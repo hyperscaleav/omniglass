@@ -11,7 +11,7 @@ import { STANDARDS_KEY } from "../lib/standards";
 import { PRODUCTS_KEY } from "../lib/products";
 import { SYSTEM_TYPES_KEY } from "../lib/system_types";
 import { TAGS_KEY } from "../lib/tags";
-import { systemRolesKey } from "../lib/system_roles";
+import { systemSlotsKey } from "../lib/system_slots";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 import { pickTree, treeValue } from "./TreeSelect.testkit";
@@ -51,8 +51,8 @@ vi.mock("../lib/components", async (orig) => {
   };
 });
 
-const owner: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const updaterOnly: Me = { principal: { id: "u-up", kind: "human" }, human: { username: "up" }, permissions: ["system:read", "system:update", "location:read", "location:update", "tag:read"], grants: [] };
+const owner: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
+const updaterOnly: Me = { user: { id: "u-up", kind: "person" }, person: { username: "up" }, permissions: ["system:read", "system:update", "location:read", "location:update", "tag:read"], grants: [] };
 
 function mount(kind: "system" | "location", id: string, me: Me = owner, systemActions: string[] = ["create", "update", "delete"]) {
   return mountHost(kind, id, "page", me, systemActions);
@@ -77,7 +77,7 @@ function mountHost(kind: "system" | "location", id: string, host: "page" | "blad
   qc.setQueryData([...STANDARDS_KEY], [{ id: uuidFor("std"), name: "huddle-room", label: "Huddle Room Standard" }]);
   qc.setQueryData([...SYSTEM_TYPES_KEY], [{ id: uuidFor("st"), name: "huddle", label: "Huddle" }]);
   qc.setQueryData([...TAGS_KEY], []);
-  qc.setQueryData([...systemRolesKey(uuidFor("ef-sys"))], []);
+  qc.setQueryData([...systemSlotsKey(uuidFor("ef-sys"))], []);
   qc.setQueryData(["system-properties", uuidFor("ef-sys")], []);
   qc.setQueryData(["location-properties", uuidFor("ef-room")], []);
   window.history.pushState({}, "", "/web/x");
@@ -111,7 +111,7 @@ describe("the one form, read", () => {
     const form = await screen.findByTestId("entity-form");
     const eyebrows = within(form).getAllByText(/^(Identity|Classification|Placement|Tags)$/).map((e) => e.textContent);
     expect(eyebrows).toEqual(["Identity", "Classification", "Placement", "Tags"]);
-    // The registry's labels, never the handles (#870): the type and the
+    // The catalog's labels, never the handles (#870): the type and the
     // standard read as an operator names them.
     expect(within(form).getByText("Huddle")).toBeTruthy();
     expect(within(form).getByText("Huddle Room Standard")).toBeTruthy();
@@ -124,7 +124,7 @@ describe("the one form, read", () => {
 });
 
 describe("the one form reads labels, not handles (#870)", () => {
-  it("names a location's type by its registry label", async () => {
+  it("names a location's type by its catalog label", async () => {
     mount("location", uuidFor("ef-room"));
     const form = await screen.findByTestId("entity-form");
     expect(within(form).getByText("Room")).toBeTruthy();
@@ -133,18 +133,18 @@ describe("the one form reads labels, not handles (#870)", () => {
 });
 
 describe("the one form in a blade is the glance (#872)", () => {
-  // Configuration (roles, properties and their cascade) lives on the
+  // Configuration (slots, properties and their cascade) lives on the
   // workspace's Configure tab; the blade keeps what an operator who landed
-  // from a row needs. A system's or component's place is the blade's own
-  // place card, so the form does not say it a second time.
+  // from a row needs. A system's or component's location is the blade's own
+  // location card, so the form does not say it a second time.
   it("renders identity, classification and tags, and none of the configuration panels", async () => {
     mountHost("system", uuidFor("ef-sys"), "blade");
     const form = await screen.findByTestId("entity-form");
-    const eyebrows = within(form).getAllByText(/^(Identity|Classification|Placement|Tags|Roles|Properties)$/).map((e) => e.textContent);
+    const eyebrows = within(form).getAllByText(/^(Identity|Classification|Placement|Tags|Slots|Properties)$/).map((e) => e.textContent);
     expect(eyebrows).toEqual(["Identity", "Classification", "Tags"]);
   });
 
-  it("keeps a location's parent in the blade, where it is the place's own placement to move", async () => {
+  it("keeps a location's parent in the blade, where it is the location's own placement to move", async () => {
     mountHost("location", uuidFor("ef-room"), "blade");
     const form = await screen.findByTestId("entity-form");
     expect(within(form).getByText("Parent")).toBeTruthy();
@@ -153,7 +153,7 @@ describe("the one form in a blade is the glance (#872)", () => {
   it("keeps the configuration panels on the page host", async () => {
     mountHost("system", uuidFor("ef-sys"), "page");
     const form = await screen.findByTestId("entity-form");
-    expect(within(form).getByText("Roles")).toBeTruthy();
+    expect(within(form).getByText("Slots")).toBeTruthy();
   });
 });
 
@@ -249,7 +249,7 @@ describe("a component's memberships, editable from its own face (#767)", () => {
   const beta = uuidFor("mf-beta");
   const gamma = uuidFor("mf-gamma");
   const member = (system_id: string, system: string, primary: boolean) => ({ component: "mic", component_id: comp, component_verdict: "healthy", primary, system, system_id, system_count: 1 });
-  const readerOnly: Me = { principal: { id: "u-rd", kind: "human" }, human: { username: "rd" }, permissions: ["component:read", "component:update", "system:read", "location:read", "tag:read", "product:read"], grants: [] };
+  const readerOnly: Me = { user: { id: "u-rd", kind: "person" }, person: { username: "rd" }, permissions: ["component:read", "component:update", "system:read", "location:read", "tag:read", "product:read"], grants: [] };
 
   type Call = { method: string; path: string };
   function mountComponent(me: Me = owner, memberships = [member(alpha, "alpha", true), member(gamma, "gamma", false)]) {
@@ -450,7 +450,7 @@ describe("the one form, empty", () => {
     ]);
     qc.setQueryData([...LOCATION_TYPES_KEY], [{ id: uuidFor("t-room"), name: "room", label: "Room", allowed_parent_types: ["building"] }]);
     qc.setQueryData([...STANDARDS_KEY], []);
-    qc.setQueryData([...SYSTEM_TYPES_KEY], []);
+    qc.setQueryData([...SYSTEM_TYPES_KEY], [{ id: uuidFor("st-collab"), name: "collaboration", label: "Collaboration" }]);
     qc.setQueryData([...PRODUCTS_KEY], []);
     window.history.pushState({}, "", "/web/x");
     render(() => (
@@ -475,6 +475,52 @@ describe("the one form, empty", () => {
     const form = await screen.findByTestId("entity-create-form");
     const location = within(form).getByLabelText("Location");
     await waitFor(() => expect(treeValue(location)).toBe("West Building"));
+  });
+
+  // An unclassified system is a refusal the server gives on every ask (a 422
+  // the browser logs as a failed request, #1548), so the form does not ask
+  // until a type or a typed name gives the question an answer, and reads the
+  // hint from the fact it already holds.
+  it("asks no label draft for an unclassified system, and still says to type a name", async () => {
+    const asked: string[] = [];
+    const stub = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST" && req.url.includes(":renderLabel")) {
+        asked.push(req.url);
+        return new Response(JSON.stringify({ name: "collaboration", ordinal: 1, label: "Collaboration", rule: "global" }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch in this test: ${req.method} ${req.url}`);
+    });
+    try {
+      mountCreate("system");
+      const form = await screen.findByTestId("entity-create-form");
+      await waitFor(() => expect(within(form).getByText(/This system is unclassified or its type chain sets no stem/)).toBeTruthy());
+      expect(asked).toEqual([]);
+
+      await pickTree(within(form).getByLabelText("Type"), "Collaboration");
+      await waitFor(() => expect(asked.length).toBe(1));
+      expect(asked[0]).toContain("/systems:renderLabel");
+    } finally { stub.mockRestore(); }
+  });
+
+  it("asks once a name is typed on an unclassified system, since the label rule can still render it", async () => {
+    const asked: Record<string, unknown>[] = [];
+    const stub = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST" && req.url.includes(":renderLabel")) {
+        asked.push(JSON.parse(await req.clone().text()));
+        return new Response(JSON.stringify({ name: "one-off", label: "One Off", rule: "global" }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch in this test: ${req.method} ${req.url}`);
+    });
+    try {
+      mountCreate("system");
+      const form = await screen.findByTestId("entity-create-form");
+      fireEvent.input(within(form).getByPlaceholderText("exec-boardroom"), { target: { value: "one-off" } });
+      await waitFor(() => expect(asked.length).toBe(1));
+      expect(asked[0].name).toBe("one-off");
+      expect(asked[0].system_type_id).toBeUndefined();
+    } finally { stub.mockRestore(); }
   });
 
   it("prefills a location's parent from `under`", async () => {
@@ -518,7 +564,7 @@ describe("the one form, system rename precheck", () => {
     qc.setQueryData([...STANDARDS_KEY], []);
     qc.setQueryData([...SYSTEM_TYPES_KEY], []);
     qc.setQueryData([...TAGS_KEY], []);
-    qc.setQueryData([...systemRolesKey(uuidFor("child-sys"))], []);
+    qc.setQueryData([...systemSlotsKey(uuidFor("child-sys"))], []);
     qc.setQueryData(["system-properties", uuidFor("child-sys")], []);
 
     window.history.pushState({}, "", "/web/x");

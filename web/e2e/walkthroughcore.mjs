@@ -4,7 +4,7 @@
 // and their checks. Both of the manifest's readers import it: the
 // run:demo PR comment (walkthroughpr.mjs) and the docs embed
 // (docs/src/plugins/walkthrough-embed.mjs). Plain ESM with no dependencies, so
-// the runner's node and the docs build load it with no install or build step.
+// the runner's outpost and the docs build load it with no install or build step.
 
 /** @typedef {{ n: number, kind: string, caption: string, still: string }} ManifestStep */
 /**

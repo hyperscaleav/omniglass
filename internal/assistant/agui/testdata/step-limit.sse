@@ -1,0 +1,10 @@
+data: {"type":"RUN_STARTED","threadId":"lobby","runId":"run-5"}
+
+data: {"type":"TEXT_MESSAGE_START","messageId":"run-5-1","role":"assistant"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"run-5-1","delta":"Stopped after 10 steps without an answer."}
+
+data: {"type":"TEXT_MESSAGE_END","messageId":"run-5-1"}
+
+data: {"type":"RUN_FINISHED","threadId":"lobby","runId":"run-5","outcome":{"type":"success"},"result":{"stopped":"step_limit","steps":10}}
+

@@ -18,12 +18,12 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// The poll-target statement reads, for each node, the poll tasks the node's
-// own worklist carries, each at the interval the node's scheduler gives it:
+// The poll-target statement reads, for each outpost, the poll tasks the outpost's
+// own worklist carries, each at the interval the outpost's scheduler gives it:
 // a driver poll at its schedule (each tick without one), any other spec at
-// the probe interval. Disabled and listen tasks, and endpoints on no node,
+// the probe interval. Disabled and listen tasks, and endpoints on no outpost,
 // are not targets.
-func TestIntegrationPollTargetsMatchEachNodesWorklist(t *testing.T) {
+func TestIntegrationPollTargetsMatchEachOutpostsWorklist(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	dsn := storagetest.NewDSN(t)
@@ -42,7 +42,7 @@ func TestIntegrationPollTargetsMatchEachNodesWorklist(t *testing.T) {
 	t.Cleanup(func() { _ = conn.Close(ctx) })
 	all := scope.Set{All: true}
 	for _, n := range []string{"edge-a", "edge-b"} {
-		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: n}, all, all); err != nil {
+		if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: n}, all, all); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -58,15 +58,15 @@ func TestIntegrationPollTargetsMatchEachNodesWorklist(t *testing.T) {
 		}
 	}
 	componentOf := map[string]string{}
-	endpoint := func(name, transport, component, node string) {
+	endpoint := func(name, transport, component, outpost string) {
 		t.Helper()
 		componentOf[name] = component
-		nodeRef := "null"
-		if node != "" {
-			nodeRef = fmt.Sprintf("(select principal_id from node where name = '%s')", node)
+		outpostRef := "null"
+		if outpost != "" {
+			outpostRef = fmt.Sprintf("(select user_id from outpost where name = '%s')", outpost)
 		}
-		exec(fmt.Sprintf(`insert into endpoint (name, transport, component, node_name, params)
-			values ($1, $2, (select id from component where name = $3), %s, '{"target":"10.0.0.1"}'::jsonb)`, nodeRef),
+		exec(fmt.Sprintf(`insert into endpoint (name, transport, component, outpost_id, params)
+			values ($1, $2, (select id from component where name = $3), %s, '{"target":"10.0.0.1"}'::jsonb)`, outpostRef),
 			name, transport, component)
 	}
 	task := func(id, mode, endpoint, spec string, enabled bool) {
@@ -87,7 +87,7 @@ func TestIntegrationPollTargetsMatchEachNodesWorklist(t *testing.T) {
 	task("t-icmp", "poll", "p3-icmp", `{"probe":"icmp"}`, true)
 	task("t-loose", "poll", "p3-loose", `{}`, true)
 
-	cadence := map[string]closedloop.NodeCadence{
+	cadence := map[string]closedloop.OutpostCadence{
 		"edge-a": {Heartbeat: 5 * time.Second, ProbeEvery: 30 * time.Second},
 		"edge-b": {Heartbeat: 10 * time.Second, ProbeEvery: 20 * time.Second},
 	}
@@ -97,11 +97,11 @@ func TestIntegrationPollTargetsMatchEachNodesWorklist(t *testing.T) {
 	}
 	var out strings.Builder
 	for rows.Next() {
-		var node, component, transport, every string
-		if err := rows.Scan(&node, &component, &transport, &every); err != nil {
+		var outpost, component, transport, every string
+		if err := rows.Scan(&outpost, &component, &transport, &every); err != nil {
 			t.Fatal(err)
 		}
-		fmt.Fprintf(&out, "%s|%s|%s|%s\n", node, component, transport, every)
+		fmt.Fprintf(&out, "%s|%s|%s|%s\n", outpost, component, transport, every)
 	}
 	if err := rows.Err(); err != nil {
 		t.Fatal(err)
@@ -114,10 +114,10 @@ func TestIntegrationPollTargetsMatchEachNodesWorklist(t *testing.T) {
 		t.Fatalf("targets = %v, want edge-a and edge-b alone", got)
 	}
 
-	// Each node's targets are its worklist's poll tasks, at the interval the
-	// node's own reading of each spec gives.
-	for node, c := range cadence {
-		wl, err := gw.NodeWorklist(ctx, node)
+	// Each outpost's targets are its worklist's poll tasks, at the interval the
+	// outpost's own reading of each spec gives.
+	for outpost, c := range cadence {
+		wl, err := gw.OutpostWorklist(ctx, outpost)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -136,17 +136,17 @@ func TestIntegrationPollTargetsMatchEachNodesWorklist(t *testing.T) {
 			want = append(want, fmt.Sprintf("%s %s %s", componentOf[task.EndpointName], task.Transport, max(d, c.Heartbeat)))
 		}
 		var have []string
-		for _, p := range got[node] {
+		for _, p := range got[outpost] {
 			var component string
 			if err := conn.QueryRow(ctx, `select name from component where id::text = $1`, p.ComponentID).Scan(&component); err != nil {
-				t.Fatalf("%s target %+v names no component: %v", node, p, err)
+				t.Fatalf("%s target %+v names no component: %v", outpost, p, err)
 			}
 			have = append(have, fmt.Sprintf("%s %s %s", component, p.Transport, p.Interval))
 		}
 		slices.Sort(want)
 		slices.Sort(have)
 		if !slices.Equal(have, want) {
-			t.Errorf("%s targets %v, want the worklist's %v", node, have, want)
+			t.Errorf("%s targets %v, want the worklist's %v", outpost, have, want)
 		}
 	}
 	// The schedule is read, not defaulted: the http poll runs at its 45 s,

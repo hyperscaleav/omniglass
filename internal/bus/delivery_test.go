@@ -274,7 +274,7 @@ func TestCrashedConsumerReplaysCleanly(t *testing.T) {
 
 // TestTelemetryStreamKeepsItsDuplicateWindow pins the window ADR-0453 states:
 // OG_TELEMETRY remembers a batch's Nats-Msg-Id for five minutes, not
-// JetStream's two-minute default, so a node's retry a few ticks later is
+// JetStream's two-minute default, so an outpost's retry a few ticks later is
 // still collapsed by the stream before the receipt has to hold it.
 func TestTelemetryStreamKeepsItsDuplicateWindow(t *testing.T) {
 	f := newDeliveryFixture(t)
@@ -324,7 +324,7 @@ func TestReplayedBatchInsideTheWindowCollapses(t *testing.T) {
 }
 
 // TestReplayedBatchPastTheWindowLandsOnce: the same batch arriving after the
-// stream has forgotten its id (a node retrying past the duplicate window, or
+// stream has forgotten its id (an outpost retrying past the duplicate window, or
 // across a server that lost its JetStream state) is stored again, and the
 // receipt keeps it from landing twice (#311).
 func TestReplayedBatchPastTheWindowLandsOnce(t *testing.T) {
@@ -598,31 +598,31 @@ func TestARefusedBatchIsDroppedAtOnce(t *testing.T) {
 }
 
 // The ingest hop's loss (#1641), driven through a real JetStream and a real
-// Postgres: a node publishes ledgered batches over its own subject, and the
+// Postgres: an outpost publishes ledgered batches over its own subject, and the
 // lab's read reconciles their receipts into each kind's loss.
 
-// ledgerRig is a node, its credentials, and one poll task it holds.
+// ledgerRig is an outpost, its credentials, and one poll task it holds.
 type ledgerRig struct {
 	deliveryFixture
 	token string
 	base  time.Time
 }
 
-const ledgerNode, ledgerBoot = "node-ledger", "boot-ledger-1"
+const ledgerOutpost, ledgerBoot = "outpost-ledger", "boot-ledger-1"
 
 func newLedgerRig(t *testing.T) ledgerRig {
 	t.Helper()
 	f := newDeliveryFixture(t)
 	all := scope.Set{All: true}
-	if _, err := f.gw.CreateNode(f.ctx, "", storage.NodeSpec{Name: ledgerNode}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := f.gw.CreateOutpost(f.ctx, "", storage.OutpostSpec{Name: ledgerOutpost}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	token := "secret-ledger"
-	if _, err := f.gw.SetEnrollmentToken(f.ctx, "", ledgerNode, hashHex(token), all); err != nil {
+	if _, err := f.gw.SetEnrollmentToken(f.ctx, "", ledgerOutpost, hashHex(token), all); err != nil {
 		t.Fatalf("mint token: %v", err)
 	}
-	if _, err := f.conn.Exec(f.ctx, `insert into endpoint (name, transport, component, node_name, params) values
-		('bar-1-tcp', 'tcp', (select id from component where name = 'bar-1'), (select principal_id from node where name = $1), '{"target":"127.0.0.1:1"}'::jsonb)`, ledgerNode); err != nil {
+	if _, err := f.conn.Exec(f.ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
+		('bar-1-tcp', 'tcp', (select id from component where name = 'bar-1'), (select user_id from outpost where name = $1), '{"target":"127.0.0.1:1"}'::jsonb)`, ledgerOutpost); err != nil {
 		t.Fatalf("insert endpoint: %v", err)
 	}
 	if _, err := f.conn.Exec(f.ctx, `insert into task (id, mode, endpoint_id, enabled) values
@@ -632,13 +632,13 @@ func newLedgerRig(t *testing.T) ledgerRig {
 	return ledgerRig{deliveryFixture: f, token: token, base: time.Now().UTC().Add(-10 * time.Minute).Truncate(time.Second)}
 }
 
-// connect is the node's own connection to srv.
+// connect is the outpost's own connection to srv.
 func (r ledgerRig) connect(t *testing.T, srv *bus.Server) *nats.Conn {
 	t.Helper()
-	nc, err := nats.Connect(srv.ClientURL(), nats.UserInfo(ledgerNode, r.token),
-		nats.CustomInboxPrefix(collection.InboxPrefix(ledgerNode)))
+	nc, err := nats.Connect(srv.ClientURL(), nats.UserInfo(ledgerOutpost, r.token),
+		nats.CustomInboxPrefix(collection.InboxPrefix(ledgerOutpost)))
 	if err != nil {
-		t.Fatalf("node connect: %v", err)
+		t.Fatalf("outpost connect: %v", err)
 	}
 	t.Cleanup(nc.Close)
 	return nc
@@ -651,13 +651,13 @@ func (r ledgerRig) window() delivery.Window {
 }
 
 // ledgered is batch seq of the boot, minted seq seconds after the base: one
-// task metric and one self-log, with the ledger a node's spool stamps.
+// task metric and one self-log, with the ledger an outpost's spool stamps.
 // resolved is the highest seq every batch at or below had left the spool.
 func (r ledgerRig) ledgered(seq, resolved uint64) *ogv1.TelemetryBatch {
 	minted := r.base.Add(time.Duration(seq) * time.Second)
 	tag := fmt.Sprintf("ledger-%d", seq)
 	return &ogv1.TelemetryBatch{
-		NodeId: ledgerNode,
+		OutpostId: ledgerOutpost,
 		Groups: []*ogv1.TaskGroup{{TaskId: "t-ledger", Ts: timestamppb.New(minted),
 			Metrics: []*ogv1.MetricSample{{Name: "tcp-connect-time", Value: float64(seq)}}}},
 		Logs: []*ogv1.LogLine{{Message: tag, Severity: "info", Ts: timestamppb.New(minted)}},
@@ -669,11 +669,11 @@ func (r ledgerRig) ledgered(seq, resolved uint64) *ogv1.TelemetryBatch {
 	}
 }
 
-// publish sends each batch on the node's subject.
+// publish sends each batch on the outpost's subject.
 func (r ledgerRig) publish(t *testing.T, nc *nats.Conn, batches ...*ogv1.TelemetryBatch) {
 	t.Helper()
 	for _, b := range batches {
-		publishEvent(t, nc, ledgerNode, b)
+		publishEvent(t, nc, ledgerOutpost, b)
 	}
 }
 
@@ -764,7 +764,7 @@ func wantHopRow(t *testing.T, rows []labfootprint.DeliveryRow, h delivery.Hop, k
 }
 
 // TestWithheldBatchReadsAsMissing: a boot's batch 3 never reaches the
-// stream (the node dropped it, its spool has moved past it), so its items
+// stream (the outpost dropped it, its spool has moved past it), so its items
 // read as missing, from the offsets of its neighbors, and the rest stored.
 func TestWithheldBatchReadsAsMissing(t *testing.T) {
 	r := newLedgerRig(t)
@@ -783,17 +783,17 @@ func TestWithheldBatchReadsAsMissing(t *testing.T) {
 	}
 	for _, k := range []delivery.Kind{delivery.Metric, delivery.Log} {
 		wantRow(t, rows, k, 5, 4, 0, map[delivery.Outcome]uint64{delivery.Stored: 4, delivery.Missing: 1})
-		// The batch carries no node account of the gap, so the node hop
+		// The batch carries no outpost account of the gap, so the outpost hop
 		// shipped it: the loss is the ingest's to name.
-		wantHopRow(t, rows, delivery.Node, k, 5, 5, 0, map[delivery.Outcome]uint64{delivery.Shipped: 5})
+		wantHopRow(t, rows, delivery.Outpost, k, 5, 5, 0, map[delivery.Outcome]uint64{delivery.Shipped: 5})
 	}
 	if len(rows) != 4 {
-		t.Fatalf("rows %+v, want a node and an ingest row for metric and log only", rows)
+		t.Fatalf("rows %+v, want an outpost and an ingest row for metric and log only", rows)
 	}
 }
 
 // TestLowerNeighborLongBeforeTheWindowOwnsItsGap: the boot's batch 1 was
-// minted two hours before the window (the node was down in between), so
+// minted two hours before the window (the outpost was down in between), so
 // batch 2 is the boot's first in it. Batch 1 is still the lower neighbor
 // that owns the seqs below 2: the read finds it by seq, however long ago it
 // was minted, and the window reads loss 0 rather than batch 1's items as
@@ -821,7 +821,7 @@ func TestLowerNeighborLongBeforeTheWindowOwnsItsGap(t *testing.T) {
 	}
 }
 
-// TestHeldBatchLandsLateAndReadsWhole: batch 1 is held in the node's spool
+// TestHeldBatchLandsLateAndReadsWhole: batch 1 is held in the outpost's spool
 // while 2 to 5 land. Until it lands the boot is unsettled and reads no
 // ratio; once it lands late, the read is loss 0.
 func TestHeldBatchLandsLateAndReadsWhole(t *testing.T) {
@@ -836,7 +836,7 @@ func TestHeldBatchLandsLateAndReadsWhole(t *testing.T) {
 	r.waitReceipts(t, srv, 5)
 
 	rows, unsettled := r.read(t)
-	if len(rows) != 0 || len(unsettled) != 1 || unsettled[0] != (labfootprint.UnsettledBoot{Node: ledgerNode, Boot: ledgerBoot}) {
+	if len(rows) != 0 || len(unsettled) != 1 || unsettled[0] != (labfootprint.UnsettledBoot{Outpost: ledgerOutpost, Boot: ledgerBoot}) {
 		t.Fatalf("before batch 1 lands: rows %+v unsettled %v, want no ratio and the boot named", rows, unsettled)
 	}
 
@@ -906,7 +906,7 @@ func TestMaxDeliveredBatchReadsAsAbandoned(t *testing.T) {
 }
 
 // TestTermedBatchLandsALaterCopy: a batch the server Termed leaves a receipt
-// naming its cause, and a later copy of it (a node's retry past the stream's
+// naming its cause, and a later copy of it (an outpost's retry past the stream's
 // duplicate window, here a fresh stream) still lands its rows: the landing
 // replaces the Term receipt, and the batch reads stored, loss 0 (#1691).
 func TestTermedBatchLandsALaterCopy(t *testing.T) {
@@ -956,8 +956,8 @@ func TestTermedBatchLandsALaterCopy(t *testing.T) {
 	}
 }
 
-// publishBatchID publishes ev on the rig's node subject under the
-// Nats-Msg-Id id, as a node's spool does, and waits for the stream's ack.
+// publishBatchID publishes ev on the rig's outpost subject under the
+// Nats-Msg-Id id, as an outpost's spool does, and waits for the stream's ack.
 func publishBatchID(t *testing.T, nc *nats.Conn, ev *ogv1.TelemetryBatch, id string) {
 	t.Helper()
 	b, err := proto.Marshal(ev)
@@ -968,17 +968,17 @@ func publishBatchID(t *testing.T, nc *nats.Conn, ev *ogv1.TelemetryBatch, id str
 	if err != nil {
 		t.Fatalf("jetstream: %v", err)
 	}
-	if _, err := collection.PublishBatch(context.Background(), js, collection.TelemetrySubject(ledgerNode), b, id, 5*time.Second); err != nil {
+	if _, err := collection.PublishBatch(context.Background(), js, collection.TelemetrySubject(ledgerOutpost), b, id, 5*time.Second); err != nil {
 		t.Fatalf("publish batch %s: %v", id, err)
 	}
 }
 
-// logLines is how many of the node's self-log lines with message msg the
+// logLines is how many of the outpost's self-log lines with message msg the
 // store holds.
 func (r ledgerRig) logLines(t *testing.T, msg string) int {
 	t.Helper()
 	var n int
-	if err := r.conn.QueryRow(r.ctx, `select count(*) from node_log where message = $1`, msg).Scan(&n); err != nil {
+	if err := r.conn.QueryRow(r.ctx, `select count(*) from outpost_log where message = $1`, msg).Scan(&n); err != nil {
 		t.Fatalf("count log lines: %v", err)
 	}
 	return n

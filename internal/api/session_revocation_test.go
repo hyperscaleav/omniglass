@@ -74,12 +74,12 @@ func TestPasswordChangeRevokesSessions(t *testing.T) {
 		return resp.StatusCode
 	}
 
-	adminTok := principalWithGrants(t, ctx, dsn, "admin-all", []grant{{role: "admin", scopeKind: "all"}})
+	adminTok := userWithGrants(t, ctx, dsn, "admin-all", []grant{{role: "admin", scopeKind: "all"}})
 	c := &apiClient{t: t, ctx: ctx, base: base}
 	var alice struct {
 		ID string `json:"id"`
 	}
-	body := c.do(adminTok, "POST", "/principals", map[string]string{"username": "alice", "password": "orange-boat-42x"}, http.StatusCreated)
+	body := c.do(adminTok, "POST", "/users", map[string]string{"username": "alice", "password": "orange-boat-42x"}, http.StatusCreated)
 	_ = json.Unmarshal(body, &alice)
 
 	// Alice also holds an API token (the CLI lane). It must survive every password
@@ -108,7 +108,7 @@ func TestPasswordChangeRevokesSessions(t *testing.T) {
 	if meStatus(cookieA) != http.StatusOK {
 		t.Fatalf("fresh session should work, got %d", meStatus(cookieA))
 	}
-	c.do(adminTok, "POST", "/principals/"+alice.ID+":resetPassword", map[string]string{"password": "purple-canyon-7"}, http.StatusNoContent)
+	c.do(adminTok, "POST", "/users/"+alice.ID+":resetPassword", map[string]string{"password": "purple-canyon-7"}, http.StatusNoContent)
 	if code := meStatus(cookieA); code != http.StatusUnauthorized {
 		t.Fatalf("reset should have revoked the session: want 401, got %d", code)
 	}

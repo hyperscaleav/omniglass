@@ -6,19 +6,19 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/obsstat"
 )
 
-// The endpoint observation's wire (#1639): what the simulator beside a node
-// saw arrive at its devices, and what the node tallied sending, each read on
+// The endpoint observation's wire (#1639): what the simulator beside an outpost
+// saw arrive at its devices, and what the outpost tallied sending, each read on
 // request so a scale lab can reconcile the two. Both are request-reply on the
-// node's own grant, the server requesting, like a simulator operation. Both
+// outpost's own grant, the server requesting, like a simulator operation. Both
 // replies are bounded whatever the fleet: per-protocol totals, a capped sample
 // of device ids, never a row per device.
 
-// SimobsSubject is where the server asks the simulator beside a node for its
+// SimobsSubject is where the server asks the simulator beside an outpost for its
 // endpoint observation.
-func SimobsSubject(node string) string { return subjectPrefix + "simobs." + node }
+func SimobsSubject(outpost string) string { return subjectPrefix + "simobs." + outpost }
 
-// RequestTallySubject is where the server asks a node for its request tally.
-func RequestTallySubject(node string) string { return subjectPrefix + "tally." + node }
+// RequestTallySubject is where the server asks an outpost for its request tally.
+func RequestTallySubject(outpost string) string { return subjectPrefix + "tally." + outpost }
 
 // SimObservationSampleCap bounds the device ids an observation names per
 // protocol, and the overlapping faces it lists, so the reply stays well under
@@ -27,11 +27,18 @@ const SimObservationSampleCap = 20
 
 // SimObservation is one read of a simulator's endpoint observation.
 type SimObservation struct {
-	Node    string    `json:"node"`
+	Outpost string    `json:"outpost"`
 	At      time.Time `json:"at"`
 	Started time.Time `json:"started"`
-	// Devices is how many devices the simulator serves; Impaired how many of
-	// them carry an applied impairment.
+	// FleetGeneration counts the changes to the fleet the simulator serves,
+	// zero before its first sync; FleetChanging holds while a sync is
+	// starting or stopping devices. Reads with one generation, none of them
+	// changing, saw one fleet throughout (#1895).
+	FleetGeneration int64 `json:"fleet_generation"`
+	FleetChanging   bool  `json:"fleet_changing,omitempty"`
+	// Devices is how many devices the simulator has observed since it
+	// started, served now or not; Impaired how many it serves carry an
+	// applied impairment.
 	Devices   int                      `json:"devices"`
 	Impaired  int                      `json:"impaired"`
 	Protocols []SimProtocolObservation `json:"protocols"`
@@ -96,12 +103,12 @@ func (o SimObservation) Protocol(name string) SimProtocolObservation {
 }
 
 // EndpointObservation is the three reads a lab reconciles, taken in order:
-// the simulator, then the node, then the simulator again. The first sim read
-// is the floor of what arrived before the node's count; the second the
+// the simulator, then the outpost, then the simulator again. The first sim read
+// is the floor of what arrived before the outpost's count; the second the
 // ceiling after it, so a request in transit between the two reads is never
 // a false gap.
 type EndpointObservation struct {
 	SimBefore SimObservation       `json:"sim_before"`
-	Node      RequestTallySnapshot `json:"node"`
+	Outpost   RequestTallySnapshot `json:"outpost"`
 	SimAfter  SimObservation       `json:"sim_after"`
 }

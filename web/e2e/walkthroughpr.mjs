@@ -2,7 +2,7 @@
 // Demos as PR evidence (#925, #1132): the pure choices the run:demo workflow
 // (.github/workflows/demo.yml) makes, so they are unit-tested
 // (web/src/walkthrough-pr.test.ts) rather than buried in YAML. Plain ESM with no
-// dependencies, so the workflow runs it on the runner's node with no build step;
+// dependencies, so the workflow runs it on the runner's outpost with no build step;
 // web/e2e/walkthrough-pr.mjs is its command line. Its types are the JSDoc below,
 // checked by tsc (web/tsconfig.json).
 //

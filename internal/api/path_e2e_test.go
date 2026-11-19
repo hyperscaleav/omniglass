@@ -12,7 +12,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// pathTestServer boots a real Postgres-backed server with an owner principal,
+// pathTestServer boots a real Postgres-backed server with an owner user,
 // the shared harness every dotted-address e2e in this file drives requests
 // against. Skipped under -short (storagetest.NewDSN handles that).
 func pathTestServer(t *testing.T) (*apiClient, string) {
@@ -140,20 +140,20 @@ func TestGetComponentByLocationAddressIs404(t *testing.T) {
 	}
 }
 
-// TestGetNodeByDottedRefIs422 is the registry-side companion: a node's name
+// TestGetOutpostByDottedRefIs422 is the catalog-side companion: an outpost's name
 // stays a single global token (#627 Task 12), so a dotted ref must be an
 // explicit 422 naming that, never a fall-through 404 that looks identical to
-// an ordinary unknown node.
-func TestGetNodeByDottedRefIs422(t *testing.T) {
+// an ordinary unknown outpost.
+func TestGetOutpostByDottedRefIs422(t *testing.T) {
 	t.Parallel()
 	c, tok := pathTestServer(t)
 
-	status, body := c.send(tok, http.MethodGet, "/nodes/boi.17c", nil)
+	status, body := c.send(tok, http.MethodGet, "/outposts/boi.17c", nil)
 	if status != http.StatusUnprocessableEntity {
-		t.Fatalf("GET a node by a dotted ref status = %d, want 422\nbody: %s", status, body)
+		t.Fatalf("GET an outpost by a dotted ref status = %d, want 422\nbody: %s", status, body)
 	}
 	if !strings.Contains(string(body), "single token") {
-		t.Fatalf("422 body = %s, want it to say a node name is a single token", body)
+		t.Fatalf("422 body = %s, want it to say an outpost name is a single token", body)
 	}
 }
 
@@ -215,41 +215,41 @@ func TestCreateComponentWithDottedMissingParentIs422(t *testing.T) {
 	}
 }
 
-// Fix round 1, finding 3: the three node tag-binding routes
+// Fix round 1, finding 3: the three outpost tag-binding routes
 // (:listTags/:setTag/:removeTag) had no RejectAddressForm guard, so a
-// dotted node ref there fell through to the plain 404 five other node
+// dotted outpost ref there fell through to the plain 404 five other outpost
 // routes already refuse explicitly with a 422.
 
-// TestListNodeTagsByDottedRefIs422 covers :listTags, which needs no tag key
+// TestListOutpostTagsByDottedRefIs422 covers :listTags, which needs no tag key
 // to exist first (resolveTagBindingOwner runs before any key lookup).
-func TestListNodeTagsByDottedRefIs422(t *testing.T) {
+func TestListOutpostTagsByDottedRefIs422(t *testing.T) {
 	t.Parallel()
 	c, tok := pathTestServer(t)
 
-	status, body := c.send(tok, http.MethodGet, "/nodes/boi.17c:listTags", nil)
+	status, body := c.send(tok, http.MethodGet, "/outposts/boi.17c:listTags", nil)
 	if status != http.StatusUnprocessableEntity {
-		t.Fatalf("GET /nodes/{dotted}:listTags status = %d, want 422\nbody: %s", status, body)
+		t.Fatalf("GET /outposts/{dotted}:listTags status = %d, want 422\nbody: %s", status, body)
 	}
 	if !strings.Contains(string(body), "single token") {
-		t.Fatalf("422 body = %s, want it to say a node name is a single token", body)
+		t.Fatalf("422 body = %s, want it to say an outpost name is a single token", body)
 	}
 }
 
-// TestSetNodeTagByDottedRefIs422 covers :setTag, which resolves the tag key
+// TestSetOutpostTagByDottedRefIs422 covers :setTag, which resolves the tag key
 // BEFORE the owner, so a real key is seeded first to prove the guard fires
 // on the OWNER resolve, not merely because the key lookup already 404'd.
-func TestSetNodeTagByDottedRefIs422(t *testing.T) {
+func TestSetOutpostTagByDottedRefIs422(t *testing.T) {
 	t.Parallel()
 	c, tok := pathTestServer(t)
 
 	c.do(tok, http.MethodPost, "/tags", map[string]any{"name": "environment"}, http.StatusCreated)
 
-	status, body := c.send(tok, http.MethodPost, "/nodes/boi.17c:setTag",
+	status, body := c.send(tok, http.MethodPost, "/outposts/boi.17c:setTag",
 		map[string]any{"key": "environment", "value": "prod"})
 	if status != http.StatusUnprocessableEntity {
-		t.Fatalf("POST /nodes/{dotted}:setTag status = %d, want 422\nbody: %s", status, body)
+		t.Fatalf("POST /outposts/{dotted}:setTag status = %d, want 422\nbody: %s", status, body)
 	}
 	if !strings.Contains(string(body), "single token") {
-		t.Fatalf("422 body = %s, want it to say a node name is a single token", body)
+		t.Fatalf("422 body = %s, want it to say an outpost name is a single token", body)
 	}
 }

@@ -25,7 +25,7 @@ const (
 	DefaultAddr = ":8080"
 	// DefaultNatsAddr is the embedded NATS listen address (host:port). Override
 	// with OMNIGLASS_NATS_ADDR; port 0 asks for a free port, as for the API.
-	// Bound to loopback by default: a node reaches it through the same host
+	// Bound to loopback by default: an outpost reaches it through the same host
 	// the API is on.
 	DefaultNatsAddr = "127.0.0.1:4222"
 	// DefaultServerName is the server's identity on a host with no hostname.
@@ -59,10 +59,10 @@ type Config struct {
 	NatsAddr string
 	// NatsStoreDir is the JetStream store directory.
 	NatsStoreDir string
-	// NatsURL is the address the node-claim reply advertises to nodes. Empty
+	// NatsURL is the address the outpost-claim reply advertises to outposts. Empty
 	// means the URL of the address the bus bound (loopback when it bound a
 	// wildcard host), so a bus asked for port 0 advertises the port it got.
-	// Set OMNIGLASS_NATS_URL when the node reaches the bus at another address.
+	// Set OMNIGLASS_NATS_URL when the outpost reaches the bus at another address.
 	NatsURL string
 	// DataDir is the directory for local, non-Postgres server state (the fallback
 	// encryption key). Override with OMNIGLASS_DATA_DIR.
@@ -81,9 +81,18 @@ type Config struct {
 	// Defaults to the hostname. Set OMNIGLASS_SERVER_NAME.
 	ServerName string
 	// ClosedLoop is the raw closed-loop settings (#1647): the ring's bracket
-	// and the node cadence the server assumes. The server parses them at boot
+	// and the outpost cadence the server assumes. The server parses them at boot
 	// (closedloop.ParseSettings), so a bad value fails the boot, not this Load.
 	ClosedLoopBracket, ClosedLoopHeartbeat, ClosedLoopProbeEvery string
+	// IngestPartitions is the raw ingest lane count (#1896): how many
+	// partitions of the telemetry stream land side by side. The server parses
+	// it at boot (bus.ParseIngestPartitions), so a bad value fails the boot,
+	// not this Load. Set OMNIGLASS_INGEST_PARTITIONS.
+	IngestPartitions string
+	// OmnibotReplay is the path of a recorded model the server's omnibot
+	// plays (#2121): a demo or a test, never a live model. Empty means the
+	// server has no model and a run is refused. Set OMNIGLASS_OMNIBOT_REPLAY.
+	OmnibotReplay string
 }
 
 // Load resolves the configuration from the environment, applying defaults for
@@ -111,6 +120,10 @@ func Load() Config {
 		ClosedLoopBracket:    Get("OMNIGLASS_CLOSED_LOOP_BRACKET"),
 		ClosedLoopHeartbeat:  Get("OMNIGLASS_CLOSED_LOOP_HEARTBEAT"),
 		ClosedLoopProbeEvery: Get("OMNIGLASS_CLOSED_LOOP_PROBE_EVERY"),
+
+		IngestPartitions: Get("OMNIGLASS_INGEST_PARTITIONS"),
+
+		OmnibotReplay: Get("OMNIGLASS_OMNIBOT_REPLAY"),
 	}
 }
 

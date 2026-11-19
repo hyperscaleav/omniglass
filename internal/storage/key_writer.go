@@ -26,8 +26,8 @@ var ErrKeyWriterRefused = errors.New("storage: the key's writer class does not a
 
 // KeyWriterError is a refused write: the key, its class, the writer that tried,
 // and, where it decides the refusal, the calc rule that owns the key, the
-// instance a node named against the endpoint its task ran, or the component a
-// node's row landed on against the one its task collects for.
+// instance an outpost named against the endpoint its task ran, or the component a
+// outpost's row landed on against the one its task collects for.
 type KeyWriterError struct {
 	Key      string
 	Class    writerclass.Class
@@ -35,33 +35,33 @@ type KeyWriterError struct {
 	Rule     string
 	Instance string
 	Endpoint string
-	// Owner and Component are set on a node's write refused for its binding:
+	// Owner and Component are set on an outpost's write refused for its binding:
 	// the component the row would land on, and the one the task collects for
 	// (empty when the writer's endpoint is no endpoint of it).
 	Owner     string
 	Component string
 	binding   bool
 	fanned    bool
-	// self marks a node's self-report row refused (#1625): a key that is no
-	// node-self key, or a row off the node's own platform component.
+	// self marks an outpost's self-report row refused (#1625): a key that is no
+	// outpost-self key, or a row off the outpost's own platform component.
 	self bool
 }
 
 func (e *KeyWriterError) Error() string {
 	if e.binding {
-		return fmt.Sprintf("%s: a node writes only for the component and the endpoint its task ran against "+
+		return fmt.Sprintf("%s: an outpost writes only for the component and the endpoint its task ran against "+
 			"(the row's component %q; the task's component %q, endpoint %q)", e.Key, e.Owner, e.Component, e.Endpoint)
 	}
 	if e.self {
-		return fmt.Sprintf("%s: a node reports of itself only the node-self platform keys, on its own platform component "+
-			"(the row's component %q; the node's platform component %q)", e.Key, e.Owner, e.Component)
+		return fmt.Sprintf("%s: an outpost reports of itself only the outpost-self platform keys, on its own platform component "+
+			"(the row's component %q; the outpost's platform component %q)", e.Key, e.Owner, e.Component)
 	}
 	if e.fanned {
 		return fmt.Sprintf("%s: a conduit's fanned value lands only on an owner one of its identity bindings names "+
 			"(the row's owner %q; the conduit %q)", e.Key, e.Owner, e.Component)
 	}
 	msg := writerclass.Refusal(e.Class, e.Key, e.Writer, e.Rule)
-	if e.Class == writerclass.NodeProbe && e.Writer == writerclass.Node {
+	if e.Class == writerclass.OutpostProbe && e.Writer == writerclass.Outpost {
 		msg += fmt.Sprintf(" (instance %q, the task's endpoint %q)", e.Instance, e.Endpoint)
 	}
 	return msg
@@ -70,26 +70,26 @@ func (e *KeyWriterError) Error() string {
 func (e *KeyWriterError) Unwrap() error { return ErrKeyWriterRefused }
 
 // KeyWriter is who a write speaks for: the entry point it came through. The two
-// a caller outside the gateway constructs are NodeWriter and PushWriter (the
+// a caller outside the gateway constructs are OutpostWriter and PushWriter (the
 // ingest lanes); every other writer is the gateway's own path (a calc rule's
 // tick, the health rollup, a command, an operator's declared value), built
 // where that path writes.
 type KeyWriter struct {
 	Kind writerclass.Writer
-	// Component is the component a node's task collects for (its id, or a
-	// name ADR-0062 resolves), the only owner a node's row lands on. Node
+	// Component is the component an outpost's task collects for (its id, or a
+	// name ADR-0062 resolves), the only owner an outpost's row lands on. Outpost
 	// writers only.
 	Component string
-	// Endpoint is the endpoint of Component's a node's task ran against, the
-	// only instance a node-probe key lands under. Node writers only.
+	// Endpoint is the endpoint of Component's an outpost's task ran against, the
+	// only instance an outpost-probe key lands under. Outpost writers only.
 	Endpoint string
-	// Node is the id of the node whose task collected the samples, recorded on
+	// Outpost is the id of the outpost whose task collected the samples, recorded on
 	// each metric series the writer starts (#1275): a task that moves to
-	// another node starts a new series of the same logical key. Node writers
+	// another outpost starts a new series of the same logical key. Outpost writers
 	// only; empty records none.
-	Node string
+	Outpost string
 	// bound is Component's id once admitWrites has resolved it; "" refuses
-	// every row a node writer carries.
+	// every row an outpost writer carries.
 	bound string
 	// calc is a calc rule's lineage; set only by the calc tick.
 	calc *sampleLineage
@@ -97,8 +97,8 @@ type KeyWriter struct {
 	// kind and id, once admitWrites has read them; a row on any other owner
 	// is refused. Fan-out writers only.
 	fanOwners map[string]bool
-	// self holds the writer to a node's self-report (#1625): Component is the
-	// node's platform component, and only a node-self key on it is admitted.
+	// self holds the writer to an outpost's self-report (#1625): Component is the
+	// outpost's platform component, and only an outpost-self key on it is admitted.
 	self bool
 }
 
@@ -110,11 +110,11 @@ func FanoutWriter(conduit string) KeyWriter {
 	return KeyWriter{Kind: writerclass.Fanout, Component: conduit}
 }
 
-// NodeWriter is the node lane's writer: a node's own collection, for the
+// OutpostWriter is the outpost lane's writer: an outpost's own collection, for the
 // component its task collects for and under the endpoint its task ran against
-// (both resolved server-side from the task, never the node's to assert).
-func NodeWriter(component, endpoint string) KeyWriter {
-	return KeyWriter{Kind: writerclass.Node, Component: component, Endpoint: endpoint}
+// (both resolved server-side from the task, never the outpost's to assert).
+func OutpostWriter(component, endpoint string) KeyWriter {
+	return KeyWriter{Kind: writerclass.Outpost, Component: component, Endpoint: endpoint}
 }
 
 // PushWriter is the telemetry push lane's writer.
@@ -136,13 +136,13 @@ func (w KeyWriter) provenanceArgs() (string, any, any, any) {
 	return w.calc.provenanceArgs()
 }
 
-// collector is the node a metric series records as its collector: the
-// node's id for a node writer that names one, nil otherwise.
+// collector is the outpost a metric series records as its collector: the
+// outpost's id for an outpost writer that names one, nil otherwise.
 func (w KeyWriter) collector() any {
-	if w.Kind != writerclass.Node || w.Node == "" {
+	if w.Kind != writerclass.Outpost || w.Outpost == "" {
 		return nil
 	}
-	return w.Node
+	return w.Outpost
 }
 
 // sourceConduit is the conduit a fan-out writer's rows record by id
@@ -269,7 +269,7 @@ func keyWriters(ctx context.Context, q querier, lane writeLane, keys []string) (
 }
 
 // keyedWrite is one row a write path is about to land: its key and instance,
-// and its resolved owner arc (kind and id), which a node's writer is held to.
+// and its resolved owner arc (kind and id), which an outpost's writer is held to.
 type keyedWrite struct {
 	key, instance    string
 	ownerKind, owner string
@@ -277,14 +277,14 @@ type keyedWrite struct {
 
 // admitWrites is the gateway's write check, run by every path that lands a
 // sample or an event before it lands anything: each row's key must admit w,
-// and a node's every row must land on its task's component. The first refusal
+// and an outpost's every row must land on its task's component. The first refusal
 // returns, so a batch lands whole or not at all.
 func admitWrites(ctx context.Context, q querier, lane writeLane, w KeyWriter, rows []keyedWrite) error {
 	if len(rows) == 0 {
 		return nil
 	}
-	if w.Kind == writerclass.Node {
-		bound, err := nodeBinding(ctx, q, w)
+	if w.Kind == writerclass.Outpost {
+		bound, err := outpostBinding(ctx, q, w)
 		if err != nil {
 			return err
 		}
@@ -313,12 +313,12 @@ func admitWrites(ctx context.Context, q querier, lane writeLane, w KeyWriter, ro
 	return nil
 }
 
-// nodeBinding resolves a node writer to the id of the component its task
+// outpostBinding resolves an outpost writer to the id of the component its task
 // collects for; "" when it names none, or none that resolves, which refuses
-// every row the writer carries. The node lane builds the writer from the task
+// every row the writer carries. The outpost lane builds the writer from the task
 // (ResolveTaskOwner reads the component and the endpoint off one endpoint
 // row), so the pair it names is always one endpoint's.
-func nodeBinding(ctx context.Context, q querier, w KeyWriter) (string, error) {
+func outpostBinding(ctx context.Context, q querier, w KeyWriter) (string, error) {
 	if w.Component == "" || w.Endpoint == "" {
 		return "", nil
 	}
@@ -337,7 +337,7 @@ func nodeBinding(ctx context.Context, q querier, w KeyWriter) (string, error) {
 	switch {
 	case errors.Is(err, ErrComponentNotFound), errors.As(err, &amb):
 	case err != nil:
-		return "", fmt.Errorf("storage: resolve the node's component %q: %w", w.Component, err)
+		return "", fmt.Errorf("storage: resolve the outpost's component %q: %w", w.Component, err)
 	default:
 		id = c.ID
 	}
@@ -385,8 +385,8 @@ func fanBinding(ctx context.Context, q querier, conduit string, rows []keyedWrit
 }
 
 // admitWrite holds one row to its key's resolved writer. Pure. Beyond the
-// class's ruling: a node writes only on the component its task collects for,
-// and a node-probe key only under the endpoint its task ran against (a node
+// class's ruling: an outpost writes only on the component its task collects for,
+// and an outpost-probe key only under the endpoint its task ran against (an outpost
 // cannot speak for a component or an endpoint it does not hold); and a calc
 // rule writes only a key it outputs.
 func admitWrite(kw keyWriterOf, w KeyWriter, r keyedWrite) error {
@@ -399,11 +399,11 @@ func admitWrite(kw keyWriterOf, w KeyWriter, r keyedWrite) error {
 	if !writerclass.Admits(kw.class, w.Kind, r.key) {
 		return refuse
 	}
-	if w.Kind == writerclass.Node && (w.bound == "" || r.ownerKind != "component" || r.owner != w.bound) {
+	if w.Kind == writerclass.Outpost && (w.bound == "" || r.ownerKind != "component" || r.owner != w.bound) {
 		refuse.Owner, refuse.Component, refuse.binding = r.owner, w.bound, true
 		return refuse
 	}
-	if w.self && !admitNodeSelf(w, r) {
+	if w.self && !admitOutpostSelf(w, r) {
 		refuse.Owner, refuse.Component, refuse.self = r.owner, w.Component, true
 		return refuse
 	}
@@ -412,7 +412,7 @@ func admitWrite(kw keyWriterOf, w KeyWriter, r keyedWrite) error {
 		return refuse
 	}
 	switch {
-	case kw.class == writerclass.NodeProbe && w.Kind == writerclass.Node:
+	case kw.class == writerclass.OutpostProbe && w.Kind == writerclass.Outpost:
 		if w.Endpoint == "" || r.instance != w.Endpoint {
 			return refuse
 		}
@@ -436,16 +436,16 @@ func reservedName(name string) error {
 	return nil
 }
 
-// nodeClockSkew is how far ahead of the database's clock a node-probe sample
-// may be dated and keep its own time. A node's clock drifts, so a little is the
-// node's to keep; but a node-probe key's latest row is the node's current
+// outpostClockSkew is how far ahead of the database's clock an outpost-probe sample
+// may be dated and keep its own time. An outpost's clock drifts, so a little is the
+// outpost's to keep; but an outpost-probe key's latest row is the outpost's current
 // account of an endpoint (and the gate and pin control reads take it), so a
-// sample dated further ahead would hold that account current after the node
+// sample dated further ahead would hold that account current after the outpost
 // stopped holding the endpoint (ADR-0161).
-const nodeClockSkew = 5 * time.Minute
+const outpostClockSkew = 5 * time.Minute
 
-// sampleClock caps a node-probe sample's time at the database's now when it is
-// dated further ahead than nodeClockSkew, reading the clock once, on first
+// sampleClock caps an outpost-probe sample's time at the database's now when it is
+// dated further ahead than outpostClockSkew, reading the clock once, on first
 // need. Any other key keeps the time its producer sent.
 type sampleClock struct {
 	q   querier
@@ -453,7 +453,7 @@ type sampleClock struct {
 }
 
 func (c *sampleClock) cap(ctx context.Context, key string, ts time.Time) (time.Time, error) {
-	if class, ok := writerclass.Reserved(key); !ok || class != writerclass.NodeProbe {
+	if class, ok := writerclass.Reserved(key); !ok || class != writerclass.OutpostProbe {
 		return ts, nil
 	}
 	if c.now.IsZero() {
@@ -463,7 +463,7 @@ func (c *sampleClock) cap(ctx context.Context, key string, ts time.Time) (time.T
 		}
 		c.now = now
 	}
-	if ts.After(c.now.Add(nodeClockSkew)) {
+	if ts.After(c.now.Add(outpostClockSkew)) {
 		return c.now, nil
 	}
 	return ts, nil
@@ -471,8 +471,8 @@ func (c *sampleClock) cap(ctx context.Context, key string, ts time.Time) (time.T
 
 // ErrContractKeyReserved refuses a product, standard or location-type contract
 // line naming a reserved key (ADR-0161): a contract's default resolves as the
-// key's value where nothing else says one, so on a node-probe key it would
-// stand in for the node's observation, on a platform key for the platform's
+// key's value where nothing else says one, so on an outpost-probe key it would
+// stand in for the outpost's observation, on a platform key for the platform's
 // verdict, and on a command's lifecycle event for a command nobody issued.
 var ErrContractKeyReserved = errors.New("storage: a contract may not declare a reserved key")
 
@@ -487,7 +487,7 @@ func contractKey(name string) error {
 }
 
 // writeIdentity is what a writer stamps on every row it lands beyond the
-// row's own fields: its collecting node, its conduit, its provenance and
+// row's own fields: its collecting outpost, its conduit, its provenance and
 // lineage. Writers of one identity land their rows in one statement (#1582).
 func (w KeyWriter) writeIdentity() string {
 	provenance, rule, version, ruleID := w.provenanceArgs()

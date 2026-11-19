@@ -64,7 +64,7 @@ func (c *calcCompiles) program(r CalcRule, typed []rules.TypedInput, output stri
 	return prog, err
 }
 
-// withCalcNotes sets r's CalcError and CalcWarnings against the registries
+// withCalcNotes sets r's CalcError and CalcWarnings against the catalogs
 // as they are now (the key types its read resolved, by the ids it holds):
 // why its stored reduce does not compile, or the warnings it compiles with.
 func (p *PG) withCalcNotes(r *CalcRule) {
@@ -173,7 +173,7 @@ type CalcWriter struct {
 // type row of table (the enabled writer, else the first disabled one by
 // name; one enabled rule writes a key), as jsonb, null when none does. A
 // correlated probe on the rule's output reference; rules read like a
-// registry, so it is scope-free like the type read itself.
+// catalog, so it is scope-free like the type read itself.
 func calcWriterCol(col, table string) string {
 	return `(select jsonb_build_object('rule', c.name, 'rule_id', c.id::text) from calc_rule c where c.` + col + ` = ` + table +
 		`.id order by c.enabled desc, c.name limit 1)`

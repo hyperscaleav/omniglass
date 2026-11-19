@@ -152,7 +152,7 @@ func TestApplyLocationTypePatchWriteSet(t *testing.T) {
 }
 
 // TestLocationTypeShadowRoundTrip pins the two halves of the fork's storage
-// contract for this registry: what a fork CAPTURES and what a read resolves.
+// contract for this catalog: what a fork CAPTURES and what a read resolves.
 //
 // The whole mutable row goes in, every time, each nullable column as an
 // explicit null rather than a dropped key (ADR-0095 decision 2). For

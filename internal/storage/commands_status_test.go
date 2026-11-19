@@ -49,12 +49,12 @@ func TestCommandStatusRecording(t *testing.T) {
 	}
 	conn := connectDSN(t, dsn)
 	all := scope.Set{All: true}
-	// The command row stamps its actor, so the issuer must be a real principal.
+	// The command row stamps its actor, so the issuer must be a real user.
 	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: make([]byte, 32), Prefix: "root0000"}); err != nil {
 		t.Fatalf("bootstrap owner: %v", err)
 	}
 	var actor string
-	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&actor); err != nil {
+	if err := conn.QueryRow(ctx, `select user_id from person where username = 'root'`).Scan(&actor); err != nil {
 		t.Fatalf("resolve actor: %v", err)
 	}
 
@@ -307,7 +307,7 @@ func TestCommandStatusRecording(t *testing.T) {
 }
 
 // TestFireAndForgetSettlesOnItsReport: a command that sets nothing is decided
-// by its node's execution report (#1630). A clean report settles it, an
+// by its outpost's execution report (#1630). A clean report settles it, an
 // execution error fails it with the masked error as its reason, each by the
 // reply and each with one lifecycle event.
 func TestFireAndForgetSettlesOnItsReport(t *testing.T) {
@@ -331,14 +331,14 @@ func TestFireAndForgetSettlesOnItsReport(t *testing.T) {
 		t.Fatalf("bootstrap owner: %v", err)
 	}
 	var actor string
-	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&actor); err != nil {
+	if err := conn.QueryRow(ctx, `select user_id from person where username = 'root'`).Scan(&actor); err != nil {
 		t.Fatalf("resolve actor: %v", err)
 	}
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-ff"}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-ff"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-ff"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: "reboot-proto", Label: "Reboot Proto", Version: "1.0.0", Spec: []byte(`{
 		"version": 1, "transport": "tcp",
@@ -346,9 +346,9 @@ func TestFireAndForgetSettlesOnItsReport(t *testing.T) {
 		"commands": [{"command_type": "reboot", "request": {"line": "REBOOT"}}]}`)}); err != nil {
 		t.Fatalf("create driver: %v", err)
 	}
-	comp, drv, node := "disp-ff", "reboot-proto", "edge-ff"
+	comp, drv, outpost := "disp-ff", "reboot-proto", "edge-ff"
 	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-		Driver: &drv, Component: &comp, Node: &node, Inputs: map[string]string{"host": "10.20.4.70"},
+		Driver: &drv, Component: &comp, Outpost: &outpost, Inputs: map[string]string{"host": "10.20.4.70"},
 	}, all); err != nil {
 		t.Fatalf("attach: %v", err)
 	}
@@ -359,11 +359,11 @@ func TestFireAndForgetSettlesOnItsReport(t *testing.T) {
 		if err != nil {
 			t.Fatalf("issue: %v", err)
 		}
-		got, err := gw.PendingNodeCommands(ctx, node)
+		got, err := gw.PendingOutpostCommands(ctx, outpost)
 		if err != nil || len(got) != 1 || got[0].ID != cmd.ID {
 			t.Fatalf("pull = %+v (%v), want command %d", got, err, cmd.ID)
 		}
-		if err := gw.RecordCommandExecution(ctx, node, cmd.ID, execErr, ""); err != nil {
+		if err := gw.RecordCommandExecution(ctx, outpost, cmd.ID, execErr, ""); err != nil {
 			t.Fatalf("report: %v", err)
 		}
 		if err := conn.QueryRow(ctx, `select status, coalesce(settled_by, ''), coalesce(reason, '') from command where id = $1`, cmd.ID).
@@ -388,7 +388,7 @@ func TestFireAndForgetSettlesOnItsReport(t *testing.T) {
 
 	t.Run("a clean report settles it", func(t *testing.T) {
 		status, by, reason, events := report(t, "")
-		if status != "settled" || by != storage.SettledByReply || reason != "the node carried it out" {
+		if status != "settled" || by != storage.SettledByReply || reason != "the outpost carried it out" {
 			t.Errorf("clean report = %s by %q (%q), want settled by reply", status, by, reason)
 		}
 		if len(events) != 1 || events[0] != "command-settled" {

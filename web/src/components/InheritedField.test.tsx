@@ -5,7 +5,7 @@ import InheritedField from "./InheritedField";
 import { BladeEditContext, createEditSlot, type BladeEdit } from "../lib/blades";
 import type { InheritedFact } from "../lib/catalog";
 
-// A field wired the way a registry blade wires it: a persisted value, a draft
+// A field wired the way a catalog blade wires it: a persisted value, a draft
 // the box binds to, and the server's answer to "clear this box and you get
 // what?". `inherited` is a SIGNAL here rather than a constant, because the real
 // one is derived from a TanStack query that hands back a fresh object on every

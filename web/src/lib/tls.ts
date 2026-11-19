@@ -35,14 +35,14 @@ export function certTone(days: number | undefined | null): Tone {
 
 const MODES: Record<string, { word: string; tone: Tone; hint: string }> = {
   verify: {
-    word: "verified against the node's roots",
+    word: "verified against the outpost's roots",
     tone: "ok",
-    hint: "Verify: the certificate must chain to one of the node's system roots and name the host. Anything else is refused as certificate, and the node stops trying until the endpoint changes.",
+    hint: "Verify: the certificate must chain to one of the outpost's system roots and name the host. Anything else is refused as certificate, and the outpost stops trying until the endpoint changes.",
   },
   pin: {
     word: "pinned on first use",
     tone: "ok",
-    hint: "Pin: the node trusted the first public key the component offered and refuses any other, as an ssh host key is pinned. A renewal that keeps the key is no change; a new key reads rejected until someone retries the endpoint with it.",
+    hint: "Pin: the outpost trusted the first public key the component offered and refuses any other, as an ssh host key is pinned. A renewal that keeps the key is no change; a new key reads rejected until someone retries the endpoint with it.",
   },
   skip: {
     word: "not verified",

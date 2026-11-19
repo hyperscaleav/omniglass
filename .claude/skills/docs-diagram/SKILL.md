@@ -96,7 +96,7 @@ classes: {
 
 gear: gear { class: node }
 datapoint: "datapoint\ncanonical signal" { class: key }   # \n for multi-line labels
-gear -> datapoint: collect (node + edge parse)
+gear -> datapoint: collect (outpost + edge parse)
 action -> gear: command { style.stroke-dash: 4 }           # dashed edge
 config -- datapoint: drift { style.stroke-dash: 4 }        # undirected
 ```

@@ -11,7 +11,7 @@ import { FLEET_VIEW_KEY } from "../lib/fleet";
 import { COMPONENTS_KEY } from "../lib/components";
 import { EVENT_RULES_KEY } from "../lib/event_rules";
 
-// The severity levels page (#921, authored since #930): the registry an event
+// The severity levels page (#921, authored since #930): the catalog an event
 // rule raises at, beside the rules. Each level shows its rank, its label in its
 // own color (the same chip every alarm wears), whether it takes a component out,
 // and its origin; worst first, the order an operator triages in. An operator
@@ -20,12 +20,12 @@ import { EVENT_RULES_KEY } from "../lib/event_rules";
 // caller's all-scope permissions (fleet_permissions), like an event rule's. Data
 // is seeded into the query cache; writes are caught at fetch.
 
-const owner: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], fleet_permissions: [">"], grants: [{ role: "owner", scope_kind: "all" }] };
-const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], fleet_permissions: ["*:read"], grants: [{ role: "viewer", scope_kind: "all" }] };
-// Owns one place, views the fleet: severity_level:* is in its flattened set,
+const owner: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], fleet_permissions: [">"], grants: [{ role: "owner", scope_kind: "all" }] };
+const viewer: Me = { user: { id: "u-view", kind: "person" }, person: { username: "viewer" }, permissions: ["*:read"], fleet_permissions: ["*:read"], grants: [{ role: "viewer", scope_kind: "all" }] };
+// Owns one location, views the fleet: severity_level:* is in its flattened set,
 // but writing a level needs it on an all-scope grant, so the server refuses it.
 const placeOwner: Me = {
-  principal: { id: "u-po", kind: "human" }, human: { username: "owner-hq" }, permissions: [">"], fleet_permissions: ["*:read"],
+  user: { id: "u-po", kind: "person" }, person: { username: "owner-hq" }, permissions: [">"], fleet_permissions: ["*:read"],
   grants: [{ role: "owner", scope_kind: "location", scope_id: "loc-hq" }, { role: "viewer", scope_kind: "all" }],
 };
 
@@ -90,7 +90,7 @@ describe("Severity levels page", () => {
     ]);
   });
 
-  it("renders each level's label in the registry's color, the chip an alarm wears", () => {
+  it("renders each level's label in the catalog's color, the chip an alarm wears", () => {
     mount();
     const row = bodyRows().find((r) => r.textContent?.includes("major"))!;
     const chip = row.querySelector('[data-severity="major"]')!;
@@ -122,7 +122,7 @@ describe("Severity levels page", () => {
     expect(screen.queryByText("New severity level")).toBeNull();
   });
 
-  it("offers no level write to a caller whose severity_level permissions stop at one place", async () => {
+  it("offers no level write to a caller whose severity_level permissions stop at one location", async () => {
     mount(placeOwner);
     expect(screen.queryByText("New severity level")).toBeNull();
     openLevel("major");

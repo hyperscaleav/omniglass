@@ -32,7 +32,7 @@ const mcpSimPortShift = 25000
 // the real binary's `omniglass mcp tools` and `omniglass mcp call`, an MCP
 // client over stdio, launch `omniglass mcp`, which relays to the real server's
 // /mcp. A read tool reports a simulated component's reachability after a real
-// node probed it on the wire, and a write tool lands an audit row naming the
+// outpost probed it on the wire, and a write tool lands an audit row naming the
 // user, the MCP channel and the declared client. Skipped under -short.
 func TestMCPStdioClientDrivesTheSimulatedFleet(t *testing.T) {
 	if testing.Short() {
@@ -62,11 +62,11 @@ func TestMCPStdioClientDrivesTheSimulatedFleet(t *testing.T) {
 		t.Fatal(err)
 	}
 	all := scope.Set{All: true}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-m"}, all, all); err != nil {
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-m"}, all, all); err != nil {
 		t.Fatal(err)
 	}
-	nodeTok := "mcp-e2e-token"
-	sum := sha256.Sum256([]byte(nodeTok))
+	outpostTok := "mcp-e2e-token"
+	sum := sha256.Sum256([]byte(outpostTok))
 	if _, err := gw.SetEnrollmentToken(ctx, "", "edge-m", hex.EncodeToString(sum[:]), all); err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestMCPStdioClientDrivesTheSimulatedFleet(t *testing.T) {
 		args []any
 	}{
 		{`update component set product_id = (select id from product where name = $1) where name = 'mcp-panel'`, []any{product}},
-		{`insert into endpoint (name, transport, component, node_name, params) values ('mcp-panel-tcp', 'tcp', (select id from component where name = 'mcp-panel'), (select principal_id from node where name = 'edge-m'), jsonb_build_object('target', $1::text))`, []any{target}},
+		{`insert into endpoint (name, transport, component, outpost_id, params) values ('mcp-panel-tcp', 'tcp', (select id from component where name = 'mcp-panel'), (select user_id from outpost where name = 'edge-m'), jsonb_build_object('target', $1::text))`, []any{target}},
 		{`insert into task (id, mode, endpoint_id, enabled) values ('t-mcp', 'poll', (select id from endpoint where name = 'mcp-panel-tcp'), true)`, nil},
 	} {
 		if _, err := conn.Exec(ctx, q.sql, q.args...); err != nil {
@@ -95,7 +95,7 @@ func TestMCPStdioClientDrivesTheSimulatedFleet(t *testing.T) {
 	simCtx, stopSim := context.WithCancel(ctx)
 	defer stopSim()
 	simCmd := exec.CommandContext(simCtx, binPath, "sim", "run", "--port-offset", fmt.Sprint(mcpSimPortShift), "--poll", "300ms")
-	simCmd.Env = append(os.Environ(), "OMNIGLASS_SERVER="+server, "OMNIGLASS_NODE_NAME=edge-m", "OMNIGLASS_NODE_TOKEN="+nodeTok)
+	simCmd.Env = append(os.Environ(), "OMNIGLASS_SERVER="+server, "OMNIGLASS_OUTPOST_NAME=edge-m", "OMNIGLASS_OUTPOST_TOKEN="+outpostTok)
 	simCmd.Stdout, simCmd.Stderr = os.Stderr, os.Stderr
 	if err := simCmd.Start(); err != nil {
 		t.Fatalf("start sim: %v", err)
@@ -106,15 +106,15 @@ func TestMCPStdioClientDrivesTheSimulatedFleet(t *testing.T) {
 	env := append(os.Environ(), "OMNIGLASS_SERVER="+server, "OMNIGLASS_TOKEN="+ownerTok)
 	cli := runCLI(t, root, binPath, env)
 	waitFor(t, "the simulator to serve the component", func() bool {
-		out, code := cli("node", "simulation", "edge-m")
+		out, code := cli("outpost", "simulation", "edge-m")
 		return code == 0 && strings.Contains(out, `"serving": true`)
 	})
-	if out, code := cli("node", "run", "--name", "edge-m", "--token", nodeTok, "--once"); code != 0 {
-		t.Fatalf("node run exit %d:\n%s", code, out)
+	if out, code := cli("outpost", "run", "--name", "edge-m", "--token", outpostTok, "--once"); code != 0 {
+		t.Fatalf("outpost run exit %d:\n%s", code, out)
 	}
 
 	out, code := cli("mcp", "tools")
-	if code != 0 || !strings.Contains(out, `"name": "get-component-reachability"`) || !strings.Contains(out, `"name": "create-secret"`) {
+	if code != 0 || !strings.Contains(out, `"name": "get-component-reachability"`) || !strings.Contains(out, `"name": "create-component"`) || strings.Contains(out, `"name": "create-secret"`) {
 		t.Fatalf("mcp tools exit %d:\n%s", code, out)
 	}
 	if strings.Contains(out, ownerTok) {
@@ -133,16 +133,16 @@ func TestMCPStdioClientDrivesTheSimulatedFleet(t *testing.T) {
 		return code == 0 && strings.Contains(out, "mcp-panel-tcp") && strings.Contains(out, `"value": "up"`)
 	})
 
-	out, code = cli("mcp", "call", "create-secret", "--args", `{"name":"mcp-e2e-key","secret_type":"api-key","owner_kind":"platform","fields":{"key":"k-1"}}`)
+	out, code = cli("mcp", "call", "create-component", "--args", `{"name":"mcp-e2e-comp","product":"generic-device"}`)
 	if code != 0 {
-		t.Fatalf("mcp call create-secret exit %d:\n%s", code, out)
+		t.Fatalf("mcp call create-component exit %d:\n%s", code, out)
 	}
 	out, code = cli("mcp", "call", "get-component", "--args", `{"name":"no-such-component"}`)
 	if code == 0 || !strings.Contains(out, "404") {
 		t.Fatalf("a tool error should exit non-zero with the route's refusal, got exit %d:\n%s", code, out)
 	}
 
-	out, code = cli("audit-log", "list", "--resource", "secret", "--verb", "create")
+	out, code = cli("audit-log", "list", "--resource", "component", "--verb", "create")
 	if code != 0 {
 		t.Fatalf("audit-log list exit %d:\n%s", code, out)
 	}
@@ -158,7 +158,7 @@ func TestMCPStdioClientDrivesTheSimulatedFleet(t *testing.T) {
 		t.Fatalf("decode audit-log: %v\n%s", err, out)
 	}
 	for _, e := range trail.Events {
-		if e.New["name"] == "mcp-e2e-key" {
+		if e.New["Name"] == "mcp-e2e-comp" {
 			if e.ActorName != "root" || e.Channel != "mcp" || !strings.HasPrefix(e.Client, "omniglass-cli") {
 				t.Fatalf("audit row = %+v, want actor root, channel mcp, client omniglass-cli", e)
 			}

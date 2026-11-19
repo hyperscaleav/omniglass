@@ -8,7 +8,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
-// Where an in-flight command sits follows from the row: queued until a node
+// Where an in-flight command sits follows from the row: queued until an outpost
 // takes it, then delivered or awaiting the reply by how it settles, then
 // awaiting the observation; a command nothing can carry awaits observation
 // from its issue; a terminal command's phase is its status.
@@ -65,25 +65,25 @@ func TestSettleModeOf(t *testing.T) {
 	}
 }
 
-// A timeout says where the command stopped, naming the node, the endpoint or
+// A timeout says where the command stopped, naming the outpost, the endpoint or
 // the type as the facts allow.
 func TestTimeoutWords(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
 		name                         string
 		delivered, executed, carried bool
-		execErr, endpoint, node      string
+		execErr, endpoint, outpost   string
 		want                         []string
 	}{
 		{"answered, nothing observed", true, true, true, "", "tcp", "edge", []string{"answered", "video-input", "15s"}},
 		{"failed execution, nothing observed", true, true, true, "render: no arg", "tcp", "edge", []string{"execution failed", "render: no arg"}},
-		{"delivered, no report", true, false, true, "", "tcp", "edge", []string{"delivered to node edge", "no execution report"}},
-		{"delivered, node gone", true, false, false, "", "", "", []string{"delivered", "no execution report"}},
-		{"queued, node never took it", false, false, true, "", "tcp", "edge", []string{"queued for node edge", "did not take it"}},
-		{"queued, endpoint on no node", false, false, true, "", "tcp", "", []string{"endpoint tcp", "no node"}},
+		{"delivered, no report", true, false, true, "", "tcp", "edge", []string{"delivered to outpost edge", "no execution report"}},
+		{"delivered, outpost gone", true, false, false, "", "", "", []string{"delivered", "no execution report"}},
+		{"queued, outpost never took it", false, false, true, "", "tcp", "edge", []string{"queued for outpost edge", "did not take it"}},
+		{"queued, endpoint on no outpost", false, false, true, "", "tcp", "", []string{"endpoint tcp", "no outpost"}},
 		{"carried by nothing", false, false, false, "", "", "", []string{"binds set-input", "no observation of video-input"}},
 	} {
-		got := timeoutWords("set-input", "video-input", "15s", tc.delivered, tc.executed, tc.carried, tc.execErr, tc.endpoint, tc.node)
+		got := timeoutWords("set-input", "video-input", "15s", tc.delivered, tc.executed, tc.carried, tc.execErr, tc.endpoint, tc.outpost)
 		for _, w := range tc.want {
 			if !strings.Contains(got, w) {
 				t.Errorf("%s: %q, want it to mention %q", tc.name, got, w)
@@ -100,21 +100,21 @@ func TestDeliveryTimeoutWords(t *testing.T) {
 	for _, tc := range []struct {
 		name               string
 		delivered, carried bool
-		endpoint, node     string
+		endpoint, outpost  string
 		want               string
 	}{
-		{"queued, node never took it", false, true, "tcp", "edge",
-			"queued for node edge, which did not take it within its 10 minute delivery window"},
+		{"queued, outpost never took it", false, true, "tcp", "edge",
+			"queued for outpost edge, which did not take it within its 10 minute delivery window"},
 		{"delivered, no report", true, true, "tcp", "edge",
-			"delivered to node edge, which sent no execution report within its 10 minute delivery window"},
-		{"delivered, node since unplaced", true, true, "tcp", "",
+			"delivered to outpost edge, which sent no execution report within its 10 minute delivery window"},
+		{"delivered, outpost since unplaced", true, true, "tcp", "",
 			"delivered, but no execution report arrived within its 10 minute delivery window"},
-		{"queued, endpoint on no node", false, true, "tcp", "",
-			"queued on endpoint tcp, which is placed on no node"},
+		{"queued, endpoint on no outpost", false, true, "tcp", "",
+			"queued on endpoint tcp, which is placed on no outpost"},
 		{"carried by nothing", false, false, "", "",
 			"no endpoint of this component has a driver that binds reboot"},
 	} {
-		got := deliveryTimeoutWords("reboot", tc.delivered, tc.carried, tc.endpoint, tc.node)
+		got := deliveryTimeoutWords("reboot", tc.delivered, tc.carried, tc.endpoint, tc.outpost)
 		if got != tc.want {
 			t.Errorf("%s: %q, want %q", tc.name, got, tc.want)
 		}
@@ -128,7 +128,7 @@ func TestDeliveryTimeoutWords(t *testing.T) {
 // settles it, an execution error fails it with that error, both by the reply.
 func TestReportOutcome(t *testing.T) {
 	t.Parallel()
-	if o := reportOutcome(""); o.status != "settled" || o.by != SettledByReply || o.reason != "the node carried it out" {
+	if o := reportOutcome(""); o.status != "settled" || o.by != SettledByReply || o.reason != "the outpost carried it out" {
 		t.Errorf("clean report = %+v, want settled by reply, carried out", o)
 	}
 	if o := reportOutcome("connection refused"); o.status != "failed" || o.by != SettledByReply || o.reason != "the execution failed: connection refused" {

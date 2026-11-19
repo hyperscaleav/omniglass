@@ -50,8 +50,8 @@ func TestPasswordAuth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("authenticate right password: %v", err)
 	}
-	if pr.Kind != "human" || pr.Human == nil || pr.Human.Username != "ops" {
-		t.Fatalf("unexpected principal: %+v", pr)
+	if pr.Kind != "person" || pr.Person == nil || pr.Person.Username != "ops" {
+		t.Fatalf("unexpected user: %+v", pr)
 	}
 	if len(pr.Grants) != 1 || pr.Grants[0].Role != "owner" || pr.Grants[0].ScopeKind != "all" {
 		t.Fatalf("expected owner@all grant, got %+v", pr.Grants)
@@ -87,11 +87,11 @@ func TestPasswordAuth(t *testing.T) {
 	}
 }
 
-// TestSetPrincipalPassword proves an admin can reset another human's password by id:
+// TestSetUserPassword proves an admin can reset another human's password by id:
 // the new secret authenticates and the old one does not, the reset is audited with
 // the admin (not the target) as the actor, a non-all scope is refused, and an unknown
 // id is not-found. Skipped under -short.
-func TestSetPrincipalPassword(t *testing.T) {
+func TestSetUserPassword(t *testing.T) {
 	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -110,14 +110,14 @@ func TestSetPrincipalPassword(t *testing.T) {
 	all := scope.Set{All: true}
 
 	oldHash, _ := auth.HashPassword("orange-boat-42x")
-	alice, err := gw.CreateHumanPrincipal(ctx, root.ID, storage.HumanSpec{Username: "alice", PasswordHash: oldHash}, all)
+	alice, err := gw.CreatePerson(ctx, root.ID, storage.PersonSpec{Username: "alice", PasswordHash: oldHash}, all)
 	if err != nil {
 		t.Fatalf("create alice: %v", err)
 	}
 
 	// Admin resets alice's password: the new secret works, the old does not.
 	newHash, _ := auth.HashPassword("purple-canyon-7")
-	if err := gw.SetPrincipalPassword(ctx, root.ID, alice.ID, newHash, all); err != nil {
+	if err := gw.SetUserPassword(ctx, root.ID, alice.ID, newHash, all); err != nil {
 		t.Fatalf("reset password: %v", err)
 	}
 	if _, err := gw.AuthenticatePassword(ctx, "alice", "purple-canyon-7"); err != nil {
@@ -127,13 +127,13 @@ func TestSetPrincipalPassword(t *testing.T) {
 		t.Fatalf("old password should be rejected: %v", err)
 	}
 
-	// A non-all scope is refused (principals are not scope-tree scoped).
-	if err := gw.SetPrincipalPassword(ctx, root.ID, alice.ID, newHash, scope.Set{}); !errors.Is(err, storage.ErrPrincipalForbidden) {
-		t.Fatalf("non-all scope: want ErrPrincipalForbidden, got %v", err)
+	// A non-all scope is refused (users are not scope-tree scoped).
+	if err := gw.SetUserPassword(ctx, root.ID, alice.ID, newHash, scope.Set{}); !errors.Is(err, storage.ErrUserForbidden) {
+		t.Fatalf("non-all scope: want ErrUserForbidden, got %v", err)
 	}
 	// An unknown id is not-found.
-	if err := gw.SetPrincipalPassword(ctx, root.ID, "00000000-0000-0000-0000-000000000000", newHash, all); !errors.Is(err, storage.ErrPrincipalNotFound) {
-		t.Fatalf("unknown id: want ErrPrincipalNotFound, got %v", err)
+	if err := gw.SetUserPassword(ctx, root.ID, "00000000-0000-0000-0000-000000000000", newHash, all); !errors.Is(err, storage.ErrUserNotFound) {
+		t.Fatalf("unknown id: want ErrUserNotFound, got %v", err)
 	}
 
 	// The reset is audited with the admin (root) as the actor, not alice.

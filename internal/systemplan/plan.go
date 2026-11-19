@@ -1,8 +1,8 @@
 // Package systemplan is the pure half of the planned-system primitive
-// (#827, ADR-0827): it staffs a standard's roles from a set of candidate
+// (#827, ADR-0827): it staffs a standard's slots from a set of candidate
 // products and says which alternate each choice takes, touching nothing.
 // The simulator plans with the products it serves (internal/simfleet), a
-// system template with the product it names per role; the transactional
+// system template with the product it names per slot; the transactional
 // half is storage.CreatePlan, which lands what a plan says.
 package systemplan
 
@@ -12,11 +12,11 @@ import (
 	"strings"
 )
 
-// Role is one role of a standard, as the system planner reads it: how many
+// Slot is one slot of a standard, as the system planner reads it: how many
 // it needs, the component types it accepts (empty is any), the products it
 // is pinned to (empty is any of an accepted type), and the choice alternate
 // it belongs to ("choice/alternate", empty when unconditional).
-type Role struct {
+type Slot struct {
 	Name           string
 	Quorum         int
 	Capacity       *int
@@ -32,19 +32,19 @@ type Product struct {
 }
 
 // Catalog is what the planner consults: which products are candidates for a
-// role, and whether a component type falls within an accepted type
+// slot, and whether a component type falls within an accepted type
 // (self-inclusive). Noun names the candidates in a shortfall's reason
 // ("simulated" for the simulator's, "template" for a template's).
 type Catalog struct {
-	Candidate func(role, product string) bool
+	Candidate func(slot, product string) bool
 	Within    func(componentType, accepted string) bool
 	Noun      string
 }
 
-// RoleFill is the plan for one role: the product and how many of it, or,
+// SlotFill is the plan for one slot: the product and how many of it, or,
 // when nothing simulated fits, how many it is short and why.
-type RoleFill struct {
-	Role      string
+type SlotFill struct {
+	Slot      string
 	Alternate string
 	Product   string
 	Count     int
@@ -52,32 +52,32 @@ type RoleFill struct {
 	Reason    string
 }
 
-// SystemPlan is a standard staffed with candidate products: a fill per role
+// SystemPlan is a standard staffed with candidate products: a fill per slot
 // taken, and the alternate chosen for each choice.
 type SystemPlan struct {
-	Roles      []RoleFill
+	Slots      []SlotFill
 	Alternates map[string]string
 }
 
 // Components is how many components the plan creates.
 func (p SystemPlan) Components() int {
 	n := 0
-	for _, f := range p.Roles {
+	for _, f := range p.Slots {
 		n += f.Count
 	}
 	return n
 }
 
-// PlanSystem staffs a standard's roles with candidate products. Each role
+// PlanSystem staffs a standard's slots with candidate products. Each slot
 // takes the first candidate product that fits it (its pins in the order
 // given, else products by name), as many as its quorum and at least one,
-// capped at its capacity; a role no candidate fits is left unstaffed, short
+// capped at its capacity; a slot no candidate fits is left unstaffed, short
 // its quorum, with the reason. Of each choice it takes one alternate: the
-// first by name whose roles can all be staffed, else the one staffing the
-// most. Pure: the roles, the products and the catalog come in, the plan goes
+// first by name whose slots can all be staffed, else the one staffing the
+// most. Pure: the slots, the products and the catalog come in, the plan goes
 // out. The simulator's candidates are the products it serves; a template's
-// are the product it names for each role.
-func PlanSystem(roles []Role, products []Product, cat Catalog) SystemPlan {
+// are the product it names for each slot.
+func PlanSystem(slots []Slot, products []Product, cat Catalog) SystemPlan {
 	noun := cat.Noun
 	if noun == "" {
 		noun = "simulated"
@@ -88,8 +88,8 @@ func PlanSystem(roles []Role, products []Product, cat Catalog) SystemPlan {
 	for _, p := range sorted {
 		byName[p.Name] = p
 	}
-	fill := func(r Role) RoleFill {
-		f := RoleFill{Role: r.Name, Alternate: r.Alternate}
+	fill := func(r Slot) SlotFill {
+		f := SlotFill{Slot: r.Name, Alternate: r.Alternate}
 		want := r.Quorum
 		if want < 1 {
 			want = 1
@@ -151,10 +151,10 @@ func PlanSystem(roles []Role, products []Product, cat Catalog) SystemPlan {
 	// Group alternates by choice to pick one per choice.
 	type alt struct {
 		name  string
-		fills []RoleFill
+		fills []SlotFill
 	}
 	choices := map[string]map[string]*alt{}
-	for _, r := range roles {
+	for _, r := range slots {
 		if r.Alternate == "" {
 			continue
 		}
@@ -195,14 +195,14 @@ func PlanSystem(roles []Role, products []Product, cat Catalog) SystemPlan {
 		}
 		plan.Alternates[choice] = best
 	}
-	for _, r := range roles {
+	for _, r := range slots {
 		if r.Alternate != "" {
 			choice, name, _ := strings.Cut(r.Alternate, "/")
 			if plan.Alternates[choice] != name {
 				continue
 			}
 		}
-		plan.Roles = append(plan.Roles, fill(r))
+		plan.Slots = append(plan.Slots, fill(r))
 	}
 	return plan
 }

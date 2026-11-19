@@ -19,7 +19,7 @@ const (
 	RefusedUnregistered Outcome = "refused-unregistered"
 	// RefusedWriter is a key whose writer class refuses the writer.
 	RefusedWriter Outcome = "refused-writer"
-	// RefusedInstance is a node-probe sample at an instance the probe does
+	// RefusedInstance is an outpost-probe sample at an instance the probe does
 	// not own.
 	RefusedInstance Outcome = "refused-instance"
 	// RefusedInvalid is a value or payload its type's validation refuses.
@@ -40,7 +40,7 @@ const (
 	// resolved, or no valid identity.
 	Unidentified Outcome = "unidentified"
 	// RefusedOwner is an item in a batch the server Termed whole because it
-	// asserted an owner on the node lane, which only the API lane may do.
+	// asserted an owner on the outpost lane, which only the API lane may do.
 	RefusedOwner Outcome = "refused-owner"
 	// RefusedTask is an item in a batch the server Termed whole because it
 	// carried task rows outside its groups.
@@ -54,15 +54,15 @@ const (
 	// the consumer allows and was Termed at the last.
 	Abandoned Outcome = "abandoned"
 	// Missing is an item that never landed at ingest: a gap in its boot's
-	// offsets the node does not account for, or a shortfall between what a
+	// offsets the outpost does not account for, or a shortfall between what a
 	// batch declared and what it decoded to.
 	Missing Outcome = "missing"
 
-	// The node hop's outcomes (#1692): an item the node minted into a batch
-	// either shipped or was dropped by the node under one of these causes.
+	// The outpost hop's outcomes (#1692): an item the outpost minted into a batch
+	// either shipped or was dropped by the outpost under one of these causes.
 
-	// Shipped is an item the node's spool handed to the stream: out of the
-	// node hop, and into the ingest hop.
+	// Shipped is an item the outpost's spool handed to the stream: out of the
+	// outpost hop, and into the ingest hop.
 	Shipped Outcome = "shipped"
 	// SpoolOverflow is an item in a batch the spool dropped, oldest first,
 	// at its count or bytes cap.
@@ -72,10 +72,10 @@ const (
 	// BusRefused is an item in a batch the bus refused outright (too large,
 	// no stream), which no retry would change.
 	BusRefused Outcome = "bus-refused"
-	// SelfLogOverflow is a node self-log line the buffer dropped at its cap
+	// SelfLogOverflow is an outpost self-log line the buffer dropped at its cap
 	// before a batch carried it.
 	SelfLogOverflow Outcome = "self-log-overflow"
-	// EncodeFailed is an item in a group or batch the node could not encode.
+	// EncodeFailed is an item in a group or batch the outpost could not encode.
 	EncodeFailed Outcome = "encode-failed"
 )
 
@@ -83,16 +83,16 @@ const (
 // endpoint settled, not telemetry items (the sim cannot know which kinds an
 // answer would have carried), so it has its own set, never mixed into the
 // ingest rows. A refusal or an error the endpoint sent back is returned: it
-// reached the node's task, which reports it; it is not the hop's loss.
+// reached the outpost's task, which reports it; it is not the hop's loss.
 const (
-	// Returned is a request whose reply reached the node's task.
+	// Returned is a request whose reply reached the outpost's task.
 	Returned Outcome = "returned"
 	// Withheld is a request the sim chose not to answer: a credential it
 	// does not accept, or its own configured datagram loss.
 	Withheld Outcome = "withheld"
 	// Dropped is a reply the sim could not write to its socket.
 	Dropped Outcome = "dropped"
-	// NotReturned is a reply the sim sent that never reached the node's
+	// NotReturned is a reply the sim sent that never reached the outpost's
 	// task: lost on the way back, or late past the task's timeout.
 	NotReturned Outcome = "not-returned"
 )
@@ -124,22 +124,22 @@ var IngestOutcomes = []Outcome{
 	RefusedOwner, RefusedTask, RefusedBatch, RefusedMetadata, Abandoned, Missing,
 }
 
-// NodeOutcomes is every outcome of the node hop, out first, then loss.
-var NodeOutcomes = []Outcome{
+// OutpostOutcomes is every outcome of the outpost hop, out first, then loss.
+var OutpostOutcomes = []Outcome{
 	Shipped, SpoolOverflow, SpoolExpired, BusRefused, SelfLogOverflow, EncodeFailed,
 }
 
 // Outcomes is every item outcome of every hop: the ingest hop's, then the
-// node's. The sim hop counts requests, not items, so SimOutcomes stands apart.
-var Outcomes = append(append([]Outcome{}, IngestOutcomes...), NodeOutcomes...)
+// outpost's. The sim hop counts requests, not items, so SimOutcomes stands apart.
+var Outcomes = append(append([]Outcome{}, IngestOutcomes...), OutpostOutcomes...)
 
 // OutcomesOf is the outcomes a hop's row counts, nil for a hop with none.
 func OutcomesOf(h Hop) []Outcome {
 	switch h {
 	case Sim:
 		return SimOutcomes
-	case Node:
-		return NodeOutcomes
+	case Outpost:
+		return OutpostOutcomes
 	case Ingest:
 		return IngestOutcomes
 	case Publish:
@@ -149,8 +149,8 @@ func OutcomesOf(h Hop) []Outcome {
 }
 
 // Out reports whether the outcome counts as out: accounted for, in the store
-// or, for an unbound sample, in its conduit's unbound inbox, or at the node
-// hop handed to the stream, or, on the sim hop, back at the node, or, on the
+// or, for an unbound sample, in its conduit's unbound inbox, or at the outpost
+// hop handed to the stream, or, on the sim hop, back at the outpost, or, on the
 // publish hop, through the turn.
 func (o Outcome) Out() bool {
 	return o == Stored || o == Coalesced || o == Unbound || o == Shipped || o == Returned || o == TurnTaken

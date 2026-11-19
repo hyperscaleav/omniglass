@@ -10,7 +10,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest/accesspath"
 )
 
-// logFixture adds a node to the prune fixture and inserts a line into either
+// logFixture adds an outpost to the prune fixture and inserts a line into either
 // log table at an exact age, with a severity ("" for none).
 func (f *pruneFixture) logRow(table, severity string, age time.Duration, msg string) {
 	f.t.Helper()
@@ -24,8 +24,8 @@ func (f *pruneFixture) logRow(table, severity string, age time.Duration, msg str
 			values ($1, (select id from component where name = 'prune-c1'), '', 'push', $2, $3)`, ts, sev, msg)
 		return
 	}
-	mustExec(f.t, f.conn, `insert into node_log (ts, node_id, source, severity, message)
-		values ($1, (select principal_id from node where name = 'log-node'), 'node', $2, $3)`, ts, sev, msg)
+	mustExec(f.t, f.conn, `insert into outpost_log (ts, outpost_id, source, severity, message)
+		values ($1, (select user_id from outpost where name = 'log-outpost'), 'outpost', $2, $3)`, ts, sev, msg)
 }
 
 func (f *pruneFixture) logMessages(table string) string {
@@ -49,8 +49,8 @@ func (f *pruneFixture) logMessages(table string) string {
 func newLogFixture(t *testing.T) *pruneFixture {
 	f := newPruneFixture(t)
 	all := scope.Set{All: true}
-	if _, err := f.gw.CreateNode(f.ctx, "", storage.NodeSpec{Name: "log-node"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := f.gw.CreateOutpost(f.ctx, "", storage.OutpostSpec{Name: "log-outpost"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	return f
 }
@@ -64,7 +64,7 @@ const day = 24 * time.Hour
 func TestPruneLogsKeepsEachBandToItsWindow(t *testing.T) {
 	t.Parallel()
 	f := newLogFixture(t)
-	for _, table := range []string{"log_line", "node_log"} {
+	for _, table := range []string{"log_line", "outpost_log"} {
 		f.logRow(table, "debug", 5*day, "debug-5d")
 		f.logRow(table, "info", 5*day, "info-5d")
 		f.logRow(table, "notice", 20*day, "notice-20d")
@@ -126,7 +126,7 @@ func TestPruneLogsCompletesABacklogInChunks(t *testing.T) {
 func TestPruneLogsReachesItsIndex(t *testing.T) {
 	t.Parallel()
 	f := newLogFixture(t)
-	for _, table := range []string{"log_line", "node_log"} {
+	for _, table := range []string{"log_line", "outpost_log"} {
 		stmts := storage.ExportPruneLogsSQL(table)
 		for kind, index := range map[string]string{"rated": table + "_severity_ts_idx", "unrated": table + "_unrated_ts_idx"} {
 			args := []any{time.Now(), 10}
@@ -188,7 +188,7 @@ func TestPruningALogLineClearsItsEventsLinkThroughAnIndex(t *testing.T) {
 	}
 
 	// The action finds its rows as this select does; an UPDATE's own plan adds a
-	// ModifyTable node the instrument would read as a second access to event.
+	// ModifyTable outpost the instrument would read as a second access to event.
 	plan, err := accesspath.Explain(f.ctx, f.conn, `select id from event where source_log_line_id = $1`, lineID)
 	if err != nil {
 		t.Fatal(err)

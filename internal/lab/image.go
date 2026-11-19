@@ -10,14 +10,21 @@ import (
 // always runs the code the binary was built from.
 const (
 	// ReleaseRepo is where a release binary's image is published, tagged
-	// v<version>.
+	// v<version>; a release binary pulls it by the digest stamped at release.
 	ReleaseRepo = "ghcr.io/hyperscaleav/omniglass"
-	// DevImage is the image `make` builds beside the host binary.
+	// DevImage is the image `make` builds beside the host binary: the tag
+	// every checkout on a Docker host shares, so the newest build anywhere
+	// wins it. A binary with a build id runs DevImageFor(build) instead.
 	DevImage = "omniglass:dev"
 	// VersionLabel is the OCI label the image carries its build id in; a dev
 	// binary runs only an image whose label matches its own build id.
 	VersionLabel = "org.opencontainers.image.version"
 )
+
+// DevImageFor is the tag `make` gives a build besides DevImage, keyed to the
+// build id both the binary and the image carry, so another checkout's build
+// never re-points it (#1422).
+func DevImageFor(build string) string { return DevImage + "-" + build }
 
 // ImageChoice is the image a lab runs and how to get it.
 type ImageChoice struct {
@@ -28,6 +35,10 @@ type ImageChoice struct {
 	// WantVersion, when set, is the build id the image's version label must
 	// carry; a missing or mismatched image is refused, saying run make.
 	WantVersion string
+	// ID is the image ID the reference resolved to at preflight, which the
+	// run's containers are created from. Set by the runner, not by
+	// SelectImage.
+	ID string
 	// Warning is printed before the lab starts.
 	Warning string
 	// Why says where the choice came from, for the status line.
@@ -42,25 +53,46 @@ func (c ImageChoice) OwnBuild(labels map[string]string) bool {
 	return c.BinaryVersion != "" && c.BinaryVersion != "dev" && labels[VersionLabel] == c.BinaryVersion
 }
 
-var releaseVersion = regexp.MustCompile(`^v?\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$`)
+var (
+	releaseVersion = regexp.MustCompile(`^v?\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$`)
+	imageDigest    = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+)
 
-// SelectImage picks the image for a binary of the given version. Pure.
+// SelectImage picks the image for a binary of the given version and the
+// image digest stamped into it at release. Pure.
 //   - --image overrides, with a warning.
-//   - A release binary (a semantic version) runs ghcr.io/hyperscaleav/omniglass:v<version>,
-//     pulled if absent.
-//   - Any other build runs the local omniglass:dev, whose version label must
-//     match the binary's build id; the lab never builds implicitly.
-func SelectImage(version, override string) ImageChoice {
+//   - A release binary (a semantic version) runs ghcr.io/hyperscaleav/omniglass@<digest>,
+//     pulled if absent: the digest its release was built with, so a re-pushed
+//     v<version> tag cannot change what it runs (#1257). One that carries no
+//     digest is refused; it never falls back to the mutable tag.
+//   - Any other build runs the local omniglass:dev-<build id> that make tagged
+//     beside the binary, or omniglass:dev for a binary with no build id (not
+//     built by make). The image's version label must match the binary's build
+//     id; the lab never builds implicitly.
+func SelectImage(version, digest, override string) (ImageChoice, error) {
 	if override != "" {
 		return ImageChoice{Ref: override, Pull: true, Why: "--image", BinaryVersion: version,
 			Warning: fmt.Sprintf("--image %s overrides the image this binary was built with (version %s); "+
-				"a lab whose server and binary disagree is yours to debug", override, version)}
+				"a lab whose server and binary disagree is yours to debug", override, version)}, nil
 	}
 	if releaseVersion.MatchString(version) {
-		return ImageChoice{Ref: ReleaseRepo + ":v" + strings.TrimPrefix(version, "v"), Pull: true,
-			Why: "the release image for this binary", BinaryVersion: version}
+		tag := "v" + strings.TrimPrefix(version, "v")
+		if !imageDigest.MatchString(digest) {
+			return ImageChoice{}, &PreflightError{
+				Cause: fmt.Sprintf("This release binary (version %s) carries no image digest, so it cannot pin the image "+
+					"it was released with; it will not run the %s:%s tag, which can be re-pushed.", version, ReleaseRepo, tag),
+				Fix: "run an image you choose with --image (or OMNIGLASS_LAB_IMAGE), for example --image " +
+					ReleaseRepo + ":" + tag + ", with a warning: a lab whose server and binary disagree is yours to debug.",
+			}
+		}
+		return ImageChoice{Ref: ReleaseRepo + "@" + digest, Pull: true,
+			Why: "the release image for this binary, " + tag + " pinned by digest", BinaryVersion: version}, nil
 	}
-	return ImageChoice{Ref: DevImage, WantVersion: version, Why: "built by make beside this binary", BinaryVersion: version}
+	ref := DevImage
+	if version != "" && version != "dev" {
+		ref = DevImageFor(version)
+	}
+	return ImageChoice{Ref: ref, WantVersion: version, Why: "built by make beside this binary", BinaryVersion: version}, nil
 }
 
 // CheckDevImage holds a dev image to the binary that runs it: the image must

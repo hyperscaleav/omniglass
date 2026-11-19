@@ -99,7 +99,7 @@ type DraftLabel struct {
 	// renders nothing. Empty is not a failure: the read ladder's third rung is
 	// the entity's own name, so an empty label means the name shows instead.
 	Label string
-	// Rule is the template that produced Label, resolved through the same tier
+	// Rule is the rule that produced Label, resolved through the same tier
 	// precedence a create uses, or "" when no tier had an opinion.
 	Rule string
 }
@@ -155,7 +155,7 @@ type LocationLabelDraft struct {
 // lives at the route (see internal/api/label_draft.go); these four decide what
 // the answer may contain.
 func (p *PG) RenderComponentDraftLabel(ctx context.Context, d ComponentLabelDraft, create, locationRead, systemRead, systemUpdate scope.Set) (DraftLabel, error) {
-	productID, err := registryID(ctx, p.pool, "product", d.ProductName, ErrProductNotFound)
+	productID, err := catalogID(ctx, p.pool, "product", d.ProductName, ErrProductNotFound)
 	if err != nil {
 		return DraftLabel{}, err
 	}
@@ -231,14 +231,14 @@ func (p *PG) RenderComponentDraftLabel(ctx context.Context, d ComponentLabelDraf
 func (p *PG) RenderSystemDraftLabel(ctx context.Context, d SystemLabelDraft, create, locationRead scope.Set) (DraftLabel, error) {
 	var systemTypeID, standardID *string
 	if d.SystemTypeRef != "" {
-		id, err := registryID(ctx, p.pool, "system_type", d.SystemTypeRef, ErrUnknownSystemType)
+		id, err := catalogID(ctx, p.pool, "system_type", d.SystemTypeRef, ErrUnknownSystemType)
 		if err != nil {
 			return DraftLabel{}, err
 		}
 		systemTypeID = &id
 	}
 	if d.StandardRef != "" {
-		id, err := registryID(ctx, p.pool, "standard", d.StandardRef, ErrUnknownStandard)
+		id, err := catalogID(ctx, p.pool, "standard", d.StandardRef, ErrUnknownStandard)
 		if err != nil {
 			return DraftLabel{}, err
 		}
@@ -276,8 +276,8 @@ func (p *PG) RenderSystemDraftLabel(ctx context.Context, d SystemLabelDraft, cre
 	s := System{Name: d.Name}
 	if d.Name == "" {
 		// generateNameForSystemType's two refusals, in its order: an
-		// unclassified system has no registry row to take a stem from, and a
-		// classified one whose chain sets none anywhere is a registry defect.
+		// unclassified system has no catalog row to take a stem from, and a
+		// classified one whose chain sets none anywhere is a catalog defect.
 		// The console reads them as one state and says two different things,
 		// because the operator's next move differs.
 		if systemTypeID == nil {
@@ -313,7 +313,7 @@ func (p *PG) RenderLocationDraftLabel(ctx context.Context, d LocationLabelDraft,
 	// tolerance a form must not inherit. It also has to be the uuid rather than
 	// the operator-facing id, because that resolver keys on the column a stored
 	// Location carries.
-	locationTypeID, err := registryID(ctx, p.pool, "location_type", d.LocationTypeRef, ErrUnknownType)
+	locationTypeID, err := catalogID(ctx, p.pool, "location_type", d.LocationTypeRef, ErrUnknownType)
 	if err != nil {
 		return DraftLabel{}, err
 	}
@@ -420,16 +420,16 @@ func draftedLabel(eng *label.Engine, rule string, data label.Data, name string, 
 	return d
 }
 
-// registryID resolves a catalog reference (a name or a uuid) to the row's id,
+// catalogID resolves a catalog reference (a name or a uuid) to the row's id,
 // answering with the caller's own not-found sentinel so the refusal reads the
 // way the create's does. Catalogs are not scoped trees, so there is no scope to
 // inject here; the scoped refs a draft touches go through GetLocation and
 // GetSystem instead.
 //
 // table is a compile-time constant at every call site, never operator input.
-func registryID(ctx context.Context, q querier, table, ref string, notFound error) (string, error) {
+func catalogID(ctx context.Context, q querier, table, ref string, notFound error) (string, error) {
 	var id string
-	err := q.QueryRow(ctx, `select id from `+refRows(table, ref)+` t where `+registryRefCol(ref)+` = $1`, ref).Scan(&id)
+	err := q.QueryRow(ctx, `select id from `+refRows(table, ref)+` t where `+catalogRefCol(ref)+` = $1`, ref).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", notFound
 	}

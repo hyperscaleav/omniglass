@@ -70,6 +70,9 @@ func TestIngestLaneTallyAndLogLine(t *testing.T) {
 	// The logged busy time is the in-process total truncated to milliseconds,
 	// so it never exceeds the tally read after the drain.
 	last := samples[len(samples)-1]
+	if last.Partition != "other" {
+		t.Errorf("the push lane's tally logged as partition %q, want other: it is outside the partitions", last.Partition)
+	}
 	if last.Busy > tally.Busy {
 		t.Errorf("the logged busy time %s exceeds the lane's tally %s", last.Busy, tally.Busy)
 	}

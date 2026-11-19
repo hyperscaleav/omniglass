@@ -1,7 +1,7 @@
 # A driver spec can be validated, previewed and run now
 #
 # A spec for a simulated display's web admin, one emit misnamed: validate names
-# the fault. Fixed, it previews through the node, the display answering and
+# the fault. Fixed, it previews through the outpost, the display answering and
 # nothing stored. Attached, its poll runs now and the samples land. The same
 # preview is an MCP tool, annotated as reaching the component (#1163).
 
@@ -30,7 +30,7 @@ Type `omniglass driver validate --spec "$(cat spec.json)" | jq -c '{valid, findi
 Enter
 Wait
 
-Type "# Fixed, it validates; previewed through the node, the display answers and nothing is stored"
+Type "# Fixed, it validates; previewed through the outpost, the display answers and nothing is stored"
 Enter
 Wait
 Type `jq '.polls[0].emits[0].name = "model-number"' spec.json > fixed.json && omniglass driver validate --spec "$(cat fixed.json)" | jq -c '{valid}'`
@@ -39,7 +39,7 @@ Wait
 Type `inputs="{\"host\":\"$host\",\"port\":\"$port\",\"login\":\"driver-preview-login\"}"`
 Enter
 Wait
-Type `omniglass driver preview --node edge-hq --spec "$(cat fixed.json)" --inputs "$inputs" | jq -c '{stored, results: [.results[] | {poll, samples: [.samples[] | {name, text}]}]}'`
+Type `omniglass driver preview --outpost edge-hq --spec "$(cat fixed.json)" --inputs "$inputs" | jq -c '{stored, results: [.results[] | {poll, samples: [.samples[] | {name, text}]}]}'`
 Enter
 Wait
 
@@ -51,7 +51,7 @@ Show
 Type "# Attached with the shipped driver, its poll runs now, and the samples land"
 Enter
 Wait
-Type `omniglass endpoint create --component "$display" --driver boreal-edge-web --node edge-hq --inputs "$inputs" | jq -c '{name, driver}'`
+Type `omniglass endpoint create --component "$display" --driver boreal-edge-web --outpost edge-hq --inputs "$inputs" | jq -c '{name, driver}'`
 Enter
 Wait
 Type `omniglass endpoint poll run "$display/http" identity | jq -c '{stored, poll, samples: [.samples[] | .name]}'`

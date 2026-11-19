@@ -65,9 +65,21 @@ func LoadRoutes() (map[string]map[string]bool, error) {
 	return routes, nil
 }
 
+// protocolRoutes are served outside the OpenAPI document: the OAuth 2.1
+// endpoints an MCP client speaks (#2048), whose shapes the RFCs fix rather
+// than the Huma API. Each is a real route, so a mention resolves.
+var protocolRoutes = map[string]map[string]bool{
+	"/oauth/register":  {"post": true},
+	"/oauth/authorize": {"get": true},
+	"/oauth/token":     {"post": true},
+}
+
 func checkRoute(method, path string, routes map[string]map[string]bool) []string {
 	norm := normalizeRoutePath(path)
 	methods, ok := routes[norm]
+	if !ok {
+		methods, ok = protocolRoutes[norm]
+	}
 	if !ok {
 		return []string{"route " + path + " is not in the OpenAPI document: the route is design (fence it) or the mention drifted"}
 	}

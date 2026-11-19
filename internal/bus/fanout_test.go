@@ -11,8 +11,8 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func fanRegistry() collection.Registry {
-	return collection.NewRegistry(
+func fanCatalog() collection.Catalog {
+	return collection.NewCatalog(
 		[]storage.MetricType{{Name: "participant-count"}, {Name: "tcp-connect-time"}},
 		[]storage.PropertyType{{Name: "call-state", DataType: "string"}, {Name: "ucc-room-id", DataType: "string"}},
 		[]storage.EventType{{Name: "call-started"}})
@@ -54,7 +54,7 @@ func TestPlanFanOut(t *testing.T) {
 	fanned := &ogv1.TelemetryBatch{
 		Metrics: []*ogv1.MetricSample{
 			{Name: "participant-count", Value: 3, Instance: "forged", Identity: room("zr-a")},
-			{Name: "tcp-connect-time", Value: 1, Identity: room("zr-a")}, // a node-probe key: refused
+			{Name: "tcp-connect-time", Value: 1, Identity: room("zr-a")}, // an outpost-probe key: refused
 			{Name: "participant-count", Value: 2, Identity: room("zr-x"), Ts: timestamppb.New(t0)},
 			{Name: "bad\x00name", Value: 2, Identity: room("zr-x")}, // no catalog key: counted, never named
 		},
@@ -65,7 +65,7 @@ func TestPlanFanOut(t *testing.T) {
 		Events: []*ogv1.EventSample{{Name: "call-started", Message: "started", Identity: room("zr-a")}},
 	}
 	owners := map[storage.IdentityKey]storage.IdentityOwner{{Key: "ucc-room-id", Value: "zr-a"}: {Kind: "system", ID: "sys-a"}}
-	p := planFanOut(fanned, "conduit-1", "meetings-cloud", "webhook", owners, fanRegistry(), t0.Add(time.Hour), nil)
+	p := planFanOut(fanned, "conduit-1", "meetings-cloud", "webhook", owners, fanCatalog(), t0.Add(time.Hour), nil)
 
 	if len(p.rows.Metrics) != 1 || len(p.rows.Events) != 1 || len(p.rows.Properties) != 0 {
 		t.Fatalf("rows = %+v, want zr-a's metric and event only", p.rows)

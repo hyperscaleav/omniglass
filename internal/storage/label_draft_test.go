@@ -224,7 +224,7 @@ func TestTheDraftedNameIsWhatTheAllocatorWouldMint(t *testing.T) {
 // case on the system tier, and since #693 there is a number in it: the shipped
 // rule leads with the place and, for the second of a stem, adds the kind and
 // the ordinal (#872), so a form drafting the SECOND boardroom in a room has to
-// show "204B Boardroom 2" and not the "204B" the first one gets.
+// show "204B Board Meeting 2" and not the "204B" the first one gets.
 //
 // Both halves are asserted against the string as well as against each other,
 // because a draft and a create that were both wrong in the same way would agree
@@ -235,7 +235,7 @@ func TestTheDraftSystemLabelCarriesTheOrdinalItWillLandWith(t *testing.T) {
 	gw, ctx := seededGateway(t)
 	room := makeRoomWithLabel(t, gw, ctx, "room-204b", "204B")
 
-	for _, want := range []string{"204B", "204B Boardroom 2"} {
+	for _, want := range []string{"204B", "204B Board Meeting 2"} {
 		drafted, err := gw.RenderSystemDraftLabel(ctx, storage.SystemLabelDraft{
 			SystemTypeRef: "board", LocationName: room.Name,
 		}, all, all)
@@ -355,7 +355,7 @@ func TestTheDraftLabelRefusesWhatANamelessCreateRefuses(t *testing.T) {
 	t.Parallel()
 	gw, ctx := seededGateway(t)
 
-	// A system with no system_type at all: the stem lives on the registry row.
+	// A system with no system_type at all: the stem lives on the catalog row.
 	if _, err := gw.RenderSystemDraftLabel(ctx, storage.SystemLabelDraft{}, all, all); !errors.Is(err, storage.ErrSystemTypeRequiredForName) {
 		t.Errorf("unclassified system draft = %v, want ErrSystemTypeRequiredForName", err)
 	}
@@ -402,8 +402,8 @@ func TestTheDraftLabelRefusesAComponentTypeChainWithNoStem(t *testing.T) {
 // label, so a caller who cannot read the placement must not be handed one
 // through the preview, whatever their grant on the entity being drafted.
 //
-// Driven by a narrow-scoped principal deliberately: three scope defects in this
-// epic survived review because every fixture drove a principal holding all.
+// Driven by a narrow-scoped user deliberately: three scope defects in this
+// epic survived review because every fixture drove a user holding all.
 func TestTheDraftLabelRendersWithinTheCallersReadScope(t *testing.T) {
 	t.Parallel()
 	gw, ctx := seededGateway(t)

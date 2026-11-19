@@ -58,7 +58,7 @@ func TestSetAllows(t *testing.T) {
 
 // TestTopicPatternMatching pins the NATS-style semantics: `*` matches exactly one
 // token and `>` matches the tail, so a two-token pattern (`*:read`, `*:*`,
-// `principal:*`) structurally cannot reach a three-token `:admin` permission,
+// `user:*`) structurally cannot reach a three-token `:admin` permission,
 // while `>`, `<resource>:>`, and an explicit `:admin` grant can. This is what
 // makes admin-sensitivity a deeper token rather than a special case.
 func TestTopicPatternMatching(t *testing.T) {
@@ -71,13 +71,13 @@ func TestTopicPatternMatching(t *testing.T) {
 		// A partial wildcard (2 tokens) cannot reach a 3-token :admin permission.
 		{"viewer *:read misses audit:read:admin", []string{"*:read"}, []string{"audit", "read", "admin"}, false},
 		{"*:* misses audit:read:admin", []string{"*:*"}, []string{"audit", "read", "admin"}, false},
-		{"principal:* misses principal:delete:admin", []string{"principal:*"}, []string{"principal", "delete", "admin"}, false},
+		{"user:* misses user:delete:admin", []string{"user:*"}, []string{"user", "delete", "admin"}, false},
 		// The IAM directory reads sit at the admin tier: viewer's *:read and a
 		// 2-token resource wildcard cannot reach them, which is why admin carries an
 		// explicit <resource>:read:admin grant alongside its wildcard.
-		{"*:read misses principal:read:admin", []string{"*:read"}, []string{"principal", "read", "admin"}, false},
-		{"principal:* misses principal:read:admin", []string{"principal:*"}, []string{"principal", "read", "admin"}, false},
-		{"explicit principal:read:admin reaches it", []string{"principal:read:admin"}, []string{"principal", "read", "admin"}, true},
+		{"*:read misses user:read:admin", []string{"*:read"}, []string{"user", "read", "admin"}, false},
+		{"user:* misses user:read:admin", []string{"user:*"}, []string{"user", "read", "admin"}, false},
+		{"explicit user:read:admin reaches it", []string{"user:read:admin"}, []string{"user", "read", "admin"}, true},
 		// The tail wildcard and explicit grants do reach it.
 		{"owner > reaches audit:read:admin", []string{">"}, []string{"audit", "read", "admin"}, true},
 		{"audit:> reaches audit:read:admin", []string{"audit:>"}, []string{"audit", "read", "admin"}, true},
@@ -113,7 +113,7 @@ func TestTopicPatternMatching(t *testing.T) {
 func TestCoversSubsumption(t *testing.T) {
 	set := func(p ...string) rbac.Set { return rbac.NewSet(p) }
 	owner := set(">")
-	admin := set("principal:*", "location:create,update,delete", "audit:read:admin", "*:read")
+	admin := set("user:*", "location:create,update,delete", "audit:read:admin", "*:read")
 
 	if !owner.Covers(admin) {
 		t.Error("owner (>) must cover admin")

@@ -124,7 +124,7 @@ func TestAmbiguousNameIs404OnEveryCollection(t *testing.T) {
 func TestAmbiguousNameNeverListsWhatTheCallerCannotRead(t *testing.T) {
 	t.Parallel()
 	f := newAmbiguousFixture(t)
-	tok := setupScopedPrincipal(t, context.Background(), f.dsn, "two-rooms",
+	tok := setupScopedUser(t, context.Background(), f.dsn, "two-rooms",
 		grantSpec{role: "deploy", scopeKind: "component", scopeID: f.compIDs["room-a"]},
 		grantSpec{role: "deploy", scopeKind: "component", scopeID: f.compIDs["room-b"]})
 

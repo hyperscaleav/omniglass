@@ -35,10 +35,10 @@ export type ReachEndpoint = {
   label?: string;
   transport: string;
   address?: string;
-  node?: string;
-  // Why verdict is null (#981), present only while it is: no node is assigned
-  // to probe the endpoint, or its node has not landed a first probe.
-  pending?: "no-node" | "awaiting-probe";
+  outpost?: string;
+  // Why verdict is null (#981), present only while it is: no outpost is assigned
+  // to probe the endpoint, or its outpost has not landed a first probe.
+  pending?: "no-outpost" | "awaiting-probe";
   // When ingest last landed a batch this endpoint's task delivered, by the
   // server's clock, whatever the batch carried (#933). The one freshness
   // every endpoint has, a driver endpoint's included.
@@ -86,24 +86,24 @@ export function verdictWord(v: ReachVerdict | null, now: number = Date.now()): V
 }
 
 // A pending notice is the reason an endpoint has no verdict yet and where the
-// operator acts on it: the Nodes page to make a node and assign it, or the
-// assigned node's blade to see whether it is running (#981).
+// operator acts on it: the Outposts page to make an outpost and assign it, or the
+// assigned outpost's blade to see whether it is running (#981).
 export type PendingNotice = { text: string; href: string; linkLabel: string };
 
 export function pendingNotice(iface: ReachEndpoint): PendingNotice | null {
   if (iface.verdict) return null;
   switch (iface.pending) {
-    case "no-node":
+    case "no-outpost":
       return {
-        text: "No node is assigned, so nothing probes this endpoint. Create and enroll a node, run it, then assign this endpoint to it.",
-        href: "/nodes",
-        linkLabel: "Open Nodes",
+        text: "No outpost is assigned, so nothing probes this endpoint. Create and enroll an outpost, run it, then assign this endpoint to it.",
+        href: "/outposts",
+        linkLabel: "Open Outposts",
       };
     case "awaiting-probe":
       return {
-        text: `Waiting for node ${iface.node}'s first probe of this endpoint.`,
-        href: `/nodes?n=${encodeURIComponent(iface.node ?? "")}`,
-        linkLabel: "Open node",
+        text: `Waiting for outpost ${iface.outpost}'s first probe of this endpoint.`,
+        href: `/outposts?n=${encodeURIComponent(iface.outpost ?? "")}`,
+        linkLabel: "Open outpost",
       };
     default:
       return null;
@@ -114,7 +114,7 @@ export function pendingNotice(iface: ReachEndpoint): PendingNotice | null {
 // last_seen stamp. Nothing a sample carries will do. The verdict is stored
 // only when it changes, so its ts is the last TRANSITION (#931); a driver's
 // instanced series is not stamped with the endpoint, an unchanged property
-// writes no row, and a node's clock can date a sample ahead (#933). Null
+// writes no row, and an outpost's clock can date a sample ahead (#933). Null
 // before any stamp.
 export function lastSeenAt(iface: ReachEndpoint): string | null {
   return iface.last_seen ?? null;
@@ -159,7 +159,7 @@ export function reason(iface: ReachEndpoint, now: number = Date.now()): string {
   }
   if (!port && iface.responsive && requestHeld(iface)) {
     // A gated request rung (#1037): the component answered with a refusal
-    // retrying cannot fix, and the node sends nothing more under it.
+    // retrying cannot fix, and the outpost sends nothing more under it.
     return `The component refused the endpoint's request in a way retrying cannot fix (${iface.rejection?.class ?? "refused"}): nothing is sent to it until the endpoint changes or someone retries it.`;
   }
   if (ping && layerUp(ping) && !port && iface.responsive?.value === "down" && iface.transport === "snmp") {

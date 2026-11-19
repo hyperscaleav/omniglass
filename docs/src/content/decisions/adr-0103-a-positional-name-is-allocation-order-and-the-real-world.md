@@ -6,7 +6,7 @@ summary: "A positional name is **allocation order**, never a claim about the wor
 ---
 
 - **Date:** 2026-08-11 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
-  [location types](/guides/admin/location-types/)
+  [location types](/admin/location-types/)
 - **Context:** [ADR-0102](#adr-0102-a-name-rule-is-a-declaration-a-type-opts-in-with-and-a-rule-change-renames-nothing)
   shipped `floor` as the one auto-nameable location type, positional and stem-less, on the argument
   that "a floor has a name the platform can know". The dev estate is the first real data to meet

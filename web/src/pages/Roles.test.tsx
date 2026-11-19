@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { render, fireEvent, screen } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Roles from "./Roles";
-import { ROLES_KEY, type Role } from "../lib/principals";
+import { ROLES_KEY, type Role } from "../lib/users";
 import { uuidFor } from "../lib/testids";
 
 // The Roles page is a config over the shared FlatList (the same list shell and blade
@@ -16,7 +16,7 @@ import { uuidFor } from "../lib/testids";
 const UNIVERSE = ["audit:read:admin", "component:create", "component:delete", "component:read", "platform:update", "system:read"];
 const seed: Role[] = [
   { id: uuidFor("owner"), name: "owner", official: true, label: "Owner", description: "Full control, break-glass.", permissions: [">"], inherits: [], effective_permissions: [">"], permission_universe: UNIVERSE, held: UNIVERSE },
-  { id: uuidFor("admin"), name: "admin", official: true, label: "Administrator", description: "Manage the fleet.", permissions: ["audit:read:admin"], inherits: ["operator"], effective_permissions: ["*:read", "principal:*", "audit:read:admin"], permission_universe: UNIVERSE, held: UNIVERSE },
+  { id: uuidFor("admin"), name: "admin", official: true, label: "Administrator", description: "Manage the fleet.", permissions: ["audit:read:admin"], inherits: ["operator"], effective_permissions: ["*:read", "user:*", "audit:read:admin"], permission_universe: UNIVERSE, held: UNIVERSE },
   { id: uuidFor("operator"), name: "operator", official: true, label: "Operator", description: "Day-to-day ops.", permissions: ["component:create"], inherits: ["viewer"], effective_permissions: ["*:read", "component:create"], permission_universe: UNIVERSE, held: ["component:create", "component:read", "system:read"] },
   { id: uuidFor("viewer"), name: "viewer", official: true, label: "Viewer", description: "Read only.", permissions: ["*:read"], inherits: [], effective_permissions: ["*:read"], permission_universe: UNIVERSE, held: ["component:read", "system:read"] },
 ];

@@ -232,15 +232,15 @@ describe("endpoint blade, held session", () => {
   const reach: Reachability = {
     component: "panel-2",
     endpoints: [{
-      id: row.id, endpoint: "telnet", transport: "telnet", node: "edge-hq", last_seen: now,
+      id: row.id, endpoint: "telnet", transport: "telnet", outpost: "edge-hq", last_seen: now,
       verdict: { value: "up", ts: now }, responsive: { value: "up", ts: now }, authenticated: { value: "no", ts: now },
       session: { state: "rejected", ts: now, reason: "auth: auth rejected" },
       rejection: { rung: "authenticated", class: "auth", ts: "2026-10-23T11:58:00.000Z" },
       layers: [{ layer: "ping", check: "icmp-reachable", value: "up", ts: now }], history: [],
     }],
   };
-  const operator: Me = { principal: { id: "op", kind: "human" }, permissions: ["*:read", "endpoint:update", "endpoint:retry"], grants: [] };
-  const viewer: Me = { principal: { id: "vw", kind: "human" }, permissions: ["*:read"], grants: [] };
+  const operator: Me = { user: { id: "op", kind: "person" }, permissions: ["*:read", "endpoint:update", "endpoint:retry"], grants: [] };
+  const viewer: Me = { user: { id: "vw", kind: "person" }, permissions: ["*:read"], grants: [] };
 
   function mountHeld(me: Me) {
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
@@ -309,13 +309,13 @@ describe("endpoint blade, a probe's gate with no held session", () => {
   const reach: Reachability = {
     component: "panel-3",
     endpoints: [{
-      id: row.id, endpoint: "snmp", transport: "snmp", node: "edge-hq", last_seen: now,
+      id: row.id, endpoint: "snmp", transport: "snmp", outpost: "edge-hq", last_seen: now,
       verdict: { value: "down", ts: now }, responsive: { value: "down", ts: now }, authenticated: { value: "no", ts: now },
       rejection: { rung: "authenticated", class: "auth", ts: now, reason: "auth: the agent answered authorizationError for the community" },
       layers: [{ layer: "ping", check: "icmp-reachable", value: "up", ts: now }], history: [],
     }],
   };
-  const operator: Me = { principal: { id: "op", kind: "human" }, permissions: ["*:read", "endpoint:update", "endpoint:retry"], grants: [] };
+  const operator: Me = { user: { id: "op", kind: "person" }, permissions: ["*:read", "endpoint:update", "endpoint:retry"], grants: [] };
 
   it("reads the refusal and fixes the community in place", async () => {
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });

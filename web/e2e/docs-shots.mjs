@@ -15,7 +15,7 @@ import matter from 'gray-matter';
 import { mkdir, readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { assertFontsRendered, watchFontRequests } from './fontguard.mjs';
-import { describeMask, planMasks, planStandingMasks, shootBaseline } from './shotmasklib.mjs';
+import { describeMask, planMasks, planStandingMasks, shootBaseline, withCaptureRetry } from './shotmasklib.mjs';
 
 const BASE = process.env.OG_E2E_BASE ?? 'http://localhost:8080';
 const TOKEN = process.env.OG_TOKEN ?? '';
@@ -110,7 +110,7 @@ for (const spec of specs) {
     // wait holds the shot until the selector shows (a figure the lab writes a
     // while after it comes up), for up to its timeout in ms, else two minutes.
     if (step.action === 'wait') await page.locator(step.selector).first().waitFor({ state: 'visible', timeout: step.timeout ?? 120_000 });
-    else if (step.action === 'click') await page.click(step.selector);
+    else if (step.action === 'click') await page.click(step.selector, { modifiers: step.modifiers });
     else if (step.action === 'hover') await page.hover(step.selector);
     else if (step.action === 'press') await page.keyboard.press(step.value);
     else if (step.action === 'fill') await page.fill(step.selector, step.value ?? '');
@@ -155,11 +155,13 @@ for (const spec of specs) {
   // measures only what is deterministic. The blind spot is explicit: a real UI
   // change entirely inside a masked region is invisible to the gate, exactly as
   // it was when the masked render was the only render.
-  await page.screenshot({
-    path: join(OUT, `${spec.id}.png`),
-    animations: 'disabled',
-    caret: 'hide',
-  });
+  await withCaptureRetry(page, () =>
+    page.screenshot({
+      path: join(OUT, `${spec.id}.png`),
+      animations: 'disabled',
+      caret: 'hide',
+    }),
+  );
   try {
     await shootBaseline(page, plan, { path: join(BASELINE, `${spec.id}.png`) });
   } catch (e) {

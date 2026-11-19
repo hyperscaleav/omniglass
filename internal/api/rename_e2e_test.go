@@ -23,9 +23,9 @@ import (
 
 // renameable is one entity that carries the :rename custom method: how to create
 // one, and the path segment the rename addresses it by (a name for the fleet
-// entities, a uuid for a principal group).
+// entities, a uuid for a user group).
 type renameable struct {
-	resource string // the permission resource: "component", "principal_group", ...
+	resource string // the permission resource: "component", "user_group", ...
 	base     string // "/components"
 	create   func(c *apiClient, tok, name string) string
 }
@@ -56,9 +56,9 @@ func renameables() []renameable {
 		{
 			// A group is addressed by its uuid, not its name, so the path segment is
 			// the created id. The rename still moves the name.
-			resource: "principal_group", base: "/principal-groups",
+			resource: "user_group", base: "/user-groups",
 			create: func(c *apiClient, tok, name string) string {
-				return createdID(c.t, c.do(tok, http.MethodPost, "/principal-groups", map[string]any{"name": name}, http.StatusCreated))
+				return createdID(c.t, c.do(tok, http.MethodPost, "/user-groups", map[string]any{"name": name}, http.StatusCreated))
 			},
 		},
 	}
@@ -97,9 +97,9 @@ func TestRenameIsItsOwnPermission(t *testing.T) {
 	for _, r := range renameables() {
 		t.Run(r.resource, func(t *testing.T) {
 			slug := roleSlug(r.resource)
-			updaterTok := principalWithGrants(t, ctx, dsn, slug+"-updater-svc",
+			updaterTok := userWithGrants(t, ctx, dsn, slug+"-updater-svc",
 				[]grant{{role: slug + "-updater", scopeKind: "all"}})
-			renamerTok := principalWithGrants(t, ctx, dsn, slug+"-renamer-svc",
+			renamerTok := userWithGrants(t, ctx, dsn, slug+"-renamer-svc",
 				[]grant{{role: slug + "-renamer", scopeKind: "all"}})
 
 			ref := r.create(c, ownerTok, slug+"-before")
@@ -144,10 +144,10 @@ func TestGroupRenameOverHTTP(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	id := createdID(t, c.do(ownerTok, http.MethodPost, "/principal-groups", map[string]any{"name": "field-techs"}, http.StatusCreated))
-	other := createdID(t, c.do(ownerTok, http.MethodPost, "/principal-groups", map[string]any{"name": "night-shift"}, http.StatusCreated))
+	id := createdID(t, c.do(ownerTok, http.MethodPost, "/user-groups", map[string]any{"name": "field-techs"}, http.StatusCreated))
+	other := createdID(t, c.do(ownerTok, http.MethodPost, "/user-groups", map[string]any{"name": "night-shift"}, http.StatusCreated))
 
-	out := c.do(ownerTok, http.MethodPost, "/principal-groups/"+id+":rename", map[string]any{"name": "field-engineers"}, http.StatusOK)
+	out := c.do(ownerTok, http.MethodPost, "/user-groups/"+id+":rename", map[string]any{"name": "field-engineers"}, http.StatusOK)
 	var renamed struct {
 		ID   string `json:"id"`
 		Name string `json:"name"`
@@ -165,7 +165,7 @@ func TestGroupRenameOverHTTP(t *testing.T) {
 	var got struct {
 		Name string `json:"name"`
 	}
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/principal-groups/"+id, nil, http.StatusOK), &got); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/user-groups/"+id, nil, http.StatusOK), &got); err != nil {
 		t.Fatalf("decode get: %v", err)
 	}
 	if got.Name != "field-engineers" {
@@ -173,17 +173,17 @@ func TestGroupRenameOverHTTP(t *testing.T) {
 	}
 
 	// The name is no longer patchable: two ways to rename is what this method removed.
-	c.do(ownerTok, http.MethodPatch, "/principal-groups/"+id, map[string]any{"name": "sneaky"}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPatch, "/user-groups/"+id, map[string]any{"name": "sneaky"}, http.StatusUnprocessableEntity)
 
 	// Onto a taken name -> 409.
-	c.do(ownerTok, http.MethodPost, "/principal-groups/"+other+":rename", map[string]any{"name": "field-engineers"}, http.StatusConflict)
+	c.do(ownerTok, http.MethodPost, "/user-groups/"+other+":rename", map[string]any{"name": "field-engineers"}, http.StatusConflict)
 
 	// Illegal slug -> 422 at the edge; uuid-shaped -> 422 from the gateway.
-	c.do(ownerTok, http.MethodPost, "/principal-groups/"+other+":rename", map[string]any{"name": "Bad Name"}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodPost, "/principal-groups/"+other+":rename",
+	c.do(ownerTok, http.MethodPost, "/user-groups/"+other+":rename", map[string]any{"name": "Bad Name"}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPost, "/user-groups/"+other+":rename",
 		map[string]any{"name": "019f8754-461f-7b82-b5f2-fc4bbe1c3765"}, http.StatusUnprocessableEntity)
 
 	// An unknown group is a 404.
-	c.do(ownerTok, http.MethodPost, "/principal-groups/00000000-0000-0000-0000-000000000000:rename",
+	c.do(ownerTok, http.MethodPost, "/user-groups/00000000-0000-0000-0000-000000000000:rename",
 		map[string]any{"name": "ghosts"}, http.StatusNotFound)
 }

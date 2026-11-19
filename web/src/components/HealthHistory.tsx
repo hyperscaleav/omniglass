@@ -16,7 +16,7 @@ import type { HealthTransition } from "../lib/health";
 // So the strip is drawn from transitions, never from samples, and each stretch is
 // labelled with its real duration rather than a bucket.
 //
-// The bar is the shared StateStrip, the same primitive the interface availability
+// The bar is the shared StateStrip, the same primitive the endpoint availability
 // strip uses, drawn from the same lib/timeline spans. One timeline idiom in the
 // console, two things measured with it.
 
@@ -47,7 +47,7 @@ export default function HealthHistory(props: {
   // What the window covers, in the API's terms.
   window?: string;
   // Strip only, no per-span rows: for a surface that narrates the spans
-  // itself (the history tab's incident list) and would otherwise say
+  // itself (the history tab's health history list) and would otherwise say
   // everything twice.
   compact?: boolean;
 }) {

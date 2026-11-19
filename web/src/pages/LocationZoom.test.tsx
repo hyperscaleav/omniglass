@@ -16,12 +16,12 @@ import { PRODUCTS_KEY } from "../lib/products";
 import { COMPONENT_TYPES_KEY } from "../lib/component_types";
 import { uuidFor } from "../lib/testids";
 
-// A place's detail view (#872): systems are the unit, places are folders. A
-// place holding one system lands on that system; a folder (no system, or a
-// place shared by several) shows its own card with its tabs: a brief card per
+// A location's detail view (#872): systems are the unit, locations are folders. A
+// location holding one system lands on that system; a folder (no system, or a
+// location shared by several) shows its own card with its tabs: a brief card per
 // system it holds, then what is beneath it as the outline rooted here.
 
-const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
+const me: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
 
 const loc = (handle: string, name: string, label: string, type: string, parent: string, verdict: string) => ({
   id: uuidFor(handle),
@@ -52,7 +52,7 @@ const view: FleetView = {
       verdict: "incomplete",
       dots: [{ component: uuidFor("lz-c-sign"), name: "display-1", verdict: "incomplete", primary: true, shared: false }],
     },
-    // A second system at hq, so hq is a place shared by two and keeps its
+    // A second system at hq, so hq is a location shared by two and keeps its
     // own view.
     {
       id: uuidFor("lz-s-sign"),
@@ -83,11 +83,11 @@ const view: FleetView = {
   ],
 } as unknown as FleetView;
 
-// The lobby system's health: an unstaffed role, which must read incomplete on
+// The lobby system's health: an unstaffed slot, which must read incomplete on
 // the card, in the server's own words, never outage.
 const lobbyHealth: FleetHealth = {
   verdict: "incomplete",
-  roles: [
+  slots: [
     {
       name: "signage",
       label: "Signage",
@@ -140,11 +140,11 @@ function mount(path = `/web/locations/${uuidFor("lz-hq")}`, lateTypes = false) {
   qc.setQueryData([...STANDARDS_KEY], []);
   qc.setQueryData([...PRODUCTS_KEY], []);
   qc.setQueryData([...COMPONENT_TYPES_KEY], []);
-  qc.setQueryData([...systemHealthKey(uuidFor("lz-s-sign"))], { verdict: "healthy", roles: [], systems: [], transitions: [] } as unknown as FleetHealth);
+  qc.setQueryData([...systemHealthKey(uuidFor("lz-s-sign"))], { verdict: "healthy", slots: [], systems: [], transitions: [] } as unknown as FleetHealth);
   qc.setQueryData([...systemHealthKey(uuidFor("lz-s-lobby"))], lobbyHealth);
   qc.setQueryData([...locationHealthKey(uuidFor("lz-hq"))], {
     verdict: "degraded",
-    roles: [],
+    slots: [],
     systems: [],
     transitions: [
       { ts: "2026-08-01T09:00:00Z", verdict: "healthy" },
@@ -157,7 +157,7 @@ function mount(path = `/web/locations/${uuidFor("lz-hq")}`, lateTypes = false) {
       <Router base="/web">
         <Route path="/locations/:id" component={Locations} />
         <Route path="/explore" component={() => <div data-testid="fleet-page" />} />
-        <Route path="/start" component={() => <A data-testid="configure-link" href={`/locations/${uuidFor("lz-room")}?tab=configure`}>Configure place</A>} />
+        <Route path="/start" component={() => <A data-testid="configure-link" href={`/locations/${uuidFor("lz-room")}?tab=configure`}>Configure location</A>} />
         <Route path="/systems/:id" component={() => <div data-testid="system-page" />} />
         <Route path="/locations/create" component={() => <div data-testid="create-page" />} />
       </Router>
@@ -168,21 +168,21 @@ function mount(path = `/web/locations/${uuidFor("lz-hq")}`, lateTypes = false) {
 
 afterEach(cleanup);
 
-describe("where a place lands (#872)", () => {
-  it("lands a place holding one system on that system, query kept", async () => {
+describe("where a location lands (#872)", () => {
+  it("lands a location holding one system on that system, query kept", async () => {
     mount(`/web/locations/${uuidFor("lz-room")}?chips=x`);
     expect(await screen.findByTestId("system-page")).toBeTruthy();
     expect(window.location.pathname).toBe(`/web/systems/${uuidFor("lz-s-board")}`);
     expect(window.location.search).toBe("?chips=x");
   });
 
-  // A one-system room has one page (#872): its place configures on the
+  // A one-system room has one page (#872): its location configures on the
   // system's Configure tab, so even a configure address lands there, the
-  // place's own edit intent carried as edit=place.
-  it("lands a configure address on the system's Configure, the place's edit intent kept", async () => {
+  // location's own edit intent carried as edit=location.
+  it("lands a configure address on the system's Configure, the location's edit intent kept", async () => {
     mount(`/web/locations/${uuidFor("lz-room")}?edit=1`);
     expect(await screen.findByTestId("system-page")).toBeTruthy();
-    expect(window.location.pathname + window.location.search).toBe(`/web/systems/${uuidFor("lz-s-board")}?tab=configure&edit=place`);
+    expect(window.location.pathname + window.location.search).toBe(`/web/systems/${uuidFor("lz-s-board")}?tab=configure&edit=location`);
   });
 
   // Followed inside the console (#932), not loaded: the router's own location
@@ -198,21 +198,21 @@ describe("where a place lands (#872)", () => {
     mount(`/web/locations/west`);
     await waitFor(() => expect(window.location.pathname).toBe(`/web/locations/${uuidFor("lz-b1")}`));
     expect(window.location.search).toBe("");
-    expect(screen.getByTestId("place-subject")).toBeTruthy();
+    expect(screen.getByTestId("location-subject")).toBeTruthy();
   });
 });
 
-describe("a folder place (#872)", () => {
-  it("is titled by the place, names its type in the registry's words, and ends the path at its parent", () => {
+describe("a folder location (#872)", () => {
+  it("is titled by the location, names its type in the catalog's words, and ends the path at its parent", () => {
     mount(`/web/locations/${uuidFor("lz-b1")}`);
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("West Building");
-    expect(within(screen.getByTestId("place-header")).getByTestId("place-type").textContent).toBe("Building");
+    expect(within(screen.getByTestId("location-header")).getByTestId("location-type").textContent).toBe("Building");
     const crumbs = within(screen.getByTestId("breadcrumb"));
     expect(crumbs.getByText("Headquarters")).toBeTruthy();
     expect(crumbs.queryByText("West Building")).toBeNull();
   });
 
-  it("links Explore back to this place's row in the outline", async () => {
+  it("links Explore back to this location's row in the outline", async () => {
     mount(`/web/locations/${uuidFor("lz-b1")}`);
     fireEvent.click(within(screen.getByTestId("breadcrumb")).getByRole("link", { name: "Explore" }));
     expect(await screen.findByTestId("fleet-page")).toBeTruthy();
@@ -251,11 +251,11 @@ describe("a folder place (#872)", () => {
     const beneath = screen.getByTestId("beneath");
     const rows = within(beneath).getAllByRole("treeitem").map((r) => r.querySelector("[data-label]")?.textContent);
     // Sorted by name; West Building folds with Boardroom A (it holds only that
-    // room), so that row sorts as West and names its deepest place.
+    // room), so that row sorts as West and names its deepest location.
     expect(rows).toEqual(["The Shed", "The Yard", "Boardroom A"]);
     expect(rows).toContain("The Yard");
     expect(rows).toContain("The Shed");
-    // Counted over what the list shows: the places beneath, not hq's own two
+    // Counted over what the list shows: the locations beneath, not hq's own two
     // systems, which have their cards above (a count the filter could not
     // narrow to was the review's finding).
     expect(within(beneath).getByTestId("explore-counts").textContent).toMatch(/^2\s*systems/);
@@ -290,7 +290,7 @@ describe("the location configure tab (#800)", () => {
     const rail = await screen.findByTestId("tab-rail");
     expect(within(rail).getByRole("tab", { name: "Overview" }).getAttribute("aria-selected")).toBe("true");
     expect(within(rail).getByRole("tab", { name: "Configure" })).toBeTruthy();
-    expect(screen.getByTestId("place-header")).toBeTruthy();
+    expect(screen.getByTestId("location-header")).toBeTruthy();
   });
 });
 
@@ -359,10 +359,10 @@ describe("the configure mover keeps the classic contract (#800)", () => {
   });
 });
 
-// The face owns its edit slot and drafts, so another place under the same route
+// The face owns its edit slot and drafts, so another location under the same route
 // must be another face: left alone, west would open already editing, holding
 // hq's half-typed name under its own page (#854).
-describe("moving to another place while editing (#854)", () => {
+describe("moving to another location while editing (#854)", () => {
   it("resets the edit slot and the drafts instead of carrying hq's over", async () => {
     mount(`/web/locations/${uuidFor("lz-hq")}?tab=configure&edit=1`);
     const face = await screen.findByTestId("configure-face");
@@ -388,7 +388,7 @@ describe("moving to another place while editing (#854)", () => {
 
 describe("the miss face (#800)", () => {
   it("an address matching no location renders the explicit miss, not a silent fallback", async () => {
-    mount("/web/locations/no-such-place");
+    mount("/web/locations/no-such-location");
     expect(await screen.findByText(/No location answers this address/)).toBeTruthy();
     expect(screen.queryByText("Contained systems")).toBeNull();
   });

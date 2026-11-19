@@ -13,13 +13,13 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// The receipt statement counts only the named node's receipts, from the
+// The receipt statement counts only the named outpost's receipts, from the
 // window's start minus the margin, splits off the margin, the backlog the
 // lane landed before it drained past the start, and the receipts after the
 // end, and reads the same after the server's 24 h prune. A backlog that
 // outlasts the window stops at its end, so no receipt is masked twice. A
 // Term receipt never counts.
-func TestIntegrationReceiptCountReadsOneNodesWindow(t *testing.T) {
+func TestIntegrationReceiptCountReadsOneOutpostsWindow(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	dsn := storagetest.NewDSN(t)
@@ -54,12 +54,12 @@ func TestIntegrationReceiptCountReadsOneNodesWindow(t *testing.T) {
 	land("og.v1.telemetry.e_ge 4", t0.Add(time.Minute))
 	land("og.v1.telemetry.e_ge 5", t0.Add(5*time.Minute))
 	land("og.v1.telemetry.e_ge 6", t1.Add(30*time.Second)) // after the end
-	land("og.v1.telemetry.e_ge-2 1", t0.Add(time.Minute))  // a node whose name extends it
-	land("og.v1.telemetry.edge 1", t0.Add(time.Minute))    // a node a LIKE pattern would match
+	land("og.v1.telemetry.e_ge-2 1", t0.Add(time.Minute))  // an outpost whose name extends it
+	land("og.v1.telemetry.edge 1", t0.Add(time.Minute))    // an outpost a LIKE pattern would match
 	land("og.v1.telemetry.e_ge", t0.Add(time.Minute))      // no message id
 	// A batch the server Termed (#1691) landed nothing: its receipt never counts.
 	termed := "og.v1.telemetry.e_ge 7"
-	if err := gw.RecordTermedBatch(ctx, storage.TermedBatch{BatchID: termed, Node: "e_ge",
+	if err := gw.RecordTermedBatch(ctx, storage.TermedBatch{BatchID: termed, Outpost: "e_ge",
 		Ledger: delivery.Stamp{Boot: "boot-1", Seq: 7, Minted: t0, Kinds: delivery.Declared{delivery.Log: {Count: 1}}}}); err != nil {
 		t.Fatalf("record %s: %v", termed, err)
 	}

@@ -35,7 +35,7 @@ type componentTypeWire struct {
 	Parent                string   `json:"parent"`
 }
 
-// TestComponentTypesAPI drives the component_type registry over HTTP: list
+// TestComponentTypesAPI drives the component_type catalog over HTTP: list
 // shows the seeded tree with parent links (a child's parent id AND name), a
 // viewer creates nothing (403), an admin (owner) creates a custom child under
 // an existing root (mic), and delete refuses an official row and a row still
@@ -76,7 +76,7 @@ func TestComponentTypesAPI(t *testing.T) {
 	}
 
 	// A viewer reads the seeded tree via the *:read floor.
-	viewerTok := principalWithGrants(t, ctx, dsn, "ct-viewer", []grant{{role: "viewer", scopeKind: "all"}})
+	viewerTok := userWithGrants(t, ctx, dsn, "ct-viewer", []grant{{role: "viewer", scopeKind: "all"}})
 	rows := list(viewerTok)
 	if len(rows) == 0 {
 		t.Fatal("component_types empty, want the seeded tree")
@@ -243,7 +243,7 @@ func TestComponentTypeForkAndRestoreAPI(t *testing.T) {
 
 	// A viewer holds component_type:read but not :update, so they cannot fork
 	// a row they could not have written either.
-	viewerTok := principalWithGrants(t, ctx, dsn, "fork-viewer", []grant{{role: "viewer", scopeKind: "all"}})
+	viewerTok := userWithGrants(t, ctx, dsn, "fork-viewer", []grant{{role: "viewer", scopeKind: "all"}})
 	c.do(viewerTok, http.MethodPatch, "/component-types/mic",
 		map[string]any{"label": "Viewer Mic"}, http.StatusForbidden)
 	c.do(viewerTok, http.MethodPost, "/component-types/mic:restore", nil, http.StatusForbidden)
@@ -363,5 +363,5 @@ func TestLabelRuleIsRefusedAtEditTime(t *testing.T) {
 		}
 		return
 	}
-	t.Fatal("display is missing from the registry listing")
+	t.Fatal("display is missing from the catalog listing")
 }

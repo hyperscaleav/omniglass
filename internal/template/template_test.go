@@ -64,7 +64,7 @@ const stdOK = `
           alternates:
             - { name: bar, label: Bar }
             - { name: kit, label: Kit }
-      roles:
+      slots:
         - { name: display, label: Display, accepted_types: [display] }
         - { name: bar, label: Bar, choice: conf, alternate: bar }
         - { name: codec, label: Codec, choice: conf, alternate: kit }
@@ -86,7 +86,7 @@ func TestLoadAcceptsAWellFormedCatalog(t *testing.T) {
     label: Base, staffed
     system:
       standard: base
-      roles:
+      slots:
         display: { component: panel }
         bar: { product: some-bar }
   - kind: component_template
@@ -96,13 +96,13 @@ func TestLoadAcceptsAWellFormedCatalog(t *testing.T) {
       product: some-panel
       attach: { inputs: { port: "161" } }
       properties: { video-input: hdmi1, power: { on: true } }
-  - kind: place_template
+  - kind: location_template
     name: floor
     label: Floor
-    place:
+    location:
       type: floor
       systems: [{ template: base-system }]
-      places:
+      locations:
         - { type: room, name: a, systems: [{ template: base-system }] }
         - { type: room, name: b }
 `)})
@@ -141,7 +141,7 @@ func TestLoadRefuses(t *testing.T) {
   - kind: standard_template
     name: x
     label: X
-    standard: { roles: [{ name: a, label: A }] }
+    standard: { slots: [{ name: a, label: A }] }
     component: { product: p }`, "carries a component_template body"},
 		{"no label", `
   - kind: component_template
@@ -158,33 +158,33 @@ func TestLoadRefuses(t *testing.T) {
     label: X
     component: { product: p, colour: red }`, "colour"},
 		{"duplicate name", stdOK + stdOK, `"base" is named twice`},
-		{"role half a choice", `
+		{"slot half a choice", `
   - kind: standard_template
     name: x
     label: X
-    standard: { roles: [{ name: a, label: A, choice: c }] }`, "want both or neither"},
-		{"role names an unknown alternate", `
+    standard: { slots: [{ name: a, label: A, choice: c }] }`, "want both or neither"},
+		{"slot names an unknown alternate", `
   - kind: standard_template
     name: x
     label: X
-    standard: { roles: [{ name: a, label: A, choice: c, alternate: d }] }`, "unknown choice/alternate c/d"},
+    standard: { slots: [{ name: a, label: A, choice: c, alternate: d }] }`, "unknown choice/alternate c/d"},
 		{"capacity below quorum", `
   - kind: standard_template
     name: x
     label: X
-    standard: { roles: [{ name: a, label: A, quorum: 3, capacity: 2 }] }`, "capacity below its quorum"},
-		{"map places an undeclared role", `
+    standard: { slots: [{ name: a, label: A, quorum: 3, capacity: 2 }] }`, "capacity below its quorum"},
+		{"map places an undeclared slot", `
   - kind: standard_template
     name: x
     label: X
     standard:
-      roles: [{ name: a, label: A }]
-      map: { aspect: 1, positions: [{ role: b, position: 1, x: 0.5, y: 0.5 }] }`, `places role "b"`},
+      slots: [{ name: a, label: A }]
+      map: { aspect: 1, positions: [{ slot: b, position: 1, x: 0.5, y: 0.5 }] }`, `places slot "b"`},
 		{"unknown parent", `
   - kind: standard_template
     name: x
     label: X
-    standard: { parent: nobody, roles: [{ name: a, label: A }] }`, `"nobody"`},
+    standard: { parent: nobody, slots: [{ name: a, label: A }] }`, `"nobody"`},
 		{"preset sets the address", `
   - kind: component_template
     name: x
@@ -194,59 +194,59 @@ func TestLoadRefuses(t *testing.T) {
   - kind: system_template
     name: s
     label: S
-    system: { standard: base, roles: { display: { component: c, product: p } } }`, "names both"},
+    system: { standard: base, slots: { display: { component: c, product: p } } }`, "names both"},
 		{"fill names an unknown component template", stdOK + `
   - kind: system_template
     name: s
     label: S
-    system: { standard: base, roles: { display: { component: nobody }, bar: { product: p } } }`, `"nobody"`},
-		{"leaves an unconditional role unfilled", stdOK + `
+    system: { standard: base, slots: { display: { component: nobody }, bar: { product: p } } }`, `"nobody"`},
+		{"leaves an unconditional slot unfilled", stdOK + `
   - kind: system_template
     name: s
     label: S
-    system: { standard: base, roles: { bar: { product: p } } }`, `leaves role "display" unfilled`},
-		{"fills an undeclared role", stdOK + `
+    system: { standard: base, slots: { bar: { product: p } } }`, `leaves slot "display" unfilled`},
+		{"fills an undeclared slot", stdOK + `
   - kind: system_template
     name: s
     label: S
-    system: { standard: base, roles: { display: { product: p }, bar: { product: p }, mixer: { product: p } } }`, `role "mixer"`},
+    system: { standard: base, slots: { display: { product: p }, bar: { product: p }, mixer: { product: p } } }`, `slot "mixer"`},
 		{"answers a choice twice", stdOK + `
   - kind: system_template
     name: s
     label: S
-    system: { standard: base, roles: { display: { product: p }, bar: { product: p }, codec: { product: p }, camera: { product: p } } }`, "with both"},
+    system: { standard: base, slots: { display: { product: p }, bar: { product: p }, codec: { product: p }, camera: { product: p } } }`, "with both"},
 		{"answers a choice in part", stdOK + `
   - kind: system_template
     name: s
     label: S
-    system: { standard: base, roles: { display: { product: p }, codec: { product: p } } }`, `leaves its role "camera" unfilled`},
+    system: { standard: base, slots: { display: { product: p }, codec: { product: p } } }`, `leaves its slot "camera" unfilled`},
 		{"answers no alternate", stdOK + `
   - kind: system_template
     name: s
     label: S
-    system: { standard: base, roles: { display: { product: p } } }`, "with no alternate"},
+    system: { standard: base, slots: { display: { product: p } } }`, "with no alternate"},
 		{"place names a standard as a system", stdOK + `
-  - kind: place_template
+  - kind: location_template
     name: p
     label: P
-    place: { type: floor, systems: [{ template: base }] }`, "is a standard_template, not a system_template"},
+    location: { type: floor, systems: [{ template: base }] }`, "is a standard_template, not a system_template"},
 		{"map places one position twice", `
   - kind: standard_template
     name: x
     label: X
     standard:
-      roles: [{ name: a, label: A }]
-      map: { aspect: 1, positions: [{ role: a, position: 1, x: 0.5, y: 0.5 }, { role: a, position: 1, x: 0.2, y: 0.2 }] }`, "duplicate position a/1"},
+      slots: [{ name: a, label: A }]
+      map: { aspect: 1, positions: [{ slot: a, position: 1, x: 0.5, y: 0.5 }, { slot: a, position: 1, x: 0.2, y: 0.2 }] }`, "duplicate position a/1"},
 		{"system builds to a standard the catalog lacks", `
   - kind: system_template
     name: s
     label: S
-    system: { standard: mr-55, roles: { whatever: { product: p } } }`, `builds to template: not in the catalog: "mr-55"`},
-		{"place holds two places of one name", `
-  - kind: place_template
+    system: { standard: mr-55, slots: { whatever: { product: p } } }`, `builds to template: not in the catalog: "mr-55"`},
+		{"place holds two locations of one name", `
+  - kind: location_template
     name: p
     label: P
-    place: { type: floor, places: [{ type: room, name: a }, { type: room, name: a }] }`, `two places named "a"`},
+    location: { type: floor, locations: [{ type: room, name: a }, { type: room, name: a }] }`, `two locations named "a"`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

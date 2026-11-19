@@ -25,12 +25,12 @@ import (
 // files of a test-helper package (a directory named *test), where a helper
 // returning a released address would otherwise hide. A port released through
 // a wrapper (a simulated face's StopTCPSession, then a restart on the port)
-// is outside what this reads; #1116 tracks the one class of it on the tree.
+// is outside what this reads; TestNoTestRestartsAFaceAtALiteralAddress reads it.
 func TestNoTestUsesAReleasedPort(t *testing.T) {
 	// The uses that cannot be avoided, each with why. A stale entry fails,
 	// so the list never outlives the code it excuses.
 	allowed := map[string]string{
-		"internal/node/datagram_test.go:TestAUDPSocketRebindsOnlyWhenWhatItDependsOnChanges":                       "the code under test binds the listen port it is told, so the test must name one; a taken port fails the bind and the pick retries",
+		"internal/outpost/datagram_test.go:TestAUDPSocketRebindsOnlyWhenWhatItDependsOnChanges":                    "the code under test binds the listen port it is told, so the test must name one; a taken port fails the bind and the pick retries",
 		"internal/collection/udp_integration_test.go:TestDatagramBindsTheEndpointsListenPortAndItsRequestsShareIt": "the code under test binds the listen port it is told, so the test must name one; a taken port fails the bind and the pick retries",
 		"internal/nettest/refused_test.go:TestAReleasedPortCanBeTakenInTheGap":                                     "the contrast that proves the race nettest.RefusedAddr closes",
 	}

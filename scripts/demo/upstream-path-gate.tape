@@ -1,7 +1,7 @@
 # An endpoint reached through a closed upstream is held, with that upstream named as the cause
 #
 # A path dependency says a component is reached through another: a touch panel behind its room's
-# videobar. It was recorded and not yet followed. Now the node follows it: while the upstream's gate
+# videobar. It was recorded and not yet followed. Now the outpost follows it: while the upstream's gate
 # is closed, the dependent's in-band endpoints carry an upstream reason naming it, their polls are
 # held and their probes are not run, so the videobar alone reads as down. Once the videobar reopens,
 # the panel waits for its own probe to read up (#1652).

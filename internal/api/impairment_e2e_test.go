@@ -23,7 +23,7 @@ type impairmentBody struct {
 
 // TestComponentImpairmentAPI drives GET/PUT /components/{name}/impairment:
 // an operator breaks and repairs a simulated device, a viewer can look but
-// not break, a value the network cannot apply is a 422, and the node's
+// not break, a value the network cannot apply is a 422, and the outpost's
 // simulation view shows the device impaired.
 func TestComponentImpairmentAPI(t *testing.T) {
 	t.Parallel()
@@ -42,14 +42,14 @@ func TestComponentImpairmentAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	all := scope.Set{All: true}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge"}, all, all); err != nil {
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge"}, all, all); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dsp"}, all, all, all, all); err != nil {
 		t.Fatal(err)
 	}
-	comp, node := "dsp", "edge"
-	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "tcp", Component: &comp, Node: &node,
+	comp, outpost := "dsp", "edge"
+	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "tcp", Component: &comp, Outpost: &outpost,
 		Params: []byte(`{"target":"127.60.0.5:1710"}`)}, all); err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func TestComponentImpairmentAPI(t *testing.T) {
 			Impairment *impairmentBody `json:"impairment"`
 		} `json:"devices"`
 	}
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/nodes/edge/simulation", nil, http.StatusOK), &view); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/outposts/edge/simulation", nil, http.StatusOK), &view); err != nil {
 		t.Fatal(err)
 	}
 	if len(view.Devices) != 1 || view.Devices[0].Impairment == nil || !view.Devices[0].Impairment.Unplugged {

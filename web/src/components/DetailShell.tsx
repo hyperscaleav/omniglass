@@ -7,7 +7,7 @@ import Button from "./Button";
 //   RelatedList   a list of related entities (members, groups, children): one row
 //                 idiom, an optional drill (onOpen -> a blade), an optional remove,
 //                 an optional add-picker. Group members and a user's groups both
-//                 render through this, so "related principals" looks identical
+//                 render through this, so "related users" looks identical
 //                 wherever it appears.
 // The labelled facts grid renders through the shared KVStacked primitive (its old
 // local `Fact` was a byte-identical copy of that markup). The footer action bar

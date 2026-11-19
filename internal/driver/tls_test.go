@@ -108,12 +108,12 @@ func TestCheckInputValue(t *testing.T) {
 	}
 }
 
-// Review of #1035, finding 1: a key the node publishes to steer its own
+// Review of #1035, finding 1: a key the outpost publishes to steer its own
 // attempts (a pin, the gate, a held session's account of itself) is the
-// node's alone. A driver emit named after one would land as the observed
+// outpost's alone. A driver emit named after one would land as the observed
 // value through the poll path, so the worklist would deliver a driver's
 // constant as the pin, bypassing the audited :retry. Refused at write.
-func TestADriverMayNotEmitANodeControlKey(t *testing.T) {
+func TestADriverMayNotEmitAOutpostControlKey(t *testing.T) {
 	for _, key := range []string{"tls-certificate", "ssh-host-key", "endpoint-rejection", "session-state", "session-reason"} {
 		cat := catalog()
 		cat.lanes[key] = "property"

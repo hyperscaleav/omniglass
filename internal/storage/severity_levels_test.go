@@ -11,7 +11,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// TestSeverityLevels proves severity is a registry of named, ranked levels:
+// TestSeverityLevels proves severity is a catalog of named, ranked levels:
 // the boot seed lands five spaced official levels and a re-run changes
 // nothing; an operator inserts a level between two without renumbering, may
 // rename it (its alarms follow), and may not touch an official one; an alarm
@@ -71,7 +71,7 @@ func TestSeverityLevels(t *testing.T) {
 	}
 
 	// Writing a level takes an all-scope grant, since its rank moves health
-	// fleet-wide; reading stays registry-shaped and takes no scope.
+	// fleet-wide; reading stays catalog-shaped and takes no scope.
 	none := scope.Set{}
 	if _, err := gw.CreateSeverityLevel(ctx, "", storage.SeverityLevel{Name: "scoped", Color: "red", Rank: 36}, none); !errors.Is(err, storage.ErrSeverityLevelForbidden) {
 		t.Fatalf("a scoped create: err %v, want ErrSeverityLevelForbidden", err)

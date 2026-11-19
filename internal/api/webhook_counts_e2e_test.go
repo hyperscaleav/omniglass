@@ -27,7 +27,7 @@ import (
 
 // TestAWebhookEndpointReportsItsOwnPosts drives #1369's push half over the
 // real wire: the simulated UCC service posts its signed webhooks to the real
-// API. A webhook-fed component has no node and no poll, yet each report
+// API. A webhook-fed component has no outpost and no poll, yet each report
 // window lands its endpoint's accepted posts as its own series, then one
 // zero once the stream goes quiet, and a window with refused posts (a bad
 // signature) lands their count.
@@ -94,7 +94,7 @@ func TestAWebhookEndpointReportsItsOwnPosts(t *testing.T) {
 	t.Cleanup(engine.StopAll)
 	uccProfile := ""
 	for name, p := range store.Devices {
-		if p.Model == "UCC Platform" {
+		if p.Model == "UCC Platform (account)" {
 			uccProfile = name
 		}
 	}
@@ -135,8 +135,8 @@ func TestAWebhookEndpointReportsItsOwnPosts(t *testing.T) {
 	// Two signed posts land: the window counts them, then the quiet window
 	// after reports zero.
 	subscribe("")
-	operate("/api/meetings/start", map[string]string{"id": "m-1", "room": "huddle"})
-	operate("/api/meetings/end", map[string]string{"id": "m-1"})
+	operate("/api/rooms/meetings/start", map[string]string{"id": "m-1", "room": "huddle"})
+	operate("/api/rooms/meetings/end", map[string]string{"room": "huddle"})
 	waitCount("the posts counted", writerclass.WebhookPostCount, func(v float64) bool { return v >= 1 })
 	waitCount("the quiet window as zero", writerclass.WebhookPostCount, func(v float64) bool { return v == 0 })
 	if v, landed := latest(writerclass.WebhookRefusalCount); landed {
@@ -145,6 +145,6 @@ func TestAWebhookEndpointReportsItsOwnPosts(t *testing.T) {
 
 	// A bad signature is refused, and its window counts the refusal.
 	subscribe("bad-signature")
-	operate("/api/meetings/start", map[string]string{"id": "m-2"})
+	operate("/api/rooms/meetings/start", map[string]string{"id": "m-2", "room": "huddle"})
 	waitCount("the refusal counted", writerclass.WebhookRefusalCount, func(v float64) bool { return v >= 1 })
 }

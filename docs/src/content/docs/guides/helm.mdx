@@ -113,6 +113,7 @@ Server certificates, certificate rotation, and mutual TLS setup are in #1295.
 
 When the server runs behind a reverse proxy, configure trusted proxy addresses so that `X-Forwarded-For` and similar headers are honored. See #1231.
 
+
 ## Durable state
 
 A chart deployment keeps two things across a pod restart, a `helm upgrade` and a `helm uninstall`
@@ -261,7 +262,7 @@ addressed by a qualified name whose slash (and `$`) is percent-encoded in the pa
 for example `/api/v1/endpoints/<addr>%2Fhttps` or
 `/api/v1/secrets/%24platform%2Fdemo-panel-login`. The chart's default Ingress
 needs no extra setting for this: a pinned Traefik container in front of a backend
-that echoed the raw request path returned the same status as direct access, with
+that echoes the raw request path returned the same status as direct access, with
 the path intact, on Traefik 3.0.4, 3.6.25 and 3.7.19 (no entry point options set).
 Reproduce it with `scripts/test-traefik-encoded-slashes.sh` (needs Docker; override
 the versions with `TRAEFIK_VERSIONS`). If you tighten the entry point's

@@ -59,7 +59,7 @@ test.describe("operator console", () => {
     await page.getByRole("button", { name: /^cancel$/i }).first().click();
     await expect(page).not.toHaveURL(/edit=1/);
 
-    // It appears as a new top-level place in the outline, under the label the
+    // It appears as a new top-level location in the outline, under the label the
     // rule rendered from the name typed above.
     await page.goto("/web/explore");
     const row = page.getByRole("treeitem").filter({ has: page.locator("[data-label]", { hasText: label }) });
@@ -150,7 +150,7 @@ test.describe("operator console", () => {
 
     // Clean up after the run, and prove on the way that a component placed
     // nowhere is still findable: it sits in the outline's "Placed nowhere you
-    // can see" node, whose row blade carries the confirm-delete (#799).
+    // can see" outpost, whose row blade carries the confirm-delete (#799).
     page.on("dialog", (d) => d.accept());
     await page.goto("/web/explore");
     await page.getByRole("button", { name: "Expand Placed nowhere you can see" }).click();
@@ -170,7 +170,7 @@ test.describe("operator console", () => {
     test(`the outline keeps its Name column readable at ${width}px`, async ({ page }) => {
       // A place to measure, made through the API and removed after: a campus
       // of one building, so the row is a folded chain with a long outer name
-      // and a short place of its own.
+      // and a short location of its own.
       const made = await page.request.post("/api/v1/locations", { data: { name: `e2e-squeeze-${width}-${Date.now()}`, location_type: "campus" } });
       expect(made.ok(), `create: ${made.status()}`).toBeTruthy();
       const { id } = (await made.json()) as { id: string };
@@ -182,7 +182,7 @@ test.describe("operator console", () => {
         await page.goto("/web/explore");
         const row = page.getByRole("treeitem").filter({ has: page.locator("[data-label]", { hasText: new RegExp(`^Wing ${width}$`) }) });
         await expect(row).toBeVisible();
-        // The place's own name is what a folded row exists to show: the outer
+        // The location's own name is what a folded row exists to show: the outer
         // path gives way before it does.
         const clipped = await row.locator("[data-label]").evaluate((el) => el.scrollWidth > el.clientWidth);
         expect(clipped, `the row's own name is cut short at ${width}px`).toBe(false);
@@ -203,7 +203,7 @@ test.describe("operator console", () => {
   }
 
   test("explore: create where you stand, the outline shows it, a link reveals it, a row opens it", async ({ page }) => {
-    // The e2e database starts with the boot seed only, so the places under
+    // The e2e database starts with the boot seed only, so the locations under
     // test are created here: a campus, two buildings under it from the row's
     // own +, and a system in the first.
     const stamp = Date.now();
@@ -260,7 +260,7 @@ test.describe("operator console", () => {
     await page.waitForURL(/\/web\/systems\/[0-9a-f-]{36}\?edit=1/);
     const systemId = page.url().match(/systems\/([0-9a-f-]{36})/)![1];
 
-    // The outline: the campus says what it holds in the registry's words, and
+    // The outline: the campus says what it holds in the catalog's words, and
     // expanding it shows both buildings. Expansion persists per browser by
     // design, and the reveal above opened the campus, so start collapsed.
     await page.evaluate(() => localStorage.removeItem("explore-open"));
@@ -274,16 +274,16 @@ test.describe("operator console", () => {
     await page.goto(`/web/explore?node=${campus}-b`);
     await expect(rowOf(buildingLabel)).toHaveAttribute("aria-selected", "true");
 
-    // A place holding one system opens as that system.
+    // A location holding one system opens as that system.
     await rowOf(buildingLabel).click();
     await expect(page.locator("aside[data-blade]")).toHaveAttribute("aria-labelledby", `blade-title-system-${systemId}`);
 
     // Its address lands on that system's view (#872): one view per system,
-    // titled by the place, the place a card of context.
+    // titled by the location, the place a card of context.
     await page.goto(`/web/locations/${buildingId}`);
     await page.waitForURL(new RegExp(`/web/systems/${systemId}$`));
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(buildingLabel);
-    await expect(page.getByTestId("place-card")).toBeVisible();
+    await expect(page.getByTestId("location-card")).toBeVisible();
     // The Explore crumb goes back up to where you were: the outline opened
     // down to this row and selected. The crumb is a link (#875), its
     // address in the DOM.
@@ -295,11 +295,11 @@ test.describe("operator console", () => {
 
     // The campus holds two buildings and no system: a folder, its own card
     // and the outline beneath it. And it settles: the live console once
-    // re-read the fleet view hundreds of times a second on a place's view.
+    // re-read the fleet view hundreds of times a second on a location's view.
     let fleetReads = 0;
     page.on("request", (r) => { if (r.url().includes("/api/v1/views/fleet")) fleetReads++; });
     await page.goto(`/web/locations/${campusId}`);
-    await expect(page.getByTestId("place-subject")).toBeVisible();
+    await expect(page.getByTestId("location-subject")).toBeVisible();
     await expect(page.getByTestId("beneath").getByRole("treeitem")).toHaveCount(2);
     await page.waitForTimeout(1500);
     expect(fleetReads, "fleet view reads while the folder sat open").toBeLessThan(5);
@@ -307,7 +307,7 @@ test.describe("operator console", () => {
     // The retired canvas address lands on the outline.
     await page.goto("/web/fleet");
     await page.waitForURL(/\/web\/explore$/);
-    await expect(page.getByRole("tree", { name: "Places" })).toBeVisible();
+    await expect(page.getByRole("tree", { name: "Locations" })).toBeVisible();
 
     // Clean up: the system through its blade (the blade delete under test),
     // then the locations through the API on the browser's own session.
@@ -377,7 +377,7 @@ test.describe("operator console", () => {
     expect((await page.request.delete(`/api/v1/notification-targets/${target}`)).ok()).toBeTruthy();
   });
 
-  test("platform health: the Home tile opens the page, which names the build, its verdict and a row per node", async ({ page }) => {
+  test("platform health: the Home tile opens the page, which names the build, its verdict and a row per outpost", async ({ page }) => {
     await page.goto("/web/");
     const tile = page.getByTestId("home-platform");
     await expect(tile).toContainText(/not up/);
@@ -392,28 +392,28 @@ test.describe("operator console", () => {
     await expect(header.getByTestId("platform-verdict")).toContainText(/healthy|incomplete|degraded|outage/);
     await expect(page.getByTestId("platform-lab")).toBeVisible();
 
-    // A row for every enrolled node, and a checkin figure on each that has
+    // A row for every enrolled outpost, and a checkin figure on each that has
     // checked in (the empty scenario enrolls none; the read-platform-health
     // walkthrough drives a live row).
-    const nodes = (await (await page.request.get("/api/v1/nodes")).json()) as {
-      nodes?: { name: string; enrolled: boolean; last_heartbeat_at?: string }[];
+    const outposts = (await (await page.request.get("/api/v1/outposts")).json()) as {
+      outposts?: { name: string; enrolled: boolean; last_heartbeat_at?: string }[];
     };
-    for (const n of (nodes.nodes ?? []).filter((x) => x.enrolled)) {
-      const row = page.getByTestId(`platform-node-${n.name}`);
+    for (const n of (outposts.outposts ?? []).filter((x) => x.enrolled)) {
+      const row = page.getByTestId(`platform-outpost-${n.name}`);
       await expect(row).toBeVisible();
       if (n.last_heartbeat_at) await expect(row.locator("[data-figure=checkin-age]")).not.toHaveText(/not reported/);
     }
   });
 
   // The closed loop (#1647), on the second lab run.sh brings up: the dev fleet
-  // with its node and the simulator beside it, nothing impaired. Once the ring
-  // holds a window the section reads measured for every node, and a healthy
+  // with its outpost and the simulator beside it, nothing impaired. Once the ring
+  // holds a window the section reads measured for every outpost, and a healthy
   // lab loses nothing at any hop: every gap reads 0 (or no figure, where the
   // sim does not observe the hop), and every protocol with a poll target
   // reached the simulator: requests it received, or, for a probe that only
   // connects or logs in and asks nothing (ssh, telnet), connections its
   // listener accepted.
-  test("platform health @simulator: every simulated node reads measured, no gap open, every polled protocol reached", async ({ page }) => {
+  test("platform health @simulator: every simulated outpost reads measured, no gap open, every polled protocol reached", async ({ page }) => {
     test.skip(!process.env.OG_E2E_SIMULATOR, "needs a lab with a simulator (run.sh's second phase)");
     test.setTimeout(150_000);
     await page.goto("/web/platform");
@@ -441,12 +441,12 @@ test.describe("operator console", () => {
       .toMatch(/^measured polled(,measured polled)*$/);
 
     for (const card of await cards.all()) {
-      const node = await card.getAttribute("data-testid");
+      const outpost = await card.getAttribute("data-testid");
       const gaps = await card.getByTestId("platform-sim-gap").evaluateAll((els) =>
         els.map((e) => ({ gap: e.getAttribute("data-gap"), protocol: e.getAttribute("data-protocol"), ratio: e.getAttribute("data-ratio") })),
       );
-      expect(gaps.length, `${node} reads its gaps`).toBeGreaterThan(0);
-      for (const g of gaps) expect(["0", ""], `${node} ${g.gap} ${g.protocol} ratio`).toContain(g.ratio);
+      expect(gaps.length, `${outpost} reads its gaps`).toBeGreaterThan(0);
+      for (const g of gaps) expect(["0", ""], `${outpost} ${g.gap} ${g.protocol} ratio`).toContain(g.ratio);
 
       const polled = await card.getByTestId("platform-sim-protocol").evaluateAll((els) =>
         els.map((e) => ({
@@ -456,9 +456,9 @@ test.describe("operator console", () => {
           received: Number(e.getAttribute("data-received")),
         })),
       );
-      expect(polled.filter((p) => p.targets > 0).length, `${node} has a polled protocol`).toBeGreaterThan(0);
-      expect(polled.some((p) => p.targets > 0 && p.received > 0), `${node} received a polled request`).toBe(true);
-      for (const p of polled.filter((x) => x.targets > 0)) expect(p.received + p.accepted, `${node} ${p.protocol} received or accepted`).toBeGreaterThan(0);
+      expect(polled.filter((p) => p.targets > 0).length, `${outpost} has a polled protocol`).toBeGreaterThan(0);
+      expect(polled.some((p) => p.targets > 0 && p.received > 0), `${outpost} received a polled request`).toBe(true);
+      for (const p of polled.filter((x) => x.targets > 0)) expect(p.received + p.accepted, `${outpost} ${p.protocol} received or accepted`).toBeGreaterThan(0);
     }
   });
 
@@ -471,7 +471,7 @@ test.describe("operator console", () => {
     const flow = page.getByTestId("pipeline");
     await expect(flow).toBeVisible();
 
-    // The hops are the view's, in its order; the empty scenario enrolls no node,
+    // The hops are the view's, in its order; the empty scenario enrolls no outpost,
     // so a hop here may carry nothing yet (not reported, never a fake 0) and the
     // find-where-work-is-lost walkthrough drives the live figures on the dev lab.
     const view = (await (await page.request.get("/api/v1/views/platform")).json()) as { pipeline?: Pipeline };
@@ -512,7 +512,7 @@ test.describe("operator console", () => {
     // boot, the ingest lag one window after a batch commits.
     test.setTimeout(240_000);
 
-    // The empty scenario runs no node, so nothing is ingested on its own: push
+    // The empty scenario runs no outpost, so nothing is ingested on its own: push
     // one sample through the ingest lane, a few seconds old, so the server has a
     // lag to report.
     const name = `e2e-ingest-${Date.now()}`;

@@ -32,7 +32,7 @@ func TestValidateSchema(t *testing.T) {
 		{"oneOf_refused", `{"oneOf":[{"type":"object","required":["ip"]}]}`, false, "ip"},
 		{"not_refused", `{"not":{"type":"object","required":["ip"]}}`, false, "ip"},
 		// required at one level, declared at another: the validator consults
-		// required only against the same node's properties, so it still
+		// required only against the same outpost's properties, so it still
 		// enforces nothing where it stands and is refused there.
 		{"required_declared_elsewhere_refused", `{"type":"object","required":["x"],"allOf":[{"properties":{"x":{"type":"string"}}}]}`, false, "x"},
 		{"not_schema_shaped_refused", `["a","b"]`, false, ""},

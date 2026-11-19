@@ -1,7 +1,6 @@
 package docslint
 
 import (
-	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -104,14 +103,12 @@ func substantiveLines(content string) []int {
 	return out
 }
 
-// ScanBadgeFences checks every badged architecture page's badge against its
-// fence census.
+// ScanBadgeFences checks every badged page's badge against its fence census,
+// wherever the page lives: the rebuilt pages carry the badges, in whatever
+// section they land (ADR-2087.2).
 func ScanBadgeFences() ([]Finding, error) {
 	var findings []Finding
 	err := walkDocs(func(rel, content string) error {
-		if filepath.Dir(rel) != "architecture" {
-			return nil
-		}
 		badge := pageBadge(content)
 		if badge == "" || badge == "Diverged" {
 			return nil

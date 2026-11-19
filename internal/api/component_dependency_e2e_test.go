@@ -139,9 +139,9 @@ func TestComponentDependencyRefusesBadEdgesOverHTTP(t *testing.T) {
 func TestComponentDependencyScopeOverHTTP(t *testing.T) {
 	t.Parallel()
 	f := newDependencyE2E(t)
-	codecOnly := principalWithGrants(t, f.ctx, f.dsn, "codec-only",
+	codecOnly := userWithGrants(t, f.ctx, f.dsn, "codec-only",
 		[]grant{{role: "dependency-editor", scopeKind: "component", scopeID: f.ids["codec-1"]}})
-	readAll := principalWithGrants(t, f.ctx, f.dsn, "panel-editor-reads-all",
+	readAll := userWithGrants(t, f.ctx, f.dsn, "panel-editor-reads-all",
 		[]grant{{role: "dependency-editor", scopeKind: "component", scopeID: f.ids["panel-1"]}, {role: "viewer", scopeKind: "all"}})
 
 	if st, raw := f.c.send(codecOnly, http.MethodPost, "/components/codec-1/dependencies", depBody("pdu-1", "power", "1")); st != http.StatusNotFound {

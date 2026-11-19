@@ -25,8 +25,8 @@ import (
 // names one endpoint (and so one component), the scheme its driver declares
 // authenticates the post, its listeners map the body onto any lane, and the
 // batch is published on the push lane, whose writer admits only collected
-// keys. The route carries no principal, so it is on the ungated allow-list
-// by necessity, as POST /nodes:claim is: the sender is not a principal, and
+// keys. The route carries no user, so it is on the ungated allow-list
+// by necessity, as POST /outposts:claim is: the sender is not a user, and
 // the endpoint's scheme is the authentication.
 //
 // Senders retry on anything but 2xx, so the answers are a contract: 202
@@ -197,7 +197,7 @@ func registerWebhookRoutes(api huma.API, gw storage.Gateway, pub TelemetryPublis
 		Middlewares:   bound,
 		Summary:       "Receive a webhook post for an endpoint",
 		Description: "The webhook transport's listener (#1024): a component or a cloud service posts here, to the URL its webhook endpoint was given. The token names one endpoint; the scheme its driver declares authenticates the post (an hmac signature over a signed timestamp, a token, basic, or none, which reads unsigned); a signed timestamp outside five minutes is refused, and a declared delivery id lands once. The driver's listeners map the body (json, xml, form or text) onto any lane, and the post also lands as a log line unless its listener says otherwise. " +
-			"Public by necessity: the sender is not a principal, and the endpoint's scheme is the authentication. Answers 202 once the post is published, 401 for a refused scheme (saying nothing of which part failed), 404 for an unknown or rotated token (identical either way), 413 past 1 MiB, 429 with Retry-After past a rate limit.",
+			"Public by necessity: the sender is not a user, and the endpoint's scheme is the authentication. Answers 202 once the post is published, 401 for a refused scheme (saying nothing of which part failed), 404 for an unknown or rotated token (identical either way), 413 past 1 MiB, 429 with Retry-After past a rate limit.",
 		Errors: []int{http.StatusUnauthorized, http.StatusNotFound, http.StatusRequestEntityTooLarge, http.StatusTooManyRequests},
 	}, rc.receive)
 	for _, method := range []string{http.MethodGet, http.MethodHead} {

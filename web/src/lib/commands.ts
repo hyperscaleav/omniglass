@@ -6,7 +6,7 @@ import { LEAF_POLL_MS } from "./component_leaf";
 
 // The commands data layer (#1155): thin typed wrappers over the generated
 // client, plus the pure derivations the commands panel renders. A COMMAND is
-// what a component was told: the issue records it, a node takes it from its
+// what a component was told: the issue records it, an outpost takes it from its
 // queue and actuates it over an endpoint, the component answers, and the
 // command settles from that reply or from the next observation of what it set,
 // or fails, or times out when its settle window closes on no evidence. Every
@@ -20,7 +20,7 @@ export const componentCommandsKey = (name: string) => [...COMPONENT_COMMANDS_PRE
 export const commandKey = (name: string, id: number) => [...COMPONENT_COMMANDS_PREFIX, name, "one", id] as const;
 
 // While a command is in flight its row moves within a second (a reply settles
-// it inside its node's cycle), so the history polls quickly; at rest it polls
+// it inside its outpost's cycle), so the history polls quickly; at rest it polls
 // on the component view's cadence.
 export const COMMANDS_IN_FLIGHT_POLL_MS = 1_000;
 export const COMMANDS_IDLE_POLL_MS = LEAF_POLL_MS;
@@ -96,16 +96,16 @@ export function observedText(c: Pick<Command, "observed">): string {
 // What the phase means for this command, in words: the teaching line its
 // pill's tooltip carries.
 export function phaseHint(c: Command): string {
-  const node = c.node ? `node ${c.node}` : "its node";
+  const outpost = c.outpost ? `outpost ${c.outpost}` : "its outpost";
   const target = c.target ?? "its target";
   const want = intendedText(c);
   switch (c.phase) {
     case "queued":
-      return `Waiting in the queue for ${node} to take it.`;
+      return `Waiting in the queue for ${outpost} to take it.`;
     case "delivered":
-      return `${node[0].toUpperCase()}${node.slice(1)} has it. Its reply decides nothing here: the next observation of ${target} does.`;
+      return `${outpost[0].toUpperCase()}${outpost.slice(1)} has it. Its reply decides nothing here: the next observation of ${target} does.`;
     case "awaiting-reply":
-      return `${node[0].toUpperCase()}${node.slice(1)} sent it to the component; the component's reply settles it.`;
+      return `${outpost[0].toUpperCase()}${outpost.slice(1)} sent it to the component; the component's reply settles it.`;
     case "awaiting-observation":
       return want
         ? `Waiting for an observation of ${target} that reads ${want} before its settle window closes.`
@@ -123,12 +123,12 @@ export function phaseHint(c: Command): string {
 // their time, a step the command skips (no endpoint carries it, or it set
 // nothing so it settled at its issue) is left out. A note says what the time
 // alone hides: the delivered step's time is its latest delivery, so a
-// redelivered command notes how many times a node took it and when the first
+// redelivered command notes how many times an outpost took it and when the first
 // came.
 export type CommandStep = { key: "issued" | "delivered" | "executed" | "terminal"; label: string; at?: string; reached: boolean; note?: string };
 
 // deliveryNote is a redelivered command's history in words: how many times a
-// node took it, and the first delivery as an offset from the issue. A command
+// outpost took it, and the first delivery as an offset from the issue. A command
 // taken once, or not yet, has nothing the step's own time does not say.
 export function deliveryNote(c: Pick<Command, "delivery_count" | "first_delivered_at" | "issued_at">): string | undefined {
   if (!c.delivery_count || c.delivery_count < 2) return undefined;
@@ -140,7 +140,7 @@ export function commandSteps(c: Command): CommandStep[] {
   const steps: CommandStep[] = [{ key: "issued", label: "Issued", at: c.issued_at, reached: true }];
   const carried = !!c.endpoint && c.settled_by !== "issue";
   if (carried) {
-    steps.push({ key: "delivered", label: c.node ? `Delivered to ${c.node}` : "Delivered", at: c.delivered_at, reached: !!c.delivered_at, note: deliveryNote(c) });
+    steps.push({ key: "delivered", label: c.outpost ? `Delivered to ${c.outpost}` : "Delivered", at: c.delivered_at, reached: !!c.delivered_at, note: deliveryNote(c) });
     steps.push({ key: "executed", label: "Answered", at: c.executed_at, reached: !!c.executed_at });
   }
   const terminal = !inFlight(c);

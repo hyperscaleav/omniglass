@@ -20,9 +20,9 @@ import { openTree, pickTree } from "../components/TreeSelect.testkit";
 // pencil. A system conforms to a STANDARD, whose declared-property contract the
 // detail's Properties panel resolves. Data is seeded into the query cache so no
 // server is needed; `>` grants every permission.
-const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
+const me: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
 const sys: System = { id: uuidFor("s-1"), name: "boardroom", label: "Boardroom", standard: "meeting-room", standard_id: uuidFor("std-meeting-room"), system_type: "class", system_type_id: uuidFor("st-class"), member_count: 2, effective_tags: {} };
-// The coarse space taxonomy (ADR-0096), nested: the picker renders it as a
+// The system type taxonomy (ADR-0096), nested: the picker renders it as a
 // tree, not a flat list, so the fixture is two levels deep. Deliberately NOT
 // named "Boardroom": the system's own label already is, and a collision
 // would make the type assertions pass on the wrong element.
@@ -83,7 +83,7 @@ describe("Systems create-as-route", () => {
     expect(screen.getByText(/Available once the system is created/)).toBeTruthy();
   });
 
-  it("offers the standard registry on the create form, with a one-off option", async () => {
+  it("offers the standard catalog on the create form, with a one-off option", async () => {
     mount("/systems/create");
     // The label is associated with its control by id (FieldRow), not by wrapping
     // it, so the lookup goes through the accessible name. That also proves the

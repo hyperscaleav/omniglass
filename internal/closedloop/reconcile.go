@@ -1,5 +1,5 @@
 // Package closedloop is the closed loop (#1639): what each simulated
-// endpoint saw arrive, reconciled hop by hop against what its node sent and
+// endpoint saw arrive, reconciled hop by hop against what its outpost sent and
 // what landed. It is pure arithmetic over reads someone else takes: the lab
 // harness (internal/labfootprint) brackets a measured window, and the server
 // (Ring) brackets a sliding one, and both read the same gaps.
@@ -13,32 +13,32 @@ import (
 )
 
 // This file is the closed loop (#1639): what each simulated endpoint saw
-// arrive, reconciled hop by hop against what its node sent and what landed.
-// Each node is read twice, at the window's start and end, and each read is a
-// bracket of three (the simulator, the node, the simulator again), so a
+// arrive, reconciled hop by hop against what its outpost sent and what landed.
+// Each outpost is read twice, at the window's start and end, and each read is a
+// bracket of three (the simulator, the outpost, the simulator again), so a
 // request in transit between two reads is a masking term printed beside its
 // gap, never a gap. Every gap is a lower bound: positive only where something
 // was lost. The arithmetic is pure; the reads are the caller's.
 
 // The hops of the loop, in the order a request travels them.
 const (
-	// GapConnectNotAccepted: a connection the node opened that the sim
+	// GapConnectNotAccepted: a connection the outpost opened that the sim
 	// never accepted.
 	GapConnectNotAccepted = "connect-not-accepted"
-	// GapSentNotReceived: a request whose bytes left the node and never
+	// GapSentNotReceived: a request whose bytes left the outpost and never
 	// reached the sim.
 	GapSentNotReceived = "sent-not-received"
 	// GapReceivedNotSettled: a request the sim received and never settled.
 	GapReceivedNotSettled = "received-not-settled"
-	// GapAnsweredNotReturned: an answer the sim gave that the node never got.
+	// GapAnsweredNotReturned: an answer the sim gave that the outpost never got.
 	GapAnsweredNotReturned = "answered-not-returned"
 	// GapPublishedNotLanded: a batch the bus acknowledged with no receipt.
 	GapPublishedNotLanded = "published-not-landed"
-	// GapSpoolDropped: a batch the node's spool gave up on.
+	// GapSpoolDropped: a batch the outpost's spool gave up on.
 	GapSpoolDropped = "spool-dropped"
 	// GapUnhitEndpoint: an enabled poll target the sim saw nothing for.
 	GapUnhitEndpoint = "unhit-endpoint"
-	// GapRestarted is the one entry a node whose counters reset gets.
+	// GapRestarted is the one entry an outpost whose counters reset gets.
 	GapRestarted = "restarted"
 )
 
@@ -52,11 +52,12 @@ func GapNames() []string {
 const (
 	// ReadingLoss: the count was lost.
 	ReadingLoss = "loss"
-	// ReadingImpaired: the node's sim carried an applied impairment, which
+	// ReadingImpaired: the outpost's sim carried an applied impairment, which
 	// loses traffic on purpose below the sim's view.
 	ReadingImpaired = "impaired"
-	// ReadingRestarted: a counter reset between the reads, so no figure for
-	// the node is meaningful.
+	// ReadingRestarted: a counter reset between the reads, or the sim's
+	// served fleet did not hold still over them, so no figure for the outpost is
+	// meaningful.
 	ReadingRestarted = "restarted"
 	// ReadingNotObserved: the kernel answers it (icmp), so the sim never sees it.
 	ReadingNotObserved = "not observed by the sim"
@@ -64,14 +65,14 @@ const (
 
 // The masking terms: what can hide a loss inside each gap's lower bound.
 const (
-	maskedByBacklog      = "connections still in the kernel backlog at the end read"
-	maskedByNodeInFlight = "requests in flight at the node's end read"
-	maskedByReturn       = "answers in flight, answers late past the node's timeout, and untallied traffic on the protocol"
-	maskedByReceiptEdges = "receipts landed in the margin before the window, in the lane's backlog at its start, or after its end"
-	maskedByUnhitSample  = "unhit devices past the sample, not checked against the targets"
+	maskedByBacklog         = "connections still in the kernel backlog at the end read"
+	maskedByOutpostInFlight = "requests in flight at the outpost's end read"
+	maskedByReturn          = "answers in flight, answers late past the outpost's timeout, and untallied traffic on the protocol"
+	maskedByReceiptEdges    = "receipts landed in the margin before the window, in the lane's backlog at its start, or after its end"
+	maskedByUnhitSample     = "unhit devices past the sample, not checked against the targets"
 )
 
-// ReceiptCount is one node's telemetry receipts around the window [T0, T1].
+// ReceiptCount is one outpost's telemetry receipts around the window [T0, T1].
 // Landed counts every receipt landed after T0 minus the acknowledgement wait
 // (the generous superset); Margin how many of those landed before T0,
 // Backlog how many from T0 until the ingest lane drained past the start read
@@ -86,33 +87,34 @@ type ReceiptCount struct {
 }
 
 // PollTarget is one enabled poll task's endpoint, at the interval it actually
-// runs (NodeCadence.Interval).
+// runs (OutpostCadence.Interval).
 type PollTarget struct {
 	ComponentID string
 	Transport   string
 	Interval    time.Duration
 }
 
-// NodeBracket is one node's two bracketed reads and what the database and
+// OutpostBracket is one outpost's two bracketed reads and what the database and
 // the task table say about its window.
-type NodeBracket struct {
-	Node       string
+type OutpostBracket struct {
+	Outpost    string
 	Start, End collection.EndpointObservation
 	Receipts   ReceiptCount
 	Targets    []PollTarget
 	Window     time.Duration
 	// Between is the sim reads taken between the window's ends (the ring's
-	// brackets inside it), read only for an impairment applied and lifted
-	// inside the window. The lab harness takes none.
+	// brackets inside it), read for an impairment applied and lifted, or a
+	// change to the sim's served fleet, inside the window. The lab harness
+	// takes none.
 	Between []collection.SimObservation
 }
 
-// ClosedLoopGap is one gap on one node. Count is the lower bound read as
+// ClosedLoopGap is one gap on one outpost. Count is the lower bound read as
 // Reading; Masked is the term printed beside it (MaskedBy names it);
-// AnsweredLate is the part of Masked the sim answered after the node gave up.
+// AnsweredLate is the part of Masked the sim answered after the outpost gave up.
 type ClosedLoopGap struct {
 	Gap          string `json:"gap"`
-	Node         string `json:"node"`
+	Outpost      string `json:"outpost"`
 	Protocol     string `json:"protocol,omitempty"`
 	Count        int64  `json:"count"`
 	Masked       int64  `json:"masked,omitempty"`
@@ -122,12 +124,13 @@ type ClosedLoopGap struct {
 	Reading      string `json:"reading"`
 }
 
-// Reconcile reads one node's gaps. A node whose node or sim restarted, or any
-// of whose counters went backwards, gets a single restarted entry. On a node
+// Reconcile reads one outpost's gaps. An outpost whose outpost or sim restarted, any of
+// whose counters went backwards, or whose sim's served fleet changed, gets a
+// single restarted entry. On an outpost
 // whose sim carries an applied impairment, every gap reads impaired.
-func Reconcile(b NodeBracket) []ClosedLoopGap {
+func Reconcile(b OutpostBracket) []ClosedLoopGap {
 	if restarted(b) {
-		return []ClosedLoopGap{{Gap: GapRestarted, Node: b.Node, Reading: ReadingRestarted}}
+		return []ClosedLoopGap{{Gap: GapRestarted, Outpost: b.Outpost, Reading: ReadingRestarted}}
 	}
 	reading := ReadingLoss
 	if impaired(b) {
@@ -139,7 +142,7 @@ func Reconcile(b NodeBracket) []ClosedLoopGap {
 		if g.Count == 0 && g.Masked == 0 && g.AnsweredLate == 0 {
 			return
 		}
-		g.Node = b.Node
+		g.Outpost = b.Outpost
 		if g.Reading == "" {
 			g.Reading = reading
 		}
@@ -147,27 +150,27 @@ func Reconcile(b NodeBracket) []ClosedLoopGap {
 	}
 	s1, s1a, s2b, s2 := b.Start.SimBefore, b.Start.SimAfter, b.End.SimBefore, b.End.SimAfter
 
-	// Connections pool across every listener (#1647): the node knows the
+	// Connections pool across every listener (#1647): the outpost knows the
 	// transport it dialed, the sim the listener that accepted, and the two
 	// need not agree (a tcp probe of a port the sim serves http on). The
 	// widest sim span (first read to last) carries the most the sim could
 	// have seen, so the difference is a floor.
 	add(ClosedLoopGap{Gap: GapConnectNotAccepted, MaskedBy: maskedByBacklog,
-		Count: nodeConnections(b) - simAccepted(s1, s2)})
+		Count: outpostConnections(b) - simAccepted(s1, s2)})
 
-	// The request hops, per transport the node tallied. A tally transport is
+	// The request hops, per transport the outpost tallied. A tally transport is
 	// named as the sim's protocol, so the rows pair by name.
-	for _, n2 := range b.End.Node.Transports {
+	for _, n2 := range b.End.Outpost.Transports {
 		p := n2.Transport
-		n1 := tallyRow(b.Start.Node, p)
+		n1 := tallyRow(b.Start.Outpost, p)
 		sent := n2.Sent - n1.Sent
 		received := s2.Protocol(p).Received - s1.Protocol(p).Received
-		add(ClosedLoopGap{Gap: GapSentNotReceived, Protocol: p, MaskedBy: maskedByNodeInFlight,
+		add(ClosedLoopGap{Gap: GapSentNotReceived, Protocol: p, MaskedBy: maskedByOutpostInFlight,
 			Count: sent - received - n2.InFlight, Masked: n2.InFlight})
 		// Answers: the narrowest sim span (the start's second read to the
-		// end's first) holds only answers given after the node's start read
+		// end's first) holds only answers given after the outpost's start read
 		// and before its end read. Each one came back, is in flight, timed
-		// out at the node, or belongs to traffic the node does not tally.
+		// out at the outpost, or belongs to traffic the outpost does not tally.
 		replied := func(o collection.SimProtocolObservation) int64 { return o.Answered + o.Refused + o.Error }
 		got := func(c collection.TallyCounters) int64 { return c.Answered + c.Refused + c.Error }
 		untallied := max(received-sent, 0)
@@ -188,9 +191,9 @@ func Reconcile(b NodeBracket) []ClosedLoopGap {
 
 	// The telemetry hops.
 	add(ClosedLoopGap{Gap: GapPublishedNotLanded, MaskedBy: maskedByReceiptEdges,
-		Count:  (b.End.Node.BatchesAcknowledged - b.Start.Node.BatchesAcknowledged) - b.Receipts.Landed,
+		Count:  (b.End.Outpost.BatchesAcknowledged - b.Start.Outpost.BatchesAcknowledged) - b.Receipts.Landed,
 		Masked: b.Receipts.Margin + b.Receipts.Backlog + b.Receipts.AfterEnd})
-	add(ClosedLoopGap{Gap: GapSpoolDropped, Count: b.End.Node.BatchesDropped - b.Start.Node.BatchesDropped})
+	add(ClosedLoopGap{Gap: GapSpoolDropped, Count: b.End.Outpost.BatchesDropped - b.Start.Outpost.BatchesDropped})
 
 	out = append(out, unhit(b, reading)...)
 	return out
@@ -201,7 +204,7 @@ func Reconcile(b NodeBracket) []ClosedLoopGap {
 // capped sample, so devices past it are a masking term. An icmp target is
 // never seen by the sim; a push transport is never polled. TODO(#1663): check
 // every target against what the sim saw inside the window, not since start.
-func unhit(b NodeBracket, reading string) []ClosedLoopGap {
+func unhit(b OutpostBracket, reading string) []ClosedLoopGap {
 	var out []ClosedLoopGap
 	var icmp int64
 	sampled := map[string]bool{}
@@ -219,17 +222,17 @@ func unhit(b NodeBracket, reading string) []ClosedLoopGap {
 		}
 		if slices.Contains(b.End.SimAfter.Protocol(p).UnhitSample, t.ComponentID) && !sampled[p+" "+t.ComponentID] {
 			sampled[p+" "+t.ComponentID] = true
-			out = append(out, ClosedLoopGap{Gap: GapUnhitEndpoint, Node: b.Node, Protocol: p, Count: 1, ComponentID: t.ComponentID, Reading: reading})
+			out = append(out, ClosedLoopGap{Gap: GapUnhitEndpoint, Outpost: b.Outpost, Protocol: p, Count: 1, ComponentID: t.ComponentID, Reading: reading})
 		}
 	}
 	for _, p := range protocols {
 		o := b.End.SimAfter.Protocol(p)
 		if past := int64(o.Unhit - len(o.UnhitSample)); past > 0 {
-			out = append(out, ClosedLoopGap{Gap: GapUnhitEndpoint, Node: b.Node, Protocol: p, Masked: past, MaskedBy: maskedByUnhitSample, Reading: reading})
+			out = append(out, ClosedLoopGap{Gap: GapUnhitEndpoint, Outpost: b.Outpost, Protocol: p, Masked: past, MaskedBy: maskedByUnhitSample, Reading: reading})
 		}
 	}
 	if icmp > 0 {
-		out = append(out, ClosedLoopGap{Gap: GapUnhitEndpoint, Node: b.Node, Protocol: "icmp", Count: icmp, Reading: ReadingNotObserved})
+		out = append(out, ClosedLoopGap{Gap: GapUnhitEndpoint, Outpost: b.Outpost, Protocol: "icmp", Count: icmp, Reading: ReadingNotObserved})
 	}
 	return out
 }
@@ -248,12 +251,12 @@ func dueProtocol(t PollTarget, window time.Duration) (string, bool) {
 	return collection.SimProtocolOf(t.Transport)
 }
 
-// nodeConnections is every connection the node opened inside the window,
+// outpostConnections is every connection the outpost opened inside the window,
 // whatever transport it tallied it under.
-func nodeConnections(b NodeBracket) int64 {
+func outpostConnections(b OutpostBracket) int64 {
 	var n int64
-	for _, n2 := range b.End.Node.Transports {
-		n += n2.Connections - tallyRow(b.Start.Node, n2.Transport).Connections
+	for _, n2 := range b.End.Outpost.Transports {
+		n += n2.Connections - tallyRow(b.Start.Outpost, n2.Transport).Connections
 	}
 	return n
 }
@@ -278,11 +281,11 @@ func unsettled(p collection.SimProtocolObservation) int64 {
 // understate it (the sim raises in flight before received and an outcome
 // before leaving flight, and the reader takes received, in flight, then the
 // outcomes), so the larger is the nearer.
-func startUnsettled(b NodeBracket, protocol string) int64 {
+func startUnsettled(b OutpostBracket, protocol string) int64 {
 	return max(unsettled(b.Start.SimBefore.Protocol(protocol)), unsettled(b.Start.SimAfter.Protocol(protocol)), 0)
 }
 
-// tallyRow is a transport's row in a node read, zero when it has none.
+// tallyRow is a transport's row in an outpost read, zero when it has none.
 func tallyRow(s collection.RequestTallySnapshot, transport string) collection.TallyCounters {
 	for _, c := range s.Transports {
 		if c.Transport == transport {
@@ -292,12 +295,12 @@ func tallyRow(s collection.RequestTallySnapshot, transport string) collection.Ta
 	return collection.TallyCounters{Transport: transport}
 }
 
-// impaired is whether any of the node's sim reads, those between the ends
+// impaired is whether any of the outpost's sim reads, those between the ends
 // included, carried an applied impairment. TODO(#1662): attribute an impairment to the protocol it
 // impairs, and count the changes, so an unimpaired protocol on an impaired
-// node still reads loss.
-func impaired(b NodeBracket) bool {
-	for _, o := range append([]collection.SimObservation{b.Start.SimBefore, b.Start.SimAfter, b.End.SimBefore, b.End.SimAfter}, b.Between...) {
+// outpost still reads loss.
+func impaired(b OutpostBracket) bool {
+	for _, o := range simReads(b) {
 		if o.Impaired > 0 {
 			return true
 		}
@@ -305,9 +308,19 @@ func impaired(b NodeBracket) bool {
 	return false
 }
 
-// restarted is whether the node or its sim started again between the reads,
-// or any counter the reads compare went backwards.
-func restarted(b NodeBracket) bool {
+// simReads is every sim read a bracket holds: its four ends, then the reads
+// between them.
+func simReads(b OutpostBracket) []collection.SimObservation {
+	return append([]collection.SimObservation{b.Start.SimBefore, b.Start.SimAfter, b.End.SimBefore, b.End.SimAfter}, b.Between...)
+}
+
+// restarted is whether the outpost or its sim started again between the reads,
+// any counter the reads compare went backwards, or the fleet the sim serves
+// did not hold still (#1895).
+func restarted(b OutpostBracket) bool {
+	if !fleetSteady(b) {
+		return true
+	}
 	sims := []collection.SimObservation{b.Start.SimBefore, b.Start.SimAfter, b.End.SimBefore, b.End.SimAfter}
 	for i := 1; i < len(sims); i++ {
 		if !sims[i].Started.Equal(sims[0].Started) {
@@ -320,7 +333,7 @@ func restarted(b NodeBracket) bool {
 			}
 		}
 	}
-	n1, n2 := b.Start.Node, b.End.Node
+	n1, n2 := b.Start.Outpost, b.End.Outpost
 	if !n1.Started.Equal(n2.Started) || n2.BatchesAcknowledged < n1.BatchesAcknowledged || n2.BatchesDropped < n1.BatchesDropped {
 		return true
 	}
@@ -331,4 +344,19 @@ func restarted(b NodeBracket) bool {
 		}
 	}
 	return false
+}
+
+// fleetSteady is whether every sim read, those between the ends included, saw
+// one served fleet: synced at least once, no sync starting or stopping devices,
+// and one generation throughout. A request the outpost sent to a device the sim
+// had not bound yet, or had just stopped, is sent and never received, and is
+// no loss of the path (#1895).
+func fleetSteady(b OutpostBracket) bool {
+	sims := simReads(b)
+	for _, o := range sims {
+		if o.FleetGeneration == 0 || o.FleetChanging || o.FleetGeneration != sims[0].FleetGeneration {
+			return false
+		}
+	}
+	return true
 }

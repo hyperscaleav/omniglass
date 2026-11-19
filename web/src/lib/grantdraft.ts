@@ -1,5 +1,5 @@
 // grantdraft is the pure staging core behind the grant builder. The admin builds a
-// desired grant set (the draft) on top of the principal's current server grants;
+// desired grant set (the draft) on top of the user's current server grants;
 // nothing is sent until save. These framework-agnostic functions compute the
 // draft, its per-chip visual state, the add/remove diff a save applies, and the
 // stage-time validation, so the builder component is a thin shell over tested
@@ -7,7 +7,7 @@
 // is identified by role + scope, not its server id, so a draft can be diffed
 // against the current set to know exactly what to POST and what to DELETE.
 
-import type { ScopeKind } from "./principals";
+import type { ScopeKind } from "./users";
 
 // A scope operator: how a grant's scope root matches the tree. It mirrors the
 // server's scope_op. TREE_OP is a SEPARATE vocabulary from predicate.ts's OP (same

@@ -60,17 +60,17 @@ func TestASystemOwnsItsMetricsAndProperties(t *testing.T) {
 		}
 		return out
 	}
-	// A huddle room staffed by two components, each a role's occupant.
+	// A huddle room staffed by two components, each a slot's occupant.
 	run("system", "create", "--name", "huddle-1")
-	for _, role := range []string{"left", "right"} {
-		run("system", "role", "update", "huddle-1", role, "--label", role, "--quorum", "1", "--impact", "none")
+	for _, slot := range []string{"left", "right"} {
+		run("system", "slot", "update", "huddle-1", slot, "--label", slot, "--quorum", "1", "--impact", "none")
 	}
 	all := scope.Set{All: true}
-	for role, comp := range map[string]string{"left": "panel-l", "right": "panel-r"} {
+	for slot, comp := range map[string]string{"left": "panel-l", "right": "panel-r"} {
 		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: comp}, all, all, all, all); err != nil {
 			t.Fatal(err)
 		}
-		run("system", "role", "assignment", "update", "huddle-1", role, comp)
+		run("system", "slot", "assignment", "update", "huddle-1", slot, comp)
 	}
 
 	// The primary path: a system calc rule over its members writes a

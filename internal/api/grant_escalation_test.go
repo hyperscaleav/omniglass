@@ -29,28 +29,28 @@ func TestGrantEscalationGuard(t *testing.T) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
-	adminTok := principalWithGrants(t, ctx, dsn, "an-admin", []grant{{role: "admin", scopeKind: "all"}})
+	adminTok := userWithGrants(t, ctx, dsn, "an-admin", []grant{{role: "admin", scopeKind: "all"}})
 	adminID := meID(t, c, adminTok)
 
 	// A plain target to receive grants.
-	targetTok := principalWithGrants(t, ctx, dsn, "a-target", nil)
+	targetTok := userWithGrants(t, ctx, dsn, "a-target", nil)
 	targetID := meID(t, c, targetTok)
 
 	// An admin CANNOT grant owner (*:*), which it does not cover, to anyone...
-	if code, b := c.send(adminTok, http.MethodPost, "/principals/"+targetID+"/grants", map[string]any{"role": "owner", "scope_kind": "all"}); code != http.StatusForbidden {
+	if code, b := c.send(adminTok, http.MethodPost, "/users/"+targetID+"/grants", map[string]any{"role": "owner", "scope_kind": "all"}); code != http.StatusForbidden {
 		t.Fatalf("admin granting owner to a user: want 403 (escalation), got %d (%s)", code, b)
 	}
 	// ...nor to itself (the self-promotion path).
-	if code, b := c.send(adminTok, http.MethodPost, "/principals/"+adminID+"/grants", map[string]any{"role": "owner", "scope_kind": "all"}); code != http.StatusForbidden {
+	if code, b := c.send(adminTok, http.MethodPost, "/users/"+adminID+"/grants", map[string]any{"role": "owner", "scope_kind": "all"}); code != http.StatusForbidden {
 		t.Fatalf("admin self-granting owner: want 403 (escalation), got %d (%s)", code, b)
 	}
 	// An admin CAN grant a role it covers (viewer, via the *:read floor it inherits).
-	c.do(adminTok, http.MethodPost, "/principals/"+targetID+"/grants", map[string]any{"role": "viewer", "scope_kind": "all"}, http.StatusCreated)
+	c.do(adminTok, http.MethodPost, "/users/"+targetID+"/grants", map[string]any{"role": "viewer", "scope_kind": "all"}, http.StatusCreated)
 	// An admin CAN grant a peer admin (it covers itself).
-	c.do(adminTok, http.MethodPost, "/principals/"+targetID+"/grants", map[string]any{"role": "operator", "scope_kind": "all"}, http.StatusCreated)
+	c.do(adminTok, http.MethodPost, "/users/"+targetID+"/grants", map[string]any{"role": "operator", "scope_kind": "all"}, http.StatusCreated)
 
 	// The owner covers everything, so it may still grant owner.
-	other := principalWithGrants(t, ctx, dsn, "owner-recipient", nil)
+	other := userWithGrants(t, ctx, dsn, "owner-recipient", nil)
 	otherID := meID(t, c, other)
-	c.do(ownerTok, http.MethodPost, "/principals/"+otherID+"/grants", map[string]any{"role": "owner", "scope_kind": "all"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/users/"+otherID+"/grants", map[string]any{"role": "owner", "scope_kind": "all"}, http.StatusCreated)
 }

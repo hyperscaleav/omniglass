@@ -10,7 +10,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/bus"
 	"github.com/hyperscaleav/omniglass/internal/collection"
-	"github.com/hyperscaleav/omniglass/internal/node"
+	"github.com/hyperscaleav/omniglass/internal/outpost"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
@@ -22,12 +22,12 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// TestTelemetryRoundTrip is the checkpoint-3 closing gate: a node runs a REAL tcp
+// TestTelemetryRoundTrip is the checkpoint-3 closing gate: an outpost runs a REAL tcp
 // probe against a live listener, ships the result as a protobuf Event over
 // JetStream, and the sample lands in metric owned (server-side) by
 // the target component. It then proves the two invariants are real, not faked:
 // (a) reject-not-project drops an unregistered sample name, and (b) the
-// confinement fence drops an Event whose task belongs to ANOTHER node. Both are
+// confinement fence drops an Event whose task belongs to ANOTHER outpost. Both are
 // asserted structurally by a watermark: a later valid sample proves the
 // consumer drained past the negatives, so their absence is a real drop.
 func TestTelemetryRoundTrip(t *testing.T) {
@@ -63,22 +63,22 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	}()
 	target := ln.Addr().String()
 
-	// Enroll node-a and node-b.
-	for _, name := range []string{"node-a", "node-b"} {
-		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: name}, all, all); err != nil {
+	// Enroll outpost-a and outpost-b.
+	for _, name := range []string{"outpost-a", "outpost-b"} {
+		if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: name}, all, all); err != nil {
 			t.Fatalf("create %s: %v", name, err)
 		}
 	}
 	tokenA := "secret-a"
-	if _, err := gw.SetEnrollmentToken(ctx, "", "node-a", hashHex(tokenA), all); err != nil {
+	if _, err := gw.SetEnrollmentToken(ctx, "", "outpost-a", hashHex(tokenA), all); err != nil {
 		t.Fatalf("mint a: %v", err)
 	}
-	if _, err := gw.SetEnrollmentToken(ctx, "", "node-b", hashHex("secret-b"), all); err != nil {
+	if _, err := gw.SetEnrollmentToken(ctx, "", "outpost-b", hashHex("secret-b"), all); err != nil {
 		t.Fatalf("mint b: %v", err)
 	}
 
-	// Components + interfaces + tasks: disp-1 bound to node-a (the happy path);
-	// disp-2 bound to node-b (the confinement target node-a must not reach).
+	// Components + interfaces + tasks: disp-1 bound to outpost-a (the happy path);
+	// disp-2 bound to outpost-b (the confinement target outpost-a must not reach).
 	for _, name := range []string{"disp-1", "disp-2"} {
 		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: name}, all, all, all, all); err != nil {
 			t.Fatalf("create component %s: %v", name, err)
@@ -88,9 +88,9 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, node_name, params) values
-		('disp-1-tcp', 'tcp', (select id from component where name = 'disp-1'), (select principal_id from node where name = 'node-a'), $1::jsonb),
-		('disp-2-tcp', 'tcp', (select id from component where name = 'disp-2'), (select principal_id from node where name = 'node-b'), '{"target":"127.0.0.1:1"}'::jsonb)`,
+	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
+		('disp-1-tcp', 'tcp', (select id from component where name = 'disp-1'), (select user_id from outpost where name = 'outpost-a'), $1::jsonb),
+		('disp-2-tcp', 'tcp', (select id from component where name = 'disp-2'), (select user_id from outpost where name = 'outpost-b'), '{"target":"127.0.0.1:1"}'::jsonb)`,
 		`{"target":"`+target+`"}`); err != nil {
 		t.Fatalf("insert endpoints: %v", err)
 	}
@@ -111,11 +111,11 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	apiSrv := httptest.NewServer(api.NewHandler(gw, api.WithNatsURL(srv.ClientURL())))
 	defer apiSrv.Close()
 
-	// HAPPY PATH: run node-a once with the REAL dialer. It pulls t-a, probes the
+	// HAPPY PATH: run outpost-a once with the REAL dialer. It pulls t-a, probes the
 	// live listener, and publishes the Event; the consumer binds owner disp-1 and
 	// writes tcp-open=open (a property since #1592).
-	if _, err := node.Run(ctx, node.Config{ServerURL: apiSrv.URL, Name: "node-a", Token: tokenA, Once: true}); err != nil {
-		t.Fatalf("node run: %v", err)
+	if _, err := outpost.Run(ctx, outpost.Config{ServerURL: apiSrv.URL, Name: "outpost-a", Token: tokenA, Once: true}); err != nil {
+		t.Fatalf("outpost run: %v", err)
 	}
 	dp := waitProperty(t, ctx, gw, "disp-1", "tcp-open", "disp-1-tcp", func(d *storage.PropertySample) bool { return d != nil && d.Value == "open" })
 	if dp.OwnerKind != "component" || dp.Provenance != "observed" || dp.Source != "tcp" {
@@ -124,42 +124,42 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	// connect_time landed too (the port was open).
 	waitMetric(t, ctx, gw, "disp-1", "tcp-connect-time", func(d *storage.MetricSample) bool { return d != nil })
 
-	// A node client to publish crafted Events (only its OWN telemetry subject).
+	// An outpost client to publish crafted Events (only its OWN telemetry subject).
 	permErrs := make(chan error, 16)
 	ncA, err := nats.Connect(srv.ClientURL(),
-		nats.UserInfo("node-a", tokenA),
-		nats.CustomInboxPrefix(collection.InboxPrefix("node-a")),
+		nats.UserInfo("outpost-a", tokenA),
+		nats.CustomInboxPrefix(collection.InboxPrefix("outpost-a")),
 		nats.ErrorHandler(func(_ *nats.Conn, _ *nats.Subscription, e error) { permErrs <- e }),
 	)
 	if err != nil {
-		t.Fatalf("node-a connect: %v", err)
+		t.Fatalf("outpost-a connect: %v", err)
 	}
 	defer ncA.Close()
 
-	// NEGATIVE (b) CONFINEMENT: node-a publishes an Event for t-b, which belongs to
-	// node-b (owner disp-2). The consumer must drop it (orphan): disp-2 gets no row.
-	publishEvent(t, ncA, "node-a", bus.AsTick(&ogv1.TelemetryBatch{
-		TaskId:  "t-b",
-		NodeId:  "node-a",
-		Metrics: []*ogv1.MetricSample{{Name: "tcp-connect-time", Value: 1}},
+	// NEGATIVE (b) CONFINEMENT: outpost-a publishes an Event for t-b, which belongs to
+	// outpost-b (owner disp-2). The consumer must drop it (orphan): disp-2 gets no row.
+	publishEvent(t, ncA, "outpost-a", bus.AsTick(&ogv1.TelemetryBatch{
+		TaskId:    "t-b",
+		OutpostId: "outpost-a",
+		Metrics:   []*ogv1.MetricSample{{Name: "tcp-connect-time", Value: 1}},
 	}))
 
-	// NEGATIVE (a) REJECT-NOT-PROJECT: node-a publishes for its own t-a but with an
+	// NEGATIVE (a) REJECT-NOT-PROJECT: outpost-a publishes for its own t-a but with an
 	// unregistered sample name; that name must not be written.
-	publishEvent(t, ncA, "node-a", bus.AsTick(&ogv1.TelemetryBatch{
-		TaskId:  "t-a",
-		NodeId:  "node-a",
-		Metrics: []*ogv1.MetricSample{{Name: "bogus.metric", Value: 9}},
+	publishEvent(t, ncA, "outpost-a", bus.AsTick(&ogv1.TelemetryBatch{
+		TaskId:    "t-a",
+		OutpostId: "outpost-a",
+		Metrics:   []*ogv1.MetricSample{{Name: "bogus.metric", Value: 9}},
 	}))
 
 	// WATERMARK: a valid sample published AFTER the negatives. JetStream is
 	// ordered per subject and the consumer processes sequentially, so once the
 	// watermark is visible the two negatives have already been handled (and
 	// dropped). connect_time=42 is distinctive from any real dial.
-	publishEvent(t, ncA, "node-a", bus.AsTick(&ogv1.TelemetryBatch{
-		TaskId:  "t-a",
-		NodeId:  "node-a",
-		Metrics: []*ogv1.MetricSample{{Name: "tcp-connect-time", Value: 42}},
+	publishEvent(t, ncA, "outpost-a", bus.AsTick(&ogv1.TelemetryBatch{
+		TaskId:    "t-a",
+		OutpostId: "outpost-a",
+		Metrics:   []*ogv1.MetricSample{{Name: "tcp-connect-time", Value: 42}},
 	}))
 	waitMetric(t, ctx, gw, "disp-1", "tcp-connect-time", func(d *storage.MetricSample) bool { return d != nil && d.Value == 42 })
 
@@ -169,20 +169,20 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	// latest-row read IS this row and its stored ts is directly assertable.
 	// Hours old, inside the metric window: an older sample is dropped (#1529).
 	suppliedTS := time.Now().UTC().Add(-3 * time.Hour).Truncate(time.Second)
-	publishEvent(t, ncA, "node-a", bus.AsTick(&ogv1.TelemetryBatch{
-		TaskId:  "t-a",
-		NodeId:  "node-a",
-		Metrics: []*ogv1.MetricSample{{Name: "icmp-rtt-avg", Value: 7.5, Ts: timestamppb.New(suppliedTS)}},
+	publishEvent(t, ncA, "outpost-a", bus.AsTick(&ogv1.TelemetryBatch{
+		TaskId:    "t-a",
+		OutpostId: "outpost-a",
+		Metrics:   []*ogv1.MetricSample{{Name: "icmp-rtt-avg", Value: 7.5, Ts: timestamppb.New(suppliedTS)}},
 	}))
 	waitMetric(t, ctx, gw, "disp-1", "icmp-rtt-avg", func(d *storage.MetricSample) bool {
 		return d != nil && d.Value == 7.5 && d.TS.Equal(suppliedTS)
 	})
 
-	// Confinement held: disp-2 (node-b's component) has NO sample from node-a.
+	// Confinement held: disp-2 (outpost-b's component) has NO sample from outpost-a.
 	if got, err := gw.LatestMetric(ctx, "disp-2", "tcp-connect-time"); err != nil {
 		t.Fatalf("latest disp-2: %v", err)
 	} else if got != nil {
-		t.Fatalf("confinement breached: node-a landed a sample on disp-2: %+v", got)
+		t.Fatalf("confinement breached: outpost-a landed a sample on disp-2: %+v", got)
 	}
 	// reject-not-project held: the unregistered name was never written.
 	if got, err := gw.LatestMetric(ctx, "disp-1", "bogus.metric"); err != nil {
@@ -195,22 +195,22 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	// properties array as canonical JSON text, under the SAME confinement and
 	// reject-not-project as a metric, plus the ingest-side transition-only guard.
 
-	// node-a publishes endpoint-reachable=up for its own t-a. The property lane
+	// outpost-a publishes endpoint-reachable=up for its own t-a. The property lane
 	// lands in property (not metric), owned disp-1 and instanced by the interface
 	// (disp-1-tcp).
-	publishEvent(t, ncA, "node-a", bus.AsTick(&ogv1.TelemetryBatch{
+	publishEvent(t, ncA, "outpost-a", bus.AsTick(&ogv1.TelemetryBatch{
 		TaskId:     "t-a",
-		NodeId:     "node-a",
+		OutpostId:  "outpost-a",
 		Properties: []*ogv1.PropertySample{{Name: "endpoint-reachable", ValueJson: `"up"`}},
 	}))
 	waitProperty(t, ctx, gw, "disp-1", "endpoint-reachable", "disp-1-tcp", func(d *storage.PropertySample) bool { return d != nil && d.Value == "up" })
 
-	// CONFINEMENT (property lane): node-a publishes endpoint-reachable=up for t-b,
-	// which belongs to node-b (owner disp-2). The same fence that drops a foreign
+	// CONFINEMENT (property lane): outpost-a publishes endpoint-reachable=up for t-b,
+	// which belongs to outpost-b (owner disp-2). The same fence that drops a foreign
 	// metric drops a foreign verdict: disp-2 gets none.
-	publishEvent(t, ncA, "node-a", bus.AsTick(&ogv1.TelemetryBatch{
+	publishEvent(t, ncA, "outpost-a", bus.AsTick(&ogv1.TelemetryBatch{
 		TaskId:     "t-b",
-		NodeId:     "node-a",
+		OutpostId:  "outpost-a",
 		Properties: []*ogv1.PropertySample{{Name: "endpoint-reachable", ValueJson: `"up"`}},
 	}))
 
@@ -218,23 +218,23 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	// schema (endpoint-reachable is enum [up, down]) must never land. Refusal is
 	// proven by the watermark pattern: the down flip below lands, so the consumer
 	// drained past this batch, and the series never contains "sideways".
-	publishEvent(t, ncA, "node-a", bus.AsTick(&ogv1.TelemetryBatch{
+	publishEvent(t, ncA, "outpost-a", bus.AsTick(&ogv1.TelemetryBatch{
 		TaskId:     "t-a",
-		NodeId:     "node-a",
+		OutpostId:  "outpost-a",
 		Properties: []*ogv1.PropertySample{{Name: "endpoint-reachable", ValueJson: `"sideways"`}},
 	}))
 
 	// TRANSITION-ONLY (ingest guard): a repeated identical up must NOT add a second
 	// row (the latest-value guard skips it); only a flip to down writes. The first
 	// up is already committed (waitProperty above), so the guard sees it deterministically.
-	publishEvent(t, ncA, "node-a", bus.AsTick(&ogv1.TelemetryBatch{
+	publishEvent(t, ncA, "outpost-a", bus.AsTick(&ogv1.TelemetryBatch{
 		TaskId:     "t-a",
-		NodeId:     "node-a",
+		OutpostId:  "outpost-a",
 		Properties: []*ogv1.PropertySample{{Name: "endpoint-reachable", ValueJson: `"up"`}},
 	}))
-	publishEvent(t, ncA, "node-a", bus.AsTick(&ogv1.TelemetryBatch{
+	publishEvent(t, ncA, "outpost-a", bus.AsTick(&ogv1.TelemetryBatch{
 		TaskId:     "t-a",
-		NodeId:     "node-a",
+		OutpostId:  "outpost-a",
 		Properties: []*ogv1.PropertySample{{Name: "endpoint-reachable", ValueJson: `"down"`}},
 	}))
 	waitProperty(t, ctx, gw, "disp-1", "endpoint-reachable", "disp-1-tcp", func(d *storage.PropertySample) bool { return d != nil && d.Value == "down" })
@@ -263,11 +263,11 @@ func TestTelemetryRoundTrip(t *testing.T) {
 		t.Fatalf("latest tcp-open series row = %+v, want value open", dp)
 	}
 
-	// Confinement held for the state path: disp-2 (node-b's component) got no verdict.
+	// Confinement held for the state path: disp-2 (outpost-b's component) got no verdict.
 	if got, err := gw.LatestProperty(ctx, "disp-2", "endpoint-reachable", "disp-2-tcp"); err != nil {
 		t.Fatalf("latest property disp-2: %v", err)
 	} else if got != nil {
-		t.Fatalf("state confinement breached: node-a landed a verdict on disp-2: %+v", got)
+		t.Fatalf("state confinement breached: outpost-a landed a verdict on disp-2: %+v", got)
 	}
 
 	// MIXED LANES + NATIVE CAUGHT EVENT (ADR-0066, #594): one batch carries a
@@ -275,8 +275,8 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	// event is a natively published occurrence (call-started, a seeded event_type)
 	// landing caught on the component, under the same owner confinement and
 	// reject-not-project as the other lanes. Raw logs are a separate lane, not this.
-	publishEvent(t, ncA, "node-a", bus.AsTick(&ogv1.TelemetryBatch{
-		TaskId: "t-a", NodeId: "node-a",
+	publishEvent(t, ncA, "outpost-a", bus.AsTick(&ogv1.TelemetryBatch{
+		TaskId: "t-a", OutpostId: "outpost-a",
 		Metrics:    []*ogv1.MetricSample{{Name: "tcp-connect-time", Value: 0.5}},
 		Properties: []*ogv1.PropertySample{{Name: "endpoint-reachable", ValueJson: `"up"`}},
 		Events:     []*ogv1.EventSample{{Name: "call-started", Message: "call started"}},
@@ -287,28 +287,28 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	waitMetric(t, ctx, gw, "disp-1", "tcp-connect-time", func(d *storage.MetricSample) bool { return d != nil && d.Value == 0.5 })
 	waitProperty(t, ctx, gw, "disp-1", "endpoint-reachable", "disp-1-tcp", func(d *storage.PropertySample) bool { return d != nil && d.Value == "up" })
 
-	// RAW LOG LANE (ADR-0066): node-a ships its own self-log as a LogLine on the
-	// telemetry Event (no task, no registry name, no sample). It lands on
-	// node_log keyed to the publishing node (#589: the origin-true self-log
+	// RAW LOG LANE (ADR-0066): outpost-a ships its own self-log as a LogLine on the
+	// telemetry Event (no task, no catalog name, no sample). It lands on
+	// outpost_log keyed to the publishing outpost (#589: the origin-true self-log
 	// home), the separate raw ingest lane, never the event table.
-	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
-		NodeId: "node-a",
+	publishEvent(t, ncA, "outpost-a", &ogv1.TelemetryBatch{
+		OutpostId: "outpost-a",
 		Logs: []*ogv1.LogLine{{
 			Message:    "tcp probe on disp-1 timed out after 3 retries",
 			Source:     "collection",
 			Severity:   "warning",
-			Facility:   "node",
+			Facility:   "outpost",
 			Attributes: []byte(`{"task":"t-a"}`),
 		}},
 	})
-	waitNodeLog(t, ctx, gw, "node-a", func(l storage.LogLine) bool {
+	waitOutpostLog(t, ctx, gw, "outpost-a", func(l storage.LogLine) bool {
 		return l.Message == "tcp probe on disp-1 timed out after 3 retries" &&
 			l.Severity == "warning" && l.Source == "collection"
 	})
 
-	// THE PUSH LANE IS NOT REACHABLE BY A NODE. This is the fence the whole
+	// THE PUSH LANE IS NOT REACHABLE BY An OUTPOST. This is the fence the whole
 	// trust-by-subject model rests on: the consumer believes the owner carried on
-	// og.v1.api.telemetry, so a node that could publish there could forge ownership
+	// og.v1.api.telemetry, so an outpost that could publish there could forge ownership
 	// of any component. Its grant is an explicit allow-list of its own subjects,
 	// so NATS refuses this before the consumer ever sees it.
 	if err := ncA.Publish(collection.APITelemetrySubject, []byte("forged")); err != nil {
@@ -316,20 +316,20 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	}
 	_ = ncA.Flush()
 	if !awaitPermissionViolation(permErrs, 3*time.Second) {
-		t.Fatal("a node was allowed to publish on the trusted API telemetry lane")
+		t.Fatal("an outpost was allowed to publish on the trusted API telemetry lane")
 	}
 
-	// And a node-lane batch that ASSERTS an owner is dropped, not honoured: on this
+	// And an outpost-lane batch that ASSERTS an owner is dropped, not honoured: on this
 	// lane the owner is the server's to resolve from the task's interface. Publishing
 	// one must leave disp-2 untouched even though the batch names it.
-	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
-		TaskId: "t-a", NodeId: "node-a",
+	publishEvent(t, ncA, "outpost-a", &ogv1.TelemetryBatch{
+		TaskId: "t-a", OutpostId: "outpost-a",
 		Owner:   &ogv1.Owner{Kind: "component", Ref: "disp-2"},
 		Metrics: []*ogv1.MetricSample{{Name: "tcp-connect-time", Value: 1}},
 	})
 	// Watermark: a later valid publish proves the forged one was processed and
 	// dropped rather than merely still in flight.
-	publishEvent(t, ncA, "node-a", bus.AsTick(&ogv1.TelemetryBatch{
+	publishEvent(t, ncA, "outpost-a", bus.AsTick(&ogv1.TelemetryBatch{
 		TaskId:  "t-a",
 		Metrics: []*ogv1.MetricSample{{Name: "tcp-connect-time", Value: 42}},
 	}))
@@ -339,27 +339,27 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	if dp, err := gw.LatestMetric(ctx, "disp-2", "tcp-connect-time"); err != nil {
 		t.Fatalf("latest disp-2 tcp-connect-time: %v", err)
 	} else if dp != nil {
-		t.Fatalf("a node forged ownership of disp-2 via the owner field: %+v", dp)
+		t.Fatalf("an outpost forged ownership of disp-2 via the owner field: %+v", dp)
 	}
 
-	// Telemetry publish isolation: node-a cannot publish to node-b's telemetry
+	// Telemetry publish isolation: outpost-a cannot publish to outpost-b's telemetry
 	// subject (a permissions violation), the same fence as worklist/heartbeat.
-	if err := ncA.Publish(collection.TelemetrySubject("node-b"), []byte("x")); err != nil {
-		t.Fatalf("client-side publish node-b telemetry: %v", err)
+	if err := ncA.Publish(collection.TelemetrySubject("outpost-b"), []byte("x")); err != nil {
+		t.Fatalf("client-side publish outpost-b telemetry: %v", err)
 	}
 	_ = ncA.Flush()
 	if !awaitPermissionViolation(permErrs, 3*time.Second) {
-		t.Fatalf("expected a permissions violation publishing to node-b's telemetry subject")
+		t.Fatalf("expected a permissions violation publishing to outpost-b's telemetry subject")
 	}
 }
 
-// TestNodeTickLandsEveryGroupOverNATS drives one node tick through the real
-// bus (#1582): node-a publishes a single batch carrying a group for each of
-// its two tasks and a group for node-b's task. Each of node-a's groups lands on
+// TestOutpostTickLandsEveryGroupOverNATS drives one outpost tick through the real
+// bus (#1582): outpost-a publishes a single batch carrying a group for each of
+// its two tasks and a group for outpost-b's task. Each of outpost-a's groups lands on
 // its own task's component, stamped with its group's ts where a sample carries
 // none, and the foreign group is dropped as an orphan without holding its
 // siblings back.
-func TestNodeTickLandsEveryGroupOverNATS(t *testing.T) {
+func TestOutpostTickLandsEveryGroupOverNATS(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server")
 	}
@@ -374,13 +374,13 @@ func TestNodeTickLandsEveryGroupOverNATS(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 	all := scope.Set{All: true}
-	for _, name := range []string{"node-a", "node-b"} {
-		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: name}, all, all); err != nil {
+	for _, name := range []string{"outpost-a", "outpost-b"} {
+		if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: name}, all, all); err != nil {
 			t.Fatalf("create %s: %v", name, err)
 		}
 	}
 	tokenA := "secret-a"
-	if _, err := gw.SetEnrollmentToken(ctx, "", "node-a", hashHex(tokenA), all); err != nil {
+	if _, err := gw.SetEnrollmentToken(ctx, "", "outpost-a", hashHex(tokenA), all); err != nil {
 		t.Fatalf("mint a: %v", err)
 	}
 	for _, name := range []string{"disp-1", "disp-2", "disp-3"} {
@@ -392,10 +392,10 @@ func TestNodeTickLandsEveryGroupOverNATS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, node_name, params) values
-		('disp-1-tcp', 'tcp', (select id from component where name = 'disp-1'), (select principal_id from node where name = 'node-a'), '{"target":"127.0.0.1:1"}'::jsonb),
-		('disp-2-tcp', 'tcp', (select id from component where name = 'disp-2'), (select principal_id from node where name = 'node-b'), '{"target":"127.0.0.1:1"}'::jsonb),
-		('disp-3-tcp', 'tcp', (select id from component where name = 'disp-3'), (select principal_id from node where name = 'node-a'), '{"target":"127.0.0.1:1"}'::jsonb)`); err != nil {
+	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
+		('disp-1-tcp', 'tcp', (select id from component where name = 'disp-1'), (select user_id from outpost where name = 'outpost-a'), '{"target":"127.0.0.1:1"}'::jsonb),
+		('disp-2-tcp', 'tcp', (select id from component where name = 'disp-2'), (select user_id from outpost where name = 'outpost-b'), '{"target":"127.0.0.1:1"}'::jsonb),
+		('disp-3-tcp', 'tcp', (select id from component where name = 'disp-3'), (select user_id from outpost where name = 'outpost-a'), '{"target":"127.0.0.1:1"}'::jsonb)`); err != nil {
 		t.Fatalf("insert endpoints: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, enabled) values
@@ -412,17 +412,17 @@ func TestNodeTickLandsEveryGroupOverNATS(t *testing.T) {
 	}
 	defer srv.Shutdown()
 	ncA, err := nats.Connect(srv.ClientURL(),
-		nats.UserInfo("node-a", tokenA),
-		nats.CustomInboxPrefix(collection.InboxPrefix("node-a")),
+		nats.UserInfo("outpost-a", tokenA),
+		nats.CustomInboxPrefix(collection.InboxPrefix("outpost-a")),
 	)
 	if err != nil {
-		t.Fatalf("node-a connect: %v", err)
+		t.Fatalf("outpost-a connect: %v", err)
 	}
 	defer ncA.Close()
 
 	tickTS := time.Now().UTC().Add(-2 * time.Hour).Truncate(time.Second)
-	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
-		NodeId: "node-a",
+	publishEvent(t, ncA, "outpost-a", &ogv1.TelemetryBatch{
+		OutpostId: "outpost-a",
 		Groups: []*ogv1.TaskGroup{
 			{TaskId: "t-a", Ts: timestamppb.New(tickTS), Metrics: []*ogv1.MetricSample{{Name: "tcp-connect-time", Value: 11}}},
 			{TaskId: "t-b", Ts: timestamppb.New(tickTS), Metrics: []*ogv1.MetricSample{{Name: "tcp-open", Value: 1}}},
@@ -437,11 +437,11 @@ func TestNodeTickLandsEveryGroupOverNATS(t *testing.T) {
 		return d != nil && d.Value == 33 && d.TS.Equal(tickTS)
 	})
 	// The tick landed in one transaction, so with its siblings visible the
-	// foreign group has been handled: disp-2 holds nothing from node-a.
+	// foreign group has been handled: disp-2 holds nothing from outpost-a.
 	if got, err := gw.LatestMetric(ctx, "disp-2", "tcp-open"); err != nil {
 		t.Fatalf("latest disp-2: %v", err)
 	} else if got != nil {
-		t.Fatalf("confinement breached: node-a's tick landed a sample on disp-2: %+v", got)
+		t.Fatalf("confinement breached: outpost-a's tick landed a sample on disp-2: %+v", got)
 	}
 }
 
@@ -467,15 +467,15 @@ func waitEvent(t *testing.T, ctx context.Context, gw storage.Gateway, comp strin
 	}
 }
 
-// waitNodeLog polls a node's self-logs until one matches pred, or a deadline
-// passes. The raw log lane writes the node's node_log rows; this reads them back.
-func waitNodeLog(t *testing.T, ctx context.Context, gw storage.Gateway, node string, pred func(storage.LogLine) bool) {
+// waitOutpostLog polls an outpost's self-logs until one matches pred, or a deadline
+// passes. The raw log lane writes the outpost's outpost_log rows; this reads them back.
+func waitOutpostLog(t *testing.T, ctx context.Context, gw storage.Gateway, outpost string, pred func(storage.LogLine) bool) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for {
-		logs, err := gw.ListNodeLogs(ctx, node, time.Hour, 50)
+		logs, err := gw.ListOutpostLogs(ctx, outpost, time.Hour, 50)
 		if err != nil {
-			t.Fatalf("list node logs %s: %v", node, err)
+			t.Fatalf("list outpost logs %s: %v", outpost, err)
 		}
 		for _, l := range logs {
 			if pred(l) {
@@ -483,20 +483,20 @@ func waitNodeLog(t *testing.T, ctx context.Context, gw storage.Gateway, node str
 			}
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("no node log on %s matched the predicate (got %d)", node, len(logs))
+			t.Fatalf("no outpost log on %s matched the predicate (got %d)", outpost, len(logs))
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
 }
 
-func publishEvent(t *testing.T, nc *nats.Conn, node string, ev *ogv1.TelemetryBatch) {
+func publishEvent(t *testing.T, nc *nats.Conn, outpost string, ev *ogv1.TelemetryBatch) {
 	t.Helper()
 	b, err := proto.Marshal(ev)
 	if err != nil {
 		t.Fatalf("marshal event: %v", err)
 	}
-	if err := nc.Publish(collection.TelemetrySubject(node), b); err != nil {
-		t.Fatalf("publish telemetry %s: %v", node, err)
+	if err := nc.Publish(collection.TelemetrySubject(outpost), b); err != nil {
+		t.Fatalf("publish telemetry %s: %v", outpost, err)
 	}
 	_ = nc.Flush()
 }

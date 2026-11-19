@@ -19,11 +19,11 @@ import {
   deleteVendor,
 } from "../lib/vendors";
 import { useMe, can } from "../lib/auth";
-import { registryLock } from "../lib/catalog";
+import { catalogLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
-// Vendors: the vendor registry (the vendor picker on the product form), on the
+// Vendors: the vendor catalog (the vendor picker on the product form), on the
 // flat FlatList surface. A vendor is addressed by its kebab name (ADR-0062:
 // the uuid is identity, the name is what an operator reads and types);
 // official rows are read-only, same as the Types catalog's
@@ -181,7 +181,7 @@ function VendorBladeBody(p: { id: string }): JSX.Element {
       row() && !row()!.official && can(me.data, "vendor", "delete")
         ? { label: "Delete", tone: "danger", onClick: removeVendor }
         : undefined,
-    locked: () => registryLock(row(), me.data, "vendor"),
+    locked: () => catalogLock(row(), me.data, "vendor"),
   });
 
   return (
@@ -210,7 +210,7 @@ function VendorBladeBody(p: { id: string }): JSX.Element {
           <BladeField
             label="Icon"
             mono
-            placeholder="crestron-logo"
+            placeholder="boreal-logo"
             value={() => r().icon ?? ""}
             draft={icon}
             onInput={setIcon}
@@ -291,22 +291,22 @@ export function CreateVendorForm(p: { onCreated: (v: Vendor) => void }): JSX.Ele
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow bind="label" hint="What an operator reads, e.g. Crestron.">
-        <input class="input input-bordered w-full" value={display()} placeholder="Crestron" onInput={(e) => setDisplay(e.currentTarget.value)} />
+      <FieldRow bind="label" hint="What an operator reads, e.g. Boreal.">
+        <input class="input input-bordered w-full" value={display()} placeholder="Boreal" onInput={(e) => setDisplay(e.currentTarget.value)} />
       </FieldRow>
       <FieldRow
         bind="name"
         hint={nameDerived() ? "Derived from the label. Edit to set your own." : "A kebab name, the address the API and CLI accept."}
       >
-        <input class="input input-bordered w-full font-data" value={name()} placeholder="crestron" onInput={(e) => setName(e.currentTarget.value)} />
+        <input class="input input-bordered w-full font-data" value={name()} placeholder="boreal" onInput={(e) => setName(e.currentTarget.value)} />
       </FieldRow>
       <FieldRow label="Kind" hint="What role the vendor plays.">
         <select class="select select-bordered w-full" value={kind()} onChange={(e) => setKind(e.currentTarget.value as VendorKind)}>
           {VENDOR_KINDS.map((k) => <option value={k}>{k}</option>)}
         </select>
       </FieldRow>
-      <FieldRow label="Icon" hint="A glyph key, e.g. crestron-logo. Optional.">
-        <input class="input input-bordered w-full font-data" value={icon()} placeholder="crestron-logo" onInput={(e) => setIcon(e.currentTarget.value)} />
+      <FieldRow label="Icon" hint="A glyph key, e.g. boreal-logo. Optional.">
+        <input class="input input-bordered w-full font-data" value={icon()} placeholder="boreal-logo" onInput={(e) => setIcon(e.currentTarget.value)} />
       </FieldRow>
       <FieldRow label="Support phone" hint="Optional.">
         <input class="input input-bordered w-full" value={supportPhone()} placeholder="+1 800 555 0100" onInput={(e) => setSupportPhone(e.currentTarget.value)} />

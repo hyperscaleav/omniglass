@@ -43,7 +43,7 @@ type createSeverityLevelInput struct {
 		Name  string `json:"name" minLength:"1" doc:"The level's name (lowercase kebab)"`
 		Label string `json:"label,omitempty" required:"false" doc:"A human label"`
 		Color string `json:"color" doc:"One of gray, blue, green, yellow, orange, red, darkred"`
-		Rank  int    `json:"rank" doc:"Its place among the levels: higher is more severe; unique"`
+		Rank  int    `json:"rank" doc:"Its position among the levels: higher is more severe; unique"`
 	}
 }
 
@@ -53,11 +53,11 @@ type updateSeverityLevelInput struct {
 		Name  *string `json:"name,omitempty" required:"false" doc:"A new name; every alarm at this level follows"`
 		Label *string `json:"label,omitempty" required:"false" doc:"A human label"`
 		Color *string `json:"color,omitempty" required:"false" doc:"One of gray, blue, green, yellow, orange, red, darkred"`
-		Rank  *int    `json:"rank,omitempty" required:"false" doc:"Its place among the levels; unique"`
+		Rank  *int    `json:"rank,omitempty" required:"false" doc:"Its position among the levels; unique"`
 	}
 }
 
-// registerSeverityLevelRoutes wires the severity registry (#917): fleet-wide
+// registerSeverityLevelRoutes wires the severity catalog (#917): fleet-wide
 // reference data every reader lists, and operator levels an admin adds,
 // renames, recolors, re-ranks and deletes. Official levels are read-only.
 // Reads take any grant; a write takes an all-scope one (#930), since a

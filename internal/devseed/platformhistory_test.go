@@ -127,7 +127,7 @@ func TestFleetSeedWritesNoPlatformHistory(t *testing.T) {
 		select count(*) from metric m
 		join metric_series s on s.id = m.series_id
 		where s.component_id in (select platform_component_id from platform_server)
-		   or s.component_id in (select platform_component_id from node)`).Scan(&n); err != nil {
+		   or s.component_id in (select platform_component_id from outpost)`).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
 	if n != 0 {

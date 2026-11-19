@@ -90,32 +90,54 @@ func scopeKindTable(kind string) (scopeTable, bool) {
 // are disjoint; a broader inclusive ancestor still admits an id that is another
 // grant's excluded root (inclusive wins). The ancestor walk is cheaper than
 // expanding every root's subtree; the CYCLE clause guards a corrupted parent edge.
+// A system or component target is also in scope when it is placed under one of
+// the set's cross-tier location roots (placedCTEs).
 func inScopeTree(ctx context.Context, q querier, tbl scopeTable, targetID string, set scope.Set) (bool, error) {
 	if set.All {
 		return true, nil
 	}
 	roots := uuidRoots(set.IDs)
 	selfIDs := uuidRoots(set.SelfIDs)
-	if len(roots) == 0 && len(selfIDs) == 0 {
+	locRoots := placedRoots(tbl, set)
+	if len(roots) == 0 && len(selfIDs) == 0 && len(locRoots) == 0 {
 		return false, nil
 	}
 	excluded := uuidRoots(set.ExcludeRootIDs)
 	inclusive := subtractRoots(roots, excluded)
+	args := []any{targetID, inclusive, excluded, selfIDs}
+	placed, placedArm := "", ""
+	if len(locRoots) > 0 {
+		placed = ", " + placedCTEs(tbl, 5, "placed")
+		placedArm = " or $1::uuid in (select id from placed)"
+		args = append(args, locRoots)
+	}
 	var ok bool
 	err := q.QueryRow(ctx, `
 		with recursive anc(id, parent_id) as (
 			select id, parent_id from `+string(tbl)+` where id = $1
 			union all
 			select t.id, t.parent_id from `+string(tbl)+` t join anc on t.id = anc.parent_id
-		) cycle id set is_cycle using path
+		) cycle id set is_cycle using path`+placed+`
 		select $1::uuid = any($4::uuid[])
 		    or exists(select 1 from anc where id = any($2::uuid[]))
-		    or exists(select 1 from anc where id = any($3::uuid[]) and id <> $1)`,
-		targetID, inclusive, excluded, selfIDs).Scan(&ok)
+		    or exists(select 1 from anc where id = any($3::uuid[]) and id <> $1)`+placedArm,
+		args...).Scan(&ok)
 	if err != nil {
 		return false, fmt.Errorf("storage: scope check on %s: %w", tbl, err)
 	}
 	return ok, nil
+}
+
+// placeAdmits reports whether a root system or component created at
+// locationID is inside create: an all scope places anywhere, and otherwise the
+// location must sit at or under one of the set's cross-tier location roots
+// (#1498). Both subtree ops keep their root for create, so the root location
+// itself is a valid place; a self grant contributes no root at all.
+func placeAdmits(ctx context.Context, q querier, locationID string, create scope.Set) (bool, error) {
+	if create.All {
+		return true, nil
+	}
+	return inScopeTree(ctx, q, locationTable, locationID, scope.Set{IDs: create.LocationIDs})
 }
 
 // InScopeIDs reports, for a batch of candidate row ids of a tree resource
@@ -151,11 +173,19 @@ func inScopeIDs(ctx context.Context, q querier, tbl scopeTable, ids []string, se
 	roots := uuidRoots(set.IDs)
 	candidates := uuidRoots(ids)
 	selfIDs := uuidRoots(set.SelfIDs)
-	if len(candidates) == 0 || (len(roots) == 0 && len(selfIDs) == 0) {
+	locRoots := placedRoots(tbl, set)
+	if len(candidates) == 0 || (len(roots) == 0 && len(selfIDs) == 0 && len(locRoots) == 0) {
 		return out, nil
 	}
 	excluded := uuidRoots(set.ExcludeRootIDs)
 	inclusive := subtractRoots(roots, excluded)
+	args := []any{inclusive, excluded, candidates, selfIDs}
+	placed, placedArm := "", ""
+	if len(locRoots) > 0 {
+		placed = ", " + placedCTEs(tbl, 5, "placed")
+		placedArm = " or id in (select id from placed)"
+		args = append(args, locRoots)
+	}
 	rows, err := q.Query(ctx, `
 		with recursive sub(id) as (
 			select id from `+string(tbl)+` where id = any($1::uuid[])
@@ -166,11 +196,11 @@ func inScopeIDs(ctx context.Context, q querier, tbl scopeTable, ids []string, se
 			select id, true from `+string(tbl)+` where id = any($2::uuid[])
 			union all
 			select t.id, false from `+string(tbl)+` t join subx on t.parent_id = subx.id
-		) cycle id set subx_cyc using subx_path
+		) cycle id set subx_cyc using subx_path`+placed+`
 		select id from `+string(tbl)+`
 		where id = any($3::uuid[])
-		  and (id in (select id from sub) or id in (select id from subx where not is_root) or id = any($4::uuid[]))`,
-		inclusive, excluded, candidates, selfIDs)
+		  and (id in (select id from sub) or id in (select id from subx where not is_root) or id = any($4::uuid[])`+placedArm+`)`,
+		args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: in-scope ids on %s: %w", tbl, err)
 	}
@@ -204,25 +234,101 @@ func subtractRoots(a, b []string) []string {
 	return out
 }
 
-// scopedListSQL builds the list query for tbl selecting cols, ordered by name.
-// An all scope selects every row (no args); a rooted scope expands each subtree
-// root to its descendants (the recursive descendant walk, cycle-guarded) and also
-// matches any self root by id equality, taking the subtree root array as $1 and
-// the self root array as $2. A list is always a read, and read never excludes a
-// root, so there is no exclude-root arm here.
-func scopedListSQL(tbl scopeTable, cols string, all bool) string {
-	if all {
+// scopedListSQL builds the list query for tbl selecting cols, ordered by name,
+// over read, with scopedListArgs' binds. An all scope selects every row (no
+// args); a rooted scope expands each subtree root to its descendants (the
+// recursive descendant walk, cycle-guarded) and also matches any self root by
+// id equality, taking the subtree root array as $1 and the self root array as
+// $2. A system or component scope with cross-tier location roots also admits
+// the rows placed under them (placedCTEs), taking those roots as $3. A list is
+// always a read, and read never excludes a root, so there is no exclude-root
+// arm here.
+func scopedListSQL(tbl scopeTable, cols string, read scope.Set) string {
+	if read.All {
 		return `select ` + cols + ` from ` + string(tbl) + ` order by name`
+	}
+	placed, placedArm := "", ""
+	if len(placedRoots(tbl, read)) > 0 {
+		placed = ", " + placedCTEs(tbl, 3, "placed")
+		placedArm = " or id in (select id from placed)"
 	}
 	return `
 		with recursive sub(id) as (
 			select id from ` + string(tbl) + ` where id = any($1::uuid[])
 			union all
 			select t.id from ` + string(tbl) + ` t join sub on t.parent_id = sub.id
-		) cycle id set is_cycle using path
+		) cycle id set is_cycle using path` + placed + `
 		select ` + cols + ` from ` + string(tbl) + `
-		where id in (select id from sub) or id = any($2::uuid[])
+		where id in (select id from sub) or id = any($2::uuid[])` + placedArm + `
 		order by name`
+}
+
+// scopedListArgs is the bind values scopedListSQL's rooted form takes for read
+// over tbl, in order, and false when no well-formed root of any kind survives
+// (nothing is in scope). An all scope binds nothing.
+func scopedListArgs(tbl scopeTable, read scope.Set) ([]any, bool) {
+	if read.All {
+		return nil, true
+	}
+	roots, selfIDs, locRoots := uuidRoots(read.IDs), uuidRoots(read.SelfIDs), placedRoots(tbl, read)
+	if len(roots) == 0 && len(selfIDs) == 0 && len(locRoots) == 0 {
+		return nil, false
+	}
+	args := []any{roots, selfIDs}
+	if len(locRoots) > 0 {
+		args = append(args, locRoots)
+	}
+	return args, true
+}
+
+// placedRoots is the set's cross-tier location roots (#1498) that apply to
+// tbl, filtered to well-formed uuids: only a system or component row has a
+// placement, so a location table (or any other) takes none.
+func placedRoots(tbl scopeTable, set scope.Set) []string {
+	if tbl != systemTable && tbl != componentTable {
+		return nil
+	}
+	return uuidRoots(set.LocationIDs)
+}
+
+// placedCTEs is the cross-tier expansion (#1498): recursive CTE bodies, without
+// the leading "with recursive", ending in name(id), the rows of tbl placed under
+// the location roots bound at $arg (its helpers are name_loc and name_sys, so
+// two expansions can share one WITH). A location root covers its location
+// subtree. A system is placed there when its own location is in that subtree,
+// and a component when its effective place is: its own location, or, when it
+// has none, its primary system's placement. Each placed row brings its
+// descendants on its own tier, the subtree a same-tier grant on it would
+// cover. tbl is systemTable or componentTable (placedRoots guards this).
+func placedCTEs(tbl scopeTable, arg int, name string) string {
+	a := strconv.Itoa(arg)
+	loc, sys := name+"_loc", name+"_sys"
+	locCTE := loc + `(id) as (
+			select id from location where id = any($` + a + `::uuid[])
+			union all
+			select t.id from location t join ` + loc + ` on t.parent_id = ` + loc + `.id
+		) cycle id set is_cycle using path`
+	sysCTE := func(cte string) string {
+		return cte + `(id) as (
+			select id from system where location_id in (select id from ` + loc + `)
+			union all
+			select t.id from system t join ` + cte + ` on t.parent_id = ` + cte + `.id
+		) cycle id set is_cycle using path`
+	}
+	if tbl == systemTable {
+		return locCTE + `,
+		` + sysCTE(name)
+	}
+	return locCTE + `,
+		` + sysCTE(sys) + `,
+		` + name + `(id) as (
+			select c.id from component c
+			where c.location_id in (select id from ` + loc + `)
+			   or (c.location_id is null and exists(select 1 from system_member m
+				where m.component_id = c.id and m.is_primary and m.system_id in (select id from ` + sys + `)))
+			union all
+			select t.id from component t join ` + name + ` on t.parent_id = ` + name + `.id
+		) cycle id set is_cycle using path`
 }
 
 // The arc-scope primitive: the exclusive-arc counterpart of scopedListSQL for
@@ -303,7 +409,8 @@ func (f readFilter) Pred(col string) string { return f.pred(col) }
 // newReadFilter renders read over tbl, binding its roots from $first: an
 // all scope admits every row, a scope with no well-formed root admits none,
 // and a rooted scope admits each subtree root's descendants and each self
-// root.
+// root, and on the system or component tier each row placed under a
+// cross-tier location root (placedCTEs, a third bind).
 func newReadFilter(tbl scopeTable, read scope.Set, first int) readFilter {
 	return newNamedReadFilter(tbl, read, first, "vis")
 }
@@ -315,8 +422,8 @@ func newNamedReadFilter(tbl scopeTable, read scope.Set, first int, cte string) r
 	if read.All {
 		return readFilter{pred: func(string) string { return "true" }}
 	}
-	roots, selfIDs := uuidRoots(read.IDs), uuidRoots(read.SelfIDs)
-	if len(roots) == 0 && len(selfIDs) == 0 {
+	roots, selfIDs, locRoots := uuidRoots(read.IDs), uuidRoots(read.SelfIDs), placedRoots(tbl, read)
+	if len(roots) == 0 && len(selfIDs) == 0 && len(locRoots) == 0 {
 		return readFilter{pred: func(string) string { return "false" }}
 	}
 	t := string(tbl)
@@ -326,12 +433,24 @@ func newNamedReadFilter(tbl scopeTable, read scope.Set, first int, cte string) r
 			union all
 			select t.id from ` + t + ` t join ` + cte + ` on t.parent_id = ` + cte + `.id
 		) cycle id set is_cycle using path `
+	args := []any{roots, selfIDs}
+	placed := ""
+	if len(locRoots) > 0 {
+		placed = cte + "_placed"
+		body += `,
+		` + placedCTEs(tbl, first+2, placed) + ` `
+		args = append(args, locRoots)
+	}
 	return readFilter{
 		With: `with recursive ` + body,
-		Args: []any{roots, selfIDs},
+		Args: args,
 		cte:  body,
 		pred: func(col string) string {
-			return `(` + col + ` in (select id from ` + cte + `) or ` + col + ` = any($` + s + `::uuid[]))`
+			p := `(` + col + ` in (select id from ` + cte + `) or ` + col + ` = any($` + s + `::uuid[])`
+			if placed != "" {
+				p += ` or ` + col + ` in (select id from ` + placed + `)`
+			}
+			return p + `)`
 		},
 	}
 }

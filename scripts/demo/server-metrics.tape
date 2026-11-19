@@ -5,7 +5,7 @@
 # its HTTP requests there by route template and status class, its database pool's gauges, and a
 # count of queries past database.slow_query_ms (#1627, ADR-1627).
 
-Type "# The platform system now holds the server beside the node"
+Type "# The platform system now holds the server beside the outpost"
 Enter
 Wait
 Type `omniglass system member list platform | jq -c '.members[] | {component, primary}'`

@@ -5,7 +5,7 @@ status: "Accepted"
 summary: "Healthy reads green, reversing the grey healthy of [ADR-0137](#adr-0137-explore-is-the-fleets-door-and-it-is-an-outline-of-places) and [ADR-0139](#adr-0139-a-detail-view-is-one-per-system-its-place-a-card-of-context) (#1067): one `--og-healthy` token from the success hue, full weight on the health pill and the history strip, muted (`text-healthy`) on the outline's slots and the uptime figure; unknown keeps the grey chip"
 ---
 
-- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [health](/architecture/health/), [design system](/contributing/design-system/), [fleet guide](/guides/operator/fleet/)
+- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [health](/architecture/health/), [design system](/contributing/design-system/), [fleet guide](/operator/fleet/)
 - **Decision:** A healthy verdict wears green, reversing the "healthy is grey, only trouble carries
   a hue" rule of [ADR-0137](#adr-0137-explore-is-the-fleets-door-and-it-is-an-outline-of-places) and
   [ADR-0139](#adr-0139-a-detail-view-is-one-per-system-its-place-a-card-of-context). One token,

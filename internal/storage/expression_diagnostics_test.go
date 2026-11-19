@@ -66,7 +66,7 @@ func TestStoredRuleDiagnostics(t *testing.T) {
 	// on its criteria.
 	ctx, all := context.Background(), scope.Set{All: true}
 	ev, err := r.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "exactly-warm", SampleKey: "room-temperature",
-		Fire: rules.Criteria{Expr: "value == 21.5"}, Clear: &rules.Criteria{Expr: "value < 20"}, FireEventType: "condition-started"}, all)
+		Fire: rules.Criteria{Expr: "value == 21.5"}, Clear: &rules.Criteria{Expr: "value < 20"}, FireEventType: "rule-fired"}, all)
 	if err != nil {
 		t.Fatalf("a warning refused the event rule: %v", err)
 	}

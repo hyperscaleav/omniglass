@@ -3,7 +3,7 @@
 # The rack's Ferrite PDU 4C gains a driver for its http control face, and with it two command types:
 # outlet-on, and outlet-off, which is disruptive and names its outlet parameter as the power marker.
 # Switching an outlet off closes the gate of every endpoint of the component that outlet feeds, so the
-# node holds its polls instead of reading the cut as failures, while the PDU itself and what its other
+# outpost holds its polls instead of reading the cut as failures, while the PDU itself and what its other
 # outlets feed stay open. The outlet reads off over SNMP, and switching it back on with the device's
 # first up verdict reopens the gate (#1653).
 

@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// TestEventTypeFamilyMigration asserts the #395 repoint: the event_type registry
+// TestEventTypeFamilyMigration asserts the #395 repoint: the event_type catalog
 // exists, the log kind has left property_type, and the event table is repointed
 // onto event_type with the new origin/causation columns and no property_type_id.
 func TestEventTypeFamilyMigration(t *testing.T) {
@@ -16,7 +16,7 @@ func TestEventTypeFamilyMigration(t *testing.T) {
 	ctx := context.Background()
 	conn := connectMigrated(t)
 
-	// The event_type registry exists and takes a row, keyed uniquely by name.
+	// The event_type catalog exists and takes a row, keyed uniquely by name.
 	mustExec(t, conn, `insert into event_type (name, label) values ('call-started', 'Call started')`)
 	if _, err := conn.Exec(ctx, `insert into event_type (name) values ('call-started')`); err == nil {
 		t.Error("expected event_type.name unique to reject a duplicate")

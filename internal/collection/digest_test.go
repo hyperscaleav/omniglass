@@ -47,7 +47,7 @@ func TestDigestChallengesPickTheStrongest(t *testing.T) {
 	// so the request's own fault, never a gate.
 	_, err := digestAuthorization(digestChallenge{nonce: "n", algorithm: "SHA-512-256"}, "GET", "/", "u", "p", 1, "c")
 	if _, ok := AsRequestFault(err); !ok {
-		t.Fatalf("an algorithm this node does not answer = %v, want a request fault", err)
+		t.Fatalf("an algorithm this outpost does not answer = %v, want a request fault", err)
 	}
 	_, err = digestAuthorization(digestChallenge{nonce: "n", algorithm: "MD5", qop: "auth-int"}, "GET", "/", "u", "p", 1, "c")
 	if _, ok := AsRequestFault(err); !ok {
