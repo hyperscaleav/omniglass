@@ -36,7 +36,7 @@ func healthy() labcheck.Snapshot {
 				{Key: "model-number", Class: writerclass.Collected},
 				{Key: "uptime", Class: writerclass.Collected},
 				{Key: "power-state", Class: writerclass.Collected},
-				{Key: probekeys.TCPOpen, Class: writerclass.NodeProbe},
+				{Key: probekeys.TCPOpen, Class: writerclass.OutpostProbe},
 			},
 		}},
 		Systems: []labcheck.System{{Name: "Boardroom", Values: []labcheck.Value{{Key: "booking-count", Class: writerclass.Collected}}}},
@@ -92,7 +92,7 @@ func TestADownEndpointOwesNoTimingOrPollDuration(t *testing.T) {
 
 func TestAComponentWithOnlyBuiltInDataFailsCollected(t *testing.T) {
 	s := healthy()
-	s.Components[0].Values = []labcheck.Value{{Key: probekeys.TCPOpen, Class: writerclass.NodeProbe}, {Key: probekeys.PollDuration, Class: writerclass.NodeProbe}}
+	s.Components[0].Values = []labcheck.Value{{Key: probekeys.TCPOpen, Class: writerclass.OutpostProbe}, {Key: probekeys.PollDuration, Class: writerclass.OutpostProbe}}
 	fs := labcheck.Evaluate(s, nil)
 	if len(fs) != 1 || fs[0].Tier != devseed.TierCollected || !strings.Contains(fs[0].String(), "Display 1") {
 		t.Fatalf("findings = %s, want one collected finding naming Display 1", render(fs))
@@ -104,7 +104,7 @@ func TestAComponentWithOnlyIdentityAndUptimeFailsCollected(t *testing.T) {
 	s.Components[0].Values = []labcheck.Value{
 		{Key: "model-number", Class: writerclass.Collected}, {Key: "serial-number", Class: writerclass.Collected},
 		{Key: "firmware-version", Class: writerclass.Collected}, {Key: "uptime", Class: writerclass.Collected},
-		{Key: probekeys.TCPOpen, Class: writerclass.NodeProbe},
+		{Key: probekeys.TCPOpen, Class: writerclass.OutpostProbe},
 	}
 	fs := labcheck.Evaluate(s, nil)
 	if len(fs) != 1 || fs[0].Tier != devseed.TierCollected {

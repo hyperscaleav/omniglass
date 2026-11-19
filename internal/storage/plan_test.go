@@ -49,7 +49,7 @@ func planFixture(t *testing.T) (storage.Gateway, func(string) int) {
 func allScopes() storage.PlanScopes {
 	all := scope.Set{All: true}
 	return storage.PlanScopes{LocationCreate: all, LocationRead: all, SystemCreate: all, SystemRead: all, SystemUpdate: all,
-		ComponentCreate: all, ComponentRead: all, ComponentUpdate: all, EndpointCreate: all, SecretRead: all,
+		ComponentCreate: all, ComponentRead: all, ComponentUpdate: all, EndpointCreate: all, SecretRead: all, SecretBind: all,
 		CanAdmin: true, CanCreateStandard: true}
 }
 
@@ -68,21 +68,21 @@ func TestCreatePlanLandsWhole(t *testing.T) {
 	plan := func(lastProduct string) storage.Plan {
 		return storage.Plan{
 			Template: "plan-fixture",
-			Standards: []storage.StandardFromTemplate{{Template: "plan-room-template", Name: std, Label: "Plan Room", Roles: []storage.TemplateRole{
-				{SystemRoleSpec: storage.SystemRoleSpec{Name: "bar", AcceptedTypes: []string{"video-bar"}}},
-				{SystemRoleSpec: storage.SystemRoleSpec{Name: "screen", AcceptedTypes: []string{"display"}}},
+			Standards: []storage.StandardFromTemplate{{Template: "plan-room-template", Name: std, Label: "Plan Room", Slots: []storage.TemplateSlot{
+				{SystemSlotSpec: storage.SystemSlotSpec{Name: "bar", AcceptedTypes: []string{"video-bar"}}},
+				{SystemSlotSpec: storage.SystemSlotSpec{Name: "screen", AcceptedTypes: []string{"display"}}},
 			}}},
-			Places: []storage.PlannedPlace{
+			Locations: []storage.PlannedLocation{
 				{Key: "b", Location: storage.LocationSpec{Name: "plan-hq", LocationType: "building"}},
 				{Key: "f", ParentKey: "b", Location: storage.LocationSpec{Name: "f1", LocationType: "floor"}},
 			},
-			Systems: []storage.PlannedSystem{{PlaceKey: "f", System: storage.SystemSpec{SystemTypeID: &sysType, StandardID: &std},
+			Systems: []storage.PlannedSystem{{LocationKey: "f", System: storage.SystemSpec{SystemTypeID: &sysType, StandardID: &std},
 				Components: []storage.PlannedComponent{
-					{Role: "bar", Component: storage.ComponentSpec{ProductName: &bar.Name}},
-					{Role: "screen", Component: storage.ComponentSpec{ProductName: &disp.Name},
+					{Slot: "bar", Component: storage.ComponentSpec{ProductName: &bar.Name}},
+					{Slot: "screen", Component: storage.ComponentSpec{ProductName: &disp.Name},
 						Properties: []storage.PlannedValue{{Name: "video-input", Value: json.RawMessage(`"hdmi1"`)}}},
 				}}},
-			Components: []storage.PlannedComponent{{PlaceKey: "b", Component: storage.ComponentSpec{ProductName: &lastProduct}}},
+			Components: []storage.PlannedComponent{{LocationKey: "b", Component: storage.ComponentSpec{ProductName: &lastProduct}}},
 		}
 	}
 
@@ -101,14 +101,14 @@ func TestCreatePlanLandsWhole(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create plan: %v", err)
 	}
-	if len(made.CreatedStandards) != 1 || len(made.Places) != 2 || len(made.Systems) != 1 || len(made.Systems[0].Components) != 2 || len(made.Components) != 1 {
+	if len(made.CreatedStandards) != 1 || len(made.Locations) != 2 || len(made.Systems) != 1 || len(made.Systems[0].Components) != 2 || len(made.Components) != 1 {
 		t.Fatalf("made = %+v, want one fork, two places, one system of two, one standalone", made)
 	}
-	if made.Places[1].ParentID == nil || *made.Places[1].ParentID != made.Places[0].ID {
-		t.Fatalf("the floor's parent is %v, want the building", made.Places[1].ParentID)
+	if made.Locations[1].ParentID == nil || *made.Locations[1].ParentID != made.Locations[0].ID {
+		t.Fatalf("the floor's parent is %v, want the building", made.Locations[1].ParentID)
 	}
-	if got := count(`select count(*) from system_role_assignment`); got != 2 {
-		t.Fatalf("role assignments = %d, want 2", got)
+	if got := count(`select count(*) from system_slot_assignment`); got != 2 {
+		t.Fatalf("slot assignments = %d, want 2", got)
 	}
 	if got := count(`select count(*) from property where provenance = 'declared' and component_id is not null`); got != 1 {
 		t.Fatalf("declared component values = %d, want 1", got)
@@ -124,7 +124,7 @@ func TestCreatePlanLandsWhole(t *testing.T) {
 
 	// A second plan naming the standard uses it as it is: no second fork.
 	again := plan(disp.Name)
-	again.Places = []storage.PlannedPlace{{Key: "b", Location: storage.LocationSpec{Name: "plan-annex", LocationType: "building"}},
+	again.Locations = []storage.PlannedLocation{{Key: "b", Location: storage.LocationSpec{Name: "plan-annex", LocationType: "building"}},
 		{Key: "f", ParentKey: "b", Location: storage.LocationSpec{Name: "f1", LocationType: "floor"}}}
 	if made, err := gw.CreatePlan(ctx, "", again, allScopes()); err != nil || len(made.CreatedStandards) != 0 {
 		t.Fatalf("a plan on a held standard forked %v (%v), want none", made, err)
@@ -142,10 +142,10 @@ func TestCreatePlanChecksEveryPieceInScope(t *testing.T) {
 	sysType := "meeting"
 	std := "scoped-room"
 	plan := storage.Plan{
-		Standards: []storage.StandardFromTemplate{{Name: std, Roles: []storage.TemplateRole{{SystemRoleSpec: storage.SystemRoleSpec{Name: "screen", AcceptedTypes: []string{"display"}}}}}},
-		Places:    []storage.PlannedPlace{{Key: "b", Location: storage.LocationSpec{Name: "scoped-hq", LocationType: "building"}}},
-		Systems: []storage.PlannedSystem{{PlaceKey: "b", System: storage.SystemSpec{SystemTypeID: &sysType, StandardID: &std},
-			Components: []storage.PlannedComponent{{Role: "screen", Component: storage.ComponentSpec{ProductName: &disp.Name}}}}},
+		Standards: []storage.StandardFromTemplate{{Name: std, Slots: []storage.TemplateSlot{{SystemSlotSpec: storage.SystemSlotSpec{Name: "screen", AcceptedTypes: []string{"display"}}}}}},
+		Locations: []storage.PlannedLocation{{Key: "b", Location: storage.LocationSpec{Name: "scoped-hq", LocationType: "building"}}},
+		Systems: []storage.PlannedSystem{{LocationKey: "b", System: storage.SystemSpec{SystemTypeID: &sysType, StandardID: &std},
+			Components: []storage.PlannedComponent{{Slot: "screen", Component: storage.ComponentSpec{ProductName: &disp.Name}}}}},
 	}
 
 	noFork := allScopes()
@@ -169,33 +169,33 @@ func isStage(err error, stage string) bool {
 }
 
 // slotPlan is a plan for one system of n staffed slots under a building and a
-// floor, on a standard of its own with a role per slot, so the system is
-// healthy the moment its last slot is filled and impaired before. The names
-// carry tag so two plans can share a database.
+// floor, on a standard of its own, so the system is healthy the moment its
+// last slot is filled and impaired before. The names carry tag so two plans can
+// share a database.
 func slotPlan(tag string, n int, product string) storage.Plan {
 	std, sysType := tag+"-room", "meeting"
-	var roles []storage.TemplateRole
-	var slots []storage.PlannedComponent
+	var slots []storage.TemplateSlot
+	var fills []storage.PlannedComponent
 	for i := range n {
-		role := fmt.Sprintf("slot-%d", i)
-		roles = append(roles, storage.TemplateRole{SystemRoleSpec: storage.SystemRoleSpec{Name: role, AcceptedTypes: []string{"display"}}})
-		slots = append(slots, storage.PlannedComponent{Role: role, Component: storage.ComponentSpec{ProductName: &product}})
+		slot := fmt.Sprintf("slot-%d", i)
+		slots = append(slots, storage.TemplateSlot{SystemSlotSpec: storage.SystemSlotSpec{Name: slot, AcceptedTypes: []string{"display"}}})
+		fills = append(fills, storage.PlannedComponent{Slot: slot, Component: storage.ComponentSpec{ProductName: &product}})
 	}
 	return storage.Plan{
 		Template:  tag + "-template",
-		Standards: []storage.StandardFromTemplate{{Template: tag + "-room-template", Name: std, Label: tag, Roles: roles}},
-		Places: []storage.PlannedPlace{
+		Standards: []storage.StandardFromTemplate{{Template: tag + "-room-template", Name: std, Label: tag, Slots: slots}},
+		Locations: []storage.PlannedLocation{
 			{Key: "b", Location: storage.LocationSpec{Name: tag + "-hq", LocationType: "building"}},
 			{Key: "f", ParentKey: "b", Location: storage.LocationSpec{Name: tag + "-f1", LocationType: "floor"}},
 		},
-		Systems: []storage.PlannedSystem{{PlaceKey: "f", System: storage.SystemSpec{SystemTypeID: &sysType, StandardID: &std}, Components: slots}},
+		Systems: []storage.PlannedSystem{{LocationKey: "f", System: storage.SystemSpec{SystemTypeID: &sysType, StandardID: &std}, Components: fills}},
 	}
 }
 
 // TestCreatePlanRecordsOneHealthEdgePerOwner: a plan's system, staffed slot by
 // slot inside one transaction, records its final verdict once, and so does
 // each location above it. The intermediate impaired state (the system born
-// with every role empty, then each slot filled) is an edge no reader could
+// with every slot empty, then each slot filled) is an edge no reader could
 // have observed, because the write is atomic; recording it put a phantom
 // outage in every composite's history (#915).
 func TestCreatePlanRecordsOneHealthEdgePerOwner(t *testing.T) {
@@ -208,7 +208,7 @@ func TestCreatePlanRecordsOneHealthEdgePerOwner(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create plan: %v", err)
 	}
-	if len(made.Systems) != 1 || len(made.Systems[0].Components) != 3 || len(made.Places) != 2 {
+	if len(made.Systems) != 1 || len(made.Systems[0].Components) != 3 || len(made.Locations) != 2 {
 		t.Fatalf("made = %+v, want one system of three under two places", made)
 	}
 
@@ -219,7 +219,7 @@ func TestCreatePlanRecordsOneHealthEdgePerOwner(t *testing.T) {
 			  and property_type_id = (select id from property_type where name = 'health')`, col, id))
 	}
 	owners := []struct{ kind, col, id string }{{"system", "system_id", made.Systems[0].System.ID}}
-	for _, l := range made.Places {
+	for _, l := range made.Locations {
 		owners = append(owners, struct{ kind, col, id string }{"location", "location_id", l.ID})
 	}
 	for _, o := range owners {
@@ -241,7 +241,7 @@ func TestCreatePlanRecordsOneHealthEdgePerOwner(t *testing.T) {
 	if rep.Verdict != "healthy" {
 		t.Errorf("the staffed system reads %q, want healthy", rep.Verdict)
 	}
-	for _, l := range made.Places {
+	for _, l := range made.Locations {
 		rep, err := gw.LocationHealth(ctx, l.ID, 0, all)
 		if err != nil {
 			t.Fatalf("location health %s: %v", l.Name, err)

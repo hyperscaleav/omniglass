@@ -183,7 +183,7 @@ describe("ExpressionField", () => {
     expect(pre.textContent).toBe("  humidity > 2\n  ^");
     // The echo scrolls sideways when the line is long, so it is a focus stop a
     // keyboard can scroll (axe scrollable-region-focusable, #1101) and is named;
-    // a focusable node is never aria-hidden.
+    // a focusable outpost is never aria-hidden.
     expect(pre.getAttribute("tabindex")).toBe("0");
     expect(pre.getAttribute("role")).toBe("region");
     expect(pre.getAttribute("aria-label")).toBe("Line 2 of the expression, with the fault marked");

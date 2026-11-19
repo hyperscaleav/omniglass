@@ -33,7 +33,7 @@ The subsystem a change touches, named to match the architecture glossary. The se
 subsystems land; today:
 
 `area:foundation` `area:api` `area:storage` `area:auth` `area:identity`
-`area:collection` `area:expr` `area:messaging` `area:ui` `area:node` `area:lab` `area:docs`
+`area:collection` `area:expr` `area:messaging` `area:ui` `area:outpost` `area:lab` `area:docs`
 
 Purely descriptive: it filters the issue list by subsystem. An issue can carry more than
 one.
@@ -92,6 +92,7 @@ promise: if a label runs automation it is named `run:<task>`, and if a label is 
 | --- | --- | --- |
 | `run:preview` | spins up a live [PR preview environment](/guides/pr-previews/); removing it tears the preview down | yes |
 | `run:demo` | records the [demos](/contributing/demos/) the PR body tags (`demo: <id>`) in CI, upserts one comment listing every demo, and writes each demo's clip into the PR body's Demo section | yes |
+| `run:dev-gha` | on an issue, has a Claude Code agent in GitHub Actions build the ticket into a PR ([agents in CI](/contributing/agents-in-ci/)); only a maintainer's label counts, and the label comes off as the build starts | yes |
 
 `run:preview` is live today (the [PR previews guide](/guides/pr-previews/) covers it, and
 `preview-comment.yml` is the workflow behind it). So is `run:demo` (`demo.yml`). Applying it
@@ -113,6 +114,9 @@ job; a demo whose lab never came up is reported as that, not as a failure). The 
 each demo's clip (its GIF or animated preview and its scrubbable link) into the PR body's Demo
 section, replacing only its own marked block. Why a ref rather than a branch is in
 [demos](/contributing/demos/#show-it-on-the-pr).
+
+`run:dev-gha` is `agent-build.yml`, and it is the architect's approval to build. A label from
+anyone outside the `maintainers` team is taken off with a comment saying why.
 
 `run:walkthrough` is `run:demo`'s earlier name, from when walkthroughs were the only demos. The
 workflow still honors it, so a PR that carries it (or a re-run of a run it started) records as
@@ -180,8 +184,9 @@ owns the moment:
 | a finding is filed | `/file-bug` | `scripts/board.sh add <n>`: Backlog |
 | a loop starts | `/run-feature-loop` | `scripts/board.sh add <n>` for each sub-issue, then `set <definition> "In Progress"` |
 | a slice starts | `/run-feature-loop` | `scripts/board.sh set <n> "In Progress"` |
-| the PR opens | `/ship-slice` | `scripts/board.sh set <n> "In Review"` |
+| the PR opens | `/ship-slice` | `scripts/board.sh set <n> "In Review"`; a dispatcher session leaves it to the dispatcher (below) |
 | the day's slice starts, then its PR opens | `/autopilot` | the same two moves, listed in the day report |
+| an Actions build starts | `agent-build.yml` | `scripts/board.sh set <n> "In Progress"`; the PR's link moves it to In Review |
 
 The board's own workflows move it too, and two of them meet those moves at the same
 moment, so each is pointed at the same status (the setup below):
@@ -225,6 +230,12 @@ scripts/board.sh show 1191               # its Status, Priority and Iteration
 - **Done closes the issue.** With Auto-close issue on, `set <n> Done` closes the issue as
   well as moving it, which is why no skill makes that move: merging closes the issue, and
   closing moves it to Done.
+- **A dispatcher session leaves In Review to the dispatcher.** The harness sets `AGENT_ROLE`
+  on every session it launches. With it set, `set <n> "In Review"` changes nothing, prints one
+  line saying the dispatcher moves the ticket after its gate, and exits 0. The dispatcher moves
+  a ticket to AI Review only while the board still says `In Progress`, so a session that moved
+  its own ticket would strand it with no reviewer. Every other move, and every move without
+  `AGENT_ROLE`, is unchanged.
 - **In Review before it exists.** Until the board has an `In Review` status, a move to it
   lands on `In Progress` with one warning.
 - **Errors a caller can act on.** A token without the `project` scope, an issue the repository

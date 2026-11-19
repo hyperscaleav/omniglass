@@ -96,7 +96,7 @@ func TestATransitionQueuesItsNotificationsInItsOwnTransaction(t *testing.T) {
 			t.Fatalf("notification = %+v", n)
 		}
 	}
-	// A re-raise of the open condition writes nothing.
+	// A re-raise of the open alarm writes nothing.
 	if _, err := f.gw.RaiseAlarm(ctx, "", "display-1", storage.AlarmSpec{Severity: "high", Message: "no video"}); err != nil {
 		t.Fatal(err)
 	}

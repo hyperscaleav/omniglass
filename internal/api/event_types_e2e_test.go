@@ -15,7 +15,7 @@ import (
 
 // TestEventTypeAPI drives the /event-types catalog over HTTP: an owner registers,
 // reads, updates, and deletes a custom event type; an official (seeded) event type is
-// read-only; a malformed name and a duplicate are rejected; an ungranted principal is
+// read-only; a malformed name and a duplicate are rejected; an ungranted user is
 // forbidden to create. Mirrors the property_type catalog e2e.
 func TestEventTypeAPI(t *testing.T) {
 	t.Parallel()
@@ -89,7 +89,7 @@ func TestEventTypeAPI(t *testing.T) {
 
 	// A type an event rule names is in use (409) until the rule lets go of it.
 	c.do(ownerTok, http.MethodPost, "/event-rules", map[string]any{"name": "unplug-watch", "sample_key": "endpoint-reachable",
-		"fire_criteria": map[string]any{"op": "eq", "value": "down"}, "fire_event_type": "condition-started",
+		"fire_criteria": map[string]any{"op": "eq", "value": "down"}, "fire_event_type": "rule-fired",
 		"clear_event_type": "cable-unplugged"}, http.StatusCreated)
 	if body := string(c.do(ownerTok, http.MethodDelete, "/event-types/cable-unplugged", nil, http.StatusConflict)); !strings.Contains(body, "in use") {
 		t.Fatalf("deleting a type a rule names: %s, want a 409 saying it is in use", body)
@@ -99,8 +99,8 @@ func TestEventTypeAPI(t *testing.T) {
 	// Delete the custom event type.
 	c.do(ownerTok, http.MethodDelete, "/event-types/cable-unplugged", nil, http.StatusNoContent)
 
-	// An ungranted principal is forbidden to create.
-	noneTok := principalWithGrants(t, ctx, dsn, "noevents", nil)
+	// An ungranted user is forbidden to create.
+	noneTok := userWithGrants(t, ctx, dsn, "noevents", nil)
 	c.do(noneTok, http.MethodPost, "/event-types", map[string]any{"name": "nope.event"}, http.StatusForbidden)
 }
 

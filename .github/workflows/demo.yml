@@ -238,7 +238,7 @@ jobs:
         run: make
 
       # The demo's recorder brings up a lab of its own, all in Docker (the
-      # node's NET_ADMIN, for its simulator's impairments, is a container
+      # outpost's NET_ADMIN, for its simulator's impairments, is a container
       # capability inside its own namespace, as make test-netadmin already
       # uses on this runner). A failure is recorded, not fatal yet, so the
       # recording still uploads.

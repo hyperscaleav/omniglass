@@ -37,17 +37,17 @@ type HoldEdge struct {
 type HoldEndpoint struct {
 	ID          string
 	ComponentID string
-	Node        string
+	Outpost     string
 	OutOfBand   bool
 }
 
 // HoldInput is everything ResolveHoldSet reads: the command's target and the
-// node delivering it, whether the command type is a power command and the
+// outpost delivering it, whether the command type is a power command and the
 // outlet its params name, and the edges and endpoints reachable from the
 // target.
 type HoldInput struct {
 	Target    string
-	Node      string
+	Outpost   string
 	Power     bool
 	Outlet    string
 	Edges     []HoldEdge
@@ -55,7 +55,7 @@ type HoldInput struct {
 }
 
 // ResolveHoldSet names the endpoints a disruptive command closes the gates
-// of (#1648), sorted, each once, only those placed on the delivering node.
+// of (#1648), sorted, each once, only those placed on the delivering outpost.
 //
 // A command that is not a power command takes its target down: the target's
 // in-band endpoints are held (an out-of-band one, a BMC, answers through a
@@ -108,7 +108,7 @@ func ResolveHoldSet(in HoldInput) []string {
 	out := []string{}
 	seen := map[string]bool{}
 	for _, e := range in.Endpoints {
-		if e.Node != in.Node || seen[e.ID] {
+		if e.Outpost != in.Outpost || seen[e.ID] {
 			continue
 		}
 		if whole[e.ComponentID] || (inBand[e.ComponentID] && !e.OutOfBand) {

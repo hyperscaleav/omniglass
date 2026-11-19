@@ -19,7 +19,7 @@ import (
 
 // This file is the scale lab's measurement (#1556): the arithmetic of one
 // table, pure and tested with fixed inputs. It reuses the window rates and the
-// number formats of the single-node footprint (measure.go, report.go) and adds
+// number formats of the single-outpost footprint (measure.go, report.go) and adds
 // what only a fleet shows: percentiles, the ingest lag, the consumer's
 // redeliveries, and the retention pass's drain rate. The harness that reads a
 // running lab (scale_run.go) feeds it.
@@ -266,7 +266,7 @@ func ParseLaneLog(r io.Reader) ([]LaneSample, error) {
 // time the busiest lane's one handler held it, and the mean time a batch held
 // a lane. It answers whether ingest is the bottleneck (the busiest lane near
 // 1) or waiting on its publishers (busy near 0 with the ingest lag at the
-// spool wait). The lanes run side by side, each a partition of the nodes
+// spool wait). The lanes run side by side, each a partition of the outposts
 // (#1896), so the busiest one is what bounds ingest, not their sum.
 type Lane struct {
 	// Measured is false when no lane held two tallies in the window, or a
@@ -461,14 +461,14 @@ type ScaleRun struct {
 	Page PageRun
 	// Absolutes is the database's standing size, read at the window's end.
 	Absolutes Absolutes
-	// Endpoints is each node's bracketed endpoint observation; when none was
+	// Endpoints is each outpost's bracketed endpoint observation; when none was
 	// read, EndpointsGap says why.
-	Endpoints    []closedloop.NodeBracket
+	Endpoints    []closedloop.OutpostBracket
 	EndpointsGap string
 	// Delivery is the receipts the delivery table reconciles (#1641).
 	Delivery DeliveryRead
-	// Worklist is each node's worst worklist pull loss over the window
-	// (#1868), WorklistUnreported the nodes that reported none; when it was
+	// Worklist is each outpost's worst worklist pull loss over the window
+	// (#1868), WorklistUnreported the outposts that reported none; when it was
 	// not read, WorklistGap says why.
 	Worklist           map[string]float64
 	WorklistUnreported []string
@@ -537,12 +537,12 @@ type ScaleReport struct {
 	EndpointsGap string                     `json:"endpoints_not_measured,omitempty"`
 
 	// Delivery is each kind's loss across each hop it crosses (#1641), over
-	// the settled boots, one set of rows per lane (#1696), the node lane's
+	// the settled boots, one set of rows per lane (#1696), the outpost lane's
 	// after the sim hop's row per protocol (#1694); DeliveryEndToEnd is each
-	// kind's loss over all the node lane's hops (the push lane's one row is
+	// kind's loss over all the outpost lane's hops (the push lane's one row is
 	// its own end to end); DeliveryUnsettled names each boot no ratio was read
 	// from; DeliveryEnded each boot read only as far as it landed, because its
-	// node (or, for the push lane, the server) started again (#1692).
+	// outpost (or, for the push lane, the server) started again (#1692).
 	Delivery          []DeliveryRow             `json:"delivery"`
 	DeliveryEndToEnd  map[delivery.Kind]float64 `json:"delivery_end_to_end,omitempty"`
 	DeliveryUnsettled []UnsettledBoot           `json:"delivery_unsettled,omitempty"`
@@ -552,9 +552,9 @@ type ScaleReport struct {
 	DeliveryNotRead string `json:"delivery_not_measured,omitempty"`
 	DeliveryNote    string `json:"delivery_note,omitempty"`
 
-	// WorklistLoss is each node's worst worklist pull loss over the window
-	// (#1868), by node; WorklistNotRead is why it was not read, when it was
-	// not. WorklistUnreported is the nodes that reported no worklist pull
+	// WorklistLoss is each outpost's worst worklist pull loss over the window
+	// (#1868), by outpost; WorklistNotRead is why it was not read, when it was
+	// not. WorklistUnreported is the outposts that reported no worklist pull
 	// loss in the window, each a failed reading, not a clean one.
 	WorklistLoss       map[string]float64 `json:"worklist_loss,omitempty"`
 	WorklistUnreported []string           `json:"worklist_unreported,omitempty"`
@@ -569,7 +569,7 @@ type ScaleReport struct {
 }
 
 // SummarizeScale turns a run into its report. The containers list the server
-// and Postgres first, then each node by name, then their total.
+// and Postgres first, then each outpost by name, then their total.
 func SummarizeScale(r ScaleRun) ScaleReport {
 	w := r.Measured
 	out := ScaleReport{
@@ -731,19 +731,19 @@ func (r ScaleReport) Table() string {
 }
 
 // worklistGap says why the worklist pull loss was not measured, or is empty.
-// A read with no node in it is not a 0: it is a read of nothing.
+// A read with no outpost in it is not a 0: it is a read of nothing.
 func (r ScaleReport) worklistGap() string {
 	switch {
 	case r.WorklistNotRead != "":
 		return r.WorklistNotRead
 	case len(r.WorklistLoss) == 0 && len(r.WorklistUnreported) == 0:
-		return "the lab holds no node to read"
+		return "the lab holds no outpost to read"
 	}
 	return ""
 }
 
-// worklistCell is the worklist row's cell: the worst node's share, named
-// when above 0, and how many nodes the bus refused.
+// worklistCell is the worklist row's cell: the worst outpost's share, named
+// when above 0, and how many outposts the bus refused.
 func (r ScaleReport) worklistCell() string {
 	if r.worklistGap() != "" {
 		return "not measured"
@@ -757,26 +757,26 @@ func (r ScaleReport) worklistCell() string {
 			}
 		}
 	}
-	nodes := len(r.WorklistLoss) + len(r.WorklistUnreported)
+	outposts := len(r.WorklistLoss) + len(r.WorklistUnreported)
 	unreported := ""
 	if len(r.WorklistUnreported) > 0 {
 		unreported = fmt.Sprintf(", %d unreported", len(r.WorklistUnreported))
 	}
 	switch {
 	case len(r.WorklistLoss) == 0:
-		return fmt.Sprintf("unreported   (%s)", nodeCount(nodes))
+		return fmt.Sprintf("unreported   (%s)", outpostCount(outposts))
 	case worst == "":
-		return fmt.Sprintf("0 %%   (%s%s)", nodeCount(nodes), unreported)
+		return fmt.Sprintf("0 %%   (%s%s)", outpostCount(outposts), unreported)
 	}
-	return fmt.Sprintf("%.0f %% on %s   (%d of %s refused%s)", 100*r.WorklistLoss[worst], worst, refused, nodeCount(nodes), unreported)
+	return fmt.Sprintf("%.0f %% on %s   (%d of %s refused%s)", 100*r.WorklistLoss[worst], worst, refused, outpostCount(outposts), unreported)
 }
 
-// nodeCount is a count of nodes, singular for one.
-func nodeCount(n int) string {
+// outpostCount is a count of outposts, singular for one.
+func outpostCount(n int) string {
 	if n == 1 {
-		return "1 node"
+		return "1 outpost"
 	}
-	return fmt.Sprintf("%d nodes", n)
+	return fmt.Sprintf("%d outposts", n)
 }
 
 // describe is the drain's table cell.

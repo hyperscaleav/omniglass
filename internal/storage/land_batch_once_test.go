@@ -12,7 +12,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest/querycount"
 )
 
-// The statements a node's tick of eight task groups costs (#1928), each
+// The statements an outpost's tick of eight task groups costs (#1928), each
 // group five metric samples and two properties on its own component,
 // delivered by its own endpoint. The batch takes each lock and reads each
 // rule set once, in lockGroups, and every lane writer answers from what it
@@ -53,11 +53,11 @@ func TestLandBatchTakesEachLockAndRuleReadOnce(t *testing.T) {
 	}
 	t.Cleanup(gw.Close)
 	tick := func(id, reach string, ts time.Time) storage.IngestBatch {
-		b := storage.IngestBatch{BatchID: id, Writer: storage.NodeWriter("", "")}
+		b := storage.IngestBatch{BatchID: id, Writer: storage.OutpostWriter("", "")}
 		for i := range groups {
 			ep := fmt.Sprintf("ep-%d", i)
-			w := storage.NodeWriter(ids[i], ep)
-			w.Node = f.node
+			w := storage.OutpostWriter(ids[i], ep)
+			w.Outpost = f.outpost
 			g := storage.IngestGroup{TaskID: fmt.Sprintf("task-%d", i), Writer: w, SeenEndpoint: endpoints[i]}
 			for j := range 5 {
 				g.Metrics = append(g.Metrics, storage.MetricSampleWrite{OwnerKind: "component", OwnerID: ids[i],

@@ -9,6 +9,9 @@
 // The collection-method table (docs/src/generated/methods.json) comes from
 // internal/devseed's fixture and MethodGaps, for the simulation page and the
 // lab guide to render (#1419).
+// The driver cost table (docs/src/generated/drivercost.json) joins the
+// committed driver sweep with the shipped plan, so a driver added since the
+// sweep ran renders as not yet measured.
 // Each has a drift test that fails when the committed file goes stale.
 package main
 
@@ -22,10 +25,11 @@ import (
 )
 
 const (
-	dst      = "docs/src/generated/lab.json"
-	readsDst = "web/src/lib/system_page_reads.gen.ts"
-	perfDst  = "docs/src/generated/perfgate.json"
-	methDst  = "docs/src/generated/methods.json"
+	dst       = "docs/src/generated/lab.json"
+	readsDst  = "web/src/lib/system_page_reads.gen.ts"
+	perfDst   = "docs/src/generated/perfgate.json"
+	methDst   = "docs/src/generated/methods.json"
+	driverDst = "docs/src/generated/drivercost.json"
 )
 
 func main() {
@@ -57,4 +61,12 @@ func main() {
 		log.Fatalf("labgen: write %s: %v", methDst, err)
 	}
 	log.Printf("wrote the collection-method table to %s", methDst)
+	drivers, err := labfootprint.DriverCostFactsJSON()
+	if err != nil {
+		log.Fatalf("labgen: %v", err)
+	}
+	if err := os.WriteFile(driverDst, drivers, 0o644); err != nil {
+		log.Fatalf("labgen: write %s: %v", driverDst, err)
+	}
+	log.Printf("wrote the driver cost table to %s", driverDst)
 }

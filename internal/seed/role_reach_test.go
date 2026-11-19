@@ -18,9 +18,11 @@ import (
 // everything inside a subtree (add rooms, systems, and components)". It never
 // did. A grant contributes to a resolved scope only when its scope_kind can
 // CONTAIN the resource (scope.applicableKinds), and every tree tier is
-// contained by its own kind alone: a location-kind grant fills no system-tier
-// and no component-tier scope, whatever actions the role carries. The
-// cross-tier expansion is unbuilt (#10).
+// contained by its own kind alone. Since #1498 a location-kind grant also
+// reaches across tiers for system and component read and create (the rows
+// placed beneath it), but it still fills no system-tier or component-tier
+// MODIFY scope, whatever actions the role carries: that half of the cross-tier
+// expansion is #10.
 //
 // The gap was silent, which is what made a stale sentence expensive: an admin
 // granting `deploy` at a building reasonably expects the field tech to add a
@@ -37,7 +39,7 @@ import (
 // scope really is what the routes enforce lives beside it in
 // internal/api/location_grant_reach_e2e_test.go, against the shipped `tech-east`
 // grant shape.
-func TestALocationGrantOfDeployReachesOneTier(t *testing.T) {
+func TestALocationGrantOfDeployReachesItsTierAndPlacesTheTiersBelow(t *testing.T) {
 	roles := seed.SeededRoles()
 	rr := make([]rbac.Role, 0, len(roles))
 	for _, r := range roles {
@@ -64,10 +66,13 @@ func TestALocationGrantOfDeployReachesOneTier(t *testing.T) {
 		// Telemetry resolves on the COMPONENT tier alone (ADR-0752): the push
 		// route's owner is a component, so a location grant reaches none.
 		"telemetry": "",
-		// The tiers the description used to claim and the role's permissions
-		// still name. Empty, every action, including read.
-		"system":    "",
-		"component": "",
+		// The tiers placed beneath the location (#1498): read and create
+		// only. The modify actions stay on their own tier (#10).
+		"system":    "read create",
+		"component": "read create",
+		// The resources that hang off a component cascade through the
+		// component tier alone, so the cross-tier reach does not extend to
+		// them.
 		"interface": "",
 		"task":      "",
 		// An alarm resolves on the COMPONENT tier, so a location grant contains
@@ -75,8 +80,9 @@ func TestALocationGrantOfDeployReachesOneTier(t *testing.T) {
 		// `operator` and not to `deploy`: in the shape `deploy` is actually
 		// granted (devseed's location-scoped `tech-east`), the capability would
 		// resolve to nothing and acknowledge nothing, while the console's
-		// capability-only hint would still offer the button. Revisit with the
-		// cross-tier expansion (#10), not before.
+		// capability-only hint would still offer the button. #1498 reaches
+		// systems and components only, not the alarms on them; revisit with
+		// the rest of the cross-tier expansion (#10), not before.
 		"alarm": "",
 		// Unscoped: no scope kind contains a file, so a scoped grant fills
 		// nothing and the permission alone governs.
@@ -97,17 +103,27 @@ func TestALocationGrantOfDeployReachesOneTier(t *testing.T) {
 		}
 	}
 
-	// The claim the description makes is not merely that the reach is small, it
-	// is that a location grant reaches no system and no component AT ALL, so the
-	// role's own system and component permissions resolve to nothing. Asserted
-	// separately from the matrix because it is the sentence's actual content.
+	// The claim the description makes: a location grant reads and creates the
+	// systems and components placed beneath it, and edits, renames, and moves
+	// none of them. Asserted separately from the matrix because it is the
+	// sentence's actual content, and because the reach has a shape the matrix
+	// does not show: it is the location itself, as a cross-tier root, never a
+	// same-tier id.
 	for _, resource := range []string{"system", "component"} {
 		for _, action := range []string{"read", "create", "update", "rename", "move"} {
 			if !idx.Flatten([]string{"deploy"}).Allows(resource, action) {
 				t.Fatalf("deploy no longer carries %s:%s, so this test is asserting the reach of a permission the role does not hold", resource, action)
 			}
-			if s := scope.Resolve(grants, idx, resource, action); !s.Empty() {
-				t.Errorf("%s:%s resolved to %+v from a location grant: the cross-tier expansion (#10) has landed, and the role's description now understates it", resource, action, s)
+			s := scope.Resolve(grants, idx, resource, action)
+			switch action {
+			case "read", "create":
+				if s.All || len(s.IDs) != 0 || len(s.SelfIDs) != 0 || strings.Join(s.LocationIDs, " ") != "L1" {
+					t.Errorf("%s:%s resolved to %+v from a location grant, want the location as its one cross-tier root", resource, action, s)
+				}
+			default:
+				if !s.Empty() {
+					t.Errorf("%s:%s resolved to %+v from a location grant: the modify half of the cross-tier expansion (#10) has landed, and the role's description now understates it", resource, action, s)
+				}
 			}
 		}
 	}
@@ -117,8 +133,8 @@ func TestALocationGrantOfDeployReachesOneTier(t *testing.T) {
 // to the matrix above from the other side (#714).
 //
 // The reach test fails when the BEHAVIOUR moves. This one fails when the COPY
-// moves back: it refuses a description that promises system or component work
-// while a location grant reaches neither. It matches on the promise rather than
+// moves back: it refuses a description that promises system or component edits
+// a location grant does not make. It matches on the promise rather than
 // on the whole sentence, so the copy stays free to be rewritten, which is the
 // only version of this guard that survives its first edit.
 func TestTheDeployDescriptionDoesNotPromiseTheTiersItCannotReach(t *testing.T) {
@@ -132,14 +148,18 @@ func TestTheDeployDescriptionDoesNotPromiseTheTiersItCannotReach(t *testing.T) {
 		"builds out and edits everything inside a subtree",
 	} {
 		if strings.Contains(desc, promise) {
-			t.Errorf("the deploy description claims %q, which a location-kind grant does not do: it fills no system-tier or component-tier scope at all", promise)
+			t.Errorf("the deploy description claims %q, which a location-kind grant does not do: it reads and creates systems and components but edits none", promise)
 		}
 	}
 	// And it has to say so, rather than merely stopping short of the false
 	// claim: an admin reading it needs to know the grant they are about to make
-	// does not reach the systems in the building.
+	// creates the systems in the building but does not edit them. The sentence
+	// the reach replaced, that it cannot even read one, must not come back.
 	if !strings.Contains(desc, "system") || !strings.Contains(desc, "component") {
-		t.Errorf("the deploy description says nothing about systems or components:\n%s\nA grant of this role carries both permission sets and reaches neither tier from a location, which is exactly what an admin has to be told", desc)
+		t.Errorf("the deploy description says nothing about systems or components:\n%s\nA grant of this role carries both permission sets and reaches them from a location for read and create only, which is exactly what an admin has to be told", desc)
+	}
+	if strings.Contains(desc, "not even to read one") {
+		t.Errorf("the deploy description still says a location grant cannot read a system or component, which it has since #1498:\n%s", desc)
 	}
 }
 

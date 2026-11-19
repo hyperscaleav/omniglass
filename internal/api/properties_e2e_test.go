@@ -15,7 +15,7 @@ import (
 
 // TestPropertyAPI drives the /property-types catalog over HTTP: an owner registers, reads,
 // updates, and deletes a custom property; an official (seeded) property is read-only; a
-// malformed name and a duplicate are rejected; and an ungranted principal is
+// malformed name and a duplicate are rejected; and an ungranted user is
 // forbidden to create.
 func TestPropertyAPI(t *testing.T) {
 	t.Parallel()
@@ -101,8 +101,8 @@ func TestPropertyAPI(t *testing.T) {
 	// Delete the custom property.
 	c.do(ownerTok, http.MethodDelete, "/property-types/rack-unit", nil, http.StatusNoContent)
 
-	// An ungranted principal is forbidden to create.
-	noneTok := principalWithGrants(t, ctx, dsn, "noprops", nil)
+	// An ungranted user is forbidden to create.
+	noneTok := userWithGrants(t, ctx, dsn, "noprops", nil)
 	c.do(noneTok, http.MethodPost, "/property-types", map[string]any{"name": "nope_prop", "data_type": "string"}, http.StatusForbidden)
 }
 

@@ -9,7 +9,7 @@ import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 
 // The Notifications page (#618) is a FlatList over the /notification-types
-// registry; official types are read-only, an operator's are editable by a
+// catalog; official types are read-only, an operator's are editable by a
 // caller holding notification_type:update, and the blade previews a type
 // against a real alarm through the server, drafts included while editing.
 const at = "2026-10-28T00:00:00Z";
@@ -20,8 +20,8 @@ const seed: NotificationTypeRow[] = [
 ];
 const comps = [{ id: uuidFor("display-1"), name: "display-1", label: "Lobby display", system_count: 0 }] as Component[];
 
-const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], grants: [] };
+const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
+const viewer: Me = { user: { id: "u-view", kind: "person" }, person: { username: "viewer" }, permissions: ["*:read"], grants: [] };
 
 const asides = () => document.querySelectorAll("aside[data-blade]");
 
@@ -71,12 +71,12 @@ describe("Notifications page", () => {
     expect((within(blade).getByLabelText("Edit") as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("previews against a component's alarm and lists the facts a template reads", async () => {
+  it("previews against a component's alarm and lists the facts a rule reads", async () => {
     const spy = vi.spyOn(lib, "previewNotificationType").mockResolvedValue({
       subject: "HIGH display-1",
       text: "no video",
       transition: "raised",
-      facts: [{ name: "Component", value: "display-1" }, { name: "Place", value: "" }],
+      facts: [{ name: "Component", value: "display-1" }, { name: "Location", value: "" }],
     } as lib.NotificationPreview);
     mount(admin);
     const blade = await openBlade("Page on-call");

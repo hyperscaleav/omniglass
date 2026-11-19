@@ -17,7 +17,7 @@ import (
 // The label recompute's row scan carries `for update`, and the column lists it
 // reads carry correlated subqueries for the names around each row (a
 // component's location_name and product_handle, a system's standard_handle,
-// a location's parent_name). #709 proved, on the registry fork, that a lock
+// a location's parent_name). #709 proved, on the catalog fork, that a lock
 // placed inside a resolving read does not do what it looks like it does: at
 // READ COMMITTED the statement's snapshot is taken before it blocks, and when
 // the lock is released only the locked row is re-read, not the subqueries

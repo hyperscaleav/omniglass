@@ -10,11 +10,11 @@ import {
   useRestoreNamespace,
   useRestoreAllDefaults,
 } from "../lib/settings";
-import { constraintFor, isList, listText, settingKeys, validateField, wireValue } from "../lib/settingsValidation";
+import { constraintFor, isList, isMap, listText, objectText, settingKeys, validateField, wireValue } from "../lib/settingsValidation";
 
 // Settings is the Admin platform-settings surface (issue #271). It resolves the
 // effective settings document from the cascade (the declared defaults, the operator
-// file, the console override) and lets an admin edit each key, see where its value came
+// file, the console binding) and lets an admin edit each key, see where its value came
 // from (provenance), restore a key or a namespace to defaults, and read the layer
 // stack. Slice-0 acts on the platform scope; the per-group and per-user levels are a
 // fast-follow. The write path is an RFC 7386 merge patch: a null on a key restores
@@ -44,7 +44,7 @@ function originLabel(level: string): string {
 function levelLabel(level: string): string {
   switch (level) {
     case "platform":
-      return "Console override (platform)";
+      return "Console binding (platform)";
     case "file":
       return "Operator settings file";
     default:
@@ -83,7 +83,7 @@ export default function Settings() {
   const [pageErr, setPageErr] = createSignal<string | null>(null);
 
   async function onRestoreAll() {
-    if (!window.confirm("Restore every platform setting to its default? This clears all console overrides.")) return;
+    if (!window.confirm("Restore every platform setting to its default? This clears every console binding.")) return;
     setRestoringAll(true);
     setPageErr(null);
     const r = await restoreAll();
@@ -103,8 +103,8 @@ export default function Settings() {
       <div class="flex items-start justify-between gap-4">
         <p class="max-w-160 text-sm text-base-content/60">
           Platform preferences resolved down the settings cascade: declared defaults, the operator
-          settings file, and the console override. Each value shows where it came from; editing it
-          sets a console override, and restoring drops that override so the value falls back to the
+          settings file, and the console binding. Each value shows where it came from; editing it
+          sets a console binding, and restoring drops that binding so the value falls back to the
           layer below.
         </p>
         <Show when={canEdit()}>
@@ -205,11 +205,18 @@ function SettingRow(props: {
 }) {
   // The generated constraint decides how a value is read and written, so a
   // list-valued setting shows as one line of comma-separated entries and goes
-  // back as a JSON array. Deciding from the SCHEMA rather than from the value
-  // keeps a list that resolved empty editable as a list.
+  // back as a JSON array, and a map shows and saves as its JSON. Deciding from
+  // the SCHEMA rather than from the value keeps a list that resolved empty
+  // editable as a list.
   const constraint = () => constraintFor(props.namespace, props.settingKey);
   const current = () =>
-    props.value == null ? "" : isList(constraint()) ? listText(props.value) : String(props.value);
+    props.value == null
+      ? ""
+      : isList(constraint())
+        ? listText(props.value)
+        : isMap(constraint())
+          ? objectText(props.value)
+          : String(props.value);
   const [draft, setDraft] = createSignal(current());
   const [expanded, setExpanded] = createSignal(false);
   const [busy, setBusy] = createSignal(false);
@@ -242,7 +249,7 @@ function SettingRow(props: {
   async function save() {
     setBusy(true);
     setRowErr(null);
-    const r = await props.onPatch(props.namespace, { [props.settingKey]: wireValue(constraint(), draft()) });
+    const r = await props.onPatch(props.namespace, { [props.settingKey]: wireValue(constraint(), draft(), props.value) });
     if (!r.ok) setRowErr(r.message);
     setBusy(false);
   }
@@ -250,7 +257,7 @@ function SettingRow(props: {
   async function restoreKey() {
     setBusy(true);
     setRowErr(null);
-    // A null value in a merge patch deletes the key from the override, restoring it
+    // A null value in a merge patch deletes the key from the binding, restoring it
     // to the layer below.
     const r = await props.onPatch(props.namespace, { [props.settingKey]: null });
     if (r.ok) setDraft(current());
@@ -338,7 +345,7 @@ function SettingRow(props: {
           </Show>
           <Show when={locked()}>
             <p class="mt-2 text-base-content/60">
-              Locked at the {levelLabel(props.lockLevel!)} level; more specific levels cannot override it.
+              Locked at the {levelLabel(props.lockLevel!)} level; more specific levels cannot shadow it.
             </p>
           </Show>
         </div>

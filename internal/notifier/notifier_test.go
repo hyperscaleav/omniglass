@@ -68,7 +68,7 @@ func TestAPassTakesNoRowItCouldNotFinish(t *testing.T) {
 
 // TestAPassEndsExpiredSnoozesBeforeItDrains: the end-of-snooze sweep runs on
 // the notifier's tick (#1318, ADR-1318) until the time primitive (#419), and
-// first, so a condition announced again at its snooze's end is delivered in
+// first, so an alarm announced again at its snooze's end is delivered in
 // the same pass.
 func TestAPassEndsExpiredSnoozesBeforeItDrains(t *testing.T) {
 	f := &fakeStore{}

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { STALENESS_WINDOW_MS, type ReachEndpoint } from "./reachability";
 import {
   ladder,
+  ladderObserved,
   rungHint,
   sessionWord,
   endpointNotice,
@@ -76,12 +77,12 @@ describe("endpointNotice", () => {
     expect(endpointNotice(e, now)).toEqual({ kind: "rejected", reason: "auth: auth rejected", waitTS: ago(1_000) });
   });
 
-  // A restarted node starts the session rejected under the gate it adopted,
-  // and the session's reason is then the node's placeholder; the gate keeps
+  // A restarted outpost starts the session rejected under the gate it adopted,
+  // and the session's reason is then the outpost's placeholder; the gate keeps
   // the refusal's own words (review of #1110), so they lead.
   it("reads the gate's reason over a restarted session's placeholder", () => {
     const e = ep({
-      session: { state: "rejected", ts: ago(1_000), reason: "auth: refused under this connection fingerprint before the node restarted" },
+      session: { state: "rejected", ts: ago(1_000), reason: "auth: refused under this connection fingerprint before the outpost restarted" },
       rejection: gate({ reason: "auth: auth rejected" }),
     });
     expect(endpointNotice(e, now)?.reason).toBe("auth: auth rejected");
@@ -132,6 +133,23 @@ describe("endpointNotice", () => {
 
 // The ladder (ADR-0158), bottom up: reachable is a ping and only informational,
 // responsive is the transport and the gate, authenticated is the login.
+// A ladder of nothing but unknown rungs claims nothing (#1454): an endpoint no
+// probe has ever answered for has no rung to show, and a chip named for a rung
+// beside no observation reads as a verdict it does not have.
+describe("ladderObserved", () => {
+  it("is false for an endpoint nothing has measured, whatever its transport", () => {
+    expect(ladderObserved(ep({}))).toBe(false);
+    expect(ladderObserved(ep({ transport: "icmp" }))).toBe(false);
+  });
+  it("is true once any rung has an observation", () => {
+    expect(ladderObserved(ep({ layers: [ping(false)] }))).toBe(true);
+    expect(ladderObserved(ep({ layers: [port(true)] }))).toBe(true);
+  });
+  it("is true for a gated endpoint, whose rungs a refusal holds", () => {
+    expect(ladderObserved(ep({ rejection: { rung: "responsive", class: "protocol", ts: ago(1_000) } }))).toBe(true);
+  });
+});
+
 describe("ladder", () => {
   it("reads a ping that failed beside a transport that answered: informational, not the gate", () => {
     const rungs = ladder(ep({ layers: [ping(false), port(true)], responsive: { value: "up", ts: ago(5_000) } }));
@@ -265,7 +283,7 @@ describe("retry", () => {
   });
 
   // A retry is in hand until the session moves or the wait runs out, so a
-  // node that never answers does not keep Retry spinning forever.
+  // outpost that never answers does not keep Retry spinning forever.
   it("holds a retry until the session moves or the wait runs out", () => {
     const pending = { ts: ago(30_000), at: now - 1_000 };
     expect(retryWaiting(pending, ago(30_000), now)).toBe(true);

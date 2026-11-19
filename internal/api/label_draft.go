@@ -123,7 +123,7 @@ type renderComponentLabelInput struct {
 
 type renderSystemLabelInput struct {
 	Body struct {
-		SystemTypeID string `json:"system_type_id,omitempty" doc:"The system_type this system is classified by, by name or uuid. Required to render a generated name's label: the stem lives on that registry row."`
+		SystemTypeID string `json:"system_type_id,omitempty" doc:"The system_type this system is classified by, by name or uuid. Required to render a generated name's label: the stem lives on that catalog row."`
 		StandardID   string `json:"standard_id,omitempty" doc:"The standard this system conforms to, by name or uuid; omit for a one-off system"`
 		Name         string `json:"name,omitempty" doc:"The name the row will carry. Omit it to draft the name and label the platform would produce; supply it to draft the label an operator-named row would carry, which has no ordinal at all."`
 		Parent       string `json:"parent,omitempty" doc:"The parent system, by name or uuid. Part of the placement bucket a generated name's ordinal is read from. Resolved within the caller's system:create scope."`

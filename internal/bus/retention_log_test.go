@@ -222,7 +222,7 @@ func (f housekeepingFixture) plantOldDebug(t *testing.T, n int) {
 }
 
 // standMarks stands both compactions' marks at their targets, so no pass
-// has an hour or a day to fold (as the node_log retention test does).
+// has an hour or a day to fold (as the outpost_log retention test does).
 func (f housekeepingFixture) standMarks(t *testing.T) {
 	t.Helper()
 	trendMark := time.Now().UTC().Add(-storage.MetricTrendHorizon).Truncate(time.Hour)

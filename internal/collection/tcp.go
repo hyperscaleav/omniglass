@@ -24,7 +24,7 @@ type TCPDialer interface {
 func NewTCPDialer() TCPDialer { return tcpDialer{} }
 
 // NewTalliedTCPDialer is the real TCP-connect probe counting each connection
-// it opens on the node's tally (#1639): a connection, never a request.
+// it opens on the outpost's tally (#1639): a connection, never a request.
 func NewTalliedTCPDialer(tally *RequestTally) TCPDialer { return tcpDialer{tally: tally} }
 
 type tcpDialer struct{ tally *RequestTally }

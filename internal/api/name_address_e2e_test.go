@@ -43,7 +43,7 @@ func newNameAddressStack(t *testing.T) *nameAddressStack {
 	srv := httptest.NewServer(api.NewHandler(gw))
 	t.Cleanup(srv.Close)
 	s := &nameAddressStack{t: t, ctx: ctx, dsn: dsn, c: &apiClient{t: t, ctx: ctx, base: srv.URL}}
-	s.owner = principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
+	s.owner = userWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
 
 	s.c.do(s.owner, http.MethodPost, "/locations", map[string]any{"name": "campus", "location_type": "campus"}, http.StatusCreated)
 	s.c.do(s.owner, http.MethodPost, "/locations", map[string]any{"name": "room-a", "location_type": "room", "parent": "campus"}, http.StatusCreated)
@@ -126,8 +126,8 @@ func TestEndpointAddressAPI(t *testing.T) {
 func TestEndpointAddressAPIScope(t *testing.T) {
 	t.Parallel()
 	s := newNameAddressStack(t)
-	op := principalWithGrants(t, s.ctx, s.dsn, "op-a", []grant{{role: "operator", scopeKind: "component", scopeID: s.dispA}})
-	viewer := principalWithGrants(t, s.ctx, s.dsn, "viewer-a", []grant{{role: "viewer", scopeKind: "component", scopeID: s.dispA}})
+	op := userWithGrants(t, s.ctx, s.dsn, "op-a", []grant{{role: "operator", scopeKind: "component", scopeID: s.dispA}})
+	viewer := userWithGrants(t, s.ctx, s.dsn, "viewer-a", []grant{{role: "viewer", scopeKind: "component", scopeID: s.dispA}})
 
 	if got := s.idOf(s.c.do(op, http.MethodGet, refPath("/endpoints", "display-1/https", ""), nil, http.StatusOK)); got != s.httpsA {
 		t.Errorf("scoped GET display-1/https = %s, want room-a's %s", got, s.httpsA)
@@ -186,7 +186,7 @@ func TestSecretNameAPI(t *testing.T) {
 	}
 
 	roomA := entityID(t, s.c, s.owner, "/locations", "room-a")
-	op := principalWithGrants(t, s.ctx, s.dsn, "op-room-a", []grant{{role: "operator", scopeKind: "location", scopeID: roomA}})
+	op := userWithGrants(t, s.ctx, s.dsn, "op-room-a", []grant{{role: "operator", scopeKind: "location", scopeID: roomA}})
 	if got := s.idOf(s.c.do(op, http.MethodPatch, refPath("/secrets", "demo-panel-login", ""), rotate, http.StatusOK)); got != room {
 		t.Errorf("room-a operator's PATCH by name answered %s, want the room's %s", got, room)
 	}
@@ -197,22 +197,22 @@ func TestSecretNameAPI(t *testing.T) {
 }
 
 // TestGroupFileVariableGrantNamesAPI covers the rest of #1133's surface over
-// HTTP: a principal group and its members by name, a file by filename, a
+// HTTP: a user group and its members by name, a file by filename, a
 // variable by name, and a grant's scope root by dotted address.
 func TestGroupFileVariableGrantNamesAPI(t *testing.T) {
 	t.Parallel()
 	s := newNameAddressStack(t)
 
-	group := s.idOf(s.c.do(s.owner, http.MethodPost, "/principal-groups", map[string]any{"name": "night-shift"}, http.StatusCreated))
-	if got := s.idOf(s.c.do(s.owner, http.MethodGet, "/principal-groups/night-shift", nil, http.StatusOK)); got != group {
+	group := s.idOf(s.c.do(s.owner, http.MethodPost, "/user-groups", map[string]any{"name": "night-shift"}, http.StatusCreated))
+	if got := s.idOf(s.c.do(s.owner, http.MethodGet, "/user-groups/night-shift", nil, http.StatusOK)); got != group {
 		t.Errorf("GET group by name answered %s, want %s", got, group)
 	}
-	alice := s.idOf(s.c.do(s.owner, http.MethodPost, "/principals", map[string]any{"username": "alice", "password": "orange-boat-42x"}, http.StatusCreated))
-	s.c.do(s.owner, http.MethodPost, "/principal-groups/night-shift/members", map[string]any{"principal_id": "alice"}, http.StatusNoContent)
-	s.c.do(s.owner, http.MethodPost, "/principal-groups/night-shift/members", map[string]any{"principal_id": "owner-all"}, http.StatusNoContent)
-	s.c.do(s.owner, http.MethodDelete, "/principal-groups/night-shift/members/alice", nil, http.StatusNoContent)
-	msg := detail(t, s.c.do(s.owner, http.MethodGet, "/principal-groups/day-shift", nil, http.StatusNotFound))
-	if !strings.Contains(msg, `principal group "day-shift" not found`) {
+	alice := s.idOf(s.c.do(s.owner, http.MethodPost, "/users", map[string]any{"username": "alice", "password": "orange-boat-42x"}, http.StatusCreated))
+	s.c.do(s.owner, http.MethodPost, "/user-groups/night-shift/members", map[string]any{"user_id": "alice"}, http.StatusNoContent)
+	s.c.do(s.owner, http.MethodPost, "/user-groups/night-shift/members", map[string]any{"user_id": "owner-all"}, http.StatusNoContent)
+	s.c.do(s.owner, http.MethodDelete, "/user-groups/night-shift/members/alice", nil, http.StatusNoContent)
+	msg := detail(t, s.c.do(s.owner, http.MethodGet, "/user-groups/day-shift", nil, http.StatusNotFound))
+	if !strings.Contains(msg, `user group "day-shift" not found`) {
 		t.Errorf("unknown group refuses %q, want it named", msg)
 	}
 
@@ -244,34 +244,34 @@ func TestGroupFileVariableGrantNamesAPI(t *testing.T) {
 		ScopeID string `json:"scope_id"`
 	}
 	roomA := entityID(t, s.c, s.owner, "/locations", "room-a")
-	if err := json.Unmarshal(s.c.do(s.owner, http.MethodPost, "/principals/alice/grants",
+	if err := json.Unmarshal(s.c.do(s.owner, http.MethodPost, "/users/alice/grants",
 		map[string]any{"role": "viewer", "scope_kind": "location", "scope_id": "campus.room-a"}, http.StatusCreated), &gr); err != nil || gr.ScopeID != roomA {
 		t.Errorf("grant scoped to campus.room-a stored %q (err %v), want the room's uuid %s", gr.ScopeID, err, roomA)
 	}
 	_ = alice
 }
 
-// TestPrincipalNameNeedsTheDirectoryAPI pins #1133's security review, finding 1:
-// a principal route resolves a NAME only for a caller who may list the whole
-// principal directory (principal:read:admin on an all-scope grant), since that
+// TestUserNameNeedsTheDirectoryAPI pins #1133's security review, finding 1:
+// a user route resolves a NAME only for a caller who may list the whole
+// user directory (user:read:admin on an all-scope grant), since that
 // caller learns nothing from a name it could not already read. Anyone else gets
 // the gateway's own all-scope 403 for every name, existing or not, so a scoped
 // admin can probe neither usernames nor service names, and an ambiguous name's
 // uuids are listed only to a caller entitled to see them.
-func TestPrincipalNameNeedsTheDirectoryAPI(t *testing.T) {
+func TestUserNameNeedsTheDirectoryAPI(t *testing.T) {
 	t.Parallel()
 	s := newNameAddressStack(t)
-	alice := s.idOf(s.c.do(s.owner, http.MethodPost, "/principals", map[string]any{"username": "alice", "password": "orange-boat-42x"}, http.StatusCreated))
-	principalWithGrants(t, s.ctx, s.dsn, "deploy-bot", nil)
+	alice := s.idOf(s.c.do(s.owner, http.MethodPost, "/users", map[string]any{"username": "alice", "password": "orange-boat-42x"}, http.StatusCreated))
+	userWithGrants(t, s.ctx, s.dsn, "deploy-bot", nil)
 	roomA := entityID(t, s.c, s.owner, "/locations", "room-a")
-	siteAdmin := principalWithGrants(t, s.ctx, s.dsn, "site-admin", []grant{{role: "admin", scopeKind: "location", scopeID: roomA}})
+	siteAdmin := userWithGrants(t, s.ctx, s.dsn, "site-admin", []grant{{role: "admin", scopeKind: "location", scopeID: roomA}})
 
 	// A username may be 32 hex digits, which a lenient uuid parser reads as a
 	// uuid without hyphens; it is a name all the same, refused like any other.
-	s.c.do(s.owner, http.MethodPost, "/principals", map[string]any{"username": "0123456789abcdef0123456789abcdef", "password": "orange-boat-42x"}, http.StatusCreated)
+	s.c.do(s.owner, http.MethodPost, "/users", map[string]any{"username": "0123456789abcdef0123456789abcdef", "password": "orange-boat-42x"}, http.StatusCreated)
 	refusal := func(ref, verb, method string) string {
 		t.Helper()
-		return string(s.c.do(siteAdmin, method, "/principals/"+ref+verb, nil, http.StatusForbidden))
+		return string(s.c.do(siteAdmin, method, "/users/"+ref+verb, nil, http.StatusForbidden))
 	}
 	want := refusal("nobody", "", http.MethodGet)
 	if got := refusal("fedcba9876543210fedcba9876543210", "", http.MethodGet); got != want {
@@ -279,21 +279,21 @@ func TestPrincipalNameNeedsTheDirectoryAPI(t *testing.T) {
 	}
 	for _, ref := range []string{"alice", "deploy-bot", "0123456789abcdef0123456789abcdef"} {
 		if got := refusal(ref, "", http.MethodGet); got != want {
-			t.Errorf("a scoped admin's GET /principals/%s = %s, want the same refusal as a name that does not exist (%s)", ref, got, want)
+			t.Errorf("a scoped admin's GET /users/%s = %s, want the same refusal as a name that does not exist (%s)", ref, got, want)
 		}
 		if got := refusal(ref, ":disable", http.MethodPost); got != refusal("nobody", ":disable", http.MethodPost) {
 			t.Errorf("a scoped admin's disable of %s refused differently from a name that does not exist: %s", ref, got)
 		}
 	}
 
-	if got := s.idOf(s.c.do(s.owner, http.MethodGet, "/principals/deploy-bot", nil, http.StatusOK)); got == "" {
-		t.Errorf("the owner's GET by a service account's name answered no id")
+	if got := s.idOf(s.c.do(s.owner, http.MethodGet, "/users/deploy-bot", nil, http.StatusOK)); got == "" {
+		t.Errorf("the owner's GET by a machine user's name answered no id")
 	}
-	shared := principalWithGrants(t, s.ctx, s.dsn, "alice", nil)
+	shared := userWithGrants(t, s.ctx, s.dsn, "alice", nil)
 	_ = shared
-	msg := detail(t, s.c.do(s.owner, http.MethodGet, "/principals/alice", nil, http.StatusNotFound))
-	if !strings.Contains(msg, `principal "alice" not found`) || !strings.Contains(msg, alice) {
-		t.Errorf("the owner's GET of a name both a human and a service carry = %q, want it named with both uuids", msg)
+	msg := detail(t, s.c.do(s.owner, http.MethodGet, "/users/alice", nil, http.StatusNotFound))
+	if !strings.Contains(msg, `user "alice" not found`) || !strings.Contains(msg, alice) {
+		t.Errorf("the owner's GET of a name both a person and a machine user carry = %q, want it named with both uuids", msg)
 	}
 	if strings.Contains(refusal("alice", "", http.MethodGet), alice) {
 		t.Errorf("a scoped admin's refusal leaked alice's uuid")

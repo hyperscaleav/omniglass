@@ -12,7 +12,7 @@ import (
 // The websocket transport (#1034, slice 4 of #1113): a held session whose
 // messages are text frames. A request is a frame, a line verbatim or a JSON
 // body rendered injection-safe; its reply is the frame carrying back an id
-// the node mints into a declared field, whatever pushes interleave; and the
+// the outpost mints into a declared field, whatever pushes interleave; and the
 // upgrade rides the session's scheme or login.
 
 func wsCatalog() fakeCatalog {

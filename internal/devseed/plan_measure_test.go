@@ -172,9 +172,9 @@ func corporatePlan(t testing.TB, size int) *scenario.Plan {
 	return p
 }
 
-// TestPlanWorklistMeasure is the measurement behind a site node's first
+// TestPlanWorklistMeasure is the measurement behind a site outpost's first
 // worklist pull (#1571): the corporate plan seeded as the scale lab seeds it,
-// then each site node's worklist read, with the statements it issued. A probe,
+// then each site outpost's worklist read, with the statements it issued. A probe,
 // not a gate: set PLAN_MEASURE to the sizes (e.g. 1000) to run it.
 func TestPlanWorklistMeasure(t *testing.T) {
 	// Serial: a timing probe.
@@ -196,11 +196,11 @@ func TestPlanWorklistMeasure(t *testing.T) {
 			t.Cleanup(gw.Close)
 			all := scope.Set{All: true}
 			for _, site := range p.Sites {
-				if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: scenario.SiteNode(site.Name), Label: site.Name}, all, all); err != nil {
+				if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: scenario.SiteOutpost(site.Name), Label: site.Name}, all, all); err != nil {
 					t.Fatal(err)
 				}
 			}
-			if _, err := devseed.SeedPlan(ctx, gw, "", p, devseed.PlanOptions{Endpoints: true, NodeFor: scenario.SiteNode}); err != nil {
+			if _, err := devseed.SeedPlan(ctx, gw, "", p, devseed.PlanOptions{Endpoints: true, OutpostFor: scenario.SiteOutpost}); err != nil {
 				t.Fatal(err)
 			}
 			tm = newStmtTimer()
@@ -212,7 +212,7 @@ func TestPlanWorklistMeasure(t *testing.T) {
 			for _, site := range p.Sites {
 				before := tm.total
 				start := time.Now()
-				wl, err := gw2.NodeWorklist(ctx, scenario.SiteNode(site.Name))
+				wl, err := gw2.OutpostWorklist(ctx, scenario.SiteOutpost(site.Name))
 				if err != nil {
 					t.Fatal(err)
 				}

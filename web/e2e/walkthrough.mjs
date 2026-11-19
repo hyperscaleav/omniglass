@@ -341,7 +341,7 @@ async function play(page, base, step, total, cursor, phase) {
   }
   await overlay(page, 'ripple', to);
   if (step.kind === 'click') {
-    await el.click({ timeout: ACT_TIMEOUT });
+    await el.click({ timeout: ACT_TIMEOUT, modifiers: step.modifiers });
   } else if (step.kind === 'type') {
     await el.click({ timeout: ACT_TIMEOUT });
     // Step off the field so the text being typed stays in view.

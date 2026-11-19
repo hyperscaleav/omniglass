@@ -84,5 +84,5 @@ demo:
 - [ ] **Demo** tagged (`demo: <id>`) and its clip in the body from `run:demo`: a terminal demo for CLI or API behavior, a walkthrough for a console flow (or `demo: none (<reason>)`)
 - [ ] Docs ship in this PR (or a one-line justification on the Docs line); status build-progress noted
 - [ ] Operator-facing surface teaches its concept (learning-tool), if applicable
-- [ ] `make gen` clean; no em dashes; no AI attribution
+- [ ] `make gen` clean; no em dashes
 - [ ] Linked to a feature issue under an epic

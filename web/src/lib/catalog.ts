@@ -22,14 +22,14 @@ import { type BladeLock } from "./blades";
 
 // The Catalog group table: the single source of truth for the catalog area's
 // IA. The CatalogShell subrail renders it as navigation (one link per entry,
-// each opening the registry's own routed page in the shell's pane) and the
+// each opening the catalog's own routed page in the shell's pane) and the
 // /catalog Overview renders it as section cards, so membership, order, labels,
 // teaching copy, gates, and count sources can never drift between the two
 // surfaces. Each live entry carries the SAME query key and fetch its list page
 // uses, so a count on either surface and the page's own list are one cache
 // entry: navigating from a count refetches nothing.
 //
-// Deliberate absences: no Logs entry under Telemetry (no log_type registry
+// Deliberate absences: no Logs entry under Telemetry (no log_type catalog
 // exists), and no Secret types entry anywhere (the standing ruling: it holds
 // no nav slot; /secret-types stays routed and renders inside the shell's pane,
 // reachable by URL under its secret:read gate).
@@ -39,18 +39,18 @@ export type CatalogEntry = {
   // The canonical route this entry opens. A soon entry with a path links to
   // its routed stub page; a soon entry without one only reserves the slot.
   path?: string;
-  // Pending: the registry does not exist yet. Wears the rail's SOON treatment.
+  // Pending: the catalog does not exist yet. Wears the rail's SOON treatment.
   soon?: boolean;
-  // The pending registry's tracking issue, nav.ts's `issue` pattern: a routed
+  // The pending catalog's tracking issue, nav.ts's `issue` pattern: a routed
   // slot mirrors its nav.ts off-rail entry, whose stub page (SectionStub via
   // navByPath) shows the same number; a pathless slot carries it here only.
   issue?: number;
-  // The permission tokens reading this registry requires (the route guard's
+  // The permission tokens reading this catalog requires (the route guard's
   // vocabulary); absent means ungated. A caller failing the gate loses the
   // entry, and with it the entry's count query (never created).
   gate?: string[];
-  // The registry's shared list-query key and fetch, the exact pair its list
-  // page uses (one cache, one failure domain per registry).
+  // The catalog's shared list-query key and fetch, the exact pair its list
+  // page uses (one cache, one failure domain per catalog).
   key?: readonly string[];
   list?: () => Promise<readonly unknown[]>;
   // A slot that opens its page filtered (the Templates slots, #1329): the
@@ -110,7 +110,7 @@ export type CatalogGroup = {
 // left: Rules went live with the event rules (#921), notifications with #618,
 // and the three Templates slots with the template catalog (#1329, closing #615,
 // #616 and #617): each opens /templates filtered, and the Systems slot reaches
-// standard templates too, since a standard is the system-side blueprint a
+// standard templates too, since a standard is the system-side contract a
 // system template is built to. Group copy follows the direction axis: Telemetry is what you
 // receive, Actions is what you send or run.
 export const CATALOG_GROUPS: CatalogGroup[] = [
@@ -128,52 +128,52 @@ export const CATALOG_GROUPS: CatalogGroup[] = [
     copy: "What you send or run: commands (the instructions you issue, with a target and a settle window), rules (what opens an alarm, and when), calc rules (a value derived from others), severity (how bad that alarm is), notifications (what a message about an alarm says), action rules (when it is sent) and targets (where it goes).",
     entries: [
       { label: "Commands", path: "/command-types", gate: ["command_type", "read"], key: COMMAND_TYPES_KEY, list: listCommandTypes },
-      { label: "Rules", path: "/rules", gate: ["rule", "read"], key: EVENT_RULES_KEY, list: listEventRules },
-      // The calc rules (#999), each registry its own page beside the rules.
+      { label: "Event rules", path: "/event-rules", gate: ["rule", "read"], key: EVENT_RULES_KEY, list: listEventRules },
+      // The calc rules (#999), each catalog its own page beside the rules.
       { label: "Calc rules", path: "/calc-rules", gate: ["rule", "read"], key: CALC_RULES_KEY, list: listCalcRules },
       // The levels a rule raises at, beside the rules (#921).
-      { label: "Severity", path: "/severity-levels", gate: ["severity_level", "read"], key: severityLevelsKey, list: listSeverityLevels },
-      // The outbound message registry (#618), the commands' peer.
+      { label: "Severity levels", path: "/severity-levels", gate: ["severity_level", "read"], key: severityLevelsKey, list: listSeverityLevels },
+      // The outbound message catalog (#618), the commands' peer.
       { label: "Notifications", path: "/notifications", gate: ["notification_type", "read"], key: NOTIFICATION_TYPES_KEY, list: listNotificationTypes },
       // When a message is sent and where it goes (#1346), beside what it says.
       // Targets are admin-only, so the gate hides the slot from everyone else.
       { label: "Action rules", path: "/action-rules", gate: ["rule", "read"], key: ACTION_RULES_KEY, list: listActionRules },
-      { label: "Targets", path: "/notification-targets", gate: ["notification_target", "read"], key: NOTIFICATION_TARGETS_KEY, list: listNotificationTargets },
+      { label: "Notification targets", path: "/notification-targets", gate: ["notification_target", "read"], key: NOTIFICATION_TARGETS_KEY, list: listNotificationTargets },
     ],
   },
   {
     header: "Components",
-    copy: "A component points at a product (its shape), a product names its vendor, a driver is how we talk to it, and a component type is the device-class genus it is classified under.",
+    copy: "A component points at a product (its shape), a product names its vendor, a driver is how we talk to it, and a component type is the device-class type it is classified under.",
     entries: [
       { label: "Vendors", path: "/vendors", gate: ["vendor", "read"], key: VENDORS_KEY, list: listVendors },
       { label: "Products", path: "/products", gate: ["product", "read"], key: PRODUCTS_KEY, list: listProducts },
       { label: "Drivers", path: "/drivers", gate: ["driver", "read"], key: DRIVERS_KEY, list: listDrivers },
       // "Types": the Components header already says where it lives (mirrors
-      // Locations' own Types entry below). The device-class genus registry
-      // (ADR-0085): a product is classified under one of its nodes.
+      // Locations' own Types entry below). The device-class type catalog
+      // (ADR-0085): a product is classified under one of its types.
       { label: "Types", path: "/component-types", gate: ["component_type", "read"], key: COMPONENT_TYPES_KEY, list: listComponentTypes },
       templatesSlot(["component_template"]),
     ],
   },
   {
     header: "Systems",
-    copy: "A system type is the coarse kind of space a system is (a boardroom, a classroom, a video wall); a standard is the blueprint it conforms to, the properties every conforming system exposes.",
+    copy: "A system type is what a system is for (meeting, teaching, signage); a standard is the contract it is built to, the properties every conforming system exposes.",
     entries: [
       { label: "Standards", path: "/standards", gate: ["standard", "read"], key: STANDARDS_KEY, list: listStandards },
       // "Types": the Systems header already says where it lives (mirrors the
-      // Components and Locations groups). The coarse space taxonomy
-      // (ADR-0096): a system is classified as one of its nodes.
+      // Components and Locations groups). The system type taxonomy
+      // (ADR-0096): a system is classified as one of its types.
       { label: "Types", path: "/system-types", gate: ["system_type", "read"], key: SYSTEM_TYPES_KEY, list: listSystemTypes },
       templatesSlot(["standard_template", "system_template"]),
     ],
   },
   {
     header: "Locations",
-    copy: "A location type classifies a place, says where it may sit, and carries its contract. Campus, building, floor and room ship; any hierarchy of your own works the same way.",
+    copy: "A location type classifies a location, says where it may sit, and carries its contract. Campus, building, floor and room ship; any hierarchy of your own works the same way.",
     entries: [
       // "Types": the Locations header already says where it lives.
       { label: "Types", path: "/location-types", gate: ["location_type", "read"], key: LOCATION_TYPES_KEY, list: listLocationTypes },
-      templatesSlot(["place_template"]),
+      templatesSlot(["location_template"]),
     ],
   },
   {
@@ -183,12 +183,12 @@ export const CATALOG_GROUPS: CatalogGroup[] = [
   },
 ];
 
-// The registries' shared official-row sentence, formerly each blade's in-body
+// The catalogs' shared official-row sentence, formerly each blade's in-body
 // banner, now the lock reason on the greyed Edit / Delete pair. Operator copy
 // says official, never seed: the seeding mechanics are not operator vocabulary.
 export const OFFICIAL_LOCK = "Official: ships with Omniglass and updates with it.";
 
-// The ROOT-STEM rule, in the words the two tree registries' create forms say it
+// The ROOT-STEM rule, in the words the two tree catalogs' create forms say it
 // with. It is one rule (`ErrRootComponentTypeNeedsStem` and
 // `ErrRootSystemTypeNeedsStem` refuse the same thing on their own tier: a root
 // has no ancestor to take a stem from), and it was written twice, so one copy
@@ -200,15 +200,15 @@ export const OFFICIAL_LOCK = "Official: ships with Omniglass and updates with it
 // system's are different facts.
 export const ROOT_STEM_HINT = "Leave blank to inherit the parent's; required on a root.";
 
-// The PARENT picker's sentence on both tree registries, for the same reason:
+// The PARENT picker's sentence on both tree catalogs, for the same reason:
 // placement is chosen once (neither gateway has a reparent leg) and choosing
 // root is what makes the stem above mandatory, so the two statements have to
 // agree and are therefore written once.
 export const TYPE_PARENT_HINT =
-  "Where this type grafts in the tree. Root creates a new top-level genus and then needs a stem of its own; the gateway has no reparent leg, so choose carefully.";
+  "Where this type grafts in the tree. Root creates a new top-level type and then needs a stem of its own; the gateway has no reparent leg, so choose carefully.";
 
-// registryLock is the catalog blades' one read-only verdict: the value the
-// edit slot's `locked` binding carries, one voice on every registry page. An
+// catalogLock is the catalog blades' one read-only verdict: the value the
+// edit slot's `locked` binding carries, one voice on every catalog page. An
 // official row wears the OFFICIAL_LOCK string for everyone, owner included:
 // both buttons greyed with the one sentence. A custom row locks per verb: each
 // side of the footer pair greys only when the caller lacks THAT side's
@@ -220,15 +220,15 @@ export const TYPE_PARENT_HINT =
 // resolved locks nothing; a row with no official flag (a tag) is judged on
 // the permission arm alone.
 //
-// `forkable` is the opt-in for a registry that has adopted the fork (#655,
+// `forkable` is the opt-in for a catalog that has adopted the fork (#655,
 // ADR-0095): an edit there does not write the shipped row, it stores the
 // operator's version over it, so Edit is live on a shipped row and judged on
 // the update permission like any other. Delete stays locked with the official
 // sentence, because a shipped row still cannot be deleted (restoring, which
 // discards the operator's version, is the footer's destructive action
-// instead). Default false: the registries that have not adopted yet keep the
+// instead). Default false: the catalogs that have not adopted yet keep the
 // flat read-only verdict, which is still the truth for them.
-export function registryLock(
+export function catalogLock(
   row: { official?: boolean; forked?: boolean } | undefined,
   me: Me | null | undefined,
   resource: string,
@@ -248,10 +248,10 @@ export function registryLock(
   return edit == null && del == null ? null : { edit, delete: del };
 }
 
-// registryOrigin is the three-state provenance a fork-adopting registry shows:
+// catalogOrigin is the three-state provenance a fork-adopting catalog shows:
 // a row this release ships, a row the operator made, or a shipped row the
 // operator has overridden. Two booleans on the wire, one word on the page.
-export function registryOrigin(row: { official?: boolean; forked?: boolean }): "shipped" | "yours" | "overridden" {
+export function catalogOrigin(row: { official?: boolean; forked?: boolean }): "shipped" | "yours" | "overridden" {
   if (!row.official) return "yours";
   return row.forked ? "overridden" : "shipped";
 }
@@ -280,7 +280,7 @@ export const CATALOG_STUB_PATHS: string[] = CATALOG_GROUPS.flatMap((g) =>
   g.entries.filter((e) => e.soon && e.path).map((e) => e.path!),
 );
 
-// InheritedFacts is what the type registries' LISTING serves beside the raw
+// InheritedFacts is what the type catalogs' LISTING serves beside the raw
 // fields (#716's console half, extending #695's `resolved_icon`): for each fact
 // a row can inherit, the value it would take if it stated none, and the name of
 // the ancestor that value comes from.
@@ -326,7 +326,7 @@ export function inheritedFact(row: InheritedFacts | undefined, fact: "stem" | "i
 }
 
 // pickInheritedFacts copies the served pairs off a wire row, the one place the
-// six field names are spelled for both registries' data layers.
+// six field names are spelled for both catalogs' data layers.
 export function pickInheritedFacts(t: InheritedFacts): InheritedFacts {
   return {
     inherited_stem: t.inherited_stem,

@@ -1,6 +1,6 @@
 // Package sandbox is the one template engine an operator-authored string is
 // rendered through (#682, lifted into its own package by #618): a label rule
-// and a notification template are both a Go text/template compiled once and
+// and a notification's subject and text are each a Go text/template compiled once and
 // executed over a closed map of strings, and both callers get the same sandbox
 // rather than a second one that could drift from it.
 //

@@ -49,7 +49,7 @@ func (f *healthFixture) healthSeries(t *testing.T, ctx context.Context, ownerKin
 func (f *healthFixture) assertTransitionOnly(t *testing.T, ctx context.Context) {
 	t.Helper()
 	type row struct{ owner, kind, value string }
-	// The three fleet arcs store ids and the node arc still stores a name, so the
+	// The three fleet arcs store ids and the outpost arc still stores a name, so the
 	// owner resolves back to a NAME here: the invariant groups by owner, and a
 	// failure message naming the entity is worth more than one printing a uuid.
 	rows, err := f.conn.Query(ctx, `
@@ -58,7 +58,7 @@ func (f *healthFixture) assertTransitionOnly(t *testing.T, ctx context.Context) 
 		left join component c on c.id = sd.component_id
 		left join system    s on s.id = sd.system_id
 		left join location  l on l.id = sd.location_id
-		left join node      n on n.principal_id = sd.node_id
+		left join outpost      n on n.user_id = sd.outpost_id
 		where sd.property_type_id = (select id from property_type where name = 'health')
 		order by owner, sd.id asc`)
 	if err != nil {
@@ -92,7 +92,7 @@ func (f *healthFixture) assertTransitionOnly(t *testing.T, ctx context.Context) 
 // meeting-room standard (room-mic wants microphone and speaker at quorum 2,
 // main-display wants a flat panel at quorum 1), three components, then the
 // assignments one at a time. Only two verdicts ever occur (degraded from the
-// moment it exists, healthy once both roles are staffed), so the record must hold
+// moment it exists, healthy once both slots are staffed), so the record must hold
 // exactly two rows. The live run held three, the middle one a duplicate degraded.
 func TestHealthRecordsOneRowPerChange(t *testing.T) {
 	t.Parallel()
@@ -106,7 +106,7 @@ func TestHealthRecordsOneRowPerChange(t *testing.T) {
 		t.Fatalf("create system: %v", err)
 	}
 	if got := f.healthSeries(t, ctx, "system", "hq-boardroom"); !sameSeq(got, []string{"incomplete"}) {
-		t.Fatalf("after create = %v, want the one opening incomplete (every role unstaffed, a commissioning gap)", got)
+		t.Fatalf("after create = %v, want the one opening incomplete (every slot unstaffed, a commissioning gap)", got)
 	}
 
 	bar := f.bar.Name
@@ -124,22 +124,22 @@ func TestHealthRecordsOneRowPerChange(t *testing.T) {
 		}
 	}
 
-	// The verdict after each assignment, from the roles themselves (#802: the
-	// seeded meeting-room ships the four-role chain): each staffing step short
-	// of the last leaves some role empty, and only the scheduling panel makes
+	// The verdict after each assignment, from the slots themselves (#802: the
+	// seeded meeting-room ships the four-slot chain): each staffing step short
+	// of the last leaves some slot empty, and only the scheduling panel makes
 	// the system whole.
-	steps := []struct{ role, component, want string }{
+	steps := []struct{ slot, component, want string }{
 		{"video-bar", "bar-a", "incomplete"},
 		{"main-display", "panel-a", "incomplete"},
 		{"touch-control", "touch-a", "incomplete"},
 		{"scheduling-panel", "sched-a", "healthy"},
 	}
 	for _, s := range steps {
-		if err := f.gw.AssignRole(ctx, "", "hq-boardroom", s.role, s.component, f.all, f.all, f.all, f.all); err != nil {
-			t.Fatalf("assign %s to %s: %v", s.component, s.role, err)
+		if err := f.gw.AssignSlot(ctx, "", "hq-boardroom", s.slot, s.component, f.all, f.all, f.all, f.all); err != nil {
+			t.Fatalf("assign %s to %s: %v", s.component, s.slot, err)
 		}
 		if _, v := f.recorded(t, ctx, "system", "hq-boardroom"); v != s.want {
-			t.Errorf("after assigning %s to %s the record says %q, want %q", s.component, s.role, v, s.want)
+			t.Errorf("after assigning %s to %s the record says %q, want %q", s.component, s.slot, v, s.want)
 		}
 	}
 
@@ -151,10 +151,10 @@ func TestHealthRecordsOneRowPerChange(t *testing.T) {
 }
 
 // TestUnbuiltAlternateDoesNotImpair is the choice-bearing fixture the
-// recompute-and-compare invariant needs (#626): before splitHealthRoles
-// existed, every role of every alternate folded as an ordinary role, so an
+// recompute-and-compare invariant needs (#626): before splitHealthSlots
+// existed, every slot of every alternate folded as an ordinary slot, so an
 // all-in-one room with a satisfied video-bar still read outage over its
-// component-system alternate's five unstaffed, unbuilt roles. This is the
+// component-system alternate's five unstaffed, unbuilt slots. This is the
 // RED that caught it, and it stays as the standing regression guard: the
 // no-DB-logic rule leaves this file's recompute-and-compare as the only
 // invariant a future change to the fold has to survive, and it catches
@@ -165,7 +165,7 @@ func TestUnbuiltAlternateDoesNotImpair(t *testing.T) {
 	ctx := context.Background()
 
 	std := "choice-huddle"
-	alts := plantChoice(t, ctx, f.gw, std, storage.RoleChoiceSpec{
+	alts := plantChoice(t, ctx, f.gw, std, storage.SlotChoiceSpec{
 		Name: "conferencing", Label: "Conferencing",
 		Alternates: []storage.AlternateSpec{
 			{Name: "all-in-one", Label: "All-in-one"},
@@ -173,22 +173,22 @@ func TestUnbuiltAlternateDoesNotImpair(t *testing.T) {
 		},
 	})
 
-	// All-in-one: one role, a video bar.
-	if _, err := f.gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
+	// All-in-one: one slot, a video bar.
+	if _, err := f.gw.SetSystemSlot(ctx, "", "standard", std, storage.SystemSlotSpec{
 		Name: "conf-bar", Label: "Conferencing Bar", Quorum: 1, Impact: "outage",
 		AcceptedTypes: []string{"video-bar"}, AlternateID: strp(alts["all-in-one"]),
 	}); err != nil {
-		t.Fatalf("declare all-in-one role: %v", err)
+		t.Fatalf("declare all-in-one slot: %v", err)
 	}
-	// Component-system: five roles, none of them ever staffed in this test,
+	// Component-system: five slots, none of them ever staffed in this test,
 	// the same shape the memo's worked example carries (codec, camera, dsp,
 	// amp, mic).
 	for _, name := range []string{"conf-codec", "conf-camera", "conf-dsp", "conf-amp", "conf-mic"} {
-		if _, err := f.gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
+		if _, err := f.gw.SetSystemSlot(ctx, "", "standard", std, storage.SystemSlotSpec{
 			Name: name, Label: name, Quorum: 1, Impact: "outage",
 			AlternateID: strp(alts["component-system"]),
 		}); err != nil {
-			t.Fatalf("declare component-system role %s: %v", name, err)
+			t.Fatalf("declare component-system slot %s: %v", name, err)
 		}
 	}
 
@@ -200,19 +200,19 @@ func TestUnbuiltAlternateDoesNotImpair(t *testing.T) {
 	}
 	// Before anything is staffed, both alternates are at zero: the choice
 	// contributes through its best-satisfied (tied, so position-1) alternate,
-	// whose unstaffed roles are a commissioning gap (#631), not their impact.
+	// whose unstaffed slots are a commissioning gap (#631), not their impact.
 	f.mustAgreeWithRecord(t, ctx, "choice-room", "incomplete")
 
 	bar := f.bar.Name
 	if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "choice-bar-1", ProductName: &bar}, f.all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if err := f.gw.AssignRole(ctx, "", "choice-room", "conf-bar", "choice-bar-1", f.all, f.all, f.all, f.all); err != nil {
+	if err := f.gw.AssignSlot(ctx, "", "choice-room", "conf-bar", "choice-bar-1", f.all, f.all, f.all, f.all); err != nil {
 		t.Fatalf("assign: %v", err)
 	}
 
 	// The all-in-one alternate is now fully satisfied. The five unbuilt
-	// component-system roles must not read as impairments of a system that
+	// component-system slots must not read as impairments of a system that
 	// chose the other way: this is the #626 defect the fold exists to close.
 	f.mustAgreeWithRecord(t, ctx, "choice-room", "healthy")
 	f.assertTransitionOnly(t, ctx)
@@ -221,9 +221,9 @@ func TestUnbuiltAlternateDoesNotImpair(t *testing.T) {
 // TestAlternateTieBreaksByPosition is the fix-round regression for the
 // fourth important finding: nothing at the storage tier pinned that
 // choice_alternate.position is what decides a tie, as opposed to whatever
-// order Go's map iteration inside splitHealthRoles happens to produce.
+// order Go's map iteration inside splitHealthSlots happens to produce.
 // internal/health.Choice.Active's tie-break is deterministic (position 1
-// wins, checked with strict >), but splitHealthRoles builds its Alternates
+// wins, checked with strict >), but splitHealthSlots builds its Alternates
 // slice from a map, so the ONLY thing making that determinism reach a live
 // read is the explicit sort.Slice by position; deleting it leaves the whole
 // suite green until a real tie is reached. Both alternates here are 0 of 1
@@ -241,22 +241,22 @@ func TestAlternateTieBreaksByPosition(t *testing.T) {
 	ctx := context.Background()
 
 	std := "tie-break-huddle"
-	alts := plantChoice(t, ctx, f.gw, std, storage.RoleChoiceSpec{
+	alts := plantChoice(t, ctx, f.gw, std, storage.SlotChoiceSpec{
 		Name: "conferencing", Label: "Conferencing",
 		Alternates: []storage.AlternateSpec{
 			{Name: "b-alt", Label: "B Alt"}, // position 1: must win the tie
 			{Name: "a-alt", Label: "A Alt"}, // position 2: sorts first alphabetically, must NOT win
 		},
 	})
-	if _, err := f.gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
-		Name: "b-role", Label: "B Role", Quorum: 1, Impact: "degraded", AlternateID: strp(alts["b-alt"]),
+	if _, err := f.gw.SetSystemSlot(ctx, "", "standard", std, storage.SystemSlotSpec{
+		Name: "b-slot", Label: "B Slot", Quorum: 1, Impact: "degraded", AlternateID: strp(alts["b-alt"]),
 	}); err != nil {
-		t.Fatalf("declare b-role: %v", err)
+		t.Fatalf("declare b-slot: %v", err)
 	}
-	if _, err := f.gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
-		Name: "a-role", Label: "A Role", Quorum: 1, Impact: "outage", AlternateID: strp(alts["a-alt"]),
+	if _, err := f.gw.SetSystemSlot(ctx, "", "standard", std, storage.SystemSlotSpec{
+		Name: "a-slot", Label: "A Slot", Quorum: 1, Impact: "outage", AlternateID: strp(alts["a-alt"]),
 	}); err != nil {
-		t.Fatalf("declare a-role: %v", err)
+		t.Fatalf("declare a-slot: %v", err)
 	}
 
 	room := "hq-r1"
@@ -266,16 +266,16 @@ func TestAlternateTieBreaksByPosition(t *testing.T) {
 		t.Fatalf("create system: %v", err)
 	}
 
-	// Neither role is ever staffed: both alternates sit at fraction 0,
+	// Neither slot is ever staffed: both alternates sit at fraction 0,
 	// tied. Position 1 (b-alt) must win, not position 2 (a-alt), and it must
 	// stay that way across repeated reads: a removed sort would make this
 	// flip depending on Go's map iteration, which varies from call to call,
 	// not just from process to process.
 	//
 	// The verdict no longer reveals the winner: an active alternate's
-	// unstaffed role contributes incomplete (#631) whatever its impact, so
+	// unstaffed slot contributes incomplete (#631) whatever its impact, so
 	// both outcomes read the same string. The winner is asserted from the
-	// roles' OWN active flags instead, which is the tie-break decision
+	// slots' OWN active flags instead, which is the tie-break decision
 	// stated directly rather than through its verdict.
 	for i := 0; i < 8; i++ {
 		rep, err := f.gw.SystemHealth(ctx, "tie-room", 0, f.all)
@@ -283,15 +283,15 @@ func TestAlternateTieBreaksByPosition(t *testing.T) {
 			t.Fatalf("system health read %d: %v", i, err)
 		}
 		if rep.Verdict != "incomplete" {
-			t.Fatalf("read %d: verdict = %q, want incomplete (the winning alternate's unstaffed role is a gap, not its impact)",
+			t.Fatalf("read %d: verdict = %q, want incomplete (the winning alternate's unstaffed slot is a gap, not its impact)",
 				i, rep.Verdict)
 		}
 		active := map[string]bool{}
-		for _, r := range rep.Roles {
+		for _, r := range rep.Slots {
 			active[r.Name] = r.Active
 		}
-		if !active["b-role"] || active["a-role"] {
-			t.Fatalf("read %d: active = %v, want b-role active and a-role not (position-1 b-alt must win the tie)",
+		if !active["b-slot"] || active["a-slot"] {
+			t.Fatalf("read %d: active = %v, want b-slot active and a-slot not (position-1 b-alt must win the tie)",
 				i, active)
 		}
 	}
@@ -300,9 +300,9 @@ func TestAlternateTieBreaksByPosition(t *testing.T) {
 
 // TestHealthRecordsEveryRealChange is the mirror of the duplicate: a verdict that
 // really moves must always land a row. The two failure modes share a mechanism, a
-// recorded value that does not match what the roles say, so they are asserted
+// recorded value that does not match what the slots say, so they are asserted
 // against each other here: after every write the recorded verdict and the one the
-// report computes from the live roles must be the same string.
+// report computes from the live slots must be the same string.
 func TestHealthRecordsEveryRealChange(t *testing.T) {
 	t.Parallel()
 	f := newHealthFixture(t)
@@ -328,11 +328,11 @@ func TestHealthRecordsEveryRealChange(t *testing.T) {
 			t.Fatalf("create component %s: %v", c.name, err)
 		}
 	}
-	for _, s := range []struct{ role, component string }{
+	for _, s := range []struct{ slot, component string }{
 		{"video-bar", "bar-a"}, {"main-display", "panel-a"}, {"touch-control", "touch-a"}, {"scheduling-panel", "sched-a"},
 	} {
-		if err := f.gw.AssignRole(ctx, "", "hq-boardroom", s.role, s.component, f.all, f.all, f.all, f.all); err != nil {
-			t.Fatalf("assign %s to %s: %v", s.component, s.role, err)
+		if err := f.gw.AssignSlot(ctx, "", "hq-boardroom", s.slot, s.component, f.all, f.all, f.all, f.all); err != nil {
+			t.Fatalf("assign %s to %s: %v", s.component, s.slot, err)
 		}
 	}
 	f.mustAgreeWithRecord(t, ctx, "hq-boardroom", "healthy")
@@ -368,9 +368,9 @@ func TestHealthRecordsEveryRealChange(t *testing.T) {
 const concurrentRooms = 8
 
 // staffPair builds one room of the fleet the race proofs need: a system
-// conforming to a shared standard whose single role sits at quorum 2, staffed by
+// conforming to a shared standard whose single slot sits at quorum 2, staffed by
 // two room bars, so the system reads healthy and EITHER bar failing drops the
-// role below quorum. Two writes that move the same system are what the record has
+// slot below quorum. Two writes that move the same system are what the record has
 // to survive.
 func (f *healthFixture) staffPair(t *testing.T, ctx context.Context, standard, system string, components ...string) {
 	t.Helper()
@@ -388,7 +388,7 @@ func (f *healthFixture) staffPair(t *testing.T, ctx context.Context, standard, s
 		}, f.all, all, all, all); err != nil {
 			t.Fatalf("create component %s: %v", c, err)
 		}
-		if err := f.gw.AssignRole(ctx, "", system, "pair", c, f.all, f.all, f.all, f.all); err != nil {
+		if err := f.gw.AssignSlot(ctx, "", system, "pair", c, f.all, f.all, f.all, f.all); err != nil {
 			t.Fatalf("assign %s: %v", c, err)
 		}
 	}
@@ -403,10 +403,10 @@ func (f *healthFixture) pairStandard(t *testing.T, ctx context.Context, id strin
 	if err := f.gw.UpsertStandard(ctx, storage.Standard{Name: id, Label: "Pair"}); err != nil {
 		t.Fatalf("create standard: %v", err)
 	}
-	if _, err := f.gw.SetSystemRole(ctx, "", "standard", id, storage.SystemRoleSpec{
+	if _, err := f.gw.SetSystemSlot(ctx, "", "standard", id, storage.SystemSlotSpec{
 		Name: "pair", Label: "Pair", Quorum: 2, Impact: "degraded",
 	}); err != nil {
-		t.Fatalf("declare role: %v", err)
+		t.Fatalf("declare slot: %v", err)
 	}
 	return id
 }
@@ -461,7 +461,7 @@ func TestHealthConcurrentWritesRecordOneEdge(t *testing.T) {
 		f.staffPair(t, ctx, std, system, a, b)
 		rooms = append(rooms, system)
 		// Both alarms are critical and take their component down, so each on its
-		// own already drops the role below its quorum of 2: one transition per
+		// own already drops the slot below its quorum of 2: one transition per
 		// room, whichever lands first, and nothing left for the second to
 		// record.
 		for _, c := range []string{a, b} {
@@ -498,7 +498,7 @@ func TestHealthConcurrentWritesRecordOneEdge(t *testing.T) {
 // symptom, and the proof it is the same defect. When one write moves the system
 // and another moves it back at the same moment, the loser's verdict was computed
 // from a snapshot taken before the winner committed, so the record can settle on
-// a value the roles no longer support. Once it does, the next write that really
+// a value the slots no longer support. Once it does, the next write that really
 // changes the verdict finds the record already holding it and writes nothing: a
 // real transition, silently missing, exactly as observed.
 func TestHealthConcurrentOppositeWritesLeaveNoStaleRecord(t *testing.T) {
@@ -541,8 +541,8 @@ func TestHealthConcurrentOppositeWritesLeaveNoStaleRecord(t *testing.T) {
 	runTogether(t, writes...)
 
 	// Whatever order they landed in, every room now has exactly one alarmed bar, so
-	// its role is below quorum and the system is degraded. The record has to say so:
-	// a record that has drifted from the roles swallows the NEXT real transition.
+	// its slot is below quorum and the system is degraded. The record has to say so:
+	// a record that has drifted from the slots swallows the NEXT real transition.
 	for _, s := range rooms {
 		f.mustAgreeWithRecord(t, ctx, s, "degraded")
 	}
@@ -596,34 +596,34 @@ func TestHealthInvariantAcrossEveryTrigger(t *testing.T) {
 			return err
 		}},
 		{"restore it", func() error { return f.gw.ClearAlarm(ctx, "", "sweep-b", spareAlarm.ID) }},
-		{"unstaff the role", func() error {
-			return f.gw.UnassignRole(ctx, "", "sweep-sys", "pair", "sweep-b", f.all, f.all, f.all, f.all)
+		{"unstaff the slot", func() error {
+			return f.gw.UnassignSlot(ctx, "", "sweep-sys", "pair", "sweep-b", f.all, f.all, f.all, f.all)
 		}},
 		{"staff it again", func() error {
-			return f.gw.AssignRole(ctx, "", "sweep-sys", "pair", "sweep-b", f.all, f.all, f.all, f.all)
+			return f.gw.AssignSlot(ctx, "", "sweep-sys", "pair", "sweep-b", f.all, f.all, f.all, f.all)
 		}},
 		{"raise the quorum on the standard, moving every conforming system", func() error {
-			_, err := f.gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
+			_, err := f.gw.SetSystemSlot(ctx, "", "standard", std, storage.SystemSlotSpec{
 				Name: "pair", Label: "Pair", Quorum: 3, Impact: "outage"})
 			return err
 		}},
 		{"lower it back", func() error {
-			_, err := f.gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
+			_, err := f.gw.SetSystemSlot(ctx, "", "standard", std, storage.SystemSlotSpec{
 				Name: "pair", Label: "Pair", Quorum: 2, Impact: "degraded"})
 			return err
 		}},
-		{"declare a second role on the system itself", func() error {
-			_, err := f.gw.SetSystemRole(ctx, "", "system", "sweep-sys", storage.SystemRoleSpec{
+		{"declare a second slot on the system itself", func() error {
+			_, err := f.gw.SetSystemSlot(ctx, "", "system", "sweep-sys", storage.SystemSlotSpec{
 				Name: "screen", Label: "Screen", Quorum: 1,
 				AcceptedTypes: []string{"display"}, Impact: "outage"})
 			return err
 		}},
-		{"withdraw it", func() error { return f.gw.DeleteSystemRole(ctx, "", "system", "sweep-sys", "screen") }},
+		{"withdraw it", func() error { return f.gw.DeleteSystemSlot(ctx, "", "system", "sweep-sys", "screen") }},
 		{"relocate the system, which recomputes both ends", func() error {
 			_, err := f.gw.MoveSystem(ctx, "", "sweep-sys", storage.SystemMove{LocationName: &room2}, f.all, f.all, all)
 			return err
 		}},
-		{"convert it to a one-off, dropping the inherited role", func() error {
+		{"convert it to a one-off, dropping the inherited slot", func() error {
 			_, err := f.gw.UpdateSystem(ctx, "", "sweep-sys", storage.SystemPatch{StandardID: &empty}, f.all, f.all)
 			return err
 		}},
@@ -632,10 +632,10 @@ func TestHealthInvariantAcrossEveryTrigger(t *testing.T) {
 			return err
 		}},
 		// Becoming a one-off released the inherited staffing (ADR-0506), and
-		// classifying it again reactivates none of it, so the role is staffed anew.
-		{"staff the reclassified role again", func() error {
+		// classifying it again reactivates none of it, so the slot is staffed anew.
+		{"staff the reclassified slot again", func() error {
 			for _, c := range []string{"sweep-a", "sweep-b"} {
-				if err := f.gw.AssignRole(ctx, "", "sweep-sys", "pair", c, f.all, f.all, f.all, f.all); err != nil {
+				if err := f.gw.AssignSlot(ctx, "", "sweep-sys", "pair", c, f.all, f.all, f.all, f.all); err != nil {
 					return err
 				}
 			}
@@ -662,8 +662,8 @@ func TestHealthInvariantAcrossEveryTrigger(t *testing.T) {
 		f.assertTransitionOnly(t, ctx)
 	}
 
-	// The record still tracks the roles at the end of all that: the never-cleared
-	// second alarm still holds sweep-a down, so the role is one occupant short of
+	// The record still tracks the slots at the end of all that: the never-cleared
+	// second alarm still holds sweep-a down, so the slot is one occupant short of
 	// its quorum, and the system created at the end has nobody in it at all.
 	f.mustAgreeWithRecord(t, ctx, "sweep-sys", "degraded")
 	f.mustAgreeWithRecord(t, ctx, "sweep-sys-2", "incomplete")
@@ -714,7 +714,7 @@ func (f *healthFixture) mustAgreeWithRecord(t *testing.T, ctx context.Context, s
 		t.Fatalf("system health %s: %v", systemName, err)
 	}
 	if rep.Verdict != want {
-		t.Fatalf("reported verdict = %q, want %q (roles %+v)", rep.Verdict, want, rep.Roles)
+		t.Fatalf("reported verdict = %q, want %q (slots %+v)", rep.Verdict, want, rep.Slots)
 	}
 	_, recorded := f.recorded(t, ctx, "system", systemName)
 	if recorded != rep.Verdict {

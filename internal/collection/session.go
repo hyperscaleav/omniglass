@@ -15,10 +15,10 @@ import (
 // A session holds its connection (#816): a stateful transport keeps one
 // connection to an endpoint across ticks instead of dialing per poll. The
 // machine establishes it, lends it to polls while it is up, recovers it with a
-// jittered, bounded backoff when it drops, and tears it down when the node
+// jittered, bounded backoff when it drops, and tears it down when the outpost
 // stops wanting it. There is no session table: the machine's state is
 // surfaced as the session-state property per endpoint (the transitions only)
-// plus the node's own logs, which carry the reasons.
+// plus the outpost's own logs, which carry the reasons.
 
 // SignalSessionState is the property the session's transitions land under,
 // and SignalSessionReason the property their reasons land under (#1049).
@@ -60,7 +60,7 @@ const (
 )
 
 // SessionStates is every SessionState, in the order a session moves through
-// them: the instances a node's session-held-count reports (#1625).
+// them: the instances an outpost's session-held-count reports (#1625).
 var SessionStates = []SessionState{SessionEstablishing, SessionUp, SessionRecovering, SessionDown, SessionRejected}
 
 // The recovery bounds. A failed attempt waits SessionBackoff(attempt), an
@@ -121,7 +121,7 @@ type SessionTransition struct {
 	Reason string
 	At     time.Time
 	// Refusal is a rejected transition's terminal error (#1056 ruling), the
-	// class and text the node's gate holds.
+	// class and text the outpost's gate holds.
 	Refusal *TerminalError
 }
 
@@ -213,8 +213,8 @@ type SSHAuth struct {
 type HostKeyPin struct {
 	mu sync.Mutex
 	fp string
-	// learned marks a key this node trusted on first use, as against one the
-	// worklist delivered: only a learned key is the node's to carry and to
+	// learned marks a key this outpost trusted on first use, as against one the
+	// worklist delivered: only a learned key is the outpost's to carry and to
 	// republish when the worklist delivers none.
 	learned bool
 	// OnTrust hears a key the session trusted on first use, or the pinned
@@ -226,13 +226,13 @@ type HostKeyPin struct {
 // key offered).
 func NewHostKeyPin(fp string) *HostKeyPin { return &HostKeyPin{fp: fp} }
 
-// NewLearnedHostKeyPin pins fp, a key this node trusted on first use and
+// NewLearnedHostKeyPin pins fp, a key this outpost trusted on first use and
 // carries across a session's recycle while the server does not yet hold it.
 func NewLearnedHostKeyPin(fp string) *HostKeyPin { return &HostKeyPin{fp: fp, learned: fp != ""} }
 
-// Learned reports whether the pin is a key this node trusted on first use
+// Learned reports whether the pin is a key this outpost trusted on first use
 // rather than one the worklist delivered. A delivered pin the worklist stops
-// delivering was withdrawn by the server (ADR-0161): the node forgets it.
+// delivering was withdrawn by the server (ADR-0161): the outpost forgets it.
 func (p *HostKeyPin) Learned() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -264,7 +264,7 @@ func (p *HostKeyPin) Trust(fp string) {
 // an empty pin takes fp atomically, so two connections racing on first use
 // cannot each trust a different key. OnTrust hears the first use only; a
 // pin lost on its way to the server is republished by whoever holds it
-// (the node's session manager, while the worklist delivers no pin). pinned
+// (the outpost's session manager, while the worklist delivers no pin). pinned
 // is the pin after the call.
 func (p *HostKeyPin) Admit(fp string) (pinned string, ok bool) {
 	p.mu.Lock()
@@ -322,7 +322,7 @@ type SessionConfig struct {
 	// Arm holds the instantiation commands (a listener's subscribe
 	// conversation), sent in order on every connection before the session
 	// reads up: on establish and again on each recover. Plumbing, per the
-	// #603 ruling: OnArm reports each with its reply for the node's logs,
+	// #603 ruling: OnArm reports each with its reply for the outpost's logs,
 	// and nothing records a command row.
 	Arm   []string
 	OnArm func(line, reply string, err error)
@@ -350,7 +350,7 @@ type SessionConfig struct {
 	After func(time.Duration) <-chan time.Time
 	// Channel shapes the line channel each connection opens (ssh).
 	Channel ChannelOptions
-	// Rejected starts the session already rejected (a gate the node holds
+	// Rejected starts the session already rejected (a gate the outpost holds
 	// for this connection fingerprint, from before a restart): it dials
 	// nothing until its re-probe, if any.
 	Rejected *TerminalError
@@ -359,7 +359,7 @@ type SessionConfig struct {
 	// declares it over a dialer that cannot run one is a protocol refusal,
 	// never a plaintext connection.
 	TLS *TLSTrust
-	// Dials are the node's dial slots, shared by every session (#1636): the
+	// Dials are the outpost's dial slots, shared by every session (#1636): the
 	// session's first attempt takes one for its connect and auth step and
 	// gives it back after; a redial does not. Nil is unbounded.
 	Dials DialSlots
@@ -467,7 +467,7 @@ func (s *Session) State() (SessionState, string) {
 // established; the exchange itself then gets its whole timeout and the
 // caller's context, so a slow dial is never blamed on the device. With no
 // connection held otherwise, the exchange fails at once naming the state and
-// its reason: a down device must not stall the node's tick, and a poll never
+// its reason: a down device must not stall the outpost's tick, and a poll never
 // reconnects on its own (the session owns the connection). A down session
 // lends the connection it is proving, so an answer can prove it.
 func (s *Session) Exchange(ctx context.Context, line string, reply *driver.Reply, timeout time.Duration) (string, error) {
@@ -550,7 +550,7 @@ func (s *Session) terminalReply(answer string, err error, refusedCh chan *Termin
 
 // Close tears the session down: the machine stops, the held connection
 // closes, and later exchanges refuse. It waits for the machine to exit and
-// is idempotent. Teardown reports no transition: the node stopped wanting
+// is idempotent. Teardown reports no transition: the outpost stopped wanting
 // the session, which says nothing about the device.
 func (s *Session) Close() {
 	s.mu.Lock()
@@ -637,7 +637,7 @@ func (s *Session) lend(conn HeldConn, heard, pushed chan struct{}, refused chan 
 }
 
 // run is the machine's goroutine. The machine runs supervised: a panic in
-// it (its clock, a backoff) is a failed attempt, never the node's end, and
+// it (its clock, a backoff) is a failed attempt, never the outpost's end, and
 // the machine goes on (#1636).
 func (s *Session) run(ctx context.Context) {
 	defer close(s.done)
@@ -645,7 +645,7 @@ func (s *Session) run(ctx context.Context) {
 	if s.cfg.Rejected == nil {
 		s.transition(SessionEstablishing, "connecting to "+s.cfg.Target, nil)
 	} else {
-		// A gate held from before (a node restart): rejected at once, no dial.
+		// A gate held from before (an outpost restart): rejected at once, no dial.
 		s.firstDialDone()
 		if !m.reject(s.cfg.Rejected) {
 			return
@@ -1058,7 +1058,7 @@ func (s *Session) armConn(ctx context.Context, conn HeldConn) error {
 	return nil
 }
 
-// onArm reports one arm command to the node's hook, which is the node's:
+// onArm reports one arm command to the outpost's hook, which is the outpost's:
 // a panic in it is logged and the arm goes on.
 func (s *Session) onArm(line, reply string, err error) {
 	if s.cfg.OnArm != nil {
@@ -1076,7 +1076,7 @@ func (s *Session) arm(ctx context.Context, conn HeldConn) (err error) {
 }
 
 // dial makes one attempt's connection, a panic in it made the attempt's
-// error. The session's first dial (bounded) runs inside one of the node's
+// error. The session's first dial (bounded) runs inside one of the outpost's
 // dial slots, waiting for one first while the session reads establishing; a
 // redial never waits, so endpoints that blackhole their dials and hold a
 // slot a whole timeout each cannot queue a healthy session's recovery.

@@ -104,7 +104,7 @@ func TestOutletOnHoldsNothing(t *testing.T) {
 }
 
 // attachFerritePDUAPI attaches the shipped ferrite-pdu-api driver to a PDU on
-// the fixture's node, its login a basic-auth secret. A secret is sealed, so
+// the fixture's outpost, its login a basic-auth secret. A secret is sealed, so
 // this goes through a gateway holding a key; the fixture's own gateway reads
 // the command wire, which never carries the credential.
 func attachFerritePDUAPI(t *testing.T, f *depFixture, pdu string) {
@@ -123,11 +123,11 @@ func attachFerritePDUAPI(t *testing.T, f *depFixture, pdu string) {
 	}, all, true); err != nil {
 		t.Fatalf("create secret: %v", err)
 	}
-	drv, node := "ferrite-pdu-api", f.node
+	drv, outpost := "ferrite-pdu-api", f.outpost
 	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-		Driver: &drv, Component: &pdu, Node: &node,
+		Driver: &drv, Component: &pdu, Outpost: &outpost,
 		Inputs:     map[string]string{"host": "10.20.9.20", "login": login},
-		SecretRead: all, CanAdmin: true,
+		SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all); err != nil {
 		t.Fatalf("attach ferrite-pdu-api: %v", err)
 	}

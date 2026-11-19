@@ -16,12 +16,12 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
 
-// The worklist read (#1868) reads each node's worst pull loss reported in the
-// window, by node name: a node refused in one window reads 1 however its
-// other windows read, a node served throughout reads 0, a reading outside
-// the window counts for nothing, and a node with no reading in the window
+// The worklist read (#1868) reads each outpost's worst pull loss reported in the
+// window, by outpost name: an outpost refused in one window reads 1 however its
+// other windows read, an outpost served throughout reads 0, a reading outside
+// the window counts for nothing, and an outpost with no reading in the window
 // reads as unreported rather than dropping out.
-func TestIntegrationWorklistQueryReadsEachNodesWorstWindow(t *testing.T) {
+func TestIntegrationWorklistQueryReadsEachOutpostsWorstWindow(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	dsn := storagetest.NewDSN(t)
@@ -39,7 +39,7 @@ func TestIntegrationWorklistQueryReadsEachNodesWorstWindow(t *testing.T) {
 	all := scope.Set{All: true}
 	platform := map[string]string{}
 	for _, name := range []string{"edge-hq", "edge-a", "edge-b", "edge-c"} {
-		n, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: name}, all, all)
+		n, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: name}, all, all)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -125,7 +125,7 @@ func TestHTTPRefusals(t *testing.T) {
 		}, "format"},
 		{"retries on http", func(s *driver.Spec) { n := 1; s.Polls[0].Request.Retries = &n }, "retries"},
 		{"a reply shape on http", func(s *driver.Spec) { s.Polls[0].Request.Reply = &driver.Reply{Prefix: "x"} }, "reply"},
-		// The credential reaches a node only with a task: a credentialed
+		// The credential reaches an outpost only with a task: a credentialed
 		// driver with commands alone could never authenticate one.
 		{"credentialed commands with no poll", func(s *driver.Spec) { s.Polls = nil }, "poll"},
 	}
@@ -225,7 +225,7 @@ func TestHTTPSessionRefusals(t *testing.T) {
 }
 
 // A listener rides a held line session or udp's own socket; anywhere else
-// nothing runs it, so it refuses at write rather than deriving a task no node
+// nothing runs it, so it refuses at write rather than deriving a task no outpost
 // ever runs (#1115).
 func TestAListenerRefusesATransportThatCannotRunIt(t *testing.T) {
 	listener := driver.Listener{Name: "events", Match: driver.Match{Prefix: "x"},

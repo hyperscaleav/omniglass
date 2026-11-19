@@ -49,7 +49,7 @@ import {
 // the left. Every affordance is gated on the permission the server checks; a
 // reader gets the facts and no controls.
 //
-// Addressed by the component's uuid: the seeded fleet reuses names across places.
+// Addressed by the component's uuid: the seeded fleet reuses names across locations.
 export default function SimComponentDrawer(props: {
   id: string | null;
   onClose: () => void;
@@ -166,7 +166,7 @@ function ComponentBody(props: { id: string; onRemoved: () => void }): JSX.Elemen
 
   // The rail: Save and Repair for whoever may impair, Remove for whoever may
   // delete; a reader who may do neither gets no rail at all. Bound inside an
-  // effect so it follows the principal (an impersonation swaps it); each run's
+  // effect so it follows the user (an impersonation swaps it); each run's
   // binding clears itself when the next replaces it.
   const actions = useFormActions();
   createEffect(() => {
@@ -266,7 +266,7 @@ function StatusSection(props: {
         hint="Where the simulator serves this component and what has reached it. Hits count every connection and request it answered since the server started, collection's polls and your fired operations alike."
       />
       <div class={KV_GRID}>
-        <KVStacked label="Node" value={<span class="font-data">{props.sim.node}</span>} />
+        <KVStacked label="Outpost" value={<span class="font-data">{props.sim.outpost}</span>} />
         <KVStacked label="Address" value={<span class="font-data">{props.sim.address}</span>} />
         <KVStacked
           label="Status"
@@ -368,7 +368,7 @@ function ImpairmentSection(props: {
     <section class="flex flex-col gap-3" data-testid="sim-impairment">
       <Eyebrow
         label="Impairment"
-        hint="Break the component on purpose and watch monitoring notice. The simulator beside the node applies it on its next pull; Repair returns it to healthy."
+        hint="Break the component on purpose and watch monitoring notice. The simulator beside the outpost applies it on its next pull; Repair returns it to healthy."
         right={
           <span class={isImpaired(props.stored) ? "badge badge-sm badge-soft badge-warning" : "badge badge-sm badge-healthy"}>
             {isImpaired(props.stored) ? "impaired" : "healthy"}
@@ -378,7 +378,7 @@ function ImpairmentSection(props: {
       <Show when={!status().available}>
         <div role="status" class="alert alert-info alert-soft text-sm" data-testid="impairments-unavailable">
           <span>
-            Impairments do not apply on this node yet: {status().reason ?? "the simulator cannot apply impairments"}.
+            Impairments do not apply on this outpost yet: {status().reason ?? "the simulator cannot apply impairments"}.
           </span>
         </div>
       </Show>

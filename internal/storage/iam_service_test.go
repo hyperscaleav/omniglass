@@ -11,8 +11,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// A service principal the trusted lane keeps (#1370: the lab's simulated
-// pusher): ensuring it twice finds the same principal, and setting its token
+// A service user the trusted lane keeps (#1370: the lab's simulated
+// pusher): ensuring it twice finds the same user, and setting its token
 // replaces the one before, so each lab run's freshly minted token is the only
 // one that authenticates it. An unknown service is reported, not created.
 func TestAServiceKeepsOneTokenTheTrustedLaneSets(t *testing.T) {
@@ -24,18 +24,18 @@ func TestAServiceKeepsOneTokenTheTrustedLaneSets(t *testing.T) {
 	}
 	defer gw.Close()
 
-	id, err := gw.EnsureServicePrincipal(ctx, "", "sim-pusher")
+	id, err := gw.EnsureMachine(ctx, "", "sim-pusher")
 	if err != nil {
 		t.Fatal(err)
 	}
-	again, err := gw.EnsureServicePrincipal(ctx, "", "sim-pusher")
+	again, err := gw.EnsureMachine(ctx, "", "sim-pusher")
 	if err != nil || again != id {
-		t.Fatalf("ensuring it again = %q, %v; want the same principal %q", again, err, id)
+		t.Fatalf("ensuring it again = %q, %v; want the same user %q", again, err, id)
 	}
 
 	first, second := bytes.Repeat([]byte{1}, 32), bytes.Repeat([]byte{2}, 32)
 	for _, h := range [][]byte{first, second} {
-		ok, err := gw.SetServiceToken(ctx, "", "sim-pusher", h, "0a0b0c0d")
+		ok, err := gw.SetMachineToken(ctx, "", "sim-pusher", h, "0a0b0c0d")
 		if err != nil || !ok {
 			t.Fatalf("set token: %v, %v", ok, err)
 		}
@@ -44,10 +44,10 @@ func TestAServiceKeepsOneTokenTheTrustedLaneSets(t *testing.T) {
 		t.Fatalf("the replaced token authenticates: %v", err)
 	}
 	pr, err := gw.AuthenticateBearer(ctx, second)
-	if err != nil || pr.ID != id || pr.Kind != "service" || pr.Service == nil || pr.Service.Name != "sim-pusher" {
+	if err != nil || pr.ID != id || pr.Kind != "machine" || pr.Machine == nil || pr.Machine.Name != "sim-pusher" {
 		t.Fatalf("the current token = %+v, %v; want the service sim-pusher", pr, err)
 	}
-	if ok, err := gw.SetServiceToken(ctx, "", "nobody", first, "0a0b0c0d"); err != nil || ok {
+	if ok, err := gw.SetMachineToken(ctx, "", "nobody", first, "0a0b0c0d"); err != nil || ok {
 		t.Fatalf("a token for an unknown service: %v, %v; want false, nil", ok, err)
 	}
 }

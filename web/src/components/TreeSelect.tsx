@@ -11,7 +11,7 @@ import { flattenTree, type FlatOption, type TreeNode } from "../lib/treeselect";
 // which a native <select> could not do: its closed face is the selected option's
 // text, so any indent typed into the option leaked into the value. The reusable
 // parent picker for every tree entity (locations, systems, components, and the
-// type registries). value is the chosen node's value; the optional root option
+// type catalogs). value is the chosen node's value; the optional root option
 // carries the empty value.
 //
 // It does not use bindSelectValue (lib/selectvalue.ts, #772): that fixes a native

@@ -9,20 +9,20 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
 
-// The worklist read (#1868): each node reports, every report window, the
+// The worklist read (#1868): each outpost reports, every report window, the
 // share of its worklist pulls the bus refused, on its own platform
-// component. A refused pull leaves the node running its last worklist while
-// every delivery hop reads clean, so the read takes each node's worst window
-// and the gate fails any node above 0. The read starts from the node table,
-// so a node that reported nothing in the window reads as unreported, never
+// component. A refused pull leaves the outpost running its last worklist while
+// every delivery hop reads clean, so the read takes each outpost's worst window
+// and the gate fails any outpost above 0. The read starts from the outpost table,
+// so an outpost that reported nothing in the window reads as unreported, never
 // as absent.
 
-// WorklistQuery reads each node's worst worklist pull loss reported in
-// (from, to], one `node|ratio` a line, and `node|` for a node with no
+// WorklistQuery reads each outpost's worst worklist pull loss reported in
+// (from, to], one `outpost|ratio` a line, and `outpost|` for an outpost with no
 // observed reading in the window.
 func WorklistQuery(from, to time.Time) string {
 	return fmt.Sprintf(`select n.name || '|' || coalesce(w.loss::text, '')
-		from node n
+		from outpost n
 		left join (
 			select s.component_id, max(m.value) as loss
 			from metric m
@@ -36,8 +36,8 @@ func WorklistQuery(from, to time.Time) string {
 		writerclass.WorklistPullLossRatio, epoch(from), epoch(to))
 }
 
-// ParseWorklist reads what WorklistQuery writes: a ratio a reporting node,
-// and the nodes that reported nothing, in order.
+// ParseWorklist reads what WorklistQuery writes: a ratio a reporting outpost,
+// and the outposts that reported nothing, in order.
 func ParseWorklist(out string) (map[string]float64, []string, error) {
 	loss := map[string]float64{}
 	var unreported []string

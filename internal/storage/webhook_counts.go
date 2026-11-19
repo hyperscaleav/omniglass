@@ -26,12 +26,12 @@ type WebhookCount struct {
 
 // RecordWebhookCounts lands a window's webhook counts as the components'
 // metric series, observed. The process writes them (the webhook receiver, a
-// platform writer), so the gateway refuses the keys to a node and to a push:
+// platform writer), so the gateway refuses the keys to an outpost and to a push:
 // the server counts its own posts. An event or calc rule reads them as it
 // reads any metric.
 //
 // Each component's counts land in a transaction of their own, so a refusal
-// costs only its own rows, as the node lane drops an orphaned batch alone: a
+// costs only its own rows, as the outpost lane drops an orphaned batch alone: a
 // component deleted since its last post (a decommissioned device, a lab torn
 // down) is dropped, and every other component's window still lands. Any
 // other failure is returned, after the rest have been tried.
@@ -67,7 +67,7 @@ func (p *PG) RecordWebhookCounts(ctx context.Context, counts []WebhookCount) err
 
 // CollectionSettings is the effective collection namespace (#1369): the
 // platform's collection report window, which the webhook receiver reports
-// its counts over and a node reads off its worklist.
+// its counts over and an outpost reads off its worklist.
 func (p *PG) CollectionSettings(ctx context.Context) (settings.CollectionSettings, error) {
 	s, err := p.platformSettings(ctx, p.pool)
 	if err != nil {

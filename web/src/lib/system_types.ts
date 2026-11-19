@@ -1,12 +1,12 @@
 import { api } from "../api/client";
 import { pickInheritedFacts, type InheritedFacts } from "./catalog";
 
-// The system_type registry data layer: the coarse taxonomy of what kind of
-// space a system is (ADR-0096), a boardroom, a classroom, a video wall. It is
+// The system_type catalog data layer: the taxonomy of what a system is
+// for (ADR-0096, ADR-2034): meeting, teaching, signage. It is
 // the system-side counterpart of component_type and it is NOT the standard: the
-// type says what kind of space this is, the standard says which blueprint it is
-// built to, and one fleet can hold ten signage standards under one coarse
-// type. It nests by parent_id/parent name (av over room over board), and each
+// type says what this system is for, the standard says which contract it is
+// built to, and one fleet can hold ten signage standards under one
+// type. It nests by parent_id/parent name (av over collaboration over board), and each
 // identity fact (stem, abbrev, icon) inherits down the tree, overridable at any
 // node: empty on a child means "inherit the nearest ancestor's".
 
@@ -100,9 +100,9 @@ export async function deleteSystemType(id: string): Promise<void> {
 
 export type SystemTypeNode = SystemType & { children: SystemTypeNode[]; depth: number };
 
-// systemTypeTree groups the flat registry into a forest by parent_id, for the admin
+// systemTypeTree groups the flat catalog into a forest by parent_id, for the admin
 // page's rows and the classification picker's indented option list. It does
-// not sort: the registry is served in label order (#757), and grouping keeps
+// not sort: the catalog is served in label order (#757), and grouping keeps
 // the order each level was received in.
 export function systemTypeTree(types: SystemType[]): SystemTypeNode[] {
   const byId = new Map<string, SystemTypeNode>(types.map((t) => [t.id, { ...t, children: [], depth: 0 }] as const));

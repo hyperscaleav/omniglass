@@ -36,24 +36,24 @@ func TestAuditRowCarriesItsChannelAndClient(t *testing.T) {
 		t.Fatalf("bootstrap: %v", err)
 	}
 	root, _ := gw.AuthenticateBearer(ctx, zeros)
-	alice, err := gw.CreateHumanPrincipal(ctx, root.ID, storage.HumanSpec{Username: "alice"}, scope.Set{All: true})
+	alice, err := gw.CreatePerson(ctx, root.ID, storage.PersonSpec{Username: "alice"}, scope.Set{All: true})
 	if err != nil {
 		t.Fatalf("create alice: %v", err)
 	}
 
 	label := func(s string) *string { return &s }
-	if err := gw.UpdateHumanProfile(ctx, alice.ID, storage.HumanProfilePatch{Label: label("Direct")}); err != nil {
+	if err := gw.UpdatePersonProfile(ctx, alice.ID, storage.PersonProfilePatch{Label: label("Direct")}); err != nil {
 		t.Fatalf("direct edit: %v", err)
 	}
 	mcpCtx := storage.WithAuditChannel(ctx, storage.AuditChannelMCP, "claude-code/2.1.0")
-	if err := gw.UpdateHumanProfile(mcpCtx, alice.ID, storage.HumanProfilePatch{Label: label("Via MCP")}); err != nil {
+	if err := gw.UpdatePersonProfile(mcpCtx, alice.ID, storage.PersonProfilePatch{Label: label("Via MCP")}); err != nil {
 		t.Fatalf("mcp edit: %v", err)
 	}
 	if err := gw.WriteAuthEvent(mcpCtx, alice.ID, "login"); err != nil {
 		t.Fatalf("auth event: %v", err)
 	}
 
-	rows, err := gw.ListAuditLog(ctx, storage.AuditFilter{Resource: "principal", Verb: "update", Limit: 10})
+	rows, err := gw.ListAuditLog(ctx, storage.AuditFilter{Resource: "user", Verb: "update", Limit: 10})
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -96,6 +96,13 @@ func TestAuditRowCarriesItsChannelAndClient(t *testing.T) {
 	if _, err := conn.Exec(ctx, `insert into audit_log (verb, resource, channel) values ('create', 'probe', 'console')`); err == nil {
 		t.Error("an unknown channel was accepted, want the check to refuse it")
 	}
+	// Every channel the Go vocabulary names, which the API's filter offers, is
+	// one the check admits.
+	for _, c := range storage.AuditChannels {
+		if _, err := conn.Exec(ctx, `insert into audit_log (verb, resource, channel) values ('create', 'probe', $1)`, string(c)); err != nil {
+			t.Errorf("channel %q refused by the check: %v", c, err)
+		}
+	}
 }
 
 // The client is what an MCP client declared about itself, so it is held to a
@@ -118,7 +125,7 @@ func TestAuditClientIsSanitized(t *testing.T) {
 }
 
 // WriteAuthEventFor round-trips resource and resource_id: a login audit has
-// resource='auth' with no target, a revoke_session audit has resource='principal'
+// resource='auth' with no target, a revoke_session audit has resource='user'
 // and the target's id, and both record the actor. Skipped under -short.
 func TestWriteAuthEventForRoundsTripsResourceAttribution(t *testing.T) {
 	t.Parallel()
@@ -140,7 +147,7 @@ func TestWriteAuthEventForRoundsTripsResourceAttribution(t *testing.T) {
 		t.Fatalf("bootstrap: %v", err)
 	}
 	root, _ := gw.AuthenticateBearer(ctx, zeros)
-	alice, err := gw.CreateHumanPrincipal(ctx, root.ID, storage.HumanSpec{Username: "alice"}, scope.Set{All: true})
+	alice, err := gw.CreatePerson(ctx, root.ID, storage.PersonSpec{Username: "alice"}, scope.Set{All: true})
 	if err != nil {
 		t.Fatalf("create alice: %v", err)
 	}
@@ -150,7 +157,7 @@ func TestWriteAuthEventForRoundsTripsResourceAttribution(t *testing.T) {
 		t.Fatalf("write login: %v", err)
 	}
 	// WriteAuthEventFor can target a resource: an admin revokes alice's session.
-	if err := gw.WriteAuthEventFor(ctx, root.ID, "revoke_session", "principal", alice.ID); err != nil {
+	if err := gw.WriteAuthEventFor(ctx, root.ID, "revoke_session", "user", alice.ID); err != nil {
 		t.Fatalf("write revoke_session: %v", err)
 	}
 
@@ -179,7 +186,7 @@ func TestWriteAuthEventForRoundsTripsResourceAttribution(t *testing.T) {
 	if revokeRow == nil {
 		t.Fatal("no revoke_session audit event found")
 	}
-	if revokeRow.Resource != "principal" || revokeRow.ResourceID != alice.ID {
-		t.Errorf("revoke row = resource=%q resource_id=%q, want principal %q", revokeRow.Resource, revokeRow.ResourceID, alice.ID)
+	if revokeRow.Resource != "user" || revokeRow.ResourceID != alice.ID {
+		t.Errorf("revoke row = resource=%q resource_id=%q, want user %q", revokeRow.Resource, revokeRow.ResourceID, alice.ID)
 	}
 }

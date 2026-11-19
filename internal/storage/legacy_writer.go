@@ -16,13 +16,13 @@ import (
 
 // What was stored before the one-writer ruling (ADR-0161) is held to it where
 // it would act: a driver spec saved, or a task derived, before the emit
-// refusal never hands a node an emit the ruling refuses (the worklist strips
+// refusal never hands an outpost an emit the ruling refuses (the worklist strips
 // it, a re-derivation never bakes it), and the boot audit names every stored
 // declaration the ruling now refuses, so an operator can mend it.
 
-// emitAdmitted reports whether a driver's emit may name key: the node lane
+// emitAdmitted reports whether a driver's emit may name key: the outpost lane
 // carries a driver's emits for collected keys alone, never a reserved key (the
-// node's own probe keys, the platform's, a command's lifecycle event) or a
+// outpost's own probe keys, the platform's, a command's lifecycle event) or a
 // calc rule's output.
 func emitAdmitted(key string, calcOwned map[string]bool) bool {
 	return writerclass.Of(key, calcOwned[key]) == writerclass.Collected
@@ -30,7 +30,7 @@ func emitAdmitted(key string, calcOwned map[string]bool) bool {
 
 // rulingEmits drops from a baked task spec every emit the ruling refuses and
 // names what it dropped. Pure. The spec comes back byte for byte when nothing
-// is dropped, and when it does not parse (the node faults such a task itself).
+// is dropped, and when it does not parse (the outpost faults such a task itself).
 func rulingEmits(spec []byte, calcOwned map[string]bool) ([]byte, []string) {
 	fn, err := driver.ParseBaked(spec)
 	if err != nil {
@@ -75,10 +75,10 @@ func calcOwnedNames(ctx context.Context, q querier) (map[string]bool, error) {
 }
 
 // stripRefusedEmits holds every driver task on a worklist to the ruling
-// before the node sees it: an emit the ruling refuses is dropped (the task's
+// before the outpost sees it: an emit the ruling refuses is dropped (the task's
 // other emits ride on) and logged once per task and key for the process's
 // life, since the worklist is built on every pull.
-func (p *PG) stripRefusedEmits(ctx context.Context, node string, tasks []WorklistTask) error {
+func (p *PG) stripRefusedEmits(ctx context.Context, outpost string, tasks []WorklistTask) error {
 	var calcOwned map[string]bool
 	for i := range tasks {
 		if !driver.IsBaked(tasks[i].Spec) {
@@ -98,7 +98,7 @@ func (p *PG) stripRefusedEmits(ctx context.Context, node string, tasks []Worklis
 		for _, key := range dropped {
 			if _, logged := p.strippedEmits.LoadOrStore(tasks[i].ID+"\x00"+key, true); !logged {
 				slog.Warn("a stored driver task emits a key its writer class refuses; the worklist drops the emit",
-					"facility", "collection", "node", node, "task", tasks[i].ID, "emit", key)
+					"facility", "collection", "outpost", outpost, "task", tasks[i].ID, "emit", key)
 			}
 		}
 	}
@@ -119,11 +119,11 @@ type RulingViolation struct {
 
 // WriterRulingViolations audits the stored declarations against the ruling,
 // for the boot audit: every driver spec and derived task emitting a key the
-// node lane may not carry (a log line names no key, so none is audited; an
+// outpost lane may not carry (a log line names no key, so none is audited; an
 // event names its event type, which is), every contract line on a reserved key, every event
 // rule firing or clearing with an event type a rule may not write, every
 // command type targeting a key a command may not, and every endpoint left
-// pinning nothing because its node offers a key retired as a pin. Each is
+// pinning nothing because its outpost offers a key retired as a pin. Each is
 // already inert where it would act (the worklist strips the emit, the
 // effective reads lend the contract no default); this names them so an
 // operator can mend them. Ordered by where, then key.
@@ -210,7 +210,7 @@ func (p *PG) WriterRulingViolations(ctx context.Context) ([]RulingViolation, err
 			out = append(out, RulingViolation{Where: d.where, Key: d.key, Class: c})
 		}
 	}
-	// An endpoint whose node offers a key retired as a pin no :retry set,
+	// An endpoint whose outpost offers a key retired as a pin no :retry set,
 	// with no :retry pin declared: it pins nothing until an operator trusts
 	// a key (the pin read never takes that one from the series).
 	var pins []string
@@ -240,8 +240,8 @@ func (p *PG) WriterRulingViolations(ctx context.Context) ([]RulingViolation, err
 		return nil, fmt.Errorf("storage: audit the endpoints offering a retired pin: %w", err)
 	}
 	for _, n := range unpinned {
-		out = append(out, RulingViolation{Where: n.where + " (its node offers a key retired as a pin no :retry set; trust a key with :retry)",
-			Key: n.key, Class: writerclass.NodeProbe})
+		out = append(out, RulingViolation{Where: n.where + " (its outpost offers a key retired as a pin no :retry set; trust a key with :retry)",
+			Key: n.key, Class: writerclass.OutpostProbe})
 	}
 	slices.SortFunc(out, func(a, b RulingViolation) int {
 		if c := strings.Compare(a.Where, b.Where); c != 0 {
@@ -253,10 +253,10 @@ func (p *PG) WriterRulingViolations(ctx context.Context) ([]RulingViolation, err
 }
 
 // HealRetiredSeries re-judges, at boot, every enabled event rule's series a
-// retirement took rows from (ADR-1100): a condition (and the alarm with it) a
+// retirement took rows from (ADR-1100): a firing (and the alarm with it) a
 // retired row raised would otherwise stand, since nothing re-reads a series
-// that lost rows rather than gained them. A series left with no sample lets
-// its condition go; one with samples is judged against its newest, as the
+// that lost rows rather than gained them. A series left with no sample clears
+// its firing; one with samples is judged against its newest, as the
 // reconcile pass judges a drifted series. It runs once over what was retired
 // (a retired row it covered is marked healed), and a series that already
 // agrees changes nothing. It reports how many series it judged.

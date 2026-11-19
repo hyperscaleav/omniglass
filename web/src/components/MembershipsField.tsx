@@ -45,12 +45,12 @@ export default function MembershipsField(props: {
   // when it is outside that scope, so the control can show what is there rather
   // than a blank that reads as "none".
   const items = createMemo(() => {
-    const nodes = bindableSystemNodes(props.systems());
+    const outposts = bindableSystemNodes(props.systems());
     const cur = props.members().find((m) => m.primary);
-    if (cur?.system_id && !nodes.some((n) => n.id === cur.system_id)) {
-      nodes.push({ id: cur.system_id, value: cur.system_id, label: labelOf(cur) });
+    if (cur?.system_id && !outposts.some((n) => n.id === cur.system_id)) {
+      outposts.push({ id: cur.system_id, value: cur.system_id, label: labelOf(cur) });
     }
-    return nodes;
+    return outposts;
   });
   const others = () => props.members().filter((m) => !m.primary && !props.removed().has(m.system_id));
 

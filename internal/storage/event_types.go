@@ -15,7 +15,7 @@ import (
 
 // EventType is a registered occurrence key: the "happen" half of the telemetry
 // model, the twin of PropertyType (the "know" half). An event is a different shape
-// from a sample (an occurrence, not a value), so it gets its own registry.
+// from a sample (an occurrence, not a value), so it gets its own catalog.
 // PayloadSchema is an optional jsonb schema for the occurrence payload. Official
 // marks a seed-owned, read-only type. An event type is addressed by its name.
 type EventType struct {
@@ -27,7 +27,7 @@ type EventType struct {
 	Description   string
 	PayloadSchema []byte
 	Official      bool
-	// WriterClass is who may write this event (ADR-0161): node-probe for
+	// WriterClass is who may write this event (ADR-0161): outpost-probe for
 	// collection-failed, collected otherwise (no calc rule outputs an event).
 	// Resolved from the name, never stored.
 	WriterClass writerclass.Class `json:"-"`
@@ -119,7 +119,7 @@ func (p *PG) UpsertEventType(ctx context.Context, et EventType) error {
 }
 
 // ListEventTypes returns every registered event type (official and custom). No
-// scope.Set: the registry is fleet-wide reference data.
+// scope.Set: the catalog is fleet-wide reference data.
 func (p *PG) ListEventTypes(ctx context.Context) ([]EventType, error) {
 	rows, err := p.pool.Query(ctx, eventTypeListSQL)
 	if err != nil {
@@ -221,7 +221,7 @@ func (p *PG) CreateEventType(ctx context.Context, actorID string, spec EventType
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// Cross-registry uniqueness. The ingest registries (property_type, metric_type,
+	// Cross-catalog uniqueness. The ingest catalogs (property_type, metric_type,
 	// event_type) are separate tables with separate uniqueness, so nothing at the
 	// schema level stops a name landing in two of them, and such a name resolves to
 	// NOTHING at ingest (the snapshot refuses it rather than picking a winner).
@@ -231,7 +231,7 @@ func (p *PG) CreateEventType(ctx context.Context, actorID string, spec EventType
 	if err := tx.QueryRow(ctx,
 		`select exists (select 1 from property_type_in_effect() property_type where name = $1)
 		     or exists (select 1 from metric_type_in_effect() metric_type where name = $1)`, spec.Name).Scan(&clash); err != nil {
-		return nil, fmt.Errorf("storage: check registry clash for %q: %w", spec.Name, err)
+		return nil, fmt.Errorf("storage: check catalog clash for %q: %w", spec.Name, err)
 	}
 	if clash {
 		return nil, ErrEventTypeExists
@@ -275,7 +275,7 @@ func (p *PG) UpdateEventType(ctx context.Context, actorID, name string, patch Ev
 	if err := guardEventTypeMutable(ctx, tx, name); err != nil {
 		return nil, err
 	}
-	before, err := registryAuditImage(ctx, tx, "event_type", name)
+	before, err := catalogAuditImage(ctx, tx, "event_type", name)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrEventTypeNotFound
@@ -303,7 +303,7 @@ func (p *PG) UpdateEventType(ctx context.Context, actorID, name string, patch Ev
 		}
 		return nil, fmt.Errorf("storage: reload event type %q: %w", name, err)
 	}
-	after, err := registryAuditImage(ctx, tx, "event_type", name)
+	after, err := catalogAuditImage(ctx, tx, "event_type", name)
 	if err != nil {
 		return nil, fmt.Errorf("storage: audit image event_type %q: %w", name, err)
 	}
@@ -328,7 +328,7 @@ func (p *PG) DeleteEventType(ctx context.Context, actorID, name string) error {
 	if err := guardEventTypeMutable(ctx, tx, name); err != nil {
 		return err
 	}
-	before, err := registryAuditImage(ctx, tx, "event_type", name)
+	before, err := catalogAuditImage(ctx, tx, "event_type", name)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrEventTypeNotFound

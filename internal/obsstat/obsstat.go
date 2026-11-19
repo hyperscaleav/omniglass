@@ -1,5 +1,5 @@
 // Package obsstat holds the two summaries both ends of a request keep about
-// it (#1639): a latency histogram that merges across nodes by summing
+// it (#1639): a latency histogram that merges across outposts by summing
 // buckets, and an in-flight high-water ring a reader takes the max over for
 // its own window. Both are fixed-size arrays of atomics, so recording is a
 // few atomic operations and no allocation, and neither resets on read.
@@ -15,7 +15,7 @@ import (
 // microseconds, from 1 us to about 67 s, so a quantile read from it is
 // within one bucket width (an eighth of its power of two) of the truth, and
 // two histograms merge by summing buckets. A sketch that cannot be summed
-// across nodes (a t-digest) is refused for that reason.
+// across outposts (a t-digest) is refused for that reason.
 const (
 	latencySubBuckets = 8
 	latencyOctaves    = 26

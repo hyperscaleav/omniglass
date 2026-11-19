@@ -51,7 +51,7 @@ func (p *PG) setTypeRetention(ctx context.Context, actorID, table, name string, 
 		return fmt.Errorf("storage: begin set %s retention: %w", table, err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	before, err := registryAuditImage(ctx, tx, table, name)
+	before, err := catalogAuditImage(ctx, tx, table, name)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return notFound
 	} else if err != nil {
@@ -60,7 +60,7 @@ func (p *PG) setTypeRetention(ctx context.Context, actorID, table, name string, 
 	if _, err := tx.Exec(ctx, `update `+table+` set retention_days = $2 where id = $1`, auditImageID(before), days); err != nil {
 		return fmt.Errorf("storage: set %s %q retention: %w", table, name, err)
 	}
-	after, err := registryAuditImage(ctx, tx, table, name)
+	after, err := catalogAuditImage(ctx, tx, table, name)
 	if err != nil {
 		return fmt.Errorf("storage: audit image %s %q: %w", table, name, err)
 	}

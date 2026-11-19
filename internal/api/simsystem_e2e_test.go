@@ -23,20 +23,20 @@ import (
 
 type systemPlanBody struct {
 	Standard string `json:"standard"`
-	Roles    []struct {
-		Role    string `json:"role"`
+	Slots    []struct {
+		Slot    string `json:"slot"`
 		Product string `json:"product"`
 		Count   int    `json:"count"`
 		Missing int    `json:"missing"`
 		Reason  string `json:"reason"`
-	} `json:"roles"`
+	} `json:"slots"`
 	Components int `json:"components"`
 }
 
 // TestSimulatedSystemAPI drives adding a whole simulated system to a
-// standard: the plan previews each role staffed with a simulated product
+// standard: the plan previews each slot staffed with a simulated product
 // (or left short, saying why), and adding it creates the system and its
-// components, each at its own free address on the node, as one write.
+// components, each at its own free address on the outpost, as one write.
 // Adding needs simulation:update and the creates it makes.
 func TestSimulatedSystemAPI(t *testing.T) {
 	t.Parallel()
@@ -57,7 +57,7 @@ func TestSimulatedSystemAPI(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 	for _, n := range []string{"site-a", "site-b"} {
-		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: n}, all, all); err != nil {
+		if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: n}, all, all); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -78,16 +78,16 @@ func TestSimulatedSystemAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	var pid string
-	if err := conn.QueryRow(ctx, `insert into principal (kind) values ('service') returning id`).Scan(&pid); err != nil {
+	if err := conn.QueryRow(ctx, `insert into users (kind) values ('machine') returning id`).Scan(&pid); err != nil {
 		t.Fatal(err)
 	}
 	for _, q := range []struct {
 		sql  string
 		args []any
 	}{
-		{`insert into service (principal_id, name) values ($1, 'sim-builder')`, []any{pid}},
-		{`insert into credential (principal_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`, []any{pid, bhash, bprefix}},
-		{`insert into principal_grant (principal_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'sim-builder'), 'all', null)`, []any{pid}},
+		{`insert into machine (user_id, name) values ($1, 'sim-builder')`, []any{pid}},
+		{`insert into credential (user_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`, []any{pid, bhash, bprefix}},
+		{`insert into user_grant (user_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'sim-builder'), 'all', null)`, []any{pid}},
 	} {
 		if _, err := conn.Exec(ctx, q.sql, q.args...); err != nil {
 			t.Fatalf("%s: %v", q.sql, err)
@@ -99,9 +99,9 @@ func TestSimulatedSystemAPI(t *testing.T) {
 	// all-scope component:create, so the add is refused as a 403 naming
 	// the component tier, not a 500.
 	if _, err := conn.Exec(ctx, `insert into role (name, permissions) values
-		('sim-sys-all', '{"system:create","system:update","system:read","location:read","node:read","simulation:read"}'),
+		('sim-sys-all', '{"system:create","system:update","system:read","location:read","outpost:read","simulation:read"}'),
 		('sim-sys-loc', '{"component:create","component:update","endpoint:create","simulation:update"}'),
-		('sim-sys-noread', '{"simulation:update","system:create","system:update","component:create","component:update","endpoint:create","node:read"}')`); err != nil {
+		('sim-sys-noread', '{"simulation:update","system:create","system:update","component:create","component:update","endpoint:create","outpost:read"}')`); err != nil {
 		t.Fatal(err)
 	}
 	locTok, lhash, lprefix, err := auth.NewBearerToken()
@@ -109,17 +109,17 @@ func TestSimulatedSystemAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	var lpid string
-	if err := conn.QueryRow(ctx, `insert into principal (kind) values ('service') returning id`).Scan(&lpid); err != nil {
+	if err := conn.QueryRow(ctx, `insert into users (kind) values ('machine') returning id`).Scan(&lpid); err != nil {
 		t.Fatal(err)
 	}
 	for _, q := range []struct {
 		sql  string
 		args []any
 	}{
-		{`insert into service (principal_id, name) values ($1, 'sim-sys-loc')`, []any{lpid}},
-		{`insert into credential (principal_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`, []any{lpid, lhash, lprefix}},
-		{`insert into principal_grant (principal_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'sim-sys-all'), 'all', null)`, []any{lpid}},
-		{`insert into principal_grant (principal_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'sim-sys-loc'), 'location', (select id::text from location where name = 'loc-s'))`, []any{lpid}},
+		{`insert into machine (user_id, name) values ($1, 'sim-sys-loc')`, []any{lpid}},
+		{`insert into credential (user_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`, []any{lpid, lhash, lprefix}},
+		{`insert into user_grant (user_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'sim-sys-all'), 'all', null)`, []any{lpid}},
+		{`insert into user_grant (user_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'sim-sys-loc'), 'location', (select id::text from location where name = 'loc-s'))`, []any{lpid}},
 	} {
 		if _, err := conn.Exec(ctx, q.sql, q.args...); err != nil {
 			t.Fatalf("%s: %v", q.sql, err)
@@ -131,13 +131,13 @@ func TestSimulatedSystemAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	var npid string
-	if err := conn.QueryRow(ctx, `insert into principal (kind) values ('service') returning id`).Scan(&npid); err != nil {
+	if err := conn.QueryRow(ctx, `insert into users (kind) values ('machine') returning id`).Scan(&npid); err != nil {
 		t.Fatal(err)
 	}
 	for _, q := range []string{
-		`insert into service (principal_id, name) values ($1, 'sim-sys-noread')`,
-		`insert into credential (principal_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`,
-		`insert into principal_grant (principal_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'sim-sys-noread'), 'all', null)`,
+		`insert into machine (user_id, name) values ($1, 'sim-sys-noread')`,
+		`insert into credential (user_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`,
+		`insert into user_grant (user_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'sim-sys-noread'), 'all', null)`,
 	} {
 		args := []any{npid}
 		if strings.Contains(q, "credential") {
@@ -159,33 +159,33 @@ func TestSimulatedSystemAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The plan: every role of the standard, staffed with a product the
+	// The plan: every slot of the standard, staffed with a product the
 	// simulator serves, or short with a reason.
 	var plan systemPlanBody
 	if err := json.Unmarshal(c.do(viewer, http.MethodGet, "/simulation/standards/meeting-room:plan", nil, http.StatusOK), &plan); err != nil {
 		t.Fatal(err)
 	}
-	roles, err := gw.ListSystemRoles(ctx, "standard", "meeting-room")
+	slots, err := gw.ListSystemSlots(ctx, "standard", "meeting-room")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if plan.Standard != "meeting-room" || len(plan.Roles) != len(roles) {
-		t.Fatalf("plan = %+v, want every one of the standard's %d roles", plan, len(roles))
+	if plan.Standard != "meeting-room" || len(plan.Slots) != len(slots) {
+		t.Fatalf("plan = %+v, want every one of the standard's %d slots", plan, len(slots))
 	}
 	staffed, sum := 0, 0
-	for _, r := range plan.Roles {
+	for _, r := range plan.Slots {
 		sum += r.Count
 		if r.Count > 0 {
 			staffed++
 			if _, _, ok := store.ForProduct(r.Product); !ok {
-				t.Errorf("role %s staffed with %s, which nothing simulates", r.Role, r.Product)
+				t.Errorf("slot %s staffed with %s, which nothing simulates", r.Slot, r.Product)
 			}
 		} else if r.Reason == "" || r.Missing == 0 {
-			t.Errorf("role %s unstaffed with no reason: %+v", r.Role, r)
+			t.Errorf("slot %s unstaffed with no reason: %+v", r.Slot, r)
 		}
 	}
 	if staffed < 3 || plan.Components != sum {
-		t.Fatalf("plan staffs %d roles and %d components (says %d), want at least the bar, display and panel", staffed, sum, plan.Components)
+		t.Fatalf("plan staffs %d slots and %d components (says %d), want at least the bar, display and panel", staffed, sum, plan.Components)
 	}
 	c.do(viewer, http.MethodGet, "/simulation/standards/no-such-standard:plan", nil, http.StatusNotFound)
 
@@ -200,17 +200,17 @@ func TestSimulatedSystemAPI(t *testing.T) {
 		return n
 	}
 	before := componentsBefore()
-	c.do(viewer, http.MethodPost, "/nodes/site-a/simulation/systems", body, http.StatusForbidden)
-	out := c.do(builderTok, http.MethodPost, "/nodes/site-a/simulation/systems", body, http.StatusForbidden)
+	c.do(viewer, http.MethodPost, "/outposts/site-a/simulation/systems", body, http.StatusForbidden)
+	out := c.do(builderTok, http.MethodPost, "/outposts/site-a/simulation/systems", body, http.StatusForbidden)
 	if !strings.Contains(string(out), "system:create") {
 		t.Fatalf("a builder without system:create was refused with %s, want it to say so", out)
 	}
-	c.do(ownerTok, http.MethodPost, "/nodes/site-b/simulation/systems", body, http.StatusConflict)
-	c.do(locTok, http.MethodPost, "/nodes/site-a/simulation/systems", body, http.StatusForbidden)
-	// The add reads too: naming a place needs location:read. A builder
-	// missing it is refused up front, saying so, not told the place does
+	c.do(ownerTok, http.MethodPost, "/outposts/site-b/simulation/systems", body, http.StatusConflict)
+	c.do(locTok, http.MethodPost, "/outposts/site-a/simulation/systems", body, http.StatusForbidden)
+	// The add reads too: naming a location needs location:read. A builder
+	// missing it is refused up front, saying so, not told the location does
 	// not exist.
-	if out := c.do(noReadTok, http.MethodPost, "/nodes/site-a/simulation/systems", body, http.StatusForbidden); !strings.Contains(string(out), "location:read") {
+	if out := c.do(noReadTok, http.MethodPost, "/outposts/site-a/simulation/systems", body, http.StatusForbidden); !strings.Contains(string(out), "location:read") {
 		t.Fatalf("a builder without location:read was refused with %s, want it to say so", out)
 	}
 	if n := componentsBefore(); n != before {
@@ -222,16 +222,16 @@ func TestSimulatedSystemAPI(t *testing.T) {
 		SystemID   string `json:"system_id"`
 		Components []struct {
 			Component string `json:"component"`
-			Role      string `json:"role"`
+			Slot      string `json:"slot"`
 			Product   string `json:"product"`
 			Address   string `json:"address"`
 		} `json:"components"`
 		Unstaffed []struct {
-			Role   string `json:"role"`
+			Slot   string `json:"slot"`
 			Reason string `json:"reason"`
 		} `json:"unstaffed"`
 	}
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/nodes/site-a/simulation/systems", body, http.StatusCreated), &added); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/outposts/site-a/simulation/systems", body, http.StatusCreated), &added); err != nil {
 		t.Fatal(err)
 	}
 	if added.System == "" || added.SystemID == "" || len(added.Components) != plan.Components {
@@ -244,18 +244,18 @@ func TestSimulatedSystemAPI(t *testing.T) {
 		}
 		seen[comp.Address] = true
 	}
-	if len(added.Unstaffed) != len(plan.Roles)-staffed {
-		t.Fatalf("unstaffed = %+v, want the plan's short roles", added.Unstaffed)
+	if len(added.Unstaffed) != len(plan.Slots)-staffed {
+		t.Fatalf("unstaffed = %+v, want the plan's short slots", added.Unstaffed)
 	}
 	var assigned int
-	if err := conn.QueryRow(ctx, `select count(*) from system_role_assignment where system_id = (select id from system where name = $1)`, added.System).Scan(&assigned); err != nil {
+	if err := conn.QueryRow(ctx, `select count(*) from system_slot_assignment where system_id = (select id from system where name = $1)`, added.System).Scan(&assigned); err != nil {
 		t.Fatal(err)
 	}
 	if assigned != plan.Components {
-		t.Fatalf("%d role assignments, want %d", assigned, plan.Components)
+		t.Fatalf("%d slot assignments, want %d", assigned, plan.Components)
 	}
 	var view simulationBody
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/nodes/site-a/simulation", nil, http.StatusOK), &view); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/outposts/site-a/simulation", nil, http.StatusOK), &view); err != nil {
 		t.Fatal(err)
 	}
 	if len(view.Devices) != plan.Components {

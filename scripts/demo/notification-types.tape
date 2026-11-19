@@ -1,6 +1,6 @@
 # A notification type says what a message about an alarm says
 #
-# The two official notification types, read-only; an operator's own, whose template the sandbox
+# The two official notification types, read-only; an operator's own, whose subject and text the sandbox
 # refuses when it reaches for printf and keeps when it reads the alarm facts; and a preview that
 # renders it against a real alarm on a Kestrel bar in the depot, exactly as a delivery would carry
 # it, writing nothing (#618, #1319). No uuid is typed.
@@ -23,13 +23,13 @@ Type "clear"
 Enter
 Wait
 Show
-Type "# An operator's own type: the sandbox refuses printf when the template is written"
+Type "# An operator's own type: the sandbox refuses printf when the rule is written"
 Enter
 Wait
 Type `omniglass notification-type create --name page-oncall --subject '{{printf "%s" .Message}}' --text x 2>/dev/null | jq -r .detail || true`
 Enter
 Wait
-Type `omniglass notification-type create --name page-oncall --label 'Page on-call' --subject '{{.SeverityLabel | upper}} {{.Component}}{{if .Place}} at {{.Place}}{{end}}' --text '{{.Message}} since {{.RaisedAt}}' | jq -c '{name, official}'`
+Type `omniglass notification-type create --name page-oncall --label 'Page on-call' --subject '{{.SeverityLabel | upper}} {{.Component}}{{if .Location}} at {{.Location}}{{end}}' --text '{{.Message}} since {{.RaisedAt}}' | jq -c '{name, official}'`
 Enter
 Wait
 
@@ -53,7 +53,7 @@ Wait
 Type `omniglass notification-type preview page-oncall --component "$bar" | jq -c '{subject, text, transition}'`
 Enter
 Wait
-Type "# The facts a template may read, every one present"
+Type "# The facts a rule may read, every one present"
 Enter
 Wait
 Type `omniglass notification-type preview page-oncall --component "$bar" | jq -c '[.facts[] | .name]'`

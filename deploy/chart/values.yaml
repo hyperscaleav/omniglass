@@ -30,6 +30,28 @@ ingress:
   className: traefik
   host: ""
 
+# The encryption key every stored secret is sealed under. Lose it and every
+# secret in Postgres is unreadable, so it lives in a Kubernetes Secret, not in
+# the pod. existingSecret names an operator Secret holding the key (base64 of 32
+# bytes) under "encryption-key", and always wins. Otherwise, with generate on,
+# the chart creates <release>-encryption-key once, reuses its value on every
+# upgrade, and keeps it on uninstall (helm.sh/resource-policy: keep), so a
+# reinstall into the same namespace finds the same key. Back it up: NOTES.txt
+# prints the read-out command. With neither set the chart refuses to render.
+encryptionKey:
+  existingSecret: ""
+  generate: true
+
+# The server's data directory, /var/lib/omniglass: the embedded JetStream store
+# (telemetry the bus acknowledged and the worker has not yet landed) lives under
+# it. Enabled, it is a PersistentVolumeClaim kept on uninstall
+# (helm.sh/resource-policy: keep); disabled, an emptyDir that a pod restart
+# loses (disposable previews). storageClass empty uses the cluster default.
+persistence:
+  enabled: true
+  size: 1Gi
+  storageClass: ""
+
 # Owner auto-created by the bootstrap init container. Intended for previews;
 # disable for production, where identity is provisioned out of band. The minted
 # bearer token is printed once to the bootstrap container's logs.

@@ -72,8 +72,7 @@ func TestRetentionSamplesMapAPassToItsRows(t *testing.T) {
 			{Name: "metric_p20261027", From: time.Date(2026, 10, 27, 0, 0, 0, 0, time.UTC)},
 			{Name: "metric_p20261112", From: time.Date(2026, 11, 12, 0, 0, 0, 0, time.UTC)},
 		},
-		TableBytes:    map[string]int64{"metric": 81920, "metric_trend": 16384, "log_line": 8192},
-		DatabaseBytes: 9 << 20,
+		TableBytes: map[string]int64{"metric": 81920, "metric_trend": 16384, "log_line": 8192},
 	}
 	got := rowsByKey(t, retentionSamples("srv", rep, status, now), "srv", now)
 	want := map[string]float64{
@@ -99,7 +98,6 @@ func TestRetentionSamplesMapAPassToItsRows(t *testing.T) {
 		writerclass.TableBytes + "|metric":                       81920,
 		writerclass.TableBytes + "|metric_trend":                 16384,
 		writerclass.TableBytes + "|log_line":                     8192,
-		writerclass.DatabaseBytes + "|":                          9 << 20,
 	}
 	diffRows(t, got, want)
 }
@@ -144,8 +142,8 @@ func TestRetentionSamplesOmitWhatThePassDidNotDo(t *testing.T) {
 // name retentionLanes gives it, so a lane added later reports with no change.
 func TestRetentionSamplesKeyEveryLaneByItsName(t *testing.T) {
 	now := time.Date(2026, 11, 9, 0, 0, 0, 0, time.UTC)
-	lanes := []string{"metric/fan-speed", "property/power-state", "log_line/warn", "node_log/warn", "some_future_lane"}
-	rep := retentionReport{Deleted: map[string]int64{}, Behind: []string{"node_log/warn"}}
+	lanes := []string{"metric/fan-speed", "property/power-state", "log_line/warn", "outpost_log/warn", "some_future_lane"}
+	rep := retentionReport{Deleted: map[string]int64{}, Behind: []string{"outpost_log/warn"}}
 	for i, l := range lanes {
 		rep.Deleted[l] = int64(i + 1)
 	}
@@ -155,7 +153,7 @@ func TestRetentionSamplesKeyEveryLaneByItsName(t *testing.T) {
 			t.Errorf("deleted count for %s = %v (%v), want %d", l, v, ok, i+1)
 		}
 		behind := 0.0
-		if l == "node_log/warn" {
+		if l == "outpost_log/warn" {
 			behind = 1
 		}
 		if v, ok := got[writerclass.RetentionBehind+"|"+l]; !ok || v != behind {

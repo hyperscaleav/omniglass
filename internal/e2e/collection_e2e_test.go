@@ -19,8 +19,8 @@ import (
 
 // TestCollectionEndToEnd drives the reachability sample path with the REAL
 // binaries an operator runs: `omniglass server` (embedded NATS + the telemetry
-// ingest consumer) and `omniglass node` (a real tcp probe, a real protobuf Event
-// over JetStream). A node runs one probe against a live listener; the sample
+// ingest consumer) and `omniglass outpost` (a real tcp probe, a real protobuf Event
+// over JetStream). An outpost runs one probe against a live listener; the sample
 // must land in metric owned by the target component. This is the
 // user-facing entry-point tier: the run-mode wiring, not an in-process call.
 func TestCollectionEndToEnd(t *testing.T) {
@@ -41,7 +41,7 @@ func TestCollectionEndToEnd(t *testing.T) {
 
 	// Run the real server: it migrates, seeds (the tcp interface_type + sample
 	// types), and hosts the embedded bus, whose claim reply advertises the URL
-	// of the port the bus bound, so the node dials the right one.
+	// of the port the bus bound, so the outpost dials the right one.
 	server := startServer(t, binPath, "OMNIGLASS_DSN="+dsn).URL
 
 	// A live listener is the probe's open target.
@@ -61,7 +61,7 @@ func TestCollectionEndToEnd(t *testing.T) {
 	}()
 	target := ln.Addr().String()
 
-	// Provision the node, its enrollment token, the target component, and a tcp
+	// Provision the outpost, its enrollment token, the target component, and a tcp
 	// interface + task (interface/task have no API yet, so via SQL) against the
 	// same DB the server serves.
 	gw, err := storage.NewPG(ctx, dsn)
@@ -70,8 +70,8 @@ func TestCollectionEndToEnd(t *testing.T) {
 	}
 	defer gw.Close()
 	all := scope.Set{All: true}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "site-a"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "site-a"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	token := "e2e-enroll-token"
 	sum := sha256.Sum256([]byte(token))
@@ -85,7 +85,7 @@ func TestCollectionEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, node_name, params) values ('disp-1-tcp', 'tcp', (select id from component where name = 'disp-1'), (select principal_id from node where name = 'site-a'), $1::jsonb)`, `{"target":"`+target+`"}`); err != nil {
+	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values ('disp-1-tcp', 'tcp', (select id from component where name = 'disp-1'), (select user_id from outpost where name = 'site-a'), $1::jsonb)`, `{"target":"`+target+`"}`); err != nil {
 		t.Fatalf("insert interface: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, enabled) values ('t-a', 'poll', (select id from endpoint where name = 'disp-1-tcp'), true)`); err != nil {
@@ -93,11 +93,11 @@ func TestCollectionEndToEnd(t *testing.T) {
 	}
 	conn.Close(ctx)
 
-	// Run the real node binary once: claim, pull, probe the live listener, publish.
+	// Run the real outpost binary once: claim, pull, probe the live listener, publish.
 	out, code := runCLI(t, root, binPath, os.Environ())(
-		"node", "run", "--server", server, "--name", "site-a", "--token", token, "--once")
+		"outpost", "run", "--server", server, "--name", "site-a", "--token", token, "--once")
 	if code != 0 {
-		t.Fatalf("omniglass node exit %d:\n%s", code, out)
+		t.Fatalf("omniglass outpost exit %d:\n%s", code, out)
 	}
 
 	// The result is observable via the read path: tcp-open=open, component-owned,
@@ -115,7 +115,7 @@ func TestCollectionEndToEnd(t *testing.T) {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("tcp-open sample never landed for disp-1 after the node run")
+			t.Fatalf("tcp-open sample never landed for disp-1 after the outpost run")
 		}
 		time.Sleep(50 * time.Millisecond)
 	}

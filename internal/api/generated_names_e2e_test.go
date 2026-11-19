@@ -157,8 +157,8 @@ func TestLocationResetNameRefusesAPI(t *testing.T) {
 // TestLocationGeneratedNameAPI drives #687 over HTTP as an operator meets it: a
 // location of a positional type created with no name comes back named, the
 // second takes the next ordinal, :rename claims the pen and :resetName returns
-// it, and the type's own rule round-trips on the registry surface so a console
-// can show which kinds of place the platform names.
+// it, and the type's own rule round-trips on the catalog surface so a console
+// can show which kinds of location the platform names.
 //
 // The positional type is MINTED HERE, over the same wire, because no shipped
 // location type carries a name rule (ADR-0103, reversed for `floor`: a
@@ -244,7 +244,7 @@ func TestLocationGeneratedNameAPI(t *testing.T) {
 		t.Fatalf("resetName = %+v, want name=1 name_generated=true", reset)
 	}
 
-	// The registry surface carries the rule, so a console can tell which types
+	// The catalog surface carries the rule, so a console can tell which types
 	// name themselves, and a rule that cannot mint a legal name is refused
 	// where it is written rather than at some later create.
 	var types struct {

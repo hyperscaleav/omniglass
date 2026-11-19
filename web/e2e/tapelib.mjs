@@ -36,7 +36,10 @@
 //   pattern, which could match the command's own typed text) before the next
 //   Type or the end, so every command finishes on screen, and a failing one is
 //   caught (the prelude lists each command line that exits non-zero, and any
-//   such fails the demo); nothing rides after a Hide, Show or Wait on its line;
+//   such fails the demo); a command that asks its own question (a y/N) may be
+//   answered once a Wait+Screen or Wait+Line pattern that none of the text typed
+//   since the last prompt matches has shown the question, and still ends on a
+//   prompt Wait; nothing rides after a Hide, Show or Wait on its line;
 // - a `# demo-needs: <need>` comment line declares what the recorder must stage
 //   for the tape, and an unknown need is refused: docker-socket (the tape
 //   drives Docker itself) or database (a database of its own on the lab's
@@ -60,8 +63,8 @@
 //
 // Inside the terminal (web/e2e/tape/prelude.sh, sourced unseen first): the
 // lab's server and an owner token are in the CLI's env; the lab's container
-// logs are files under /stack/logs/ (server.log, and node.log, which carries
-// the node's in-process simulator too); and
+// logs are files under /stack/logs/ (server.log, and outpost.log, which carries
+// the outpost's in-process simulator too); and
 // demo_hush '<code>' runs code unseen, demo_until <seconds> '<code>' retries it
 // until it succeeds, each erasing its own command line, so a hidden block
 // leaves the screen as it found it.
@@ -120,6 +123,17 @@ export function holdTable(holdMs) {
   }
   return t;
 }
+
+// Whether a Wait's pattern matches `text`; one JavaScript cannot compile
+// counts as a match, so it proves nothing.
+/** @param {string} re @param {string} text */
+const matches = (re, text) => {
+  try {
+    return new RegExp(re).test(text);
+  } catch {
+    return true;
+  }
+};
 
 // A typed line that is a caption: bash runs nothing for it.
 /** @param {string} typed */
@@ -200,7 +214,7 @@ const RECORDERS = new Set(['Set', 'Output', 'Require', 'Source', 'Env', 'Screens
 // Typed text that reaches the pacing rule's hooks: the prompt variables, the
 // DEMO_ variables the recorder and the prelude set, the prelude's demo__ names,
 // the shell's history (the prelude reads each line's number from it to pace and
-// to check it, so a line history skips is neither), and, in a command's place
+// to check it, so a line history skips is neither), and, in a command's location
 // (behind env, command, builtin or a path, too), an exec or a trap (either
 // replaces what the prelude installed; an exec that only opens or closes a
 // file descriptor replaces nothing) or an interactive shell (it would run
@@ -275,6 +289,10 @@ export function parseTape(id, text, file) {
   let hidden = false;
   let hiddenAt = 0;
   let pendingEnter = 0;
+  // The text typed since the last prompt Wait, and whether a pattern it cannot
+  // match has appeared since: the running command is asking, so a Type answers.
+  let typedSince = '';
+  let answerable = false;
   let typedOnScreen = false;
   for (let i = head; i < lines.length; i++) {
     const n = i + 1;
@@ -295,7 +313,9 @@ export function parseTape(id, text, file) {
       if (!caption(/** @type {string} */ (s)) && HOOKS.test(/** @type {string} */ (s))) {
         fail(n, "types into the pacing rule's hooks (the prompt, its hold tables, the prelude's own names, the shell's history, a new shell or a trap); a tape's commands are paced, never the pacing");
       }
-      if (pendingEnter) fail(pendingEnter, 'the command entered here is not waited on (a Wait) before the next Type');
+      if (pendingEnter && !answerable) fail(pendingEnter, 'the command entered here is not waited on (a Wait) before the next Type');
+      answerable = false;
+      typedSince += s;
       if (!hidden) typedOnScreen = true;
     } else if (name === 'Enter') {
       if (rest !== '' && !/^\d+$/.test(rest)) fail(n, 'Enter takes an optional repeat count');
@@ -306,7 +326,13 @@ export function parseTape(id, text, file) {
       }
       // Only a wait for the prompt finishes a command: a pattern can match the
       // command's own typed text, and let the next step run before it ends.
-      if (name === 'Wait' && rest === '') pendingEnter = 0;
+      if (name === 'Wait' && rest === '') {
+        pendingEnter = 0;
+        typedSince = '';
+        answerable = false;
+      } else if (pendingEnter && rest !== '') {
+        answerable = !matches(rest.slice(1, -1), typedSince);
+      }
     } else if (name === 'Sleep') {
       fail(n, "Sleep is the pacing rule's: the prelude holds each command's output and each caption on screen (web/e2e/tape/pace.sh), so a tape adds no hold of its own");
     } else if (name === 'Hide' || name === 'Show') {

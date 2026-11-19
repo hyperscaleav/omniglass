@@ -52,7 +52,7 @@ func readProps(t *testing.T, c *apiClient, tok, path string) map[string]propRow 
 // naming the instance; a property only observed appears with want null and no
 // drift; a system's declared row and a property pushed on it carry the same
 // block; an out-of-scope
-// component is the non-disclosing 404, a principal without component:read is
+// component is the non-disclosing 404, a user without component:read is
 // refused, and the retired reconciliation route is gone. Skipped under -short.
 func TestPropertiesCarryReconciliationAPI(t *testing.T) {
 	t.Parallel()
@@ -80,13 +80,13 @@ func TestPropertiesCarryReconciliationAPI(t *testing.T) {
 		t.Fatalf("create component: %v", err)
 	}
 	// A declared value (want) and an observed value (is) that differ, and a
-	// key observed with nothing declared. The observations are the node lane's,
+	// key observed with nothing declared. The observations are the outpost lane's,
 	// stamped with the endpoint whose task collected them.
 	if _, err := gw.SetProperty(ctx, "", "component", "disp-1", "firmware-version", "", json.RawMessage(`"1.0.0"`), all, all); err != nil {
 		t.Fatalf("set declared: %v", err)
 	}
 	now := time.Now().UTC()
-	if err := gw.InsertPropertySamples(ctx, storage.NodeWriter("disp-1", "panel-ip"), []storage.PropertySampleWrite{
+	if err := gw.InsertPropertySamples(ctx, storage.OutpostWriter("disp-1", "panel-ip"), []storage.PropertySampleWrite{
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "firmware-version", Instance: "panel-ip", Value: "2.0.0", TS: now},
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "serial-number", Instance: "panel-ip", Value: "SN-42", TS: now},
 	}); err != nil {
@@ -144,7 +144,7 @@ func TestPropertiesCarryReconciliationAPI(t *testing.T) {
 	c.do(sysViewerTok, http.MethodGet, "/systems/huddle-2/properties", nil, http.StatusOK)
 
 	// A viewer scoped to a different component gets a non-disclosing 404 on
-	// disp-1 and reads its own component; a principal holding no component:read
+	// disp-1 and reads its own component; a user holding no component:read
 	// is refused outright.
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "other-1"}, all, all, all, all); err != nil {
 		t.Fatalf("create other component: %v", err)
@@ -156,7 +156,7 @@ func TestPropertiesCarryReconciliationAPI(t *testing.T) {
 	viewerTok := setupScopedViewer(t, ctx, dsn, "viewer-other", "viewer", "component", other.ID)
 	c.do(viewerTok, http.MethodGet, "/components/disp-1/properties", nil, http.StatusNotFound)
 	c.do(viewerTok, http.MethodGet, "/components/other-1/properties", nil, http.StatusOK)
-	limitedTok := setupLimitedPrincipal(t, ctx, dsn)
+	limitedTok := setupLimitedUser(t, ctx, dsn)
 	c.do(limitedTok, http.MethodGet, "/components/disp-1/properties", nil, http.StatusForbidden)
 
 	// The reconciliation route is retired: nothing answers it.

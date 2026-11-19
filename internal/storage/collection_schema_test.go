@@ -25,7 +25,7 @@ func TestCollectionSchema(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 
-	for _, table := range []string{"node", "endpoint", "task", "metric_type", "metric"} {
+	for _, table := range []string{"outpost", "endpoint", "task", "metric_type", "metric"} {
 		var exists bool
 		if err := conn.QueryRow(ctx, `select exists (select 1 from information_schema.tables where table_name = $1)`, table).Scan(&exists); err != nil {
 			t.Fatalf("probe %s: %v", table, err)

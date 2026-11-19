@@ -126,7 +126,7 @@ func TestRatiosNothingInReadsAbsent(t *testing.T) {
 }
 
 // Unhit endpoints read per protocol, over the components due on it; icmp reads
-// not observed by the sim; a restarted node reads its one entry, no ratio.
+// not observed by the sim; a restarted outpost reads its one entry, no ratio.
 func TestRatiosUnhitAndRestarted(t *testing.T) {
 	b := balanced()
 	b.Targets = append(b.Targets, PollTarget{ComponentID: "c-tls", Transport: "https", Interval: 2e9},
@@ -144,7 +144,7 @@ func TestRatiosUnhitAndRestarted(t *testing.T) {
 	}
 
 	b = balanced()
-	b.End.Node.BatchesAcknowledged = 2
+	b.End.Outpost.BatchesAcknowledged = 2
 	rs = Ratios(b)
 	if len(rs) != 1 || rs[0].Reading != ReadingRestarted || rs[0].Ratio != nil {
 		t.Fatalf("restarted = %+v, want one entry with no ratio", rs)

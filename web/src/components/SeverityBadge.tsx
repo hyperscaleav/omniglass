@@ -2,7 +2,7 @@ import type { JSX } from "solid-js";
 import { useSeverity } from "../lib/severity";
 
 // SeverityBadge is the console's one severity chip (#917). It takes a level NAME
-// as it rides an alarm and renders the registry's label in the registry's color,
+// as it rides an alarm and renders the catalog's label in the catalog's color,
 // with a hint that teaches what the level does to its component (an outage level
 // takes it out, any other degrades it). An unknown name, or any name while the
 // levels are still loading, renders as itself in the neutral chip.

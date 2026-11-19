@@ -46,7 +46,7 @@ and `kobalte` cover the reactivity and primitive mechanics.
 ## The proof pass (drive the real console)
 
 **Bring it up.** Full fidelity is `make lab`: Postgres, the server with the embedded build
-at `http://127.0.0.1:8080/web`, and a node collecting from the simulated fleet, boot seed
+at `http://127.0.0.1:8080/web`, and an outpost collecting from the simulated fleet, boot seed
 plus the dev fleet, login `dev`/`dev` (`make lab LAB_ARGS=--fresh` starts over from the
 seed). While iterating, keep the lab up and run `cd web && npm run dev` on :5173 (Vite
 proxies `/api` to the lab; no rebuild per change), but **PR captures come from the embedded build**,

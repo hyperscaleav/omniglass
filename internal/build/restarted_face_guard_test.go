@@ -19,7 +19,7 @@ import (
 // as a literal. The restart is a bind on the address and port it is told, so
 // another run on the host that serves the same literal address can be handed
 // that port in the gap (`bind: address already in use`), or its panel answers
-// this run's node (#1116). A test that restarts a face takes its address from
+// this run's outpost (#1116). A test that restarts a face takes its address from
 // simtest.ClaimLoopback, which holds it for the test's life.
 //
 // It reads the same files as TestNoTestUsesAReleasedPort, and what that guard

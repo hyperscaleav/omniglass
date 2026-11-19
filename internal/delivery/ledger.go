@@ -21,12 +21,12 @@ type Stamp struct {
 	Minted   time.Time
 	Resolved uint64
 	Kinds    Declared
-	// Loss is the node's account of what it dropped or lost, as of the mint
+	// Loss is the outpost's account of what it dropped or lost, as of the mint
 	// (#1692).
-	Loss NodeLoss
+	Loss OutpostLoss
 }
 
-// Ledger is a node boot's running count, held by the node's spool: the next
+// Ledger is an outpost boot's running count, held by the outpost's spool: the next
 // sequence and every kind's running offset. Not safe for concurrent use; the
 // spool calls it under its own lock, which is what makes seq and the offsets
 // dense in queue order.
@@ -70,7 +70,7 @@ func (l *Ledger) Mint(counts map[Kind]int, at time.Time, resolved uint64) Stamp 
 
 // Against compares what a batch's ledger declared with what the batch
 // decoded to, kind by kind: short is each kind it decoded fewer items of
-// (those items are missing), over each kind it decoded more of (a node
+// (those items are missing), over each kind it decoded more of (an outpost
 // that miscounted, warned but never counted as loss). Pure.
 func (d Declared) Against(decoded map[Kind]int) (short, over map[Kind]int) {
 	for _, k := range Kinds {

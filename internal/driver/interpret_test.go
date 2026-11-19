@@ -53,7 +53,7 @@ func TestInterpretSNMPScalars(t *testing.T) {
 
 func TestInterpretRegexCapture(t *testing.T) {
 	fn := &driver.BakedFunction{
-		Driver: "newtron-nvp", Function: "status",
+		Driver: "newtron-panel-nvp", Function: "status",
 		Emits: []driver.BakedEmit{
 			{Name: "video-input", Lane: "property", Extract: driver.Extract{Regex: `^INPUT (\S+)$`}},
 		},
@@ -147,7 +147,7 @@ func TestInterpretFaults(t *testing.T) {
 
 	t.Run("a regex that does not match is a fault", func(t *testing.T) {
 		fn := &driver.BakedFunction{
-			Driver: "newtron-nvp", Function: "status",
+			Driver: "newtron-panel-nvp", Function: "status",
 			Emits: []driver.BakedEmit{
 				{Name: "video-input", Lane: "property", Extract: driver.Extract{Regex: `^INPUT (\S+)$`}},
 			},

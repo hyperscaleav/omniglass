@@ -14,7 +14,7 @@
    "summary": "The label of the component type its product classifies it as; empty for a component with no product."
   },
   {
-   "name": "Place",
+   "name": "Location",
    "summary": "How the location the component sits at reads (its label, else its name); empty when it sits at none of its own."
   },
   {

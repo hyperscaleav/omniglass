@@ -69,8 +69,8 @@ func TestRolesViewAPI(t *testing.T) {
 		t.Fatalf("admin effective perms = %v, want audit:read:admin", admin.eff)
 	}
 	// admin still holds the broad management wildcards it enumerates.
-	if !slices.Contains(admin.eff, "principal:*") {
-		t.Fatalf("admin effective perms = %v, want principal:*", admin.eff)
+	if !slices.Contains(admin.eff, "user:*") {
+		t.Fatalf("admin effective perms = %v, want user:*", admin.eff)
 	}
 	viewer, ok := byID["viewer"]
 	if !ok || viewer.display != "Viewer" || !slices.Contains(viewer.eff, "*:read") {

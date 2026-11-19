@@ -8,13 +8,13 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/delivery"
 )
 
-// TermedBatch is a batch the server Termed whole (#1691): its id, the node
+// TermedBatch is a batch the server Termed whole (#1691): its id, the outpost
 // that sent it, the ledger it carried, and every item it declared under the
-// Term's cause. The ledger's node loss account (#1692) rides the receipt as
-// a landing's would, so the node hop reads what the node dropped before it.
+// Term's cause. The ledger's outpost loss account (#1692) rides the receipt as
+// a landing's would, so the outpost hop reads what the outpost dropped before it.
 type TermedBatch struct {
 	BatchID string
-	Node    string
+	Outpost string
 	Ledger  delivery.Stamp
 	Outcome delivery.Tally
 }
@@ -29,24 +29,24 @@ func (p *PG) RecordTermedBatch(ctx context.Context, b TermedBatch) error {
 	if err != nil {
 		return fmt.Errorf("storage: term batch %s: outcome: %w", b.BatchID, err)
 	}
-	var node, nodeLoss *string
-	if b.Node != "" {
-		node = &b.Node
+	var outpost, outpostLoss *string
+	if b.Outpost != "" {
+		outpost = &b.Outpost
 	}
 	if !b.Ledger.Loss.Empty() {
 		raw, err := json.Marshal(b.Ledger.Loss)
 		if err != nil {
-			return fmt.Errorf("storage: term batch %s: node loss: %w", b.BatchID, err)
+			return fmt.Errorf("storage: term batch %s: outpost loss: %w", b.BatchID, err)
 		}
 		n := string(raw)
-		nodeLoss = &n
+		outpostLoss = &n
 	}
 	if _, err := p.pool.Exec(ctx, `insert into telemetry_receipt
-		(batch_id, node, boot, seq, minted, resolved, ledger, outcome, node_loss, termed)
+		(batch_id, outpost, boot, seq, minted, resolved, ledger, outcome, outpost_loss, termed)
 		values ($1, $2, $3, $4, $5, $6, $7::bigint[], $8::int[], $9::jsonb, true)
 		on conflict (batch_id) do nothing`,
-		b.BatchID, node, b.Ledger.Boot, int64(b.Ledger.Seq), b.Ledger.Minted, int64(b.Ledger.Resolved),
-		b.Ledger.Kinds.Cells(), outcome, nodeLoss); err != nil {
+		b.BatchID, outpost, b.Ledger.Boot, int64(b.Ledger.Seq), b.Ledger.Minted, int64(b.Ledger.Resolved),
+		b.Ledger.Kinds.Cells(), outcome, outpostLoss); err != nil {
 		return fmt.Errorf("storage: term batch %s: %w", b.BatchID, err)
 	}
 	return nil

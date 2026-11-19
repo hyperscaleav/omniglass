@@ -11,7 +11,7 @@ import (
 )
 
 // ErrCannotImpersonateSelf is returned when the real actor and the target are the
-// same principal.
+// same user.
 var ErrCannotImpersonateSelf = errors.New("storage: cannot impersonate self")
 
 // ErrImpersonationNotFound is returned when ending a session that is not active.
@@ -30,7 +30,7 @@ type ImpersonationSession struct {
 // BeginImpersonation mints an impersonation token for realActorID to view/act as
 // targetID for ttl, storing its sha256 hash. The API enforces the escalation guard
 // (the real actor's capabilities must cover the target's) and the
-// principal:impersonate capability before calling this; the gateway refuses only
+// user:impersonate capability before calling this; the gateway refuses only
 // self-impersonation and an invalid mode, then persists. Returns the plaintext
 // token (shown once) and the session.
 func (p *PG) BeginImpersonation(ctx context.Context, realActorID, targetID, mode string, ttl time.Duration) (string, *ImpersonationSession, error) {
@@ -52,7 +52,7 @@ func (p *PG) BeginImpersonation(ctx context.Context, realActorID, targetID, mode
 
 	s := ImpersonationSession{TargetID: targetID, RealActorID: realActorID, Mode: mode}
 	err = tx.QueryRow(ctx, `
-		insert into impersonation_session (token_hash, target_principal_id, real_actor_principal_id, mode, expires_at)
+		insert into impersonation_session (token_hash, target_user_id, real_actor_user_id, mode, expires_at)
 		values ($1, $2, $3, $4, now() + make_interval(secs => $5))
 		returning id, expires_at`,
 		hash, targetID, realActorID, mode, ttl.Seconds()).Scan(&s.ID, &s.ExpiresAt)
@@ -61,7 +61,7 @@ func (p *PG) BeginImpersonation(ctx context.Context, realActorID, targetID, mode
 	}
 	// Audit the START: a normal action by the admin acting as themselves (not yet
 	// impersonated), so actor is the real admin and real_actor is null.
-	if err := writeAuditRes(ctx, tx, realActorID, "impersonate", "principal", targetID, nil, map[string]any{"mode": mode}); err != nil {
+	if err := writeAuditRes(ctx, tx, realActorID, "impersonate", "user", targetID, nil, map[string]any{"mode": mode}); err != nil {
 		return "", nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -71,18 +71,18 @@ func (p *PG) BeginImpersonation(ctx context.Context, realActorID, targetID, mode
 }
 
 // AuthenticateImpersonation resolves an impersonation token hash to the TARGET
-// principal (its profile and grants), plus the real actor id, the mode, and the
+// user (its profile and grants), plus the real actor id, the mode, and the
 // session id. It is the authn fallback the API tries on a bearer miss. The session
 // must be unrevoked and unexpired, and BOTH the target and the real actor must be
 // active, so disabling either kills the session immediately. A miss is
 // ErrCredentialNotFound, so the API treats it exactly like a bad bearer.
-func (p *PG) AuthenticateImpersonation(ctx context.Context, hash []byte) (pr *Principal, realActorID, mode, sessionID string, err error) {
-	var t Principal
+func (p *PG) AuthenticateImpersonation(ctx context.Context, hash []byte) (pr *User, realActorID, mode, sessionID string, err error) {
+	var t User
 	err = p.pool.QueryRow(ctx, `
-		select s.id, s.target_principal_id, pr.kind, s.real_actor_principal_id, s.mode
+		select s.id, s.target_user_id, pr.kind, s.real_actor_user_id, s.mode
 		from impersonation_session s
-		join principal pr on pr.id = s.target_principal_id and pr.active
-		join principal ra on ra.id = s.real_actor_principal_id and ra.active
+		join users pr on pr.id = s.target_user_id and pr.active
+		join users ra on ra.id = s.real_actor_user_id and ra.active
 		where s.token_hash = $1 and s.revoked_at is null and s.expires_at > now()`,
 		hash).Scan(&sessionID, &t.ID, &t.Kind, &realActorID, &mode)
 	switch {
@@ -91,7 +91,7 @@ func (p *PG) AuthenticateImpersonation(ctx context.Context, hash []byte) (pr *Pr
 	case err != nil:
 		return nil, "", "", "", fmt.Errorf("storage: authenticate impersonation: %w", err)
 	}
-	if err := p.loadPrincipal(ctx, &t); err != nil {
+	if err := p.loadUser(ctx, &t); err != nil {
 		return nil, "", "", "", err
 	}
 	return &t, realActorID, mode, sessionID, nil

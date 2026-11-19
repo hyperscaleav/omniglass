@@ -17,8 +17,8 @@ const seed: Vendor[] = [
   { id: uuidFor("ven-evil-corp"), name: "evil-corp", label: "Evil Corp", kind: "manufacturer", official: false, website: "javascript:alert(document.cookie)" },
 ];
 
-const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], grants: [] };
+const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
+const viewer: Me = { user: { id: "u-view", kind: "person" }, person: { username: "viewer" }, permissions: ["*:read"], grants: [] };
 
 const asides = () => document.querySelectorAll("aside[data-blade]");
 
@@ -36,7 +36,7 @@ function mount(me: Me = admin) {
 describe("Vendors page", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  // The registry list puts an UNLABELLED row at the END, not the beginning
+  // The catalog list puts an UNLABELLED row at the END, not the beginning
   // (#613). The console re-sorts what the gateway already ordered, so fixing
   // `order by nullif(label, '') nulls last, name` in SQL fixed nothing an
   // operator could see: a plain `a.label.localeCompare(b.label)` is negative for

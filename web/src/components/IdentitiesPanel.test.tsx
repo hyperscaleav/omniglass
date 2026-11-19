@@ -59,7 +59,7 @@ const components: Comp[] = [
   { id: CONDUIT, name: "ucc-platform", label: "UCC platform", system_count: 0, actions: ["update"] },
   { id: uuidFor("panel-1"), name: "panel-1", label: "Panel 1", system_count: 1, actions: ["update"] },
 ];
-const admin: Me = { principal: { id: "p", kind: "human" }, permissions: [">"], grants: [] };
+const admin: Me = { user: { id: "p", kind: "person" }, permissions: [">"], grants: [] };
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });

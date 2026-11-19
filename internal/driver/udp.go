@@ -10,8 +10,8 @@ import (
 // ListenPortInput is a udp driver's input naming the local port its
 // endpoint binds (#1037, decision 5 of #1076): each endpoint binds its own,
 // and its requests share it, so a reply and a push arrive on one socket. The
-// operator configures the component to send there (and opens the node's
-// firewall). Absent, the node binds a port of its own choosing, which suits a
+// operator configures the component to send there (and opens the outpost's
+// firewall). Absent, the outpost binds a port of its own choosing, which suits a
 // component that answers to a request's source. It is derived into the
 // endpoint's params as host and port are, so it is part of the connection
 // fingerprint.
@@ -57,8 +57,8 @@ func checkPort(v string) error {
 
 // ParseListenPort reads a listen port off its params value: a JSON number or
 // a numeral, 1 to 65535. Absent, null and "" are unset and read 0. It is the
-// one reading the write path and the node share, so a value the write
-// accepts is one the node binds.
+// one reading the write path and the outpost share, so a value the write
+// accepts is one the outpost binds.
 func ParseListenPort(raw json.RawMessage) (int, error) {
 	if len(raw) == 0 || string(raw) == "null" {
 		return 0, nil

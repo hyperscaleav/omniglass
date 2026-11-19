@@ -44,7 +44,7 @@ func envSentinels(t *testing.T) map[string]string {
 		s[v.Key] = "sentinel-" + strings.ToLower(v.Key) + "-q7x"
 	}
 	s["OMNIGLASS_TOKEN"] = tok
-	s["OMNIGLASS_NODE_TOKEN"] = "ogp_nodetokensentinel_" + strings.Repeat("z", 24)
+	s["OMNIGLASS_OUTPOST_TOKEN"] = "ogp_outposttokensentinel_" + strings.Repeat("z", 24)
 	s["OMNIGLASS_SERVER"] = "https://operator:hunter2-sentinel@omniglass.example"
 	for k, v := range s {
 		t.Setenv(k, v)

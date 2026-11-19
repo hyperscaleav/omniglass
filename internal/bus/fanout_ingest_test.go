@@ -34,9 +34,9 @@ func (c *countingStore) ResolveIdentityBindings(ctx context.Context, ids map[str
 	return c.PG.ResolveIdentityBindings(ctx, ids)
 }
 
-// fanIngest is a conduit (meetings-cloud) polled by node-a's task t-rooms
+// fanIngest is a conduit (meetings-cloud) polled by outpost-a's task t-rooms
 // over its http endpoint, two of its room ids bound to systems, and a second
-// node holding a task of its own on another component.
+// outpost holding a task of its own on another component.
 type fanIngest struct {
 	ctx     context.Context
 	gw      *storage.PG
@@ -66,8 +66,8 @@ func newFanIngest(t *testing.T, opts ...storage.Option) *fanIngest {
 	}
 	t.Cleanup(func() { conn.Close(ctx) })
 	all := scope.Set{All: true}
-	for _, n := range []string{"node-a", "node-b"} {
-		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: n}, all, all); err != nil {
+	for _, n := range []string{"outpost-a", "outpost-b"} {
+		if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: n}, all, all); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -82,9 +82,9 @@ func newFanIngest(t *testing.T, opts ...storage.Option) *fanIngest {
 		}
 	}
 	if _, err := conn.Exec(ctx, `
-		insert into endpoint (name, transport, component, node_name, params) values
-			('http', 'http', (select id from component where name = 'meetings-cloud'), (select principal_id from node where name = 'node-a'), '{"target":"127.0.0.1:443"}'::jsonb),
-			('http-b', 'http', (select id from component where name = 'other-cloud'), (select principal_id from node where name = 'node-b'), '{"target":"127.0.0.1:443"}'::jsonb);
+		insert into endpoint (name, transport, component, outpost_id, params) values
+			('http', 'http', (select id from component where name = 'meetings-cloud'), (select user_id from outpost where name = 'outpost-a'), '{"target":"127.0.0.1:443"}'::jsonb),
+			('http-b', 'http', (select id from component where name = 'other-cloud'), (select user_id from outpost where name = 'outpost-b'), '{"target":"127.0.0.1:443"}'::jsonb);
 		insert into task (id, mode, endpoint_id, enabled) values
 			('t-rooms', 'poll', (select id from endpoint where name = 'http'), true),
 			('t-other', 'poll', (select id from endpoint where name = 'http-b'), true)`); err != nil {
@@ -97,7 +97,7 @@ func newFanIngest(t *testing.T, opts ...storage.Option) *fanIngest {
 	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: make([]byte, 32), Prefix: "root0000"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&f.actor); err != nil {
+	if err := conn.QueryRow(ctx, `select user_id from person where username = 'root'`).Scan(&f.actor); err != nil {
 		t.Fatal(err)
 	}
 	f.bind(t, "zr-a", "room-a")
@@ -153,9 +153,9 @@ func rooms(ids ...string) *ogv1.TelemetryBatch {
 	return ev
 }
 
-func (f *fanIngest) nodeLane(ev *ogv1.TelemetryBatch) (string, *ogv1.TelemetryBatch) {
-	ev.TaskId, ev.NodeId = "t-rooms", "node-a"
-	return collection.TelemetrySubject("node-a"), asTick(ev)
+func (f *fanIngest) outpostLane(ev *ogv1.TelemetryBatch) (string, *ogv1.TelemetryBatch) {
+	ev.TaskId, ev.OutpostId = "t-rooms", "outpost-a"
+	return collection.TelemetrySubject("outpost-a"), asTick(ev)
 }
 
 func (f *fanIngest) webhookLane(ev *ogv1.TelemetryBatch) (string, *ogv1.TelemetryBatch) {
@@ -198,7 +198,7 @@ func (f *fanIngest) count(t *testing.T, sql string, args ...any) int {
 }
 
 // TestBothArrivalsFanOutTheSameRows is the epic's acceptance (#1282): a
-// node polling the conduit's room list and the conduit posting the same
+// outpost polling the conduit's room list and the conduit posting the same
 // list to its webhook land the same rows, each room's values on its bound
 // system, observed, at the empty instance, naming the conduit and its
 // endpoint in source; the unidentified sample stays on the conduit; the
@@ -208,9 +208,9 @@ func TestBothArrivalsFanOutTheSameRows(t *testing.T) {
 		t.Skip("integration test needs Postgres")
 	}
 	got := map[string][]string{}
-	for _, lane := range []string{"node", "webhook"} {
+	for _, lane := range []string{"outpost", "webhook"} {
 		f := newFanIngest(t)
-		subject, ev := f.nodeLane(rooms("zr-a", "zr-b", "zr-x"))
+		subject, ev := f.outpostLane(rooms("zr-a", "zr-b", "zr-x"))
 		if lane == "webhook" {
 			subject, ev = f.webhookLane(rooms("zr-a", "zr-b", "zr-x"))
 		}
@@ -257,14 +257,14 @@ func TestBothArrivalsFanOutTheSameRows(t *testing.T) {
 
 // TestFanOutFollowsTheBindings: binding an unbound identity makes its next
 // value land on the owner with no restart; deleting the binding makes the
-// next one unbound again; a redelivery lands nothing twice; a node-probe key
+// next one unbound again; a redelivery lands nothing twice; an outpost-probe key
 // named under a bound identity is never written on the owner.
 func TestFanOutFollowsTheBindings(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
 	f := newFanIngest(t)
-	subject, ev := f.nodeLane(rooms("zr-x"))
+	subject, ev := f.outpostLane(rooms("zr-x"))
 	f.deliver(t, subject, ev, "first")
 	f.deliver(t, subject, ev, "first") // a redelivery
 	inbox, _ := f.gw.ListUnboundIdentities(f.ctx, "meetings-cloud", scope.Set{All: true})
@@ -278,19 +278,19 @@ func TestFanOutFollowsTheBindings(t *testing.T) {
 	}
 	probed := rooms("zr-x")
 	probed.Metrics = append(probed.Metrics, &ogv1.MetricSample{Name: "tcp-connect-time", Value: 1, Identity: room("zr-x")})
-	subject, ev = f.nodeLane(probed)
+	subject, ev = f.outpostLane(probed)
 	f.deliver(t, subject, ev, "")
 	if n := f.count(t, `select count(*) from property p join system s on s.id = p.system_id where s.name = 'room-c' and p.provenance = 'observed'`); n != 1 {
 		t.Errorf("after binding, room-c holds %d call-state rows, want one", n)
 	}
 	if n := f.count(t, `select count(*) from `+storagetest.MetricRows+` m join metric_type t on t.id = m.metric_type_id where t.name = 'tcp-connect-time'`); n != 0 {
-		t.Errorf("a node-probe key under a bound identity landed %d rows", n)
+		t.Errorf("an outpost-probe key under a bound identity landed %d rows", n)
 	}
 
 	if err := f.gw.DeleteIdentityBinding(f.ctx, f.actor, "meetings-cloud", "ucc-room-id", "zr-x", f.scopes()); err != nil {
 		t.Fatal(err)
 	}
-	subject, ev = f.nodeLane(rooms("zr-x"))
+	subject, ev = f.outpostLane(rooms("zr-x"))
 	f.deliver(t, subject, ev, "")
 	if n := f.count(t, `select count(*) from `+storagetest.MetricRows+` m join system s on s.id = m.system_id where s.name = 'room-c'`); n != 1 {
 		t.Errorf("after unbinding, room-c holds %d metric rows, want the one landed while bound", n)
@@ -301,8 +301,8 @@ func TestFanOutFollowsTheBindings(t *testing.T) {
 	}
 }
 
-// TestConfinementComesBeforeTheFanOut: a node cannot land a fanned value
-// through another node's task: the batch is an orphan, dropped before any
+// TestConfinementComesBeforeTheFanOut: an outpost cannot land a fanned value
+// through another outpost's task: the batch is an orphan, dropped before any
 // identity is read, and nothing lands on the bound owners.
 func TestConfinementComesBeforeTheFanOut(t *testing.T) {
 	if testing.Short() {
@@ -310,19 +310,19 @@ func TestConfinementComesBeforeTheFanOut(t *testing.T) {
 	}
 	f := newFanIngest(t)
 	ev := rooms("zr-a", "zr-b")
-	ev.TaskId, ev.NodeId = "t-rooms", "node-b"
-	f.deliver(t, collection.TelemetrySubject("node-b"), asTick(ev), "")
+	ev.TaskId, ev.OutpostId = "t-rooms", "outpost-b"
+	f.deliver(t, collection.TelemetrySubject("outpost-b"), asTick(ev), "")
 	if n := f.store.resolves.Load(); n != 0 {
 		t.Errorf("an orphan batch's identities were read %d times, want none", n)
 	}
 	if rows := f.landed(t); len(rows) != 0 {
 		t.Errorf("an orphan batch landed %v on the bound owners", rows)
 	}
-	// And a node's own task on another component cannot reach this
+	// And an outpost's own task on another component cannot reach this
 	// conduit's bindings: its identities resolve on its own conduit.
 	ev = rooms("zr-a")
-	ev.TaskId, ev.NodeId = "t-other", "node-b"
-	f.deliver(t, collection.TelemetrySubject("node-b"), asTick(ev), "")
+	ev.TaskId, ev.OutpostId = "t-other", "outpost-b"
+	f.deliver(t, collection.TelemetrySubject("outpost-b"), asTick(ev), "")
 	if rows := f.landed(t); len(rows) != 0 {
 		t.Errorf("another conduit's batch landed %v on meetings-cloud's owners", rows)
 	}
@@ -353,10 +353,10 @@ func TestFanOutResolvesOwnersInOneRead(t *testing.T) {
 		for i := range n {
 			ev.Metrics = append(ev.Metrics, &ogv1.MetricSample{Name: "participant-count", Value: float64(i), Identity: room(fmt.Sprintf("zr-%03d", i))})
 		}
-		subject, tick := f.nodeLane(ev)
-		f.deliver(t, subject, tick, "") // warm the registry and the first rows
+		subject, tick := f.outpostLane(ev)
+		f.deliver(t, subject, tick, "") // warm the catalog and the first rows
 		counter.Reset()
-		subject, tick = f.nodeLane(ev)
+		subject, tick = f.outpostLane(ev)
 		f.deliver(t, subject, tick, "")
 		return counter.N()
 	}
@@ -389,7 +389,7 @@ func TestAnOwnersRuleJudgesAFannedValue(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := f.gw.CreateEventRule(f.ctx, "", storage.EventRuleSpec{Name: "in-a-call", SampleKey: "call-state",
-		Fire: rules.Criteria{Expr: `value == "active"`}, Severity: "high", FireEventType: "condition-started"}, all); err != nil {
+		Fire: rules.Criteria{Expr: `value == "active"`}, Severity: "high", FireEventType: "rule-fired"}, all); err != nil {
 		t.Fatal(err)
 	}
 	subject, ev := f.webhookLane(&ogv1.TelemetryBatch{Properties: []*ogv1.PropertySample{
@@ -414,7 +414,7 @@ func TestAFannedSampleNamesItsConduitAcrossARename(t *testing.T) {
 	}
 	f := newFanIngest(t)
 	all := scope.Set{All: true}
-	subject, ev := f.nodeLane(rooms("zr-a"))
+	subject, ev := f.outpostLane(rooms("zr-a"))
 	f.deliver(t, subject, ev, "")
 	if n := f.count(t, `select count(*) from property where source_conduit_id = $1::uuid`, f.conduit); n != 1 {
 		t.Fatalf("%d fanned property rows record the conduit by uuid, want one", n)
@@ -435,7 +435,7 @@ func TestAFannedSampleNamesItsConduitAcrossARename(t *testing.T) {
 	}
 }
 
-// TestATickResolvesEveryConduitInOneRead: a node tick whose groups poll two
+// TestATickResolvesEveryConduitInOneRead: an outpost tick whose groups poll two
 // conduits, each naming identities bound on its own conduit, resolves them
 // all in one read (#1582), and each value still lands on the owner its own
 // conduit binds: a value fans out only through its group's conduit.
@@ -449,8 +449,8 @@ func TestATickResolvesEveryConduitInOneRead(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := f.conn.Exec(f.ctx, `
-		insert into endpoint (name, transport, component, node_name, params) values
-			('http-r', 'http', (select id from component where name = 'rooms-cloud'), (select principal_id from node where name = 'node-a'), '{"target":"127.0.0.1:443"}'::jsonb);
+		insert into endpoint (name, transport, component, outpost_id, params) values
+			('http-r', 'http', (select id from component where name = 'rooms-cloud'), (select user_id from outpost where name = 'outpost-a'), '{"target":"127.0.0.1:443"}'::jsonb);
 		insert into task (id, mode, endpoint_id, enabled) values
 			('t-rooms-2', 'poll', (select id from endpoint where name = 'http-r'), true)`); err != nil {
 		t.Fatalf("second conduit: %v", err)
@@ -463,9 +463,9 @@ func TestATickResolvesEveryConduitInOneRead(t *testing.T) {
 	meetings, other := rooms("zr-a"), rooms("zr-b")
 	meetings.TaskId, other.TaskId = "t-rooms", "t-rooms-2"
 	tick := asTick(meetings)
-	tick.NodeId = "node-a"
+	tick.OutpostId = "outpost-a"
 	tick.Groups = append(tick.Groups, asTick(other).GetGroups()...)
-	f.deliver(t, collection.TelemetrySubject("node-a"), tick, "")
+	f.deliver(t, collection.TelemetrySubject("outpost-a"), tick, "")
 	if n := f.store.resolves.Load(); n != 1 {
 		t.Errorf("a tick fanning on two conduits read its identities %d times, want once", n)
 	}

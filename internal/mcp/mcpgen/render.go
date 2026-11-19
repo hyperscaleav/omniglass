@@ -48,11 +48,20 @@ func RenderGo(defs []tooldef.Def) ([]byte, error) {
 		}
 		a := d.Annotations
 		field("Annotations", fmt.Sprintf("tooldef.Annotations{ReadOnly: %t, Destructive: %t, Idempotent: %t, OpenWorld: %t}", a.ReadOnly, a.Destructive, a.Idempotent, a.OpenWorld))
+		field("Class", classConst[d.Class])
 		field("InputSchema", strconv.Quote(d.InputSchema))
 		b.WriteString("\t},\n")
 	}
 	b.WriteString("}\n")
 	return format.Source([]byte(b.String()))
+}
+
+// classConst names each class by its tooldef constant in the rendered catalog.
+var classConst = map[tooldef.Class]string{
+	tooldef.ClassRead:                  "tooldef.ClassRead",
+	tooldef.ClassWrite:                 "tooldef.ClassWrite",
+	tooldef.ClassDestructive:           "tooldef.ClassDestructive",
+	tooldef.ClassCredentialDestination: "tooldef.ClassCredentialDestination",
 }
 
 // RenderDoc renders the docs reference page for the catalog: what each tool
@@ -83,6 +92,12 @@ Each tool says what a client may assume of it, from one rule over the route's me
 
 A tool that is not read-only and not destructive adds something (a create).
 
+Each tool also has an **agent class**, the one the install's [agent policy](/guides/agents/#what-an-agent-may-do)
+sets to always, ask or never: **read** (read-only), **destructive**, **credential_destination** (it may bind a
+stored credential to a destination, the most sensitive class, whatever else it does) or **write** (the rest). On
+` + "`tools/list`, each tool's `_meta` carries `omniglass/agent_policy`" + `, its class and the policy the install resolves
+for it: the strictest of the class, the caller's roles and an override on the tool itself.
+
 `)
 	fmt.Fprintf(&b, "%d tools.\n\n", len(defs))
 	b.WriteString("| Tool | What it does | Gate | Assume |\n|---|---|---|---|\n")
@@ -96,6 +111,7 @@ A tool that is not read-only and not destructive adds something (a create).
 		fmt.Fprintf(&b, "- Route: `%s /api/v1%s`\n", d.Method, d.Path)
 		fmt.Fprintf(&b, "- Gate: %s\n", gateCell(d.Permission))
 		fmt.Fprintf(&b, "- Assume: %s\n", assumes(d.Annotations))
+		fmt.Fprintf(&b, "- Agent class: %s\n", d.Class)
 		args := arguments(d)
 		if len(args) == 0 {
 			b.WriteString("- Arguments: none\n")

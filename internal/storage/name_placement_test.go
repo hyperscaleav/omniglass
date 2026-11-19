@@ -16,7 +16,7 @@ import (
 // openGateway is the shared open-and-seed boilerplate every test in this file
 // needs: a fresh testcontainer Postgres, a gateway on it, and the boot seed
 // (the generic-device product a component create falls back to, and the
-// location/system/component_type registries).
+// location/system/component_type catalogs).
 func openGateway(t *testing.T) storage.Gateway {
 	t.Helper()
 	ctx := context.Background()
@@ -259,20 +259,20 @@ func TestSiblingSubsystemsSameParentRefused(t *testing.T) {
 	}
 }
 
-// TestNodeNameStaysGlobal pins the one tree-shaped-looking name that #627
-// deliberately leaves alone: a node's name is also its NATS subject, a wire
-// identity outside any placement, so node_name_key stays a plain global
+// TestOutpostNameStaysGlobal pins the one tree-shaped-looking name that #627
+// deliberately leaves alone: an outpost's name is also its NATS subject, a wire
+// identity outside any placement, so outpost_name_key stays a plain global
 // UNIQUE(name) rather than gaining placement buckets.
-func TestNodeNameStaysGlobal(t *testing.T) {
+func TestOutpostNameStaysGlobal(t *testing.T) {
 	t.Parallel()
 	gw := openGateway(t)
 	ctx := context.Background()
 
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-node"}, all, all); err != nil {
-		t.Fatalf("first node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-outpost"}, all, all); err != nil {
+		t.Fatalf("first outpost: %v", err)
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-node"}, all, all); !errors.Is(err, storage.ErrNodeExists) {
-		t.Fatalf("second node with the same name = %v, want ErrNodeExists", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-outpost"}, all, all); !errors.Is(err, storage.ErrOutpostExists) {
+		t.Fatalf("second outpost with the same name = %v, want ErrOutpostExists", err)
 	}
 }
 
@@ -331,7 +331,7 @@ func TestNameAmbiguousGloballyButUniqueToCallerResolvesCleanly(t *testing.T) {
 // caller can pass the first check and then have the second one raise
 // ErrAmbiguousName anyway, discovered by tracing exactly this path, not
 // named in the review that asked for it: EffectiveProperties, EffectiveMetrics,
-// LatestValue, SystemHealth, LocationHealth, EffectiveRoles, SetProperty,
+// LatestValue, SystemHealth, LocationHealth, EffectiveSlots, SetProperty,
 // IssueCommand, and CommandSettlement all had this shape; this test drives
 // every one of them. The last two now take a resolved id instead (#749), so
 // they are driven that way below and no longer resolve a name at all.
@@ -340,7 +340,7 @@ func TestOwnerScopedReadsResolveAmbiguousNameWithinScope(t *testing.T) {
 	gw := openGateway(t)
 	ctx := context.Background()
 
-	// zoneA is the scope root (a system, since SystemHealth/EffectiveRoles
+	// zoneA is the scope root (a system, since SystemHealth/EffectiveSlots
 	// scope-check against the system tree); sysInZone is its child, named
 	// "shared" (system_parent_name_key). An unrelated root system, also
 	// named "shared" (system_orphan_name_key), is what makes the bare name
@@ -375,7 +375,7 @@ func TestOwnerScopedReadsResolveAmbiguousNameWithinScope(t *testing.T) {
 	// IssueCommand's caused event needs a real actor uuid (the column is a
 	// foreign key), so the bootstrapped owner is resolved by username rather
 	// than passed as an empty string.
-	actor, err := gw.ResolvePrincipalRef(ctx, "root")
+	actor, err := gw.ResolveUserRef(ctx, "root")
 	if err != nil {
 		t.Fatalf("resolve actor: %v", err)
 	}
@@ -389,8 +389,8 @@ func TestOwnerScopedReadsResolveAmbiguousNameWithinScope(t *testing.T) {
 	if _, err := gw.SystemHealth(ctx, "shared", 0, readZoneA); err != nil {
 		t.Errorf("SystemHealth(shared) scoped to zone-a = %v, want ok", err)
 	}
-	if _, err := gw.EffectiveRoles(ctx, "shared", readZoneA); err != nil {
-		t.Errorf("EffectiveRoles(shared) scoped to zone-a = %v, want ok", err)
+	if _, err := gw.EffectiveSlots(ctx, "shared", readZoneA); err != nil {
+		t.Errorf("EffectiveSlots(shared) scoped to zone-a = %v, want ok", err)
 	}
 	if _, err := gw.SetProperty(ctx, "", "system", "shared", "note", "", []byte(`"hi"`), readZoneA, readZoneA); err != nil {
 		t.Errorf("SetProperty(shared) scoped to zone-a = %v, want ok", err)
@@ -598,7 +598,7 @@ func TestScopedCreateBindsCrossTierSystemAndLocation(t *testing.T) {
 		t.Fatalf("wing-loc-2: %v", err)
 	}
 
-	// A deploy principal scoped to component:<container> only (the review's
+	// A deploy user scoped to component:<container> only (the review's
 	// own failure scenario): posting a child with a system AND a location
 	// bind used to 422 unconditionally.
 	compScope := scope.Set{IDs: []string{container.ID}}
@@ -655,7 +655,7 @@ func TestScopedCreateBindsCrossTierSystemAndLocation(t *testing.T) {
 // chain, so every non-all caller's ?system= filter silently fell into the
 // "named a system with no binding here" empty-band branch regardless of
 // whether the system genuinely had one, a wrong answer with no error, not a
-// refusal. A scoped principal that can read the component must still see the
+// refusal. A scoped user that can read the component must still see the
 // system band its own tags cascade includes.
 func TestResolveTagsSystemBandSurvivesScopedCaller(t *testing.T) {
 	t.Parallel()
@@ -699,7 +699,7 @@ func TestResolveTagsSystemBandSurvivesScopedCaller(t *testing.T) {
 	}
 }
 
-// TestAssignRoleComponentAmbiguityNeverLeaksCandidates pins where AssignRole's
+// TestAssignSlotComponentAmbiguityNeverLeaksCandidates pins where AssignSlot's
 // and AddMember's component end judges a name's ambiguity. It used to resolve
 // scope-blind (the only sets in hand were resolved for "system"), so a
 // fleet-wide-ambiguous name was refused with its candidates redacted. Since
@@ -710,12 +710,12 @@ func TestResolveTagsSystemBandSurvivesScopedCaller(t *testing.T) {
 // naming only rows that scope can read, which is the property the redaction
 // used to buy.
 //
-// UnassignRole does not share this shape (#627 review round 3, closing #645): it
-// resolves the component within THIS role's current occupants, so a
+// UnassignSlot does not share this shape (#627 review round 3, closing #645): it
+// resolves the component within THIS slot's current occupants, so a
 // fleet-wide-ambiguous name that occupies nothing here is ErrAssignmentMissing.
-// TestUnassignRoleResolvesFleetWideDuplicateWithinOccupancy and
-// TestUnassignRoleStillRefusesWhenBothDuplicatesOccupyTheSameRole below cover it.
-func TestAssignRoleComponentAmbiguityNeverLeaksCandidates(t *testing.T) {
+// TestUnassignSlotResolvesFleetWideDuplicateWithinOccupancy and
+// TestUnassignSlotStillRefusesWhenBothDuplicatesOccupyTheSameSlot below cover it.
+func TestAssignSlotComponentAmbiguityNeverLeaksCandidates(t *testing.T) {
 	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -733,14 +733,14 @@ func TestAssignRoleComponentAmbiguityNeverLeaksCandidates(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 
-	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "role-sys"}, all, all)
+	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "slot-sys"}, all, all)
 	if err != nil {
-		t.Fatalf("role-sys: %v", err)
+		t.Fatalf("slot-sys: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `
-		insert into system_role (owner_kind, system_id, name, label)
+		insert into system_slot (owner_kind, system_id, name, label)
 		values ('system', $1, 'seat', 'Seat')`, sys.ID); err != nil {
-		t.Fatalf("declare role: %v", err)
+		t.Fatalf("declare slot: %v", err)
 	}
 
 	holder, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "holder"}, all, all, all, all)
@@ -763,25 +763,25 @@ func TestAssignRoleComponentAmbiguityNeverLeaksCandidates(t *testing.T) {
 
 	// Ambiguous across the whole fleet, the full component scope can read both,
 	// so the refusal names both: every candidate is a row this caller may read.
-	err = gw.AssignRole(ctx, "", sys.Name, "seat", "dup-seat", sysScope, sysScope, all, all)
+	err = gw.AssignSlot(ctx, "", sys.Name, "seat", "dup-seat", sysScope, sysScope, all, all)
 	if !errors.As(err, &ambig) {
-		t.Fatalf("assign role with ambiguous component = %v, want *ErrAmbiguousName", err)
+		t.Fatalf("assign slot with ambiguous component = %v, want *ErrAmbiguousName", err)
 	}
 	if len(ambig.Candidates) != 2 {
-		t.Fatalf("assign role ambiguous component candidates = %v, want both rows the all scope reads", ambig.Candidates)
+		t.Fatalf("assign slot ambiguous component candidates = %v, want both rows the all scope reads", ambig.Candidates)
 	}
 
-	// UnassignRole resolves within the role's own occupants now (#645):
+	// UnassignSlot resolves within the slot's own occupants now (#645):
 	// "dup-seat" is fleet-wide ambiguous but occupies nothing here (no
 	// assignment exists), so this is the honest, more specific
 	// ErrAssignmentMissing, not the ambiguity 409 it used to raise over a
 	// component that was never actually a candidate for this call.
-	err = gw.UnassignRole(ctx, "", sys.Name, "seat", "dup-seat", sysScope, sysScope, all, all)
+	err = gw.UnassignSlot(ctx, "", sys.Name, "seat", "dup-seat", sysScope, sysScope, all, all)
 	if !errors.Is(err, storage.ErrAssignmentMissing) {
-		t.Fatalf("unassign role with an unassigned, fleet-wide-ambiguous component = %v, want ErrAssignmentMissing", err)
+		t.Fatalf("unassign slot with an unassigned, fleet-wide-ambiguous component = %v, want ErrAssignmentMissing", err)
 	}
 
-	// AddMember drives resolveMembershipEnds directly: no role or assignment
+	// AddMember drives resolveMembershipEnds directly: no slot or assignment
 	// involved, just the (system, component) membership resolve. Inside the
 	// holder's subtree the name means one row, and the root dup-seat outside it
 	// is never a candidate.
@@ -796,20 +796,20 @@ func TestAssignRoleComponentAmbiguityNeverLeaksCandidates(t *testing.T) {
 		t.Fatalf("members = %+v, want the nested dup-seat alone", members)
 	}
 	// The same narrowing on the assignment.
-	if err := gw.AssignRole(ctx, "", sys.Name, "seat", "dup-seat", sysScope, sysScope, compScope, compScope); err != nil {
-		t.Fatalf("assign role by a name unique inside the component scope = %v, want ok", err)
+	if err := gw.AssignSlot(ctx, "", sys.Name, "seat", "dup-seat", sysScope, sysScope, compScope, compScope); err != nil {
+		t.Fatalf("assign slot by a name unique inside the component scope = %v, want ok", err)
 	}
 }
 
-// TestUnassignRoleResolvesFleetWideDuplicateWithinOccupancy is the epic's
+// TestUnassignSlotResolvesFleetWideDuplicateWithinOccupancy is the epic's
 // headline promise, closed for the last remaining write (#627 review round
-// 3, #645): an operator who can staff a role with a duplicate-named
+// 3, #645): an operator who can staff a slot with a duplicate-named
 // component must also be able to unstaff it, not get in with no way back
 // out. "dup-seat" is ambiguous fleet-wide (two components, two placements),
-// but only the nested one occupies "seat" here, so UnassignRole resolves it
+// but only the nested one occupies "seat" here, so UnassignSlot resolves it
 // from the bare name alone, exactly the string the wire's own AssignedTo
-// gives a caller (internal/api's EffectiveRoleBody.AssignedTo, names only).
-func TestUnassignRoleResolvesFleetWideDuplicateWithinOccupancy(t *testing.T) {
+// gives a caller (internal/api's EffectiveSlotBody.AssignedTo, names only).
+func TestUnassignSlotResolvesFleetWideDuplicateWithinOccupancy(t *testing.T) {
 	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -833,9 +833,9 @@ func TestUnassignRoleResolvesFleetWideDuplicateWithinOccupancy(t *testing.T) {
 		t.Fatalf("create system: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `
-		insert into system_role (owner_kind, system_id, name, label)
+		insert into system_slot (owner_kind, system_id, name, label)
 		values ('system', $1, 'seat', 'Seat')`, sys.ID); err != nil {
-		t.Fatalf("declare role: %v", err)
+		t.Fatalf("declare slot: %v", err)
 	}
 	holder, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "holder"}, all, all, all, all)
 	if err != nil {
@@ -850,43 +850,43 @@ func TestUnassignRoleResolvesFleetWideDuplicateWithinOccupancy(t *testing.T) {
 	}
 
 	sysScope := scope.Set{IDs: []string{sys.ID}}
-	// Staffed by uuid, exactly how the console addresses AssignRole's own
-	// component end today (round 3's assign/add fix): AssignRole itself did
+	// Staffed by uuid, exactly how the console addresses AssignSlot's own
+	// component end today (round 3's assign/add fix): AssignSlot itself did
 	// not change, only what a caller supplies, and a uuid never ambiguous.
-	if err := gw.AssignRole(ctx, "", sys.Name, "seat", nested.ID, sysScope, sysScope, all, all); err != nil {
+	if err := gw.AssignSlot(ctx, "", sys.Name, "seat", nested.ID, sysScope, sysScope, all, all); err != nil {
 		t.Fatalf("assign nested dup-seat: %v", err)
 	}
-	roles, err := gw.EffectiveRoles(ctx, sys.Name, sysScope)
+	slots, err := gw.EffectiveSlots(ctx, sys.Name, sysScope)
 	if err != nil {
-		t.Fatalf("effective roles: %v", err)
+		t.Fatalf("effective slots: %v", err)
 	}
-	if len(roles) != 1 || len(roles[0].AssignedTo) != 1 {
-		t.Fatalf("roles after assign = %+v, want one role with one occupant", roles)
+	if len(slots) != 1 || len(slots[0].AssignedTo) != 1 {
+		t.Fatalf("slots after assign = %+v, want one slot with one occupant", slots)
 	}
 
 	// Unassigned by the bare, fleet-wide-ambiguous name: the wire has no
 	// uuid to give here (AssignedTo is names only), so this is the case the
 	// fix exists for.
-	if err := gw.UnassignRole(ctx, "", sys.Name, "seat", "dup-seat", sysScope, sysScope, all, all); err != nil {
+	if err := gw.UnassignSlot(ctx, "", sys.Name, "seat", "dup-seat", sysScope, sysScope, all, all); err != nil {
 		t.Fatalf("unassign fleet-wide-ambiguous but uniquely-occupying component = %v, want ok", err)
 	}
-	roles, err = gw.EffectiveRoles(ctx, sys.Name, sysScope)
+	slots, err = gw.EffectiveSlots(ctx, sys.Name, sysScope)
 	if err != nil {
-		t.Fatalf("effective roles after unassign: %v", err)
+		t.Fatalf("effective slots after unassign: %v", err)
 	}
-	if len(roles) != 1 || len(roles[0].AssignedTo) != 0 {
-		t.Fatalf("roles after unassign = %+v, want the role vacated", roles)
+	if len(slots) != 1 || len(slots[0].AssignedTo) != 0 {
+		t.Fatalf("slots after unassign = %+v, want the slot vacated", slots)
 	}
 }
 
-// TestUnassignRoleStillRefusesWhenBothDuplicatesOccupyTheSameRole is the
-// edge case the occupancy-scoped resolve must not paper over: a role's
+// TestUnassignSlotStillRefusesWhenBothDuplicatesOccupyTheSameSlot is the
+// edge case the occupancy-scoped resolve must not paper over: a slot's
 // capacity is unbounded by default, so nothing stops two DIFFERENT
 // same-named components (different placements) from both occupying the same
-// role at once. When that happens, "the name is unique within this role's
+// slot at once. When that happens, "the name is unique within this slot's
 // occupants" no longer holds, and the fix must still refuse ambiguously
 // rather than silently picking whichever row sorted first.
-func TestUnassignRoleStillRefusesWhenBothDuplicatesOccupyTheSameRole(t *testing.T) {
+func TestUnassignSlotStillRefusesWhenBothDuplicatesOccupyTheSameSlot(t *testing.T) {
 	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -910,9 +910,9 @@ func TestUnassignRoleStillRefusesWhenBothDuplicatesOccupyTheSameRole(t *testing.
 		t.Fatalf("create system: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `
-		insert into system_role (owner_kind, system_id, name, label)
+		insert into system_slot (owner_kind, system_id, name, label)
 		values ('system', $1, 'seat', 'Seat')`, sys.ID); err != nil {
-		t.Fatalf("declare role: %v", err)
+		t.Fatalf("declare slot: %v", err)
 	}
 	holder, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "holder"}, all, all, all, all)
 	if err != nil {
@@ -928,17 +928,17 @@ func TestUnassignRoleStillRefusesWhenBothDuplicatesOccupyTheSameRole(t *testing.
 	}
 
 	sysScope := scope.Set{IDs: []string{sys.ID}}
-	if err := gw.AssignRole(ctx, "", sys.Name, "seat", root.ID, sysScope, sysScope, all, all); err != nil {
+	if err := gw.AssignSlot(ctx, "", sys.Name, "seat", root.ID, sysScope, sysScope, all, all); err != nil {
 		t.Fatalf("assign root dup-seat: %v", err)
 	}
-	if err := gw.AssignRole(ctx, "", sys.Name, "seat", nested.ID, sysScope, sysScope, all, all); err != nil {
+	if err := gw.AssignSlot(ctx, "", sys.Name, "seat", nested.ID, sysScope, sysScope, all, all); err != nil {
 		t.Fatalf("assign nested dup-seat: %v", err)
 	}
 
 	var ambig *storage.ErrAmbiguousName
-	err = gw.UnassignRole(ctx, "", sys.Name, "seat", "dup-seat", sysScope, sysScope, all, all)
+	err = gw.UnassignSlot(ctx, "", sys.Name, "seat", "dup-seat", sysScope, sysScope, all, all)
 	if !errors.As(err, &ambig) {
-		t.Fatalf("unassign with both duplicates occupying the role = %v, want *ErrAmbiguousName", err)
+		t.Fatalf("unassign with both duplicates occupying the slot = %v, want *ErrAmbiguousName", err)
 	}
 	if len(ambig.Candidates) != 0 {
 		t.Fatalf("unassign ambiguous-within-occupancy candidates = %v, want none (an occupancy-scoped resolve still redacts)", ambig.Candidates)
@@ -946,7 +946,7 @@ func TestUnassignRoleStillRefusesWhenBothDuplicatesOccupyTheSameRole(t *testing.
 }
 
 // TestRemoveMemberResolvesFleetWideDuplicateWithinMembership is
-// TestUnassignRoleResolvesFleetWideDuplicateWithinOccupancy's membership
+// TestUnassignSlotResolvesFleetWideDuplicateWithinOccupancy's membership
 // counterpart (#627 review round 3, #645): a duplicate-named component that
 // is a member of this system removes cleanly by its bare name, the only
 // form SystemMemberBody.component gives a caller (internal/api/members.go),

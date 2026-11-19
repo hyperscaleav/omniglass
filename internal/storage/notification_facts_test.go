@@ -11,9 +11,9 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// The alarm fact map is declared once (#618): a notification template reads
+// The alarm fact map is declared once (#618): a notification's subject and text read
 // its keys, and an action rule's predicate reads the same facts in
-// snake_case. A key added to one and not the other is a template and a
+// snake_case. A key added to one and not the other is a rule and a
 // predicate seeing two different alarms.
 func TestTheActionSiteBindsEveryAlarmFact(t *testing.T) {
 	t.Parallel()
@@ -28,9 +28,10 @@ func TestTheActionSiteBindsEveryAlarmFact(t *testing.T) {
 			t.Errorf("the alarm fact %s has no %s binding at the action site", k, snake)
 		}
 	}
-	// The one binding beyond the facts is the severity's rank.
-	if len(bindings) != len(storage.AlarmFactKeys())+1 || !slices.Contains(bindings, "severity_rank") {
-		t.Errorf("action site bindings = %v, want the facts plus severity_rank", bindings)
+	// The two bindings beyond the facts are the severity's rank and whether
+	// the component is a platform one (#1987).
+	if len(bindings) != len(storage.AlarmFactKeys())+2 || !slices.Contains(bindings, "severity_rank") || !slices.Contains(bindings, "platform") {
+		t.Errorf("action site bindings = %v, want the facts plus severity_rank and platform", bindings)
 	}
 }
 

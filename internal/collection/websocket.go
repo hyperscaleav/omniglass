@@ -37,13 +37,13 @@ import (
 const WebSocketPingInterval = 30 * time.Second
 
 // maxWebSocketFrame bounds one inbound frame: a control interface's message
-// is a small document, and a hostile component cannot make the node hold
+// is a small document, and a hostile component cannot make the outpost hold
 // more. A larger frame is read off the wire, dropped, and named unclaimed;
 // the connection is kept.
 const maxWebSocketFrame = 1 << 20
 
 // maxUpgradeHead bounds the upgrade answer's head, as a stream's is: a few
-// headers, never more than the node will hold.
+// headers, never more than the outpost will hold.
 const maxUpgradeHead = maxStreamHead
 
 // upgradeAttempts bounds the upgrades one auth step sends: the first, and

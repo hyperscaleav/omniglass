@@ -162,7 +162,7 @@ func pathSegment(s string) string {
 // none of them a dot segment. A positional rides the request path as one
 // segment, and `.` or `..` there is a segment a normalizing hop (a proxy, an
 // ingress) rewrites into the route above it, so `member delete night-shift ..`
-// could reach `DELETE /principal-groups/night-shift`. No name, dotted address or
+// could reach `DELETE /user-groups/night-shift`. No name, dotted address or
 // filename is either (the name rule opens on a letter or digit, and a file may
 // not be named one, #1133), so refusing them loses nothing.
 func pathArgs(n int) cobra.PositionalArgs {

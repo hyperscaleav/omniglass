@@ -17,17 +17,17 @@ import (
 // a loss ratio: count over in, 0 healthy, null when nothing went in.
 type platformSimulationGap struct {
 	Gap          string   `json:"gap" doc:"The hop a request or a batch was lost at, in travel order."`
-	Protocol     string   `json:"protocol" doc:"The protocol the gap is on; empty for a batch gap, which is per node."`
+	Protocol     string   `json:"protocol" doc:"The protocol the gap is on; empty for a batch gap, which is per outpost."`
 	Count        int64    `json:"count" doc:"How many were lost at the hop over the window, past its masking term."`
 	In           int64    `json:"in" doc:"How many went into the hop over the window: the ratio's denominator."`
-	Ratio        *float64 `json:"ratio" required:"true" nullable:"true" doc:"count over in, 0 healthy; null when nothing went in, when the sim does not observe the hop, or on a restarted node."`
+	Ratio        *float64 `json:"ratio" required:"true" nullable:"true" doc:"count over in, 0 healthy; null when nothing went in, when the sim does not observe the hop, or on a restarted outpost."`
 	Masked       int64    `json:"masked" doc:"How many the masking term accounts for, not counted as lost."`
 	MaskedBy     string   `json:"masked_by" doc:"What the masking term is, empty when the gap has none."`
-	AnsweredLate int64    `json:"answered_late" doc:"Answers the node gave up on before they arrived."`
-	Reading      string   `json:"reading" enum:"loss,impaired,restarted,not observed by the sim" doc:"How to read the gap: loss is a fault, impaired is expected under an applied impairment, restarted means no figure is meaningful."`
+	AnsweredLate int64    `json:"answered_late" doc:"Answers the outpost gave up on before they arrived."`
+	Reading      string   `json:"reading" enum:"loss,impaired,restarted,not observed by the sim" doc:"How to read the gap: loss is a fault, impaired is expected under an applied impairment, restarted (an outpost or sim that started again, or a sim whose served fleet changed) means no figure is meaningful."`
 }
 
-// platformSimulationReceipts is the node's receipts counted for the window.
+// platformSimulationReceipts is the outpost's receipts counted for the window.
 type platformSimulationReceipts struct {
 	Landed   int64 `json:"landed" doc:"Batches landed from the margin before the window's start to the bracket after its end."`
 	Margin   int64 `json:"margin" doc:"Of those, the ones landed before the start: a batch acknowledged before the start read."`
@@ -35,7 +35,7 @@ type platformSimulationReceipts struct {
 	AfterEnd int64 `json:"after_end" doc:"Of those, the ones landed after the end, acknowledged before the end read."`
 }
 
-// platformSimulationProtocol is one protocol at the node's simulator over
+// platformSimulationProtocol is one protocol at the outpost's simulator over
 // the window.
 type platformSimulationProtocol struct {
 	Protocol     string               `json:"protocol"`
@@ -50,44 +50,44 @@ type platformSimulationProtocol struct {
 // platformSimulationDevice is one simulated device over the window.
 type platformSimulationDevice struct {
 	ComponentID string           `json:"component_id"`
-	Component   string           `json:"component" doc:"The component's name; empty when it is no longer one of the node's simulated devices."`
+	Component   string           `json:"component" doc:"The component's name; empty when it is no longer one of the outpost's simulated devices."`
 	Received    map[string]int64 `json:"received" doc:"Requests the device saw over the window, by protocol."`
 	Impaired    bool             `json:"impaired" doc:"Whether the simulator impairs the device at the window's end."`
 	Unhit       bool             `json:"unhit" doc:"Whether it is a poll target due over the window that the simulator never saw."`
 }
 
-// platformSimulationNode is one node with a simulator, read over the window.
-type platformSimulationNode struct {
-	Node      string                       `json:"node"`
-	State     string                       `json:"state" enum:"warming up,measured,restarted" doc:"warming up until the server holds a window and the bracket after it; restarted while the window holds a restart."`
+// platformSimulationOutpost is one outpost with a simulator, read over the window.
+type platformSimulationOutpost struct {
+	Outpost   string                       `json:"outpost"`
+	State     string                       `json:"state" enum:"warming up,measured,restarted" doc:"warming up until the server holds a window and the bracket after it; restarted while the window holds a restart of the outpost or its sim, or a change to the fleet the sim serves."`
 	Start     *time.Time                   `json:"start" required:"true" nullable:"true" doc:"The window's first bracket; null while warming up."`
 	End       *time.Time                   `json:"end" required:"true" nullable:"true" doc:"The window's last bracket; null while warming up."`
-	Brackets  int                          `json:"brackets" doc:"How many brackets the server holds for the node."`
+	Brackets  int                          `json:"brackets" doc:"How many brackets the server holds for the outpost."`
 	Error     string                       `json:"error" doc:"Why the last bracket or its reads failed; empty when they did not."`
 	Gaps      []platformSimulationGap      `json:"gaps" required:"true" nullable:"true" doc:"Every gap over the window in travel order; null while warming up."`
 	Receipts  platformSimulationReceipts   `json:"receipts"`
 	Protocols []platformSimulationProtocol `json:"protocols"`
-	// InFlightHigh is the most requests the node's sim held at once over
+	// InFlightHigh is the most requests the outpost's sim held at once over
 	// every protocol.
 	InFlightHigh int64                      `json:"in_flight_high" doc:"The most requests the simulator held at once over every protocol."`
-	QueueDepth   *int64                     `json:"queue_depth" required:"true" nullable:"true" doc:"The node's dispatch queue depth; null until a node reports it."`
-	BusyWorkers  *int64                     `json:"busy_workers" required:"true" nullable:"true" doc:"The node's busy-worker high water; null until a node reports it."`
+	QueueDepth   *int64                     `json:"queue_depth" required:"true" nullable:"true" doc:"The outpost's dispatch queue depth; null until an outpost reports it."`
+	BusyWorkers  *int64                     `json:"busy_workers" required:"true" nullable:"true" doc:"The outpost's busy-worker high water; null until an outpost reports it."`
 	Devices      []platformSimulationDevice `json:"devices"`
 }
 
 type platformSimulationViewOutput struct {
 	Body struct {
-		ReadAt         time.Time                `json:"read_at" doc:"The server's clock at the read."`
-		WindowSeconds  int                      `json:"window_seconds" doc:"A full window's length."`
-		BracketSeconds int                      `json:"bracket_seconds" doc:"How often the server brackets each node."`
-		Nodes          []platformSimulationNode `json:"nodes" doc:"Each node with a connected simulator; empty when none is."`
+		ReadAt         time.Time                   `json:"read_at" doc:"The server's clock at the read."`
+		WindowSeconds  int                         `json:"window_seconds" doc:"A full window's length."`
+		BracketSeconds int                         `json:"bracket_seconds" doc:"How often the server brackets each outpost."`
+		Outposts       []platformSimulationOutpost `json:"outposts" doc:"Each outpost with a connected simulator; empty when none is."`
 	}
 }
 
-// toPlatformSimulationNode is a ring's read of one node as the wire carries
+// toPlatformSimulationOutpost is a ring's read of one outpost as the wire carries
 // it, its devices named by name.
-func toPlatformSimulationNode(w closedloop.NodeWindow, names map[string]string) platformSimulationNode {
-	n := platformSimulationNode{Node: w.Node, State: w.State, Brackets: w.Brackets, Error: w.Err,
+func toPlatformSimulationOutpost(w closedloop.OutpostWindow, names map[string]string) platformSimulationOutpost {
+	n := platformSimulationOutpost{Outpost: w.Outpost, State: w.State, Brackets: w.Brackets, Error: w.Err,
 		Protocols: []platformSimulationProtocol{}, Devices: []platformSimulationDevice{}}
 	if w.State == closedloop.WindowWarmingUp {
 		return n
@@ -101,13 +101,13 @@ func toPlatformSimulationNode(w closedloop.NodeWindow, names map[string]string) 
 	}
 	rc := w.Bracket.Receipts
 	n.Receipts = platformSimulationReceipts{Landed: rc.Landed, Margin: rc.Margin, Backlog: rc.Backlog, AfterEnd: rc.AfterEnd}
-	sum := closedloop.SummarizeEndpoints([]closedloop.NodeBracket{w.Bracket})
+	sum := closedloop.SummarizeEndpoints([]closedloop.OutpostBracket{w.Bracket})
 	for _, p := range sum.Protocols {
 		n.Protocols = append(n.Protocols, platformSimulationProtocol{Protocol: p.Protocol, Accepted: p.Accepted, Received: p.Received,
-			Answered: p.Answered, Latency: p.Latency, PollTargets: p.PollTargets, InFlightHigh: p.InFlightHigh[w.Node]})
+			Answered: p.Answered, Latency: p.Latency, PollTargets: p.PollTargets, InFlightHigh: p.InFlightHigh[w.Outpost]})
 	}
-	for _, sn := range sum.Nodes {
-		if sn.Node == w.Node {
+	for _, sn := range sum.Outposts {
+		if sn.Outpost == w.Outpost {
 			n.InFlightHigh, n.QueueDepth, n.BusyWorkers = sn.ArrivalHigh, sn.DispatchQueueDepth, sn.BusyWorkers
 		}
 	}
@@ -126,7 +126,7 @@ func registerPlatformSimulationView(api huma.API, a *authenticator, gw storage.G
 		Method:      http.MethodGet,
 		Path:        "/views/platform/simulation",
 		Summary:     "Read what each simulator saw against what the platform collected",
-		Description: "Returns the read behind the Platform health page's simulation section: one row per node with a connected simulator, read over a sliding window the server brackets each minute by default (bracket_seconds). Each gap is a loss ratio (count over what went into the hop, 0 healthy, null when nothing did), its masking term and how to read it: impaired under an applied impairment, restarted while the window holds a restart, otherwise loss. Beside them, the receipts counted for the window, each protocol's received and answered counts, service-time quantiles and in-flight high water, and each simulated device's requests. A node reads warming up until the server holds a full window. The devices are unplaced simulator state, so the read needs a fleet-wide component:read; short of that it answers not found. Gated by simulation:read.",
+		Description: "Returns the read behind the Platform health page's simulation section: one row per outpost with a connected simulator, read over a sliding window the server brackets each minute by default (bracket_seconds). Each gap is a loss ratio (count over what went into the hop, 0 healthy, null when nothing did), its masking term and how to read it: impaired under an applied impairment, restarted while the window holds a restart or a change to the fleet the simulator serves, otherwise loss. Beside them, the receipts counted for the window, each protocol's received and answered counts, service-time quantiles and in-flight high water, and each simulated device's requests. An outpost reads warming up until the server holds a full window. The devices are unplaced simulator state, so the read needs a fleet-wide component:read; short of that it answers not found. Gated by simulation:read.",
 	}, "simulation", "read"), func(ctx context.Context, _ *struct{}) (*platformSimulationViewOutput, error) {
 		if !a.scopeFor(ctx, "component", "read").All {
 			return nil, huma.Error404NotFound("not found")
@@ -135,7 +135,7 @@ func registerPlatformSimulationView(api huma.API, a *authenticator, gw storage.G
 		out.Body.ReadAt = time.Now().UTC()
 		out.Body.BracketSeconds = int(closedloop.RingEvery / time.Second)
 		out.Body.WindowSeconds = closedloop.RingSpan * out.Body.BracketSeconds
-		out.Body.Nodes = []platformSimulationNode{}
+		out.Body.Outposts = []platformSimulationOutpost{}
 		if ring == nil {
 			return out, nil
 		}
@@ -143,15 +143,15 @@ func registerPlatformSimulationView(api huma.API, a *authenticator, gw storage.G
 		out.Body.WindowSeconds = int(ring.Length() / time.Second)
 		for _, w := range ring.Windows() {
 			names := map[string]string{}
-			devs, err := gw.NodeSimDevices(ctx, w.Node, scope.Set{All: true})
+			devs, err := gw.OutpostSimDevices(ctx, w.Outpost, scope.Set{All: true})
 			if err != nil {
-				log.ErrorContext(ctx, "read platform simulation view", "node", w.Node, "error", err)
+				log.ErrorContext(ctx, "read platform simulation view", "outpost", w.Outpost, "error", err)
 				return nil, huma.Error500InternalServerError("read platform simulation view")
 			}
 			for _, d := range devs {
 				names[d.ComponentID] = d.Name
 			}
-			out.Body.Nodes = append(out.Body.Nodes, toPlatformSimulationNode(w, names))
+			out.Body.Outposts = append(out.Body.Outposts, toPlatformSimulationOutpost(w, names))
 		}
 		return out, nil
 	})

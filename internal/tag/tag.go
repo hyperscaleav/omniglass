@@ -1,6 +1,6 @@
 // Package tag is the pure core of the tag primitive: a tag is an operator
 // key: value label whose key is a tenant-wide governed vocabulary and whose
-// values bind per entity and resolve union-on-key, override-on-value down the
+// values bind per entity and resolve union-on-key, shadow-on-value down the
 // cascade. This file owns the vocabulary rules with no I/O, so they are
 // unit-testable in isolation: what makes a well-formed tag key, which entity
 // kinds a key may apply to, and what makes a well-formed bound value. The
@@ -79,12 +79,12 @@ const (
 	KindComponent EntityKind = "component"
 	KindSystem    EntityKind = "system"
 	KindLocation  EntityKind = "location"
-	KindNode      EntityKind = "node"
+	KindOutpost   EntityKind = "outpost"
 )
 
 // EntityKinds is the ordered set of bindable entity kinds, for validation and
 // the create form's applies_to picker.
-var EntityKinds = []EntityKind{KindComponent, KindSystem, KindLocation, KindNode}
+var EntityKinds = []EntityKind{KindComponent, KindSystem, KindLocation, KindOutpost}
 
 // ValidKind reports whether k is a known bindable entity kind.
 func ValidKind(k EntityKind) bool {

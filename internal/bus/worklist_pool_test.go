@@ -52,19 +52,19 @@ type worklistReads struct {
 	reads *int
 }
 
-func (s worklistReads) NodeWorklist(ctx context.Context, node string) (storage.Worklist, error) {
+func (s worklistReads) OutpostWorklist(ctx context.Context, outpost string) (storage.Worklist, error) {
 	*s.reads++
-	return s.worklistOf.NodeWorklist(ctx, node)
+	return s.worklistOf.OutpostWorklist(ctx, outpost)
 }
 
-// A pull whose node stopped waiting while it queued is dropped unread: no
+// A pull whose outpost stopped waiting while it queued is dropped unread: no
 // database read, no reply, one warning and one count.
 func TestAWorklistPullPastItsDeadlineIsDroppedUnread(t *testing.T) {
 	logged := capture(t, slog.LevelDebug)
 	reads := 0
 	s := &Server{store: worklistReads{worklistOf{n: 2}, &reads}}
 	now := time.Now()
-	s.serveWorklistPull(context.Background(), worklistPull{node: "edge-1", subject: "og.v1.worklist.edge-1", deadline: now}, now)
+	s.serveWorklistPull(context.Background(), worklistPull{outpost: "edge-1", subject: "og.v1.worklist.edge-1", deadline: now}, now)
 
 	if reads != 0 {
 		t.Errorf("an expired pull read the worklist %d times", reads)
@@ -72,7 +72,7 @@ func TestAWorklistPullPastItsDeadlineIsDroppedUnread(t *testing.T) {
 	if got := s.WorklistCounts(); got.Expired != 1 || got.Served != 0 {
 		t.Errorf("counts %+v, want one expired", got)
 	}
-	if line := logged.String(); !strings.Contains(line, "level=WARN") || !strings.Contains(line, "node=edge-1") || !strings.Contains(line, "expired") {
+	if line := logged.String(); !strings.Contains(line, "level=WARN") || !strings.Contains(line, "outpost=edge-1") || !strings.Contains(line, "expired") {
 		t.Errorf("no expiry warning: %s", line)
 	}
 }
@@ -80,14 +80,14 @@ func TestAWorklistPullPastItsDeadlineIsDroppedUnread(t *testing.T) {
 // slowStore's read outlasts its caller's deadline.
 type slowStore struct{ worklistOf }
 
-func (s slowStore) NodeWorklist(ctx context.Context, node string) (storage.Worklist, error) {
+func (s slowStore) OutpostWorklist(ctx context.Context, outpost string) (storage.Worklist, error) {
 	<-ctx.Done()
 	return storage.Worklist{}, ctx.Err()
 }
 
-// A read the node gave up on mid-way is abandoned: no reply (the node has
+// A read the outpost gave up on mid-way is abandoned: no reply (the outpost has
 // gone), and counted, not taken for a storage failure.
-func TestAWorklistReadItsNodeGaveUpOnIsAbandoned(t *testing.T) {
+func TestAWorklistReadItsOutpostGaveUpOnIsAbandoned(t *testing.T) {
 	capture(t, slog.LevelDebug)
 	s := &Server{store: slowStore{}}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
@@ -96,7 +96,7 @@ func TestAWorklistReadItsNodeGaveUpOnIsAbandoned(t *testing.T) {
 	s.answerWorklist(ctx, "edge-1", "og.v1.worklist.edge-1", 1<<20, r.respond, time.Now())
 
 	if r.calls != 0 {
-		t.Errorf("sent %d replies to a node that gave up", r.calls)
+		t.Errorf("sent %d replies to an outpost that gave up", r.calls)
 	}
 	if got := s.WorklistCounts(); got.Abandoned != 1 || got.ReadFailed != 0 {
 		t.Errorf("counts %+v, want one abandoned", got)
@@ -129,16 +129,16 @@ func TestALargeWorklistReplyIsSentGzipped(t *testing.T) {
 // A pull that finds the responder's queue full is refused at once as busy,
 // counted, and never waited on: the subscription must not block, or later
 // pulls would be stamped on delivery rather than arrival and the deadline
-// would stop being the node's.
+// would stop being the outpost's.
 func TestAWorklistPullFindingTheQueueFullIsRefusedAsBusy(t *testing.T) {
 	logged := capture(t, slog.LevelDebug)
 	s := &Server{worklistCtx: context.Background(), worklistQueue: make(chan worklistPull, 1)}
 	var first, second sent
-	s.queueWorklistPull(worklistPull{node: "edge-1", subject: "og.v1.worklist.edge-1", respond: first.respond})
+	s.queueWorklistPull(worklistPull{outpost: "edge-1", subject: "og.v1.worklist.edge-1", respond: first.respond})
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		s.queueWorklistPull(worklistPull{node: "edge-2", subject: "og.v1.worklist.edge-2", respond: second.respond})
+		s.queueWorklistPull(worklistPull{outpost: "edge-2", subject: "og.v1.worklist.edge-2", respond: second.respond})
 	}()
 	select {
 	case <-done:
@@ -153,7 +153,7 @@ func TestAWorklistPullFindingTheQueueFullIsRefusedAsBusy(t *testing.T) {
 	if got := s.WorklistCounts(); got.Busy != 1 || got.Served != 0 || got.Expired != 0 {
 		t.Errorf("counts %+v, want one busy", got)
 	}
-	if line := logged.String(); !strings.Contains(line, "level=WARN") || !strings.Contains(line, "node=edge-2") || !strings.Contains(line, "queue is full") {
+	if line := logged.String(); !strings.Contains(line, "level=WARN") || !strings.Contains(line, "outpost=edge-2") || !strings.Contains(line, "queue is full") {
 		t.Errorf("no busy warning: %s", line)
 	}
 	if len(s.worklistQueue) != 1 {

@@ -5,7 +5,7 @@ status: "Accepted"
 summary: "Every gated route stamps its required permission into the OpenAPI (`x-omniglass-permission`), so the permission universe is derived from the routes rather than a hand-kept catalog"
 ---
 
-- **Date:** 2026-07-17 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/), [API](/architecture/api/), [Access guide](/guides/admin/access/)
+- **Date:** 2026-07-17 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/), [API](/architecture/api/), [Access guide](/admin/access/)
 - **Decision:** Every capability-gated route registers through one helper, `gated(op, tokens...)`,
   which sets the `authn` + `require` middleware (unchanged enforcement), stamps the operation with
   an `x-omniglass-permission` OpenAPI extension, and records the permission in an in-process

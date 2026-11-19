@@ -24,8 +24,8 @@ const catalog: PropertyRow[] = [
   { name: "port_count", data_type: "int", label: "Port count", official: true },
 ];
 
-const owner: Me = { principal: { id: "p", kind: "human" }, permissions: [">"], grants: [] };
-const reader: Me = { principal: { id: "r", kind: "human" }, permissions: ["product:read"], grants: [] };
+const owner: Me = { user: { id: "p", kind: "person" }, permissions: [">"], grants: [] };
+const reader: Me = { user: { id: "r", kind: "person" }, permissions: ["product:read"], grants: [] };
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -74,7 +74,7 @@ describe("ProductContractEditor", () => {
     expect(queryByLabelText("Withdraw serial-number")).toBeNull();
   });
 
-  it("hides the write controls from a principal without product:update", () => {
+  it("hides the write controls from a user without product:update", () => {
     const { getByText, queryByLabelText } = mount({ me: reader });
     expect(getByText("serial-number")).toBeTruthy();
     expect(queryByLabelText("Property to declare")).toBeNull();

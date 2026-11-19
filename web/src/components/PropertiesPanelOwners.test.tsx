@@ -22,7 +22,7 @@ const seed: EffectiveProperty[] = [
   { property_type_name: "site.note", property_type_id: "site.note-id", label: "Note", data_type: "string", required: false, is_set: true, from_contract: false, set_value: "leased", value: "leased", value_id: "v-note" },
 ];
 
-const owner: Me = { principal: { id: "p", kind: "human" }, permissions: [">"], grants: [] };
+const owner: Me = { user: { id: "p", kind: "person" }, permissions: [">"], grants: [] };
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -135,7 +135,7 @@ describe("PropertiesPanel on a location", () => {
   // The panel is one component, so an owner that cannot be updated gets no input:
   // the write permission is the owner's own resource, resolved per kind.
   it("keeps the rows read-only for a caller without the owner's update permission", () => {
-    const reader: Me = { principal: { id: "r", kind: "human" }, permissions: ["*:read"], grants: [] };
+    const reader: Me = { user: { id: "r", kind: "person" }, permissions: ["*:read"], grants: [] };
     const qc = client("location", "hq");
     qc.setQueryData([...ME_KEY], reader);
     const edit = createEditSlot();

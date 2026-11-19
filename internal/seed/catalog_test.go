@@ -65,3 +65,17 @@ func TestShippedDriverPollsReadEveryDriversSchedule(t *testing.T) {
 		t.Error("no shipped product names a driver")
 	}
 }
+
+// Every shipped driver names the transport it speaks, the kind of work its
+// polls are: the driver cost table rolls its drivers up by it (#1871).
+func TestShippedDriverTransportsNameEveryDriversKind(t *testing.T) {
+	kinds := ShippedDriverTransports()
+	for driver := range ShippedDriverPolls() {
+		if kinds[driver] == "" {
+			t.Errorf("driver %s names no transport", driver)
+		}
+	}
+	if kinds["snmp-generic"] != "snmp" {
+		t.Errorf("snmp-generic speaks %q, want snmp", kinds["snmp-generic"])
+	}
+}

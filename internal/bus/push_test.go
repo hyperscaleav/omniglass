@@ -9,10 +9,10 @@ import (
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
 )
 
-// testRegistry is the minimal registry these cases resolve against.
-func testRegistry(t *testing.T) collection.Registry {
+// testCatalog is the minimal catalog these cases resolve against.
+func testCatalog(t *testing.T) collection.Catalog {
 	t.Helper()
-	return collection.NewRegistry([]storage.MetricType{{Name: "icmp-rtt-avg"}, {Name: "audio-level"}}, nil, nil)
+	return collection.NewCatalog([]storage.MetricType{{Name: "icmp-rtt-avg"}, {Name: "audio-level"}}, nil, nil)
 }
 
 // pushOwner is what apiBinding produces: a component, and no interface labels.
@@ -20,9 +20,9 @@ func pushOwner() storage.TaskOwner {
 	return storage.TaskOwner{ComponentID: "boardroom-a-bar"}
 }
 
-// nodeOwner is what ResolveTaskOwner produces: the interface supplies the instance
+// outpostOwner is what ResolveTaskOwner produces: the interface supplies the instance
 // discriminator and the source.
-func nodeOwner() storage.TaskOwner {
+func outpostOwner() storage.TaskOwner {
 	return storage.TaskOwner{ComponentID: "disp-1", EndpointName: "api", Transport: "icmp"}
 }
 
@@ -39,10 +39,10 @@ func TestAPIBindingRequiresAnAddressableOwner(t *testing.T) {
 		{"owner with no kind", &ogv1.TelemetryBatch{Owner: &ogv1.Owner{Ref: "disp-1"}}},
 		{"owner with no ref", &ogv1.TelemetryBatch{Owner: &ogv1.Owner{Kind: "component"}}},
 		// A push names a component or a system (ADR-0422). No route pushes for a
-		// location or a node, so a batch naming one is refused rather than landed
+		// location or an outpost, so a batch naming one is refused rather than landed
 		// on an arc nothing authorized.
 		{"location owner, never pushed", &ogv1.TelemetryBatch{Owner: &ogv1.Owner{Kind: "location", Ref: "hq-west"}}},
-		{"node owner, never pushed", &ogv1.TelemetryBatch{Owner: &ogv1.Owner{Kind: "node", Ref: "edge-hq"}}},
+		{"outpost owner, never pushed", &ogv1.TelemetryBatch{Owner: &ogv1.Owner{Kind: "outpost", Ref: "edge-hq"}}},
 		// A log line is component-owned (#589), so a system batch carrying one
 		// has nowhere to land it: the route refuses it with a 422, and the
 		// consumer refuses it again rather than land half a batch.
@@ -58,7 +58,7 @@ func TestAPIBindingRequiresAnAddressableOwner(t *testing.T) {
 	}
 }
 
-// A push has ONE owner, unlike the node lane where log lines are node-owned
+// A push has ONE owner, unlike the outpost lane where log lines are outpost-owned
 // self-logs while samples belong to the task's component.
 func TestAPIBindingOwnsBothLanesOfTheBatch(t *testing.T) {
 	bind, ok := apiBinding(&ogv1.TelemetryBatch{
@@ -67,8 +67,8 @@ func TestAPIBindingOwnsBothLanesOfTheBatch(t *testing.T) {
 	if !ok {
 		t.Fatal("apiBinding refused a well-formed component owner")
 	}
-	if bind.LogComponent != "boardroom-a-bar" || bind.LogNode != "" {
-		t.Fatalf("log destination = component %q / node %q, want component boardroom-a-bar only", bind.LogComponent, bind.LogNode)
+	if bind.LogComponent != "boardroom-a-bar" || bind.LogOutpost != "" {
+		t.Fatalf("log destination = component %q / outpost %q, want component boardroom-a-bar only", bind.LogComponent, bind.LogOutpost)
 	}
 	if bind.SampleOwner == nil || bind.SampleOwner.ComponentID != "boardroom-a-bar" {
 		t.Fatalf("sample owner = %+v, want component boardroom-a-bar", bind.SampleOwner)
@@ -99,8 +99,8 @@ func TestAPIBindingLandsASystemOwnerOnTheSystemArc(t *testing.T) {
 	if bind.Arc != (sampleArc{Kind: "system", ID: "boardroom-a"}) {
 		t.Fatalf("sample arc = %+v, want system boardroom-a", bind.Arc)
 	}
-	if bind.LogComponent != "" || bind.LogNode != "" {
-		t.Fatalf("a system batch named a log destination: component %q / node %q", bind.LogComponent, bind.LogNode)
+	if bind.LogComponent != "" || bind.LogOutpost != "" {
+		t.Fatalf("a system batch named a log destination: component %q / outpost %q", bind.LogComponent, bind.LogOutpost)
 	}
 	if bind.SampleOwner == nil || bind.SampleOwner.ComponentID != "" || bind.SampleOwner.EndpointName != "" || bind.SampleOwner.EndpointID != "" {
 		t.Fatalf("sample owner = %+v, want one with no component and no endpoint", bind.SampleOwner)
@@ -113,7 +113,7 @@ func TestAPIBindingLandsASystemOwnerOnTheSystemArc(t *testing.T) {
 // Every lane stamps the binding's arc, never a hardcoded component (#422):
 // a system's metric, property and event each land with owner_kind system.
 func TestDerivedSamplesCarryTheBindingsArc(t *testing.T) {
-	reg := collection.NewRegistry([]storage.MetricType{{Name: "audio-level"}},
+	reg := collection.NewCatalog([]storage.MetricType{{Name: "audio-level"}},
 		[]storage.PropertyType{{Name: "room-state", DataType: "string"}},
 		[]storage.EventType{{Name: "call-started"}})
 	ev := &ogv1.TelemetryBatch{
@@ -138,9 +138,9 @@ func TestDerivedSamplesCarryTheBindingsArc(t *testing.T) {
 }
 
 // The wire value wins where supplied, else the interface-derived value. This is what
-// keeps the node lane byte-for-byte unchanged while letting a push express both.
+// keeps the outpost lane byte-for-byte unchanged while letting a push express both.
 func TestDeriveMetricsInstanceAndSourcePrecedence(t *testing.T) {
-	reg := testRegistry(t)
+	reg := testCatalog(t)
 
 	t.Run("push supplies instance and source", func(t *testing.T) {
 		metrics := deriveMetrics(&ogv1.TelemetryBatch{
@@ -164,10 +164,10 @@ func TestDeriveMetricsInstanceAndSourcePrecedence(t *testing.T) {
 		}
 	})
 
-	t.Run("node lane falls back to the interface", func(t *testing.T) {
+	t.Run("outpost lane falls back to the interface", func(t *testing.T) {
 		metrics := deriveMetrics(&ogv1.TelemetryBatch{
 			Metrics: []*ogv1.MetricSample{{Name: "icmp-rtt-avg", Value: 12.4}},
-		}, componentArc(nodeOwner()), nodeOwner(), reg, storage.NodeWriter(nodeOwner().ComponentID, nodeOwner().EndpointName), nil)
+		}, componentArc(outpostOwner()), outpostOwner(), reg, storage.OutpostWriter(outpostOwner().ComponentID, outpostOwner().EndpointName), nil)
 		if len(metrics) != 1 {
 			t.Fatalf("got %d metrics, want 1", len(metrics))
 		}
@@ -214,29 +214,29 @@ func TestAPushedLineKeepsItsEndpointInstance(t *testing.T) {
 	}
 }
 
-// A node's self-logs resolve ts and source exactly as a push's lines do (the
+// An outpost's self-logs resolve ts and source exactly as a push's lines do (the
 // shared per-line helpers), and every write is stamped with the publishing
-// node: the origin-true landing #589 split out of log_line.
-func TestNodeLogWritesStampTheNode(t *testing.T) {
-	logs := nodeLogWrites(&ogv1.TelemetryBatch{
-		Source: "node",
+// outpost: the origin-true landing #589 split out of log_line.
+func TestOutpostLogWritesStampTheOutpost(t *testing.T) {
+	logs := outpostLogWrites(&ogv1.TelemetryBatch{
+		Source: "outpost",
 		Logs: []*ogv1.LogLine{
 			{Message: "explicit", Source: "collection", Severity: "warning"},
 			{Message: "inherited"},
 		},
 	}, "site-a")
 	if len(logs) != 2 {
-		t.Fatalf("got %d node log writes, want 2", len(logs))
+		t.Fatalf("got %d outpost log writes, want 2", len(logs))
 	}
 	if logs[0].Source != "collection" || logs[0].Severity != "warning" {
 		t.Fatalf("explicit line = %+v, want source collection severity warning", logs[0])
 	}
-	if logs[1].Source != "node" {
-		t.Fatalf("inherited line source = %q, want the batch's node", logs[1].Source)
+	if logs[1].Source != "outpost" {
+		t.Fatalf("inherited line source = %q, want the batch's outpost", logs[1].Source)
 	}
 	for _, l := range logs {
-		if l.Node != "site-a" {
-			t.Fatalf("node log stamped %q, want the publishing node site-a", l.Node)
+		if l.Outpost != "site-a" {
+			t.Fatalf("outpost log stamped %q, want the publishing outpost site-a", l.Outpost)
 		}
 	}
 }

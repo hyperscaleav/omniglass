@@ -2,8 +2,8 @@
 #
 # A batch pushed to the API (POST /telemetry:push, or a webhook) carried no ledger, so whatever the
 # push lane lost was invisible. Now the server mints one as it publishes: a boot per server process,
-# a dense seq, and each kind's count, and the receipt carries it with a null node. omniglass lab
-# measure reconciles the push lane apart from the nodes', one ingest row per kind, 0 healthy (#1696).
+# a dense seq, and each kind's count, and the receipt carries it with a null outpost. omniglass lab
+# measure reconciles the push lane apart from the outposts', one ingest row per kind, 0 healthy (#1696).
 # A corporate lab runs a booking service a site, which pushes on its own (#1743); this one also pushes by hand,
 # an event besides, so every push kind reads.
 
@@ -44,7 +44,7 @@ Show
 Type "# Measured unseen while it pushed: omniglass lab measure --systems 0 --warmup 10s --window 40s"
 Enter
 Wait
-Type "# The delivery table: the node lane first, then the push lane, each kind across the ingest hop"
+Type "# The delivery table: the outpost lane first, then the push lane, each kind across the ingest hop"
 Enter
 Wait
 Type "sed -n '/^delivery /,$p' /tmp/push-lane.txt"

@@ -32,7 +32,7 @@ func TestLocationNameRuleArrivesClaimingNothing(t *testing.T) {
 	}
 	conn := connectDSN(t, dsn)
 
-	// The registries are seeded by the boot phase rather than by a migration,
+	// The catalogs are seeded by the boot phase rather than by a migration,
 	// so this fixture writes the rows an upgraded fleet would already hold.
 	// The column is `display_name` at this point in the chain: #613's rename
 	// (20260814100000_label_is_the_column.sql) is above the version this test

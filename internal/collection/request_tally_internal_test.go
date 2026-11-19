@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// One request per connection is what lets the lab reconcile the node's
+// One request per connection is what lets the lab reconcile the outpost's
 // connections against the sim's accepts: a pooled connection would carry
 // several requests on one accept. Both HTTP transports keep it.
 func TestBothHTTPTransportsKeepDisableKeepAlives(t *testing.T) {

@@ -26,7 +26,7 @@ function hook(over: Partial<NonNullable<Reachability["endpoints"][number]["webho
 function mount(data: Reachability, permissions: string[]) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...REACHABILITY_KEY(data.component)], data);
-  qc.setQueryData([...ME_KEY], { principal: { id: "p", kind: "human" }, permissions, grants: [] } as Me);
+  qc.setQueryData([...ME_KEY], { user: { id: "p", kind: "person" }, permissions, grants: [] } as Me);
   return render(() => (
     <QueryClientProvider client={qc}>
       <ReachabilityPanel name={data.component} />

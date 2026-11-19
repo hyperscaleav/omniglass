@@ -2,7 +2,7 @@
 #
 # The meeting platform's account-wide service (a conduit) reports every room's call state in one
 # answer. Each room is named by its ucc-room-id, and the conduit's identity bindings say which
-# system each room is: the node's poll of its room list and the service's webhook report both land
+# system each room is: the outpost's poll of its room list and the service's webhook report both land
 # each room's value on its own system, observed, its source naming the conduit. The room nobody
 # bound lands on no system and waits in the conduit's unbound inbox; binding it makes its next value
 # land on its system (#1282, ADR-1282).
@@ -36,7 +36,7 @@ Type "clear"
 Enter
 Wait
 Show
-Type "# The node polled the room list once: each room's call state landed on its own system"
+Type "# The outpost polled the room list once: each room's call state landed on its own system"
 Enter
 Wait
 Type `for s in "$board_a" "$huddle"; do omniglass system property sample list "$s" call-state --limit 1 | jq -c --arg s "$s" '.samples[0] | {system: $s, value, instance, source}'; done`

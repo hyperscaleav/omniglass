@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, vi } from "vitest";
+import { describe, it, expect, afterEach, beforeAll, vi } from "vitest";
 import { render, fireEvent, screen, waitFor, within } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
@@ -12,7 +12,7 @@ import { SYSTEM_TYPES_KEY } from "../lib/system_types";
 import { SYSTEMS_KEY } from "../lib/systems";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
-import { expressionText, typeExpression } from "../components/ExpressionField.testing";
+import { expressionText, typeExpression, warmExpressionEditor } from "../components/ExpressionField.testing";
 
 // The Calc rules page (#999, #1018): a FlatList over /calc-rules, each row
 // reading its owner kind, inputs, reduce (an expression, as code), output and
@@ -62,8 +62,8 @@ const metrics: MetricRow[] = [
   { name: "avg-temp", data_type: "float", label: "Average temperature", official: false },
 ];
 
-const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], fleet_permissions: [">"], grants: [{ role: "owner", scope_kind: "all" }] };
-const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], fleet_permissions: ["*:read"], grants: [{ role: "viewer", scope_kind: "all" }] };
+const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], fleet_permissions: [">"], grants: [{ role: "owner", scope_kind: "all" }] };
+const viewer: Me = { user: { id: "u-view", kind: "person" }, person: { username: "viewer" }, permissions: ["*:read"], fleet_permissions: ["*:read"], grants: [{ role: "viewer", scope_kind: "all" }] };
 
 const asides = () => document.querySelectorAll("aside[data-blade]");
 const blade = () =>
@@ -131,6 +131,9 @@ function routes(preview: unknown = { owners: [], owners_judged: 0, owners_total:
   });
   return reqs;
 }
+
+// The editor's lazy chunk is loaded once, before any test (see warmExpressionEditor).
+beforeAll(warmExpressionEditor);
 
 describe("Calc rules page", () => {
   afterEach(() => vi.restoreAllMocks());

@@ -323,6 +323,188 @@ func TestPropertyBucketsAggregateOneMeasuredInstance(t *testing.T) {
 	}
 }
 
+// The value in force when the grid opens (#1488): a property that changed to
+// `on` before the window and has not changed since is held across the whole
+// window, though no bucket holds a change. Carried-in is a read of the series
+// from before the grid, never a bucket's own last.
+func TestPropertyBucketsCarryInTheValueInForce(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	f := newWriterFixture(t)
+	hour := time.Now().UTC().Truncate(time.Hour)
+	if err := insertProperties(f.ctx, f.gw, []storage.PropertySampleWrite{
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "firmware-version", Value: "on", Source: "collection", TS: hour.Add(-3*time.Hour + 10*time.Minute)},
+	}); err != nil {
+		t.Fatalf("insert samples: %v", err)
+	}
+
+	// One hour, no change inside it: one flat held value across the window.
+	got, err := f.gw.ListPropertyBuckets(f.ctx, "component", "disp-1", "firmware-version", nil, time.Hour, time.Hour)
+	if err != nil {
+		t.Fatalf("list buckets: %v", err)
+	}
+	if got.CarriedIn == nil || *got.CarriedIn != "on" {
+		t.Fatalf("carried-in = %v, want on: the value in force when the window opens", got.CarriedIn)
+	}
+	if len(got.Buckets) != 1 || got.Buckets[0].Count != 0 || got.Buckets[0].Last != nil {
+		t.Fatalf("buckets = %+v, want one empty bucket: last stays the bucket's own rows", got.Buckets)
+	}
+	if h := got.Buckets[0].Held; h == nil || *h != "on" {
+		t.Fatalf("held = %v, want on carried through the empty bucket", h)
+	}
+
+	// A wider window with a change inside it: the leading empty buckets hold the
+	// carried-in value, the change's bucket and the empties after it hold the new one.
+	if err := insertProperties(f.ctx, f.gw, []storage.PropertySampleWrite{
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "firmware-version", Value: "off", Source: "collection", TS: hour.Add(-time.Hour + 20*time.Minute)},
+	}); err != nil {
+		t.Fatalf("insert change: %v", err)
+	}
+	wide, err := f.gw.ListPropertyBuckets(f.ctx, "component", "disp-1", "firmware-version", nil, 3*time.Hour, time.Hour)
+	if err != nil {
+		t.Fatalf("list wide: %v", err)
+	}
+	// The grid is hour-2h, hour-1h, hour. "on" landed before the grid's start,
+	// so it is carried in; "off" is the change inside the second bucket.
+	if len(wide.Buckets) != 3 {
+		t.Fatalf("buckets = %d, want 3", len(wide.Buckets))
+	}
+	if wide.CarriedIn == nil || *wide.CarriedIn != "on" {
+		t.Fatalf("carried-in = %v, want on: the newest measured row before the grid", wide.CarriedIn)
+	}
+	want := []string{"on", "off", "off"}
+	for i, b := range wide.Buckets {
+		if b.Held == nil || *b.Held != want[i] {
+			t.Fatalf("bucket %d held = %v, want %s", i, b.Held, want[i])
+		}
+	}
+}
+
+// A carried-in value is bounded by the type's retention (the coverage floor),
+// and is only ever one instance's measured row.
+func TestPropertyBucketsCarryInStaysInTheSeriesAndCoverage(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	f := newWriterFixture(t)
+	hour := time.Now().UTC().Truncate(time.Hour)
+	if err := insertProperties(f.ctx, f.gw, []storage.PropertySampleWrite{
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "firmware-version", Instance: "ssh", Value: "2.1.0", Source: "collection", TS: hour.Add(-5 * time.Hour)},
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "firmware-version", Instance: "tls", Value: "7.0.0", Source: "collection", TS: hour.Add(-4 * time.Hour)},
+	}); err != nil {
+		t.Fatalf("insert samples: %v", err)
+	}
+	// A declared row is a want, newer than both measured ones.
+	if _, err := f.conn.Exec(f.ctx, `insert into property (owner_kind, component_id, property_type_id, instance, provenance, value, ts)
+		values ('component', (select id from component where name = 'disp-1'),
+		        (select id from property_type_in_effect() where name = 'firmware-version'), 'ssh', 'declared', '"9.9.9"'::jsonb, $1)`, hour.Add(-3*time.Hour)); err != nil {
+		t.Fatalf("plant a declared value: %v", err)
+	}
+
+	ssh, tls := "ssh", "tls"
+	gotSSH, err := f.gw.ListPropertyBuckets(f.ctx, "component", "disp-1", "firmware-version", &ssh, 2*time.Hour, time.Hour)
+	if err != nil {
+		t.Fatalf("list ssh: %v", err)
+	}
+	if gotSSH.CarriedIn == nil || *gotSSH.CarriedIn != "2.1.0" {
+		t.Fatalf("ssh carried-in = %v, want 2.1.0: not tls's 7.0.0 and not the declared 9.9.9", gotSSH.CarriedIn)
+	}
+	gotTLS, err := f.gw.ListPropertyBuckets(f.ctx, "component", "disp-1", "firmware-version", &tls, 2*time.Hour, time.Hour)
+	if err != nil {
+		t.Fatalf("list tls: %v", err)
+	}
+	if gotTLS.CarriedIn == nil || *gotTLS.CarriedIn != "7.0.0" {
+		t.Fatalf("tls carried-in = %v, want 7.0.0", gotTLS.CarriedIn)
+	}
+
+	// An unnamed read with nothing measured in the window and the series held
+	// by two instances is not guessed at: no carried-in.
+	none, err := f.gw.ListPropertyBuckets(f.ctx, "component", "disp-1", "firmware-version", nil, 2*time.Hour, time.Hour)
+	if err != nil {
+		t.Fatalf("list unnamed: %v", err)
+	}
+	if none.CarriedIn != nil {
+		t.Fatalf("unnamed carried-in over two held instances = %v, want none", *none.CarriedIn)
+	}
+
+	// Past the type's retention the value is older than the coverage floor.
+	one := 1
+	if _, err := f.gw.SetPropertyTypeRetention(f.ctx, "", "firmware-version", &one); err != nil {
+		t.Fatalf("set retention: %v", err)
+	}
+	if err := insertProperties(f.ctx, f.gw, []storage.PropertySampleWrite{
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "firmware-version", Instance: "old", Value: "0.0.1", Source: "collection", TS: time.Now().UTC().Add(-48 * time.Hour)},
+	}); err != nil {
+		t.Fatalf("insert old: %v", err)
+	}
+	old := "old"
+	stale, err := f.gw.ListPropertyBuckets(f.ctx, "component", "disp-1", "firmware-version", &old, 2*time.Hour, time.Hour)
+	if err != nil {
+		t.Fatalf("list old: %v", err)
+	}
+	if stale.CarriedIn != nil {
+		t.Fatalf("carried-in = %v, want none: older than the coverage floor", *stale.CarriedIn)
+	}
+}
+
+// With no instance named and nothing measured in the window, the one instance
+// that holds a value is the series: a property that never changes again still
+// reads as held.
+func TestPropertyBucketsCarryInPicksTheOneHeldInstance(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	f := newWriterFixture(t)
+	hour := time.Now().UTC().Truncate(time.Hour)
+	if err := insertProperties(f.ctx, f.gw, []storage.PropertySampleWrite{
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "firmware-version", Instance: "ssh", Value: "2.1.0", Source: "collection", TS: hour.Add(-5 * time.Hour)},
+	}); err != nil {
+		t.Fatalf("insert samples: %v", err)
+	}
+	got, err := f.gw.ListPropertyBuckets(f.ctx, "component", "disp-1", "firmware-version", nil, 2*time.Hour, time.Hour)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if got.Instance != "ssh" || got.CarriedIn == nil || *got.CarriedIn != "2.1.0" {
+		t.Fatalf("instance %q carried-in %v, want ssh holding 2.1.0", got.Instance, got.CarriedIn)
+	}
+}
+
+// The raw read carries the same value in: the newest measured row of the
+// instance before the window opens.
+func TestPropertyCarriedInForTheRawRead(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	f := newWriterFixture(t)
+	now := time.Now().UTC()
+	if err := insertProperties(f.ctx, f.gw, []storage.PropertySampleWrite{
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "firmware-version", Value: "on", Source: "collection", TS: now.Add(-5 * time.Hour)},
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "firmware-version", Value: "off", Source: "collection", TS: now.Add(-1 * time.Hour)},
+	}); err != nil {
+		t.Fatalf("insert samples: %v", err)
+	}
+	got, err := f.gw.PropertyCarriedIn(f.ctx, "component", "disp-1", "firmware-version", nil, 2*time.Hour)
+	if err != nil {
+		t.Fatalf("carried in: %v", err)
+	}
+	if got == nil || *got != "on" {
+		t.Fatalf("carried-in = %v, want on: the value in force when the 2h window opened, not the change inside it", got)
+	}
+	none, err := f.gw.PropertyCarriedIn(f.ctx, "component", "disp-1", "firmware-version", nil, 10*time.Hour)
+	if err != nil {
+		t.Fatalf("carried in wide: %v", err)
+	}
+	if none != nil {
+		t.Fatalf("carried-in = %v, want none: nothing precedes a window opening before the first row", *none)
+	}
+}
+
 // The bucketed read's time bound reaches the sample scan (#1485): the range's
 // lower bound and the coverage floor sit in the WHERE on metric itself, as bind
 // parameters and now() rather than a CTE's column, so the planner prunes the

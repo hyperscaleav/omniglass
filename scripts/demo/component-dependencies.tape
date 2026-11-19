@@ -49,7 +49,7 @@ Wait
 Type `demo_hush 'omniglass endpoint delete "$b/https"'`
 Enter
 Wait
-Type `demo_hush 'omniglass endpoint create --component "$b" --driver kestrel-api-restart --node edge-hq --inputs "$inputs"'`
+Type `demo_hush 'omniglass endpoint create --component "$b" --driver kestrel-api-restart --outpost edge-hq --inputs "$inputs"'`
 Enter
 Wait
 Type `demo_until 150 'omniglass endpoint poll run "$b/https" system > /dev/null 2>&1'`

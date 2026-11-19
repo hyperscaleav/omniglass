@@ -40,11 +40,11 @@ func TestCommandHealthCarriesTheWindowBetweenPasses(t *testing.T) {
 	t.Parallel()
 	t0 := time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC)
 	t2 := t0.Add(30 * time.Second)
-	q := storage.CommandQueue{Node: "edge-a", ComponentID: "pa", Pending: 2, Stuck: 1, ExpiredUndelivered: 1}
+	q := storage.CommandQueue{Outpost: "edge-a", ComponentID: "pa", Pending: 2, Stuck: 1, ExpiredUndelivered: 1}
 	var asked []time.Time
 	var landed [][]storage.PlatformMetric
 	s := &Server{store: &healthStore{
-		reads:  []storage.CommandQueueRead{{Now: t0, Nodes: []storage.CommandQueue{q}}, {}, {Now: t2, Nodes: []storage.CommandQueue{q}}},
+		reads:  []storage.CommandQueueRead{{Now: t0, Outposts: []storage.CommandQueue{q}}, {}, {Now: t2, Outposts: []storage.CommandQueue{q}}},
 		errs:   []error{nil, errors.New("database away"), nil},
 		asked:  &asked,
 		landed: &landed,

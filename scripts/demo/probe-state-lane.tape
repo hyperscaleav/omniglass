@@ -6,7 +6,7 @@
 # it is a property, written once until it flips. At 1,000 systems the two probe states were half of
 # every metric row, each repeating the last one, which is why they moved lanes (#1592).
 
-Type "# A suite's touch panel, by its dotted address; its edge node probes the panel's tcp port every 10s"
+Type "# A suite's touch panel, by its dotted address; its edge outpost probes the panel's tcp port every 10s"
 Enter
 Wait
 Type `panel='harbor.pavilion-b.suite-b4.$comp.panel-1'`

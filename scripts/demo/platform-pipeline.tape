@@ -1,13 +1,13 @@
 # Read where work is lost, hop by hop
 #
-# omniglass view platform list (GET /views/platform, gated node:read) now serves the pipeline
+# omniglass view platform list (GET /views/platform, gated outpost:read) now serves the pipeline
 # behind Platform health: the hops an item crosses from its run to the store, in order, each read
 # from the same three delivery keys, so one rule reads every hop's loss, (in - out) / in, 0 healthy.
-# The end to end composes them, and each node's Loss composes the hops its own component records
+# The end to end composes them, and each outpost's Loss composes the hops its own component records
 # (#1646, ADR-1646).
 
 Hide
-Type `demo_until 150 'omniglass view platform list | jq -e "([.pipeline.hops[] | select(.total.last_hour.in > 0 and .total.last_hour.loss == 0)] | length == 2) and ([.nodes[] | select(.name == \"edge-hq\" and .loss == 0)] | length == 1)"'`
+Type `demo_until 150 'omniglass view platform list | jq -e "([.pipeline.hops[] | select(.total.last_hour.in > 0 and .total.last_hour.loss == 0)] | length == 2) and ([.outposts[] | select(.name == \"edge-hq\" and .loss == 0)] | length == 1)"'`
 Enter
 Wait@180s
 Type "clear"
@@ -44,9 +44,9 @@ Wait
 Type `omniglass view platform list | jq -c '.pipeline.end_to_end_total'`
 Enter
 Wait
-Type "# A node's Loss composes the hops its own component records, shown on its row"
+Type "# An outpost's Loss composes the hops its own component records, shown on its row"
 Enter
 Wait
-Type `omniglass view platform list | jq -c '{loss_hops, nodes: [.nodes[] | {name, loss}]}'`
+Type `omniglass view platform list | jq -c '{loss_hops, outposts: [.outposts[] | {name, loss}]}'`
 Enter
 Wait

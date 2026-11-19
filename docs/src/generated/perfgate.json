@@ -33,14 +33,14 @@
       "class": "exact",
       "tolerance": 0,
       "two_sided": false,
-      "about": "each node's worst share of worklist pulls refused or unreadable (#1868), per node"
+      "about": "each outpost's worst share of worklist pulls refused or unreadable (#1868), per outpost"
     },
     {
       "family": "delivery_unsettled_boots",
       "class": "exact",
       "tolerance": 0,
       "two_sided": false,
-      "about": "node boots whose batches had not all settled when the read ran out"
+      "about": "outpost boots whose batches had not all settled when the read ran out"
     },
     {
       "family": "metric_rows_per_minute_per_system",
