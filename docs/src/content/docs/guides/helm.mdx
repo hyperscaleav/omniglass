@@ -87,7 +87,7 @@ postgres:
 externalDsn: "postgres://user:pass@managed-db.example.com:5432/omniglass?sslmode=require"
 ```
 
-The `externalDsn` value contains credentials. The chart creates a Secret from it and injects `OMNIGLASS_DSN` into the server, migrate, and bootstrap init containers. Supply it at install time via `--set externalDsn=...` or `--set-file externalDsn=<file>`, or use your GitOps secret tooling (such as External Secrets Operator) to populate the value before install.
+The `externalDsn` value contains credentials. The chart creates a Secret from it and injects `OMNIGLASS_DSN` into the server and the migrate init container, and into the bootstrap init container when `bootstrap.enabled` is true (production leaves it off). Supply it at install time via `--set externalDsn=...` or `--set-file externalDsn=<file>`, or use your GitOps secret tooling (such as External Secrets Operator) to populate the value before install.
 
 ### Persistent data
 
