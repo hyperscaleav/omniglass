@@ -86,11 +86,22 @@ func TestListMetricBuckets(t *testing.T) {
 		t.Fatalf("empty bucket = %+v, want count 0 and null min/max/avg/last", empty)
 	}
 
-	// The default window is 14 days: nothing older is read, and covered_from
-	// says so, so the empty buckets before it are retention's, not collection's.
+	// An observed series has hourly trends, which are kept for two years, so a
+	// whole-hour read reaches past the hot window (#1566): covered from the
+	// grid's start.
+	if !got.CoveredFrom.Equal(got.Buckets[0].TS) || got.Resolution != time.Hour {
+		t.Fatalf("covered_from = %s at %s, want the grid's start %s at 1h: the trends cover the window", got.CoveredFrom, got.Resolution, got.Buckets[0].TS)
+	}
+	// From the samples alone the default window is 14 days: nothing older is
+	// read, and covered_from says so, so the empty buckets before it are
+	// retention's, not collection's.
+	raw, err := gw.ListMetricBucketsFromSamples(ctx, "component", "bucket-1", "icmp-rtt-avg", nil, 720*time.Hour, time.Hour)
+	if err != nil {
+		t.Fatalf("list buckets from samples: %v", err)
+	}
 	wantCovered := time.Now().UTC().Add(-14 * 24 * time.Hour)
-	if d := got.CoveredFrom.Sub(wantCovered); d < -time.Minute || d > time.Minute {
-		t.Fatalf("covered_from = %s, want about %s (the install's metric_days)", got.CoveredFrom, wantCovered)
+	if d := raw.CoveredFrom.Sub(wantCovered); d < -time.Minute || d > time.Minute {
+		t.Fatalf("covered_from = %s, want about %s (the install's metric_days)", raw.CoveredFrom, wantCovered)
 	}
 
 	// A type's own window wins over the install's.
@@ -98,7 +109,7 @@ func TestListMetricBuckets(t *testing.T) {
 	if _, err := gw.SetMetricTypeRetention(ctx, "", "icmp-rtt-avg", &three); err != nil {
 		t.Fatalf("set retention: %v", err)
 	}
-	short, err := gw.ListMetricBuckets(ctx, "component", "bucket-1", "icmp-rtt-avg", nil, 720*time.Hour, time.Hour)
+	short, err := gw.ListMetricBucketsFromSamples(ctx, "component", "bucket-1", "icmp-rtt-avg", nil, 720*time.Hour, time.Hour)
 	if err != nil {
 		t.Fatalf("list buckets: %v", err)
 	}

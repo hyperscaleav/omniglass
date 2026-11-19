@@ -37,7 +37,7 @@ type seriesInput struct {
 	Metric     string `path:"metric" doc:"The metric_type name of the series"`
 	Hours      int    `query:"hours" minimum:"1" maximum:"720" doc:"The window in hours, counted back from now; 24 when unset"`
 	Limit      int    `query:"limit" minimum:"1" maximum:"2000" doc:"The row cap, newest kept; 500 when unset. Ignored when a resolution is set"`
-	Resolution int    `query:"resolution" minimum:"1" maximum:"2592000" doc:"The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused"`
+	Resolution int    `query:"resolution" minimum:"1" maximum:"2592000" doc:"The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. Over a window of more than 48 hours, or one past the series' retention, it is raised to whole hours, at least one, and resolution_seconds says the width applied. A window of more than 5000 buckets is refused"`
 	Instance   string `query:"instance" doc:"The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution"`
 
 	instanceSet bool
@@ -79,9 +79,9 @@ type metricSeriesOutput struct {
 		Metric  string             `json:"metric" doc:"The series' metric_type name"`
 		Samples []metricSampleBody `json:"samples" doc:"Newest first; empty when a resolution was asked for"`
 		// The bucketed answer (#1269), absent from a raw read.
-		ResolutionSeconds int                `json:"resolution_seconds,omitempty" required:"false" doc:"The bucket width asked for; present only on a bucketed read"`
+		ResolutionSeconds int                `json:"resolution_seconds,omitempty" required:"false" doc:"The bucket width applied: the one asked for, raised to whole hours over a window of more than 48 hours or past the series' retention (ADR-1566); present only on a bucketed read"`
 		Instance          *string            `json:"instance,omitempty" required:"false" doc:"The one instance the buckets aggregate, measured samples only (observed and calculated); present only on a bucketed read"`
-		CoveredFrom       *time.Time         `json:"covered_from,omitempty" required:"false" doc:"The earliest instant the read could have data for: the start of the window or the series' effective retention, whichever is later. A bucket before it is empty because of retention, not because collection stopped"`
+		CoveredFrom       *time.Time         `json:"covered_from,omitempty" required:"false" doc:"The earliest instant the read could have data for: the start of the window, or the oldest the series keeps when that is later, its samples' effective retention or, at whole hours for a series with hourly trends, the trends' window. A bucket before it is empty because of retention, not because collection stopped"`
 		Buckets           []metricBucketBody `json:"buckets,omitempty" required:"false" doc:"Every regular bucket of the window, oldest first"`
 	}
 }
@@ -110,7 +110,7 @@ type propertySeriesOutput struct {
 		Property string               `json:"property" doc:"The series' property_type name"`
 		Samples  []propertySampleBody `json:"samples" doc:"Newest first: the change history behind the effective value; empty when a resolution was asked for"`
 		// The bucketed answer (#1269), absent from a raw read.
-		ResolutionSeconds int                  `json:"resolution_seconds,omitempty" required:"false" doc:"The bucket width asked for; present only on a bucketed read"`
+		ResolutionSeconds int                  `json:"resolution_seconds,omitempty" required:"false" doc:"The bucket width applied, the one asked for; present only on a bucketed read"`
 		Instance          *string              `json:"instance,omitempty" required:"false" doc:"The one instance the buckets aggregate, measured changes only (observed and calculated); present only on a bucketed read"`
 		CoveredFrom       *time.Time           `json:"covered_from,omitempty" required:"false" doc:"The earliest instant the read could have data for: the start of the window or the series' effective retention, whichever is later"`
 		Buckets           []propertyBucketBody `json:"buckets,omitempty" required:"false" doc:"Every regular bucket of the window, oldest first"`
@@ -166,13 +166,20 @@ func seriesWindow(hours int) time.Duration {
 
 // seriesBucketing validates a bucketed request: the window, the bucket width
 // and how many buckets they make, the window rounded up to a whole bucket. A
-// grid past seriesMaxBuckets is refused rather than cut.
-func seriesBucketing(hours, resolutionSeconds int) (window, resolution time.Duration, n int, err error) {
+// metric read (clamp) first raises the width over a wide window to whole hours
+// (storage.ClampBucketResolution, ADR-1566), so a 30-day read at a minute is
+// 720 hourly buckets, not a refusal; the read raises it again past the
+// series' retention, which only this read knows. A grid past
+// seriesMaxBuckets is refused rather than cut.
+func seriesBucketing(hours, resolutionSeconds int, clamp bool) (window, resolution time.Duration, n int, err error) {
 	if resolutionSeconds < 1 || resolutionSeconds > seriesMaxResolution {
 		return 0, 0, 0, fmt.Errorf("a resolution of %d seconds is outside 1 to %d (30 days)", resolutionSeconds, seriesMaxResolution)
 	}
 	window = seriesWindow(hours)
 	resolution = time.Duration(resolutionSeconds) * time.Second
+	if clamp {
+		resolution = storage.ClampBucketResolution(window, resolution, 0)
+	}
 	n = int((window + resolution - 1) / resolution)
 	if n > seriesMaxBuckets {
 		return 0, 0, 0, fmt.Errorf("a %s window at %s makes %d buckets, past the %d a read answers with; widen the resolution", window, resolution, n, seriesMaxBuckets)
@@ -220,7 +227,7 @@ func registerSeriesRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 			Method:      http.MethodGet,
 			Path:        "/" + oc.kind + "s/{name}/metrics/{metric}/samples",
 			Summary:     "Read one metric series' samples",
-			Description: "The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with count, min, max, avg and last (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured samples (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured samples in the window, or a 422 listing them when there are several. Nothing is read beyond the series' effective retention until trends exist (#1276). Gated by " + oc.resource + ":read; an out-of-scope owner is a non-disclosing 404.",
+			Description: "The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with count, min, max, avg and last (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured samples (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured samples in the window, or a 422 listing them when there are several. Over more than 48 hours, or past the series' retention, the resolution is raised to whole hours, and resolution_seconds is the width applied. At whole hours a series with hourly trends (an observed one) takes every hour the trend fold has closed from its trend, so the read reaches back as far as the trends are kept, and its open hours from the samples; any other series, or a finer resolution, reads its samples, within their retention (ADR-1566). Gated by " + oc.resource + ":read; an out-of-scope owner is a non-disclosing 404.",
 		}, oc.resource, "read"), func(ctx context.Context, in *seriesInput) (*metricSeriesOutput, error) {
 			id, display, err := oc.resolve(ctx, in.Name)
 			if err != nil {
@@ -230,7 +237,7 @@ func registerSeriesRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 			out.Body.Owner = display
 			out.Body.Metric = in.Metric
 			if in.Resolution > 0 {
-				window, res, n, err := seriesBucketing(in.Hours, in.Resolution)
+				window, res, n, err := seriesBucketing(in.Hours, in.Resolution, true)
 				if err != nil {
 					return nil, huma.Error422UnprocessableEntity(err.Error())
 				}
@@ -238,7 +245,7 @@ func registerSeriesRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 				if err != nil {
 					return nil, bucketReadErr(err, "read metric series buckets")
 				}
-				out.Body.ResolutionSeconds = in.Resolution
+				out.Body.ResolutionSeconds = int(got.Resolution / time.Second)
 				out.Body.Instance = &got.Instance
 				out.Body.CoveredFrom = &got.CoveredFrom
 				out.Body.Samples = []metricSampleBody{}
@@ -274,7 +281,7 @@ func registerSeriesRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 			out.Body.Owner = display
 			out.Body.Property = in.Property
 			if in.Resolution > 0 {
-				window, res, n, err := seriesBucketing(in.Hours, in.Resolution)
+				window, res, n, err := seriesBucketing(in.Hours, in.Resolution, false)
 				if err != nil {
 					return nil, huma.Error422UnprocessableEntity(err.Error())
 				}

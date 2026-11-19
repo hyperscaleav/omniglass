@@ -7438,7 +7438,7 @@ components:
             - array
             - "null"
         covered_from:
-          description: "The earliest instant the read could have data for: the start of the window or the series' effective retention, whichever is later. A bucket before it is empty because of retention, not because collection stopped"
+          description: "The earliest instant the read could have data for: the start of the window, or the oldest the series keeps when that is later, its samples' effective retention or, at whole hours for a series with hourly trends, the trends' window. A bucket before it is empty because of retention, not because collection stopped"
           format: date-time
           type: string
         instance:
@@ -7451,7 +7451,7 @@ components:
           description: The owner's name
           type: string
         resolution_seconds:
-          description: The bucket width asked for; present only on a bucketed read
+          description: "The bucket width applied: the one asked for, raised to whole hours over a window of more than 48 hours or past the series' retention (ADR-1566); present only on a bucketed read"
           format: int64
           type: integer
         samples:
@@ -9490,7 +9490,7 @@ components:
           description: The series' property_type name
           type: string
         resolution_seconds:
-          description: The bucket width asked for; present only on a bucketed read
+          description: The bucket width applied, the one asked for; present only on a bucketed read
           format: int64
           type: integer
         samples:
@@ -17269,7 +17269,7 @@ paths:
       x-omniglass-permission: component:read
   /components/{name}/metrics/{metric}/samples:
     get:
-      description: "The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with count, min, max, avg and last (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured samples (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured samples in the window, or a 422 listing them when there are several. Nothing is read beyond the series' effective retention until trends exist (#1276). Gated by component:read; an out-of-scope owner is a non-disclosing 404."
+      description: "The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with count, min, max, avg and last (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured samples (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured samples in the window, or a 422 listing them when there are several. Over more than 48 hours, or past the series' retention, the resolution is raised to whole hours, and resolution_seconds is the width applied. At whole hours a series with hourly trends (an observed one) takes every hour the trend fold has closed from its trend, so the read reaches back as far as the trends are kept, and its open hours from the samples; any other series, or a finer resolution, reads its samples, within their retention (ADR-1566). Gated by component:read; an out-of-scope owner is a non-disclosing 404."
       operationId: list-component-metric-series
       parameters:
         - description: The owner's name or uuid
@@ -17306,12 +17306,12 @@ paths:
             maximum: 2000
             minimum: 1
             type: integer
-        - description: The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused
+        - description: The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. Over a window of more than 48 hours, or one past the series' retention, it is raised to whole hours, at least one, and resolution_seconds says the width applied. A window of more than 5000 buckets is refused
           explode: false
           in: query
           name: resolution
           schema:
-            description: The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused
+            description: The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. Over a window of more than 48 hours, or one past the series' retention, it is raised to whole hours, at least one, and resolution_seconds says the width applied. A window of more than 5000 buckets is refused
             format: int64
             maximum: 2592000
             minimum: 1
@@ -22983,7 +22983,7 @@ paths:
       x-omniglass-permission: system:read
   /systems/{name}/metrics/{metric}/samples:
     get:
-      description: "The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with count, min, max, avg and last (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured samples (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured samples in the window, or a 422 listing them when there are several. Nothing is read beyond the series' effective retention until trends exist (#1276). Gated by system:read; an out-of-scope owner is a non-disclosing 404."
+      description: "The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with count, min, max, avg and last (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured samples (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured samples in the window, or a 422 listing them when there are several. Over more than 48 hours, or past the series' retention, the resolution is raised to whole hours, and resolution_seconds is the width applied. At whole hours a series with hourly trends (an observed one) takes every hour the trend fold has closed from its trend, so the read reaches back as far as the trends are kept, and its open hours from the samples; any other series, or a finer resolution, reads its samples, within their retention (ADR-1566). Gated by system:read; an out-of-scope owner is a non-disclosing 404."
       operationId: list-system-metric-series
       parameters:
         - description: The owner's name or uuid
@@ -23020,12 +23020,12 @@ paths:
             maximum: 2000
             minimum: 1
             type: integer
-        - description: The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused
+        - description: The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. Over a window of more than 48 hours, or one past the series' retention, it is raised to whole hours, at least one, and resolution_seconds says the width applied. A window of more than 5000 buckets is refused
           explode: false
           in: query
           name: resolution
           schema:
-            description: The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused
+            description: The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. Over a window of more than 48 hours, or one past the series' retention, it is raised to whole hours, at least one, and resolution_seconds says the width applied. A window of more than 5000 buckets is refused
             format: int64
             maximum: 2592000
             minimum: 1

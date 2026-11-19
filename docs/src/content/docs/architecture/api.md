@@ -958,7 +958,9 @@ read entirely when off contract; clearing a value the instance never set is a 40
 `.../properties/{property}/samples` answer a window of one series (`hours`, up to 720). Raw, they
 return the newest rows up to `limit`. Given a `resolution` in seconds they return every regular
 bucket of the window instead, oldest first, empty ones included, with the body's `covered_from`
-naming where retention ends. A bucket is one `instance`'s measured samples: unset, the one instance
+naming where retention ends. A metric read over more than 48 hours, or past retention, is raised to
+whole hours and served its closed hours from the trends; `resolution_seconds` is the width applied
+([ADR-1566](/architecture/decisions/#adr-1566-a-wide-bucketed-read-is-whole-hours-and-takes-closed-hours-from-the-trends)). A bucket is one `instance`'s measured samples: unset, the one instance
 measured in the window, or a 422 listing them when there are several ([a series chart is truthful at every zoom](/architecture/properties/#a-series-chart-is-truthful-at-every-zoom-1269)).
 
 The **metrics read** is its numeric twin, read-only since a sample is telemetry, not an override:
