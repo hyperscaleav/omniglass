@@ -401,3 +401,28 @@ describe("filterWhen", () => {
     expect(routeTokens("/simulation")).toEqual(["simulation", "read"]);
   });
 });
+
+// Hints on pathless groups (Values, Admin) are never rendered: the sidebar
+// shows the group's label only, and navByPath only indexes items with a path
+// (so SectionStub never reads them). Items with a path carry hints because
+// stubs render them through lookupNav.
+describe("nav hints (#2106)", () => {
+  it("pathless group items carry no hint (they cannot reach navByPath or SectionStub)", () => {
+    const pathless = navItems.filter((i) => !i.path);
+    for (const item of pathless) {
+      expect(item.hint, `${item.label} has no path and must have no hint`).toBeUndefined();
+    }
+  });
+
+  it("every item with a path carries a hint (stubs render it; live pages document it)", () => {
+    for (const item of navItems) {
+      if (!item.path) continue;
+      expect(item.hint, `${item.label} has a path and must carry a hint`).toBeTruthy();
+    }
+    for (const item of navItems) {
+      for (const child of item.children ?? []) {
+        expect(child.hint, `${item.label} > ${child.label} must carry a hint`).toBeTruthy();
+      }
+    }
+  });
+});
