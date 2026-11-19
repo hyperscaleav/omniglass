@@ -8,10 +8,10 @@ import "context"
 // the Gateway.
 type BindingsFunc func(ctx context.Context, scope string) (Doc, map[string][]string, error)
 
-// Service resolves effective settings from the four base levels: the type's own
-// declared defaults, the operator file (captured at boot), the environment
-// (captured at boot), and the platform DB binding (read live per call). It
-// holds no per-request state.
+// Service resolves effective settings from four levels: the type's own
+// declared defaults and two in-memory base layers captured at boot (the
+// operator file and the environment), then the platform binding read live from
+// Postgres per call. It holds no per-request state.
 type Service struct {
 	defaults Doc
 	file     Doc

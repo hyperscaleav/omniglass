@@ -316,7 +316,7 @@ caller (the Storage Gateway) through a narrow function seam.
 
 ## Slice-0 boundary
 
-**In:** the platform level (file plus DB), the full cascade-shaped payload, and the platform lock
+**In:** the platform level (file, env and DB), the full cascade-shaped payload, and the platform lock
 stored, shown, and enforced, end to end through the pure engine, the binding table, the Gateway,
 the API, the two permissions, the two seeded `profile` namespaces, and the Admin settings page.
 

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"math"
 	"os"
 	"reflect"
 	"strconv"
@@ -190,6 +191,11 @@ func coerceDefault(s string, k reflect.Kind) (any, error) {
 		f, err := strconv.ParseFloat(s, 64)
 		if err != nil {
 			return nil, err
+		}
+		// NaN and the infinities parse, but no JSON document can carry them, so
+		// a setting holding one would fail every resolved read.
+		if math.IsNaN(f) || math.IsInf(f, 0) {
+			return nil, fmt.Errorf("%q is not a finite number", s)
 		}
 		if k == reflect.Float32 {
 			return float32(f), nil

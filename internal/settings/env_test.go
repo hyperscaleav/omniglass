@@ -1,6 +1,7 @@
 package settings
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"testing"
@@ -205,6 +206,40 @@ func TestLoadEnvIsLayerSource(t *testing.T) {
 	}
 	if got := r.Sources["assistant.model"]; got != "env" {
 		t.Errorf("source = %v, want env", got)
+	}
+}
+
+func TestCoerceRefusesANonFiniteNumber(t *testing.T) {
+	for _, v := range []string{"NaN", "Inf", "-Infinity"} {
+		if _, err := coerceDefault(v, reflect.Float64); err == nil {
+			t.Errorf("coerceDefault(%q, float64) = nil error, want a refusal", v)
+		}
+	}
+}
+
+// The console still wins (#2223): the service's own level stack puts env under
+// the platform binding, so a key set at both resolves to the binding, sourced
+// "platform", and a key set only by env still reads from env.
+func TestPlatformBindingBeatsEnv(t *testing.T) {
+	envDoc, err := LoadEnv([]string{
+		"OMNIGLASS_SETTING__ASSISTANT__MODEL=from-env",
+		"OMNIGLASS_SETTING__ASSISTANT__BASE_URL=https://env.example/v1",
+	})
+	if err != nil {
+		t.Fatalf("LoadEnv: %v", err)
+	}
+	svc := NewService(Doc{}, envDoc, func(context.Context, string) (Doc, map[string][]string, error) {
+		return Doc{"assistant": {"model": "from-console"}}, nil, nil
+	})
+	r, err := svc.Resolve(context.Background())
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if got, src := r.Values["assistant"]["model"], r.Sources["assistant.model"]; got != "from-console" || src != "platform" {
+		t.Errorf("assistant.model = %v from %v, want from-console from platform", got, src)
+	}
+	if got, src := r.Values["assistant"]["base_url"], r.Sources["assistant.base_url"]; got != "https://env.example/v1" || src != "env" {
+		t.Errorf("assistant.base_url = %v from %v, want the env value from env", got, src)
 	}
 }
 
