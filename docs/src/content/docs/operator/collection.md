@@ -111,9 +111,12 @@ without one reads its transport name exactly.
 
     From the CLI or the API a probe's address is the one `target` key of its `params`, written as
     `host[:port]`. `timeout` tunes any probe's wait; `count` and `timeout` together tune an icmp probe, and `tls-mode` a `tls`, `https`, or `wss` one.
-    There are no `host` or `port` keys: params that carry no `target`, or carry either of those keys,
-    are refused with a 422 on create (a 400 on an edit) naming `target`, because the outpost would
-    otherwise skip the endpoint forever and its reachability would never read.
+    Params present at create or edit are validated: a `timeout` that is not a valid Go duration
+    string (e.g. `"30s"`, `"1m30s"`), or a `count` on icmp that is not a non-negative integer,
+    are refused with a 422 on create (a 400 on an edit) naming the field. There are no `host` or
+    `port` keys: params that are present but carry no `target`, or carry either of those keys,
+    are refused the same way, because the outpost would otherwise skip the endpoint forever and its
+    reachability would never read. Creating with no `params` field at all is not yet checked (#2228).
 
     ```bash
     omniglass endpoint create --component amp-9 --transport tcp --params '{"target":"10.20.4.61:8080"}'

@@ -34,17 +34,22 @@ var (
 	// driver's declared inputs refuse, an undeclared input, a transport the
 	// driver does not speak, or a raw target on a driver-attached endpoint.
 	ErrEndpointPatchInvalid = errors.New("storage: endpoint patch invalid")
-	// ErrEndpointParamsInvalid refuses a bare endpoint's create whose params
-	// carry a value its transport's dialer cannot read (a tls mode that is
-	// not a mode), naming the field.
+	// ErrEndpointParamsInvalid refuses a bare endpoint's create or edit whose
+	// params carry a value its transport cannot use: a missing or wrong target
+	// on a dialed endpoint (#1187), host or port keys instead of target, a
+	// timeout that is not a valid Go duration string, a count on icmp that is
+	// not a non-negative integer, an invalid tls-mode on tls/https/wss, or an
+	// invalid listen-port on udp; naming the field.
 	ErrEndpointParamsInvalid = errors.New("storage: endpoint params invalid")
 )
 
 // checkBareParams reads what a bare endpoint's params hand its transport's
 // dialer with meaning, refusing a value it cannot use: the target an outpost
 // dials (required of every dialed transport when params are present, #1187),
-// and the mode of an endpoint over the tls handshake (tls #1035, https #902),
-// which a driver-attached one has checked as an input instead.
+// a timeout that is not a valid Go duration string, a count on an icmp endpoint
+// that is not a non-negative integer, and the mode of an endpoint over the tls
+// handshake (tls #1035, https #902), which a driver-attached one has checked
+// as an input instead.
 func checkBareParams(transportName string, params []byte) error {
 	// TODO(#2228): a create with no params at all is not yet held to this check.
 	if transport.IsDialed(transportName) && len(params) > 0 {
@@ -52,7 +57,7 @@ func checkBareParams(transportName string, params []byte) error {
 			return err
 		}
 	}
-	if (!transport.UsesTLS(transportName) && transportName != "udp") || len(params) == 0 {
+	if len(params) == 0 {
 		return nil
 	}
 	var p map[string]any
@@ -62,6 +67,19 @@ func checkBareParams(transportName string, params []byte) error {
 	if transportName == "udp" {
 		return checkListenPort(p)
 	}
+	if transport.IsDialed(transportName) {
+		if err := checkTimeout(p); err != nil {
+			return err
+		}
+		if transportName == "icmp" {
+			if err := checkCount(p); err != nil {
+				return err
+			}
+		}
+	}
+	if !transport.UsesTLS(transportName) {
+		return nil
+	}
 	raw, ok := p[driver.TLSModeInput]
 	if !ok {
 		return nil
@@ -69,6 +87,39 @@ func checkBareParams(transportName string, params []byte) error {
 	mode, isString := raw.(string)
 	if _, err := driver.ParseTLSMode(mode); err != nil || !isString {
 		return fmt.Errorf("params.%s must be one of %s, and %v is not", driver.TLSModeInput, strings.Join(driver.TLSModes(), ", "), raw)
+	}
+	return nil
+}
+
+// checkTimeout refuses a bare endpoint's params whose timeout value is not a
+// valid Go duration string (the outpost calls time.ParseDuration on it at probe
+// time; a bad value would skip the task forever).
+func checkTimeout(p map[string]any) error {
+	raw, ok := p["timeout"]
+	if !ok {
+		return nil
+	}
+	s, isString := raw.(string)
+	if !isString {
+		return fmt.Errorf("params.timeout must be a duration string (e.g. \"2s\"), and %v is not", raw)
+	}
+	if _, err := time.ParseDuration(s); err != nil {
+		return fmt.Errorf("params.timeout must be a duration string (e.g. \"2s\"), and %q is not", s)
+	}
+	return nil
+}
+
+// checkCount refuses a bare icmp endpoint's params whose count value is not a
+// non-negative integer (the outpost unmarshals it into an int; a non-integer or
+// negative value would cause a parse fault and skip the task forever).
+func checkCount(p map[string]any) error {
+	raw, ok := p["count"]
+	if !ok {
+		return nil
+	}
+	n, isFloat := raw.(float64)
+	if !isFloat || n < 0 || n != float64(int(n)) {
+		return fmt.Errorf("params.count must be a non-negative integer, and %v is not", raw)
 	}
 	return nil
 }
