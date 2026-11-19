@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -272,4 +273,35 @@ func indexOfSub(s, sub string) int {
 		}
 	}
 	return -1
+}
+
+// TestEnvReferenceListsOnlyLoadableKeys pins the generated env reference to
+// what LoadEnv accepts: a map key such as agent.roles is refused at boot, so
+// it must not appear as a variable an operator could set.
+func TestEnvReferenceListsOnlyLoadableKeys(t *testing.T) {
+	facts := EnvSettingFacts()
+	if len(facts) == 0 {
+		t.Fatal("no env facts reflected")
+	}
+	for _, f := range facts {
+		switch f.Key {
+		case EnvPrefix + "AGENT" + EnvSep + "ROLES", EnvPrefix + "AGENT" + EnvSep + "TOOLS":
+			t.Errorf("reference lists %s, which the env layer refuses", f.Key)
+		}
+	}
+	fields := indexSettingFields()
+	for _, f := range facts {
+		rest := strings.TrimPrefix(f.Key, EnvPrefix)
+		ns, key, ok := strings.Cut(rest, EnvSep)
+		if !ok {
+			t.Fatalf("fact %s has no separator", f.Key)
+		}
+		sf, ok := fields[strings.ToLower(ns)][strings.ToLower(key)]
+		if !ok {
+			t.Fatalf("fact %s names no field", f.Key)
+		}
+		if !envSettable(sf.Type) {
+			t.Errorf("reference lists %s, a %s the env layer refuses", f.Key, sf.Type)
+		}
+	}
 }

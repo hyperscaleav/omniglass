@@ -23,7 +23,9 @@ A single setting may also be fed from the server's environment. Set
 console binding, so the console still wins. A per-user namespace (the `profile` domain, `ui` and
 `keybindings`) is refused at boot, naming the variable: those levels are per-user, not per-process.
 The generated [server variables reference](/guides/container-image/#configuration) lists every
-settable key, one `OMNIGLASS_SETTING__*` row per key.
+key a variable can set, one `OMNIGLASS_SETTING__*` row per key. A scalar or a comma-separated list
+can come from a variable; a keyed map (`agent.roles`, `agent.tools`) cannot, and is set in the
+settings file or the console.
 
 From the CLI, `omniglass setting list` reads every namespace, and `omniglass setting update` applies a
 merge patch to one, where a `null` restores a key:

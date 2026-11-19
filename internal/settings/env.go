@@ -142,11 +142,13 @@ func indexNamespaces() map[string]Namespace {
 	return out
 }
 
-// indexSettingFields indexes each platform-domain namespace's leaf fields by
-// their json name, so a variable's key segment looks up the struct field
-// whose type and parser it coerces through. Profile-domain namespaces are
-// indexed too so a profile-namespace variable reports a specific message
-// rather than an "unknown namespace" one.
+// indexSettingFields indexes every namespace's leaf fields by their json name,
+// so a variable's key segment looks up the struct field whose type and parser
+// it coerces through. It walks the whole Settings struct, profile-domain
+// namespaces included, because it reflects the struct as it is; it is NOT
+// the guard against profile keys. That guard is the namespace domain check in
+// LoadEnv (nsDecl.Domain != "platform"), which refuses a profile-namespace
+// variable before this index is consulted. Keep that check.
 func indexSettingFields() map[string]map[string]reflect.StructField {
 	out := map[string]map[string]reflect.StructField{}
 	t := reflect.TypeOf(Settings{})
@@ -177,7 +179,8 @@ type EnvSettingFact struct {
 }
 
 // EnvSettingFacts reflects one fact per settable key off the Settings struct,
-// so the env-var reference carries one row per platform-domain leaf. The
+// so the env-var reference carries one row per platform-domain leaf the env
+// layer accepts (a scalar or a list of scalars; see envSettable). The
 // variable name is the struct's shape translated into the double-underscore
 // convention: namespace json name, then the key's. Walked in struct order so
 // the reference reads namespace by namespace.
@@ -194,6 +197,11 @@ func EnvSettingFacts() []EnvSettingFact {
 		nsType := nsField.Type
 		for j := 0; j < nsType.NumField(); j++ {
 			f := nsType.Field(j)
+			if !envSettable(f.Type) {
+				// A map or struct key is refused by coerceEnvValue, so the
+				// reference must not list a variable that fails the boot.
+				continue
+			}
 			key := jsonName(f)
 			name := EnvPrefix + strings.ToUpper(ns) + EnvSep + strings.ToUpper(key)
 			out = append(out, EnvSettingFact{
@@ -231,6 +239,9 @@ func namespaceDomain(tag string) string {
 // operator would rather not see echoed back in a log line. The caller
 // (LoadEnv) composes this message with the variable's name.
 func coerceEnvValue(s string, t reflect.Type) (any, error) {
+	if !envSettable(t) {
+		return nil, fmt.Errorf("%s is not a scalar or list; set it in the file layer or the platform binding", t)
+	}
 	switch t.Kind() {
 	case reflect.Slice:
 		v, err := listDefault(s, t)
@@ -238,8 +249,6 @@ func coerceEnvValue(s string, t reflect.Type) (any, error) {
 			return nil, fmt.Errorf("expected a comma-separated list of %s", t.Elem().Kind())
 		}
 		return v, nil
-	case reflect.Map, reflect.Struct, reflect.Interface, reflect.Ptr:
-		return nil, fmt.Errorf("%s is not a scalar or list; set it in the file layer or the platform binding", t)
 	}
 	v, err := coerceDefault(s, t.Kind())
 	if err != nil {
@@ -250,4 +259,21 @@ func coerceEnvValue(s string, t reflect.Type) (any, error) {
 		return nil, fmt.Errorf("expected %s %s", article, t.Kind())
 	}
 	return v, nil
+}
+
+// envSettable reports whether the env layer can carry a field of type t: a
+// scalar, or a list of scalars. A map, struct, interface or pointer (or a list
+// of them) is refused, since a flat per-key variable cannot express it. Both
+// coerceEnvValue (what loads) and EnvSettingFacts (what the reference lists)
+// go through this one check, so the two cannot drift apart.
+func envSettable(t reflect.Type) bool {
+	switch t.Kind() {
+	case reflect.Map, reflect.Struct, reflect.Interface, reflect.Ptr:
+		return false
+	case reflect.Array:
+		return false
+	case reflect.Slice:
+		return envSettable(t.Elem())
+	}
+	return true
 }
