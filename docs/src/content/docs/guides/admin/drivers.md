@@ -189,7 +189,7 @@ A datagram counts as the component's when it comes from the component's address,
 that answers from a separate send socket works; one from any other address is dropped and logged.
 Every udp request declares its reply's shape (`reply`), since a datagram's answer is told from a
 late reply to another ask only by it. An endpoint whose `host` is a DNS name follows the name when it
-moves: the outpost re-resolves it once per tick, within the endpoint's timeout, and keeps the
+moves: the outpost re-resolves it once per tick, bounded by half the endpoint's timeout, and keeps the
 socket, so a component that changes address is found again without a restart (a literal IP is never
 resolved). A request may declare `retries` (udp only, 0 to 5), how many times a lost datagram is
 re-sent within

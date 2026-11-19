@@ -188,6 +188,9 @@ func resolveUDPAddr(ctx context.Context, network, target string) (*net.UDPAddr, 
 	if err != nil {
 		return nil, err
 	}
+	if len(ips) == 0 {
+		return nil, &net.DNSError{Err: "no addresses found", Name: host, IsNotFound: true}
+	}
 	addr := ips[0]
 	for _, ip := range ips {
 		if ip.Is4() {

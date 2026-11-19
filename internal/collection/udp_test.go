@@ -156,3 +156,24 @@ func TestDatagramRetargetAcceptsOnlyTheNewAddressAsTheComponent(t *testing.T) {
 	x.push(t, c.LocalAddr(), "OK")
 	eventually(t, "the old address's datagram to be counted foreign", func() bool { return c.ForeignCount() == 1 })
 }
+
+func TestDatagramSystemResolverFollowsALocalName(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real-socket integration test")
+	}
+	// No Resolve is injected, so the target goes through the system resolver
+	// both at bind and on every retarget; localhost answers from the hosts file.
+	x := newUDPPeer(t, answerOK)
+	_, port, err := net.SplitHostPort(x.addr())
+	if err != nil {
+		t.Fatalf("peer address: %v", err)
+	}
+	c := listenDatagram(t, collection.DatagramConfig{Target: net.JoinHostPort("localhost", port)})
+	if _, _, moved, err := c.Retarget(context.Background()); moved || err != nil {
+		t.Fatalf("retarget of localhost: moved=%v err=%v, want no move and no error", moved, err)
+	}
+	exchangeOK(t, c)
+	if x.requests.Load() != 1 {
+		t.Fatalf("the peer on 127.0.0.1 got %d requests, want 1", x.requests.Load())
+	}
+}
