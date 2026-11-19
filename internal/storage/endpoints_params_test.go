@@ -55,6 +55,7 @@ func TestABareDialedEndpointsParamsNameATarget(t *testing.T) {
 		{"icmp count not a number", "icmp", `{"target":"10.0.0.1","count":"three"}`, "count"},
 		{"icmp count negative", "icmp", `{"target":"10.0.0.1","count":-1}`, "count"},
 		{"icmp count not integer", "icmp", `{"target":"10.0.0.1","count":1.5}`, "count"},
+		{"icmp count spelled as a float", "icmp", `{"target":"10.0.0.1","count":3.0}`, "count"},
 		{"ssh no target", "ssh", `{"timeout":"2s"}`, "target"},
 		{"snmp no target", "snmp", `{"count":1}`, "target"},
 		{"tls target and mode", "tls", `{"target":"10.0.0.1:51326","tls-mode":"pin"}`, ""},

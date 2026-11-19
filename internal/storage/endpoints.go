@@ -1,11 +1,13 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -72,7 +74,7 @@ func checkBareParams(transportName string, params []byte) error {
 			return err
 		}
 		if transportName == "icmp" {
-			if err := checkCount(p); err != nil {
+			if err := checkCount(params); err != nil {
 				return err
 			}
 		}
@@ -110,16 +112,26 @@ func checkTimeout(p map[string]any) error {
 }
 
 // checkCount refuses a bare icmp endpoint's params whose count value is not a
-// non-negative integer (the outpost unmarshals it into an int; a non-integer or
-// negative value would cause a parse fault and skip the task forever).
-func checkCount(p map[string]any) error {
+// non-negative integer literal (the outpost unmarshals it into an int, which
+// takes no other spelling: 3.0 or 1e1 faults the parse as 1.5 or -1 would, and
+// the task would skip forever). The literal is read as written, not as a float.
+func checkCount(params []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(params))
+	dec.UseNumber()
+	var p map[string]any
+	if err := dec.Decode(&p); err != nil {
+		return nil // params are passed through as given; their shape is not this check's
+	}
 	raw, ok := p["count"]
 	if !ok {
 		return nil
 	}
-	n, isFloat := raw.(float64)
-	if !isFloat || n < 0 || n != float64(int(n)) {
+	n, isNumber := raw.(json.Number)
+	if !isNumber {
 		return fmt.Errorf("params.count must be a non-negative integer, and %v is not", raw)
+	}
+	if v, err := strconv.ParseInt(n.String(), 10, 0); err != nil || v < 0 {
+		return fmt.Errorf("params.count must be a non-negative integer, and %s is not", n)
 	}
 	return nil
 }
