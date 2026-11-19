@@ -252,13 +252,20 @@ func TestAgentTrustFixTakesTheReviewerAppsChangesRequested(t *testing.T) {
 }
 
 // On a PR its own App wrote, the reviewer can only comment, so a comment
-// whose body opens with a blocking count still blocks.
+// whose body opens with a blocking count still blocks. Both old and new formats
+// are accepted: the old "agent-review: N blocking" and the new
+// "❌ Changes requested · N blocking".
 func TestAgentTrustVerdictBlocksOnACommentThatCarriesBlockingFindings(t *testing.T) {
 	cases := map[string]string{
+		// Old format.
 		`"body":"agent-review: 2 blocking, 1 advisory (lenses: a)"`:  "block: the reviewer found 2 blocking issue(s) and could only comment, since its App wrote this PR",
 		`"body":"agent-review: 0 blocking, 3 advisory (lenses: a)"`:  "ship",
 		`"body":"agent-review: swept, nothing survived (lenses: a)"`: "ship",
 		`"body":"looks fine; agent-review: 2 blocking"`:              "ship",
+		// New compact format.
+		`"body":"❌ Changes requested · 2 blocking · 1 advisory"`: "block: the reviewer found 2 blocking issue(s) and could only comment, since its App wrote this PR",
+		`"body":"✅ Ship · nothing found"`:                        "ship",
+		`"body":"⚠️ 3 advisory"`:                                 "ship",
 	}
 	for body, want := range cases {
 		reviews := `{"user":"hyperscale-agent[bot]","state":"COMMENTED","commit_id":"h2",` + body + `}`
