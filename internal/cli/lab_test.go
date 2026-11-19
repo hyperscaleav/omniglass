@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -270,6 +271,27 @@ func TestLabRunScaleKeepReachesTheRunConfig(t *testing.T) {
 			t.Errorf("keep %v: project %q, scale run %v, %d site outposts; want the scale lab's own project and its outposts",
 				tc.keep, got.Project, got.ScaleRun != nil, len(got.SiteOutposts))
 		}
+	}
+}
+
+// A scale lab forwards the shell's settings variables to its server as a
+// seeded lab does (#2223), and names them on its start line. The run is
+// captured, so no Docker is needed.
+func TestLabRunScaleForwardsSettingsEnv(t *testing.T) {
+	t.Setenv("OMNIGLASS_SETTING__ASSISTANT__MODEL", "openai.gpt-oss-20b-1:0")
+	var got lab.Config
+	var out strings.Builder
+	err := runLab(context.Background(), &out, "test", labFlags{scenario: "corporate", systems: 20,
+		project: lab.DefaultProject, listen: lab.DefaultListen, port: lab.DefaultPort,
+		start: func(_ context.Context, _ io.Writer, cfg lab.Config) error { got = cfg; return nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(got.ServerSettingsEnv, "OMNIGLASS_SETTING__ASSISTANT__MODEL=openai.gpt-oss-20b-1:0") {
+		t.Errorf("scale run ServerSettingsEnv = %q, want the shell's settings variable", got.ServerSettingsEnv)
+	}
+	if !strings.Contains(out.String(), "OMNIGLASS_SETTING__ASSISTANT__MODEL") || strings.Contains(out.String(), "gpt-oss") {
+		t.Errorf("start line should name the variable and not its value:\n%s", out.String())
 	}
 }
 

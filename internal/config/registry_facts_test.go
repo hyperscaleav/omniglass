@@ -3,6 +3,7 @@ package config_test
 import (
 	"encoding/json"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -87,8 +88,13 @@ func TestEnvironReadsOnlyItsFamily(t *testing.T) {
 	t.Setenv("OMNIGLASS_SETTING__ASSISTANT__MODEL", "m")
 	t.Setenv("OMNIGLASS_SETTINGX", "not-in-family")
 	got := config.Environ("OMNIGLASS_SETTING__")
-	if len(got) != 1 || got[0] != "OMNIGLASS_SETTING__ASSISTANT__MODEL=m" {
-		t.Fatalf("Environ = %q, want only the one settings variable", got)
+	if !slices.Contains(got, "OMNIGLASS_SETTING__ASSISTANT__MODEL=m") {
+		t.Fatalf("Environ = %q, want the settings variable this test set", got)
+	}
+	for _, e := range got {
+		if !strings.HasPrefix(e, "OMNIGLASS_SETTING__") {
+			t.Fatalf("Environ = %q, holds %q from outside the family", got, e)
+		}
 	}
 	defer func() {
 		if recover() == nil {

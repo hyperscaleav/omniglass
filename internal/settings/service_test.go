@@ -23,26 +23,27 @@ func TestServiceResolvesFileOverDefaultAndPlatformOverFile(t *testing.T) {
 	}
 }
 
-// TestServiceNamesLevelsDefaultFilePlatform asserts the engine constructs the
-// renamed levels, in broad-to-specific order. Each level contributes a key nothing
+// TestServiceNamesLevelsDefaultFileEnvPlatform asserts the engine constructs the
+// named levels, in broad-to-specific order. Each level contributes a key nothing
 // more specific touches, so the reported source names the level that fed it: the
-// off-axis declaration is "default", the operator file is "file", and the DB
-// binding is "platform".
-func TestServiceNamesLevelsDefaultFilePlatform(t *testing.T) {
+// off-axis declaration is "default", the operator file is "file", the process
+// environment is "env" (#2223), and the DB binding is "platform".
+func TestServiceNamesLevelsDefaultFileEnvPlatform(t *testing.T) {
 	file := Doc{"ui": {"default_landing": "/alarms"}}
 	bindings := func(ctx context.Context, scope string) (Doc, map[string][]string, error) {
 		return Doc{"ui": {"theme": "omniglass-light"}}, nil, nil
 	}
-	svc := NewService(file, nil, bindings)
+	svc := NewService(file, Doc{"assistant": {"model": "from-env"}}, bindings)
 	r, err := svc.Resolve(context.Background())
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
 	// keybindings.open_edit is declared by the type and set by nobody, so it is the
-	// off-axis default; the other two are bindings at the two real rungs.
+	// off-axis default; the other three are set at the three real rungs.
 	for _, tc := range []struct{ path, want string }{
 		{"keybindings.open_edit", "default"},
 		{"ui.default_landing", "file"},
+		{"assistant.model", "env"},
 		{"ui.theme", "platform"},
 	} {
 		if got := r.Sources[tc.path]; got != tc.want {

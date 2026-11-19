@@ -208,12 +208,19 @@ func runLabScenario(ctx context.Context, out io.Writer, m *labscenario.Manifest,
 	if cadence == "" {
 		cadence = lab.CadenceLab
 	}
+	settingsEnv, err := labSettingsEnv(config.Environ(settings.EnvPrefix))
+	if err != nil {
+		return err
+	}
 	choice, err := lab.SelectImage(f.version, f.imageDigest, labImage(f))
 	if err != nil {
 		return err
 	}
 	fmt.Fprintf(out, "Starting a scale lab: scenario %s at %d systems, %d sites (an outpost each), %d simulated components.\n",
 		m.Name, plan.Totals.Systems, len(plan.Sites), plan.Simulated())
+	if names := labSettingsEnvNames(settingsEnv); len(names) > 0 {
+		fmt.Fprintf(out, "Your server takes %d setting(s) from this shell: %s.\n", len(names), strings.Join(names, ", "))
+	}
 	fmt.Fprintln(out)
 	start := f.start
 	if start == nil {
@@ -227,6 +234,7 @@ func runLabScenario(ctx context.Context, out io.Writer, m *labscenario.Manifest,
 			Systems: plan.Totals.Systems, SiteOutposts: outposts, Pushers: pushers,
 			Owner: lab.CurrentOwner(host), WorkDir: wd,
 			Ephemeral: !f.keep, Cadence: cadence, InduceUnregistered: f.scale.induce,
+			ServerSettingsEnv: settingsEnv,
 		},
 		Image: choice, Fresh: f.fresh, Hold: true, ReadyFile: f.script.readyFile, WhilePID: f.script.whilePID,
 		ScaleRun: scale,
