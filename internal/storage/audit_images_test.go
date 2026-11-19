@@ -580,4 +580,19 @@ func TestPrincipalAuditRowsCarryTheirImages(t *testing.T) {
 	purge.wantHeld(t, "purge", "kind", "person")
 	purge.wantHeld(t, "purge", "archived", true)
 	purge.wantNoPlaintext(t, "purge", hash, "hashmarker")
+
+	// A machine user has no person row; its purge still names it.
+	svc, err := gw.EnsureMachine(ctx, root.ID, "svc-purge")
+	if err != nil {
+		t.Fatalf("create machine: %v", err)
+	}
+	if err := gw.ArchiveUser(ctx, root.ID, svc, all); err != nil {
+		t.Fatalf("archive machine: %v", err)
+	}
+	if err := gw.PurgeUser(ctx, root.ID, svc, all); err != nil {
+		t.Fatalf("purge machine: %v", err)
+	}
+	mpurge := latestAudit(t, dsn, "user", svc, "purge")
+	mpurge.wantHeld(t, "machine purge", "name", "svc-purge")
+	mpurge.wantHeld(t, "machine purge", "kind", "machine")
 }

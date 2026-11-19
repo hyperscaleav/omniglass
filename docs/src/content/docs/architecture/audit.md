@@ -41,7 +41,8 @@ drawer. See [implementation status](/architecture/status/).
   the whole subject in `old`. Every writer is held to it: deleting a component already removes its
   alarms (the foreign key cascades) and keeps their rows, alarm retention (#1339) will remove cleared
   ones, and purging a user keeps the rows that named it. Each image is read in the writing
-  transaction, under the row's lock, so it is the state the write replaced. A secret's image is its
+  transaction, under the row's lock (or an advisory lock where the subject is an append-only
+  series, as property values are), so it is the state the write replaced. A secret's image is its
   metadata and a version digest of the sealed value, never the plaintext. The two password verbs
   (`change_password`, `reset_password`) carry no field images on purpose: the only field that moves is
   a credential hash, and a hash is never imaged ([ADR-1442](/architecture/decisions/#adr-1442-an-audit-row-outlives-its-subject-both-images-and-a-string-reference)).

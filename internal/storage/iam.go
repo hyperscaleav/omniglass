@@ -1590,7 +1590,18 @@ func (p *PG) PurgeUser(ctx context.Context, actorID, userID string, action scope
 			before["label"] = label
 		}
 	case errors.Is(err, pgx.ErrNoRows):
-		// A machine user or an outpost has no person row, so no profile fields.
+		// A machine user or an outpost has no person row; its name is on its
+		// machine or outpost row, which the delete cascades away too.
+		name, outpost, err := machineImageName(ctx, tx, userID)
+		if err != nil {
+			return err
+		}
+		if name != "" {
+			before["name"] = name
+		}
+		if outpost {
+			before["outpost"] = true
+		}
 	default:
 		return fmt.Errorf("storage: purge person image: %w", err)
 	}
@@ -1654,6 +1665,29 @@ func mapUserWriteErr(err error) error {
 		return ErrUsernameTaken
 	}
 	return fmt.Errorf("storage: create person: %w", err)
+}
+
+// machineImageName reads, under its row's lock, the name a non-person user is
+// known by: its machine row's, or its outpost row's when the machine is an
+// outpost's (outpost true). Empty when it has neither.
+func machineImageName(ctx context.Context, tx pgx.Tx, userID string) (string, bool, error) {
+	var name string
+	err := tx.QueryRow(ctx, `select name from machine where user_id = $1 for update`, userID).Scan(&name)
+	if err == nil {
+		return name, false, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return "", false, fmt.Errorf("storage: purge machine image: %w", err)
+	}
+	err = tx.QueryRow(ctx, `select name from outpost where user_id = $1 for update`, userID).Scan(&name)
+	switch {
+	case err == nil:
+		return name, true, nil
+	case errors.Is(err, pgx.ErrNoRows):
+		return "", false, nil
+	default:
+		return "", false, fmt.Errorf("storage: purge outpost image: %w", err)
+	}
 }
 
 // loadUser fills a user's kind profile and its grants, given its id and kind
