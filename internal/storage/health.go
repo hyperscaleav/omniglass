@@ -836,9 +836,9 @@ type SystemHealthEntry struct {
 //
 // A system with nothing recorded is reported HEALTHY rather than omitted, and
 // that default is not a guess: recordHealth only writes on a TRANSITION, so a
-// system that has never been recomputed has no row, and SystemVerdictWith over no
-// impaired active slot is Healthy. TestSystemVerdictsAgreeWithTheReport holds
-// this read to SystemHealth's own verdict, defaulted rows included, so the two
+// system that has never been recomputed has no row, and SystemValueWith over no
+// impaired active slot is Healthy. TestSystemHealthsAgreeWithTheReport holds
+// this read to SystemHealth's own value, defaulted rows included, so the two
 // cannot drift.
 func (p *PG) SystemHealths(ctx context.Context, read scope.Set) ([]SystemHealthEntry, error) {
 	if read.Empty() {

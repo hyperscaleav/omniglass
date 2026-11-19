@@ -82,13 +82,13 @@ func verdictFleet(t *testing.T, gw storage.Gateway, systems int) {
 	}
 }
 
-// TestSystemVerdictsAgreeWithTheReport is the oracle gate. SystemHealth is the
-// read the badge used to make per row, and it computes its verdict live from the
+// TestSystemHealthsAgreeWithTheReport is the oracle gate. SystemHealth is the
+// read the badge used to make per row, and it computes its value live from the
 // slots; SystemHealths reads the recorded series and defaults what it does not
 // find. Those are two different mechanisms answering one question, so the
 // agreement is asserted rather than assumed, over a fleet deliberately holding
-// all three verdicts AND a system nothing has ever recomputed.
-func TestSystemVerdictsAgreeWithTheReport(t *testing.T) {
+// all three values AND a system nothing has ever recomputed.
+func TestSystemHealthsAgreeWithTheReport(t *testing.T) {
 	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
