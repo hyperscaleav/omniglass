@@ -1051,9 +1051,17 @@ func TestPlanSettingsEnvGoesToTheServerAlone(t *testing.T) {
 	if !slices.Contains(s.Server.Env, model) {
 		t.Fatalf("server env %v, want %s", s.Server.Env, model)
 	}
-	for _, svc := range []Service{s.DB, s.Seed, s.Outpost} {
-		if slices.Contains(svc.Env, model) {
-			t.Fatalf("%s is handed the server's setting", svc.Name)
+	sc := scaleOptions()
+	sc.ServerSettingsEnv = []string{model}
+	scale, err := Plan(sc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, plan := range []Spec{s, scale} {
+		for _, svc := range plan.Services() {
+			if svc.Name != plan.Server.Name && slices.Contains(svc.Env, model) {
+				t.Fatalf("%s is handed the server's setting", svc.Name)
+			}
 		}
 	}
 	o.ServerSettingsEnv = []string{"OMNIGLASS_DSN=postgres://elsewhere"}

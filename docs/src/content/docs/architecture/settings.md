@@ -76,7 +76,7 @@ falls out: a user may edit a key at level L if and only if no broader level has 
 Every resolved key reports **where it came from** and its **lock state**: the admin read returns the
 effective document plus a sibling `sources` map (`namespace.key` to the winning level, or `default`)
 and a `locks` map (`namespace.key` to the locking level). The Admin page badges a set key
-(`From settings file` / `Set in console`) and badges nothing for a declared default ("Declared
+(`From settings file` / `From environment` / `Set in console`) and badges nothing for a declared default ("Declared
 default" in the layer stack); a row expands to teach the full layer stack (doctrine 4).
 
 ## Domains: platform versus profile
