@@ -225,3 +225,45 @@ func TestAgentTrustOpenRefusesABranchThatAlreadyHasAPR(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+// agent-review posts as a second App, hyperscale-reviewer, because GitHub
+// refuses Request changes from the App that wrote the PR. Its review starts
+// the automatic fix the same way, under the same round cap.
+func TestAgentTrustFixTakesTheReviewerAppsChangesRequested(t *testing.T) {
+	facts := func(sender, state, rounds string) string {
+		return fixFacts(`"event":"review","sender":"` + sender + `","review_state":"` + state + `","auto_rounds":` + rounds + `,"reviewer_bot":"hyperscale-reviewer[bot]","head_ref":"fix/x","fork":false`)
+	}
+	cases := map[string]string{
+		facts("hyperscale-reviewer[bot]", "CHANGES_REQUESTED", "1"): "run",
+		facts("Hyperscale-Reviewer[bot]", "CHANGES_REQUESTED", "5"): "run",
+		facts("hyperscale-reviewer[bot]", "CHANGES_REQUESTED", "6"): "park",
+		facts("hyperscale-reviewer[bot]", "COMMENTED", "1"):         "skip",
+	}
+	for f, want := range cases {
+		if got, _ := agentTrust(t, "fix", f); !strings.HasPrefix(got, want) {
+			t.Fatalf("%s: got %q, want %s", f, got, want)
+		}
+	}
+	// With no reviewer App set up, an event with no sender matches nothing.
+	got, _ := agentTrust(t, "fix", fixFacts(`"event":"review","sender":"","review_state":"CHANGES_REQUESTED","reviewer_bot":"","head_ref":"fix/x","fork":false`))
+	if !strings.HasPrefix(got, "skip:") {
+		t.Fatalf("empty sender: got %q, want a skip", got)
+	}
+}
+
+// On a PR its own App wrote, the reviewer can only comment, so a comment
+// whose body opens with a blocking count still blocks.
+func TestAgentTrustVerdictBlocksOnACommentThatCarriesBlockingFindings(t *testing.T) {
+	cases := map[string]string{
+		`"body":"agent-review: 2 blocking, 1 advisory (lenses: a)"`:  "block: the reviewer found 2 blocking issue(s) and could only comment, since its App wrote this PR",
+		`"body":"agent-review: 0 blocking, 3 advisory (lenses: a)"`:  "ship",
+		`"body":"agent-review: swept, nothing survived (lenses: a)"`: "ship",
+		`"body":"looks fine; agent-review: 2 blocking"`:              "ship",
+	}
+	for body, want := range cases {
+		reviews := `{"user":"hyperscale-agent[bot]","state":"COMMENTED","commit_id":"h2",` + body + `}`
+		if got, _ := agentTrust(t, "verdict", verdictFacts(reviews)); got != want {
+			t.Fatalf("%s: got %q, want %q", body, got, want)
+		}
+	}
+}

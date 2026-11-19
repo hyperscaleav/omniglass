@@ -56,6 +56,12 @@ const (
 	DecisionWaiting Decision = "waiting"
 )
 
+// DeclinedText is what the model is told of a call the person declined.
+const DeclinedText = "the person declined this call; it did not run"
+
+// RefusedText is what the model is told of a call to a tool it was not offered.
+func RefusedText(tool string) string { return "the tool " + tool + " is not offered" }
+
 // Call is one call the model asked for and what became of it.
 type Call struct {
 	Tool     string
@@ -334,7 +340,7 @@ func (l *Loop) emit(e Event) {
 // to run is DecisionCalled, still to be made.
 func decide(ctx context.Context, t *sdk.Tool, tc provider.ToolCall, confirm Confirmer) (Call, error) {
 	if t == nil {
-		return Call{Tool: tc.Name, Decision: DecisionRefused, IsError: true, Text: "the tool " + tc.Name + " is not offered"}, nil
+		return Call{Tool: tc.Name, Decision: DecisionRefused, IsError: true, Text: RefusedText(tc.Name)}, nil
 	}
 	if policyOf(t) != "always" {
 		yes := false
@@ -345,7 +351,7 @@ func decide(ctx context.Context, t *sdk.Tool, tc provider.ToolCall, confirm Conf
 			}
 		}
 		if !yes {
-			return Call{Tool: t.Name, Decision: DecisionDeclined, IsError: true, Text: "the person declined this call; it did not run"}, nil
+			return Call{Tool: t.Name, Decision: DecisionDeclined, IsError: true, Text: DeclinedText}, nil
 		}
 	}
 	return Call{Tool: t.Name, Decision: DecisionCalled}, nil

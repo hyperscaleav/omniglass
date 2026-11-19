@@ -55,6 +55,7 @@ func newLabRunCmd(version, imageDigest string) *cobra.Command {
 		project  string
 		systems  int
 		plan     bool
+		keyEnv   string
 		script   labScript
 		scale    labScale
 	)
@@ -90,7 +91,7 @@ func newLabRunCmd(version, imageDigest string) *cobra.Command {
 			go func() { <-ctx.Done(); stop() }()
 			return runLab(ctx, cmd.OutOrStdout(), version, labFlags{
 				imageDigest: imageDigest, port: port, listen: listen, fresh: fresh, keep: keep, scenario: scenario, image: image, project: project,
-				systems: systems, plan: plan, script: script, scale: scale,
+				systems: systems, plan: plan, script: script, scale: scale, omnibotKeyEnv: keyEnv,
 			})
 		},
 	}
@@ -106,6 +107,9 @@ func newLabRunCmd(version, imageDigest string) *cobra.Command {
 	cmd.Flags().BoolVar(&keep, "keep", false, "a scale lab: keep its data when it stops, so the next run with the same scenario, size and --keep picks up where it left off (--fresh starts over)")
 	cmd.Flags().BoolVar(&plan, "plan", false, "print the scale lab scenario's resolved plan (sites, systems per standard, components per product) and exit, starting nothing")
 	cmd.Flags().StringVar(&image, "image", "", "run this omniglass image instead of the one this binary was built with (env OMNIGLASS_LAB_IMAGE); one that is not this binary's own build is warned about")
+	// A live omnibot (#2109): the key stays in the host's env, named here,
+	// and only the seed is handed it, to seal as a secret.
+	cmd.Flags().StringVar(&keyEnv, "omnibot-key-env", "", "run omnibot on a live model (OpenRouter by default) with the key in this environment variable, e.g. OPENROUTER_API_KEY; without it omnibot plays a recording")
 	cmd.Flags().StringVar(&project, "project", lab.DefaultProject, "the Docker compose project name")
 	_ = cmd.Flags().MarkHidden("project")
 	// For scripts, not learners (the demo pipeline's recorders and the
@@ -139,6 +143,9 @@ func newLabRunCmd(version, imageDigest string) *cobra.Command {
 // the plan up (#1554): Postgres, the server, and one outpost per site, each
 // simulating its site's components, after a check that the host can fit it.
 func runLabScenario(ctx context.Context, out io.Writer, m *labscenario.Manifest, f labFlags) error {
+	if f.omnibotKeyEnv != "" {
+		return fmt.Errorf("--omnibot-key-env is a seeded fleet's lab; scenario %s is a scale lab, which runs no omnibot of its own", m.Name)
+	}
 	if f.keep && f.script.ephemeral {
 		return errors.New("--keep and --ephemeral contradict each other: a kept scale lab keeps its data when it stops, a throwaway one removes it")
 	}
@@ -335,9 +342,11 @@ type labFlags struct {
 	fresh, keep                      bool
 	systems                          int
 	plan                             bool
-	script                           labScript
-	scale                            labScale
-	version                          string
+	// omnibotKeyEnv names the host env var holding a live model's key.
+	omnibotKeyEnv string
+	script        labScript
+	scale         labScale
+	version       string
 	// imageDigest is the release image's digest stamped into this binary.
 	imageDigest string
 	// readHost, when set, stands in for this machine's Docker host in a
@@ -367,6 +376,10 @@ func runLab(ctx context.Context, out io.Writer, version string, f labFlags) erro
 	if f.keep {
 		return fmt.Errorf("--keep keeps a scale lab scenario's data (%s); %q is a seeded fleet, whose lab keeps its data already",
 			strings.Join(labscenario.Names(), ", "), f.scenario)
+	}
+	omnibotKey, err := labOmnibotKey(f.omnibotKeyEnv, config.Named)
+	if err != nil {
+		return err
 	}
 	faults, err := devseed.PlantedFaults(sc)
 	if err != nil {
@@ -406,7 +419,7 @@ func runLab(ctx context.Context, out io.Writer, version string, f labFlags) erro
 			Pushers: pushers,
 			Owner:   lab.CurrentOwner(host), WorkDir: wd,
 			Ephemeral: f.script.ephemeral, NoOutpost: f.script.noOutpost, Cadence: f.script.cadence,
-			PlatformHistory: f.script.platformHistory,
+			PlatformHistory: f.script.platformHistory, OmnibotKey: omnibotKey,
 		},
 		Image: choice, Fresh: f.fresh, PlantedFaults: plantedLabels(faults), Hold: true,
 		ReadyFile: f.script.readyFile, WhilePID: f.script.whilePID,
@@ -502,7 +515,7 @@ func newLabSeedCmd() *cobra.Command {
 				return errors.New("--induce-unregistered is a scale lab's: it needs --systems")
 			}
 			return runLabSeed(cmd.Context(), cmd.OutOrStdout(), scenario, outpost, user, password, config.Get("OMNIGLASS_LAB_OUTPOST_TOKEN_HASH"), noOutpost,
-				pushers, reportSeconds, platformHistory)
+				pushers, reportSeconds, platformHistory, config.Get(lab.OmnibotKeyEnv))
 		},
 	}
 	cmd.Flags().StringVar(&scenario, "scenario", lab.DefaultScenario, "the fleet to seed on the first run")
@@ -537,7 +550,7 @@ func newLabSeedCmd() *cobra.Command {
 // the server's platform component (#1790), so a capture of platform health
 // draws full lines. Only a capture asks for it: a learner's lab reads what
 // its own server measured.
-func runLabSeed(ctx context.Context, out io.Writer, scenario, outpost, user, password, outpostTokenHash string, noOutpost bool, pushers map[string]lab.PusherToken, reportSeconds int, platformHistory bool) error {
+func runLabSeed(ctx context.Context, out io.Writer, scenario, outpost, user, password, outpostTokenHash string, noOutpost bool, pushers map[string]lab.PusherToken, reportSeconds int, platformHistory bool, omnibotKey string) error {
 	sc, err := devseed.LookupScenario(scenario)
 	if err != nil {
 		return err
@@ -598,12 +611,67 @@ func runLabSeed(ctx context.Context, out io.Writer, scenario, outpost, user, pas
 			return err
 		}
 	}
-	// The server reads the lab's omnibot recording as it starts (#2121).
+	// The server reads the lab's omnibot recording as it starts (#2121), and
+	// plays it whenever no live model is configured.
 	if err := lab.WriteOmnibotReplay(cfg().DataDir); err != nil {
+		return err
+	}
+	if err := seedLabOmnibotModel(ctx, gw, omnibotKey); err != nil {
 		return err
 	}
 	fmt.Fprintln(out, lab.FormatSeedResult(lab.SeedResult{Outpost: present, Summary: summary}))
 	return nil
+}
+
+// labOmnibotKey reads the live model key from the host env var name names;
+// no name is no key. A name that is unset or empty is refused, so a typo
+// never quietly falls back to the recording.
+func labOmnibotKey(name string, getenv func(string) string) (string, error) {
+	if name == "" {
+		return "", nil
+	}
+	key := getenv(name)
+	if key == "" {
+		return "", fmt.Errorf("--omnibot-key-env: %s is not set (or is empty) in this shell, so there is no key to run omnibot on", name)
+	}
+	return key, nil
+}
+
+// seedLabOmnibotModel points the lab's omnibot at a live model when given a
+// key (#2109): the key is sealed as the platform api-key secret
+// lab.OmnibotKeySecret (rotated when it already exists) and the assistant
+// settings name it, on the default model and base URL. With no key it undoes
+// that, so the recording plays again; an assistant setting an operator made
+// with a key of their own is left alone.
+func seedLabOmnibotModel(ctx context.Context, gw *storage.PG, key string) error {
+	all := scope.Set{All: true}
+	if key == "" {
+		a, err := gw.AssistantSettings(ctx)
+		if err != nil {
+			return err
+		}
+		if a.KeySecret == lab.OmnibotKeySecret {
+			if _, err := gw.MergePatchSettingBinding(ctx, "", "platform", "assistant", map[string]any{"provider": "none", "key_secret": ""}); err != nil {
+				return err
+			}
+		}
+		if err := gw.DeleteSecret(ctx, "", lab.OmnibotKeySecret, all, all, true, true); err != nil && !errors.Is(err, storage.ErrSecretNotFound) {
+			return err
+		}
+		return nil
+	}
+	fields := map[string]string{"key": key}
+	_, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
+		Name: lab.OmnibotKeySecret, SecretType: "api-key", OwnerKind: "platform", Fields: fields,
+	}, all, true)
+	if errors.Is(err, storage.ErrSecretExists) {
+		_, err = gw.UpdateSecret(ctx, "", lab.OmnibotKeySecret, storage.SecretPatch{Fields: fields}, all, all, true, true)
+	}
+	if err != nil {
+		return err
+	}
+	_, err = gw.MergePatchSettingBinding(ctx, "", "platform", "assistant", map[string]any{"provider": "openai", "key_secret": lab.OmnibotKeySecret})
+	return err
 }
 
 // openLabDB is the lab seed's way into its database: it refuses one that

@@ -1312,6 +1312,12 @@ func (UnimplementedGateway) MailRelay(context.Context) (*MailRelay, string, erro
 func (UnimplementedGateway) MergePatchNotificationSettings(context.Context, string, map[string]any, SecretUse) (*SettingBinding, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) OmnibotModel(context.Context) (*OmnibotModelConfig, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) MergePatchAssistantSettings(context.Context, string, map[string]any, SecretUse) (*SettingBinding, error) {
+	return nil, nil
+}
 
 func (UnimplementedGateway) ListPersonalRules(context.Context, string) ([]ActionRule, error) {
 	return []ActionRule{}, nil

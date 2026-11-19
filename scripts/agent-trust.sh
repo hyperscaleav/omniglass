@@ -24,9 +24,13 @@
 # contributors (logins). fix reads event
 # ("comment" or "review"), sender, review_state, mentions (bool: the body
 # carries @hyperscale-agent or @claude), fork (bool), app_bot (the agents' App bot login),
-# auto_rounds (the App's Changes-requested reviews on the PR, this one
-# included), maintainers and contributors. verdict reads app_bot, head_sha and
-# reviews ([{user, state, commit_id}] in the order GitHub lists them). actors
+# reviewer_bot (the reviewer App's bot login, empty when there is none),
+# auto_rounds (the Changes-requested reviews on the PR from the reviewer App
+# or the agents' App, this one included), maintainers and contributors. verdict reads app_bot (the login
+# that posts agent-review's reviews), head_sha and reviews ([{user, state,
+# commit_id, body}] in the order GitHub lists them). A COMMENTED review whose
+# body opens "agent-review: N blocking" with N above 0 blocks too: that is
+# how the reviewer says no on a PR its own App wrote. actors
 # reads maintainers and contributors. open reads sender (who dispatched
 # agent-open-pr), head_ref (the branch to open the PR from), open_prs (open PRs
 # already on that branch, a count) and maintainers. A comment reaches fix only
@@ -121,7 +125,8 @@ case "$mode" in
   fix)
     printf '%s' "$facts" | jq -r --argjson cap "$AUTO_ROUND_CAP" "$common"'
       (.sender // "") as $sender
-      | ((.app_bot // "") != "" and ($sender | ascii_downcase) == ((.app_bot // "") | ascii_downcase)) as $from_app
+      | def is($bot): ($bot // "") != "" and ($sender | ascii_downcase) == ($bot | ascii_downcase);
+      (is(.app_bot) or is(.reviewer_bot)) as $from_app
       | if (.fork // false) then "skip: the PR comes from a fork"
         elif $from_app then
           if .event != "review" or ((.review_state // "") | ascii_downcase) != "changes_requested" then
@@ -144,9 +149,12 @@ case "$mode" in
           | select((.user // "" | ascii_downcase) == $bot and .commit_id == $root.head_sha)
           | select(.state == "CHANGES_REQUESTED" or .state == "COMMENTED" or .state == "APPROVED")]
       | last as $r
+      | ([($r.body // "") | capture("^agent-review: (?<n>[0-9]+) blocking") | .n | tonumber] | first // 0) as $held
       | if $bot == "" then "block: the event names no reviewer"
         elif $r == null then "block: the reviewer posted no review on this head"
         elif $r.state == "CHANGES_REQUESTED" then "block: the reviewer requests changes"
+        elif $r.state == "COMMENTED" and $held > 0 then
+          "block: the reviewer found \($held) blocking issue(s) and could only comment, since its App wrote this PR"
         else "ship" end'
     ;;
 esac

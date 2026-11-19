@@ -21,3 +21,12 @@ const OmnibotReplayPath = dataDir + "/omnibot-replay.yaml"
 func WriteOmnibotReplay(dir string) error {
 	return os.WriteFile(filepath.Join(dir, filepath.Base(OmnibotReplayPath)), omnibotReplay, 0o644)
 }
+
+// A lab run with --omnibot-key-env runs omnibot on a live model (#2109): the
+// host's key reaches the seed container as OmnibotKeyEnv, and the seed seals
+// it as the platform api-key secret OmnibotKeySecret and points the assistant
+// settings at it. With no key, the seed undoes that and the recording plays.
+const (
+	OmnibotKeyEnv    = "OMNIGLASS_LAB_OMNIBOT_KEY"
+	OmnibotKeySecret = "lab-omnibot-key"
+)

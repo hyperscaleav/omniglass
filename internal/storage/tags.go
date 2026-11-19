@@ -224,6 +224,15 @@ func (p *PG) UpdateTag(ctx context.Context, actorID, name string, patch TagPatch
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// The before-image is read under the row lock the update then takes (ADR-1442).
+	before, err := scanTagRow(tx.QueryRow(ctx, `select `+tagCols+` from tag where name = $1 for update`, name))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrTagNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("storage: read tag before update: %w", err)
+	}
+
 	setLabel, labelVal := labelPatch(patch.Label)
 	t, err := scanTagRow(tx.QueryRow(ctx, `
 		update tag set
@@ -242,7 +251,7 @@ func (p *PG) UpdateTag(ctx context.Context, actorID, name string, patch TagPatch
 	if err != nil {
 		return nil, fmt.Errorf("storage: update tag: %w", err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "tag", t.ID, nil, auditTag(t)); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "update", "tag", t.ID, auditTag(before), auditTag(t)); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -326,6 +335,29 @@ func (p *PG) SetTagBinding(ctx context.Context, actorID, key, ownerKind string, 
 	}
 	compID, sysID, locID := arcColumns(ownerKind, ownerID)
 	outpostID := outpostArc(ownerKind, ownerID)
+
+	// Read the existing binding before the upsert to populate the before image
+	// (ADR-1442: an overwrite has no before image if we skip this read).
+	prev, prevErr := scanBindingRow(tx.QueryRow(ctx, `
+		select id, owner_kind, component_id, system_id, location_id, outpost_id, value, created_at, updated_at
+		from tag_binding
+		where tag_id = $1 and owner_kind = $2
+		  and component_id is not distinct from $3
+		  and system_id    is not distinct from $4
+		  and location_id  is not distinct from $5
+		  and outpost_id   is not distinct from $6
+		for update`,
+		t.ID, ownerKind, compID, sysID, locID, outpostID))
+	if prevErr != nil && !errors.Is(prevErr, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("storage: read existing tag binding: %w", prevErr)
+	}
+	var beforeImage map[string]any
+	if prevErr == nil {
+		prev.Key = key
+		prev.OwnerName = ownerDisplay
+		beforeImage = auditBinding(prev)
+	}
+
 	b, err := scanBindingRow(tx.QueryRow(ctx, `
 		insert into tag_binding (tag_id, owner_kind, component_id, system_id, location_id, outpost_id, value)
 		values ($1, $2, $3, $4, $5, $6, $7)
@@ -337,7 +369,7 @@ func (p *PG) SetTagBinding(ctx context.Context, actorID, key, ownerKind string, 
 	}
 	b.Key = key
 	b.OwnerName = ownerDisplay
-	if err := writeAuditRes(ctx, tx, actorID, "set", "tag_binding", b.ID, nil, auditBinding(b)); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "set", "tag_binding", b.ID, beforeImage, auditBinding(b)); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {

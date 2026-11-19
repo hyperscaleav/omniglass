@@ -943,11 +943,12 @@ on the page, minus the browser.
   (`seed-dev`, the same trusted lane, never for production), and `mcp`, which serves the
   [MCP tools](/reference/mcp/) over stdio for a local agent, with `mcp tools` and `mcp call`
   as a small client of it ([connect an agent](/guides/agents/)), and `omnibot`, the assistant
-  that drives those tools as its own agent token and asks you on the terminal before any write
+  that runs on the server's model and asks you on the terminal before any write (`--replay` runs it
+  here on a recorded model instead)
   ([omnibot](/guides/agents/#omnibot-the-assistant-in-the-cli)), and with `--resume <name>` carries on
   a conversation the generated `assistant conversation` commands list and delete
   ([carrying a conversation on](/guides/agents/#carrying-a-conversation-on)); the generated
-  `assistant conversation run` runs omnibot on the server instead and prints its AG-UI event stream
+  `assistant conversation run` runs the same server run and prints its raw AG-UI event stream
   ([running omnibot on the server](/guides/agents/#running-omnibot-on-the-server)). The MCP tools are generated
   too, by `cmd/mcpgen` from the same OpenAPI document.
 

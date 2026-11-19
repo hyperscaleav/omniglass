@@ -24,7 +24,8 @@ refs: [2175]
   4. **Outside text stays out of the model.** The build reads the ticket from a file holding the
      body and the two teams' comments; the fix reads only the feedback that started it; the
      conversation is locked while a build runs; no `pull_request_target`, no forks, no bot but
-     the agents' own.
+     the agents' own App and, when one is set up, the reviewer App that posts agent-review's
+     reviews (GitHub lets no App request changes on a PR it wrote).
   5. **The architect gates start, merge and release.** Builds open draft PRs and mark them ready
      when done; the `agent-review` check is red until the reviewer says ship on the head. Merges
      go to `main` (no staging branch; unfinished features ship behind a flag), and releases

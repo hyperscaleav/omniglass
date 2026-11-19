@@ -181,10 +181,18 @@ func (p *PG) DeleteAlternate(ctx context.Context, actorID, ownerKind, ownerID, c
 		return &ChoiceInUseShortfall{Choice: choiceName, Alternate: altName, Slots: attached}
 	}
 
-	if _, err := tx.Exec(ctx, `delete from choice_alternate where id = $1`, altID); err != nil {
+	before := map[string]any{"id": altID, "choice": choiceName}
+	var ownerKindOut, ownerRef, name, labelText string
+	var position int
+	if err := tx.QueryRow(ctx, `
+		delete from choice_alternate where id = $1
+		returning owner_kind, owner_ref::text, name, coalesce(label, ''), position`, altID).
+		Scan(&ownerKindOut, &ownerRef, &name, &labelText, &position); err != nil {
 		return mapSlotWriteErr(err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "choice_alternate", altID, nil, nil); err != nil {
+	before["owner_kind"], before["owner_id"] = ownerKindOut, ownerRef
+	before["name"], before["label"], before["position"] = name, labelText, position
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "choice_alternate", altID, before, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -233,14 +241,54 @@ func (p *PG) DeleteChoice(ctx context.Context, actorID, ownerKind, ownerID, name
 		return &ChoiceInUseShortfall{Choice: name, Slots: attached}
 	}
 
+	before, err := slotChoiceImage(ctx, tx, choiceID)
+	if err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx, `delete from slot_choice where id = $1`, choiceID); err != nil {
 		return mapSlotWriteErr(err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "slot_choice", choiceID, nil, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "slot_choice", choiceID, before, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("storage: commit delete choice: %w", err)
 	}
 	return nil
+}
+
+// slotChoiceImage is the audit image of a choice (ADR-1442): its row and, in
+// position order, the alternates under it, which a delete of the choice
+// cascades away and so must be kept in the row's old image.
+func slotChoiceImage(ctx context.Context, q txQuerier, choiceID string) (map[string]any, error) {
+	img := map[string]any{"id": choiceID}
+	var ownerKind, ownerRef, name, labelText string
+	if err := q.QueryRow(ctx, `
+		select owner_kind, owner_ref::text, name, coalesce(label, '')
+		  from slot_choice where id = $1 for update`, choiceID).
+		Scan(&ownerKind, &ownerRef, &name, &labelText); err != nil {
+		return nil, fmt.Errorf("storage: read choice image %s: %w", choiceID, err)
+	}
+	img["owner_kind"], img["owner_id"], img["name"], img["label"] = ownerKind, ownerRef, name, labelText
+	rows, err := q.Query(ctx, `
+		select name, coalesce(label, ''), position from choice_alternate
+		 where choice_id = $1 order by position for update`, choiceID)
+	if err != nil {
+		return nil, fmt.Errorf("storage: read choice alternates %s: %w", choiceID, err)
+	}
+	defer rows.Close()
+	alternates := []map[string]any{}
+	for rows.Next() {
+		var altName, altDisplay string
+		var pos int
+		if err := rows.Scan(&altName, &altDisplay, &pos); err != nil {
+			return nil, fmt.Errorf("storage: scan choice alternate %s: %w", choiceID, err)
+		}
+		alternates = append(alternates, map[string]any{"name": altName, "label": altDisplay, "position": pos})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("storage: read choice alternates %s: %w", choiceID, err)
+	}
+	img["alternates"] = alternates
+	return img, nil
 }

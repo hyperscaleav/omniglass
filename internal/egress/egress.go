@@ -435,6 +435,23 @@ func (c *Client) Fetch(ctx context.Context, rawURL string, limit int64) ([]byte,
 	return body, nil
 }
 
+// Do sends a request the caller built (the omnibot model call, #2109) under
+// the contract: its URL is judged first and the dial again, no redirect is
+// followed, and a failure is the reason alone, never the request.
+func (c *Client) Do(req *http.Request) (*http.Response, error) {
+	if _, err := c.policy.CheckURL(req.URL.String()); err != nil {
+		return nil, err
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		if errors.Is(err, ErrRefused) {
+			return nil, refusal{reason(err)}
+		}
+		return nil, errors.New(reason(err))
+	}
+	return resp, nil
+}
+
 // refusal is a refused destination's reason that still answers
 // errors.Is(err, ErrRefused).
 type refusal struct{ reason string }
