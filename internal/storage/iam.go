@@ -1577,9 +1577,11 @@ func (p *PG) PurgeUser(ctx context.Context, actorID, userID string, action scope
 	// archived flag, and kind. The audit row is the only record after the delete.
 	before := map[string]any{"kind": userKind, "archived": archivedAt != nil}
 	var username, email, label string
-	if err := tx.QueryRow(ctx,
+	err = tx.QueryRow(ctx,
 		`select username, coalesce(email, ''), coalesce(label, '') from person where user_id = $1 for update`,
-		userID).Scan(&username, &email, &label); err == nil {
+		userID).Scan(&username, &email, &label)
+	switch {
+	case err == nil:
 		before["username"] = username
 		if email != "" {
 			before["email"] = email
@@ -1587,6 +1589,10 @@ func (p *PG) PurgeUser(ctx context.Context, actorID, userID string, action scope
 		if label != "" {
 			before["label"] = label
 		}
+	case errors.Is(err, pgx.ErrNoRows):
+		// A machine user or an outpost has no person row, so no profile fields.
+	default:
+		return fmt.Errorf("storage: purge person image: %w", err)
 	}
 	// A notification target that notifies this person holds them (#1341).
 	if err := boundTarget(ctx, tx, "user_id", userID, "user"); err != nil {
