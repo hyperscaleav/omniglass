@@ -178,8 +178,8 @@ environment registry (`make gen`). The chart already sets `OMNIGLASS_SECURE_COOK
 `server.secureCookies`, `OMNIGLASS_ENCRYPTION_KEY` from the key Secret, and `OMNIGLASS_DATA_DIR` and
 `OMNIGLASS_NATS_STORE_DIR` into the data volume ([durable state](#durable-state)).
 
-Both values are passed to the server container and to the init containers (migrate and
-bootstrap), so all three containers reach the same configuration.
+Both values are passed to the server container and to every init container (migrate, and
+bootstrap when `bootstrap.enabled` is true), so they all reach the same configuration.
 
 Set a plain variable with `extraEnv`, or pull all keys from a Secret or ConfigMap with `envFrom`:
 
