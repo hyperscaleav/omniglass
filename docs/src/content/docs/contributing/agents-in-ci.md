@@ -30,7 +30,7 @@ merging it, and releasing it. Everything between the gates runs without a person
    another one first says so with GitHub's **blocked by** link, and a build refuses to start
    while any blocker is open. **Gate 1:** applying `run:dev-gha` is the
    approval to start.
-3. **Build and review.** The builder opens a draft PR, and marks it ready once `make test`
+3. **Build and review.** The builder opens a draft PR, and marks it ready once `make preflight`
    passes and `/ship-slice` is clean. Ready starts agent-review; its Changes requested starts
    agent-fix, whose push starts agent-review again. The loop ends when the reviewer says ship,
    which turns its check green, or after five fix rounds, when the PR parks with `needs-fred`.
@@ -119,6 +119,22 @@ When agent-review requests changes, agent-fix answers it automatically, up to fi
 PR. After the fifth the PR parks: it gets the `needs-fred` label and a comment, and waits for a
 person to request changes, mention `@hyperscale-agent` or take it over. Fork PRs
 are skipped.
+
+## Green before it pushes
+
+Both agents run `make preflight` before every push and push only when it passes. It runs what
+the PR's required checks run: `make gen` with a drift check, `make test`, the docs build and
+the migration check against `origin/main`. The e2e tier and the image smoke stay CI-only.
+`scripts/preflight_test.go` fails if the target and the workflows it mirrors drift apart.
+Run it yourself before you push a PR by hand; it needs Docker and a fetched `origin/main`.
+
+agent-fix merges `main` into the PR's branch before the agent starts, with
+`scripts/agent-sync.sh merge`, and hands the agent any conflicts as its first job.
+claude-code-action puts main's copies of the agents' own config (`CLAUDE.md`, `.claude/`,
+`.mcp.json` and the like) into the work tree, and an agent PR must not commit them: `make
+preflight` fails an agent's run that does, and after the run agent-fix puts main's copies
+back in one commit if any slipped through. A ticket labeled `area:ci` may change that config;
+a PR a person opens is never held to it.
 
 ## Seeing an agent at work
 
