@@ -68,6 +68,10 @@ func checkBareParams(transportName string, params []byte) error {
 		return nil // params are passed through as given; their shape is not this check's
 	}
 	if transportName == "udp" {
+		// udp dials no target, but the outpost parses its timeout as any probe's.
+		if err := checkTimeout(p); err != nil {
+			return err
+		}
 		return checkListenPort(p)
 	}
 	if transport.IsDialed(transportName) {
@@ -160,7 +164,11 @@ func checkTarget(transportName string, params []byte) error {
 			return fmt.Errorf("params.%s is not a key: set params.%s as host[:port], the address the outpost dials", k, targetParam)
 		}
 	}
-	target, _ := p[targetParam].(string)
+	raw, present := p[targetParam]
+	target, isString := raw.(string)
+	if present && !isString {
+		return fmt.Errorf("params.%s must be a string, host:port, and %v is not", targetParam, raw)
+	}
 	if strings.TrimSpace(target) == "" {
 		return fmt.Errorf("params.%s is required: the address the outpost dials, as host[:port]", targetParam)
 	}

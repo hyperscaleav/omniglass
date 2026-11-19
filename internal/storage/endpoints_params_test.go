@@ -64,6 +64,7 @@ func TestABareDialedEndpointsParamsNameATarget(t *testing.T) {
 		{"tls bad mode", "tls", `{"target":"10.0.0.1:51326","tls-mode":"pinned"}`, "tls-mode"},
 		{"udp listen port, no target", "udp", `{"listen-port":4000}`, ""},
 		{"udp bad listen port", "udp", `{"listen-port":99999}`, "listen-port"},
+		{"udp bad timeout", "udp", `{"listen-port":4000,"timeout":"five minutes"}`, "timeout"},
 		{"udp empty object", "udp", `{}`, ""},
 	}
 	for i, tc := range cases {
