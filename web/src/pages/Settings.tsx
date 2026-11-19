@@ -14,7 +14,7 @@ import { constraintFor, isList, isMap, listText, objectText, settingKeys, valida
 
 // Settings is the Admin platform-settings surface (issue #271). It resolves the
 // effective settings document from the cascade (the declared defaults, the operator
-// file, the console binding) and lets an admin edit each key, see where its value came
+// file, the server's environment, the console binding) and lets an admin edit each key, see where its value came
 // from (provenance), restore a key or a namespace to defaults, and read the layer
 // stack. Slice-0 acts on the platform scope; the per-group and per-user levels are a
 // fast-follow. The write path is an RFC 7386 merge patch: a null on a key restores
@@ -107,7 +107,7 @@ export default function Settings() {
       <div class="flex items-start justify-between gap-4">
         <p class="max-w-160 text-sm text-base-content/60">
           Platform preferences resolved down the settings cascade: declared defaults, the operator
-          settings file, and the console binding. Each value shows where it came from; editing it
+          settings file, the server's environment, and the console binding. Each value shows where it came from; editing it
           sets a console binding, and restoring drops that binding so the value falls back to the
           layer below.
         </p>
