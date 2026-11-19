@@ -182,6 +182,13 @@ works, then finishes as success when the run pushed, neutral when it pushed noth
 when the run broke. A run that pushed shows the finished check on the new head as well, since a
 PR lists only its head's checks. The check is not required; it is there to be seen.
 
+Every agent-build and agent-fix run also keeps what the agent did, as an artifact on the run
+named `agent-transcript-<issue or PR>-<run id>`, for 14 days. It holds the action's transcript
+and `agent-commands.json`: each shell command the agent ran with its exit code, then whether
+`make preflight` and `make test` ran and how each last ended. This is how a red push is told apart
+from a flake: an agent that never ran preflight shows it. The repo is public, so its artifacts
+are too: `scripts/agent-transcript.sh` masks tokens and private keys before anything is kept.
+
 ## PRs from a session
 
 A Claude session that opens its PR with a person's token makes that person the author, and GitHub
