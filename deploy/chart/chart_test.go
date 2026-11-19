@@ -271,7 +271,8 @@ func TestNotesPrintTheKeyBackupCommand(t *testing.T) {
 
 // TestExtraEnvAndEnvFromReachAllContainers verifies that server.extraEnv entries
 // (plain values and secretKeyRef) and server.envFrom sources land on the server
-// container and both init containers (migrate and bootstrap).
+// container and every init container in the default render, where bootstrap is
+// enabled (migrate and bootstrap).
 func TestExtraEnvAndEnvFromReachAllContainers(t *testing.T) {
 	out := mustRender(t, map[string]any{
 		"server": map[string]any{
@@ -317,6 +318,32 @@ func TestExtraEnvAndEnvFromReachAllContainers(t *testing.T) {
 		}
 		if !found {
 			t.Errorf("%s: envFrom = %+v, want configMapRef test-config", name, c.EnvFrom)
+		}
+	}
+}
+
+// TestExtraEnvWithBootstrapDisabled verifies that with bootstrap.enabled=false,
+// the production shape, server.extraEnv still reaches migrate and the server,
+// and no bootstrap init container is rendered.
+func TestExtraEnvWithBootstrapDisabled(t *testing.T) {
+	out := mustRender(t, map[string]any{
+		"bootstrap": map[string]any{"enabled": false},
+		"server": map[string]any{
+			"extraEnv": []any{
+				map[string]any{"name": "OMNIGLASS_TRUSTED_PROXIES", "value": "10.0.0.0/8"},
+			},
+		},
+	})
+	d := deployment(t, out)
+	for _, c := range d.Spec.Template.Spec.InitContainers {
+		if c.Name == "bootstrap" {
+			t.Fatalf("bootstrap init container rendered with bootstrap.enabled=false")
+		}
+	}
+	for _, name := range []string{"server", "migrate"} {
+		c := container(t, d, name)
+		if e, ok := envVar(c, "OMNIGLASS_TRUSTED_PROXIES"); !ok || e.Value != "10.0.0.0/8" {
+			t.Errorf("%s: OMNIGLASS_TRUSTED_PROXIES = %+v ok=%v, want value 10.0.0.0/8", name, e, ok)
 		}
 	}
 }
