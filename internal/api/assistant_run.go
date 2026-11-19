@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/assistant/agui"
 	"github.com/hyperscaleav/omniglass/internal/assistant/provider"
 	"github.com/hyperscaleav/omniglass/internal/auth"
+	"github.com/hyperscaleav/omniglass/internal/egress"
 	mcpserver "github.com/hyperscaleav/omniglass/internal/mcp"
 	"github.com/hyperscaleav/omniglass/internal/mcp/skills"
 	"github.com/hyperscaleav/omniglass/internal/storage"
@@ -35,6 +37,10 @@ import (
 // its own token should the revoke never land. A run that died frees its
 // conversation when the claim lapses.
 const runLifetime = 30 * time.Minute
+
+// modelTimeout bounds one model turn: a live model takes far longer than the
+// egress contract's default for a webhook.
+const modelTimeout = 2 * time.Minute
 
 type aguiMessageInput struct {
 	_       struct{}        `additionalProperties:"true"`
@@ -97,14 +103,16 @@ func registerAssistantRunRoute(api huma.API, a *authenticator, gw storage.Gatewa
 			"and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. " +
 			"Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. " +
 			"forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. " +
-			"A server with no model is a 503. Gated by assistant:use.",
+			"The run talks to the model the assistant settings configure, read as it starts; with none, the server's recording, if it has one. " +
+			"A server with no model, or a configured model whose key no longer resolves, is a 503. Gated by assistant:use.",
 	}, "assistant", "use"), func(ctx context.Context, in *runAssistantConversationInput) (*huma.StreamResponse, error) {
-		if o.omnibotModel == nil {
-			return nil, huma.Error503ServiceUnavailable("omnibot has no model on this server")
-		}
 		u, ok := userFrom(ctx)
 		if !ok || u.Person == nil || u.Agent != nil || impersonationMode(ctx) != "" {
 			return nil, huma.Error403Forbidden("only a person, as themselves, runs omnibot")
+		}
+		model, err := runProvider(ctx, gw, o)
+		if err != nil {
+			return nil, err
 		}
 		conv, ms, err := gw.GetAssistantConversation(ctx, callerID(ctx), in.Name)
 		if err != nil {
@@ -157,7 +165,7 @@ func registerAssistantRunRoute(api huma.API, a *authenticator, gw storage.Gatewa
 			}
 			release()
 		}
-		l := &assistant.Loop{Provider: o.omnibotModel, Tools: mcpserver.NewLocal(o.self, "Bearer "+tok), Pause: true}
+		l := &assistant.Loop{Provider: model, Tools: mcpserver.NewLocal(o.self, "Bearer "+tok), Pause: true}
 
 		waiting, open, err := l.Waiting(ctx, history)
 		if err != nil {
@@ -221,6 +229,37 @@ func registerAssistantRunRoute(api huma.API, a *authenticator, gw storage.Gatewa
 			run.Finish()
 		}}, nil
 	})
+}
+
+// runProvider is the model a run talks to, chosen as the run starts so a
+// settings change is the next run's (#2109): the configured provider, its key
+// resolved in process and its calls judged by the egress contract; else the
+// server's recording; else none. A configured provider whose key is broken
+// refuses the run rather than quietly playing the recording.
+func runProvider(ctx context.Context, gw storage.Gateway, o options) (provider.Provider, error) {
+	cfg, err := gw.OmnibotModel(ctx)
+	if errors.Is(err, storage.ErrModelKeyInvalid) {
+		return nil, huma.Error503ServiceUnavailable("omnibot's model: " + strings.TrimPrefix(err.Error(), storage.ErrModelKeyInvalid.Error()+": "))
+	}
+	if err != nil {
+		return nil, huma.Error500InternalServerError("read omnibot's model")
+	}
+	if cfg == nil {
+		if o.omnibotModel == nil {
+			return nil, huma.Error503ServiceUnavailable("omnibot has no model on this server")
+		}
+		return o.omnibotModel, nil
+	}
+	pol, err := gw.EgressPolicy(ctx)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("read the egress policy")
+	}
+	eo := o.egressOpts
+	if eo.ResponseTimeout == 0 {
+		eo.ResponseTimeout = modelTimeout
+	}
+	return &provider.OpenAI{BaseURL: cfg.BaseURL, Model: cfg.Model, Key: cfg.Key, System: provider.DefaultSystemPrompt,
+		Client: egress.New(pol, eo)}, nil
 }
 
 // runHistory is the stored transcript as the loop carries it on.

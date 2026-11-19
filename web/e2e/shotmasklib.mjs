@@ -11,6 +11,10 @@
 //   { selector: "<s>", width: N, align: "right" }
 //                                 the same box anchored at each element's RIGHT edge
 //                                 instead, for a right-aligned value (#1482).
+//   { selector: "<s>", pad: N }   a PADDED box: each resolved element's bounding box
+//                                 grown by N CSS pixels on every side, for an element
+//                                 whose varying part overflows it, such as a badge
+//                                 pinned to its corner (#2196).
 //
 // What a selector mask resolves to is the whole contract, because a mask is
 // painted at the size of what it resolves to. A selector on a value's own span
@@ -45,7 +49,21 @@ export const MASK_COLOR = '#1a2336';
 // The rail's counts are right-aligned at the end of a row of fixed width, so the
 // box is anchored at the right edge. 40px holds five digits of the rail's
 // 12px mono face (the widest, "10000", is 36px) and leaves the label live.
-export const STANDING_MASKS = [{ selector: '[data-testid="catalog-entry-count"]', width: 40, align: 'right' }];
+//
+// The top bar's inbox bell carries the unread count, which belongs to the run,
+// not the page: the lab raises a notification partway through a capture, so a
+// shot taken before it lands has no badge and one taken after has a "1", and a
+// shot near that moment flips between runs (platform-health-hop did, red on
+// main, #2196). The badge is pinned outside the bell's own 32px box (-right-1.5,
+// -top-1, InboxIndicator.tsx), so a selector mask on the bell would leave its
+// edge live, and a mask on the badge would paint nothing when there is none.
+// The bell's box grown by 8px covers the badge at any count (it is 16px tall,
+// at most 6px past the right edge and 4px above), and stays clear of the
+// omnibot button 12px to its left.
+export const STANDING_MASKS = [
+  { selector: '[data-testid="catalog-entry-count"]', width: 40, align: 'right' },
+  { selector: '[data-testid="inbox-indicator"]', pad: 8 },
+];
 
 const DECLARED_BOX = 'data-og-mask-box';
 
@@ -58,10 +76,14 @@ export function normalizeMask(entry) {
     const declared = typeof selector === 'string' && selector.length > 0 && Number.isInteger(width) && width > 0;
     if (declared && keys === 'selector,width') return { selector, width };
     if (declared && keys === 'align,selector,width' && align === 'right') return { selector, width, align };
+    const { pad } = /** @type {{ pad?: unknown }} */ (entry);
+    if (keys === 'pad,selector' && typeof selector === 'string' && selector.length > 0 && Number.isInteger(pad) && pad > 0) {
+      return { selector, pad };
+    }
   }
   throw new Error(
-    `invalid mask entry ${JSON.stringify(entry)}: a selector string, or { selector, width } with a whole-pixel width` +
-      ` (and optionally align: right)`,
+    `invalid mask entry ${JSON.stringify(entry)}: a selector string, { selector, width } with a whole-pixel width` +
+      ` (and optionally align: right), or { selector, pad } with a whole-pixel pad`,
   );
 }
 
@@ -110,16 +132,24 @@ export async function planStandingMasks(page) {
   return planMasks(page, present);
 }
 
+// A mask the baseline paints as its own box (declared or padded), rather than
+// through Playwright's mask at the element's bounding box.
+const paintsBox = (m) => m.width !== undefined || m.pad !== undefined;
+
 // The boxes a baseline paints, in viewport CSS pixels: a selector mask's element
-// rects, or a declared box anchored at each element it matches (at its left edge,
-// or its right when the mask is `align: right`).
+// rects, a declared box anchored at each element it matches (at its left edge,
+// or its right when the mask is `align: right`), or each element's rect grown by
+// a padded mask's pad on every side.
 export function paintedBoxes(plan) {
   return plan.flatMap((m) =>
-    m.rects.map((r) =>
-      m.width === undefined
+    m.rects.map((r) => {
+      if (m.pad !== undefined) {
+        return { x: r.x - m.pad, y: r.y - m.pad, width: r.width + 2 * m.pad, height: r.height + 2 * m.pad };
+      }
+      return m.width === undefined
         ? { x: r.x, y: r.y, width: r.width, height: r.height }
-        : { x: m.align === 'right' ? r.x + r.width - m.width : r.x, y: r.y, width: m.width, height: r.height },
-    ),
+        : { x: m.align === 'right' ? r.x + r.width - m.width : r.x, y: r.y, width: m.width, height: r.height };
+    }),
   );
 }
 
@@ -129,9 +159,11 @@ export function paintedBoxes(plan) {
 // will move with it.
 export function describeMask(m) {
   const shapes = m.rects.map((r) =>
-    m.width === undefined
-      ? `${r.tag} ${Math.round(r.width)}x${Math.round(r.height)}`
-      : `box ${m.width}x${Math.round(r.height)} over ${r.tag} ${Math.round(r.width)}`,
+    m.pad !== undefined
+      ? `${r.tag} ${Math.round(r.width)}x${Math.round(r.height)} padded ${m.pad}`
+      : m.width === undefined
+        ? `${r.tag} ${Math.round(r.width)}x${Math.round(r.height)}`
+        : `box ${m.width}x${Math.round(r.height)} over ${r.tag} ${Math.round(r.width)}`,
   );
   const distinct = [...new Set(shapes)];
   return (
@@ -196,7 +228,7 @@ async function pageState(page) {
 // box planted where the value used to be would leave the value's tail live.
 export async function shootBaseline(page, plan, { path, log } = {}) {
   const boxes = [];
-  for (const m of plan.filter((m) => m.width !== undefined)) {
+  for (const m of plan.filter(paintsBox)) {
     boxes.push({ ...m, rects: await measure(m, m.locator) });
   }
   await page.evaluate(
@@ -220,7 +252,7 @@ export async function shootBaseline(page, plan, { path, log } = {}) {
     { attr: DECLARED_BOX, color: MASK_COLOR, boxes: paintedBoxes(boxes) },
   );
   try {
-    const mask = plan.filter((m) => m.width === undefined).map((m) => m.locator);
+    const mask = plan.filter((m) => !paintsBox(m)).map((m) => m.locator);
     if (boxes.length > 0) mask.push(page.locator(`[${DECLARED_BOX}]`));
     return await withCaptureRetry(
       page,

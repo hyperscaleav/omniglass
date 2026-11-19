@@ -184,9 +184,15 @@ type AgentSettings struct {
 }
 
 // AssistantSettings is the assistant namespace (#2113): how long omnibot's
-// stored conversations are kept.
+// stored conversations are kept, and the model it runs on (#2109). KeySecret
+// names a platform api-key secret the server unseals in process for each run;
+// binding it takes secret:bind on it, as binding a target's secret does.
 type AssistantSettings struct {
-	ConversationDays int `json:"conversation_days" minimum:"1" maximum:"36500" default:"30" doc:"Days a stored omnibot conversation is kept after it last changed"`
+	ConversationDays int    `json:"conversation_days" minimum:"1" maximum:"36500" default:"30" doc:"Days a stored omnibot conversation is kept after it last changed"`
+	Provider         string `json:"provider" enum:"none,openai" default:"none" doc:"The model omnibot runs on: openai (any OpenAI-compatible chat completions server, OpenRouter by default) or none, which leaves the server's recording, if any"`
+	Model            string `json:"model" default:"openai/gpt-4.1-mini" doc:"The model's name on that server (openai/gpt-4.1-mini on OpenRouter, llama3.1 on Ollama)"`
+	BaseURL          string `json:"base_url" default:"https://openrouter.ai/api/v1" doc:"The server's base URL, /chat/completions appended. An internal server is reached only when the notification settings' egress_allow names it. Moving it while a key_secret is bound takes secret:bind on that secret"`
+	KeySecret        string `json:"key_secret" default:"" doc:"A platform api-key secret, by name, sent as the bearer on every model call; empty calls without a key (a local server). Setting it takes secret:bind on it. The key never leaves the server"`
 }
 
 // AgentClassOverride is one role's override of the class policies (#2088). An

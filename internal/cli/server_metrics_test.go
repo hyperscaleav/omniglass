@@ -25,6 +25,8 @@ type fakeSelfStore struct {
 	outboxErr     error
 	connections   storage.ConnectionStatus
 	connectionErr error
+	dbSize        int64
+	dbSizeErr     error
 	written       []storage.PlatformMetric
 }
 
@@ -50,6 +52,8 @@ func (f *fakeSelfStore) OutboxStatus(context.Context) (storage.OutboxStatus, err
 func (f *fakeSelfStore) ConnectionStatus(context.Context) (storage.ConnectionStatus, error) {
 	return f.connections, f.connectionErr
 }
+
+func (f *fakeSelfStore) DatabaseSize(context.Context) (int64, error) { return f.dbSize, f.dbSizeErr }
 
 // TestServerReportWindowFollowsTheCollectionWindow: the server's self-report
 // arms on collection.report_seconds as the webhook receiver does, and on a
@@ -99,7 +103,8 @@ func TestServerReporterGaugesThePoolAndReReadsTheSetting(t *testing.T) {
 	m := newServerMetrics(slog.New(slog.NewTextHandler(io.Discard, nil)), time.Now)
 	gw := &fakeSelfStore{database: settings.DatabaseSettings{SlowQueryMS: 900},
 		outbox:      storage.OutboxStatus{Queued: 7, DueAge: 45 * time.Second},
-		connections: storage.ConnectionStatus{Held: 31, Limit: 97, IdleInTransaction: 2, OldestTransactionAge: 90 * time.Second}}
+		connections: storage.ConnectionStatus{Held: 31, Limit: 97, IdleInTransaction: 2, OldestTransactionAge: 90 * time.Second},
+		dbSize:      1 << 30}
 	sampled := false
 	rp := m.reporter(gw, "server-1", t.TempDir(), nil, func(context.Context, *platformmetric.Recorder) { sampled = true })
 	gw.pool = storage.PoolStat{Acquired: 3, Max: 12, AcquireCount: 80, EmptyAcquireCount: 4}
@@ -126,6 +131,11 @@ func TestServerReporterGaugesThePoolAndReReadsTheSetting(t *testing.T) {
 		got[writerclass.DBConnectionIdleInTransactionCount] != 2 || got[writerclass.DBTransactionOldestAge] != 90 {
 		t.Errorf("database connection gauges = %v, want 31 held of 97, 2 idle in a transaction, the oldest 90 s", got)
 	}
+	// The database's size is a figure of every window, not the retention
+	// pass's hour (#1985).
+	if got[writerclass.DBSize] != 1<<30 {
+		t.Errorf("db-size = %v, want the database's 1 GiB", got[writerclass.DBSize])
+	}
 	if _, ok := got[writerclass.ProcessGoroutineCount]; !ok {
 		t.Errorf("the window read no runtime: %v", got)
 	}
@@ -138,18 +148,18 @@ func TestServerReporterGaugesThePoolAndReReadsTheSetting(t *testing.T) {
 	}
 }
 
-// TestServerReporterSaysNothingOfAnUnreadOutbox: an outbox read that fails
-// costs its window's outbox figures, not a zero depth that was never read.
+// TestServerReporterSaysNothingOfAnUnreadOutbox: an outbox or database size
+// read that fails costs its window's figures, not a zero that was never read.
 func TestServerReporterSaysNothingOfAnUnreadOutbox(t *testing.T) {
 	t.Parallel()
 	m := newServerMetrics(slog.New(slog.NewTextHandler(io.Discard, nil)), time.Now)
-	gw := &fakeSelfStore{outboxErr: errors.New("down")}
+	gw := &fakeSelfStore{outboxErr: errors.New("down"), dbSizeErr: errors.New("down")}
 	if err := m.reporter(gw, "server-1", t.TempDir(), nil).Report(context.Background()); err != nil {
 		t.Fatalf("report: %v", err)
 	}
 	for _, r := range gw.written {
-		if r.Key == writerclass.OutboxQueuedDepth || r.Key == writerclass.OutboxDueAge {
-			t.Errorf("an unread outbox reported %s = %v", r.Key, r.Value)
+		if r.Key == writerclass.OutboxQueuedDepth || r.Key == writerclass.OutboxDueAge || r.Key == writerclass.DBSize {
+			t.Errorf("an unread read reported %s = %v", r.Key, r.Value)
 		}
 	}
 }

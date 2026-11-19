@@ -47,12 +47,32 @@ export const settingsSchema = {
     }
   },
   "assistant": {
+    "base_url": {
+      "description": "The server's base URL, /chat/completions appended. An internal server is reached only when the notification settings' egress_allow names it. Moving it while a key_secret is bound takes secret:bind on that secret",
+      "type": "string"
+    },
     "conversation_days": {
       "description": "Days a stored omnibot conversation is kept after it last changed",
       "type": "integer",
       "minimum": 1,
       "maximum": 36500,
       "format": "int64"
+    },
+    "key_secret": {
+      "description": "A platform api-key secret, by name, sent as the bearer on every model call; empty calls without a key (a local server). Setting it takes secret:bind on it. The key never leaves the server",
+      "type": "string"
+    },
+    "model": {
+      "description": "The model's name on that server (openai/gpt-4.1-mini on OpenRouter, llama3.1 on Ollama)",
+      "type": "string"
+    },
+    "provider": {
+      "description": "The model omnibot runs on: openai (any OpenAI-compatible chat completions server, OpenRouter by default) or none, which leaves the server's recording, if any",
+      "type": "string",
+      "enum": [
+        "none",
+        "openai"
+      ]
     }
   },
   "collection": {

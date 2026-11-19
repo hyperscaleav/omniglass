@@ -6,7 +6,7 @@ summary: "A vendor, driver, product, standard or location type renames through `
 refs: [555, 825, 827, 1188]
 ---
 
-- **Date:** 2026-10-26 | **Status:** Accepted | **Pages:** [API](/architecture/api/), [core entities](/architecture/core-entities/), [CLI](/guides/cli/), [standards](/guides/admin/standards/)
+- **Date:** 2026-10-26 | **Status:** Accepted | **Pages:** [API](/architecture/api/), [core entities](/architecture/core-entities/), [CLI](/guides/cli/), [standards](/admin/standards/)
 - **Decision:** (#555, pre-tag hygiene for 0.1.0, #825.)
   1. **The rename is a custom method, not a patch field.** `POST /vendors/{id}:rename`,
      `/drivers/{id}:rename`, `/products/{id}:rename`, `/standards/{id}:rename`, and

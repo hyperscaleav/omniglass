@@ -491,7 +491,7 @@ the same way.)
 A signed-in user manages its own account through the generated self-scoped commands
 (`omniglass auth me`, `auth update-profile`, `auth change-password`, `auth set-avatar` /
 `auth remove-avatar`); an administrator manages other users, roles, user groups, secrets,
-and variables through the resource commands, all covered in the [admin guide](/guides/admin/)
+and variables through the resource commands, all covered in the [Admin section](/admin/)
 and listed in full in the [CLI reference](/reference/cli/).
 
 ## Tags
@@ -823,9 +823,9 @@ non-disclosing 404 on the read and on the write. The catalog and its contract sh
 ## Retention
 
 How long the server keeps each lane is the `retention` settings: `omniglass setting list` shows the
-effective windows under `values.retention`. They are changed on the console's Settings page; the
-CLI's `setting update` cannot carry a body yet (#1333). A metric or property type can keep a window
-of its own, overriding its lane's, shipped types included:
+effective windows under `values.retention`, and `omniglass setting update retention --body
+'{"metric_days": 30}'` changes one ([platform settings](/admin/settings/)). A metric or property type
+can keep a window of its own, overriding its lane's, shipped types included:
 
 ```sh
 omniglass metric-type setRetention tcp-connect-time --days 3       # keep this type 3 days
@@ -943,11 +943,12 @@ on the page, minus the browser.
   (`seed-dev`, the same trusted lane, never for production), and `mcp`, which serves the
   [MCP tools](/reference/mcp/) over stdio for a local agent, with `mcp tools` and `mcp call`
   as a small client of it ([connect an agent](/guides/agents/)), and `omnibot`, the assistant
-  that drives those tools as its own agent token and asks you on the terminal before any write
+  that runs on the server's model and asks you on the terminal before any write (`--replay` runs it
+  here on a recorded model instead)
   ([omnibot](/guides/agents/#omnibot-the-assistant-in-the-cli)), and with `--resume <name>` carries on
   a conversation the generated `assistant conversation` commands list and delete
   ([carrying a conversation on](/guides/agents/#carrying-a-conversation-on)); the generated
-  `assistant conversation run` runs omnibot on the server instead and prints its AG-UI event stream
+  `assistant conversation run` runs the same server run and prints its raw AG-UI event stream
   ([running omnibot on the server](/guides/agents/#running-omnibot-on-the-server)). The MCP tools are generated
   too, by `cmd/mcpgen` from the same OpenAPI document.
 

@@ -49,7 +49,28 @@ export default defineConfig({
     '/architecture/datapoints/': '/architecture/properties/',
     // The joint Types guide split into one page per catalog (#598); the old
     // URL lands on the location half, which inherited most of its content.
-    '/guides/admin/types/': '/guides/admin/location-types/',
+    '/guides/admin/types/': '/admin/location-types/',
+    // The Admin guide's access and values pages became the Admin section (#2158);
+    // secret types folded into the secrets page.
+    '/guides/admin/': '/admin/',
+    '/guides/admin/users/': '/admin/users/',
+    '/guides/admin/access/': '/admin/access/',
+    '/guides/admin/audit/': '/admin/audit/',
+    '/guides/admin/secrets/': '/admin/secrets/',
+    '/guides/admin/secret-types/': '/admin/secrets/#secret-types',
+    '/guides/admin/variables/': '/admin/variables/',
+    '/guides/admin/files/': '/admin/files/',
+    // The catalog pages joined the Admin section (#2190); vendors folded into
+    // the products page.
+    '/guides/admin/location-types/': '/admin/location-types/',
+    '/guides/admin/tags/': '/admin/tags/',
+    '/guides/admin/products/': '/admin/products/',
+    '/guides/admin/vendors/': '/admin/products/#vendors',
+    '/guides/admin/properties/': '/admin/properties/',
+    '/guides/admin/metrics/': '/admin/metrics/',
+    '/guides/admin/events/': '/admin/events/',
+    '/guides/admin/commands/': '/admin/commands/',
+    '/guides/admin/standards/': '/admin/standards/',
     // Find things in your fleet folded into the outline guide (#861).
     '/guides/operator/inventory/': '/operator/fleet/',
     // The operator guide became the Operator section (#2157); alarms and
@@ -240,27 +261,10 @@ export default defineConfig({
               label: 'Admin guide',
               collapsed: true,
               items: [
-                { label: 'Overview', slug: 'guides/admin' },
-                { label: 'Manage users', slug: 'guides/admin/users' },
-                { label: 'Roles, groups, and grants', slug: 'guides/admin/access' },
-                { label: 'The audit trail', slug: 'guides/admin/audit' },
-                { label: 'Secrets', slug: 'guides/admin/secrets' },
-                { label: 'Variables', slug: 'guides/admin/variables' },
-                { label: 'Files', slug: 'guides/admin/files' },
-                { label: 'Location types', slug: 'guides/admin/location-types' },
-                { label: 'Secret types', slug: 'guides/admin/secret-types' },
-                { label: 'Properties', slug: 'guides/admin/properties' },
-                { label: 'Metrics', slug: 'guides/admin/metrics' },
-                { label: 'Events', slug: 'guides/admin/events' },
-                { label: 'Commands', slug: 'guides/admin/commands' },
                 { label: 'Rules and severity', slug: 'guides/admin/rules' },
                 { label: 'Calc rules', slug: 'guides/admin/calc-rules' },
                 { label: 'Notifications', slug: 'guides/admin/notifications' },
-                { label: 'Tags', slug: 'guides/admin/tags' },
-                { label: 'Vendors', slug: 'guides/admin/vendors' },
                 { label: 'Drivers', slug: 'guides/admin/drivers' },
-                { label: 'Products', slug: 'guides/admin/products' },
-                { label: 'Standards', slug: 'guides/admin/standards' },
               ],
             },
             {

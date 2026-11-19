@@ -49,8 +49,8 @@ Each is a gate; a red one blocks the ship.
      rebuilt), **including a generated command**: if `make gen` touched
      `internal/cli/api_gen.go`, the CLI guide is in scope (this is how the password and profile
      commands shipped undocumented);
-   - a changed **console surface** (`web/src`) to its Operator or Admin page (`operator/`, or
-     `guides/admin/` until that section is rebuilt) plus the live screenshots (item 9).
+   - a changed **console surface** (`web/src`) to its Operator or Admin page (`operator/` or
+     `admin/`; a catalog or automation surface to `guides/admin/` until #2190 and #2191 land) plus the live screenshots (item 9).
 
    Mechanically, run the docs lint suite; it must be green:
    `go test ./internal/docslint/ ./internal/cli/ -run 'TestVocabulary|TestDecisionsFormat|TestBuildLogFormat|TestLogsStayFragments|TestDocsOnlyNameRealCommands|TestBadgeFence' -count=1`.

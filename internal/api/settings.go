@@ -102,13 +102,21 @@ func registerSettingsRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		// The merge is a single atomic read-modify-write in the Gateway, serialized
 		// against concurrent patches to the same namespace so no update is lost.
 		// The notification namespace's mail relay binds a secret, so its patch
-		// is judged on the settings it results in (#1317).
-		if in.Namespace == "notification" {
+		// is judged on the settings it results in (#1317), as is the assistant
+		// namespace's model key (#2109).
+		switch in.Namespace {
+		case "notification":
 			if _, err := gw.MergePatchNotificationSettings(ctx, actorID(ctx), in.Body, a.secretBind(ctx)); err != nil {
 				return nil, mapMailSecretErr(err)
 			}
-		} else if _, err := gw.MergePatchSettingBinding(ctx, actorID(ctx), "platform", in.Namespace, in.Body); err != nil {
-			return nil, err
+		case "assistant":
+			if _, err := gw.MergePatchAssistantSettings(ctx, actorID(ctx), in.Body, a.secretBind(ctx)); err != nil {
+				return nil, mapModelKeyErr(err)
+			}
+		default:
+			if _, err := gw.MergePatchSettingBinding(ctx, actorID(ctx), "platform", in.Namespace, in.Body); err != nil {
+				return nil, err
+			}
 		}
 		return resolveOutput(ctx, svc)
 	})
@@ -164,6 +172,21 @@ func resolveOutput(ctx context.Context, svc *settings.Service) (*settingsReadOut
 	out.Body.Sources = r.Sources
 	out.Body.Locks = r.Locks
 	return out, nil
+}
+
+// mapModelKeyErr maps an assistant settings patch refused for omnibot's model
+// key (#2109): binding one, or moving base_url or the provider while one stays
+// bound, takes the right to bind it (secret:bind), as the mail relay's does.
+func mapModelKeyErr(err error) error {
+	switch {
+	case errors.Is(err, storage.ErrSecretNotFound):
+		return huma.Error404NotFound("secret not found")
+	case errors.Is(err, storage.ErrSecretForbidden):
+		return huma.Error403Forbidden("binding omnibot's model key, or moving base_url or the provider while one is bound, takes the right to bind that secret (secret:bind)")
+	case errors.Is(err, storage.ErrModelKeyInvalid):
+		return huma.Error422UnprocessableEntity(strings.TrimPrefix(err.Error(), "storage: omnibot's model key is invalid: "))
+	}
+	return err
 }
 
 // mapMailSecretErr maps a notification settings patch refused for the mail

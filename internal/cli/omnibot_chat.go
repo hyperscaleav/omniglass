@@ -92,7 +92,7 @@ const chatBanner = "omnibot: type a prompt; /exit or Ctrl-D ends.\n" +
 
 // chat is omnibot with no prompt on the command line: a conversation, a Run
 // per line, each continuing the last. A /secret line hands it a credential.
-func chat(ctx context.Context, con *console, stdout io.Writer, sess *assistant.Session, t *turns) error {
+func chat(ctx context.Context, con *console, sess *assistant.Session, r runner) error {
 	fmt.Fprintln(con.out, chatBanner)
 	for {
 		fmt.Fprint(con.out, "> ")
@@ -111,7 +111,7 @@ func chat(ctx context.Context, con *console, stdout io.Writer, sess *assistant.S
 		case line == "/exit":
 			return nil
 		case line == "/secret" || strings.HasPrefix(line, "/secret "):
-			if err := handCredential(ctx, con, sess, t.loop, strings.Fields(line)[1:]); err != nil {
+			if err := handCredential(ctx, con, sess, r, strings.Fields(line)[1:]); err != nil {
 				if ctx.Err() != nil {
 					return ctx.Err()
 				}
@@ -122,12 +122,11 @@ func chat(ctx context.Context, con *console, stdout io.Writer, sess *assistant.S
 			fmt.Fprintf(con.out, "omnibot: no command %s; the commands are /secret and /exit\n", strings.Fields(line)[0])
 			continue
 		}
-		out, err := t.run(ctx, line)
+		stopped, err := r.prompt(ctx, line)
 		if err != nil {
 			return err
 		}
-		fmt.Fprintln(stdout, out.Text)
-		if out.Stopped {
+		if stopped {
 			fmt.Fprintln(con.out, "omnibot: stopped without an answer")
 		}
 	}
@@ -136,7 +135,7 @@ func chat(ctx context.Context, con *console, stdout io.Writer, sess *assistant.S
 // handCredential is /secret: it asks for the credential's values without
 // echo, creates the secret with the person's own token, and tells the model
 // only its reference.
-func handCredential(ctx context.Context, con *console, sess *assistant.Session, loop *assistant.Loop, args []string) error {
+func handCredential(ctx context.Context, con *console, sess *assistant.Session, r runner, args []string) error {
 	c, err := parseCredential(args)
 	if err != nil {
 		return err
@@ -162,7 +161,7 @@ func handCredential(ctx context.Context, con *console, sess *assistant.Session, 
 	if err != nil {
 		return err
 	}
-	loop.Tell(note)
+	r.tell(note)
 	fmt.Fprintf(con.out, "omnibot: stored the secret %s; omnibot knows its name, not its value\n", c.Name)
 	return nil
 }

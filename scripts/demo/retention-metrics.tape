@@ -10,7 +10,7 @@
 Type "# The retention keys join the catalog, written only by the platform"
 Enter
 Wait
-Type `omniglass metric-type list | jq -c '.metric_types[] | select(.name | test("^(retention-|metric-partition-|metric-oldest-|metric-(trend|block)-mark-|table-bytes|database-bytes)")) | {name, unit, writer_class}'`
+Type `omniglass metric-type list | jq -c '.metric_types[] | select(.name | test("^(retention-|metric-partition-|metric-oldest-|metric-(trend|block)-mark-|table-bytes)")) | {name, unit, writer_class}'`
 Enter
 Wait
 

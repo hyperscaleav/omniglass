@@ -181,7 +181,7 @@ func TestHoldEndsWhenTheProcessItHoldsForIsGone(t *testing.T) {
 	var gone atomic.Bool
 	var out bytes.Buffer
 	r := testRunner(eng, &out)
-	r.Alive = func(pid int) bool { return pid == 42 || (pid == 77 && !gone.Load()) }
+	r.Alive = func(pid int, start string) bool { return testAlive(pid, start) && (pid != 77 || !gone.Load()) }
 	cfg := testConfig()
 	cfg.Hold, cfg.WhilePID = true, 77
 	cfg.Project, cfg.Ephemeral = "ogwalk-1-ab", true
@@ -213,7 +213,8 @@ func TestReapRemovesAbandonedThrowawayLabsOfAnyProject(t *testing.T) {
 	srv := fakeServer(t)
 	eng := newFakeEngine(strings.TrimPrefix(srv.URL, "http://"))
 	lbl := func(project, host, pid string, ephemeral bool) map[string]string {
-		l := map[string]string{LabelLab: project, LabelComposeProject: project, LabelLabHost: host, LabelLabPID: pid}
+		l := map[string]string{LabelLab: project, LabelComposeProject: project, LabelLabHost: host, LabelLabPID: pid,
+			LabelLabPIDStart: "t" + pid}
 		if ephemeral {
 			l[LabelLabEphemeral] = "true"
 		}
@@ -226,6 +227,14 @@ func TestReapRemovesAbandonedThrowawayLabsOfAnyProject(t *testing.T) {
 	eng.containers["live-c"] = Resource{ID: "live-c", Labels: lbl("ogwalk-42-bb", "box", "42", true)}
 	eng.volumes["ogwalk-42-bb_db"] = Resource{Name: "ogwalk-42-bb_db", Labels: lbl("ogwalk-42-bb", "box", "42", true)}
 	eng.containers["far-c"] = Resource{ID: "far-c", Labels: lbl("ogwalk-7-cc", "elsewhere", "7", true)}
+	// Its owner's pid is now a stranger's (a different start time): abandoned.
+	reused := lbl("ogwalk-8-dd", "box", "42", true)
+	reused[LabelLabPIDStart] = "t1"
+	eng.containers["reused-c"] = Resource{ID: "reused-c", Labels: reused}
+	// No start time recorded (an older binary's lab): never judged gone.
+	old := lbl("ogwalk-6-ee", "box", "9999", true)
+	delete(old, LabelLabPIDStart)
+	eng.containers["old-c"] = Resource{ID: "old-c", Labels: old}
 	eng.volumes["learner_db"] = Resource{Name: "learner_db", Labels: lbl("learner", "box", "9999", false)}
 
 	var out bytes.Buffer
@@ -241,7 +250,10 @@ func TestReapRemovesAbandonedThrowawayLabsOfAnyProject(t *testing.T) {
 	if _, ok := eng.volumes["ogwalk-9-aa_db"]; ok {
 		t.Error("an abandoned throwaway lab's volume was not reaped")
 	}
-	for _, keep := range []string{"live-c", "far-c"} {
+	if _, ok := eng.containers["reused-c"]; ok {
+		t.Error("a throwaway lab whose owner's pid was reused was not reaped")
+	}
+	for _, keep := range []string{"live-c", "far-c", "old-c"} {
 		if _, ok := eng.containers[keep]; !ok {
 			t.Errorf("the reaper removed %s, which it does not own or whose owner is alive", keep)
 		}

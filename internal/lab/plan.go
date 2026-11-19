@@ -82,6 +82,7 @@ const (
 	LabelLabHost        = "omniglass.lab.host"
 	LabelLabPID         = "omniglass.lab.pid"
 	LabelLabPIDNS       = "omniglass.lab.pidns"
+	LabelLabPIDStart    = "omniglass.lab.pidstart"
 	// LabelLabEphemeral marks a throwaway lab (a demo recorder's, #1197):
 	// its data goes with it, and the reaper may remove an abandoned one of
 	// any project, which it never does to a learner's lab.
@@ -237,6 +238,10 @@ type Owner struct {
 	// it, so an owner in another one (a lab run from a container that shares
 	// the host's name) is never judged by this namespace's pids.
 	PIDNS string
+	// Start is when the owner process started, so a pid that a different
+	// process now holds (the owner killed hard, its pid reused) is not
+	// mistaken for it. Empty where the platform cannot read one.
+	Start string
 }
 
 // Options are a lab's settings.
@@ -280,6 +285,10 @@ type Options struct {
 	// throwaway lab takes it, and never a scale lab, whose figures are the
 	// measurement.
 	PlatformHistory bool
+	// OmnibotKey is a live model's key (#2109), read from the host's env:
+	// the seed alone is handed it, seals it as a platform secret and points
+	// omnibot at it. Empty plays the recording.
+	OmnibotKey string
 	// Cadence names the outpost's cadence profile (CadenceProfiles); empty is
 	// the lab's own.
 	Cadence string
@@ -529,6 +538,9 @@ func Plan(o Options) (Spec, error) {
 	if o.PlatformHistory && o.Scale() {
 		return Spec{}, fmt.Errorf("a scale lab's platform figures are its measurement, so it cannot take --platform-history")
 	}
+	if o.OmnibotKey != "" && o.Scale() {
+		return Spec{}, fmt.Errorf("a scale lab runs no omnibot of its own, so it cannot take --omnibot-key-env")
+	}
 	if o.PlatformHistory && !o.Ephemeral {
 		return Spec{}, fmt.Errorf("--platform-history seeds made-up platform figures for a capture, so it needs --ephemeral: a learner's lab reads its own")
 	}
@@ -537,7 +549,7 @@ func Plan(o Options) (Spec, error) {
 	}
 	owner := map[string]string{
 		LabelLab: o.Project, LabelLabHost: o.Owner.Host, LabelLabPID: strconv.Itoa(o.Owner.PID), LabelLabPIDNS: o.Owner.PIDNS,
-		LabelComposeProject: o.Project,
+		LabelLabPIDStart: o.Owner.Start, LabelComposeProject: o.Project,
 	}
 	if o.Ephemeral {
 		owner[LabelLabEphemeral] = "true"
@@ -611,6 +623,9 @@ func Plan(o Options) (Spec, error) {
 	}
 	pusherTokens := PusherTokensEnv + "=" + FormatPusherTokens(o.Pushers)
 	seedEnv := append(append([]string{}, appEnv...), "OMNIGLASS_LAB_OUTPOST_TOKEN_HASH="+o.OutpostTokenHash, pusherTokens)
+	if o.OmnibotKey != "" {
+		seedEnv = append(seedEnv, OmnibotKeyEnv+"="+o.OmnibotKey)
+	}
 	if o.Scale() {
 		seedCmd = []string{"lab", "seed", "--scenario", o.Scenario, "--systems", strconv.Itoa(o.Systems),
 			"--user", LoginUser, "--password", LoginPassword}

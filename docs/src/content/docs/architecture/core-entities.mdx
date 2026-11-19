@@ -94,7 +94,7 @@ each slot carrying an **impact**. See [implementation status](/architecture/stat
   key like `building`; unknown keys fall back to `map-pin`) rendered in the tree, and
   `allowed_parent_types` (a set of `location_type` ids and/or the reserved `root` sentinel): empty is
   unconstrained, a non-empty set is enforced on create and move. The shipped set and its parents are
-  rendered from the seed on the [location types guide](/guides/admin/location-types/) rather than
+  rendered from the seed on the [location types guide](/admin/location-types/) rather than
   listed in two places.
 - An **outpost** is the edge process (`omniglass outpost run`) that pulls work, reaches components over
   endpoints, and ships results ([outposts](/architecture/outposts/)). It is structural because it is a
@@ -197,7 +197,7 @@ The column mechanics render from the generated schema facts:
 ### Catalog reference data: vendor, driver, capability
 
 The **component-classification catalogs** are flat, seed-and-custom catalogs on the same
-official/custom pattern as the `*_type` catalogs ([Location Types guide](/guides/admin/location-types/)); the
+official/custom pattern as the `*_type` catalogs ([Location Types guide](/admin/location-types/)); the
 **`product`** catalog (below) sits above them as the concrete SKU a `component` points at:
 
 - A **`vendor`** (Boreal, Polaris, ...) names an organization, with a **`kind`** of `manufacturer`,
@@ -209,7 +209,7 @@ official/custom pattern as the `*_type` catalogs ([Location Types guide](/guides
   (below), and what a [system slot](#system-slots-what-a-system-needs-filled) requires is a
   typed-slot guard over it, not a capability set.
 
-See the [Vendors guide](/guides/admin/vendors/) for the operator surface.
+See the [Vendors guide](/admin/products/#vendors) for the operator surface.
 
 ### Catalog reference data: `component_type`
 
@@ -284,7 +284,7 @@ A **`component`** points at the product it **is** through **`component.product_i
 referenced by a component cannot be deleted (409), and a component can no longer exist unclassified.
 A component's `component_type` is never stored on the component itself; it is read through the
 product (`component.product_id -> product.component_type_id`). See the
-[Products guide](/guides/admin/products/).
+[Products guide](/admin/products/).
 
 ### Catalog reference data: `system_type`
 
@@ -333,7 +333,7 @@ A **`system`** conforms through the optional **`system.standard_id`**; a **one-o
 first-class and carries no contract. The standard is a separate axis from `system_type` above: a
 system can carry either, both, or neither. Conformance is **not** a copy: the standard's contract defaults
 resolve **live** for every conforming system until it binds its own. See the
-[Standards guide](/guides/admin/standards/).
+[Standards guide](/admin/standards/).
 
 A system also declares **slots** directly on itself (an ad hoc slot), which is how a one-off system
 gets any: it inherits none. The console declares them from the system's Slots panel in edit mode,
@@ -385,7 +385,7 @@ Every arc is **scope-checked on the write**: setting a value outside your scope 
 This pair replaces the retired `field_definition` / `field_value` feature: a "field" was always a
 property with **declared** provenance
 ([ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)).
-See the [Properties guide](/guides/admin/properties/).
+See the [Properties guide](/admin/properties/).
 
 ### System slots: what a system needs filled
 

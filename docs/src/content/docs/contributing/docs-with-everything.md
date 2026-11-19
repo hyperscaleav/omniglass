@@ -291,6 +291,12 @@ standing mask each such PR failed the gate on a UI it never touched (#1482). Add
 catalog rows to chrome the same way, a `data-testid` and an entry in that list, rather than a mask
 on each shot.
 
+The top bar's inbox bell is masked the same way (`data-testid="inbox-indicator"`), because its
+unread badge belongs to the run: the lab raises a notification partway through a capture, so a
+shot taken near that moment shows the badge on one run and not the next (#2196). The badge sits
+past the bell's own corner, so its mask is a **padded box**, `{ selector, pad: N }`: the element's
+bounding box grown by N pixels on every side, painted whether the badge renders or not.
+
 The fill is **deliberately visible** in the baseline: the console's own neutral surface, one
 step lighter than the card behind it, so a human reading a diff artifact sees a block placed
 over a value rather than a column that failed to render. The published docs never show the

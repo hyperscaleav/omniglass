@@ -12,7 +12,7 @@ call.
 **In this section:** signing in; finding a location, system or component and reading its view;
 creating and editing what is in the fleet; alarms, health and commands; your inbox; starting from a
 template; connecting outposts and reading reachability; whether Omniglass itself is well; and a
-simulated fleet to practise on. Who may sign in and what they may do is the [Admin](/guides/admin/)
+simulated fleet to practise on. Who may sign in and what they may do is the [Admin](/admin/)
 section's job, and standing the platform up is [Deployment](/guides/deployment/).
 
 ## Two ways in, one API
@@ -59,7 +59,7 @@ one you can do in the other.
 - **The top bar** names the section you are in and carries **Search (⌘K)** and, if you may use the
   assistant, **Ask omnibot**, which opens [omnibot](/guides/agents/#omnibot-in-the-console) with the
   page you are on as its context. The console is dark-only; its theme is an
-  [Admin > Settings](/guides/admin/) value, not a per-session toggle.
+  [Admin > Settings](/admin/settings/) value, not a per-session toggle.
 - **⌘K** (or Ctrl-K) is the command palette, a jump to any destination by name: arrow keys move,
   Enter goes, Esc closes. It finds each catalog by its own name (`products` lands on **Catalog, under
   Components: Products**) and every entry under a group by the group's name (`telemetry` lists
@@ -74,7 +74,7 @@ one you can do in the other.
 
 Every read is filtered to **your scope** on the server. An operator granted one location sees that
 location and everything under it, on every page, in every list, in the CLI, with nothing to configure:
-scope follows your [grants](/guides/admin/access/). The **Access** view in [your
+scope follows your [grants](/admin/access/). The **Access** view in [your
 profile](/operator/sign-in/#your-profile) shows the roles you hold and the permissions they carry.
 The model behind both layers is [identity and access](/architecture/identity-access/).
 
