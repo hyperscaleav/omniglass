@@ -171,10 +171,10 @@ func TestLoadEnvIgnoresOtherVariables(t *testing.T) {
 // the prefix with no separator, or a trailing separator.
 func TestLoadEnvRejectsMalformedVariable(t *testing.T) {
 	for _, name := range []string{
-		"OMNIGLASS_SETTING__ASSISTANT",            // no key
-		"OMNIGLASS_SETTING____MODEL",              // empty namespace
-		"OMNIGLASS_SETTING__ASSISTANT__",          // empty key
-		"OMNIGLASS_SETTING__ASSISTANT__MODEL__X",  // too many segments
+		"OMNIGLASS_SETTING__ASSISTANT",           // no key
+		"OMNIGLASS_SETTING____MODEL",             // empty namespace
+		"OMNIGLASS_SETTING__ASSISTANT__",         // empty key
+		"OMNIGLASS_SETTING__ASSISTANT__MODEL__X", // too many segments
 	} {
 		_, err := LoadEnv([]string{name + "=x"})
 		if err == nil {

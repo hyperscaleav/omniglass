@@ -33,6 +33,8 @@ function originLabel(level: string): string {
   switch (level) {
     case "platform":
       return "Set in console";
+    case "env":
+      return "From environment";
     case "file":
       return "From settings file";
     default:
@@ -45,6 +47,8 @@ function levelLabel(level: string): string {
   switch (level) {
     case "platform":
       return "Console binding (platform)";
+    case "env":
+      return "Server environment";
     case "file":
       return "Operator settings file";
     default:
@@ -58,7 +62,7 @@ const UNSET = "unset";
 
 // The cascade order, broad to specific, for the layer-stack display. "default" is
 // off the axis: it is what the setting is when nobody set it, never a stored row.
-const CASCADE = ["default", "file", "platform"] as const;
+const CASCADE = ["default", "file", "env", "platform"] as const;
 
 export default function Settings() {
   const me = useMe();

@@ -118,7 +118,7 @@ func runServer(ctx context.Context, version string, lab bool) error {
 	if err != nil {
 		return fmt.Errorf("server: load settings file: %w", err)
 	}
-	settingsEnv, err := settings.LoadEnv(os.Environ())
+	settingsEnv, err := settings.LoadEnv(config.Environ(settings.EnvPrefix))
 	if err != nil {
 		return fmt.Errorf("server: load settings env: %w", err)
 	}

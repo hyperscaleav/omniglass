@@ -35,16 +35,14 @@ type Var struct {
 	// deployment guides teach the rename from the same declaration.
 	Deprecated string `json:"deprecated,omitempty"`
 	// Family, when set, names the prefix family a variable belongs to (#2223):
-	// a row generated for a key under OMNIGLASS_SETTING__ or OMNIGLASS_SECRET__
-	// carries the family the operator reads about. Hand-declared Vars leave
+	// a row generated for a key under OMNIGLASS_SETTING__ carries the family the operator reads about. Hand-declared Vars leave
 	// this empty.
 	Family string `json:"family,omitempty"`
 }
 
 // Family declares a prefix a variable may share, when the variable's full
 // name is not known at build time: the OMNIGLASS_SETTING__ layer, whose keys
-// come from the reflected Settings struct, and the OMNIGLASS_SECRET__ layer,
-// whose names are the operator's. config.Get accepts an exact Registry key
+// come from the reflected Settings struct. config.Get accepts an exact Registry key
 // or a name under a declared family prefix, so a read a generator would make
 // does not panic as "undeclared" even though no single Registry row names it.
 type Family struct {
@@ -55,13 +53,11 @@ type Family struct {
 
 // Families declares the prefix variables omniglass reads (#2223). The env
 // settings layer (OMNIGLASS_SETTING__*) is expanded per-key in the generated
-// reference; the env secrets layer (OMNIGLASS_SECRET__*) is one entry since
-// an operator names each secret.
+// reference. Env-backed platform secrets are the ticket's other half and
+// join this list when the server reads them.
 var Families = []Family{
 	{Prefix: "OMNIGLASS_SETTING__", Scope: "server",
 		Doc: "sets one platform setting from the environment (OMNIGLASS_SETTING__<NAMESPACE>__<KEY>=value); the env layer sits between the settings file and the platform binding, so a console edit still wins. See the generated per-key rows"},
-	{Prefix: "OMNIGLASS_SECRET__", Scope: "server",
-		Doc: "declares one platform secret from the environment (OMNIGLASS_SECRET__<NAME>=<JSON {type,fields}>), resolved like any stored one by name; env-backed secrets refuse an update or delete and are never written to Postgres"},
 }
 
 // Registry declares every environment variable the binary reads, in the order
@@ -164,8 +160,8 @@ var registered = func() map[string]bool {
 // Get reads a declared environment variable. An unregistered key panics: that
 // is the point, a read that is not declared (and therefore not documented and
 // not rendered into the deployment guides) is a build bug, not a runtime
-// condition. A name under a declared family prefix (OMNIGLASS_SETTING__,
-// OMNIGLASS_SECRET__) counts as declared, since the family covers it even
+// condition. A name under a declared family prefix (OMNIGLASS_SETTING__)
+// counts as declared, since the family covers it even
 // though no Registry row names it individually.
 func Get(key string) string {
 	if !declared(key) {
@@ -196,11 +192,31 @@ func Named(key string) string {
 	return os.Getenv(key)
 }
 
+// Environ is the process environment's KEY=VALUE entries under one declared
+// family prefix (#2223), for a reader that takes a whole family at once: the
+// server's env settings layer, and the lab forwarding it to its server. A
+// prefix no family declares panics, as Get does for an undeclared key.
+func Environ(prefix string) []string {
+	ok := false
+	for _, f := range Families {
+		ok = ok || f.Prefix == prefix
+	}
+	if !ok {
+		panic(fmt.Sprintf("config: env family %s read without a Families entry; declare it in internal/config/registry.go", prefix))
+	}
+	var out []string
+	for _, e := range os.Environ() {
+		if strings.HasPrefix(e, prefix) {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
 // FactsJSON renders the registry as the generated env-var reference. Each
 // hand-declared Var is emitted as itself; each declared Family is either
 // expanded per-key (OMNIGLASS_SETTING__, driven by the Settings struct, one
-// row per platform-domain leaf) or emitted as a single family entry
-// (OMNIGLASS_SECRET__, since an operator names each secret). The trailing
+// row per platform-domain leaf) or emitted as a single family entry. The trailing
 // newline makes the committed file POSIX-clean.
 func FactsJSON() ([]byte, error) {
 	vars := append([]Var{}, Registry...)
@@ -237,8 +253,7 @@ type SettingsEnvFact struct {
 
 // familyFacts expands the declared families (#2223): OMNIGLASS_SETTING__ one
 // row per settable key off the Settings struct (through the SettingsEnvFacts
-// seam), OMNIGLASS_SECRET__ a single family row (the shape is
-// operator-named).
+// seam); any other family a single row, its name the operator's.
 func familyFacts() []Var {
 	var out []Var
 	for _, f := range Families {
@@ -256,7 +271,7 @@ func familyFacts() []Var {
 					Family:  f.Prefix,
 				})
 			}
-		case "OMNIGLASS_SECRET__":
+		default:
 			out = append(out, Var{
 				Key:    f.Prefix + "<NAME>",
 				Scope:  f.Scope,

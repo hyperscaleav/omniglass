@@ -14,3 +14,9 @@ secret). The `profile` domain (`ui`, `keybindings`) is refused at boot, naming t
 theme has no process-wide meaning. `cmd/configgen` renders one row per settable key in the
 generated env-var reference so the table stays complete by construction, and the registry's drift
 gate still fails when the facts move.
+
+`omniglass lab run` forwards every `OMNIGLASS_SETTING__` variable in its shell to the lab's server,
+judging them first so a typo stops the run before a container starts, and the console's Admin
+settings page badges an env-fed key **From environment**. With `--omnibot-key-env`, exporting the
+assistant's base URL and model runs a lab's omnibot on Bedrock with no setting update after boot.
+Env-backed platform secrets, the ticket's other half, follow.

@@ -1025,3 +1025,28 @@ func TestPlanHandsOnlyDeclaredVariables(t *testing.T) {
 		}
 	}
 }
+
+// The host's settings variables (#2223) reach the lab's server alone, so its
+// env settings layer resolves them; the seed, the database and the outpost
+// never see them. An entry that is not a settings variable is refused.
+func TestPlanSettingsEnvGoesToTheServerAlone(t *testing.T) {
+	o := testOptions()
+	model := "OMNIGLASS_SETTING__ASSISTANT__MODEL=openai.gpt-oss-20b-1:0"
+	o.ServerSettingsEnv = []string{model}
+	s, err := Plan(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(s.Server.Env, model) {
+		t.Fatalf("server env %v, want %s", s.Server.Env, model)
+	}
+	for _, svc := range []Service{s.DB, s.Seed, s.Outpost} {
+		if slices.Contains(svc.Env, model) {
+			t.Fatalf("%s is handed the server's setting", svc.Name)
+		}
+	}
+	o.ServerSettingsEnv = []string{"OMNIGLASS_DSN=postgres://elsewhere"}
+	if _, err := Plan(o); err == nil || !strings.Contains(err.Error(), "OMNIGLASS_DSN") {
+		t.Fatalf("a non-settings entry: err = %v, want a refusal naming it", err)
+	}
+}

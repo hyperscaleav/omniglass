@@ -421,12 +421,6 @@
    "scope": "server",
    "doc": "Seconds between heartbeats",
    "family": "OMNIGLASS_SETTING__"
-  },
-  {
-   "key": "OMNIGLASS_SECRET__\u003cNAME\u003e",
-   "scope": "server",
-   "doc": "declares one platform secret from the environment (OMNIGLASS_SECRET__\u003cNAME\u003e=\u003cJSON {type,fields}\u003e), resolved like any stored one by name; env-backed secrets refuse an update or delete and are never written to Postgres",
-   "family": "OMNIGLASS_SECRET__"
   }
  ]
 }

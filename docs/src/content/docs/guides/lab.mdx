@@ -151,6 +151,14 @@ command itself; here is when you would reach for each:
   The key travels to the lab's seed in its environment, visible to `docker inspect` on this machine
   while the seed runs, as the outpost's token is. Without the flag omnibot plays the lab's recording,
   and the key a run before stored is removed. A scale lab runs no omnibot, so it refuses the flag.
+- Every `OMNIGLASS_SETTING__<NAMESPACE>__<KEY>` variable in your shell reaches the lab's server as
+  its [environment settings](/admin/settings/), and the start line names them (never their
+  values). One the server would refuse (a key it has no setting for, a value that does not parse)
+  stops the run before anything is created, naming the variable. With the key flag, the assistant's
+  base URL and model point the lab at another model: Amazon Bedrock's gpt-oss is
+  `OMNIGLASS_SETTING__ASSISTANT__BASE_URL=https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1`
+  and `OMNIGLASS_SETTING__ASSISTANT__MODEL=openai.gpt-oss-20b-1:0` with a Bedrock API key
+  (`.env.example` carries them).
 
 - `--systems` and `--plan` size a [scale lab scenario](#scale-lab-scenarios) instead of a seeded
   fleet, and preview it with its preflight.

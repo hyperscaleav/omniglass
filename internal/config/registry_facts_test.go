@@ -78,7 +78,22 @@ func TestSettingsFamilyAccepted(t *testing.T) {
 	if got := config.Get("OMNIGLASS_SETTING__ASSISTANT__MODEL"); got != "" {
 		t.Errorf("Get on unset family var = %q, want \"\"", got)
 	}
-	if got := config.Get("OMNIGLASS_SECRET__BEDROCK_KEY"); got != "" {
-		t.Errorf("Get on unset family var = %q, want \"\"", got)
+}
+
+// TestEnvironReadsOnlyItsFamily is the whole-family read the server's env
+// layer and the lab take (#2223): only names under the prefix, and an
+// undeclared prefix panics as an undeclared Get does.
+func TestEnvironReadsOnlyItsFamily(t *testing.T) {
+	t.Setenv("OMNIGLASS_SETTING__ASSISTANT__MODEL", "m")
+	t.Setenv("OMNIGLASS_SETTINGX", "not-in-family")
+	got := config.Environ("OMNIGLASS_SETTING__")
+	if len(got) != 1 || got[0] != "OMNIGLASS_SETTING__ASSISTANT__MODEL=m" {
+		t.Fatalf("Environ = %q, want only the one settings variable", got)
 	}
+	defer func() {
+		if recover() == nil {
+			t.Error("Environ of an undeclared prefix did not panic")
+		}
+	}()
+	config.Environ("OMNIGLASS_NOPE__")
 }

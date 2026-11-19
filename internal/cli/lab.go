@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -28,6 +29,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/seed"
+	"github.com/hyperscaleav/omniglass/internal/settings"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
@@ -381,6 +383,10 @@ func runLab(ctx context.Context, out io.Writer, version string, f labFlags) erro
 	if err != nil {
 		return err
 	}
+	settingsEnv, err := labSettingsEnv(config.Environ(settings.EnvPrefix))
+	if err != nil {
+		return err
+	}
 	faults, err := devseed.PlantedFaults(sc)
 	if err != nil {
 		return err
@@ -390,6 +396,9 @@ func runLab(ctx context.Context, out io.Writer, version string, f labFlags) erro
 		return err
 	}
 	fmt.Fprintln(out, "Starting your omniglass lab. The first run takes a few minutes; later ones, under one.")
+	if names := labSettingsEnvNames(settingsEnv); len(names) > 0 {
+		fmt.Fprintf(out, "Your server takes %d setting(s) from this shell: %s.\n", len(names), strings.Join(names, ", "))
+	}
 	fmt.Fprintln(out)
 
 	eng, daemon, err := labEngine(ctx, out)
@@ -420,6 +429,7 @@ func runLab(ctx context.Context, out io.Writer, version string, f labFlags) erro
 			Owner:   lab.CurrentOwner(host), WorkDir: wd,
 			Ephemeral: f.script.ephemeral, NoOutpost: f.script.noOutpost, Cadence: f.script.cadence,
 			PlatformHistory: f.script.platformHistory, OmnibotKey: omnibotKey,
+			ServerSettingsEnv: settingsEnv,
 		},
 		Image: choice, Fresh: f.fresh, PlantedFaults: plantedLabels(faults), Hold: true,
 		ReadyFile: f.script.readyFile, WhilePID: f.script.whilePID,
@@ -621,6 +631,36 @@ func runLabSeed(ctx context.Context, out io.Writer, scenario, outpost, user, pas
 	}
 	fmt.Fprintln(out, lab.FormatSeedResult(lab.SeedResult{Outpost: present, Summary: summary}))
 	return nil
+}
+
+// labSettingsEnv is the host's OMNIGLASS_SETTING__ variables (#2223), in
+// name order, for the lab's server: the env settings layer the server reads
+// at boot. They are judged here as the server will judge them, so a typo or a
+// value that does not parse stops the run before anything is created, naming
+// the variable and never its value.
+func labSettingsEnv(environ []string) ([]string, error) {
+	var out []string
+	for _, e := range environ {
+		if strings.HasPrefix(e, settings.EnvPrefix) {
+			out = append(out, e)
+		}
+	}
+	if _, err := settings.LoadEnv(out); err != nil {
+		return nil, fmt.Errorf("lab: your shell's %w", err)
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+// labSettingsEnvNames is the variables' names alone, for the start line:
+// a value may be a URL or a secret's name, so the line names only the keys.
+func labSettingsEnvNames(env []string) []string {
+	names := make([]string, 0, len(env))
+	for _, e := range env {
+		name, _, _ := strings.Cut(e, "=")
+		names = append(names, name)
+	}
+	return names
 }
 
 // labOmnibotKey reads the live model key from the host env var name names;

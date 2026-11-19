@@ -300,3 +300,41 @@ func TestLabRunReleasePullsByStampedDigest(t *testing.T) {
 		t.Errorf("no digest: started %v, err %v; want a refusal naming --image before anything starts", started, err)
 	}
 }
+
+// A lab's server takes the host's settings variables (#2223): only the
+// OMNIGLASS_SETTING__ ones, in name order, and a variable the server would
+// refuse at boot stops the run here, naming it and never its value.
+func TestLabSettingsEnvForwardsOnlySettings(t *testing.T) {
+	got, err := labSettingsEnv([]string{
+		"PATH=/usr/bin",
+		"OMNIGLASS_SETTING__ASSISTANT__MODEL=openai.gpt-oss-20b-1:0",
+		"OMNIGLASS_TEST_MODEL_KEY=sk-test",
+		"OMNIGLASS_SETTING__ASSISTANT__BASE_URL=https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"OMNIGLASS_SETTING__ASSISTANT__BASE_URL=https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1",
+		"OMNIGLASS_SETTING__ASSISTANT__MODEL=openai.gpt-oss-20b-1:0",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("forwarded %q, want %q", got, want)
+	}
+	if names := labSettingsEnvNames(got); strings.Join(names, ",") != "OMNIGLASS_SETTING__ASSISTANT__BASE_URL,OMNIGLASS_SETTING__ASSISTANT__MODEL" {
+		t.Fatalf("names %q", names)
+	}
+	_, err = labSettingsEnv([]string{"OMNIGLASS_SETTING__RETENTION__METRIC_DAYS=soon-secret"})
+	if err == nil || !strings.Contains(err.Error(), "OMNIGLASS_SETTING__RETENTION__METRIC_DAYS") {
+		t.Fatalf("a value that does not parse: err = %v, want one naming the variable", err)
+	}
+	if strings.Contains(err.Error(), "soon-secret") {
+		t.Fatalf("the refusal quotes the value: %v", err)
+	}
+	if _, err := labSettingsEnv([]string{"OMNIGLASS_SETTING__ASSISTANT__NOPE=x"}); err == nil {
+		t.Fatal("a variable naming no setting is forwarded")
+	}
+	if got, err := labSettingsEnv(nil); err != nil || len(got) != 0 {
+		t.Fatalf("no settings variables: %q, %v", got, err)
+	}
+}
