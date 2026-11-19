@@ -33,7 +33,7 @@ export type NavChild = {
 export type NavItem = {
   label: string;
   icon: Component<{ size?: number }>;
-  hint: string;
+  hint?: string;
   path?: string;
   live?: boolean;
   issue?: number;
@@ -78,7 +78,7 @@ export const navItems: NavItem[] = [
   // surface, so its door shows only while a simulator is connected.
   { label: "Simulation", path: "/simulation", icon: Icons.FlaskConical, live: true, resource: "simulation", when: "simulator", hint: "The simulated components a simulator serves beside an outpost: the hits collection lands on them, what is broken, and each one's API surface." },
   {
-    label: "Values", icon: Icons.Sliders, hint: "Operator-set values and content: interpolation variables, encrypted secrets, and declared values, each resolved down the scope cascade, plus the files kept with the fleet.",
+    label: "Values", icon: Icons.Sliders,
     children: [
       { label: "Variables", path: "/variables", live: true, resource: "variable", hint: "Free interpolated values (macros), resolved down the scope cascade." },
       { label: "Secrets", path: "/secrets", live: true, resource: "secret", hint: "Shared device and platform credentials, resolved down the scope cascade." },
@@ -100,7 +100,7 @@ export const navItems: NavItem[] = [
   { label: "Catalog", path: "/catalog", icon: Icons.Layers, live: true, hint: "Everything the fleet is typed by: every catalog, browsable in one place." },
   { label: "Learn", path: "/learn", icon: Icons.GraduationCap, hint: "How collection turns a device into owned samples." },
   {
-    label: "Admin", icon: Icons.Settings, hint: "Platform administration: users, roles, user groups, the audit trail, the collection outposts, the platform's status, and platform settings.",
+    label: "Admin", icon: Icons.Settings,
     children: [
       { label: "Users", path: "/users", live: true, perm: "user:read:admin", hint: "People and machine users: status, grants, and tokens." },
       { label: "Roles", path: "/roles", live: true, perm: "role:read:admin", hint: "The built-in roles: what each permission bundle grants, and how they inherit." },
@@ -202,7 +202,7 @@ export type NavMeta = { label: string; hint: string; issue?: number; icon: Compo
 export const navByPath: Record<string, NavMeta> = (() => {
   const m: Record<string, NavMeta> = {};
   for (const item of navItems) {
-    if (item.path) m[item.path] = { label: item.label, hint: item.hint, issue: item.issue, icon: item.icon };
+    if (item.path) m[item.path] = { label: item.label, hint: item.hint ?? "", issue: item.issue, icon: item.icon };
     for (const child of item.children ?? [])
       m[child.path] = { label: child.label, hint: child.hint, issue: child.issue, icon: item.icon, group: item.label, section: child.section };
   }
