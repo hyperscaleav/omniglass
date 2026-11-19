@@ -94,8 +94,8 @@ func TestSystemTypesAPI(t *testing.T) {
 	// board states its own stem and abbrev (what #657's rules read) but no
 	// icon: the wire carries the RAW row, inheritance is the resolver's job.
 	board := find(rows, "board")
-	if board.Stem != "boardroom" || board.Abbrev != "br" {
-		t.Fatalf("board stem/abbrev = %q/%q, want boardroom/br", board.Stem, board.Abbrev)
+	if board.Stem != "board-meeting" || board.Abbrev != "bm" {
+		t.Fatalf("board stem/abbrev = %q/%q, want board-meeting/bm", board.Stem, board.Abbrev)
 	}
 	if board.Icon != "" {
 		t.Fatalf("board icon = %q, want empty on the wire (it inherits collaboration's; this read does not resolve)", board.Icon)

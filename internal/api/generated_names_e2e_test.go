@@ -57,8 +57,8 @@ func TestSystemGeneratedNameAPI(t *testing.T) {
 		map[string]any{"system_type_id": "board", "location": "gen-room"}, http.StatusCreated), &first); err != nil {
 		t.Fatalf("decode the nameless create: %v", err)
 	}
-	if first.Name != "boardroom" || !first.NameGenerated {
-		t.Fatalf("nameless create = %+v, want name=boardroom name_generated=true", first)
+	if first.Name != "board-meeting" || !first.NameGenerated {
+		t.Fatalf("nameless create = %+v, want name=board-meeting name_generated=true", first)
 	}
 
 	var second nameBody
@@ -66,8 +66,8 @@ func TestSystemGeneratedNameAPI(t *testing.T) {
 		map[string]any{"system_type_id": "board", "location": "gen-room"}, http.StatusCreated), &second); err != nil {
 		t.Fatalf("decode the second create: %v", err)
 	}
-	if second.Name != "boardroom-2" {
-		t.Fatalf("the second nameless create = %+v, want name=boardroom-2", second)
+	if second.Name != "board-meeting-2" {
+		t.Fatalf("the second nameless create = %+v, want name=board-meeting-2", second)
 	}
 
 	// A nameless create with no system_type is a 422 naming the reason, not a
@@ -75,7 +75,7 @@ func TestSystemGeneratedNameAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"location": "gen-room"}, http.StatusUnprocessableEntity)
 
 	var renamed nameBody
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/systems/boardroom:rename",
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/systems/board-meeting:rename",
 		map[string]any{"name": "exec-suite"}, http.StatusOK), &renamed); err != nil {
 		t.Fatalf("decode rename: %v", err)
 	}
@@ -87,8 +87,8 @@ func TestSystemGeneratedNameAPI(t *testing.T) {
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/systems/exec-suite:resetName", nil, http.StatusOK), &reset); err != nil {
 		t.Fatalf("decode resetName: %v", err)
 	}
-	if reset.Name != "boardroom" || !reset.NameGenerated {
-		t.Fatalf("resetName = %+v, want name=boardroom name_generated=true", reset)
+	if reset.Name != "board-meeting" || !reset.NameGenerated {
+		t.Fatalf("resetName = %+v, want name=board-meeting name_generated=true", reset)
 	}
 
 	// A missing system is the ordinary non-disclosing 404, same as :rename.

@@ -11,7 +11,7 @@ import (
 )
 
 // newSystemNamegenDB is the fixture every case below shares: a seeded catalog
-// (system_type "board" carries stem "boardroom", "class" carries "classroom")
+// (system_type "board" carries stem "board-meeting", "class" carries "teaching")
 // and one room to place systems in, since a location is the bucket an operator
 // actually creates rooms' systems into.
 // It hands back the concrete *PG rather than the Gateway interface because the
@@ -47,8 +47,8 @@ func TestSystemCreateGeneratesFromTypeStem(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create first: %v", err)
 	}
-	if first.Name != "boardroom" {
-		t.Fatalf("first generated name = %q, want boardroom (the first of its stem carries no ordinal)", first.Name)
+	if first.Name != "board-meeting" {
+		t.Fatalf("first generated name = %q, want board-meeting (the first of its stem carries no ordinal)", first.Name)
 	}
 	if !first.NameGenerated {
 		t.Fatal("first.NameGenerated = false, want true")
@@ -61,8 +61,8 @@ func TestSystemCreateGeneratesFromTypeStem(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create second: %v", err)
 	}
-	if second.Name != "boardroom-2" {
-		t.Fatalf("second generated name = %q, want boardroom-2", second.Name)
+	if second.Name != "board-meeting-2" {
+		t.Fatalf("second generated name = %q, want board-meeting-2", second.Name)
 	}
 	if second.Ordinal == nil || *second.Ordinal != 2 {
 		t.Fatalf("second.Ordinal = %s, want 2", ordstr(second.Ordinal))
@@ -71,14 +71,14 @@ func TestSystemCreateGeneratesFromTypeStem(t *testing.T) {
 	// A different stem in the SAME bucket is its own allocation space.
 	class, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("class"), LocationName: &room}, all, all)
 	if err != nil {
-		t.Fatalf("create classroom: %v", err)
+		t.Fatalf("create teaching: %v", err)
 	}
-	if class.Name != "classroom" {
-		t.Fatalf("a different stem in the same bucket = %q, want classroom", class.Name)
+	if class.Name != "teaching" {
+		t.Fatalf("a different stem in the same bucket = %q, want teaching", class.Name)
 	}
 
 	// A different LOCATION is a different bucket: the ordinal restarts, so the
-	// second room's only boardroom is bare again.
+	// second room's only board-meeting is bare again.
 	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "namegen-room-b", LocationType: "campus"}, all); err != nil {
 		t.Fatalf("create second location: %v", err)
 	}
@@ -86,8 +86,8 @@ func TestSystemCreateGeneratesFromTypeStem(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create in the second room: %v", err)
 	}
-	if elsewhere.Name != "boardroom" {
-		t.Fatalf("the second room's only boardroom = %q, want boardroom (a placement bucket counts alone)", elsewhere.Name)
+	if elsewhere.Name != "board-meeting" {
+		t.Fatalf("the second room's only board-meeting = %q, want board-meeting (a placement bucket counts alone)", elsewhere.Name)
 	}
 
 	// And the parent bucket is its own too, which is what makes system need
@@ -96,8 +96,8 @@ func TestSystemCreateGeneratesFromTypeStem(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create under a parent system: %v", err)
 	}
-	if nested.Name != "boardroom" {
-		t.Fatalf("the only boardroom under a parent = %q, want boardroom", nested.Name)
+	if nested.Name != "board-meeting" {
+		t.Fatalf("the only board-meeting under a parent = %q, want board-meeting", nested.Name)
 	}
 }
 
@@ -242,8 +242,8 @@ func TestSystemRenameFreezesAndResetReturnsThePen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reset: %v", err)
 	}
-	if reset.Name != "boardroom" || !reset.NameGenerated {
-		t.Fatalf("reset = (%q, generated %v), want (boardroom, true)", reset.Name, reset.NameGenerated)
+	if reset.Name != "board-meeting" || !reset.NameGenerated {
+		t.Fatalf("reset = (%q, generated %v), want (board-meeting, true)", reset.Name, reset.NameGenerated)
 	}
 	if reset.Ordinal == nil || *reset.Ordinal != 1 {
 		t.Fatalf("reset.Ordinal = %s, want 1", ordstr(reset.Ordinal))
@@ -251,8 +251,8 @@ func TestSystemRenameFreezesAndResetReturnsThePen(t *testing.T) {
 }
 
 // TestSystemMoveReMintsTheOrdinal proves a platform-owned name follows its
-// placement: moved into a room that already holds a boardroom, the bare name is
-// taken, so the row becomes boardroom-2 and records the 2.
+// placement: moved into a room that already holds a board-meeting, the bare name is
+// taken, so the row becomes board-meeting-2 and records the 2.
 func TestSystemMoveReMintsTheOrdinal(t *testing.T) {
 	t.Parallel()
 	gw, ctx, room := newSystemNamegenDB(t)
@@ -266,16 +266,16 @@ func TestSystemMoveReMintsTheOrdinal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if s.Name != "boardroom" {
-		t.Fatalf("pre-move name = %q, want boardroom", s.Name)
+	if s.Name != "board-meeting" {
+		t.Fatalf("pre-move name = %q, want board-meeting", s.Name)
 	}
 
 	moved, err := gw.MoveSystem(ctx, "", s.ID, storage.SystemMove{LocationName: strp("namegen-room-d")}, all, all, all)
 	if err != nil {
 		t.Fatalf("move: %v", err)
 	}
-	if moved.Name != "boardroom-2" {
-		t.Fatalf("after moving into an occupied bucket = %q, want boardroom-2", moved.Name)
+	if moved.Name != "board-meeting-2" {
+		t.Fatalf("after moving into an occupied bucket = %q, want board-meeting-2", moved.Name)
 	}
 	if moved.Ordinal == nil || *moved.Ordinal != 2 {
 		t.Fatalf("moved.Ordinal = %s, want 2: the old bucket's number is no more true of the row than the old name was", ordstr(moved.Ordinal))
@@ -292,7 +292,7 @@ func TestSystemMoveReMintsTheOrdinal(t *testing.T) {
 // system:rename grant held.
 //
 // The fleet is the one that makes it visible rather than silent, the same one
-// the reclassify case uses: a rename has freed "boardroom" in this bucket, so a
+// the reclassify case uses: a rename has freed "board-meeting" in this bucket, so a
 // spurious re-mint does not recompute to the same answer.
 func TestSystemMoveWithoutABucketChangeKeepsTheName(t *testing.T) {
 	t.Parallel()
@@ -306,10 +306,10 @@ func TestSystemMoveWithoutABucketChangeKeepsTheName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create the second: %v", err)
 	}
-	if second.Name != "boardroom-2" {
-		t.Fatalf("the second create = %q, want boardroom-2", second.Name)
+	if second.Name != "board-meeting-2" {
+		t.Fatalf("the second create = %q, want board-meeting-2", second.Name)
 	}
-	// Frees "boardroom" in this bucket.
+	// Frees "board-meeting" in this bucket.
 	if _, err := gw.RenameSystem(ctx, "", first.ID, "main-room", all, all); err != nil {
 		t.Fatalf("rename the first: %v", err)
 	}
@@ -319,7 +319,7 @@ func TestSystemMoveWithoutABucketChangeKeepsTheName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("move to the same location: %v", err)
 	}
-	if after.Name != "boardroom-2" {
+	if after.Name != "board-meeting-2" {
 		t.Fatalf("a move that changed no bucket renamed the system to %q: a re-stated placement changes neither input to the mint", after.Name)
 	}
 	if after.Ordinal == nil || *after.Ordinal != 2 {
@@ -332,7 +332,7 @@ func TestSystemMoveWithoutABucketChangeKeepsTheName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("no-op move: %v", err)
 	}
-	if noop.Name != "boardroom-2" {
+	if noop.Name != "board-meeting-2" {
 		t.Fatalf("a no-op move renamed the system to %q", noop.Name)
 	}
 
@@ -346,8 +346,8 @@ func TestSystemMoveWithoutABucketChangeKeepsTheName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create the child: %v", err)
 	}
-	if child.Name != "boardroom" {
-		t.Fatalf("the child create = %q, want boardroom (its parent is its bucket)", child.Name)
+	if child.Name != "board-meeting" {
+		t.Fatalf("the child create = %q, want board-meeting (its parent is its bucket)", child.Name)
 	}
 	sibling, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), ParentName: &parent.Name}, all, all)
 	if err != nil {
@@ -360,7 +360,7 @@ func TestSystemMoveWithoutABucketChangeKeepsTheName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("relocate the parented sibling: %v", err)
 	}
-	if relocated.Name != "boardroom-2" {
+	if relocated.Name != "board-meeting-2" {
 		t.Fatalf("relocating a parented system renamed it to %q: its parent still wins, so its bucket never moved", relocated.Name)
 	}
 
@@ -371,8 +371,8 @@ func TestSystemMoveWithoutABucketChangeKeepsTheName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("lift the sibling to its location bucket: %v", err)
 	}
-	if lifted.Name != "boardroom" {
-		t.Fatalf("a move out of the parent bucket = %q, want boardroom (the room's bare name was freed by the rename)", lifted.Name)
+	if lifted.Name != "board-meeting" {
+		t.Fatalf("a move out of the parent bucket = %q, want board-meeting (the room's bare name was freed by the rename)", lifted.Name)
 	}
 }
 
@@ -391,8 +391,8 @@ func TestSystemReclassifyReMintsTheStem(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reclassify: %v", err)
 	}
-	if after.Name != "classroom" {
-		t.Fatalf("after a reclassify = %q, want classroom", after.Name)
+	if after.Name != "teaching" {
+		t.Fatalf("after a reclassify = %q, want teaching", after.Name)
 	}
 	if after.Ordinal == nil || *after.Ordinal != 1 {
 		t.Fatalf("after.Ordinal = %s, want 1", ordstr(after.Ordinal))
@@ -420,7 +420,7 @@ func TestSystemReclassifyReMintsTheStem(t *testing.T) {
 //
 // The fleet here is the one that makes it visible rather than silent: a lower
 // ordinal has been freed by a rename, so a spurious re-mint does not recompute
-// to the same answer, it MOVES the name to "boardroom" under system:update,
+// to the same answer, it MOVES the name to "board-meeting" under system:update,
 // with no rename requested and possibly no system:rename grant held.
 func TestSystemUpdateWithoutAClassificationChangeKeepsTheName(t *testing.T) {
 	t.Parallel()
@@ -434,10 +434,10 @@ func TestSystemUpdateWithoutAClassificationChangeKeepsTheName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create the second: %v", err)
 	}
-	if second.Name != "boardroom-2" {
-		t.Fatalf("the second create = %q, want boardroom-2", second.Name)
+	if second.Name != "board-meeting-2" {
+		t.Fatalf("the second create = %q, want board-meeting-2", second.Name)
 	}
-	// Frees "boardroom" in this bucket.
+	// Frees "board-meeting" in this bucket.
 	if _, err := gw.RenameSystem(ctx, "", first.ID, "main-room", all, all); err != nil {
 		t.Fatalf("rename the first: %v", err)
 	}
@@ -449,7 +449,7 @@ func TestSystemUpdateWithoutAClassificationChangeKeepsTheName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("update the label: %v", err)
 	}
-	if after.Name != "boardroom-2" {
+	if after.Name != "board-meeting-2" {
 		t.Fatalf("a label edit renamed the system to %q: a patch that re-states the classification changes neither input to the mint", after.Name)
 	}
 	if after.Ordinal == nil || *after.Ordinal != 2 {
@@ -464,8 +464,8 @@ func TestSystemUpdateWithoutAClassificationChangeKeepsTheName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reclassify: %v", err)
 	}
-	if reclassified.Name != "classroom" {
-		t.Fatalf("a real reclassify = %q, want classroom", reclassified.Name)
+	if reclassified.Name != "teaching" {
+		t.Fatalf("a real reclassify = %q, want teaching", reclassified.Name)
 	}
 }
 
@@ -539,8 +539,8 @@ func TestSystemReclassifyWithinOneStemKeepsTheName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reclassify onto another stem: %v", err)
 	}
-	if moved.Name != "classroom" {
-		t.Fatalf("name after a reclassify onto a different stem = %q, want classroom", moved.Name)
+	if moved.Name != "teaching" {
+		t.Fatalf("name after a reclassify onto a different stem = %q, want teaching", moved.Name)
 	}
 	if moved.Ordinal == nil || *moved.Ordinal != 1 {
 		t.Fatalf("ordinal after a real reclassify = %s, want 1", ordstr(moved.Ordinal))
@@ -605,8 +605,8 @@ func TestSystemGeneratedNamesAreUniquePerBucket(t *testing.T) {
 		t.Fatalf("create child: %v", err)
 	}
 	for _, s := range []*storage.System{orphan, placed, child} {
-		if s.Name != "boardroom" {
-			t.Errorf("bucket-local name = %q, want boardroom in every bucket", s.Name)
+		if s.Name != "board-meeting" {
+			t.Errorf("bucket-local name = %q, want board-meeting in every bucket", s.Name)
 		}
 	}
 	if orphan.ID == placed.ID || placed.ID == child.ID || orphan.ID == child.ID {
@@ -624,8 +624,8 @@ func TestSystemGeneratedNamesAreUniquePerBucket(t *testing.T) {
 		if err != nil {
 			t.Fatalf("create the second in a bucket: %v", err)
 		}
-		if s.Name != "boardroom-2" {
-			t.Errorf("the second in a bucket = %q, want boardroom-2", s.Name)
+		if s.Name != "board-meeting-2" {
+			t.Errorf("the second in a bucket = %q, want board-meeting-2", s.Name)
 		}
 	}
 }
@@ -656,11 +656,11 @@ func TestStoredSystemOrdinalsRecomputeToThemselves(t *testing.T) {
 	}
 	for range 2 {
 		if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: &room}, all, all); err != nil {
-			t.Fatalf("create a placed boardroom: %v", err)
+			t.Fatalf("create a placed board-meeting: %v", err)
 		}
 	}
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("class"), LocationName: &room}, all, all); err != nil {
-		t.Fatalf("create a classroom: %v", err)
+		t.Fatalf("create a teaching system: %v", err)
 	}
 	// One already in the destination room, so the moved row below must land on
 	// ordinal 2: without it the moved row's old ordinal would still equal what
@@ -727,8 +727,8 @@ func TestStoredSystemOrdinalsRecomputeToThemselves(t *testing.T) {
 		}
 		checked++
 	}
-	// The parent, two placed boardrooms, the classroom, the boardroom that
-	// occupied the destination, the moved child, and the row that was renamed
+	// The parent, two placed board-meetings, the teaching system, the board-meeting
+	// that occupied the destination, the moved child, and the row that was renamed
 	// and then reset. The two operator-named rows (one hand-typed, one renamed
 	// and left frozen) carry no ordinal and are not among them, which is the
 	// point of counting rather than trusting the loop ran.

@@ -236,13 +236,13 @@ func TestTheNamePreconditionIsRefusedOnAnOperatorTypedName(t *testing.T) {
 // system suppresses its first ordinal and a location has two buckets instead of
 // three, and both differences are now INSIDE the compared value rather than
 // outside it, which is the other reason the name is the better claim: the
-// suppressed "boardroom" and the "boardroom-2" beside it are one comparison.
+// suppressed "board-meeting" and the "board-meeting-2" beside it are one comparison.
 func TestTheNamePreconditionHoldsOnEveryTierThatGenerates(t *testing.T) {
 	t.Parallel()
 	gw, ctx := seededGateway(t)
 	room := makeRoomWithLabel(t, gw, ctx, "room-204b", "204B")
 
-	// System: the shipped board type mints "boardroom", suppressing ordinal 1.
+	// System: the shipped board type mints "board-meeting", suppressing ordinal 1.
 	sysDraft, err := gw.RenderSystemDraftLabel(ctx, storage.SystemLabelDraft{
 		SystemTypeRef: "board", LocationName: room.Name,
 	}, all, all)

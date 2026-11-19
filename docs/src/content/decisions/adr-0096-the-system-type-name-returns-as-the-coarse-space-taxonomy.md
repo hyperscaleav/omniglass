@@ -47,7 +47,7 @@ summary: "A nested, universally seeded **`system_type`** registry lands beside `
   artifact.
 
   The forcing function is naming. A generated system name needs a stem in the space vocabulary
-  (`boardroom-2`) and a label render needs a compact form (`br`), and nothing in the estate model
+  (`board-meeting-2`) and a label render needs a compact form (`bm`), and nothing in the estate model
   spoke either: a standard is a blueprint name (`meeting-room-v2`), a location type is where the room
   sits rather than what it is for, and neither is universally seeded. Every identity fact the console
   reached for turned out to live at the same missing level, the same tell that made ADR-0085's case.
