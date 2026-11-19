@@ -164,7 +164,7 @@ func (r *blockRig) ruleReads() map[string]string {
 		"the current calc":  {Alias: "x", Key: "prune-rtt"},
 	} {
 		calcs[name] = storage.CalcRuleSpec{Name: "readers-avg", OwnerKind: rules.OwnerComponent,
-			Inputs: []rules.CalcInput{in}, Reduce: rules.CalcReduce{Expr: "avg(x)"}, OutputKey: "blk-avg"}
+			Inputs: []rules.CalcInput{in}, Reduce: rules.CalcReduce{Expr: "avg(x)"}, OutputKey: "test-block-avg"}
 	}
 	for _, at := range r.readerInstants() {
 		r.stopAt(at)
@@ -192,7 +192,7 @@ func (r *blockRig) ruleReads() map[string]string {
 func TestTheRuleReadsReadTheSameOnceFolded(t *testing.T) {
 	t.Parallel()
 	r := newBlockRigAt(t, time.Now())
-	if _, err := r.gw.CreateMetricType(r.ctx, "", storage.MetricTypeSpec{Name: "blk-avg", DataType: "float"}); err != nil {
+	if _, err := r.gw.CreateMetricType(r.ctx, "", storage.MetricTypeSpec{Name: "test-block-avg", DataType: "float"}); err != nil {
 		t.Fatal(err)
 	}
 	a, b := r.recordReaderScenario()
@@ -224,7 +224,7 @@ func TestTheRuleReadsReadTheSameOnceFolded(t *testing.T) {
 // ruleInForce is how many series event rule name holds in force.
 func (r *blockRig) ruleInForce(name string) int {
 	r.t.Helper()
-	return r.count(`select count(*) from event_rule_condition c join event_rule e on e.id = c.rule_id where e.name = $1`, name)
+	return r.count(`select count(*) from event_rule_firing c join event_rule e on e.id = c.rule_id where e.name = $1`, name)
 }
 
 // lowRule creates an event rule that fires on a prune-rtt below 10 (and the

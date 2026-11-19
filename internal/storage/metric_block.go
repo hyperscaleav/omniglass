@@ -641,7 +641,7 @@ func mergeLateBlocks(ctx context.Context, tx pgx.Tx, late lateSamples, laneDays 
 // paired with its rows by bk, a key of its own for the pass: a full join
 // cannot match the lineage's nulls.
 var verifyBlocksSQL = fmt.Sprintf(`with b as (
-		select row_number() over () as bk, b.series_id, b.span_start, b.span, %[1]s, b.offset_ms, b.value from metric_block b
+		select row_number() over () as bk, b.series_id, b.span_start, b.span, %[1]s, b.n, b.offset_ms, b.value, b.arrival_id from metric_block b
 		join metric_series s on s.id = b.series_id
 		join metric_type t on t.id = s.metric_type_id
 		where %[2]s),

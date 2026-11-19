@@ -504,7 +504,7 @@ observed-sample round trip and lands on the sample row, so the cycle guard walks
 
 ## Current value and projections: views by default
 
-`alarm` and `action` are **stateful entities** holding current state in a real table (not event-sourced). Everything else that is "current state" is a **read model**, default a **plain SQL view or a per-series indexed read** (always-correct, never stale, zero maintenance); a worker-maintained table is a **measured optimization**, earned only when a read profile shows the derived read too slow. **The schema holds zero SQL views and zero maintained caches today**: the shipped current-value read is the latest series row, derived on read; the once-built latest-value cache retired with the fold ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)).
+`alarm` and `action` are **stateful entities** holding current state in a real table (not event-sourced). Everything else that is "current state" is a **read model**, default a **plain SQL view or a per-series indexed read** (always-correct, never stale, zero maintenance); a worker-maintained table is a **measured optimization**, earned only when a read profile shows the derived read too slow. **The schema holds zero SQL views and zero maintained caches today**: the shipped current-value read is derived on read (the latest series row on most lanes; the metric lane uses `metricNewestSQL`, the newest raw or folded sample); the once-built latest-value cache retired with the fold ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)).
 
 ### A series read carries an owner index for the arc it reads
 

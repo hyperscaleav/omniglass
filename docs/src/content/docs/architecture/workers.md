@@ -52,7 +52,7 @@ outpost-liveness sweep of its own raise an `outpost-down` alarm directly; the ru
 replaced it
 ([ADR-1707](/architecture/decisions/#adr-1707-a-silent-node-alarms-through-a-seeded-rule-over-its-checkin-age-not-a-node-liveness-sweep)).
 
-There is no separate projector: a current value is the latest series row, derived on read ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus); [storage](/architecture/storage/)), and `alarm` / `action` hold their state directly.
+There is no separate projector: a current value is derived on read (the latest series row on the property lane; the metric lane adds a block fallback, [storage](/architecture/storage/)) ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)), and `alarm` / `action` hold their state directly.
 
 ## Measuring the ticks
 
