@@ -256,7 +256,6 @@ func (p *PG) PreviewEventRule(ctx context.Context, spec RulePreviewSpec, visible
 // window, newest first, read them in.
 func judgedInArrival(window []previewSample) []previewSample {
 	sorted := slices.Clone(window)
-	slices.Reverse(sorted)
 	sort.SliceStable(sorted, func(i, j int) bool {
 		a, b := sorted[i], sorted[j]
 		if !a.ts.Equal(b.ts) {
