@@ -110,9 +110,9 @@ without one reads its transport name exactly.
     tcp-family transports, `host` for icmp).
 
     From the CLI or the API a probe's address is the one `target` key of its `params`, written as
-    `host[:port]`. `count` and `timeout` tune an icmp probe, and `tls-mode` a `tls` or `https` one.
+    `host[:port]`. `count` and `timeout` tune an icmp probe, and `tls-mode` a `tls`, `https`, or `wss` one.
     There are no `host` or `port` keys: params that carry no `target`, or carry either of those keys,
-    are refused with a 422 on create (a 400 on an edit) naming `target`, because the node would
+    are refused with a 422 on create (a 400 on an edit) naming `target`, because the outpost would
     otherwise skip the endpoint forever and its reachability would never read.
 
     ```bash
