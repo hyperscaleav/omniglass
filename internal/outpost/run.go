@@ -294,7 +294,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 				d.kick()
 			}
 		},
-		auth: func(taskID, endpoint string, v collection.AuthVerdict) {
+		auth: func(taskID, endpoint string, v collection.AuthReachability) {
 			// The auth step's verdict is the endpoint-authenticated rung, the
 			// ladder's own vocabulary, published when it changes.
 			logger.Info("session authenticated", "facility", "session", "task", taskID, "endpoint", endpoint, "authenticated", v.Authenticated, "reason", v.Reason)

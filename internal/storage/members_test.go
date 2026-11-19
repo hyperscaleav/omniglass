@@ -406,7 +406,7 @@ func TestListMembersCarriesEachMembersOwnVerdict(t *testing.T) {
 	}
 	got := map[string]string{}
 	for _, m := range members {
-		got[m.ComponentID] = m.ComponentVerdict
+		got[m.ComponentID] = m.ComponentHealth
 	}
 	if got["dsp"] != "outage" || got["mic-a"] != "unknown" {
 		t.Errorf("member verdicts = %v, want dsp outage (a high alarm) and mic-a unknown (never observed)", got)

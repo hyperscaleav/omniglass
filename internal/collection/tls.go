@@ -325,7 +325,7 @@ func (r *Runner) CollectTLSResult(ctx context.Context, t TLSTask) ([]Sample, TLS
 		responsive = "up"
 		out = append(out, Sample{Name: SignalTLSHandshakeTime, Value: res.HandshakeMS, TS: now})
 	}
-	out = append(out, ladderVerdict(SignalEndpointResponsive, responsive, res.Reason, now))
+	out = append(out, ladderReachability(SignalEndpointResponsive, responsive, res.Reason, now))
 	if res.Accepted && !res.Facts.NotAfter.IsZero() {
 		out = append(out,
 			Sample{Name: SignalTLSCertificateExpiry, Text: res.Facts.NotAfter.UTC().Format(time.RFC3339), IsText: true, TS: now},

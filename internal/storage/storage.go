@@ -623,7 +623,7 @@ type Gateway interface {
 	// returned. Passing a name here is a caller error: nothing on this path
 	// narrows a resolve by scope any more.
 	IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, commandType, instance string, value, params json.RawMessage) (*Command, error)
-	CommandSettlement(ctx context.Context, ownerKind, ownerID, commandType, instance string) (SettlementVerdict, error)
+	CommandSettlement(ctx context.Context, ownerKind, ownerID, commandType, instance string) (Settlement, error)
 	// GetComponentCommand and ListComponentCommands read a component's
 	// commands back whole (#1155): the state machine with a time per
 	// transition, the in-flight phase, the evidence and the reason, and the
@@ -704,9 +704,9 @@ type Gateway interface {
 	// on each conduit against that conduit's bindings, every conduit in one
 	// read (#1282, #1582), in system mode.
 	ResolveIdentityBindings(ctx context.Context, ids map[string][]IdentityKey) (map[string]*IdentityResolution, error)
-	// ComponentVerdict is one component's own verdict, by its id, from its
+	// ComponentHealth is one component's own verdict, by its id, from its
 	// active alarms: what a component's view reads without the fleet (#934).
-	ComponentVerdict(ctx context.Context, componentID string) (string, error)
+	ComponentHealth(ctx context.Context, componentID string) (string, error)
 
 	// The observed-log sink: the mirror of the metric and property sinks for log-kind
 	// occurrences. reject-not-project and owner-confinement are applied by the caller
@@ -1115,10 +1115,10 @@ type Gateway interface {
 	// The health reads: the current verdict, why it is what it is, and the
 	// recorded transitions at or after since (a zero since is the whole history).
 	SystemHealth(ctx context.Context, systemName string, window time.Duration, read scope.Set) (*HealthReport, error)
-	// SystemVerdicts is the BULK health read: every system in the read scope with
+	// SystemHealths is the BULK health read: every system in the read scope with
 	// its current verdict, in one statement. The read a LIST paints its health
 	// column from, where SystemHealth is the read one system's panel opens (#653).
-	SystemVerdicts(ctx context.Context, read scope.Set) ([]SystemVerdict, error)
+	SystemHealths(ctx context.Context, read scope.Set) ([]SystemHealthEntry, error)
 	LocationHealth(ctx context.Context, locationName string, window time.Duration, read scope.Set) (*HealthReport, error)
 
 	// FleetProjection is the read behind the fleet canvas: the whole in-scope

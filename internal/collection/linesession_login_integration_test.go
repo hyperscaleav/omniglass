@@ -122,12 +122,12 @@ func TestLineSessionLoginOverRawTCP(t *testing.T) {
 	}
 	srv := newPromptServer(t, "newtron")
 	states := make(chan collection.SessionTransition, 16)
-	verdicts := make(chan collection.AuthVerdict, 4)
+	verdicts := make(chan collection.AuthReachability, 4)
 	s := collection.StartSession(collection.SessionConfig{
 		Target: srv.addr, Timeout: 2 * time.Second, Dialer: collection.NewLineSessionDialer(),
 		Auth: loginTo("newtron"), Terminal: rejectClassifier,
 		OnTransition: func(tr collection.SessionTransition) { states <- tr },
-		OnAuth:       func(v collection.AuthVerdict) { verdicts <- v },
+		OnAuth:       func(v collection.AuthReachability) { verdicts <- v },
 	})
 	defer s.Close()
 	awaitTransition(t, states, collection.SessionUp)
@@ -149,12 +149,12 @@ func TestLineSessionWrongPasswordRejectsAfterOneAttempt(t *testing.T) {
 	}
 	srv := newPromptServer(t, "newtron")
 	states := make(chan collection.SessionTransition, 16)
-	verdicts := make(chan collection.AuthVerdict, 4)
+	verdicts := make(chan collection.AuthReachability, 4)
 	s := collection.StartSession(collection.SessionConfig{
 		Target: srv.addr, Timeout: 2 * time.Second, Dialer: collection.NewLineSessionDialer(),
 		Auth: loginTo("wrong"), Terminal: rejectClassifier, Arm: []string{"SUBSCRIBE INPUT"},
 		OnTransition: func(tr collection.SessionTransition) { states <- tr },
-		OnAuth:       func(v collection.AuthVerdict) { verdicts <- v },
+		OnAuth:       func(v collection.AuthReachability) { verdicts <- v },
 	})
 	defer s.Close()
 	tr := awaitTransition(t, states, collection.SessionRejected)

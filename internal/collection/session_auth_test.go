@@ -271,19 +271,19 @@ func (c *loggingConn) Exchange(ctx context.Context, line string, reply *driver.R
 
 type authRecorder struct {
 	mu   sync.Mutex
-	seen []collection.AuthVerdict
+	seen []collection.AuthReachability
 }
 
-func (a *authRecorder) on(v collection.AuthVerdict) {
+func (a *authRecorder) on(v collection.AuthReachability) {
 	a.mu.Lock()
 	a.seen = append(a.seen, v)
 	a.mu.Unlock()
 }
 
-func (a *authRecorder) verdicts() []collection.AuthVerdict {
+func (a *authRecorder) verdicts() []collection.AuthReachability {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return append([]collection.AuthVerdict(nil), a.seen...)
+	return append([]collection.AuthReachability(nil), a.seen...)
 }
 
 // Nothing borrows the connection, and no listener arms, until the auth step

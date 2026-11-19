@@ -84,7 +84,7 @@ func verdictFleet(t *testing.T, gw storage.Gateway, systems int) {
 
 // TestSystemVerdictsAgreeWithTheReport is the oracle gate. SystemHealth is the
 // read the badge used to make per row, and it computes its verdict live from the
-// slots; SystemVerdicts reads the recorded series and defaults what it does not
+// slots; SystemHealths reads the recorded series and defaults what it does not
 // find. Those are two different mechanisms answering one question, so the
 // agreement is asserted rather than assumed, over a fleet deliberately holding
 // all three verdicts AND a system nothing has ever recomputed.
@@ -98,9 +98,9 @@ func TestSystemVerdictsAgreeWithTheReport(t *testing.T) {
 	verdictFleet(t, gw, 7)
 	all := scope.Set{All: true}
 
-	bulk, err := gw.SystemVerdicts(ctx, all)
+	bulk, err := gw.SystemHealths(ctx, all)
 	if err != nil {
-		t.Fatalf("SystemVerdicts: %v", err)
+		t.Fatalf("SystemHealths: %v", err)
 	}
 	systems, err := gw.ListSystems(ctx, all)
 	if err != nil {
@@ -158,7 +158,7 @@ func TestSystemVerdictsCostIsFlatInFleetSize(t *testing.T) {
 	read := func(gw storage.Gateway, c *querycount.Counter) reading {
 		t.Helper()
 		return measure(t, c, func() (int, error) {
-			vs, err := gw.SystemVerdicts(ctx, all)
+			vs, err := gw.SystemHealths(ctx, all)
 			return len(vs), err
 		})
 	}
@@ -188,9 +188,9 @@ func TestSystemVerdictsScopeMatchesTheList(t *testing.T) {
 	}
 	narrow := scope.Set{IDs: []string{systems[0].ID}}
 
-	scoped, err := gw.SystemVerdicts(ctx, narrow)
+	scoped, err := gw.SystemHealths(ctx, narrow)
 	if err != nil {
-		t.Fatalf("SystemVerdicts (narrow): %v", err)
+		t.Fatalf("SystemHealths (narrow): %v", err)
 	}
 	listed, err := gw.ListSystems(ctx, narrow)
 	if err != nil {
@@ -214,9 +214,9 @@ func TestSystemVerdictsScopeMatchesTheList(t *testing.T) {
 	}
 
 	// An empty scope is an empty answer, not a refusal and not the whole fleet.
-	empty, err := gw.SystemVerdicts(ctx, scope.Set{})
+	empty, err := gw.SystemHealths(ctx, scope.Set{})
 	if err != nil {
-		t.Fatalf("SystemVerdicts (empty scope): %v", err)
+		t.Fatalf("SystemHealths (empty scope): %v", err)
 	}
 	if len(empty) != 0 {
 		t.Errorf("an empty read scope returned %d verdicts, want none", len(empty))

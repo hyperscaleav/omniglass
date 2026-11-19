@@ -1,4 +1,4 @@
-// Package health computes a fleet's health verdict from resolved inputs. The
+// Package health computes a fleet's health from resolved inputs. The
 // rollup is a pure function on purpose: the subtle cases (quorum boundaries, a
 // slot nobody staffed, a component an alarm has taken down) are where this
 // gets quietly wrong, and they are far easier to pin down in a unit test than
@@ -6,17 +6,17 @@
 // judgement lives here.
 package health
 
-// Verdict is an entity's health. The zero value is Healthy, so an entity with
+// Value is an entity's health. The zero value is Healthy, so an entity with
 // nothing wrong needs no special casing.
-type Verdict int
+type Value int
 
 // The order IS the severity ranking: Worse and RollUp compare these values
-// directly, so a new verdict is inserted at its rank rather than appended.
+// directly, so a new value is inserted at its rank rather than appended.
 // Incomplete sits between Healthy and Degraded because a commissioning gap is
 // worth surfacing above a clean system and worth burying under anything
 // actually broken.
 const (
-	Healthy Verdict = iota
+	Healthy Value = iota
 	// Incomplete is a slot short of quorum because the hardware was never
 	// installed, rather than because installed hardware is failing. No alarm
 	// will ever fire for it: nothing exists yet to alarm. It is deliberately
@@ -28,7 +28,7 @@ const (
 	Outage
 )
 
-func (v Verdict) String() string {
+func (v Value) String() string {
 	switch v {
 	case Outage:
 		return "outage"
@@ -41,9 +41,9 @@ func (v Verdict) String() string {
 	}
 }
 
-// ParseVerdict reads a recorded verdict back. An unrecognized value is Healthy,
+// ParseValue reads a recorded health back. An unrecognized value is Healthy,
 // so a stray row cannot make a fleet look broken.
-func ParseVerdict(s string) Verdict {
+func ParseValue(s string) Value {
 	switch s {
 	case "outage":
 		return Outage
@@ -56,20 +56,20 @@ func ParseVerdict(s string) Verdict {
 	}
 }
 
-// Worse returns the more severe of two verdicts. Rollup is worst-wins at every
-// level: one slot in outage puts its system in outage regardless of how many
-// other slots are fine.
-func Worse(a, b Verdict) Verdict {
+// Worse returns the more severe of two health values. Rollup is worst-wins at
+// every level: one slot in outage puts its system in outage regardless of how
+// many other slots are fine.
+func Worse(a, b Value) Value {
 	if a > b {
 		return a
 	}
 	return b
 }
 
-// ImpactVerdict maps a slot's declared impact to the verdict an impaired slot
+// ImpactValue maps a slot's declared impact to the value an impaired slot
 // contributes. An unrecognized impact is Degraded rather than Healthy: an
 // impaired slot should never be silently harmless because of a bad value.
-func ImpactVerdict(impact string) Verdict {
+func ImpactValue(impact string) Value {
 	switch impact {
 	case "outage":
 		return Outage
@@ -81,16 +81,16 @@ func ImpactVerdict(impact string) Verdict {
 }
 
 // Component is a component as the rollup sees it: only its own current
-// verdict, from its active alarms. An alarm impairs a component wholesale
+// health, from its active alarms. An alarm impairs a component wholesale
 // now (#626): there is no per-capability degradation left to resolve, so a
 // component's own state is the whole of what a slot it occupies can see.
 type Component struct {
-	Name    string
-	Verdict Verdict
+	Name  string
+	Value Value
 }
 
 // Occupies reports whether this component currently satisfies a slot it
-// fills: a component whose own verdict is Outage (down) cannot be counted
+// fills: a component whose own health is Outage (down) cannot be counted
 // toward a slot's quorum, regardless of which slot asked or which alarm is
 // behind it. A Degraded component still occupies: severity is how loudly to
 // page somebody, not a second threshold for staffing, so an info or warning
@@ -98,7 +98,7 @@ type Component struct {
 // high-severity alarm reaches a system: impair the component down to Outage, and
 // every slot it occupies loses one occupant.
 func (c Component) Occupies() bool {
-	return c.Verdict != Outage
+	return c.Value != Outage
 }
 
 // Slot is a slot as the rollup sees it: how many occupants it needs, what its
@@ -111,7 +111,7 @@ type Slot struct {
 }
 
 // Satisfying counts the assigned components that currently occupy the slot
-// (their own verdict is not Outage).
+// (their own health is not Outage).
 func (r Slot) Satisfying() int {
 	n := 0
 	for _, c := range r.Assigned {
@@ -156,12 +156,12 @@ func (r Slot) Spare() int {
 }
 
 // Down counts the assigned components that are not currently occupying the
-// slot, which after #626 is exactly those whose own verdict is Outage.
+// slot, which after #626 is exactly those whose own health is Outage.
 func (r Slot) Down() int {
 	return len(r.Assigned) - r.Satisfying()
 }
 
-// Contributes is the verdict this slot hands its system, and it distinguishes
+// Contributes is the health this slot hands its system, and it distinguishes
 // two different ways of being short.
 //
 // A slot whose assigned hardware is FAILING contributes what the slot declared
@@ -178,12 +178,12 @@ func (r Slot) Down() int {
 // absence harmless too: reporting Incomplete for one would put a permanent
 // commissioning gap on every confidence monitor nobody ever intends to staff,
 // which is the same saturation Incomplete exists to prevent. An unrecognized
-// impact still reads as a gap rather than harmless, matching ImpactVerdict.
-func (r Slot) Contributes() Verdict {
+// impact still reads as a gap rather than harmless, matching ImpactValue.
+func (r Slot) Contributes() Value {
 	if r.Down() > 0 && r.Impaired() {
-		return ImpactVerdict(r.Impact)
+		return ImpactValue(r.Impact)
 	}
-	if len(r.Assigned) < r.want() && ImpactVerdict(r.Impact) != Healthy {
+	if len(r.Assigned) < r.want() && ImpactValue(r.Impact) != Healthy {
 		return Incomplete
 	}
 	return Healthy
@@ -251,14 +251,14 @@ func (c Choice) Active() (Alternate, bool) {
 	return active, found
 }
 
-// Contributes is the verdict this choice hands its system: the worst-wins
+// Contributes is the health this choice hands its system: the worst-wins
 // fold of its active alternate's own slots, the same per-slot impact fold an
 // unconditional slot set gets. Winning the choice does not make an
 // alternate's own slots immune to their own impact: an active alternate that
 // is itself short still contributes what its short slots declare. A choice
 // with no non-empty alternate (nothing declared on either side) contributes
 // nothing, the same as a system with no slots.
-func (c Choice) Contributes() Verdict {
+func (c Choice) Contributes() Value {
 	active, ok := c.Active()
 	if !ok {
 		return Healthy
@@ -270,11 +270,11 @@ func (c Choice) Contributes() Verdict {
 	return v
 }
 
-// SystemVerdictWith rolls a system's slots into one verdict, worst-wins,
+// SystemValueWith rolls a system's slots into one health value, worst-wins,
 // across two kinds of input: unconditional slots that always count, and
 // choices where only the best-satisfied alternate's slots count (#626).
-// SystemVerdict is the special case with no choices.
-func SystemVerdictWith(unconditional []Slot, choices []Choice) Verdict {
+// SystemValue is the special case with no choices.
+func SystemValueWith(unconditional []Slot, choices []Choice) Value {
 	v := Healthy
 	for _, r := range unconditional {
 		v = Worse(v, r.Contributes())
@@ -285,17 +285,17 @@ func SystemVerdictWith(unconditional []Slot, choices []Choice) Verdict {
 	return v
 }
 
-// SystemVerdict rolls a system's slots into one verdict, worst-wins. A system
-// with no slots is Healthy: nothing has been claimed about it, and claiming
-// otherwise would paint every unmodelled system as broken.
-func SystemVerdict(slots []Slot) Verdict {
-	return SystemVerdictWith(slots, nil)
+// SystemValue rolls a system's slots into one health value, worst-wins. A
+// system with no slots is Healthy: nothing has been claimed about it, and
+// claiming otherwise would paint every unmodelled system as broken.
+func SystemValue(slots []Slot) Value {
+	return SystemValueWith(slots, nil)
 }
 
-// RollUp folds already-computed child verdicts into a parent, worst-wins. It is
+// RollUp folds already-computed child values into a parent, worst-wins. It is
 // how a location takes the worst of the systems placed in it and of the
 // locations beneath it.
-func RollUp(children []Verdict) Verdict {
+func RollUp(children []Value) Value {
 	v := Healthy
 	for _, c := range children {
 		v = Worse(v, c)
@@ -308,12 +308,12 @@ func RollUp(children []Verdict) Verdict {
 // alarm degrades. Official levels are read-only, so the floor does not move.
 const OutageRank = 40
 
-// ComponentVerdict is a component's own health, independent of any slot it
+// ComponentValue is a component's own health, independent of any slot it
 // fills, from the ranks of its active alarms' severity levels: degraded once
 // any alarm is active against it, and an outage when one is at or above
 // OutageRank. A component that fills no slot still shows what is wrong with
 // it.
-func ComponentVerdict(ranks []int) Verdict {
+func ComponentValue(ranks []int) Value {
 	v := Healthy
 	for _, r := range ranks {
 		if r >= OutageRank {

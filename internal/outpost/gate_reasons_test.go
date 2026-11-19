@@ -719,7 +719,7 @@ func TestARefusedUDPEndpointNeverReadsUnreachable(t *testing.T) {
 	}
 }
 
-// probeVerdict drops only a refusal's echo: a responsive rung that reads down,
+// probeReachability drops only a refusal's echo: a responsive rung that reads down,
 // rejected, with no probe result beside it. A port that did not open is the
 // endpoint's own down, and so is a rung that timed out.
 func TestProbeVerdictDropsOnlyARefusalsEcho(t *testing.T) {
@@ -740,8 +740,8 @@ func TestProbeVerdictDropsOnlyARefusalsEcho(t *testing.T) {
 		{"a closed port beside a held rung", []collection.Sample{closedPort, responsive(collection.VerdictDown, rejectedReason+driver.ClassAuth)}, false, true},
 		{"nothing", nil, false, false},
 	} {
-		if up, ok := probeVerdict(tc.dps); up != tc.up || ok != tc.ok {
-			t.Errorf("%s: probeVerdict = %v, %v; want %v, %v", tc.name, up, ok, tc.up, tc.ok)
+		if up, ok := probeReachability(tc.dps); up != tc.up || ok != tc.ok {
+			t.Errorf("%s: probeReachability = %v, %v; want %v, %v", tc.name, up, ok, tc.up, tc.ok)
 		}
 	}
 }

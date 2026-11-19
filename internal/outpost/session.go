@@ -36,7 +36,7 @@ import (
 // its listeners land, the faults they meet, and the arm conversation.
 type sessionHooks struct {
 	transition func(taskID, endpoint string, tr collection.SessionTransition)
-	auth       func(taskID, endpoint string, v collection.AuthVerdict)
+	auth       func(taskID, endpoint string, v collection.AuthReachability)
 	samples    func(taskID string, dps []collection.Sample)
 	fault      func(taskID string, err error)
 	arm        func(taskID, endpoint, line, reply string, err error)
@@ -566,7 +566,7 @@ type heldSession struct {
 	// what was recorded under it, so the older state never follows the newer.
 	repMu      sync.Mutex
 	transition *collection.SessionTransition // the last transition published
-	verdict    *collection.AuthVerdict       // the last auth verdict published
+	verdict    *collection.AuthReachability  // the last auth verdict published
 }
 
 // report records tr as the session's current state and publishes it.
@@ -581,7 +581,7 @@ func (h *heldSession) report(hooks sessionHooks, tr collection.SessionTransition
 }
 
 // reportAuth records v as the session's current auth verdict and publishes it.
-func (h *heldSession) reportAuth(hooks sessionHooks, v collection.AuthVerdict) {
+func (h *heldSession) reportAuth(hooks sessionHooks, v collection.AuthReachability) {
 	h.repMu.Lock()
 	defer h.repMu.Unlock()
 	h.verdict = &v
@@ -1330,7 +1330,7 @@ func (m *sessionManager) start(id string, w sessionWant) {
 		Reprobe:  w.reprobe,
 		Channel:  w.channel,
 		TLS:      trust,
-		OnAuth: func(v collection.AuthVerdict) {
+		OnAuth: func(v collection.AuthReachability) {
 			h.reportAuth(hooks, v)
 		},
 		OnArm: func(line, reply string, err error) {
@@ -1581,7 +1581,7 @@ func rejectionSamples(value, reason string, at time.Time) []collection.Sample {
 
 // authSample renders the session's auth verdict as the endpoint-authenticated
 // rung (#1049), the ladder's own vocabulary: yes or no, the reason a label.
-func authSample(v collection.AuthVerdict) collection.Sample {
+func authSample(v collection.AuthReachability) collection.Sample {
 	verdict := "no"
 	if v.Authenticated {
 		verdict = "yes"

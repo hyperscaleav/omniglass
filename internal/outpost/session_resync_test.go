@@ -103,7 +103,7 @@ func newResyncRig(t *testing.T) *resyncRig {
 			r.mu.Unlock()
 			_ = publishBatch(r.spool, "edge", taskID, sessionSamples(tr))
 		},
-		auth: func(taskID, _ string, v collection.AuthVerdict) {
+		auth: func(taskID, _ string, v collection.AuthReachability) {
 			r.mu.Lock()
 			r.auths = append(r.auths, v.Authenticated)
 			r.mu.Unlock()

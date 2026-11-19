@@ -248,7 +248,7 @@ func (p *PG) IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, comm
 // verdict describes was reached by the ISSUE scope. A route that computes a
 // settlement from somewhere other than an issue resolves its own target first,
 // exactly as this one does.
-func (p *PG) CommandSettlement(ctx context.Context, ownerKind, ownerID, commandType, instance string) (SettlementVerdict, error) {
+func (p *PG) CommandSettlement(ctx context.Context, ownerKind, ownerID, commandType, instance string) (Settlement, error) {
 	if _, ok := ownerContracts[ownerKind]; !ok {
 		return "", ErrUnknownOwnerKind
 	}

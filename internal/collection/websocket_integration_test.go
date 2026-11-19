@@ -301,7 +301,7 @@ func TestWebSocketArmsPushesAndAnswersByItsID(t *testing.T) {
 		t.Fatalf("a refused get = %v, want the device's refusal", err)
 	}
 	tr.mu.Lock()
-	auth := append([]collection.AuthVerdict(nil), tr.auth...)
+	auth := append([]collection.AuthReachability(nil), tr.auth...)
 	tr.mu.Unlock()
 	if len(auth) != 1 || !auth[0].Authenticated {
 		t.Fatalf("auth verdicts = %+v, want one yes", auth)

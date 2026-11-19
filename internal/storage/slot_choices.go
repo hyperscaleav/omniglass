@@ -13,7 +13,7 @@ import (
 // exclusive-or group instead of contributing to its system unconditionally.
 // slot_choice is the group; choice_alternate is one way to satisfy it;
 // system_slot.alternate_id (slot_declarations.go, slots.go) is how a slot
-// joins one. internal/health.SystemVerdictWith is the pure fold that reads
+// joins one. internal/health.SystemValueWith is the pure fold that reads
 // the grouping this file writes; splitHealthSlots (health.go) is what turns
 // a system's resolved slots back into that fold's shape.
 

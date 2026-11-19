@@ -210,7 +210,7 @@ func TestSnoozeIsOrthogonalToAcknowledgementAndHealth(t *testing.T) {
 	if afterRows, afterVerdict := recordedHealth(t, dsn, raised.ComponentID); afterRows != rows || afterVerdict != verdict {
 		t.Errorf("snoozing recorded health (%d rows, %s), want none: a snooze only governs notifications", afterRows-rows, afterVerdict)
 	}
-	if v, err := gw.ComponentVerdict(ctx, raised.ComponentID); err != nil || v != "outage" {
+	if v, err := gw.ComponentHealth(ctx, raised.ComponentID); err != nil || v != "outage" {
 		t.Errorf("a snoozed high alarm leaves its component %q (%v), want outage", v, err)
 	}
 	queue, err := gw.ListAlarms(ctx, comp, storage.AlarmFilter{Unacknowledged: true})

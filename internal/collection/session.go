@@ -294,11 +294,11 @@ type ChannelOptions struct {
 	ConnectQuiet time.Duration
 }
 
-// AuthVerdict is the auth step's outcome, the endpoint-authenticated rung:
+// AuthReachability is the auth step's outcome, the endpoint-authenticated rung:
 // Authenticated with the reason it passed, or refused with the device's
 // text. Reported only when the step decided (a dropped or silent login
 // decides nothing) and only when the verdict changes.
-type AuthVerdict struct {
+type AuthReachability struct {
 	Authenticated bool
 	Reason        string
 	At            time.Time
@@ -332,7 +332,7 @@ type SessionConfig struct {
 	// as a protocol refusal).
 	Auth *SessionAuth
 	// OnAuth hears the auth step's verdict when it changes.
-	OnAuth func(AuthVerdict)
+	OnAuth func(AuthReachability)
 	// Terminal classifies a device's line as a refusal retrying cannot fix
 	// (the driver's terminal rules): during the login, and as the answer or
 	// refusal of any exchange or arm. A match rejects the session.
@@ -996,7 +996,7 @@ func (s *Session) reportAuth(ok bool, reason string) {
 	}
 	s.lastAuth = v
 	if s.cfg.OnAuth != nil {
-		v := AuthVerdict{Authenticated: ok, Reason: reason, At: s.cfg.Now().UTC()}
+		v := AuthReachability{Authenticated: ok, Reason: reason, At: s.cfg.Now().UTC()}
 		Supervise("session auth hook "+s.cfg.Target, func() { s.cfg.OnAuth(v) })
 	}
 }
