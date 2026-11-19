@@ -4,6 +4,7 @@ package outpost
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -641,4 +642,153 @@ func TestAUDPSocketWhoseReaderDiedIsReboundOnTheNextReconcile(t *testing.T) {
 		t.Fatal("the dead socket was kept")
 	}
 	eventually(t, "the re-arm on the new socket", func() bool { return peer.count("SUBSCRIBE INPUT") == 2 })
+}
+
+// A udp endpoint whose target is a name follows the name when it moves
+// (#1104): the request rung re-resolves each tick and the socket's peer moves
+// in place, so the next request goes to the new address and the socket stays
+// bound.
+func TestTheUDPRequestRungFollowsAMovedName(t *testing.T) {
+	// Serial: it swaps the slog default to count the move log lines.
+	x := newComponent(t, nvpAnswers)
+	y := newComponentAt(t, net.IPv4(127, 0, 0, 2), nvpAnswers)
+	var mu sync.Mutex
+	current := x.conn.LocalAddr().(*net.UDPAddr)
+	var failure error
+	m := newDatagramManager(t, newCapture())
+	m.datagramResolve = func(_ context.Context, network, target string) (*net.UDPAddr, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		return current, failure
+	}
+	task := udpProbeTask("r1", "ep-1", udpParams("component.test:5000"))
+	m.reconcile([]collection.TaskSpec{task})
+	held := m.datagrams["ep-1"]
+	if held == nil {
+		t.Fatalf("no socket: %v", m.datagramRefused)
+	}
+	runner := &collection.Runner{}
+	rung := func() collection.Sample {
+		dps, err := collectProbe(t.Context(), runner, task, m)
+		if err != nil {
+			t.Fatalf("probe: %v", err)
+		}
+		return samplesByName(dps)[collection.SignalEndpointResponsive]
+	}
+	var buf bytes.Buffer
+	prior := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	defer slog.SetDefault(prior)
+
+	if r := rung(); r.Text != "up" || x.requests.Load() != 1 {
+		t.Fatalf("first tick: %+v, x got %d requests", r, x.requests.Load())
+	}
+	mu.Lock()
+	current = y.conn.LocalAddr().(*net.UDPAddr)
+	mu.Unlock()
+	if r := rung(); r.Text != "up" || y.requests.Load() != 1 || x.requests.Load() != 1 {
+		t.Fatalf("after the move: %+v, x=%d y=%d requests, want the request at y", r, x.requests.Load(), y.requests.Load())
+	}
+	if r := rung(); r.Text != "up" {
+		t.Fatalf("third tick: %+v", r)
+	}
+	if n := strings.Count(buf.String(), "udp target moved"); n != 1 || !strings.Contains(buf.String(), y.addr()) {
+		t.Fatalf("log = %q, want one move line naming the new address", buf.String())
+	}
+
+	// A resolve failure keeps sending to the last address, without a rebind.
+	mu.Lock()
+	failure = &net.DNSError{Err: "no such host", Name: "component.test", IsNotFound: true}
+	mu.Unlock()
+	if r := rung(); r.Text != "up" || y.requests.Load() != 3 {
+		t.Fatalf("resolve failure: %+v, y got %d requests, want the last address kept", r, y.requests.Load())
+	}
+	m.reconcile([]collection.TaskSpec{task})
+	if m.datagrams["ep-1"] != held {
+		t.Fatal("a moved name rebound the socket: the target string is the key, and it did not change")
+	}
+}
+
+// A listen port is part of what the socket depends on: changing only it (the
+// target and the terminal rules unchanged) closes the held socket for a new
+// one (#1104). The endpoint starts with no listen port, so the outpost picks
+// one; the change then names that same port, which differs from the key (unset)
+// though the bound port does not, so only a rebind on the key can tell.
+func TestAUDPSocketRebindsWhenOnlyTheListenPortChanges(t *testing.T) {
+	t.Parallel()
+	peer := newComponent(t, nvpAnswers)
+	m := newDatagramManager(t, newCapture())
+	m.reconcile([]collection.TaskSpec{udpListenTask("l1", "ep-1", udpParams(peer.addr()))})
+	held := m.datagrams["ep-1"]
+	if held == nil {
+		t.Fatalf("no socket: %v", m.datagramRefused)
+	}
+	port := held.sock.LocalAddr().(*net.UDPAddr).Port
+	m.reconcile([]collection.TaskSpec{udpListenTask("l1", "ep-1", udpParams(peer.addr(), fmt.Sprintf(`,"listen-port":"%d"`, port)))})
+	// The port the old socket held is free the moment it closes, so a
+	// concurrent run can take it before the new bind: that leaves no socket,
+	// which is as much a rebind as a new one.
+	if now := m.datagrams["ep-1"]; now == held || (now != nil && now.sock == held.sock) {
+		t.Fatal("a changed listen port kept the old socket")
+	}
+	if held.sock.Err() == nil {
+		t.Fatal("a changed listen port left the old socket open")
+	}
+}
+
+// A resolver that never answers cannot stall the tick: the re-resolve is bound
+// by half the endpoint's timeout, the last address is kept, and the request
+// goes to it, so the whole tick still ends within the endpoint's timeout
+// (#1104).
+func TestTheUDPRequestRungBoundsAHungResolve(t *testing.T) {
+	t.Parallel()
+	x := newComponent(t, nvpAnswers)
+	var hang atomic.Bool
+	cancelled := make(chan struct{})
+	m := newDatagramManager(t, newCapture())
+	m.datagramResolve = func(ctx context.Context, network, target string) (*net.UDPAddr, error) {
+		if !hang.Load() {
+			return x.conn.LocalAddr().(*net.UDPAddr), nil
+		}
+		<-ctx.Done()
+		close(cancelled)
+		return nil, ctx.Err()
+	}
+	task := udpProbeTask("r1", "ep-1", udpParams("component.test:5000")) // timeout 600ms
+	m.reconcile([]collection.TaskSpec{task})
+	if m.datagrams["ep-1"] == nil {
+		t.Fatalf("no socket: %v", m.datagramRefused)
+	}
+	hang.Store(true)
+	start := time.Now()
+	dps, err := collectProbe(t.Context(), &collection.Runner{}, task, m)
+	took := time.Since(start)
+	if err != nil {
+		t.Fatalf("probe: %v", err)
+	}
+	if r := samplesByName(dps)[collection.SignalEndpointResponsive]; r.Text != "up" || x.requests.Load() != 1 {
+		t.Fatalf("hung resolve: %+v, x got %d requests, want the last address kept and asked", r, x.requests.Load())
+	}
+	select {
+	case <-cancelled:
+	default:
+		t.Fatal("the hung resolve was never cancelled")
+	}
+	if took > 600*time.Millisecond+200*time.Millisecond {
+		t.Fatalf("the tick took %s, want it within the 600ms endpoint timeout", took)
+	}
+}
+
+func TestAUDPSocketRebindsWhenTheTerminalRulesChange(t *testing.T) {
+	t.Parallel()
+	peer := newComponent(t, nvpAnswers)
+	m := newDatagramManager(t, newCapture())
+	task := udpProbeTask("r1", "ep-1", udpParams(peer.addr()))
+	m.reconcile([]collection.TaskSpec{task})
+	first := m.datagrams["ep-1"].sock
+	task.Session = &driver.SessionSpec{Terminal: []driver.TerminalRule{{Class: driver.ClassAuth, Match: driver.Match{Prefix: "-ERR locked"}}}}
+	m.reconcile([]collection.TaskSpec{task})
+	if m.datagrams["ep-1"].sock == first {
+		t.Fatal("changed terminal rules kept the old socket")
+	}
 }
