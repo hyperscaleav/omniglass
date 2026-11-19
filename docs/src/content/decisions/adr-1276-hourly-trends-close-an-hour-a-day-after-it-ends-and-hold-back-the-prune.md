@@ -53,3 +53,4 @@ refs: [1276, 1265, 1275, 311, 1269]
   hot tier has kept only 14 days; a bucket's maximum carries the spike. Measured on PG18 after `VACUUM`,
   a trend row costs about 145 bytes with its primary key, 3,482 bytes per series per day
   (`TestTrendFootprint`), against about 100 bytes per sample in the hot tier (ADR-1275).
+- **Amended by [ADR-1566](#adr-1566-a-wide-bucketed-read-is-whole-hours-and-takes-closed-hours-from-the-trends):** the trend-served reads of decision 6 shipped with #1566, not #1269.

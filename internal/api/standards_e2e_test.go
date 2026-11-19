@@ -153,8 +153,8 @@ func TestStandardMapOnTheWire(t *testing.T) {
 	mapDecl := map[string]any{
 		"aspect": 1.6,
 		"positions": []map[string]any{
-			{"slot": "room-mic", "position": 1, "x": 0.3, "y": 0.5},
-			{"slot": "main-display", "position": 1, "x": 0.5, "y": 0.05},
+			{"role": "room-mic", "position": 1, "x": 0.3, "y": 0.5},
+			{"role": "main-display", "position": 1, "x": 0.5, "y": 0.05},
 		},
 	}
 	c.do(ownerTok, http.MethodPatch, "/standards/"+created.ID, map[string]any{"map": mapDecl}, http.StatusOK)
@@ -163,7 +163,7 @@ func TestStandardMapOnTheWire(t *testing.T) {
 		Map *struct {
 			Aspect    float64 `json:"aspect"`
 			Positions []struct {
-				Slot string  `json:"slot"`
+				Role string  `json:"role"`
 				X    float64 `json:"x"`
 			} `json:"positions"`
 		} `json:"map"`
@@ -176,7 +176,7 @@ func TestStandardMapOnTheWire(t *testing.T) {
 	}
 
 	// Out of bounds is a 422, not stored garbage.
-	c.do(ownerTok, http.MethodPatch, "/standards/"+created.ID, map[string]any{"map": map[string]any{"aspect": 1.6, "positions": []map[string]any{{"slot": "r", "position": 1, "x": 1.2, "y": 0.5}}}}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPatch, "/standards/"+created.ID, map[string]any{"map": map[string]any{"aspect": 1.6, "positions": []map[string]any{{"role": "r", "position": 1, "x": 1.2, "y": 0.5}}}}, http.StatusUnprocessableEntity)
 
 	// JSON null clears the declaration.
 	c.do(ownerTok, http.MethodPatch, "/standards/"+created.ID, map[string]any{"map": nil}, http.StatusOK)
@@ -281,15 +281,19 @@ func TestBucketedSeriesReadsOnTheWire(t *testing.T) {
 			Last  *float64  `json:"last"`
 		} `json:"buckets"`
 	}
-	body := c.do(ownerTok, http.MethodGet, "/components/bucket-probe/metrics/icmp-rtt-avg/samples?hours=720&resolution=3600", nil, http.StatusOK)
+	body := c.do(ownerTok, http.MethodGet, "/components/bucket-probe/metrics/icmp-rtt-avg/samples?hours=720&resolution=300", nil, http.StatusOK)
 	if err := json.Unmarshal(body, &got); err != nil {
 		t.Fatalf("read buckets: %v", err)
 	}
+	// 30 days at five minutes is clamped to whole hours (ADR-1566), and the
+	// body says the width applied, not the one asked for.
 	if len(got.Buckets) != 720 || got.ResolutionSeconds != 3600 || len(got.Samples) != 0 {
-		t.Fatalf("got %d buckets at %ds with %d raw samples, want 720 at 3600 and no raw samples", len(got.Buckets), got.ResolutionSeconds, len(got.Samples))
+		t.Fatalf("got %d buckets at %ds with %d raw samples, want 720 at 3600 (clamped from 300) and no raw samples", len(got.Buckets), got.ResolutionSeconds, len(got.Samples))
 	}
-	if got.CoveredFrom.IsZero() || got.CoveredFrom.After(time.Now().Add(-13*24*time.Hour)) {
-		t.Fatalf("covered_from = %s, want about 14 days back: the hot window, said on the wire", got.CoveredFrom)
+	// An observed series keeps hourly trends, so an hourly read covers the
+	// whole 30 days, past the samples' 14-day hot window.
+	if !got.CoveredFrom.Equal(got.Buckets[0].TS) {
+		t.Fatalf("covered_from = %s, want the window's first bucket %s: the trends reach past the hot window", got.CoveredFrom, got.Buckets[0].TS)
 	}
 	spike := got.Buckets[719-2]
 	if spike.Count != 3 || spike.Max == nil || *spike.Max != 480 || spike.Min == nil || *spike.Min != 5 {
@@ -358,9 +362,10 @@ func TestBucketedSeriesReadsOnTheWire(t *testing.T) {
 		}
 	}
 
-	// A resolution that would make more buckets than the cap is a 422, never a
-	// truncated grid; an out-of-scope owner stays the non-disclosing 404.
-	c.do(ownerTok, http.MethodGet, "/components/bucket-probe/metrics/icmp-rtt-avg/samples?hours=720&resolution=1", nil, http.StatusUnprocessableEntity)
+	// A resolution that would make more buckets than the cap within the clamp
+	// span is a 422, never a truncated grid; an out-of-scope owner stays the
+	// non-disclosing 404.
+	c.do(ownerTok, http.MethodGet, "/components/bucket-probe/metrics/icmp-rtt-avg/samples?hours=48&resolution=1", nil, http.StatusUnprocessableEntity)
 	c.do(ownerTok, http.MethodGet, "/components/no-such/metrics/icmp-rtt-avg/samples?resolution=60", nil, http.StatusNotFound)
 
 	// A resolution past 30 days is the schema's 422, not a 500 from an
