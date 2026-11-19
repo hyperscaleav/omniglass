@@ -188,6 +188,15 @@ func upsertBindingTx(ctx context.Context, tx pgx.Tx, actorID, scope, namespace s
 	if locks == nil {
 		locks = []string{}
 	}
+	// The row's own lock, taken before the before-image is read so the image is
+	// the row this write replaces (merge-patch already holds the same key).
+	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtext($1), hashtext($2))`, scope, namespace); err != nil {
+		return nil, fmt.Errorf("storage: lock setting override: %w", err)
+	}
+	before, err := overrideImageTx(ctx, tx, scope, namespace)
+	if err != nil {
+		return nil, err
+	}
 	docJSON, err := json.Marshal(doc)
 	if err != nil {
 		return nil, fmt.Errorf("storage: marshal binding doc: %w", err)
@@ -206,7 +215,10 @@ func upsertBindingTx(ctx context.Context, tx pgx.Tx, actorID, scope, namespace s
 		return nil, fmt.Errorf("storage: upsert setting binding: %w", err)
 	}
 	o := SettingBinding{Scope: scope, Namespace: namespace, Doc: doc, Locks: locks}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "settings", namespace, nil, o); err != nil {
+	// The after image takes the before image's shape: SettingBinding has no json
+	// tags, so the struct itself would image as Doc and Locks.
+	after := map[string]any{"scope": o.Scope, "namespace": o.Namespace, "doc": o.Doc, "locks": o.Locks}
+	if err := writeAuditRes(ctx, tx, actorID, "update", "settings", namespace, before, after); err != nil {
 		return nil, err
 	}
 	return &o, nil
@@ -221,6 +233,13 @@ func (p *PG) DeleteSettingBinding(ctx context.Context, actorID, scope, namespace
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtext($1), hashtext($2))`, scope, namespace); err != nil {
+		return fmt.Errorf("storage: lock setting override: %w", err)
+	}
+	before, err := overrideImageTx(ctx, tx, scope, namespace)
+	if err != nil {
+		return err
+	}
 	window, err := p.reportWindowBefore(ctx, tx, namespace)
 	if err != nil {
 		return err
@@ -233,7 +252,7 @@ func (p *PG) DeleteSettingBinding(ctx context.Context, actorID, scope, namespace
 	if err := p.announceReportWindowChange(ctx, tx, window); err != nil {
 		return err
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "settings", namespace, nil, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "settings", namespace, before, nil); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
@@ -252,17 +271,65 @@ func (p *PG) DeleteAllSettingBindings(ctx context.Context, actorID, scope string
 	if err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx,
-		`delete from setting_binding where scope = $1 and user_id is null`, scope); err != nil {
+	rows, err := tx.Query(ctx,
+		`delete from setting_binding where scope = $1 and user_id is null returning namespace, doc, locks`, scope)
+	if err != nil {
+		return fmt.Errorf("storage: reset setting bindings: %w", err)
+	}
+	deleted := []map[string]any{}
+	for rows.Next() {
+		var namespace string
+		var docRaw, locksRaw []byte
+		if err := rows.Scan(&namespace, &docRaw, &locksRaw); err != nil {
+			rows.Close()
+			return fmt.Errorf("storage: scan reset setting binding: %w", err)
+		}
+		o := SettingBinding{Scope: scope, Namespace: namespace, Doc: map[string]any{}, Locks: []string{}}
+		if err := json.Unmarshal(docRaw, &o.Doc); err != nil {
+			rows.Close()
+			return fmt.Errorf("storage: unmarshal binding doc: %w", err)
+		}
+		if err := json.Unmarshal(locksRaw, &o.Locks); err != nil {
+			rows.Close()
+			return fmt.Errorf("storage: unmarshal binding locks: %w", err)
+		}
+		deleted = append(deleted, map[string]any{"scope": scope, "namespace": namespace, "doc": o.Doc, "locks": o.Locks})
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
 		return fmt.Errorf("storage: reset setting bindings: %w", err)
 	}
 	if err := p.announceReportWindowChange(ctx, tx, window); err != nil {
 		return err
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "settings", "", nil, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "settings", "", map[string]any{"scope": scope, "bindings": deleted}, nil); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+// overrideImageTx reads the (scope, namespace) platform binding row as its audit
+// image, inside the caller's transaction and before its write. A namespace with
+// no row reads as the empty document with no locks: the state the write moves it from.
+func overrideImageTx(ctx context.Context, tx pgx.Tx, scope, namespace string) (map[string]any, error) {
+	o := SettingBinding{Scope: scope, Namespace: namespace, Doc: map[string]any{}, Locks: []string{}}
+	var docRaw, locksRaw []byte
+	err := tx.QueryRow(ctx,
+		`select doc, locks from setting_binding where scope = $1 and user_id is null and namespace = $2`,
+		scope, namespace).Scan(&docRaw, &locksRaw)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return map[string]any{"scope": o.Scope, "namespace": o.Namespace, "doc": o.Doc, "locks": o.Locks}, nil
+	case err != nil:
+		return nil, fmt.Errorf("storage: read setting binding: %w", err)
+	}
+	if err := json.Unmarshal(docRaw, &o.Doc); err != nil {
+		return nil, fmt.Errorf("storage: unmarshal binding doc: %w", err)
+	}
+	if err := json.Unmarshal(locksRaw, &o.Locks); err != nil {
+		return nil, fmt.Errorf("storage: unmarshal binding locks: %w", err)
+	}
+	return map[string]any{"scope": o.Scope, "namespace": o.Namespace, "doc": o.Doc, "locks": o.Locks}, nil
 }
 
 // reportWindowNamespace is the settings namespace the report window lives in,
