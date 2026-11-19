@@ -114,8 +114,9 @@ without one reads its transport name exactly.
     Params present at create or edit are validated: a `timeout` that is not a valid Go duration
     string (e.g. `"30s"`, `"1m30s"`), or a `count` on icmp that is not a non-negative integer,
     are refused with a 422 on create (a 400 on an edit) naming the field. There are no `host` or
-    `port` keys: params that are present but carry no `target`, or carry either of those keys,
-    are refused the same way, because the outpost would otherwise skip the endpoint forever and its
+    `port` keys: on every dialed transport (all but `udp`, which binds its `listen-port` and dials
+    no target), params that are present but carry no `target`, or carry either of those keys, are
+    refused the same way, because the outpost would otherwise skip the endpoint forever and its
     reachability would never read. Creating with no `params` field at all is not yet checked (#2228).
 
     ```bash

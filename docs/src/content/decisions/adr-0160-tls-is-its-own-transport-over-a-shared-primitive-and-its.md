@@ -21,11 +21,11 @@ summary: "`tls` is its own held line transport (rung `handshake`) over one TLS d
      ([ADR-0902](#adr-0902-http-polls-and-commands-send-real-requests-read-through-one-extraction-authenticated-by-a-declared-scheme));
      wss beside websocket follows the same answer (decision 4 of #1113).
   2. **The mode is a driver input.** `tls-mode` (`verify`, `pin`, `skip`) is derived into the
-     endpoint's params as `host` and `port` are, so it edits in place (`PATCH /endpoints/{id}`
-     `inputs`) and moves the connection fingerprint.
-     **Superseded in part (#1187):** `host` and `port` are no longer valid params keys; `target`
-     as `host[:port]` replaces them. A `POST /endpoints` body carrying `{"host":...,"port":...}`
-     now returns 422 naming `target`. The driver declares its default (the
+     endpoint's params as the `host` and `port` inputs are (those into the one `target` key, as
+     `host[:port]`), so it edits in place (`PATCH /endpoints/{id}` `inputs`) and moves the
+     connection fingerprint. **Amended (#1187):** `host` and `port` are never params keys; a bare
+     dialed endpoint's `POST /endpoints` body carrying them, once stored as given, now returns 422
+     naming `target`. The driver declares its default (the
      seeded `newtron-nvp-tls` pins, since its gear self-signs); a driver that declares none
      verifies; a spec defaulting to `skip` is refused at write, so skip is only ever an
      operator's choice, shown on the endpoint. Verify checks the chain against the node's
