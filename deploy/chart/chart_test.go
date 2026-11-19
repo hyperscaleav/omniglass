@@ -159,25 +159,25 @@ func TestDefaultsKeepTheKeyAndTheData(t *testing.T) {
 	if claim == "" {
 		t.Fatalf("deployment mounts no PVC; volumes = %+v", d.Spec.Template.Spec.Volumes)
 	}
-	server := container(t, d, "server")
+	srv := container(t, d, "server")
 	mounted := false
-	for _, m := range server.VolumeMounts {
+	for _, m := range srv.VolumeMounts {
 		if m.Name == claim && m.MountPath == dataDir {
 			mounted = true
 		}
 	}
 	if !mounted {
-		t.Errorf("server mounts = %+v, want %s at %s", server.VolumeMounts, claim, dataDir)
+		t.Errorf("server mounts = %+v, want %s at %s", srv.VolumeMounts, claim, dataDir)
 	}
 	for name, want := range map[string]string{
 		"OMNIGLASS_DATA_DIR":       dataDir,
 		"OMNIGLASS_NATS_STORE_DIR": dataDir + "/nats",
 	} {
-		if e, _ := envVar(server, name); e.Value != want {
+		if e, _ := envVar(srv, name); e.Value != want {
 			t.Errorf("server %s = %q, want %q", name, e.Value, want)
 		}
 	}
-	assertKeyFrom(t, server, sec.Name)
+	assertKeyFrom(t, srv, sec.Name)
 	assertKeyFrom(t, container(t, d, "bootstrap"), sec.Name)
 }
 
@@ -224,8 +224,8 @@ func TestPersistenceOffUsesEmptyDir(t *testing.T) {
 			t.Errorf("volume %s claims a PVC with persistence off", v.Name)
 		}
 	}
-	server := container(t, d, "server")
-	if e, _ := envVar(server, "OMNIGLASS_NATS_STORE_DIR"); e.Value != dataDir+"/nats" {
+	srv := container(t, d, "server")
+	if e, _ := envVar(srv, "OMNIGLASS_NATS_STORE_DIR"); e.Value != dataDir+"/nats" {
 		t.Errorf("OMNIGLASS_NATS_STORE_DIR = %q, want %s/nats", e.Value, dataDir)
 	}
 }
@@ -266,5 +266,120 @@ func TestNotesPrintTheKeyBackupCommand(t *testing.T) {
 				t.Errorf("NOTES.txt does not print %q:\n%s", cmd, notes)
 			}
 		})
+	}
+}
+
+// TestExtraEnvAndEnvFromReachAllContainers verifies that server.extraEnv entries
+// (plain values and secretKeyRef) and server.envFrom sources land on the server
+// container and the migrate and bootstrap init containers in the default render,
+// where bootstrap is enabled. wait-for-db is a readiness gate and gets neither.
+func TestExtraEnvAndEnvFromReachAllContainers(t *testing.T) {
+	out := mustRender(t, map[string]any{
+		"server": map[string]any{
+			"extraEnv": []any{
+				map[string]any{"name": "OMNIGLASS_TRUSTED_PROXIES", "value": "10.0.0.0/8"},
+				map[string]any{
+					"name": "TEST_SECRET",
+					"valueFrom": map[string]any{
+						"secretKeyRef": map[string]any{
+							"name": "test-secret",
+							"key":  "test-key",
+						},
+					},
+				},
+			},
+			"envFrom": []any{
+				map[string]any{
+					"configMapRef": map[string]any{"name": "test-config"},
+				},
+			},
+		},
+	})
+	d := deployment(t, out)
+	for _, name := range []string{"server", "migrate", "bootstrap"} {
+		c := container(t, d, name)
+
+		e, ok := envVar(c, "OMNIGLASS_TRUSTED_PROXIES")
+		if !ok || e.Value != "10.0.0.0/8" {
+			t.Errorf("%s: OMNIGLASS_TRUSTED_PROXIES = %+v ok=%v, want value 10.0.0.0/8", name, e, ok)
+		}
+
+		e, ok = envVar(c, "TEST_SECRET")
+		if !ok || e.ValueFrom == nil || e.ValueFrom.SecretKeyRef == nil {
+			t.Errorf("%s: TEST_SECRET = %+v ok=%v, want a secretKeyRef", name, e, ok)
+		}
+
+		found := false
+		for _, ef := range c.EnvFrom {
+			if ef.ConfigMapRef != nil && ef.ConfigMapRef.Name == "test-config" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("%s: envFrom = %+v, want configMapRef test-config", name, c.EnvFrom)
+		}
+	}
+}
+
+// TestExtraEnvWithBootstrapDisabled verifies that with bootstrap.enabled=false
+// (one of production's three values), server.extraEnv and server.envFrom still
+// reach migrate and the server, and no bootstrap init container is rendered.
+func TestExtraEnvWithBootstrapDisabled(t *testing.T) {
+	out := mustRender(t, map[string]any{
+		"bootstrap": map[string]any{"enabled": false},
+		"server": map[string]any{
+			"extraEnv": []any{
+				map[string]any{"name": "OMNIGLASS_TRUSTED_PROXIES", "value": "10.0.0.0/8"},
+			},
+			"envFrom": []any{
+				map[string]any{"configMapRef": map[string]any{"name": "test-config"}},
+			},
+		},
+	})
+	d := deployment(t, out)
+	for _, c := range d.Spec.Template.Spec.InitContainers {
+		if c.Name == "bootstrap" {
+			t.Fatalf("bootstrap init container rendered with bootstrap.enabled=false")
+		}
+	}
+	for _, name := range []string{"server", "migrate"} {
+		c := container(t, d, name)
+		if e, ok := envVar(c, "OMNIGLASS_TRUSTED_PROXIES"); !ok || e.Value != "10.0.0.0/8" {
+			t.Errorf("%s: OMNIGLASS_TRUSTED_PROXIES = %+v ok=%v, want value 10.0.0.0/8", name, e, ok)
+		}
+		found := false
+		for _, ef := range c.EnvFrom {
+			if ef.ConfigMapRef != nil && ef.ConfigMapRef.Name == "test-config" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("%s: envFrom = %+v, want configMapRef test-config", name, c.EnvFrom)
+		}
+	}
+}
+
+// TestDefaultsHaveNoExtraEnvOrEnvFrom verifies that the default chart render
+// does not add any extra env or envFrom entries beyond the chart-managed set.
+func TestDefaultsHaveNoExtraEnvOrEnvFrom(t *testing.T) {
+	out := mustRender(t, nil)
+	d := deployment(t, out)
+	// Expected chart-managed env var counts per container. Changing these is a
+	// signal that the default variable set shipped to operators changed.
+	wantEnvCount := map[string]int{
+		"migrate":   1, // OMNIGLASS_DSN
+		"bootstrap": 2, // OMNIGLASS_DSN, OMNIGLASS_ENCRYPTION_KEY
+		"server":    5, // OMNIGLASS_DSN, OMNIGLASS_SECURE_COOKIES, OMNIGLASS_ENCRYPTION_KEY, OMNIGLASS_DATA_DIR, OMNIGLASS_NATS_STORE_DIR
+	}
+	for _, name := range []string{"server", "migrate", "bootstrap"} {
+		c := container(t, d, name)
+		if len(c.EnvFrom) != 0 {
+			t.Errorf("%s: envFrom = %v, want empty by default", name, c.EnvFrom)
+		}
+		if want := wantEnvCount[name]; len(c.Env) != want {
+			t.Errorf("%s: len(env) = %d, want %d (chart-managed only)", name, len(c.Env), want)
+		}
 	}
 }

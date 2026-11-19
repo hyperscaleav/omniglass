@@ -197,6 +197,8 @@ the bundled preview Postgres is an `emptyDir` and goes with the release.
 | `image.pullPolicy` | `IfNotPresent` | |
 | `server.replicas` | `1` | server pod count |
 | `server.resources` | small requests/limits | |
+| `server.extraEnv` | `[]` | additional environment variables as `EnvVar` entries |
+| `server.envFrom` | `[]` | additional environment sources (ConfigMap or Secret refs) as `EnvFromSource` entries |
 | `service.port` | `8080` | ClusterIP service port |
 | `ingress.enabled` | `false` | create an Ingress (on for per-PR previews) |
 | `ingress.className` | `traefik` | ingress controller class |
@@ -219,11 +221,32 @@ the bundled preview Postgres is an `emptyDir` and goes with the release.
 
 ## Server environment
 
-Anything the chart's values do not cover reaches the server as plain environment (via
-`extraEnv`-style values or a Secret). The full server surface renders from the declared
+Anything the chart's values do not cover reaches the server as plain environment via
+`server.extraEnv` and `server.envFrom`. The full server surface renders from the declared
 environment registry (`make gen`). The chart already sets `OMNIGLASS_SECURE_COOKIES` from
 `server.secureCookies`, `OMNIGLASS_ENCRYPTION_KEY` from the key Secret, and `OMNIGLASS_DATA_DIR` and
 `OMNIGLASS_NATS_STORE_DIR` into the data volume ([durable state](#durable-state)).
+
+Both values are passed to the server container, the migrate init container, and the bootstrap
+init container when `bootstrap.enabled` is true, so the Omniglass containers share one configuration.
+
+Set a plain variable with `extraEnv`, or pull all keys from a Secret or ConfigMap with `envFrom`:
+
+```yaml
+server:
+  extraEnv:
+    - name: "OMNIGLASS_TRUSTED_PROXIES"
+      value: "10.0.0.0/8"
+  envFrom:
+    - secretRef:
+        name: omniglass-extra-env
+    - configMapRef:
+        name: omniglass-config
+```
+
+To supply a custom encryption key, use `encryptionKey.existingSecret` rather than `server.extraEnv`. The chart
+sets `OMNIGLASS_ENCRYPTION_KEY` from its own Secret; placing it in `server.extraEnv` creates a duplicate entry
+that may cause decryption failures if the duplicate is later removed (see [The encryption key](#the-encryption-key)).
 
 Upgrading a deployment that sets the old names (`OMNIGLASS_SECRET_KEY` or
 `OMNIGLASS_SECRET_KEY_FILE`): it keeps working, because the server still reads them while neither
