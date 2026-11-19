@@ -15,7 +15,7 @@ import (
 // every level of it current. This drives a deep tree through every kind of
 // write that moves a verdict or the shape under it, and after each one holds
 // every recorded verdict to a recompute from scratch: each system's verdict
-// derived live from its roles (SystemHealth), each location's the worst of
+// derived live from its slots (SystemHealth), each location's the worst of
 // those over its whole subtree, walked here in Go from the tree as it stands.
 // The subtree fold is also what LocationHealth reports, so the record, the
 // report and the oracle all have to agree.
@@ -48,10 +48,10 @@ func TestHealthIncrementalMatchesFullRecompute(t *testing.T) {
 	if err := f.gw.UpsertStandard(ctx, storage.Standard{Name: "eq-main", Label: "Main"}); err != nil {
 		t.Fatalf("create standard: %v", err)
 	}
-	if _, err := f.gw.SetSystemRole(ctx, "", "standard", "eq-main", storage.SystemRoleSpec{
+	if _, err := f.gw.SetSystemSlot(ctx, "", "standard", "eq-main", storage.SystemSlotSpec{
 		Name: "main", Label: "Main", Quorum: 1, Impact: "outage",
 	}); err != nil {
-		t.Fatalf("declare role: %v", err)
+		t.Fatalf("declare slot: %v", err)
 	}
 	f.staffIn(t, ctx, pair, "pair", "sys-a", "eq-b1-f1-r1", "a1", "a2")
 	f.staffIn(t, ctx, pair, "pair", "sys-b", "eq-b1-f1-r2", "b1", "b2")
@@ -79,8 +79,8 @@ func TestHealthIncrementalMatchesFullRecompute(t *testing.T) {
 		{"take its sibling floor's room out entirely", raise("o1", "high")},
 		{"a warning that moves nothing", raise("c1", "warning")},
 		{"restore the outage, leaving the degraded room", clear("o1")},
-		{"unstaff a role below its quorum", func() error {
-			return f.gw.UnassignRole(ctx, "", "sys-b", "pair", "b2", f.all, f.all, f.all, f.all)
+		{"unstaff a slot below its quorum", func() error {
+			return f.gw.UnassignSlot(ctx, "", "sys-b", "pair", "b2", f.all, f.all, f.all, f.all)
 		}},
 		{"move the degraded system to the other campus", func() error {
 			_, err := f.gw.MoveSystem(ctx, "", "sys-a", storage.SystemMove{LocationName: ptrStr("s2-r1")}, f.all, f.all, all)
@@ -90,8 +90,8 @@ func TestHealthIncrementalMatchesFullRecompute(t *testing.T) {
 			_, err := f.gw.MoveLocation(ctx, "", "eq-b1-f1", storage.LocationMove{ParentName: ptrStr("hq-b2")}, f.all, f.all)
 			return err
 		}},
-		{"staff the role again", func() error {
-			return f.gw.AssignRole(ctx, "", "sys-b", "pair", "b2", f.all, f.all, f.all, f.all)
+		{"staff the slot again", func() error {
+			return f.gw.AssignSlot(ctx, "", "sys-b", "pair", "b2", f.all, f.all, f.all, f.all)
 		}},
 		{"take the outage system down again, under its moved floor", raise("o1", "high")},
 		{"delete a system", func() error { return f.gw.DeleteSystem(ctx, "", "sys-c", f.all, f.all) }},
@@ -113,9 +113,9 @@ func TestHealthIncrementalMatchesFullRecompute(t *testing.T) {
 	f.assertTransitionOnly(t, ctx)
 }
 
-// staffIn builds a system conforming to standard in room and staffs role with
+// staffIn builds a system conforming to standard in room and staffs slot with
 // the components, each a new room bar.
-func (f *healthFixture) staffIn(t *testing.T, ctx context.Context, standard, role, system, room string, components ...string) {
+func (f *healthFixture) staffIn(t *testing.T, ctx context.Context, standard, slot, system, room string, components ...string) {
 	t.Helper()
 	if _, err := f.gw.CreateSystem(ctx, "", storage.SystemSpec{
 		Name: system, StandardID: &standard, LocationName: &room,
@@ -126,7 +126,7 @@ func (f *healthFixture) staffIn(t *testing.T, ctx context.Context, standard, rol
 		if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: c, ProductName: &f.bar.Name}, f.all, all, all, all); err != nil {
 			t.Fatalf("create component %s: %v", c, err)
 		}
-		if err := f.gw.AssignRole(ctx, "", system, role, c, f.all, f.all, f.all, f.all); err != nil {
+		if err := f.gw.AssignSlot(ctx, "", system, slot, c, f.all, f.all, f.all, f.all); err != nil {
 			t.Fatalf("assign %s: %v", c, err)
 		}
 	}
@@ -165,7 +165,7 @@ func (f *healthFixture) assertMatchesFullRecompute(t *testing.T, ctx context.Con
 		return health.Healthy.String()
 	}
 
-	// Each system from its roles, live.
+	// Each system from its slots, live.
 	located := map[string][]health.Verdict{}
 	rows, err = f.conn.Query(ctx, `select id, name, location_id from system`)
 	if err != nil {

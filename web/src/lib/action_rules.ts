@@ -8,7 +8,7 @@ import { TRANSITIONS, type Transition } from "./subscriptions";
 // judges a draft by. An action rule says WHEN a message is sent: on an alarm's
 // raise, clear or both, when its predicate (the "action" expression site) holds
 // over the alarm facts, it queues one notification of its type per target. It
-// is a rule, so it rides rule:* (reads registry-shaped, writes all-scope).
+// is a rule, so it rides rule:* (reads catalog-shaped, writes all-scope).
 // A person's own subscriptions are /auth/me/action-rules (lib/subscriptions),
 // never listed here.
 

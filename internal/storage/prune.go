@@ -18,7 +18,7 @@ var sampleLaneTypes = map[string]string{"metric": "metric_type", "property": "pr
 
 // sampleArcs is every owner arc a sample row fills one of, in the order a prune
 // visits them.
-var sampleArcs = []string{"component", "system", "location", "node"}
+var sampleArcs = []string{"component", "system", "location", "outpost"}
 
 // pruneProbe is how one lane finds, for an old row of one owner arc, a newer
 // row of the same series through an index (TestPruneSamplesReachesAnIndexOnEveryArc):
@@ -28,12 +28,12 @@ var sampleArcs = []string{"component", "system", "location", "node"}
 //   - the metric lane's other rows through metric_arc_owner_idx, keyed on the one
 //     arc column such a row fills.
 //
-// No writer gives a node a property today and no index serves one, so that probe
+// No writer gives an outpost a property today and no index serves one, so that probe
 // walks the type's rows; it finds no candidate to probe for until something does.
 func pruneProbe(lane, arc string) string {
 	col := arc + "_id"
 	if lane == "metric" && arc != "component" {
-		return `n.component_id is null and coalesce(n.system_id, n.location_id, n.node_id) = c.` + col
+		return `n.component_id is null and coalesce(n.system_id, n.location_id, n.outpost_id) = c.` + col
 	}
 	return `n.` + col + ` = c.` + col
 }
@@ -52,7 +52,7 @@ func pruneProbe(lane, arc string) string {
 //
 // The probe walks the series upward from the candidate's ts (order by n.ts), so
 // the first row it meets past the candidate is usually the one that answers. A
-// walk down from the newest row would first pass every row a node's clock
+// walk down from the newest row would first pass every row an outpost's clock
 // future-dated before it was corrected: they head the ts-descending index with
 // low ids, and the id test is a filter, not part of the index condition
 // (measured on PG18: 2.5s a chunk against 46ms, with 2,016 skewed rows a series).
@@ -76,7 +76,7 @@ func pruneSamplesSQL(lane, arc string, typed bool) string {
 	if typed {
 		types = fmt.Sprintf(`c.%s = $3::uuid and $4::int = (select retention_days from %s where id = $3::uuid)`, typeCol, sampleLaneTypes[lane])
 	}
-	// A row a system, a location or a node owns has no component (the owner arc
+	// A row a system, a location or an outpost owns has no component (the owner arc
 	// is exclusive). Saying so lets the planner prove metric_arc_owner_idx's
 	// partial predicate, so a typed prune searches its type's rows through that
 	// index instead of reading every old row of the lane
@@ -182,9 +182,17 @@ func pruneMetricSampleSQL(part string, typed bool) string {
 
 // pruneMetricSamples is pruneSamples on the metric lane: the partitions that
 // begin before the cutoff, oldest first, a statement each until limit rows
-// are deleted. A day wholly past every window is dropped whole by
-// DropMetricPartitions; this keeps the window exact inside the days that
-// remain, a day a longer type's window still holds among them.
+// are deleted. A typed prune (typeID set) works in every such day, so a
+// type's own window is exact. The lane's prune (typeID empty) works only in
+// a day a longer type holds (#1957): any other day past the cutoff, the one
+// the cutoff sits in included, is one DropMetricPartitions takes whole once
+// it ends, so its rows go with it rather than one delete at a time. The held
+// test is the drop's own, asked of each day as the drop will first ask it: a
+// day wholly past the cutoff on its own end, as the drop asks it now, and the
+// day the cutoff sits in on the cutoff, which is what its end reads against
+// the window once the day is past. A day skipped here is one the drop takes.
+// It is read every call, so a day a late sample of a longer type comes to
+// hold is pruned again from then on.
 func (p *PG) pruneMetricSamples(ctx context.Context, typeID string, days int, before time.Time, limit int) (int64, error) {
 	// No sample of an hour the trend compaction has not closed is removed
 	// (#1276), so the trend tier never misses an hour retention reached first.
@@ -204,11 +212,25 @@ func (p *PG) pruneMetricSamples(ctx context.Context, typeID string, days int, be
 		if total >= int64(limit) || !part.From.Before(before) {
 			break
 		}
+		name := pgx.Identifier{"public", part.Name}.Sanitize()
+		if typeID == "" {
+			bound := part.To
+			if before.Before(bound) {
+				bound = before
+			}
+			var held bool
+			if err := p.pool.QueryRow(ctx, metricPartitionHeldSQL(name), bound).Scan(&held); err != nil {
+				return total, fmt.Errorf("storage: prune metric samples in %s: %w", part.Name, err)
+			}
+			if !held {
+				continue
+			}
+		}
 		args := []any{before, int64(limit) - total}
 		if typeID != "" {
 			args = append(args, typeID, days)
 		}
-		tag, err := p.pool.Exec(ctx, pruneMetricSampleSQL(pgx.Identifier{"public", part.Name}.Sanitize(), typeID != ""), args...)
+		tag, err := p.pool.Exec(ctx, pruneMetricSampleSQL(name, typeID != ""), args...)
 		if err != nil {
 			return total, fmt.Errorf("storage: prune metric samples in %s: %w", part.Name, err)
 		}
@@ -225,7 +247,7 @@ func (p *PG) RetentionWindows(ctx context.Context) (settings.RetentionSettings, 
 	if err != nil {
 		return settings.RetentionSettings{}, fmt.Errorf("storage: retention windows: %w", err)
 	}
-	s, err := settings.Typed(p.settings.ResolveOverride(doc, locks).Values)
+	s, err := settings.Typed(p.settings.ResolveBinding(doc, locks).Values)
 	if err != nil {
 		return settings.RetentionSettings{}, fmt.Errorf("storage: retention windows: %w", err)
 	}

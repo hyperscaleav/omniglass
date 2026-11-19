@@ -44,10 +44,11 @@ func cleanRun() ScaleReport {
 		FleetView:             Quantiles{P95: 80, N: 20},
 		Endpoints: &closedloop.EndpointReport{
 			Protocols: []closedloop.EndpointProtocol{{Protocol: "http", Latency: closedloop.Quantiles{P95: 12}}},
-			Nodes:     []closedloop.EndpointNode{{Node: "edge-hq"}},
+			Outposts:  []closedloop.EndpointOutpost{{Outpost: "edge-hq"}},
 			GapTotals: gaps,
 		},
-		Delivery: []DeliveryRow{{Hop: "ingest", Kind: "metric", In: 10, Out: 10, Loss: &loss}},
+		Delivery:     []DeliveryRow{{Hop: "ingest", Kind: "metric", In: 10, Out: 10, Loss: &loss}},
+		WorklistLoss: map[string]float64{"edge-hq": 0},
 	}
 }
 
@@ -120,8 +121,10 @@ func TestComparePerfExactFigureFailsAtAnyNonzeroValue(t *testing.T) {
 		{"a delivery loss", "delivery_loss/ingest/metric", func(r *ScaleReport) { r.Delivery[0].Loss = &half }},
 		{"delivery read with no kind to account", "delivery_loss", func(r *ScaleReport) { r.Delivery = nil }},
 		{"delivery read with no kind carrying items", "delivery_loss", func(r *ScaleReport) { r.Delivery[0].Loss = nil }},
+		{"a stale worklist", "worklist_loss/edge-hq", func(r *ScaleReport) { r.WorklistLoss["edge-hq"] = 1 }},
+		{"the worklist unread", "worklist_loss", func(r *ScaleReport) { r.WorklistLoss, r.WorklistNotRead = nil, "no answer" }},
 		{"the closed loop unread", "closed_loop_loss/" + closedloop.GapConnectNotAccepted, func(r *ScaleReport) {
-			r.Endpoints, r.EndpointsGap = nil, "no node answered"
+			r.Endpoints, r.EndpointsGap = nil, "no outpost answered"
 		}},
 	}
 	for _, tc := range cases {
@@ -259,8 +262,8 @@ func TestComparePerfInvalidRunIsRefusedBeforeAnyFigure(t *testing.T) {
 		edit func(r *ScaleReport)
 		want string
 	}{
-		{"a node restarted", func(r *ScaleReport) { r.Endpoints.Nodes[0].Restarted = true }, "edge-hq restarted"},
-		{"a node impaired", func(r *ScaleReport) { r.Endpoints.Nodes[0].Impaired = true }, "edge-hq carried an impairment"},
+		{"an outpost restarted", func(r *ScaleReport) { r.Endpoints.Outposts[0].Restarted = true }, "edge-hq restarted"},
+		{"an outpost impaired", func(r *ScaleReport) { r.Endpoints.Outposts[0].Impaired = true }, "edge-hq carried an impairment"},
 		{"an impaired gap", func(r *ScaleReport) { r.Endpoints.GapTotals[0].Impaired = 3 }, "impaired"},
 		{"another scenario", func(r *ScaleReport) { r.Scenario, r.Systems = "dev", 0 },
 			"the run measured dev at 0 systems; the baseline is corporate at 300"},
@@ -398,7 +401,7 @@ func TestGenerateBaselineRefuses(t *testing.T) {
 			"server_millicores"},
 		{"a nonzero exact figure", runsWith(3, func(i int, r *ScaleReport) { r.Redeliveries.Unconfirmed = i }),
 			"redeliveries"},
-		{"an impaired node", runsWith(3, func(_ int, r *ScaleReport) { r.Endpoints.Nodes[0].Impaired = true }),
+		{"an impaired outpost", runsWith(3, func(_ int, r *ScaleReport) { r.Endpoints.Outposts[0].Impaired = true }),
 			"impairment"},
 		{"another size", runsWith(3, func(_ int, r *ScaleReport) { r.Systems = 1000 }), "1000"},
 		{"no runs", nil, "no runs"},

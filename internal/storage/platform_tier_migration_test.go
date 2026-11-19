@@ -53,11 +53,11 @@ func TestPlatformTierRename(t *testing.T) {
 		}
 	}
 
-	// setting_override carries the tier as scope, under its own check constraint.
-	mustExec(t, conn, `insert into setting_override (scope, namespace) values ('platform', 'ui')`)
+	// setting_binding carries the tier as scope, under its own check constraint.
+	mustExec(t, conn, `insert into setting_binding (scope, namespace) values ('platform', 'ui')`)
 	if _, err := conn.Exec(ctx,
-		`insert into setting_override (scope, namespace) values ('global', 'keybindings')`); err == nil {
-		t.Error("expected the check constraint to reject setting_override.scope 'global'")
+		`insert into setting_binding (scope, namespace) values ('global', 'keybindings')`); err == nil {
+		t.Error("expected the check constraint to reject setting_binding.scope 'global'")
 	}
 }
 

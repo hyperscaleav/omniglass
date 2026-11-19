@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/solid-query";
 import { actingAs, stopImpersonating } from "../lib/impersonation";
 import Button from "./Button";
 
-// A persistent banner shown while impersonating another principal, so the operator
+// A persistent banner shown while impersonating another user, so the operator
 // always knows whose eyes they are seeing through and can stop. The server
 // enforces the actual read-only (view-as) and audit; this is the visible cue.
 export default function ImpersonationBanner() {

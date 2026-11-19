@@ -1,16 +1,16 @@
 // The component leaf's derivations (#637): the membership rows the leaf lists
 // and the collection card's state. Pure, so the one distinction the card
-// exists to make is pinned with no DOM: a healthy node with a stale sample
+// exists to make is pinned with no DOM: a healthy outpost with a stale sample
 // means the component or the path, not collection, and that sentence is why
-// nodes need no zoom of their own.
+// outposts need no zoom of their own.
 
 import { locationIndex, type FleetView } from "./fleet";
 import { sortAlarms, type Alarm } from "./alarms";
 import type { SeverityLevel } from "./severity";
 import type { EffectiveMetricBody, EffectivePropertyBody } from "../api/api.gen";
 import type { Member } from "./members";
-import type { Node } from "./nodes";
-import { nodeStatus } from "./nodes";
+import type { Outpost } from "./outposts";
+import { outpostStatus } from "./outposts";
 import type { ReachEndpoint } from "./reachability";
 import { STALENESS_WINDOW_MS, endpointWord, lastSeenAt } from "./reachability";
 import { pollsHeld } from "./session";
@@ -19,17 +19,17 @@ import { entityLabel } from "./entities";
 // The leaf's poll (#934): a monitoring console's component view moves as
 // collection arrives. The component's own reads (reachability, vitals, and
 // its alarms with the verdict they make) poll at the cadence of the sibling
-// live surfaces (a rule's detail, the Simulation section); the node behind
+// live surfaces (a rule's detail, the Simulation section); the outpost behind
 // each endpoint (usually one) at a slower cadence, its heartbeat moving no
-// faster. Nothing it polls grows with the fleet: no fleet view, no node
+// faster. Nothing it polls grows with the fleet: no fleet view, no outpost
 // list. TanStack holds an interval while the tab is hidden.
 export const LEAF_POLL_MS = 5_000;
-export const LEAF_NODE_POLL_MS = 10_000;
+export const LEAF_OUTPOST_POLL_MS = 10_000;
 
 export type CollectionState = {
-  // collecting: fresh sample, node live. component-or-path: the sample went
-  // stale while the node stayed live, so collection is fine and the component or
-  // the route to it is not. node-offline: the node itself stopped
+  // collecting: fresh sample, outpost live. component-or-path: the sample went
+  // stale while the outpost stayed live, so collection is fine and the component or
+  // the route to it is not. outpost-offline: the outpost itself stopped
   // heartbeating, so staleness says nothing about the component. down: the
   // component answered, badly, which is a component fact and not a collection one.
   // rejected and session-down (#1059): the endpoint's held session refused or
@@ -39,8 +39,8 @@ export type CollectionState = {
   // (#1110, lib/session's pollsHeld).
   // listening: a push endpoint (#1024), which the server hosts and a sender
   // posts to; silence is never read as down, so it has no other state.
-  kind: "collecting" | "component-or-path" | "node-offline" | "down" | "rejected" | "session-down" | "unknown" | "listening";
-  node?: string;
+  kind: "collecting" | "component-or-path" | "outpost-offline" | "no-outpost" | "down" | "rejected" | "session-down" | "unknown" | "listening";
+  outpost?: string;
 };
 
 // Collection is judged by when the endpoint last delivered anything (the
@@ -49,16 +49,19 @@ export type CollectionState = {
 // any stamp a verdict's own time stands in, which can only read older. Only
 // a probe endpoint carries a verdict, and only its down value says more than
 // freshness does.
-export function collectionState(iface: ReachEndpoint, node: Node | undefined, now: number = Date.now()): CollectionState {
+export function collectionState(iface: ReachEndpoint, outpost: Outpost | undefined, now: number = Date.now()): CollectionState {
   if (iface.webhook) return { kind: "listening" };
-  const nodeDown = !node || nodeStatus(node, now) !== "up";
+  // No outpost at all is its own state (#1454), not an offline one: an outpost that
+  // does not exist cannot have stopped heartbeating.
+  const missing = !outpost;
+  const outpostDown = !!outpost && outpostStatus(outpost, now) !== "up";
   const last = lastSeenAt(iface) ?? iface.verdict?.ts ?? null;
-  if (!last) return { kind: nodeDown ? "node-offline" : "unknown", node: iface.node };
-  if (now - new Date(last).getTime() > STALENESS_WINDOW_MS) return { kind: nodeDown ? "node-offline" : "component-or-path", node: iface.node };
-  if (iface.session?.state === "rejected" || pollsHeld(iface)) return { kind: "rejected", node: iface.node };
-  if (iface.session?.state === "down") return { kind: "session-down", node: iface.node };
-  if (endpointWord(iface, now) === "down") return { kind: "down", node: iface.node };
-  return { kind: "collecting", node: iface.node };
+  if (!last) return { kind: missing ? "no-outpost" : outpostDown ? "outpost-offline" : "unknown", outpost: iface.outpost };
+  if (now - new Date(last).getTime() > STALENESS_WINDOW_MS) return { kind: missing ? "no-outpost" : outpostDown ? "outpost-offline" : "component-or-path", outpost: iface.outpost };
+  if (iface.session?.state === "rejected" || pollsHeld(iface)) return { kind: "rejected", outpost: iface.outpost };
+  if (iface.session?.state === "down") return { kind: "session-down", outpost: iface.outpost };
+  if (endpointWord(iface, now) === "down") return { kind: "down", outpost: iface.outpost };
+  return { kind: "collecting", outpost: iface.outpost };
 }
 
 export type MembershipRow = {
@@ -133,7 +136,10 @@ export function identityRows(props: EffectivePropertyBody[]): IdentityRow[] {
 // one did (#999). spread is present only when the metric has more than one
 // live instance (#1020): the row shows the newest, and says which and of how
 // many; a single-instance metric carries none and reads as it always did.
-export type VitalRow = { name: string; label: string; value: unknown; sampled: boolean; sourceRule?: string; sourceRuleId?: string; spread?: VitalSpread };
+export type VitalRow = { name: string; label: string; value: unknown; unit?: string; sampled: boolean; sourceRule?: string; sourceRuleId?: string; spread?: VitalSpread };
+
+// unit is the metric type's display unit, carried by the read (#1550) so the
+// row never shows a bare number; absent when the type names none.
 
 // One live instance's latest sample, and the spread a multi-instance row
 // carries: the instance shown, how many there are, and each one's latest,
@@ -149,12 +155,24 @@ export function vitalRows(metrics: EffectiveMetricBody[]): VitalRow[] {
     .filter((m) => m.value !== null && m.value !== undefined)
     .map((m) => {
       const row: VitalRow = { name: m.metric_type_name, label: entityLabel({ name: m.metric_type_name, label: m.label }), value: m.value, sampled: m.is_sampled };
+      if (m.unit) row.unit = m.unit;
       if (m.source_rule && m.source_rule_id) Object.assign(row, { sourceRule: m.source_rule, sourceRuleId: m.source_rule_id });
       if ((m.instance_count ?? 0) > 1 && m.instances?.length) {
         row.spread = { shown: m.instance ?? "", count: m.instance_count, instances: m.instances.map((i) => ({ instance: i.instance, value: i.value, ts: i.ts, endpoint: i.endpoint })) };
       }
       return row;
     });
+}
+
+// vitalValueText is how a metric's value reads on the console (#1550): a
+// number keeps at most two decimals (a poll of 0.1527895 ms reads 0.15), a
+// whole number stays whole, and a small one keeps two significant digits
+// rather than rounding to 0. Anything that is not a finite number is shown as
+// it came. The raw value stays on the title and in the API.
+export function vitalValueText(value: unknown): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) return String(value);
+  const fixed = Number(value.toFixed(2));
+  return String(fixed === 0 && value !== 0 ? Number(value.toPrecision(2)) : fixed);
 }
 
 // instanceName is how an instance reads on the console: its name, or

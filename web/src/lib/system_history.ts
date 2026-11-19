@@ -11,7 +11,7 @@ import type { Span } from "./timeline";
 
 export type MemberAlarms = { component: string; componentId: string; alarms: Alarm[] };
 
-export type IncidentRow = {
+export type MemberAlarmRow = {
   id: string;
   severity: string;
   message: string;
@@ -22,10 +22,10 @@ export type IncidentRow = {
   ongoing: boolean;
 };
 
-export function incidentRows(members: MemberAlarms[], now: number, windowHours: number, levels?: SeverityLevel[] | null): IncidentRow[] {
+export function memberAlarmRows(members: MemberAlarms[], now: number, windowHours: number, levels?: SeverityLevel[] | null): MemberAlarmRow[] {
   const bySeverity = compareSeverity(levels);
   const start = now - windowHours * 3600_000;
-  const rows: IncidentRow[] = [];
+  const rows: MemberAlarmRow[] = [];
   for (const m of members) {
     for (const a of m.alarms ?? []) {
       const clearedAt = (a as { cleared_at?: string }).cleared_at;
@@ -61,7 +61,7 @@ export function markerX(iso: string, now: number, windowMs: number): number {
 
 // ---------------------------------------------------------------------------
 // The statuspage read (#795 refinement): the health KPI over the window and
-// the transitions grouped into INCIDENTS, the way statuspage.io or OneUptime
+// the transitions grouped into a HEALTH HISTORY, the way statuspage.io or OneUptime
 // tell the story: uptime up top, then each unhealthy stretch as an entry
 // whose reasoning expands.
 
@@ -76,7 +76,7 @@ export function uptimePct(spans: Span<string>[]): string | null {
   return pct >= 100 ? "100" : pct.toFixed(1);
 }
 
-export type Incident = {
+export type UnhealthyStretch = {
   from: number;
   to: number;
   ongoing: boolean;
@@ -86,11 +86,11 @@ export type Incident = {
   spans: Span<string>[];
 };
 
-// incidentsOf groups consecutive unhealthy spans into incidents, ongoing
+// stretchesOf groups consecutive unhealthy spans into stretches, ongoing
 // first and then newest first: one entry per contiguous stretch away from
 // healthy, however many verdict changes it contained.
-export function incidentsOf(spans: Span<string>[], now: number): Incident[] {
-  const out: Incident[] = [];
+export function stretchesOf(spans: Span<string>[], now: number): UnhealthyStretch[] {
+  const out: UnhealthyStretch[] = [];
   let cur: Span<string>[] = [];
   const flush = () => {
     if (cur.length === 0) return;
@@ -113,10 +113,10 @@ export function incidentsOf(spans: Span<string>[], now: number): Incident[] {
   return out.sort((a, b) => Number(b.ongoing) - Number(a.ongoing) || b.from - a.from);
 }
 
-// incidentReasons keeps the alarms whose own lifetime overlaps the incident's
+// stretchReasons keeps the alarms whose own lifetime overlaps the
 // stretch: the expandable "why" under each entry. An alarm with no clear is
-// open-ended; an ongoing incident's right edge is now.
-export function incidentReasons(inc: Incident, rows: IncidentRow[]): IncidentRow[] {
+// open-ended; an ongoing stretch's right edge is now.
+export function stretchReasons(inc: UnhealthyStretch, rows: MemberAlarmRow[]): MemberAlarmRow[] {
   return rows.filter((r) => {
     const raised = Date.parse(r.raisedAt);
     const cleared = r.clearedAt ? Date.parse(r.clearedAt) : Infinity;

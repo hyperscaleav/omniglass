@@ -53,6 +53,40 @@ func (e *RefusedError) Error() string {
 // (a banner sent on connect) land in this window and are discarded.
 const drainWindow = 2 * time.Millisecond
 
+// DefaultConnectQuiet is how long after a line connection opens its first ask
+// waits for a banner before the line goes out (#1418). A banner a slow device
+// sends past drainWindow would otherwise land armed and be taken as that
+// ask's answer. Any line in the window is discarded as a banner. Later asks
+// pay drainWindow alone. NoConnectQuiet (a driver declaring connect_quiet of
+// 0s) turns the window off: the first ask draws its boundary with drainWindow
+// like every other. Both are the driver's, the one place the spec declares.
+const (
+	DefaultConnectQuiet               = driver.DefaultConnectQuiet
+	NoConnectQuiet      time.Duration = driver.NoConnectQuiet
+)
+
+// connectQuietEnd is when the first ask's boundary may be drawn: the connect
+// window measured from when the connection opened, never longer than half the
+// ask's own timeout (the wait must not eat the answer's time), and never
+// sooner than the drain window from now. A zero quiet is the default, a
+// negative one none.
+func connectQuietEnd(opened time.Time, quiet, askTimeout time.Duration, now time.Time) time.Time {
+	end := now.Add(drainWindow)
+	switch {
+	case quiet < 0:
+		return end
+	case quiet == 0:
+		quiet = DefaultConnectQuiet
+	}
+	if half := askTimeout / 2; quiet > half {
+		quiet = half
+	}
+	if q := opened.Add(quiet); q.After(end) {
+		return q
+	}
+	return end
+}
+
 // NewLineSessionDialer returns the real held line-connection dialer. It is
 // staged (#1049): a declared login runs over the raw connection as the
 // session's auth step before the reader starts routing lines.
@@ -107,18 +141,20 @@ func (p *pendingLine) Authenticate(ctx context.Context, auth *SessionAuth, termi
 }
 
 // Open starts the reader: from here the connection routes every line.
-func (p *pendingLine) Open(in Inbound, _ ChannelOptions) (HeldConn, error) {
-	return openLineConn(p.c, p.target, in), nil
+func (p *pendingLine) Open(in Inbound, ch ChannelOptions) (HeldConn, error) {
+	return openLineConn(p.c, p.target, in, ch.ConnectQuiet), nil
 }
 
 func (p *pendingLine) Close() error { return p.c.Close() }
 
 // openLineConn wraps a connection as a held line connection and starts its
-// reader goroutine.
-func openLineConn(c net.Conn, target string, in Inbound) *lineConn {
+// reader goroutine. connectQuiet is the first ask's banner window (zero is
+// DefaultConnectQuiet, NoConnectQuiet none), counted from now.
+func openLineConn(c net.Conn, target string, in Inbound, connectQuiet time.Duration) *lineConn {
 	lc := &lineConn{
 		c: c, target: target, br: bufio.NewReaderSize(c, maxLineAnswer), in: in,
 		asks: make(chan lineAsk, 1), done: make(chan struct{}),
+		opened: time.Now(), connectQuiet: connectQuiet,
 	}
 	goSupervised("line reader "+target, lc.read, func(pe *PanicError) { lc.fail(pe) })
 	return lc
@@ -162,6 +198,10 @@ type lineConn struct {
 	xmu    sync.Mutex
 	asks   chan lineAsk
 
+	// opened and connectQuiet draw the first ask's banner window (#1418).
+	opened       time.Time
+	connectQuiet time.Duration
+
 	mu  sync.Mutex
 	err error
 
@@ -172,12 +212,14 @@ type lineConn struct {
 // reader is the reader goroutine's state: the ask awaiting its answer, and
 // the bytes of a line not yet complete (carry), with whether that line began
 // before the armed ask was written (a line that began before the ask cannot
-// be its answer).
+// be its answer), and whether the connection's first ask has been armed (the
+// one that waits out the connect window).
 type reader struct {
 	c        *lineConn
 	armed    *lineAsk
 	carry    []byte
 	carryPre bool
+	served   bool
 }
 
 // read is the reader goroutine.
@@ -275,13 +317,21 @@ func (r *reader) die(err error) {
 // arm draws an ask's boundary and writes it. Every line already received is
 // routed (to a listener, or unclaimed) as received before the ask, so a
 // waiting push is delivered rather than lost and is never the answer; a
-// short drain window catches bytes already in flight. Then the line goes out
+// short drain window catches bytes already in flight (the connection's first
+// ask waits out the connect window instead, so a slow banner is caught too,
+// #1418). Then the line goes out
 // and the reader resumes, routing what follows. A write failure answers the
 // ask with the error and kills the connection.
 func (r *reader) arm(ask lineAsk) bool {
 	c := r.c
 	r.carryPre = len(r.carry) > 0
-	_ = c.c.SetReadDeadline(time.Now().Add(drainWindow))
+	now := time.Now()
+	end := now.Add(drainWindow)
+	if !r.served {
+		end = connectQuietEnd(c.opened, c.connectQuiet, ask.timeout, now)
+		r.served = true
+	}
+	_ = c.c.SetReadDeadline(end)
 	for {
 		raw, err := c.br.ReadSlice('\n')
 		if err != nil {

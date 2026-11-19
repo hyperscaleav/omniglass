@@ -61,7 +61,7 @@ func TestValidateExpression(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 	viewer := setupAllViewer(t, ctx, dsn, "expr-viewer")
-	limited := setupLimitedPrincipal(t, ctx, dsn)
+	limited := setupLimitedUser(t, ctx, dsn)
 
 	validate := func(tok string, body map[string]any, status int) validateOut {
 		t.Helper()

@@ -12,17 +12,17 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/config"
 	"github.com/hyperscaleav/omniglass/internal/mailsim"
-	"github.com/hyperscaleav/omniglass/internal/simnode"
+	"github.com/hyperscaleav/omniglass/internal/simoutpost"
 )
 
 // newSimCmd is the simulator run mode's group. `sim run` serves the devices
-// placed on a node, beside that node, with that node's credential; it reads
-// the same OMNIGLASS_* identity env as `node run`, so a sidecar in the
-// node's pod needs no secret of its own.
+// placed on an outpost, beside that outpost, with that outpost's credential; it reads
+// the same OMNIGLASS_* identity env as `outpost run`, so a sidecar in the
+// outpost's pod needs no secret of its own.
 func newSimCmd() *cobra.Command {
 	group := &cobra.Command{
 		Use:   "sim",
-		Short: "Simulate the devices placed on a node",
+		Short: "Simulate the devices placed on an outpost",
 	}
 	var (
 		serverURL   string
@@ -34,8 +34,8 @@ func newSimCmd() *cobra.Command {
 	)
 	run := &cobra.Command{
 		Use:   "run",
-		Short: "Serve the node's simulated devices and follow changes until interrupted",
-		Long: "Serves each component placed on the node whose product has a simulator profile and whose " +
+		Short: "Serve the outpost's simulated devices and follow changes until interrupted",
+		Long: "Serves each component placed on the outpost whose product has a simulator profile and whose " +
 			"endpoints target a loopback address, on that address, and reports every request it answers " +
 			"to the server. Re-pulls the device list on an interval, so devices added or removed on the " +
 			"server start or stop without a restart.",
@@ -44,21 +44,21 @@ func newSimCmd() *cobra.Command {
 				serverURL = config.Get("OMNIGLASS_SERVER")
 			}
 			if name == "" {
-				name = config.Get("OMNIGLASS_NODE_NAME")
+				name = config.Get("OMNIGLASS_OUTPOST_NAME")
 			}
 			if token == "" {
-				token = config.Get("OMNIGLASS_NODE_TOKEN")
+				token = config.Get("OMNIGLASS_OUTPOST_TOKEN")
 			}
 			if serverURL == "" || name == "" || token == "" {
-				return fmt.Errorf("sim: --server, --name, and --token are the node's (or set OMNIGLASS_SERVER / OMNIGLASS_NODE_NAME / OMNIGLASS_NODE_TOKEN)")
+				return fmt.Errorf("sim: --server, --name, and --token are the outpost's (or set OMNIGLASS_SERVER / OMNIGLASS_OUTPOST_NAME / OMNIGLASS_OUTPOST_TOKEN)")
 			}
-			pushers, err := simnode.ParsePushers(config.Get(simnode.PushersEnv))
+			pushers, err := simoutpost.ParsePushers(config.Get(simoutpost.PushersEnv))
 			if err != nil {
 				return err
 			}
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
-			return simnode.Run(ctx, simnode.Config{
+			return simoutpost.Run(ctx, simoutpost.Config{
 				ServerURL: serverURL, Name: name, Token: token,
 				PortOffset: portOffset, Poll: poll, Impairments: impairments,
 				Pushers: pushers,
@@ -66,8 +66,8 @@ func newSimCmd() *cobra.Command {
 		},
 	}
 	run.Flags().StringVar(&serverURL, "server", "", "Omniglass server base URL (env OMNIGLASS_SERVER)")
-	run.Flags().StringVar(&name, "name", "", "the node this simulator runs beside (env OMNIGLASS_NODE_NAME)")
-	run.Flags().StringVar(&token, "token", "", "that node's enrollment token (env OMNIGLASS_NODE_TOKEN)")
+	run.Flags().StringVar(&name, "name", "", "the outpost this simulator runs beside (env OMNIGLASS_OUTPOST_NAME)")
+	run.Flags().StringVar(&token, "token", "", "that outpost's enrollment token (env OMNIGLASS_OUTPOST_TOKEN)")
 	run.Flags().IntVar(&portOffset, "port-offset", 0, "lift the simulated ports below 1024 by this much, to serve without the privilege to bind them")
 	run.Flags().DurationVar(&poll, "poll", 10*time.Second, "how often to re-pull the device list")
 	run.Flags().BoolVar(&impairments, "impairments", false, "apply impairments (unplug, latency, loss) and truthful ping by rewriting the firewall and traffic shaping of this network namespace; needs NET_ADMIN, and is meant for a namespace of the simulator's own (a pod or container)")

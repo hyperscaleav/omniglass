@@ -20,7 +20,7 @@ func TestABatchJudgesEachSampleOfASeriesInOrder(t *testing.T) {
 	if _, err := r.f.gw.CreateEventRule(r.ctx, "", storage.EventRuleSpec{
 		Name: "hot-room", SampleKey: "room-temperature", Severity: "high",
 		Fire: criteria("gt", 30), Clear: ptrCriteria(criteria("lt", 25)),
-		FireEventType: "condition-started", ClearEventType: "condition-ended",
+		FireEventType: "rule-fired", ClearEventType: "rule-cleared",
 		Selector: storage.EventRuleSelector{Components: []string{"bar-1"}},
 	}, r.f.all); err != nil {
 		t.Fatal(err)
@@ -41,12 +41,12 @@ func TestABatchJudgesEachSampleOfASeriesInOrder(t *testing.T) {
 	}
 
 	evs := r.events()
-	if len(evs) != 2 || evs[0].key != "condition-started" || evs[1].key != "condition-ended" {
+	if len(evs) != 2 || evs[0].key != "rule-fired" || evs[1].key != "rule-cleared" {
 		got := make([]string, len(evs))
 		for i, e := range evs {
 			got[i] = e.key
 		}
-		t.Fatalf("one batch carrying 31 then 20 derived %v, want [condition-started condition-ended]", got)
+		t.Fatalf("one batch carrying 31 then 20 derived %v, want [rule-fired rule-cleared]", got)
 	}
 	if a := r.openAlarm(""); a != "" {
 		t.Fatalf("an alarm is still open after the clearing sample: %s", a)
@@ -67,7 +67,7 @@ func TestABatchJudgesEachSampleOfASeriesInOrder(t *testing.T) {
 	if err != nil || !landed {
 		t.Fatalf("land by name then id: landed=%v err=%v", landed, err)
 	}
-	if evs := r.events(); len(evs) != 4 || evs[2].key != "condition-started" || evs[3].key != "condition-ended" {
+	if evs := r.events(); len(evs) != 4 || evs[2].key != "rule-fired" || evs[3].key != "rule-cleared" {
 		got := make([]string, len(evs))
 		for i, e := range evs {
 			got[i] = e.key

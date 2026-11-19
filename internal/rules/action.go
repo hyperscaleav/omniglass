@@ -8,16 +8,18 @@ import (
 
 // The action site (#618): an action rule's `when`, a predicate over one
 // alarm transition's facts. Its bindings are the alarm fact map a
-// notification template reads (declared once in internal/storage, which a
-// test holds this struct to), in snake_case, plus the severity's rank so a
-// floor reads as a comparison (`severity_rank >= 40`, high and above).
+// notification's subject and text read (declared once in internal/storage, which a
+// test holds this struct to), in snake_case, plus two derived bindings: the
+// severity's rank so a floor reads as a comparison (`severity_rank >= 40`,
+// high and above), and whether the component is one of Omniglass's own
+// (`platform`, #1987), so a rule can route the platform's alarms.
 
 // ActionInput is the action site's prepared input: one alarm transition.
 type ActionInput struct {
 	Component      string `expr:"component" doc:"The component's name"`
 	ComponentLabel string `expr:"component_label" doc:"How the component reads: its label, else its name"`
 	ComponentType  string `expr:"component_type" doc:"The label of the component type its product classifies it as"`
-	Place          string `expr:"place" doc:"How the location the component sits at reads; empty when it sits at none of its own"`
+	Location       string `expr:"location" doc:"How the location the component sits at reads; empty when it sits at none of its own"`
 	Severity       string `expr:"severity" doc:"The severity level the alarm was raised at, by name"`
 	SeverityLabel  string `expr:"severity_label" doc:"That level's label, else its name"`
 	SeverityRank   int    `expr:"severity_rank" doc:"That level's rank: higher is worse (the shipped high is 40, so severity_rank >= 40 is high and above)"`
@@ -27,6 +29,7 @@ type ActionInput struct {
 	ClearedAt      string `expr:"cleared_at" doc:"When it was cleared, RFC 3339 in UTC; empty while raised"`
 	Rule           string `expr:"rule" doc:"The event rule that raised it, by name; empty for an alarm an operator raised"`
 	Link           string `expr:"link" doc:"The component's page in the console; empty while notification.console_url is unset"`
+	Platform       bool   `expr:"platform" doc:"Whether the component is one of Omniglass's own parts (a server's or an outpost's), a member of the reserved platform system"`
 }
 
 // actionEnv is the action site's environment: the criteria builtins and

@@ -48,7 +48,7 @@ export default function ConfigureFace(props: {
   kind: ConfigureKind;
   id: string;
   // Which edit intent this face answers, where a page holds two (#872): the
-  // system's own form takes `edit=1`, its sole place's `edit=place`.
+  // system's own form takes `edit=1`, its sole location's `edit=location`.
   editValue?: string;
   testid?: string;
   // The page's leave guard: this face's slot is tracked into it, so the page

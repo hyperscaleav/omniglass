@@ -30,7 +30,7 @@ func TestNamePenSpreadsWithoutClaimingExistingRows(t *testing.T) {
 	}
 	conn := connectDSN(t, dsn)
 
-	// The registries are seeded by the boot phase rather than by a migration, so
+	// The catalogs are seeded by the boot phase rather than by a migration, so
 	// this fixture writes the one row a location needs to exist at all.
 	// The column is `display_name` at this point in the chain: #613's rename
 	// (20260814100000_label_is_the_column.sql) is above the version this test

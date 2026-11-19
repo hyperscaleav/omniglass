@@ -1,5 +1,5 @@
 // Package redact masks credentials in text a component sent back: a reply
-// to a command, an error, a reason. It is the one masking primitive the node
+// to a command, an error, a reason. It is the one masking primitive the outpost
 // (before a reply leaves it) and the server (before a reply is stored and
 // served) both run, so the forms it knows are known everywhere at once.
 //

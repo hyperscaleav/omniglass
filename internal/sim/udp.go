@@ -121,7 +121,7 @@ func (d *Device) SetDatagramLoss(pct int) {
 
 // DatagramSources returns the source addresses every datagram face on the
 // device holds a session for, sorted: a test-harness hook, as the TLS ones
-// are, for a test that must address the node's own socket.
+// are, for a test that must address the outpost's own socket.
 func (d *Device) DatagramSources() []string {
 	d.udpMu.Lock()
 	faces := append([]*udpFace(nil), d.udpFaces...)
@@ -139,8 +139,8 @@ func (d *Device) DatagramSources() []string {
 }
 
 // udpIdle is how long a source's session outlives its last datagram. A
-// node's endpoint asks every tick, so its session never idles out; a source
-// that went away (a node restarted onto another port) stops being pushed to.
+// outpost's endpoint asks every tick, so its session never idles out; a source
+// that went away (an outpost restarted onto another port) stops being pushed to.
 const udpIdle = 5 * time.Minute
 
 // datagramLoss drops a seeded share of datagrams. A datagram's fate is fixed

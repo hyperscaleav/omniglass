@@ -15,7 +15,7 @@ import (
 // discloses only what that conduit heard.
 
 type unboundIdentitiesInput struct {
-	Name string `path:"name" example:"hq.$comp.meetings-cloud" doc:"The conduit component's name, or a dotted address (e.g. hq.$comp.meetings-cloud)"`
+	Name string `path:"name" example:"hq.$comp.ucc-platform" doc:"The conduit component's name, or a dotted address (e.g. hq.$comp.ucc-platform)"`
 }
 
 type unboundIdentityBody struct {

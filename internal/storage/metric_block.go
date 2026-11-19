@@ -543,7 +543,11 @@ type lateSamples struct {
 // into hours (a new one when the hour had none), else by the day's block,
 // else, once the week fold has passed the series' week, by the week block.
 // A sample of a day the fold has not reached is covered by nothing and waits
-// as a raw row for the fold. Each block is written once, in key order: the
+// as a raw row for the fold. A sample of a folded day that is no longer
+// intact is covered by nothing for good, so its hour's dirty mark is set
+// raw_only in the same statement: the recompute, which runs in another
+// transaction and may see the window widened by then, reads that hour from
+// its raw rows (#1560). Each block is written once, in key order: the
 // samples it gains, in ts then id order, join those it holds after every
 // sample at the same instant, so it unnests as it would have folded had they
 // landed on time. The block's span is never revisited, however many samples
@@ -568,7 +572,18 @@ var mergeBlocksSQL = fmt.Sprintf(`with l as (
 			case when k.hours then date_bin('1 hour', k.ts, %[1]s) when k.whole then k.day else k.week end as span_start,
 			case when k.hours then 'hour' when k.whole then 'day' else 'week' end as span
 		from k
-		where k.hours or k.whole or k.week < k.week_through or k.week = k.week_through and k.series_id <= k.week_series)
+		where k.hours or k.whole or k.week < k.week_through or k.week = k.week_through and k.series_id <= k.week_series),
+	skipped as (
+		select distinct l.series_id, date_bin('1 hour', l.ts, %[1]s) as hour
+		from l join metric_series s on s.id = l.series_id and %[6]s
+		join metric_type t on t.id = s.metric_type_id
+		cross join metric_block_mark mk
+		where (l.day < mk.blocked_through or l.day = mk.blocked_through and l.series_id <= mk.blocked_series)
+			and not %[3]s),
+	rawed as (
+		update metric_trend_dirty d set raw_only = true from skipped sk
+		where d.series_id = sk.series_id and d.hour = sk.hour and not d.raw_only
+		returning 1)
 	%[7]s
 	select m.series_id, m.span_start, m.span, $6::text, $7::bigint, $8::uuid, count(*), array_agg(%[4]s order by m.ts, m.id),
 		array_agg(m.value order by m.ts, m.id)
@@ -590,8 +605,10 @@ var mergeBlocksSQL = fmt.Sprintf(`with l as (
 // committed, and no fold commits past them before the batch does.
 //
 // The wait for the lock has no lock_timeout, on purpose: the consumer Terms a
-// message after maxTelemetryDeliveries redeliveries (about 15 s), so a fold
-// chunk longer than that would drop the batch, its on-time rows included. The
+// message that went unacked for maxTelemetryDeliveries AckWaits (5 x 30 s), so
+// a fold chunk longer than that would drop the batch, its on-time rows
+// included; the consumer sends InProgress for as long as the landing runs, so
+// the wait spends no delivery at all (#1560). The
 // stall a long wait can cause on a multi-server install is bounded where it
 // bites, by trendDrainTimeout failing the compaction (ADR-1529, decision 9).
 func mergeLateBlocks(ctx context.Context, tx pgx.Tx, late lateSamples, laneDays int) error {

@@ -130,6 +130,18 @@ func TestValidateRefusals(t *testing.T) {
 		{"duplicate command bindings", func(s *driver.Spec) {
 			s.Commands = append(s.Commands, driver.CommandBinding{CommandType: "set-input", Request: driver.Request{Line: "x"}})
 		}, "set-input"},
+		{"command transform on nothing", func(s *driver.Spec) {
+			s.Commands[0].Transform = &driver.Transform{}
+		}, "transform"},
+		{"command transform with an unknown cast", func(s *driver.Spec) {
+			s.Commands[0].Transform = &driver.Transform{Cast: "quaternion"}
+		}, "cast"},
+		{"command transform with a map", func(s *driver.Spec) {
+			s.Commands[0].Transform = &driver.Transform{Map: map[string]string{"a": "b"}}
+		}, "scale"},
+		{"command transform with a cast", func(s *driver.Spec) {
+			s.Commands[0].Transform = &driver.Transform{Cast: "int"}
+		}, "scale"},
 		{"command binding with an unknown template field", func(s *driver.Spec) {
 			s.Commands[0].Request.Line = "SET ${warp.factor}"
 		}, "warp.factor"},

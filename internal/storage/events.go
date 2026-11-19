@@ -67,12 +67,12 @@ type Event struct {
 const eventLineageCols = `case when event.origin = 'derived' then event.source_rule end, event.derived_by_rule_id::text, event.alarm_id::text`
 
 // InsertEvents writes observed occurrence rows in one transaction, for w: a
-// node's lane (NodeWriter) or the push lane (PushWriter). Each row sets
+// outpost's lane (OutpostWriter) or the push lane (PushWriter). Each row sets
 // exactly its owner arc column (the CHECK enforces the rest) and provenance
-// observed. Callers apply reject-not-project (collection.Registry) before
+// observed. Callers apply reject-not-project (collection.Catalog) before
 // calling; this is the durable write, refusing the whole batch when an event
 // type's writer class does not admit w (ADR-0161: collection-failed is the
-// node's alone). Mirrors InsertMetricSamples.
+// outpost's alone). Mirrors InsertMetricSamples.
 func (p *PG) InsertEvents(ctx context.Context, w KeyWriter, evs []EventWrite) error {
 	if len(evs) == 0 {
 		return nil
@@ -159,12 +159,12 @@ func (p *PG) writeEventSets(ctx context.Context, tx pgx.Tx, sets []eventSet) err
 		}
 		kinds[i], keys[i], instances[i], messages[i], sources[i] = ev.OwnerKind, ev.Key, ev.Instance, ev.Message, ev.Source
 	}
-	if _, err := tx.Exec(ctx, `insert into event (ts, owner_kind, component_id, system_id, location_id, node_id, event_type_id, instance, origin, message, attributes, provenance, source, source_conduit_id)
+	if _, err := tx.Exec(ctx, `insert into event (ts, owner_kind, component_id, system_id, location_id, outpost_id, event_type_id, instance, origin, message, attributes, provenance, source, source_conduit_id)
 		select u.ts, u.kind,
 			case when u.kind = 'component' then u.owner::uuid end,
 			case when u.kind = 'system' then u.owner::uuid end,
 			case when u.kind = 'location' then u.owner::uuid end,
-			case when u.kind = 'node' then u.owner::uuid end,
+			case when u.kind = 'outpost' then u.owner::uuid end,
 			et.id, u.instance, u.origin, u.message, u.attrs::jsonb, 'observed', u.source, $10::uuid
 		from unnest($1::timestamptz[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[])
 			with ordinality as u(ts, kind, owner, key, instance, origin, message, attrs, source, ord)

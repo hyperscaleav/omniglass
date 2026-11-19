@@ -6,7 +6,7 @@ summary: "The trend tier is metric_trend, one row per observed metric series per
 refs: [1276, 1265, 1275, 311, 1269]
 ---
 
-- **Date:** 2026-11-05 | **Status:** Accepted | **Pages:** [storage](/architecture/storage/), [admin guide](/guides/admin/)
+- **Date:** 2026-11-05 | **Status:** Accepted | **Pages:** [storage](/architecture/storage/), [platform settings](/admin/settings/)
 - **Decision:** (#1276, under the approved #1265.)
   1. **One trend row per observed series per UTC hour**, `metric_trend (series_id, hour, count, min,
      max, sum, first, last)`, keyed by series and hour and removed with its series. Calculated series

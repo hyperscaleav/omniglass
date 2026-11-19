@@ -13,7 +13,7 @@ import (
 // than calling a name the official catalog holds unregistered.
 func TestAPushOfAShadowedNameSaysWhyItIsRefused(t *testing.T) {
 	t.Parallel()
-	reg := collection.NewRegistry(
+	reg := collection.NewCatalog(
 		[]storage.MetricType{{Name: "x", Official: true}, {Name: "plain"}},
 		[]storage.PropertyType{{Name: "x"}},
 		nil,

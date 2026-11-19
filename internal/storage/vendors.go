@@ -30,12 +30,12 @@ func validVendorKind(s string) bool {
 	return false
 }
 
-// Vendor is a registry row naming an organization in the fleet model (e.g.
+// Vendor is a catalog row naming an organization in the fleet model (e.g.
 // "Boreal", "Kestrel"): a stable id, the official flag, a label, a kind
 // (manufacturer/integrator/developer), and optional contact metadata (icon,
-// support phone, website). It is a flat registry like component_type: no tree,
+// support phone, website). It is a flat catalog like component_type: no tree,
 // and no in-use delete guard in this slice (product will reference it). The
-// registry lists alphabetically by label; there is no ordering field.
+// catalog lists alphabetically by label; there is no ordering field.
 type Vendor struct {
 	// ID is the uuid primary key and Name the renameable name, the shape
 	// tag has and every fleet entity has after ADR-0056. A vendor is addressable
@@ -104,7 +104,7 @@ func (p *PG) UpsertVendor(ctx context.Context, m Vendor) error {
 // nullability change cannot silently move them to the top. What makes it work
 // at all is that unset is SQL NULL and never the empty string, which
 // labelOrNull (label_unset.go) enforces on the write side and
-// registry_ordering_test.go pins on all seven registries (#613, ADR-0118).
+// catalog_ordering_test.go pins on all seven catalogs (#613, ADR-0118).
 func (p *PG) ListVendors(ctx context.Context) ([]Vendor, error) {
 	rows, err := p.pool.Query(ctx, `select `+vendorCols+` from vendor order by label nulls last, name`)
 	if err != nil {
@@ -124,7 +124,7 @@ func (p *PG) ListVendors(ctx context.Context) ([]Vendor, error) {
 
 // GetVendor resolves one vendor by id. An unknown id is ErrTypeNotFound.
 func (p *PG) GetVendor(ctx context.Context, id string) (*Vendor, error) {
-	m, err := scanVendor(p.pool.QueryRow(ctx, `select `+vendorCols+` from `+refRows("vendor", id)+` vendor where `+registryRefCol(id)+` = $1`, id))
+	m, err := scanVendor(p.pool.QueryRow(ctx, `select `+vendorCols+` from `+refRows("vendor", id)+` vendor where `+catalogRefCol(id)+` = $1`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTypeNotFound
 	}
@@ -180,7 +180,7 @@ func (p *PG) UpdateVendor(ctx context.Context, actorID, id string, patch VendorP
 	if err := guardTypeMutable(ctx, tx, "vendor", id); err != nil {
 		return nil, err
 	}
-	before, err := registryAuditImage(ctx, tx, "vendor", id)
+	before, err := catalogAuditImage(ctx, tx, "vendor", id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound
@@ -196,7 +196,7 @@ func (p *PG) UpdateVendor(ctx context.Context, actorID, id string, patch VendorP
 			support_phone = coalesce($5, support_phone),
 			website       = coalesce($6, website),
 			updated_at    = now()
-		where id = (select id from `+refRows("vendor", id)+` t where `+registryRefCol(id)+` = $1)
+		where id = (select id from `+refRows("vendor", id)+` t where `+catalogRefCol(id)+` = $1)
 		returning `+vendorCols,
 		id, labelVal, patch.Kind, patch.Icon, patch.SupportPhone, patch.Website, setLabel))
 	if err != nil {
@@ -205,7 +205,7 @@ func (p *PG) UpdateVendor(ctx context.Context, actorID, id string, patch VendorP
 		}
 		return nil, fmt.Errorf("storage: update vendor %q: %w", id, err)
 	}
-	after, err := registryAuditImage(ctx, tx, "vendor", id)
+	after, err := catalogAuditImage(ctx, tx, "vendor", id)
 	if err != nil {
 		return nil, fmt.Errorf("storage: audit image vendor %q: %w", id, err)
 	}
@@ -233,14 +233,14 @@ func (p *PG) DeleteVendor(ctx context.Context, actorID, id string) error {
 	if err := guardTypeMutable(ctx, tx, "vendor", id); err != nil {
 		return err
 	}
-	before, err := registryAuditImage(ctx, tx, "vendor", id)
+	before, err := catalogAuditImage(ctx, tx, "vendor", id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrTypeNotFound
 		}
 		return fmt.Errorf("storage: audit image vendor %q: %w", id, err)
 	}
-	if _, err := tx.Exec(ctx, `delete from vendor where id = (select id from `+refRows("vendor", id)+` t where `+registryRefCol(id)+` = $1)`, id); err != nil {
+	if _, err := tx.Exec(ctx, `delete from vendor where id = (select id from `+refRows("vendor", id)+` t where `+catalogRefCol(id)+` = $1)`, id); err != nil {
 		return fmt.Errorf("storage: delete vendor %q: %w", id, err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "delete", "vendor", auditImageID(before), before, nil); err != nil {

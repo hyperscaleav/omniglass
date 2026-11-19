@@ -144,10 +144,10 @@ func TestAPathMayCarryAnAt(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
-	if _, err := apiclient.New(srv.URL, "").Do(context.Background(), http.MethodGet, "/api/v1/principals/ops@example.com", nil); err != nil {
+	if _, err := apiclient.New(srv.URL, "").Do(context.Background(), http.MethodGet, "/api/v1/users/ops@example.com", nil); err != nil {
 		t.Fatalf("Do: %v", err)
 	}
-	if gotPath != "/api/v1/principals/ops@example.com" {
+	if gotPath != "/api/v1/users/ops@example.com" {
 		t.Errorf("path = %q", gotPath)
 	}
 }

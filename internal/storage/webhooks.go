@@ -13,6 +13,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/driver"
 	"github.com/hyperscaleav/omniglass/internal/scope"
+	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/transport"
 	"github.com/jackc/pgx/v5"
 )
@@ -148,14 +149,22 @@ func (p *PG) RotateWebhookToken(ctx context.Context, actorID, ref string, read, 
 		if err != nil {
 			return nil, fmt.Errorf("storage: marshal webhook token: %w", err)
 		}
-		if _, err := tx.Exec(ctx, `update secret set value = $2, updated_at = now() where id = $1`, secretID, valueJSON); err != nil {
+		// The before-image (ADR-1442): the token's secret as it stands, read under the
+		// lock the reseal takes, then the resealed row. Both are metadata and version.
+		before, err := scanSecretRow(tx.QueryRow(ctx, `select `+secretCols+` from secret where id = $1 for update`, secretID), st.Shape())
+		if err != nil {
+			return nil, fmt.Errorf("storage: read webhook token secret: %w", err)
+		}
+		after, err := scanSecretRow(tx.QueryRow(ctx, `update secret set value = $2, updated_at = now() where id = $1 returning `+secretCols,
+			secretID, valueJSON), st.Shape())
+		if err != nil {
 			return nil, fmt.Errorf("storage: reseal webhook token: %w", err)
 		}
 		if _, err := tx.Exec(ctx, `update webhook_token set token_hash = $2, minted_at = now() where endpoint_id = $1`,
 			ep.ID, WebhookTokenHash(token)); err != nil {
 			return nil, fmt.Errorf("storage: rebind webhook token: %w", err)
 		}
-		if err := writeAuditRes(ctx, tx, actorID, "update", "secret", secretID, nil, nil); err != nil {
+		if err := writeAuditRes(ctx, tx, actorID, "update", "secret", secretID, auditSecret(before), auditSecret(after)); err != nil {
 			return nil, err
 		}
 	}
@@ -171,21 +180,22 @@ func (p *PG) RotateWebhookToken(ctx context.Context, actorID, ref string, read, 
 // deleteWebhookToken removes a webhook endpoint's token secret inside the
 // endpoint's delete, audited as the secret's own delete.
 func deleteWebhookToken(ctx context.Context, tx pgx.Tx, actorID, endpointID string) error {
-	var secretID string
-	err := tx.QueryRow(ctx, `delete from secret where id = (select secret_id from webhook_token where endpoint_id = $1) returning id`, endpointID).Scan(&secretID)
+	// The secret's own row is the audit's old image (ADR-1442), taken from the
+	// delete itself: metadata and version, no shape needed because no field is projected.
+	before, err := scanSecretRow(tx.QueryRow(ctx, `delete from secret where id = (select secret_id from webhook_token where endpoint_id = $1) returning `+secretCols, endpointID), secret.Shape{})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
 	if err != nil {
 		return fmt.Errorf("storage: delete webhook token: %w", err)
 	}
-	return writeAuditRes(ctx, tx, actorID, "delete", "secret", secretID, nil, nil)
+	return writeAuditRes(ctx, tx, actorID, "delete", "secret", before.ID, auditSecret(before), nil)
 }
 
 // WebhookTarget is everything the receiver needs to check and land one post
 // to a resolved token: the endpoint and its component, the scheme its driver
 // declares (none for a bare endpoint) with its block, the scheme's credential
-// unsealed (confined to secrets cascading onto the component, as a node's
+// unsealed (confined to secrets cascading onto the component, as an outpost's
 // worklist is), and its listeners in the spec's order.
 type WebhookTarget struct {
 	EndpointID, EndpointName, ComponentID string
@@ -236,7 +246,7 @@ func (p *PG) ResolveWebhook(ctx context.Context, tokenHash []byte) (*WebhookTarg
 	if credInput != "" {
 		var in map[string]string
 		_ = json.Unmarshal(inputs, &in)
-		fields, _, err := p.nodeSecretFields(ctx, in[credInput], t.ComponentID)
+		fields, _, err := p.outpostSecretFields(ctx, in[credInput], t.ComponentID)
 		var amb *ErrAmbiguousName
 		switch {
 		case errors.Is(err, ErrSecretNotFound), errors.As(err, &amb):
@@ -397,7 +407,7 @@ func (p *PG) RecordUnclaimedSources(ctx context.Context, us []UnclaimedSource) e
 }
 
 // ListUnclaimedSources reads the inbox, most recently heard first, within
-// its age (the node:read observation of every listener).
+// its age (the outpost:read observation of every listener).
 func (p *PG) ListUnclaimedSources(ctx context.Context) ([]UnclaimedSource, error) {
 	rows, err := p.pool.Query(ctx, `
 		select host, transport, source, first_heard_at, last_heard_at, heard_count, last_message

@@ -47,8 +47,9 @@ type Envelope struct {
 	Version int    `json:"version" doc:"The envelope version; this document describes version 1"`
 	ID      string `json:"id" doc:"The notification's uuid, the same on every attempt; the Idempotency-Key header carries it too, so a receiver can drop a redelivery"`
 	Type    string `json:"type" doc:"The notification type that rendered it, by name"`
-	// Transition is the alarm edge, or "test" for a target's :test send.
-	Transition string            `json:"transition" enum:"raised,cleared,test" doc:"The alarm edge the message is about; test for a target's :test send, which is about no alarm"`
+	// Transition is the alarm edge, "test" for a target's :test send, or
+	// "heartbeat" for the server's outbound dead-man's switch (#1986).
+	Transition string            `json:"transition" enum:"raised,cleared,test,heartbeat" doc:"The alarm edge the message is about; test for a target's :test send and heartbeat for the server's own heartbeat, which are about no alarm"`
 	Subject    string            `json:"subject" doc:"The rendered subject, one line"`
 	Text       string            `json:"text" doc:"The rendered text"`
 	AlarmID    string            `json:"alarm_id,omitempty" doc:"The alarm's uuid; absent on a test send"`

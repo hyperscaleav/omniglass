@@ -1,6 +1,6 @@
-# A node's command queue reports its health
+# An outpost's command queue reports its health
 #
-# Each node's command queue lands on its platform component as plain metrics: how many commands
+# Each outpost's command queue lands on its platform component as plain metrics: how many commands
 # wait, how old the oldest is, how long a take and a run took, and how many a pull redelivered. A
 # command keeps its first delivery and its delivery count, so a held one tells its story. Here the
 # huddle bar answers one command at once; then, unplugged while its session is still connecting, it
@@ -19,7 +19,7 @@ Show
 Type "# The huddle bar is up: edge-hq takes a command, runs it and reports it"
 Enter
 Wait
-Type `omniglass component command issue "$bar" --command-type set-volume --value 30 | jq -c '{command_type, status, node}'`
+Type `omniglass component command issue "$bar" --command-type set-volume --value 0.3 | jq -c '{command_type, status, outpost}'`
 Enter
 Wait
 Hide
@@ -54,7 +54,7 @@ Wait
 Type "# A command issued now: edge-hq takes it and holds it until the session is up"
 Enter
 Wait
-Type `omniglass component command issue "$bar" --command-type set-volume --value 34 | jq -c '{command_type, status, node}'`
+Type `omniglass component command issue "$bar" --command-type set-volume --value 0.34 | jq -c '{command_type, status, outpost}'`
 Enter
 Wait
 
@@ -99,7 +99,7 @@ Wait
 Type `omniglass component metric list "$bar" | jq -c '.metrics[] | select(.metric_type_name == "volume") | {volume: .value}'`
 Enter
 Wait
-Type "# The node's platform component carries the queue: depth, oldest age, latencies, redeliveries"
+Type "# The outpost's platform component carries the queue: depth, oldest age, latencies, redeliveries"
 Enter
 Wait
 Type `omniglass component metric list edge-hq | jq -c '[.metrics[] | select(.metric_type_name | startswith("command-")) | {(.metric_type_name): (.value | floor)}] | add'`

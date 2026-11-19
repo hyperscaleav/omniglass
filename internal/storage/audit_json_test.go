@@ -119,7 +119,7 @@ func TestAnAuditImageLeavesANamedEmbedAlone(t *testing.T) {
 	}
 }
 
-// An image that is not a struct (a map, as the secret and principal writes
+// An image that is not a struct (a map, as the secret and user writes
 // pass) and a missing image marshal as they always did.
 func TestAnAuditImageOfAMapOrNothingIsUnchanged(t *testing.T) {
 	t.Parallel()

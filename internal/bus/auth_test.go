@@ -15,17 +15,17 @@ import (
 	"github.com/nats-io/nats-server/v2/server"
 )
 
-// fakeStore admits exactly one (node, token-hash) pair, so the auth callback can
+// fakeStore admits exactly one (outpost, token-hash) pair, so the auth callback can
 // be unit-tested without a database.
 type fakeStore struct {
 	validName    string
 	validHashHex string
 }
 
-func (f fakeStore) AuthenticateNode(_ context.Context, name, hashHex string) (bool, error) {
+func (f fakeStore) AuthenticateOutpost(_ context.Context, name, hashHex string) (bool, error) {
 	return name == f.validName && hashHex == f.validHashHex, nil
 }
-func (f fakeStore) PendingNodeCommands(context.Context, string) ([]storage.CommandDelivery, error) {
+func (f fakeStore) PendingOutpostCommands(context.Context, string) ([]storage.CommandDelivery, error) {
 	return nil, nil
 }
 func (f fakeStore) RecordCommandExecution(context.Context, string, int64, string, string) error {
@@ -39,21 +39,28 @@ func (f fakeStore) DrainCalcPending(context.Context, int) (storage.CalcDrain, er
 func (f fakeStore) ReconcileEventRules(context.Context, *storage.RuleReconcileState) error {
 	return nil
 }
-func (f fakeStore) NodeSimDevices(context.Context, string, scope.Set) ([]storage.SimDevice, error) {
+func (f fakeStore) OutpostSimDevices(context.Context, string, scope.Set) ([]storage.SimDevice, error) {
 	return nil, nil
 }
-func (f fakeStore) NodeSimWebhooks(context.Context, string) (map[string]storage.SimWebhook, error) {
+func (f fakeStore) WorklistChanges(context.Context) (<-chan string, error) { return nil, nil }
+func (f fakeStore) OutpostSimWebhooks(context.Context, string) (map[string]storage.SimWebhook, error) {
 	return nil, nil
 }
-func (f fakeStore) NodeWorklist(context.Context, string) (storage.Worklist, error) {
+func (f fakeStore) OutpostWorklist(context.Context, string) (storage.Worklist, error) {
 	return storage.Worklist{}, nil
 }
 func (f fakeStore) RecordHeartbeat(context.Context, string) error { return nil }
-func (f fakeStore) NodeCheckins(context.Context) ([]storage.NodeCheckin, error) {
+func (f fakeStore) OutpostCheckins(context.Context) ([]storage.OutpostCheckin, error) {
 	return nil, nil
 }
 func (f fakeStore) RecordPlatformMetrics(context.Context, []storage.PlatformMetric) error {
 	return nil
+}
+func (f fakeStore) StampRuleSweep(context.Context, string) error   { return nil }
+func (f fakeStore) MarkServerSeen(context.Context, string) error   { return nil }
+func (f fakeStore) ReleaseRuleSweep(context.Context, string) error { return nil }
+func (f fakeStore) ServerSweepAges(context.Context, time.Duration) ([]storage.ServerSweepAge, error) {
+	return nil, nil
 }
 func (f fakeStore) CommandQueueHealth(context.Context, time.Time) (storage.CommandQueueRead, error) {
 	return storage.CommandQueueRead{}, nil
@@ -70,7 +77,6 @@ func (f fakeStore) ListMetricTypes(context.Context) ([]storage.MetricType, error
 func (f fakeStore) ListPropertyTypes(context.Context) ([]storage.PropertyType, error) {
 	return nil, nil
 }
-func (f fakeStore) StampEndpointsSeen(context.Context, []string) error { return nil }
 func (f fakeStore) RecordOrphanedBatches(context.Context, string, int64, time.Time) error {
 	return nil
 }
@@ -99,12 +105,19 @@ func (f fakeStore) CompactMetricTrends(context.Context, int, int) (storage.Trend
 	return storage.TrendCompaction{}, nil
 }
 func (f fakeStore) PruneMetricTrends(context.Context, time.Time, int) (int64, error) { return 0, nil }
+func (f fakeStore) AssistantSettings(context.Context) (settings.AssistantSettings, error) {
+	return settings.AssistantSettings{}, nil
+}
+func (f fakeStore) PruneAssistantConversations(context.Context, time.Time, int) (int64, error) {
+	return 0, nil
+}
 func (f fakeStore) CompactMetricBlocks(context.Context, storage.BlockFold) (storage.BlockCompaction, error) {
 	return storage.BlockCompaction{}, nil
 }
 func (f fakeStore) DropMetricPartitions(context.Context, time.Time) ([]string, error) {
 	return nil, nil
 }
+func (f fakeStore) SummarizeMetricPartitions(context.Context) ([]string, error) { return nil, nil }
 func (f fakeStore) RetentionStatus(context.Context) (storage.RetentionStatus, error) {
 	return storage.RetentionStatus{}, nil
 }
@@ -139,8 +152,8 @@ func (f *fakeClientAuth) GetID() uint64                               { return 0
 func TestAuthCheck(t *testing.T) {
 	pass := "enroll-secret"
 	sum := sha256.Sum256([]byte(pass))
-	store := fakeStore{validName: "node-a", validHashHex: hex.EncodeToString(sum[:])}
-	a := &nodeAuth{store: store, internalToken: "boot-secret"}
+	store := fakeStore{validName: "outpost-a", validHashHex: hex.EncodeToString(sum[:])}
+	a := &outpostAuth{store: store, internalToken: "boot-secret"}
 
 	// Internal client: right token -> full permissions.
 	c := &fakeClientAuth{opts: &server.ClientOpts{Token: "boot-secret"}}
@@ -153,18 +166,18 @@ func TestAuthCheck(t *testing.T) {
 		t.Fatalf("wrong internal token: want reject")
 	}
 
-	// Node: right creds -> admit with node-scoped perms.
-	c = &fakeClientAuth{opts: &server.ClientOpts{Username: "node-a", Password: pass}}
+	// Outpost: right creds -> admit with outpost-scoped perms.
+	c = &fakeClientAuth{opts: &server.ClientOpts{Username: "outpost-a", Password: pass}}
 	if !a.Check(c) || c.registered == nil {
-		t.Fatalf("node right creds: want admit")
+		t.Fatalf("outpost right creds: want admit")
 	}
-	if got := c.registered.Permissions.Publish.Allow; got[1] != "og.v1.heartbeat.node-a" {
-		t.Fatalf("node perms not scoped to node-a: %v", got)
+	if got := c.registered.Permissions.Publish.Allow; got[1] != "og.v1.heartbeat.outpost-a" {
+		t.Fatalf("outpost perms not scoped to outpost-a: %v", got)
 	}
-	// Node: wrong password -> reject, no registration.
-	c = &fakeClientAuth{opts: &server.ClientOpts{Username: "node-a", Password: "wrong"}}
+	// Outpost: wrong password -> reject, no registration.
+	c = &fakeClientAuth{opts: &server.ClientOpts{Username: "outpost-a", Password: "wrong"}}
 	if a.Check(c) || c.registered != nil {
-		t.Fatalf("node wrong password: want reject")
+		t.Fatalf("outpost wrong password: want reject")
 	}
 	// Empty creds -> reject.
 	c = &fakeClientAuth{opts: &server.ClientOpts{}}

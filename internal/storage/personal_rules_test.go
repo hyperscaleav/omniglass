@@ -95,10 +95,11 @@ func TestAPersonalRuleIsItsOwnersAlone(t *testing.T) {
 	if err := f.gw.DeletePersonalRule(f.ctx, alice, alice, bobs.ID); !errors.Is(err, storage.ErrActionRuleNotFound) {
 		t.Fatalf("alice deleting bob's rule = %v", err)
 	}
-	// The platform surface never sees a personal rule.
+	// The platform surface never sees a personal rule: only the shipped one
+	// (#1987).
 	rs, err := f.gw.ListActionRules(f.ctx)
-	if err != nil || len(rs) != 0 {
-		t.Fatalf("the platform list = %v, %v; want no personal rule", rs, err)
+	if err != nil || len(rs) != 1 || rs[0].Name != "platform-alarms-to-admins" {
+		t.Fatalf("the platform list = %v, %v; want the shipped rule alone, no personal rule", rs, err)
 	}
 	if _, err := f.gw.GetActionRule(f.ctx, bobs.ID); !errors.Is(err, storage.ErrActionRuleNotFound) {
 		t.Fatalf("the platform read of bob's rule = %v", err)
@@ -112,10 +113,10 @@ func TestAPersonalRuleIsItsOwnersAlone(t *testing.T) {
 		t.Fatalf("a personal rule naming a target = %v", err)
 	}
 	// Purging the owner takes their rules with them.
-	if err := f.gw.ArchivePrincipal(f.ctx, "", f.ids["bob"], f.all); err != nil {
+	if err := f.gw.ArchiveUser(f.ctx, "", f.ids["bob"], f.all); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.gw.PurgePrincipal(f.ctx, "", f.ids["bob"], f.all); err != nil {
+	if err := f.gw.PurgeUser(f.ctx, "", f.ids["bob"], f.all); err != nil {
 		t.Fatal(err)
 	}
 	if rs, _ := f.gw.ListPersonalRules(f.ctx, f.ids["bob"]); len(rs) != 0 {
@@ -196,7 +197,7 @@ func TestAnOwnerWithoutSubscribeIsToldNothing(t *testing.T) {
 	if _, err := conn.Exec(f.ctx, `insert into role (name, permissions, inherits) values ('reader', '{"*:read"}', '{}')`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := conn.Exec(f.ctx, `update principal_grant set role_id = (select id from role where name = 'reader') where principal_id = $1`, f.ids["alice"]); err != nil {
+	if _, err := conn.Exec(f.ctx, `update user_grant set role_id = (select id from role where name = 'reader') where user_id = $1`, f.ids["alice"]); err != nil {
 		t.Fatal(err)
 	}
 	a, err := f.gw.RaiseAlarm(f.ctx, "", "display-1", storage.AlarmSpec{Severity: "high", Message: "no video"})

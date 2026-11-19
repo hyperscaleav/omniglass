@@ -14,7 +14,7 @@ that as a **calculated** sample of its **output key**, naming the rule. The valu
 other: it shows among a component's vitals and properties and a system's data, linked back to the rule
 ("by calc rule rtt-worst"), and event rules judge it on a component like an observed sample. How it runs is on [calculations](/architecture/calculations/).
 
-Calc rules read like a registry, as [event rules](/guides/admin/rules/) do: any grant carrying
+Calc rules read like a catalog, as [event rules](/guides/admin/rules/) do: any grant carrying
 `rule:read` lists them all, with live counts over the owners you may read. **Writing** one is
 fleet-wide, so **New rule**, Edit, Disable and Delete are offered on an all-scope grant only.
 
@@ -32,16 +32,16 @@ owner you can read, the owners that need a look first: those it **failed** on, t
 then those it wrote nothing for, then those holding a value. For each, the value it last wrote and when,
 at which version; what it found no value of; on a system, the members that held none (named when you can
 read them, counted when you cannot); whether the owner is pending; and, for a system that has no
-role-bound members, since when (its last value stands, unsupported, until a member returns). The blade
+slot-bound members, since when (its last value stands, unsupported, until a member returns). The blade
 lists the first twelve; **and N more** shows the rest.
 
 ## Write a rule
 
 **New rule** opens the form:
 
-- **Name** and **Label**, as for every registry; the name is renameable later (Edit, the Name field).
-- **Derives on**: each component, or each system from its **role-bound members** (the components
-  assigned to its roles). Fixed when the rule is created.
+- **Name** and **Label**, as for every catalog; the name is renameable later (Edit, the Name field).
+- **Derives on**: each component, or each system from its **slot-bound members** (the components
+  assigned to its slots). Fixed when the rule is created.
 - **Of types** and **Or** owners: the selector, as for event rules (a type includes its subtypes); both
   empty is every owner of the kind.
 - **Reads**: one or more inputs, each a **key** (the property or metric it reads) and the **alias** the

@@ -20,11 +20,11 @@ import (
 )
 
 // TestHealthRecomputeScaleProbe is the measurement behind #1562: how the health
-// recompute an AssignRole pays grows with the fleet. It builds the corporate
+// recompute an AssignSlot pays grows with the fleet. It builds the corporate
 // plan's location tree (campus, building, floor, room, one system per room) at
 // each size, staffs every system with as many components as the plan gives
-// it, row by row through AssignRole, and reports where the time went, along
-// with the recompute alone (the one AssignRole runs), sampled as the fleet
+// it, row by row through AssignSlot, and reports where the time went, along
+// with the recompute alone (the one AssignSlot runs), sampled as the fleet
 // fills.
 //
 // It is a probe, not a gate: set HEALTH_MEASURE to the sizes (e.g. 100,1000)
@@ -60,10 +60,10 @@ func probeHealthAtSize(t *testing.T, size int) {
 	if err := gw.UpsertStandard(ctx, storage.Standard{Name: "probe-std", Label: "Probe"}); err != nil {
 		t.Fatalf("standard: %v", err)
 	}
-	if _, err := gw.SetSystemRole(ctx, "", "standard", "probe-std", storage.SystemRoleSpec{
+	if _, err := gw.SetSystemSlot(ctx, "", "standard", "probe-std", storage.SystemSlotSpec{
 		Name: "member", Label: "Member", Quorum: 1, AcceptedTypes: []string{"video-bar"}, Impact: "degraded",
 	}); err != nil {
-		t.Fatalf("role: %v", err)
+		t.Fatalf("slot: %v", err)
 	}
 	bar := storagetest.MintProduct(t, ctx, gw, "video-bar").Name
 
@@ -107,7 +107,7 @@ func probeHealthAtSize(t *testing.T, size int) {
 	}
 	built := time.Since(start)
 
-	// Every step-th AssignRole is followed by the same recompute again, timed
+	// Every step-th AssignSlot is followed by the same recompute again, timed
 	// on its own, so the sample tracks the fleet as it grows the way the
 	// recompute inside the write does. The extra pass records nothing (the
 	// verdicts it computes are already recorded), and its statements are
@@ -119,7 +119,7 @@ func probeHealthAtSize(t *testing.T, size int) {
 	timer.reset()
 	for i, s := range staffed {
 		begin := time.Now()
-		if err := gw.AssignRole(ctx, "", s.system, "member", s.component, all, all, all, all); err != nil {
+		if err := gw.AssignSlot(ctx, "", s.system, "member", s.component, all, all, all, all); err != nil {
 			t.Fatalf("assign %s: %v", s.component, err)
 		}
 		assigned += time.Since(begin)
@@ -135,12 +135,12 @@ func probeHealthAtSize(t *testing.T, size int) {
 		n++
 		timer.resume()
 	}
-	t.Logf("%d systems, %d sites, %d AssignRole: built in %s, staffed in %s (%s per AssignRole)",
+	t.Logf("%d systems, %d sites, %d AssignSlot: built in %s, staffed in %s (%s per AssignSlot)",
 		plan.Totals.Systems, len(plan.Sites), len(staffed), built.Round(time.Millisecond),
 		assigned.Round(time.Millisecond), (assigned / time.Duration(len(staffed))).Round(time.Microsecond))
 	timer.report(t, len(staffed), 8)
 
-	t.Logf("health recompute per AssignRole: %s (mean of %d, sampled through the staffing)",
+	t.Logf("health recompute per AssignSlot: %s (mean of %d, sampled through the staffing)",
 		(sampled / time.Duration(n)).Round(time.Microsecond), n)
 }
 

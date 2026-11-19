@@ -1,8 +1,8 @@
 # A scale lab pushes on its own: each site's booking service and meeting platform report unasked
 #
 # A corporate lab declares one booking service a site (#1743). Each run mints every pusher its
-# token, the seed grants its service principal telemetry:push on its site's systems and nothing
-# else, and the simulator on the site's node posts each system's bookings to POST /telemetry:push
+# token, the seed grants its service user telemetry:push on its site's systems and nothing
+# else, and the simulator on the site's outpost posts each system's bookings to POST /telemetry:push
 # every 30 seconds. It also declares one meeting platform a site (#1747): a component with a signed
 # webhook endpoint, a signing key minted for the run and never shown, and the site's systems bound
 # as its rooms, which the simulator adds and reports on every 30 seconds. Nobody pushes by hand
@@ -31,13 +31,13 @@ Wait
 Type "omniglass lab run --scenario corporate --systems 3 --plan | sed -n '/^PUSHER/,/^$/p'"
 Enter
 Wait
-Type "# Each is a service principal that may push to its site's systems and do nothing else"
+Type "# Each is a service user that may push to its site's systems and do nothing else"
 Enter
 Wait
-Type `omniglass principal list | jq -c '.principals[] | select(.service.name // "" | test("-booking-")) | {service: .service.name, grants: [.grants[] | {role, scope_kind}]}'`
+Type `omniglass user list | jq -c '.users[] | select(.machine.name // "" | test("-booking-")) | {service: .machine.name, grants: [.grants[] | {role, scope_kind}]}'`
 Enter
 Wait
-Type "# Nobody pushes by hand: the simulator posts each room's bookings with that principal's token"
+Type "# Nobody pushes by hand: the simulator posts each room's bookings with that user's token"
 Enter
 Wait
 

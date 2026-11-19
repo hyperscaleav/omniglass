@@ -12,7 +12,7 @@ import "strings"
 //
 // It lives in Go rather than in a CHECK or a NOT NULL DEFAULT for the reason the
 // reversal was made on: a stored representation that every reader has to undo is
-// the wrong representation. `NOT NULL DEFAULT ''` forced seven registry
+// the wrong representation. `NOT NULL DEFAULT ''` forced seven catalog
 // orderings to be spelled `order by nullif(label, '') nulls last`, which is the
 // read path converting the storage choice back into the thing it should have
 // been. With NULL, the orderings are `order by label nulls last, name` and the

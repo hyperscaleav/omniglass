@@ -28,7 +28,7 @@ import {
   SIMULATION_KEY,
   SIM_PROFILES_KEY,
   addSimComponent,
-  connectedNodes,
+  connectedOutposts,
   getSimulation,
   listSimProfiles,
   productGroups,
@@ -40,18 +40,18 @@ import {
   type AddComponentDraft,
   type AddSimSystemResult,
   type SimComponent,
-  type SimNode,
+  type SimOutpost,
 } from "../lib/simulation";
 
-// Simulation (#890): the simulated fleet, live. Per node a card that answers
+// Simulation (#890): the simulated fleet, live. Per outpost a card that answers
 // "is monitoring working": the simulator's link and what it may do (ports below
 // 1024, NET_ADMIN for impairments). Under them one table of every simulated
 // component, in the list shell every list page wears: a row per component with
-// what has reached it, and a brief highlight when a hit lands on it. A Node
-// column joins only when more than one node serves. A row opens the component's
+// what has reached it, and a brief highlight when a hit lands on it. An Outpost
+// column joins only when more than one outpost serves. A row opens the component's
 // drawer (status, impairment, API surface). The one primary action adds a
 // simulated component; beside it, quieter, adding a simulated system builds a
-// whole system to a standard, a simulated component per staffed role (#913). Its sidebar door shows only while a simulator is
+// whole system to a standard, a simulated component per staffed slot (#913). Its sidebar door shows only while a simulator is
 // connected; this page renders an honest face either way.
 //
 // Rows iterate stable component ids, never the objects a poll hands back: a
@@ -75,7 +75,7 @@ export default function Simulation(): JSX.Element {
   const canAdd = () => can(me.data, "simulation", "update") && can(me.data, "component", "create") && can(me.data, "endpoint", "create");
   // Adding a system writes the system, its components and their endpoints; the
   // form reads the standards and system types its selects offer, and the server
-  // reads the node and assigns the roles under system:read.
+  // reads the outpost and assigns the slots under system:read.
   const canAddSystem = () =>
     can(me.data, "simulation", "update") &&
     can(me.data, "system", "create") &&
@@ -85,7 +85,7 @@ export default function Simulation(): JSX.Element {
     can(me.data, "standard", "read") &&
     can(me.data, "system_type", "read") &&
     can(me.data, "system", "read") &&
-    can(me.data, "node", "read");
+    can(me.data, "outpost", "read");
   const [adding, setAdding] = createSignal(false);
   const [addingSystem, setAddingSystem] = createSignal(false);
   const [added, setAdded] = createSignal<AddSimSystemResult | null>(null);
@@ -105,7 +105,7 @@ export default function Simulation(): JSX.Element {
   onCleanup(() => timers.forEach(clearTimeout));
   createEffect(on(() => sim.data, (d) => {
     if (!d) return;
-    const risen = risenHits(seen, (d.nodes ?? []).flatMap((n) => n.components ?? []));
+    const risen = risenHits(seen, (d.outposts ?? []).flatMap((n) => n.components ?? []));
     if (!risen.length) return;
     const token = ++seq;
     setBlink((prev) => {
@@ -124,17 +124,17 @@ export default function Simulation(): JSX.Element {
     timers.add(t);
   }));
 
-  const nodeNames = createMemo(() => (sim.data?.nodes ?? []).map((n) => n.node), undefined, { equals: sameList });
-  const nodeBy = (name: string) => (sim.data?.nodes ?? []).find((n) => n.node === name);
-  // Every simulated component by id, with the node that serves it; rebuilt on
+  const outpostNames = createMemo(() => (sim.data?.outposts ?? []).map((n) => n.outpost), undefined, { equals: sameList });
+  const outpostBy = (name: string) => (sim.data?.outposts ?? []).find((n) => n.outpost === name);
+  // Every simulated component by id, with the outpost that serves it; rebuilt on
   // each poll, read by the rows through their stable id.
   const rowBy = createMemo(() => {
     const m = new Map<string, SimRowData>();
-    for (const n of sim.data?.nodes ?? []) for (const d of n.components ?? []) m.set(d.component_id, { node: n.node, sim: d });
+    for (const n of sim.data?.outposts ?? []) for (const d of n.components ?? []) m.set(d.component_id, { outpost: n.outpost, sim: d });
     return m;
   });
-  const canAddNow = () => canAdd() && connectedNodes(sim.data).length > 0;
-  const canAddSystemNow = () => canAddSystem() && connectedNodes(sim.data).length > 0;
+  const canAddNow = () => canAdd() && connectedOutposts(sim.data).length > 0;
+  const canAddSystemNow = () => canAddSystem() && connectedOutposts(sim.data).length > 0;
   const AddButton = () => (
     <>
       <Show when={canAddSystem()}>
@@ -182,20 +182,20 @@ export default function Simulation(): JSX.Element {
         {(r) => <AddedNote result={r()} onDismiss={() => setAdded(null)} />}
       </Show>
 
-      <Show when={sim.data && nodeNames().length === 0}>
+      <Show when={sim.data && outpostNames().length === 0}>
         <EmptyState
           title="No simulator connected"
-          hint="A simulated component is one whose product a simulator profile answers for: a loopback address that speaks HTTP, SNMP, SSH or Telnet like the real product, so collection, drivers and alarms run end to end with no hardware. Start a simulator beside a node and its components appear here."
-          command="omniglass sim run --server <url> --name <node> --token <node-token>"
+          hint="A simulated component is one whose product a simulator profile answers for: a loopback address that speaks HTTP, SNMP, SSH or Telnet like the real product, so collection, drivers and alarms run end to end with no hardware. Start a simulator beside an outpost and its components appear here."
+          command="omniglass sim run --server <url> --name <outpost> --token <outpost-token>"
         />
       </Show>
 
-      <Show when={sim.data && nodeNames().length > 0}>
+      <Show when={sim.data && outpostNames().length > 0}>
         <div class="flex flex-col gap-4">
-          <For each={nodeNames()}>
+          <For each={outpostNames()}>
             {(name) => (
-              <Show when={nodeBy(name)}>
-                {(n) => <NodeCard node={n()} />}
+              <Show when={outpostBy(name)}>
+                {(n) => <OutpostCard outpost={n()} />}
               </Show>
             )}
           </For>
@@ -209,27 +209,27 @@ export default function Simulation(): JSX.Element {
               />
             }
           >
-            <SimTable rowBy={rowBy()} byId={byId()} blink={blink()} showNode={nodeNames().length > 1} onOpen={setOpen} trailing={<AddButton />} />
+            <SimTable rowBy={rowBy()} byId={byId()} blink={blink()} showOutpost={outpostNames().length > 1} onOpen={setOpen} trailing={<AddButton />} />
           </Show>
         </div>
       </Show>
 
       <Drawer open={adding()} onClose={() => setAdding(false)} title="Add simulated component">
-        <AddComponentForm nodes={connectedNodes(sim.data)} close={() => setAdding(false)} />
+        <AddComponentForm outposts={connectedOutposts(sim.data)} close={() => setAdding(false)} />
       </Drawer>
       <Drawer open={addingSystem()} onClose={() => setAddingSystem(false)} title="Add simulated system">
-        <AddSimSystemForm nodes={connectedNodes(sim.data)} close={() => setAddingSystem(false)} onAdded={setAdded} />
+        <AddSimSystemForm outposts={connectedOutposts(sim.data)} close={() => setAddingSystem(false)} onAdded={setAdded} />
       </Drawer>
       <SimComponentDrawer id={open()} onClose={() => setOpen(null)} />
     </Page>
   );
 }
 
-type SimRowData = { node: string; sim: SimComponent };
+type SimRowData = { outpost: string; sim: SimComponent };
 
 // AddedNote: what the last add-simulated-system created, until dismissed. The
 // new components are already in the table below; this links the system they
-// belong to and names the roles it was left short, each with why.
+// belong to and names the slots it was left short, each with why.
 function AddedNote(props: { result: AddSimSystemResult; onDismiss: () => void }) {
   const n = () => (props.result.components ?? []).length;
   const short = () => props.result.unstaffed ?? [];
@@ -238,9 +238,9 @@ function AddedNote(props: { result: AddSimSystemResult; onDismiss: () => void })
       <span>
         Added simulated system{" "}
         <A href={`/systems/${props.result.system_id}`} class="font-data font-semibold hover:underline">{props.result.system}</A> on{" "}
-        <span class="font-data">{props.result.node}</span>: {n()} {n() === 1 ? "component" : "components"}
+        <span class="font-data">{props.result.outpost}</span>: {n()} {n() === 1 ? "component" : "components"}
         <Show when={short().length > 0}>
-          , short <span data-testid="sim-system-short">{short().map((r) => `${r.role} (${r.reason ?? "nothing simulated fits"})`).join(", ")}</span>
+          , short <span data-testid="sim-system-short">{short().map((r) => `${r.slot} (${r.reason ?? "nothing simulated fits"})`).join(", ")}</span>
         </Show>
         .
       </span>
@@ -275,19 +275,19 @@ const PILL_NEUTRAL = "badge badge-sm badge-ghost";
 const PILL_WARN = "badge badge-sm badge-soft badge-warning";
 const yesNo = (v: boolean) => (v ? "yes" : "no");
 
-function NodeCard(props: { node: SimNode }) {
-  const n = () => props.node;
+function OutpostCard(props: { outpost: SimOutpost }) {
+  const n = () => props.outpost;
   const imp = () => n().impairments;
   return (
-    <section class="card overflow-hidden border border-base-300 bg-base-200 p-0" data-testid="sim-node" data-node={n().node}>
+    <section class="card overflow-hidden border border-base-300 bg-base-200 p-0" data-testid="sim-outpost" data-outpost={n().outpost}>
       <div class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-base-300 px-4 py-3 text-sm">
-        <Eyebrow label="Node" hint="The node a simulator runs beside. It serves every simulated component whose endpoints sit on this node, and collection on the node polls them as it would real hardware." />
-        <span class="font-data font-medium">{n().node}</span>
+        <Eyebrow label="Outpost" hint="The outpost a simulator runs beside. It serves every simulated component whose endpoints sit on this outpost, and collection on the outpost polls them as it would real hardware." />
+        <span class="font-data font-medium">{n().outpost}</span>
         <span class={n().connected ? PILL_NEUTRAL : PILL_WARN}>{n().connected ? "connected" : "disconnected"}</span>
         <span class="text-xs text-base-content/50">last seen <span class="tnum">{rel(n().last_seen)}</span></span>
       </div>
       <div class="grid grid-cols-2 gap-x-6 gap-y-3 px-4 py-3 sm:grid-cols-3 lg:grid-cols-6">
-        <KVStacked label="Hits" value={<span class="font-data tnum font-semibold" data-testid="node-hits">{totalHits(n()).toLocaleString()}</span>} />
+        <KVStacked label="Hits" value={<span class="font-data tnum font-semibold" data-testid="outpost-hits">{totalHits(n()).toLocaleString()}</span>} />
         <KVStacked label="Components" value={<span class="font-data tnum">{(n().components ?? []).length}</span>} />
         <Fact label="Low ports" hint="Whether the simulator may bind ports below 1024. When it may not, every port is lifted by the offset, and the seeded endpoints aim at the lifted ports.">
           {yesNo(n().capabilities.low_ports)}
@@ -322,7 +322,7 @@ function Fact(props: { label: string; hint: string; children: JSX.Element }) {
 // The table's columns past Name, with the widths Name's floor is added to (the
 // list-table rule: table-fixed, every column but Name declares a width).
 const COLS: { key: string; label: string; width: number; right?: boolean }[] = [
-  { key: "node", label: "Node", width: 130 },
+  { key: "outpost", label: "Outpost", width: 130 },
   { key: "product", label: "Product", width: 160 },
   { key: "address", label: "Address", width: 112 },
   { key: "status", label: "Status", width: 264 },
@@ -339,7 +339,7 @@ function SimTable(props: {
   rowBy: Map<string, SimRowData>;
   byId: Map<string, FleetComponent>;
   blink: ReadonlyMap<string, number>;
-  showNode: boolean;
+  showOutpost: boolean;
   onOpen: (id: string) => void;
   trailing: JSX.Element;
 }) {
@@ -347,25 +347,25 @@ function SimTable(props: {
     const c = props.byId.get(id);
     return c ? entityLabel(c) : (props.rowBy.get(id)?.sim.component ?? id);
   };
-  const place = (id: string) => props.byId.get(id)?.location ?? "";
+  const location = (id: string) => props.byId.get(id)?.location ?? "";
   const ids = createMemo(
-    () => [...props.rowBy.keys()].sort((a, b) => label(a).localeCompare(label(b)) || place(a).localeCompare(place(b)) || a.localeCompare(b)),
+    () => [...props.rowBy.keys()].sort((a, b) => label(a).localeCompare(label(b)) || location(a).localeCompare(location(b)) || a.localeCompare(b)),
     undefined,
     { equals: sameList },
   );
-  const cols = () => COLS.filter((c) => c.key !== "node" || props.showNode);
+  const cols = () => COLS.filter((c) => c.key !== "outpost" || props.showOutpost);
   const minWidth = () => cols().reduce((s, c) => s + c.width, NAME_MIN_W + OPEN_W);
   const distinct = (rows: string[], get: (id: string) => string | undefined) => [...new Set(rows.map(get).filter((v): v is string => !!v))].sort();
   const filterKeys = (): FilterKey<string>[] => [
     { key: "name", type: "string", hint: "substring", get: (id) => `${label(id)} ${props.rowBy.get(id)?.sim.component ?? ""}`, values: () => [] },
-    { key: "place", type: "string", hint: "substring", get: place, values: (rows) => distinct(rows, place) },
+    { key: "location", type: "string", hint: "substring", get: location, values: (rows) => distinct(rows, location) },
     { key: "product", type: "string", hint: "exact", get: (id) => props.rowBy.get(id)?.sim.product, values: (rows) => distinct(rows, (id) => props.rowBy.get(id)?.sim.product) },
-    ...(props.showNode ? [{ key: "node", type: "string" as const, hint: "exact", get: (id: string) => props.rowBy.get(id)?.node, values: (rows: string[]) => distinct(rows, (id) => props.rowBy.get(id)?.node) }] : []),
+    ...(props.showOutpost ? [{ key: "outpost", type: "string" as const, hint: "exact", get: (id: string) => props.rowBy.get(id)?.outpost, values: (rows: string[]) => distinct(rows, (id) => props.rowBy.get(id)?.outpost) }] : []),
     { key: "status", type: "string", hint: "exact", get: (id) => props.rowBy.get(id)?.sim.status, values: () => [...SIM_STATES] },
     { key: "impairment", type: "string", hint: "substring", get: (id) => impairmentText(props.rowBy.get(id)?.sim), values: () => ["unplugged", "not applied", "none"] },
   ];
   return (
-    <ListShell filterKeys={filterKeys()} rows={ids()} placeholder="filter by name, place, product..." trailing={props.trailing}>
+    <ListShell filterKeys={filterKeys()} rows={ids()} placeholder="filter by name, location, product..." trailing={props.trailing}>
       {(filtered) => (
         <div class="overflow-x-auto">
           <table class="og-rows table table-fixed table-sm" style={{ "min-width": `${minWidth()}px` }} data-testid="sim-table">
@@ -392,7 +392,7 @@ function SimTable(props: {
               >
                 {(id) => (
                   <Show when={props.rowBy.get(id)}>
-                    {(r) => <SimRow id={id} row={r()} component={props.byId.get(id)} blink={props.blink.get(id)} showNode={props.showNode} onOpen={() => props.onOpen(id)} />}
+                    {(r) => <SimRow id={id} row={r()} component={props.byId.get(id)} blink={props.blink.get(id)} showOutpost={props.showOutpost} onOpen={() => props.onOpen(id)} />}
                   </Show>
                 )}
               </For>
@@ -411,7 +411,7 @@ const impairmentText = (d: SimComponent | undefined) => {
   return i ? `${i.summary}${i.applied ? "" : " not applied"}` : "none";
 };
 
-function SimRow(props: { id: string; row: SimRowData; component?: FleetComponent; blink?: number; showNode: boolean; onOpen: () => void }) {
+function SimRow(props: { id: string; row: SimRowData; component?: FleetComponent; blink?: number; showOutpost: boolean; onOpen: () => void }) {
   const d = () => props.row.sim;
   // The highlight is driven by its token, not a boolean: a second rise landing
   // inside the first highlight brings a new token, and the animation restarts
@@ -456,8 +456,8 @@ function SimRow(props: { id: string; row: SimRowData; component?: FleetComponent
           </Show>
         </span>
       </td>
-      <Show when={props.showNode}>
-        <td class="truncate font-data text-xs">{props.row.node}</td>
+      <Show when={props.showOutpost}>
+        <td class="truncate font-data text-xs">{props.row.outpost}</td>
       </Show>
       <td class="truncate font-data text-xs text-base-content/70" title={d().product}>{d().product}</td>
       <td class="font-data text-xs">{d().address}</td>
@@ -482,15 +482,15 @@ function SimRow(props: { id: string; row: SimRowData; component?: FleetComponent
 // picks the address (the lowest free one in the simulated block) and the
 // endpoint the collector reaches it through; the operator chooses where it is
 // served, what it is, and its name.
-function AddComponentForm(props: { nodes: string[]; close: () => void }) {
+function AddComponentForm(props: { outposts: string[]; close: () => void }) {
   const qc = useQueryClient();
   const me = useMe();
-  // Placing is optional, so a user who cannot read places adds unplaced components
+  // Placing is optional, so a user who cannot read locations adds unplaced components
   // and is never shown (or sent for) a list it would be refused.
-  const canPlace = () => can(me.data, "location", "read");
+  const canReadLocations = () => can(me.data, "location", "read");
   const profiles = useQuery(() => ({ queryKey: SIM_PROFILES_KEY, queryFn: listSimProfiles }));
-  const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations, enabled: canPlace() }));
-  const [draft, setDraft] = createSignal<AddComponentDraft>({ node: props.nodes.length === 1 ? props.nodes[0] : "", product: "", name: "", location: "" });
+  const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations, enabled: canReadLocations() }));
+  const [draft, setDraft] = createSignal<AddComponentDraft>({ outpost: props.outposts.length === 1 ? props.outposts[0] : "", product: "", name: "", location: "" });
   const [touched, setTouched] = createSignal<Partial<Record<keyof AddComponentDraft, boolean>>>({});
   const [busy, setBusy] = createSignal(false);
   const [err, setErr] = createSignal<string | null>(null);
@@ -514,14 +514,14 @@ function AddComponentForm(props: { nodes: string[]; close: () => void }) {
   async function submit() {
     if (Object.keys(errors()).length) {
       // An attempt shows every field's hint, not only the ones already touched.
-      setTouched({ node: true, product: true, name: true, location: true });
+      setTouched({ outpost: true, product: true, name: true, location: true });
       return;
     }
     setBusy(true);
     setErr(null);
     const d = draft();
     try {
-      await addSimComponent(d.node, { name: d.name.trim(), product: d.product, ...(d.location ? { location: d.location } : {}) });
+      await addSimComponent(d.outpost, { name: d.name.trim(), product: d.product, ...(d.location ? { location: d.location } : {}) });
       await Promise.all([
         qc.invalidateQueries({ queryKey: SIMULATION_KEY, exact: true }),
         qc.invalidateQueries({ queryKey: COMPONENTS_KEY }),
@@ -539,10 +539,10 @@ function AddComponentForm(props: { nodes: string[]; close: () => void }) {
       <Show when={err()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
       </Show>
-      <FieldRow label="Node" info="The node whose simulator serves the component. Its endpoints are placed on this node, so this node's collection polls it." hint={shown("node")}>
-        <select class="select select-bordered w-full font-data" aria-required="true" value={draft().node} onChange={(e) => set("node", e.currentTarget.value)} disabled={busy()}>
-          <option value="" disabled>Choose a node...</option>
-          <For each={props.nodes}>{(n) => <option value={n}>{n}</option>}</For>
+      <FieldRow label="Outpost" info="The outpost whose simulator serves the component. Its endpoints are placed on this outpost, so this outpost's collection polls it." hint={shown("outpost")}>
+        <select class="select select-bordered w-full font-data" aria-required="true" value={draft().outpost} onChange={(e) => set("outpost", e.currentTarget.value)} disabled={busy()}>
+          <option value="" disabled>Choose an outpost...</option>
+          <For each={props.outposts}>{(n) => <option value={n}>{n}</option>}</For>
         </select>
       </FieldRow>
       <FieldRow label="Product" info="What the component is. Each simulator profile answers for its own product and its variants, grouped here by profile; the product's driver decides how collection reads it." hint={shown("product")}>
@@ -569,7 +569,7 @@ function AddComponentForm(props: { nodes: string[]; close: () => void }) {
           disabled={busy()}
         />
       </FieldRow>
-      <Show when={canPlace()}>
+      <Show when={canReadLocations()}>
         <FieldRow label="Location" info="Where the component sits. Optional: an unplaced component is still served and collected.">
           <select class="select select-bordered w-full" value={draft().location} onChange={(e) => set("location", e.currentTarget.value)} disabled={busy()}>
             <option value="">(unplaced)</option>

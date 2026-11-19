@@ -8,8 +8,7 @@
 # reads the room list as records, each naming its room by id, and the
 # webhook posts name the room in their body, so each value lands on the
 # system its room id is bound to and an unbound room lands in the
-# conduit's inbox. The lab's per-room ucc-service instances stay beside it
-# (their retirement is #1390).
+# conduit's inbox.
 #
 # Course datapoints (HTTP, token auth):
 #   status.rooms.<id>.state    , idle or in-call
@@ -58,7 +57,7 @@ interfaces:
         doc: { summary: "Every room on the account with its meeting state", tags: [api, rooms] }
 
       # The webhook subscription (#1024): where the platform posts its room
-      # events and how each post is signed, as on ucc-service.
+      # events and how each post is signed.
       - match: "POST /api/webhooks"
         template: api/ucc-platform/ack.json.gotempl
         doc: { summary: "Subscribe a webhook receiver to every room's meeting events", tags: [api, webhook] }

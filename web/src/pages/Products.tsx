@@ -27,21 +27,21 @@ import { COMPONENT_TYPES_KEY, listComponentTypes, componentTypeByName } from "..
 import { VENDORS_KEY, listVendors } from "../lib/vendors";
 import { DRIVERS_KEY, listDrivers } from "../lib/drivers";
 import { useMe, can } from "../lib/auth";
-import { registryLock } from "../lib/catalog";
+import { catalogLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
 // Products: the product catalog (the model a component is an instance of, e.g.
-// "Crestron TSW-1070"), on the flat FlatList surface. A product is addressed by
+// "Kestrel VRoom"), on the flat FlatList surface. A product is addressed by
 // its kebab name (ADR-0062: the uuid is identity, the name is what an operator
 // reads and types); official rows are read-only,
 // same as the Types catalog's official rows: the Edit / Delete pair greys. A
 // product carries a kind (device/app/service; vm retired, folded into app,
-// ADR-0086), a required component_type (the device-class genus every product
+// ADR-0086), a required component_type (the device-class type every product
 // is classified under, ADR-0085, picked from the Types tree; also what a
-// system role's typed-slot guard checks, #626), an optional icon override
+// system slot's typed-slot guard checks, #626), an optional icon override
 // (default: the type's icon), and an optional vendor and driver (picked from
-// those registries).
+// those catalogs).
 
 const PRODUCT_KINDS: ProductKind[] = ["device", "app", "service"];
 
@@ -194,7 +194,7 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
       row() && !row()!.official && can(me.data, "product", "delete")
         ? { label: "Delete", tone: "danger", onClick: removeProduct }
         : undefined,
-    locked: () => registryLock(row(), me.data, "product"),
+    locked: () => catalogLock(row(), me.data, "product"),
   });
 
   return (
@@ -246,7 +246,7 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
 // CreateProductForm: the label leads and the kebab name (the
 // operator-facing address; the uuid is the database's to mint) derives from it
 // until the operator edits it by hand (lib/entities). Kind defaults to device;
-// component_type (the device-class genus, #614) is required, no default, so
+// component_type (the device-class type, #614) is required, no default, so
 // every product states its class explicitly rather than reading the silent
 // default that let a mislabeled cloud service pass as correct forever
 // (ADR-0086); vendor, driver, and icon override are optional.
@@ -297,17 +297,17 @@ export function CreateProductForm(p: { onCreated: (r: Product) => void }): JSX.E
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
       <FieldRow bind="label">
-        <input class="input input-bordered w-full" value={display()} placeholder="Crestron TSW-1070" onInput={(e) => setDisplay(e.currentTarget.value)} />
+        <input class="input input-bordered w-full" value={display()} placeholder="Kestrel VRoom" onInput={(e) => setDisplay(e.currentTarget.value)} />
       </FieldRow>
       <FieldRow bind="name" hint={nameDerived() ? "Derived from the label. Edit to set your own." : "Globally unique address, used by the API and CLI."}>
-        <input class="input input-bordered w-full font-data" value={name()} placeholder="crestron-tsw-1070" onInput={(e) => setName(e.currentTarget.value)} />
+        <input class="input input-bordered w-full font-data" value={name()} placeholder="kestrel-vroom" onInput={(e) => setName(e.currentTarget.value)} />
       </FieldRow>
       <FieldRow label="Kind" hint="What class of thing the product is.">
         <select class="select select-bordered w-full" value={kind()} onChange={(e) => setKind(e.currentTarget.value as ProductKind)}>
           <For each={PRODUCT_KINDS}>{(k) => <option value={k}>{k}</option>}</For>
         </select>
       </FieldRow>
-      <FieldRow label="Type" hint="The device-class genus this SKU is classified under. Required.">
+      <FieldRow label="Type" hint="The device-class type this SKU is classified under. Required.">
         <TypeSelect value={componentType()} onChange={setComponentType} />
       </FieldRow>
       <FieldRow label="Icon" hint="A per-SKU override. Leave blank to use the type's icon.">
@@ -323,13 +323,13 @@ export function CreateProductForm(p: { onCreated: (r: Product) => void }): JSX.E
   );
 }
 
-// VendorSelect: a vendor picker over the vendor registry, with a "None" option
+// VendorSelect: a vendor picker over the vendor catalog, with a "None" option
 // (a product need not name a vendor). Stores the vendor's name (the
 // write path resolves either form).
 function VendorSelect(p: { value: string; onChange: (v: string) => void }): JSX.Element {
   const vendors = useQuery(() => ({ queryKey: VENDORS_KEY, queryFn: listVendors }));
   const options = createMemo(() => vendors.data ?? []);
-  // The registry answers on its own schedule and the blade is often on screen
+  // The catalog answers on its own schedule and the blade is often on screen
   // first, so the value is bound through the shared binder (lib/selectvalue.ts,
   // #772) rather than a value= prop that would not re-run when the rows land.
   return (
@@ -340,7 +340,7 @@ function VendorSelect(p: { value: string; onChange: (v: string) => void }): JSX.
   );
 }
 
-// DriverSelect: a driver picker over the driver registry, with a "None" option.
+// DriverSelect: a driver picker over the driver catalog, with a "None" option.
 // Stores the driver's name (the write path resolves either form).
 function DriverSelect(p: { value: string; onChange: (v: string) => void }): JSX.Element {
   const drivers = useQuery(() => ({ queryKey: DRIVERS_KEY, queryFn: listDrivers }));

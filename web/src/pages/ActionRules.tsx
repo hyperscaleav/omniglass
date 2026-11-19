@@ -15,7 +15,7 @@ import { createIdentity, entityLabel } from "../lib/entities";
 import { useFormActions } from "../lib/formactions";
 import { bindSelectValue } from "../lib/selectvalue";
 import { can, canFleet, fleetView, useMe } from "../lib/auth";
-import { OFFICIAL_LOCK, registryLock } from "../lib/catalog";
+import { OFFICIAL_LOCK, catalogLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
 import { type BladeDef, createBladeController, useBlades, useBladeEdit } from "../lib/blades";
 import { PILL_NEUTRAL, TRANSITIONS, TRANSITION_PILL, toggled, whenError, type Transition } from "../lib/subscriptions";
@@ -48,13 +48,13 @@ import {
 
 export const ACTION_RULE_HINTS = {
   on: "Which edges of an alarm send: when it is raised, when it clears, or both. Acknowledging an alarm never sends anything.",
-  when: "A predicate over the alarm's facts (component, place, severity, severity_rank, message, rule and more). Empty always holds: every alarm transition sends. severity_rank >= 40 is high and above.",
+  when: "A predicate over the alarm's facts (component, location, severity, severity_rank, message, rule and more). Empty always holds: every alarm transition sends. severity_rank >= 40 is high and above.",
   targets: "Where it sends: one notification per target, per transition. A disabled target is skipped.",
   type: "What the message says. The official one for the transition (alarm-raised, alarm-cleared) unless you pick your own from Notifications.",
-  optOut: "Whether a member of a group this rule targets may opt themselves out of it. Off by default, so an on-call page cannot be opted out of. Turning it off withdraws every opt-out, and turning it back on does not restore them.",
+  optOut: "Whether a member of a user group this rule targets may opt themselves out of it. Off by default, so an on-call page cannot be opted out of. Turning it off withdraws every opt-out, and turning it back on does not restore them.",
   enabled: "A disabled rule queues nothing on a transition; what it queued before still delivers. Enabled again, it acts from the next transition.",
   recent: "What this rule sent lately, newest first, about components you can read, picked from the newest 500 notifications.",
-  official: "Official rules ship with Omniglass and update with it, so they are read-only.",
+  official: "Official rules ship with Omniglass and update with it, so they are read-only but for the enabled switch, which is yours: a disable survives a restart.",
 } as const;
 
 const LIST_POLL_MS = 10_000;
@@ -217,9 +217,10 @@ function ActionRuleBladeBody(p: { name: string }): JSX.Element {
     }
   }
 
-  // An official rule is read-only for everyone; a custom one offers Edit (the
-  // Drawer), the Disable / Enable switch and a kebab Delete, each on its own
-  // all-scope permission (the Rules page's footer).
+  // A custom rule offers Edit (the Drawer), the Disable / Enable switch and a
+  // kebab Delete, each on its own all-scope permission (the Rules page's
+  // footer). An official rule (the shipped routing, #1987) offers only the
+  // switch, the one part of it the seed leaves to the operator; Edit greys.
   edit.bind({
     primary: () => {
       const r = row();
@@ -227,7 +228,7 @@ function ActionRuleBladeBody(p: { name: string }): JSX.Element {
     },
     destructive: () => {
       const r = row();
-      if (!r || r.official || !canUpdate()) return undefined;
+      if (!r || !canUpdate()) return undefined;
       return r.enabled
         ? { label: "Disable", tone: "warn", onClick: () => void toggleEnabled(r) }
         : { label: "Enable", tone: "ok", onClick: () => void toggleEnabled(r) };
@@ -240,8 +241,8 @@ function ActionRuleBladeBody(p: { name: string }): JSX.Element {
     locked: () => {
       const r = row();
       if (!r) return null;
-      if (r.official) return OFFICIAL_LOCK;
-      return canUpdate() ? null : registryLock(r, fleetView(me.data), "rule");
+      if (r.official) return canUpdate() ? { edit: OFFICIAL_LOCK, delete: null } : OFFICIAL_LOCK;
+      return canUpdate() ? null : catalogLock(r, fleetView(me.data), "rule");
     },
   });
 
@@ -305,7 +306,7 @@ function ActionRuleBladeBody(p: { name: string }): JSX.Element {
 // hosts it and draws its rail. The when is written in the expression editor at
 // the action site (no sample key: it reads the alarm's fixed facts) and must
 // compile before the rule saves; the targets and the notification type are
-// picked from their registries. The name is fixed at create.
+// picked from their catalogs. The name is fixed at create.
 export function ActionRuleForm(p: { mode: "create" | "edit"; rule?: ActionRule; onSaved: (r: ActionRule) => void }): JSX.Element {
   const qc = useQueryClient();
   const me = useMe();

@@ -57,7 +57,7 @@ func New(store Store, opts egress.Options) *Notifier {
 // Pass ends the snoozes past their deadline, then delivers up to max due
 // notifications and reports how many it took (sent or not). The sweep runs
 // here, on the drain's tick, until the time primitive (#419) exists
-// (ADR-1318), and first, so a condition announced again at the end of its
+// (ADR-1318), and first, so an alarm announced again at the end of its
 // snooze is delivered in the same pass. The egress policy is read once per
 // pass; an allow list that does not parse fails every send of the pass with
 // the reason.

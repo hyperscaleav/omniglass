@@ -21,7 +21,7 @@ import {
   deleteProperty,
 } from "../lib/properties";
 import { useMe, can } from "../lib/auth";
-import { registryLock } from "../lib/catalog";
+import { catalogLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
@@ -161,7 +161,7 @@ function PropertyBladeBody(p: { name: string }): JSX.Element {
       row() && !row()!.official && can(me.data, "property_type", "delete")
         ? { label: "Delete", tone: "danger", onClick: removeProperty }
         : undefined,
-    locked: () => registryLock(row(), me.data, "property_type"),
+    locked: () => catalogLock(row(), me.data, "property_type"),
   });
 
   return (

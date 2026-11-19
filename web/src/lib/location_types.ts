@@ -1,17 +1,17 @@
 import { api } from "../api/client";
 
-// The location_type registry data layer: typed wrappers over /location-types.
-// One classifier, one module: the old lib/types.ts aggregated this registry with
+// The location_type catalog data layer: typed wrappers over /location-types.
+// One classifier, one module: the old lib/types.ts aggregated this catalog with
 // secret types behind a single query that threw if EITHER fetch failed, which
 // made secret:read (off the viewer floor) a prerequisite for reading location
-// types (#598). Each registry now stands alone, so neither page's failure can
+// types (#598). Each catalog now stands alone, so neither page's failure can
 // take down the other; secret types live in lib/secret_types.ts.
 //
 // A system's shape is NOT here: the old system_type COLUMN was promoted to the
-// STANDARD, a first-class catalog entity with its own registry and a
+// STANDARD, a first-class catalog entity with its own catalog and a
 // declared-property contract (lib/standards.ts). A component's shape is
 // likewise the product it is an instance of. The system_type NAME now belongs
-// to a different object, the coarse space taxonomy in lib/system_types.ts.
+// to a different object, the system type taxonomy in lib/system_types.ts.
 
 // ROOT_PLACEMENT is the reserved allowed_parent_types member meaning "may sit
 // at the top, no parent" (mirrors storage.RootPlacement). CreateLocationType
@@ -19,7 +19,7 @@ import { api } from "../api/client";
 export const ROOT_PLACEMENT = "root";
 
 // NameRule is a type's opt-in to NAMING the locations it classifies (#687,
-// ADR-0102): a declaration rather than a template, so the console can read the
+// ADR-0102): a declaration rather than a rule string, so the console can read the
 // shape a create would mint without re-implementing anything. Absent is the
 // opt-out, and means an operator names every location of this type.
 export type NameRule = {
@@ -79,7 +79,7 @@ export type LocationType = {
   name_rule?: NameRuleRead;
 };
 
-// The one cache key for the registry, shared by the LocationTypes page and the
+// The one cache key for the catalog, shared by the LocationTypes page and the
 // location form's type picker, so a CRUD invalidation here refetches both.
 export const LOCATION_TYPES_KEY = ["location_types"] as const;
 

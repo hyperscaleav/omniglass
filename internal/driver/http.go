@@ -135,7 +135,7 @@ func validateHTTPFieldsOff(transportName, what string, r Request) error {
 	return fmt.Errorf("driver: %s carries http request fields (method, path, query, headers, body, format, namespaces), which %q does not read", what, transportName)
 }
 
-// validateHTTPRequest refuses an http request no node could send: no path, a
+// validateHTTPRequest refuses an http request no outpost could send: no path, a
 // field another transport reads, an unknown method or format, a body where
 // none belongs, a header the client owns or a credential would ride, or a
 // template reference the family cannot render (a poll renders none; a
@@ -324,9 +324,9 @@ func checkHTTPEmit(what string, ex Extract, r Request) error {
 	return nil
 }
 
-// validateHTTPSession refuses an http session block no node could run: the
+// validateHTTPSession refuses an http session block no outpost could run: the
 // scheme and the credential come together, the credential names a secret
-// input of the scheme's type, an api key is placed where a node can put it,
+// input of the scheme's type, an api key is placed where an outpost can put it,
 // and nothing a held line session declares (a login, a re-probe, a channel)
 // rides along. The login dialog over http requests is #1114.
 func (s *Spec) validateHTTPSession() error {
@@ -354,7 +354,7 @@ func (s *Spec) validateHTTPSession() error {
 
 // validateHTTPScheme refuses a session scheme no request could carry: the
 // scheme and the credential come together, the credential names a secret
-// input of the scheme's type, and an api key is placed where a node can put
+// input of the scheme's type, and an api key is placed where an outpost can put
 // it. http's and a websocket upgrade's (#1034).
 func (s *Spec) validateHTTPScheme() error {
 	ss := s.Session

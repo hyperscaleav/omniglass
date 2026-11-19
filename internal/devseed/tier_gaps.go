@@ -4,7 +4,7 @@ package devseed
 // (#1371, the live counterpart of #1266's outcome).
 type Tier string
 
-// The tiers: a component's built-in data (the node's and the platform's own
+// The tiers: a component's built-in data (the outpost's and the platform's own
 // account of it), its collected data (a class signal from the device's API
 // beyond identity and uptime), and a system's value of its own.
 const (
@@ -31,7 +31,7 @@ type TierGap struct {
 // #1266 is done.
 var TierGaps = map[Tier]map[string]TierGap{
 	TierBuiltIn: {
-		"lyra-gn-12":     {Issue: "#1367"}, // passive gear has no endpoint of its own for a node to probe
+		"lyra-gn-12":     {Issue: "#1367"}, // passive gear has no endpoint of its own for an outpost to probe
 		"polaris-sky-c6": {Issue: "#1367"},
 	},
 	TierCollected: {

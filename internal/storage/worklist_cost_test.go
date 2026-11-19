@@ -14,16 +14,16 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// A node's worklist pull costs a number of statements that does not grow with
+// An outpost's worklist pull costs a number of statements that does not grow with
 // the endpoints it carries (#1571). The pull ran a key-pin read per ssh or tls
 // endpoint and a rejection read per component endpoint, so a 1,000-system
-// corporate lab's headquarters node (806 components, 4,434 tasks) issued about
-// 4,300 round trips per pull: past the node's 5 s pull timeout once the lab was
+// corporate lab's headquarters outpost (806 components, 4,434 tasks) issued about
+// 4,300 round trips per pull: past the outpost's 5 s pull timeout once the lab was
 // loaded, a restart loop and a lab that never came up. Batching the pins and
 // rejections left a secret resolve per (reference, component) pair, about 1,100
 // statements, until the cascade resolved every pair in one statement (#1581).
 
-// worklistProbe is a node with `endpoints` components, each carrying a tls
+// worklistProbe is an outpost with `endpoints` components, each carrying a tls
 // endpoint with its own trusted key and its own rejection and an snmp driver
 // endpoint whose community is a secret the component owns, and the worklist
 // pulled once: the statements the pull issued, the worklist it returned, and
@@ -39,8 +39,8 @@ func worklistProbe(t *testing.T, endpoints int) (int, storage.Worklist, map[stri
 		t.Fatalf("seed: %v", err)
 	}
 	all := scope.Set{All: true}
-	node, drv := "edge-w", "snmp-scalar"
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: node}, all, all); err != nil {
+	outpost, drv := "edge-w", "snmp-scalar"
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: outpost}, all, all); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: drv, Label: "SNMP Scalar", Version: "1.0.0", Spec: []byte(snmpSpec)}); err != nil {
@@ -58,13 +58,13 @@ func worklistProbe(t *testing.T, endpoints int) (int, storage.Worklist, map[stri
 			Fields: map[string]string{"community": community(i)}}, all, true); err != nil {
 			t.Fatal(err)
 		}
-		tlsEp, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "tls", Component: &comp, Node: &node,
+		tlsEp, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "tls", Component: &comp, Outpost: &outpost,
 			Params: []byte(fmt.Sprintf(`{"target":"10.0.%d.%d:51326","tls-mode":"pin"}`, i/250, i%250+1))}, all)
 		if err != nil {
 			t.Fatal(err)
 		}
-		snmpEp, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp, Node: &node,
-			Inputs: map[string]string{"host": fmt.Sprintf("10.1.%d.%d", i/250, i%250+1), "community": cred}, SecretRead: all, CanAdmin: true}, all)
+		snmpEp, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp, Outpost: &outpost,
+			Inputs: map[string]string{"host": fmt.Sprintf("10.1.%d.%d", i/250, i%250+1), "community": cred}, SecretRead: all, SecretBind: all, CanAdmin: true}, all)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -78,7 +78,7 @@ func worklistProbe(t *testing.T, endpoints int) (int, storage.Worklist, map[stri
 		t.Fatal(err)
 	}
 	counter.Reset()
-	wl, err := gw.NodeWorklist(ctx, node)
+	wl, err := gw.OutpostWorklist(ctx, outpost)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,12 +89,12 @@ func community(i int) string   { return fmt.Sprintf("community-%d", i) }
 func pinOf(i int) string       { return fmt.Sprintf("SHA256:%043d", i) }
 func rejectionOf(i int) string { return fmt.Sprintf("rejected %d", i) }
 
-func TestNodeWorklistStatementsDoNotGrowWithEndpoints(t *testing.T) {
+func TestOutpostWorklistStatementsDoNotGrowWithEndpoints(t *testing.T) {
 	t.Parallel()
 	small, _, _ := worklistProbe(t, 10)
 	n, wl, owner := worklistProbe(t, 100)
 	if n != small {
-		t.Errorf("a worklist of 100 components cost %d statements, 10 cost %d: the pull must cost the same however many endpoints the node carries", n, small)
+		t.Errorf("a worklist of 100 components cost %d statements, 10 cost %d: the pull must cost the same however many endpoints the outpost carries", n, small)
 	}
 	// The batched reads hand each endpoint its own pin, its own rejection and
 	// its own component's secret, and nothing of another endpoint's.

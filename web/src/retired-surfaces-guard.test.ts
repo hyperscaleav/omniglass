@@ -28,31 +28,31 @@ const RETIRED = [
   ["defaultWidgets", "the summary board's config; retired with the board"],
   ["og-loc-widgets", "the summary board's stored preference; retired with the board"],
   // The inventory-era detail panels, unmounted when the classic faces retired
-  // (#806): the workspace's header, Activity tab and roles surface replaced them.
+  // (#806): the workspace's header, Activity tab and slots surface replaced them.
   ["HealthPanel", "the classic detail's health panel; the workspace header and Activity tab replaced it"],
-  ["MembersPanel", "the classic detail's members panel; staffing a role is how a member is bound"],
+  ["MembersPanel", "the classic detail's members panel; staffing a slot is how a member is bound"],
   // Explore's renderer library and the inventory tables (#861, #868): the
-  // outline of places replaced the cards, bands, mosaic and matrix faces, the
+  // outline of locations replaced the cards, bands, mosaic and matrix faces, the
   // saved views over them, and the table face with its kind tabs.
-  ["sectionsFor", "the cards face's section builder; the outline is one tree of places"],
+  ["sectionsFor", "the cards face's section builder; the outline is one tree of locations"],
   ["cutTypeFor", "the level cut; the outline folds single-child chains instead"],
   ["foldToBudget", "the renderers' space budget; the outline has no canvas to budget"],
-  ["matrixFor", "the standards matrix; a place's row names its standard"],
+  ["matrixFor", "the standards matrix; a location's row names its standard"],
   ["layoutPx", "the mosaic's pixel layout; the outline has no canvas to tile"],
-  ["fillFor", "the mosaic's share fill; a place counts its systems by verdict instead"],
+  ["fillFor", "the mosaic's share fill; a location counts its systems by verdict instead"],
   ["explore-mosaic", "the mosaic face; retired with the renderer library"],
   ["explore-matrix", "the matrix face; retired with the renderer library"],
   ["MatrixFace", "the standards matrix face; retired with the matrix"],
-  ["DotField", "the dot field; a place's health is four counted slots"],
+  ["DotField", "the dot field; a location's health is four counted slots"],
   ["STOCK_PRESETS", "the saved renderer views; the filter rides the address instead"],
   ['"explore-face"', "the renderer switch; the outline is the one view"],
   ["explore-presets", "the saved-view menu; retired with the presets"],
   ["explore-section-head", "the drilled section header; a row's + creates where you stand"],
-  ["fleet-list-face", "the table face; the outline lists every place, system and component"],
+  ["fleet-list-face", "the table face; the outline lists every location, system and component"],
   // The workspaces the audit found speaking those retired idioms (#872): a
-  // place's band canvas and its cards, a counts line over each detail, the KPI
+  // location's band canvas and its cards, a counts line over each detail, the KPI
   // tiles, and the component cards. A detail view is one view per system, its
-  // place as context, its components in the outline's row idiom.
+  // location as context, its components in the outline's row idiom.
   ["SystemCard", "the system card grid; a system's brief card is SystemSummary, its components are rows"],
   ["FleetShell", "the workspaces' counts-line frame; the subject card's header says each fact once"],
   ["FleetRows", "the location page's list face; a folder lists what is beneath it as the outline"],
@@ -64,7 +64,7 @@ const RETIRED = [
   ["view-toggle", "the cards/list toggle; a folder has one face"],
   ["kpi-tiles", "the KPI tiles; the Data section says each metric once"],
   ["compcard-", "the component cards; a system's components are rows"],
-  ["Location follows the primary system", "copy the model does not back: a component's place is its own (#862)"],
+  ["Location follows the primary system", "copy the model does not back: a component's location is its own (#862)"],
 ] as const;
 
 function walk(dir: string, out: string[] = []): string[] {

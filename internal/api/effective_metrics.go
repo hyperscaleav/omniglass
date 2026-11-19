@@ -23,6 +23,7 @@ type effectiveMetricBody struct {
 	MetricTypeID   string               `json:"metric_type_id" doc:"The catalog metric's uuid, the stable form of metric_type_name"`
 	Label          string               `json:"label,omitempty" doc:"The metric's human label; omitted when unset"`
 	DataType       string               `json:"data_type" doc:"The numeric value type, from the metric catalog"`
+	Unit           *string              `json:"unit,omitempty" doc:"The display unit of the series (ms, dB, percent), from the metric catalog; omitted when the type names none"`
 	Required       bool                 `json:"required" doc:"Whether the contract requires the metric; always false off-contract"`
 	IsSampled      bool                 `json:"is_sampled" doc:"True when the series holds an observed or calculated sample"`
 	FromContract   bool                 `json:"from_contract" doc:"True when the owner's classifier declares the metric; false for a series landing directly on the owner"`
@@ -50,6 +51,7 @@ func toEffectiveMetricBody(e *storage.EffectiveMetric) effectiveMetricBody {
 		MetricTypeID:   e.MetricTypeID,
 		Label:          e.Label,
 		DataType:       e.DataType,
+		Unit:           ptrOrNil(e.Unit),
 		Required:       e.Required,
 		IsSampled:      e.IsSampled,
 		FromContract:   e.FromContract,
@@ -120,6 +122,7 @@ func registerEffectiveMetricRoutes(api huma.API, a *authenticator, gw storage.Ga
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-system-metrics",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/systems/{name}/metrics",
 		Summary:     "List a system's effective metrics",
@@ -137,6 +140,7 @@ func registerEffectiveMetricRoutes(api huma.API, a *authenticator, gw storage.Ga
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-location-metrics",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/locations/{name}/metrics",
 		Summary:     "List a location's effective metrics",

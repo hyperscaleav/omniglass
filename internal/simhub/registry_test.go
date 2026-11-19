@@ -24,7 +24,7 @@ func TestRegistryCountsHitsOnListedDevices(t *testing.T) {
 			{ComponentID: "c1", Protocol: "http", At: at(1)},
 			{ComponentID: "c1", Protocol: "snmp", At: at(3)},
 			{ComponentID: "c1", Protocol: "http", At: at(2)},
-			{ComponentID: "c9", Protocol: "http", At: at(4)}, // not handed to this node
+			{ComponentID: "c9", Protocol: "http", At: at(4)}, // not handed to this outpost
 		},
 	})
 	if acc != 3 || rej != 1 {
@@ -32,7 +32,7 @@ func TestRegistryCountsHitsOnListedDevices(t *testing.T) {
 	}
 	st, ok := r.Status("edge-a")
 	if !ok {
-		t.Fatal("no status for a node that pulled")
+		t.Fatal("no status for an outpost that pulled")
 	}
 	if !st.Capabilities.LowPorts || !st.LastSeen.Equal(at(0)) {
 		t.Fatalf("status = %+v", st)
@@ -75,7 +75,7 @@ func TestRegistryCountsAWebsocketHit(t *testing.T) {
 
 // A hit the hub drops for its protocol used to vanish: the websocket drop
 // (#1366) read as a component with no hits. The hub now says so, once for each
-// protocol it will not count, naming the node, and bounded so a credential
+// protocol it will not count, naming the outpost, and bounded so a credential
 // reporting made-up protocols cannot grow its memory or its log.
 func TestRegistryTellsOnceForEachProtocolItWillNotCount(t *testing.T) {
 	var buf bytes.Buffer
@@ -89,7 +89,7 @@ func TestRegistryTellsOnceForEachProtocolItWillNotCount(t *testing.T) {
 	r.Report("edge-a", collection.SimHitBatch{Hits: []collection.SimHit{
 		{ComponentID: "c1", Protocol: "made-up-1"}, {ComponentID: "c1", Protocol: "made-up-1"},
 		{ComponentID: "c1", Protocol: "made-up-2"}, {ComponentID: "c1", Protocol: "http"},
-		{ComponentID: "c9", Protocol: "made-up-3"}, // not handed to this node: the ordinary rejection, said nothing of
+		{ComponentID: "c9", Protocol: "made-up-3"}, // not handed to this outpost: the ordinary rejection, said nothing of
 	}})
 	r.Report("edge-a", collection.SimHitBatch{Hits: []collection.SimHit{{ComponentID: "c1", Protocol: "made-up-1"}}})
 	logs := buf.String()
@@ -98,8 +98,8 @@ func TestRegistryTellsOnceForEachProtocolItWillNotCount(t *testing.T) {
 			t.Errorf("told %d times of %s, want once:\n%s", n, p, logs)
 		}
 	}
-	if !strings.Contains(logs, "node=edge-a") {
-		t.Errorf("the notice does not name the node:\n%s", logs)
+	if !strings.Contains(logs, "outpost=edge-a") {
+		t.Errorf("the notice does not name the outpost:\n%s", logs)
 	}
 	if strings.Contains(logs, "made-up-3") || strings.Contains(logs, "protocol=http") {
 		t.Errorf("told of a hit that was not dropped for its protocol:\n%s", logs)
@@ -123,7 +123,7 @@ func TestRegistryRejectsReportsBeforeAPull(t *testing.T) {
 		t.Fatalf("accepted %d rejected %d before any pull", acc, rej)
 	}
 	if _, ok := r.Status("edge-a"); ok {
-		t.Fatal("status exists for a node that never pulled")
+		t.Fatal("status exists for an outpost that never pulled")
 	}
 }
 
@@ -134,7 +134,7 @@ func TestRegistryForgetsDevicesDroppedFromTheList(t *testing.T) {
 	r.Pulled("edge-a", collection.SimCapabilities{}, []string{"c1"})
 	st, _ := r.Status("edge-a")
 	if _, ok := st.Devices["c2"]; ok {
-		t.Fatal("c2 kept after the node stopped listing it")
+		t.Fatal("c2 kept after the outpost stopped listing it")
 	}
 	if acc, _ := r.Report("edge-a", collection.SimHitBatch{Hits: []collection.SimHit{{ComponentID: "c2", Protocol: "http"}}}); acc != 0 {
 		t.Fatal("hit accepted for a dropped device")
@@ -205,27 +205,27 @@ func TestListedSinceIsTheFirstHandover(t *testing.T) {
 	}
 }
 
-func TestRegistryForgetDropsANode(t *testing.T) {
+func TestRegistryForgetDropsAOutpost(t *testing.T) {
 	r := New()
 	r.now = func() time.Time { return at(0) }
 	r.Pulled("edge-a", collection.SimCapabilities{}, []string{"c1"})
 	r.Pulled("edge-b", collection.SimCapabilities{}, []string{"c2"})
 
 	r.Forget("edge-a")
-	r.Forget("never-pulled") // forgetting an unknown node is a no-op
+	r.Forget("never-pulled") // forgetting an unknown outpost is a no-op
 
-	if got := r.Nodes(); len(got) != 1 || got[0] != "edge-b" {
-		t.Fatalf("Nodes() = %v, want [edge-b]", got)
+	if got := r.Outposts(); len(got) != 1 || got[0] != "edge-b" {
+		t.Fatalf("Outposts() = %v, want [edge-b]", got)
 	}
 	if _, ok := r.Status("edge-a"); ok {
-		t.Fatal("Status still answers for a forgotten node")
+		t.Fatal("Status still answers for a forgotten outpost")
 	}
 	if acc, rej := r.Report("edge-a", collection.SimHitBatch{Hits: []collection.SimHit{{ComponentID: "c1", Protocol: "http"}}}); acc != 0 || rej != 1 {
-		t.Fatalf("a forgotten node's report: accepted %d rejected %d, want 0 and 1", acc, rej)
+		t.Fatalf("a forgotten outpost's report: accepted %d rejected %d, want 0 and 1", acc, rej)
 	}
 }
 
-func TestRegistryAgesOutASilentNode(t *testing.T) {
+func TestRegistryAgesOutASilentOutpost(t *testing.T) {
 	r := New()
 	now := at(0)
 	r.now = func() time.Time { return now }
@@ -233,31 +233,31 @@ func TestRegistryAgesOutASilentNode(t *testing.T) {
 	r.Pulled("reports", collection.SimCapabilities{}, []string{"c2"})
 
 	now = at(int(SilenceTTL/time.Second) - 1)
-	if got := r.Nodes(); len(got) != 2 {
-		t.Fatalf("inside the TTL Nodes() = %v, want both", got)
+	if got := r.Outposts(); len(got) != 2 {
+		t.Fatalf("inside the TTL Outposts() = %v, want both", got)
 	}
-	// A report is hearing from the simulator: it keeps the node listed
+	// A report is hearing from the simulator: it keeps the outpost listed
 	// without moving its pull time.
 	r.Report("reports", collection.SimHitBatch{Serving: []string{"c2"}})
 
 	now = at(int(SilenceTTL/time.Second) + 1)
-	if got := r.Nodes(); len(got) != 1 || got[0] != "reports" {
-		t.Fatalf("past the TTL Nodes() = %v, want [reports]", got)
+	if got := r.Outposts(); len(got) != 1 || got[0] != "reports" {
+		t.Fatalf("past the TTL Outposts() = %v, want [reports]", got)
 	}
 	if _, ok := r.Status("silent"); ok {
-		t.Fatal("Status still answers for a node silent past the TTL")
+		t.Fatal("Status still answers for an outpost silent past the TTL")
 	}
 	if st, ok := r.Status("reports"); !ok || !st.LastSeen.Equal(at(0)) {
 		t.Fatalf("a report moved the pull time: %+v %v", st, ok)
 	}
 
 	now = at(2*int(SilenceTTL/time.Second) + 2)
-	if got := r.Nodes(); len(got) != 0 {
-		t.Fatalf("a node silent again past the TTL stays listed: %v", got)
+	if got := r.Outposts(); len(got) != 0 {
+		t.Fatalf("an outpost silent again past the TTL stays listed: %v", got)
 	}
 }
 
-func TestRegistryTakesANodeBackAfterEviction(t *testing.T) {
+func TestRegistryTakesAOutpostBackAfterEviction(t *testing.T) {
 	r := New()
 	now := at(0)
 	r.now = func() time.Time { return now }
@@ -265,8 +265,8 @@ func TestRegistryTakesANodeBackAfterEviction(t *testing.T) {
 	r.Report("edge-a", collection.SimHitBatch{Serving: []string{"c1"}, Hits: []collection.SimHit{{ComponentID: "c1", Protocol: "http"}}})
 
 	now = at(int(SilenceTTL/time.Second) + 1)
-	if len(r.Nodes()) != 0 {
-		t.Fatal("node not evicted")
+	if len(r.Outposts()) != 0 {
+		t.Fatal("outpost not evicted")
 	}
 	r.Pulled("edge-a", collection.SimCapabilities{LowPorts: true}, []string{"c1"})
 
@@ -275,9 +275,9 @@ func TestRegistryTakesANodeBackAfterEviction(t *testing.T) {
 		t.Fatalf("after re-pull: %+v %v", st, ok)
 	}
 	if len(st.Devices) != 0 || len(st.Serving) != 0 {
-		t.Fatalf("the re-pulled node carries old state: %+v", st)
+		t.Fatalf("the re-pulled outpost carries old state: %+v", st)
 	}
-	if got := r.Nodes(); len(got) != 1 {
-		t.Fatalf("Nodes() = %v, want [edge-a]", got)
+	if got := r.Outposts(); len(got) != 1 {
+		t.Fatalf("Outposts() = %v, want [edge-a]", got)
 	}
 }

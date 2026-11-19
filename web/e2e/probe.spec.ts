@@ -14,7 +14,7 @@ import { locate, parseWalkthrough, runSetup } from "./walkthroughlib.mjs";
 // OG_TOKEN, and its ready condition waited for, as the recorder does both.
 //
 // Routes come first and walkthroughs after, since a walkthrough may change
-// what a route shows (one renames a place).
+// what a route shows (one renames a location).
 const OUT = process.env.OG_PROBE_OUT;
 const USER = process.env.OG_E2E_USER;
 const PASSWORD = process.env.OG_E2E_PASSWORD;

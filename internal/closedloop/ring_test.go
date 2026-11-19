@@ -10,24 +10,26 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/collection"
 )
 
-// fakeSource scripts a node's reads by tick: tick k carries 60k http
+// fakeSource scripts an outpost's reads by tick: tick k carries 60k http
 // requests and 6k batches on top of a base, every one of them carried.
 type fakeSource struct {
 	tick       int
 	impairedAt map[int]bool // ticks whose sim reads carry an applied impairment
-	restartAt  int          // the tick the node's sim and node start again; 0 for never
+	restartAt  int          // the tick the outpost's sim and outpost start again; 0 for never
+	syncedAt   int          // the first tick the sim has synced its fleet; reads before it are generation 0
+	changeAt   int          // the tick a sync is changing the fleet, the next generation after it; 0 for never
 	fail       bool
 	receipts   []receiptCall
 }
 
 type receiptCall struct {
-	node                   string
+	outpost                string
 	from, start, end, next time.Time
 }
 
-func (f *fakeSource) Observe(_ context.Context, node string) (collection.EndpointObservation, map[string]DeviceRead, error) {
+func (f *fakeSource) Observe(_ context.Context, outpost string) (collection.EndpointObservation, map[string]DeviceRead, error) {
 	if f.fail {
-		return collection.EndpointObservation{}, nil, errors.New("node did not answer")
+		return collection.EndpointObservation{}, nil, errors.New("outpost did not answer")
 	}
 	k, started := int64(f.tick), simStarted
 	base := int64(100)
@@ -40,9 +42,17 @@ func (f *fakeSource) Observe(_ context.Context, node string) (collection.Endpoin
 	if f.impairedAt[f.tick] {
 		sim.Impaired = 1
 	}
+	switch {
+	case f.tick < f.syncedAt:
+		sim.FleetGeneration = 0
+	case f.changeAt > 0 && f.tick == f.changeAt:
+		sim.FleetChanging = true
+	case f.changeAt > 0 && f.tick > f.changeAt:
+		sim.FleetGeneration = 2
+	}
 	obs := collection.EndpointObservation{
 		SimBefore: sim,
-		Node: collection.RequestTallySnapshot{Node: node, At: at, Started: started, BatchesAcknowledged: base/10 + 6*k,
+		Outpost: collection.RequestTallySnapshot{Outpost: outpost, At: at, Started: started, BatchesAcknowledged: base/10 + 6*k,
 			Transports: []collection.TallyCounters{sent("http", base+60*k, base+60*k)}},
 		SimAfter: sim,
 	}
@@ -56,9 +66,9 @@ func (f *fakeSource) Targets(context.Context) (map[string][]PollTarget, error) {
 	return map[string][]PollTarget{"edge": {{ComponentID: "c-http", Transport: "http", Interval: 2 * time.Second}}}, nil
 }
 
-// Receipts answers a node's acknowledged batches over the window, all landed.
-func (f *fakeSource) Receipts(_ context.Context, node string, from, start, end, next time.Time) (ReceiptCount, error) {
-	f.receipts = append(f.receipts, receiptCall{node, from, start, end, next})
+// Receipts answers an outpost's acknowledged batches over the window, all landed.
+func (f *fakeSource) Receipts(_ context.Context, outpost string, from, start, end, next time.Time) (ReceiptCount, error) {
+	f.receipts = append(f.receipts, receiptCall{outpost, from, start, end, next})
 	return ReceiptCount{Landed: int64(end.Sub(start)/time.Minute) * 6}, nil
 }
 
@@ -68,7 +78,7 @@ func ringAt(src *fakeSource, span int) *Ring {
 }
 
 // take advances the source to tick and takes a bracket of edge.
-func take(t *testing.T, r *Ring, src *fakeSource, tick int) NodeWindow {
+func take(t *testing.T, r *Ring, src *fakeSource, tick int) OutpostWindow {
 	t.Helper()
 	src.tick = tick
 	r.Take(context.Background(), []string{"edge"})
@@ -80,7 +90,7 @@ func take(t *testing.T, r *Ring, src *fakeSource, tick int) NodeWindow {
 }
 
 // healthy is whether every gap with something in reads a 0 loss ratio.
-func healthy(t *testing.T, w NodeWindow) {
+func healthy(t *testing.T, w OutpostWindow) {
 	t.Helper()
 	if len(w.Gaps) == 0 {
 		t.Fatalf("window %+v has no gaps", w)
@@ -157,7 +167,7 @@ func TestRingCountsReceiptsAtTheNextBracket(t *testing.T) {
 func TestRingImpairmentInsideTheWindow(t *testing.T) {
 	src := &fakeSource{impairedAt: map[int]bool{2: true}}
 	r := ringAt(src, 3)
-	var w NodeWindow
+	var w OutpostWindow
 	for tick := range 5 {
 		w = take(t, r, src, tick)
 	}
@@ -198,9 +208,35 @@ func TestRingRestartReadsForThatWindowOnly(t *testing.T) {
 	healthy(t, w)
 }
 
-// A node whose read fails keeps its brackets and says why; a node no longer
+// A window holding a read from before the sim's first sync, or across a sync
+// that changed its fleet, reads restarted until it slides past (#1895); the
+// windows on either side, over one fleet, measure healthy.
+func TestRingFleetChangeReadsForThoseWindowsOnly(t *testing.T) {
+	src := &fakeSource{syncedAt: 2, changeAt: 6}
+	r := ringAt(src, 2)
+	want := map[int]string{
+		2: WindowRestarted, 3: WindowRestarted, 4: WindowRestarted, // a read before the first sync
+		5: WindowMeasured, 6: WindowMeasured,
+		7: WindowRestarted, 8: WindowRestarted, 9: WindowRestarted, // the change at 6, then generation 2
+		10: WindowMeasured,
+	}
+	for tick := range 11 {
+		w := take(t, r, src, tick)
+		if tick < 2 {
+			continue
+		}
+		if w.State != want[tick] {
+			t.Fatalf("tick %d: %+v, want %s", tick, w, want[tick])
+		}
+		if want[tick] == WindowMeasured {
+			healthy(t, w)
+		}
+	}
+}
+
+// An outpost whose read fails keeps its brackets and says why; an outpost no longer
 // listed is dropped, so one that comes back warms up again.
-func TestRingFailedReadAndDroppedNode(t *testing.T) {
+func TestRingFailedReadAndDroppedOutpost(t *testing.T) {
 	src := &fakeSource{}
 	r := ringAt(src, 2)
 	for tick := range 3 {
@@ -214,7 +250,7 @@ func TestRingFailedReadAndDroppedNode(t *testing.T) {
 	src.fail = false
 	r.Take(context.Background(), nil)
 	if _, ok := r.Window("edge"); ok {
-		t.Fatal("a node no longer listed kept its window")
+		t.Fatal("an outpost no longer listed kept its window")
 	}
 	if w := take(t, r, src, 5); w.State != WindowWarmingUp {
 		t.Fatalf("back again: %+v, want warming up", w)
@@ -258,6 +294,6 @@ func TestRingRunTicksAtItsBracket(t *testing.T) {
 	calls := 0
 	r.Run(ctx, func() []string { calls++; return nil })
 	if calls < 4 {
-		t.Fatalf("Run listed nodes %d times in 150ms at a 20ms bracket, want at least 4", calls)
+		t.Fatalf("Run listed outposts %d times in 150ms at a 20ms bracket, want at least 4", calls)
 	}
 }

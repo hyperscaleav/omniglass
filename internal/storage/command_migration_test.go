@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// TestCommandPillarMigration asserts the #396 schema: the command_type registry (with
+// TestCommandPillarMigration asserts the #396 schema: the command_type catalog (with
 // its settle window and target-property pointer) and the command invocation table
 // (over the owner arc) exist with the expected columns and constraints.
 func TestCommandPillarMigration(t *testing.T) {
@@ -16,7 +16,7 @@ func TestCommandPillarMigration(t *testing.T) {
 	ctx := context.Background()
 	conn := connectMigrated(t)
 
-	// The command_type registry exists and is keyed uniquely by name.
+	// The command_type catalog exists and is keyed uniquely by name.
 	mustExec(t, conn, `insert into command_type (name, label, settle_window_seconds) values ('set-input', 'Set input', 30)`)
 	if _, err := conn.Exec(ctx, `insert into command_type (name) values ('set-input')`); err == nil {
 		t.Error("expected command_type.name unique to reject a duplicate")

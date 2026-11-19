@@ -16,7 +16,7 @@ import (
 // TestCommandTypeAPI drives the /command-types catalog over HTTP: an owner registers,
 // reads, updates, and deletes a custom command type (with a settle window and a target
 // property); an official (seeded) type is read-only; a malformed name, a duplicate, and
-// an unknown target property are rejected; an ungranted principal is forbidden to
+// an unknown target property are rejected; an ungranted user is forbidden to
 // create. Mirrors the property_type and event_type catalog e2e.
 func TestCommandTypeAPI(t *testing.T) {
 	t.Parallel()
@@ -193,7 +193,66 @@ func TestCommandTypeAPI(t *testing.T) {
 	// Delete the custom command type.
 	c.do(ownerTok, http.MethodDelete, "/command-types/set-dimmer", nil, http.StatusNoContent)
 
-	// An ungranted principal is forbidden to create.
-	noneTok := principalWithGrants(t, ctx, dsn, "nocmds", nil)
+	// An ungranted user is forbidden to create.
+	noneTok := userWithGrants(t, ctx, dsn, "nocmds", nil)
 	c.do(noneTok, http.MethodPost, "/command-types", map[string]any{"name": "nope_cmd"}, http.StatusForbidden)
+}
+
+// A nullable JSON Schema object has no empty value to overload, so params_schema
+// clears by being named in update_mask with no value (#1189, ADR-0106's rule
+// for a nullable object). Omitting it leaves it, a value replaces it, and a
+// mask naming other fields leaves it alone.
+func TestCommandTypeParamsSchemaClearsUnderUpdateMask(t *testing.T) {
+	t.Parallel()
+	dsn := seededDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	ownerTok := bootstrapOwnerTok(t, ctx, gw)
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	c.do(ownerTok, http.MethodPost, "/command-types", map[string]any{
+		"name":          "reboot-now",
+		"params_schema": map[string]any{"type": "object"},
+	}, http.StatusCreated)
+
+	patch := func(body map[string]any) map[string]json.RawMessage {
+		t.Helper()
+		var got map[string]json.RawMessage
+		if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/command-types/reboot-now", body, http.StatusOK), &got); err != nil {
+			t.Fatalf("decode patch: %v", err)
+		}
+		return got
+	}
+	hasSchema := func(step string, got map[string]json.RawMessage, wantSchema string) {
+		t.Helper()
+		raw, ok := got["params_schema"]
+		if wantSchema == "" {
+			if ok && string(raw) != "null" {
+				t.Fatalf("%s: params_schema = %s, want none", step, raw)
+			}
+			return
+		}
+		if !ok || !strings.Contains(string(raw), wantSchema) {
+			t.Fatalf("%s: params_schema = %s, want it to carry %s", step, raw, wantSchema)
+		}
+	}
+
+	hasSchema("omitted", patch(map[string]any{"label": "A label"}), `"object"`)
+	hasSchema("replaced", patch(map[string]any{"params_schema": map[string]any{"type": "string"}}), `"string"`)
+	// A mask naming another field leaves the schema, even though it is not in the body.
+	hasSchema("mask names another field", patch(map[string]any{"label": "Again", "update_mask": []string{"label"}}), `"string"`)
+	// Naming the field with no value clears it, on the response and on a re-read.
+	hasSchema("cleared", patch(map[string]any{"update_mask": []string{"params_schema"}}), "")
+	var reread map[string]json.RawMessage
+	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/command-types/reboot-now", nil, http.StatusOK), &reread)
+	hasSchema("reread", reread, "")
+	// A mask naming a field the route does not patch is a 422, never a no-op.
+	c.do(ownerTok, http.MethodPatch, "/command-types/reboot-now",
+		map[string]any{"update_mask": []string{"name"}}, http.StatusUnprocessableEntity)
 }

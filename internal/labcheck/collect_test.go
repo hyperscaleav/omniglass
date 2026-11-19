@@ -30,7 +30,7 @@ func (l *fakeLab) routes() map[string]any {
 		return map[string]any{"metric_type_name": name, "is_sampled": true, "instance": "ssh"}
 	}
 	var metrics []any
-	for _, k := range []string{"tcp-connect-time", "ssh-handshake-time", "poll-duration"} {
+	for _, k := range []string{"tcp-connect-time", "ssh-handshake-time", "poll-duration", "poll-cpu-time"} {
 		if k != l.dropBuiltIn && l.endpoint {
 			metrics = append(metrics, instance(k))
 		}
@@ -64,17 +64,18 @@ func (l *fakeLab) routes() map[string]any {
 	}
 	return map[string]any{
 		"/property-types": map[string]any{"properties": []any{
-			map[string]any{"name": "endpoint-reachable", "writer_class": "node-probe"},
-			map[string]any{"name": "tcp-open", "writer_class": "node-probe"},
-			map[string]any{"name": "endpoint-responsive", "writer_class": "node-probe"},
-			map[string]any{"name": "session-state", "writer_class": "node-probe"},
+			map[string]any{"name": "endpoint-reachable", "writer_class": "outpost-probe"},
+			map[string]any{"name": "tcp-open", "writer_class": "outpost-probe"},
+			map[string]any{"name": "endpoint-responsive", "writer_class": "outpost-probe"},
+			map[string]any{"name": "session-state", "writer_class": "outpost-probe"},
 			map[string]any{"name": "power-state", "writer_class": "collected"},
 			map[string]any{"name": "model-number", "writer_class": "collected"},
 		}},
 		"/metric-types": map[string]any{"metric_types": []any{
-			map[string]any{"name": "tcp-connect-time", "writer_class": "node-probe"},
-			map[string]any{"name": "ssh-handshake-time", "writer_class": "node-probe"},
-			map[string]any{"name": "poll-duration", "writer_class": "node-probe"},
+			map[string]any{"name": "tcp-connect-time", "writer_class": "outpost-probe"},
+			map[string]any{"name": "ssh-handshake-time", "writer_class": "outpost-probe"},
+			map[string]any{"name": "poll-duration", "writer_class": "outpost-probe"},
+			map[string]any{"name": "poll-cpu-time", "writer_class": "outpost-probe"},
 			map[string]any{"name": "uptime", "writer_class": "collected"},
 			map[string]any{"name": "booking-count", "writer_class": "collected"},
 		}},
@@ -155,7 +156,7 @@ func TestRemovingAProfileFailsCollectedNamingTheComponent(t *testing.T) {
 }
 
 func TestAMissingMetricAndAMissingPropertyEachFailBuiltIn(t *testing.T) {
-	for _, key := range []string{"poll-duration", "ssh-handshake-time", "endpoint-responsive", "session-state"} {
+	for _, key := range []string{"poll-duration", "poll-cpu-time", "ssh-handshake-time", "endpoint-responsive", "session-state"} {
 		l := newFakeLab()
 		l.dropBuiltIn = key
 		fs := check(t, l, nil)

@@ -22,7 +22,7 @@ import { describeError } from "../lib/format";
 // TagAdder is the entity detail-blade panel for applying tags: it lists the tags
 // bound DIRECTLY on the entity as removable colored chips, and (with the entity's
 // own :update) offers a staged key -> value add row. The key stage autocompletes
-// the registry, filtered by applies_to for this entity kind and by what is already
+// the catalog, filtered by applies_to for this entity kind and by what is already
 // bound; with tag:create, a "create new" affordance opens the shared Tags create
 // form in a drawer and returns with the minted key selected. Writes are immediate
 // (each is the ordinary entity write), so there is no separate Save. The resolved
@@ -30,7 +30,7 @@ import { describeError } from "../lib/format";
 export default function TagAdder(props: { kind: EntityKind; name: string; canUpdate: boolean; canCreateKey: boolean }): JSX.Element {
   const qc = useQueryClient();
   const bindings = useQuery(() => ({ queryKey: entityTagsKey(props.kind, props.name), queryFn: () => listEntityTags(props.kind, props.name) }));
-  const registry = useQuery(() => ({ queryKey: TAGS_KEY, queryFn: listTags }));
+  const catalog = useQuery(() => ({ queryKey: TAGS_KEY, queryFn: listTags }));
 
   const [keyQuery, setKeyQuery] = createSignal("");
   const [keyFocused, setKeyFocused] = createSignal(false);
@@ -43,13 +43,13 @@ export default function TagAdder(props: { kind: EntityKind; name: string; canUpd
   const [valueFocused, setValueFocused] = createSignal(false);
 
   const boundKeys = () => (bindings.data ?? []).map((b) => b.key);
-  const suggestions = () => keySuggestions(registry.data ?? [], props.kind, boundKeys(), keyQuery());
-  const coinable = () => canCoin(registry.data ?? [], keyQuery(), props.canCreateKey);
+  const suggestions = () => keySuggestions(catalog.data ?? [], props.kind, boundKeys(), keyQuery());
+  const coinable = () => canCoin(catalog.data ?? [], keyQuery(), props.canCreateKey);
   const listKey = () => entityTagsKey(props.kind, props.name);
 
-  // The chosen key's registry row drives the value stage: an enum key shows its
+  // The chosen key's catalog row drives the value stage: an enum key shows its
   // allowed set, a free key its distinct in-use values (fetched lazily).
-  const pendTag = () => (registry.data ?? []).find((t) => t.name === pendKey());
+  const pendTag = () => (catalog.data ?? []).find((t) => t.name === pendKey());
   const distinctValues = useQuery(() => ({
     queryKey: tagValuesKey(pendKey()),
     queryFn: () => listTagValues(pendKey()),

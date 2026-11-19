@@ -1,0 +1,252 @@
+package storage_test
+
+import (
+	"bytes"
+	"context"
+	"testing"
+
+	"github.com/hyperscaleav/omniglass/internal/scope"
+	"github.com/hyperscaleav/omniglass/internal/secret"
+	"github.com/hyperscaleav/omniglass/internal/seed"
+	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
+	"github.com/jackc/pgx/v5"
+)
+
+// A catalog handle can be renamed with every reference intact. This is the whole
+// point of giving the catalogs uuid primary keys, and it is the test each slice
+// of the epic writes first.
+//
+// Before this, a product id was the primary key, so a typo or a rebrand could not
+// be corrected: a product's name was permanent, and every referencing row would
+// have had to be rewritten to change it.
+func TestCatalogHandleRenameKeepsReferences(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn,
+		storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	t.Cleanup(gw.Close)
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+
+	if _, err := gw.CreateVendor(ctx, "", storage.Vendor{Name: "acme", Label: "Acme", Kind: "manufacturer"}); err != nil {
+		t.Fatalf("vendor: %v", err)
+	}
+	// A product referencing that vendor, a sub-product referencing the product, a
+	// property contract on it, and a component instance of it: one of every
+	// inbound reference this slice converted.
+	if _, err := gw.CreateProduct(ctx, "", storage.Product{
+		Name: "acme-bar", Label: "Acme Bar", Kind: "device",
+		VendorID: strptr("acme")}); err != nil {
+		t.Fatalf("product: %v", err)
+	}
+	if _, err := gw.CreateProduct(ctx, "", storage.Product{
+		Name: "acme-bar-mini", Label: "Acme Bar Mini", Kind: "device",
+		ParentProductID: strptr("acme-bar")}); err != nil {
+		t.Fatalf("sub-product: %v", err)
+	}
+	if _, err := gw.SetProductProperty(ctx, "", "acme-bar", storage.ProductPropertySpec{
+		PropertyTypeName: "serial-number", Required: true}); err != nil {
+		t.Fatalf("property: %v", err)
+	}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
+		Name: "bar-1", ProductName: strptr("acme-bar")}, all, all, all, all); err != nil {
+		t.Fatalf("component: %v", err)
+	}
+
+	// The rename. Nothing else moves.
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(ctx)
+	if _, err := conn.Exec(ctx, `update product set name = 'acme-soundbar' where name = 'acme-bar'`); err != nil {
+		t.Fatalf("rename product: %v", err)
+	}
+	if _, err := conn.Exec(ctx, `update vendor set name = 'acme-av' where name = 'acme'`); err != nil {
+		t.Fatalf("rename vendor: %v", err)
+	}
+
+	// Every reference still resolves, and now reads the NEW handle.
+	got, err := gw.GetProduct(ctx, "acme-soundbar")
+	if err != nil {
+		t.Fatalf("get renamed product: %v", err)
+	}
+	if got.VendorName == nil || *got.VendorName != "acme-av" {
+		t.Errorf("vendor reads %v, want acme-av: the arc should follow the rename", got.VendorName)
+	}
+	sub, err := gw.GetProduct(ctx, "acme-bar-mini")
+	if err != nil {
+		t.Fatalf("get sub-product: %v", err)
+	}
+	if sub.ParentProductName == nil || *sub.ParentProductName != "acme-soundbar" {
+		t.Errorf("parent reads %v, want acme-soundbar", sub.ParentProductName)
+	}
+	props, err := gw.ListProductProperties(ctx, "acme-soundbar")
+	if err != nil {
+		t.Fatalf("list properties: %v", err)
+	}
+	if len(props) != 1 || props[0].PropertyTypeName != "serial-number" {
+		t.Errorf("contract = %v, want serial-number still declared", props)
+	}
+	comp, err := gw.GetComponent(ctx, "bar-1", all)
+	if err != nil {
+		t.Fatalf("get component: %v", err)
+	}
+	if comp.ProductHandle == nil || *comp.ProductHandle != "acme-soundbar" {
+		t.Errorf("component product reads %v, want acme-soundbar", comp.ProductHandle)
+	}
+
+	// Slice 2: a standard rename with its slot's typed-slot requirement intact.
+	// The standard has a slot accepting video-bar (the typed-slot guard, #626);
+	// renaming the standard must leave the slot, and what it accepts, resolving.
+	if _, err := gw.CreateStandard(ctx, "", storage.Standard{Name: "huddle", Label: "Huddle"}); err != nil {
+		t.Fatalf("standard: %v", err)
+	}
+	if _, err := gw.SetSystemSlot(ctx, "", "standard", "huddle", storage.SystemSlotSpec{
+		Name: "mic", Label: "Mic", Quorum: 1, AcceptedTypes: []string{"video-bar"}, Impact: "degraded"}); err != nil {
+		t.Fatalf("slot: %v", err)
+	}
+	if _, err := conn.Exec(ctx, `update standard set name = 'huddle-space' where name = 'huddle'`); err != nil {
+		t.Fatalf("rename standard: %v", err)
+	}
+	// The standard is addressable by its new handle, and the slot still declares
+	// the accepted type it did before the rename.
+	slots, err := gw.ListSystemSlots(ctx, "standard", "huddle-space")
+	if err != nil {
+		t.Fatalf("list slots by the renamed standard: %v", err)
+	}
+	if len(slots) != 1 || len(slots[0].AcceptedTypes) != 1 || slots[0].AcceptedTypes[0] != "video-bar" {
+		t.Errorf("slot accepted types = %v, want [video-bar]", slots)
+	}
+
+	// Slice 3: a property rename follows its contract line, a declared value, AND
+	// a telemetry series, since the telemetry key is now a real foreign key.
+	if _, err := gw.SetProductProperty(ctx, "", "acme-soundbar", storage.ProductPropertySpec{
+		PropertyTypeName: "serial-number", Required: true}); err != nil {
+		t.Fatalf("contract: %v", err)
+	}
+	if _, err := gw.SetProperty(ctx, "", "component", "bar-1", "serial-number", "", []byte(`"SN-1"`), all, all); err != nil {
+		t.Fatalf("value: %v", err)
+	}
+	if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{{
+		OwnerKind: "component", OwnerID: "bar-1", Key: "tcp-connect-time", Instance: "tcp", Value: 1, Source: "test"}}); err != nil {
+		t.Fatalf("sample: %v", err)
+	}
+	if _, err := conn.Exec(ctx, `update property_type set name = 'serial_no' where name = 'serial-number'`); err != nil {
+		t.Fatalf("rename property: %v", err)
+	}
+	// tcp-connect-time lives on the metric lane (#587), so the telemetry rename
+	// happens on metric_type; the sample FK follows the same way.
+	if _, err := conn.Exec(ctx, `update metric_type set name = 'tcp-dial-time' where name = 'tcp-connect-time'`); err != nil {
+		t.Fatalf("rename telemetry metric type: %v", err)
+	}
+	// The contract reads the property's new handle.
+	props2, err := gw.ListProductProperties(ctx, "acme-soundbar")
+	if err != nil {
+		t.Fatalf("list contract after rename: %v", err)
+	}
+	if len(props2) != 1 || props2[0].PropertyTypeName != "serial_no" {
+		t.Errorf("contract property = %v, want serial_no", props2)
+	}
+	// The sample's key follows the property rename, which is the point of the
+	// telemetry foreign key.
+	dp, err := gw.LatestMetric(ctx, "bar-1", "tcp-dial-time")
+	if err != nil {
+		t.Fatalf("latest metric by the new key: %v", err)
+	}
+	if dp == nil || dp.Key != "tcp-dial-time" {
+		t.Errorf("sample key = %v, want tcp-dial-time through the rename", dp)
+	}
+
+	// Slice 4: the leaf catalogs (driver, location_type, secret_type,
+	// interface_type) rename with every inbound reference intact. These are the
+	// last string-keyed catalogs the epic converts, closing the invariant that
+	// no foreign key anywhere points at a mutable string.
+
+	// driver: a product's driver arc follows the rename.
+	if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: "acme-ctl", Label: "Acme Controller"}); err != nil {
+		t.Fatalf("driver: %v", err)
+	}
+	if _, err := gw.CreateProduct(ctx, "", storage.Product{
+		Name: "acme-panel", Label: "Acme Panel", Kind: "device", DriverID: strptr("acme-ctl")}); err != nil {
+		t.Fatalf("product with driver: %v", err)
+	}
+	if _, err := conn.Exec(ctx, `update driver set name = 'acme-controller' where name = 'acme-ctl'`); err != nil {
+		t.Fatalf("rename driver: %v", err)
+	}
+	panel, err := gw.GetProduct(ctx, "acme-panel")
+	if err != nil {
+		t.Fatalf("get product after driver rename: %v", err)
+	}
+	if panel.DriverName == nil || *panel.DriverName != "acme-controller" {
+		t.Errorf("driver reads %v, want acme-controller through the rename", panel.DriverName)
+	}
+
+	// location_type: a location's type arc AND a location_type_property contract
+	// both follow the rename (property serial_no exists from the slice-3 rename above).
+	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{
+		Name: "wing", Label: "Wing", AllowedParentTypes: []string{storage.RootPlacement}}); err != nil {
+		t.Fatalf("location type: %v", err)
+	}
+	if _, err := gw.SetLocationTypeProperty(ctx, "", "wing", storage.LocationTypePropertySpec{
+		PropertyTypeName: "serial_no", Required: true}); err != nil {
+		t.Fatalf("location type property: %v", err)
+	}
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "west-wing", LocationType: "wing"}, all); err != nil {
+		t.Fatalf("location: %v", err)
+	}
+	if _, err := conn.Exec(ctx, `update location_type set name = 'annex' where name = 'wing'`); err != nil {
+		t.Fatalf("rename location type: %v", err)
+	}
+	loc, err := gw.GetLocation(ctx, "west-wing", all)
+	if err != nil {
+		t.Fatalf("get location after type rename: %v", err)
+	}
+	if loc.LocationType != "annex" {
+		t.Errorf("location type reads %q, want annex through the rename", loc.LocationType)
+	}
+	ltProps, err := gw.ListLocationTypeProperties(ctx, "annex")
+	if err != nil {
+		t.Fatalf("list location type properties by the renamed type: %v", err)
+	}
+	if len(ltProps) != 1 || ltProps[0].PropertyTypeName != "serial_no" {
+		t.Errorf("location type contract = %v, want serial_no still declared", ltProps)
+	}
+
+	// secret_type: a secret's type arc follows the rename.
+	if _, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
+		Name: "snmp", SecretType: "snmp-community", OwnerKind: "component", OwnerName: strptr("bar-1"),
+		Fields: map[string]string{"community": "public"}}, all, true); err != nil {
+		t.Fatalf("secret: %v", err)
+	}
+	if _, err := conn.Exec(ctx, `update secret_type set name = 'snmp-comm' where name = 'snmp-community'`); err != nil {
+		t.Fatalf("rename secret type: %v", err)
+	}
+	secrets, err := gw.ListSecrets(ctx, all, true)
+	if err != nil {
+		t.Fatalf("list secrets after type rename: %v", err)
+	}
+	var snmp *storage.Secret
+	for i := range secrets {
+		if secrets[i].Name == "snmp" {
+			snmp = &secrets[i]
+		}
+	}
+	if snmp == nil || snmp.SecretType != "snmp-comm" {
+		t.Errorf("secret type reads %v, want snmp-comm through the rename", snmp)
+	}
+
+	// The interface_type arm this test carried retired with the table: a
+	// transport is a code-registry fact (ADR-0073, #811), so there is no row
+	// left to rename and no arc to follow it.
+}

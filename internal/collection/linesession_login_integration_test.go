@@ -176,7 +176,7 @@ func TestLineSessionWrongPasswordRejectsAfterOneAttempt(t *testing.T) {
 	if _, err := s.Exchange(context.Background(), "GET INPUT", nil, time.Second); err == nil {
 		t.Fatal("a poll rode a rejected session")
 	}
-	// The fixed credential is a new session (the node recycles on a
+	// The fixed credential is a new session (the outpost recycles on a
 	// credential change); a retry of this one, with the device fixed, reads
 	// up too.
 	srv.setPassword("wrong")

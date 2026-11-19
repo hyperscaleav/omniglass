@@ -3,7 +3,8 @@ import { api } from "../api/client";
 
 // The public /auth/status: whether an owner exists, and whether this server is
 // a lab (#1195). It does not change while the console is open, so it is read
-// once.
+// once. A failed read is not retried: the console waits on it before its first
+// paint (AuthGuard), and a lab banner is not worth holding the console for.
 export function useAuthStatus() {
   return useQuery(() => ({
     queryKey: ["auth-status"],
@@ -13,5 +14,6 @@ export function useAuthStatus() {
       return data;
     },
     staleTime: Infinity,
+    retry: false,
   }));
 }

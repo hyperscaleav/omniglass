@@ -158,7 +158,7 @@ func TestComparePerfDeliveryUnsettledBootFailsByName(t *testing.T) {
 	base := baselineOf(t, runsWith(3, nil))
 	runs := runsWith(3, func(i int, r *ScaleReport) {
 		if i == 2 {
-			r.DeliveryUnsettled = []UnsettledBoot{{Node: "edge-hq", Boot: "b-7f3a"}}
+			r.DeliveryUnsettled = []UnsettledBoot{{Outpost: "edge-hq", Boot: "b-7f3a"}}
 		}
 		*r = viaJSON(t, *r)
 	})
@@ -183,7 +183,7 @@ func TestComparePerfDeliveryUnsettledBootsNoteIsBounded(t *testing.T) {
 	base := baselineOf(t, runsWith(3, nil))
 	runs := runsWith(3, func(_ int, r *ScaleReport) {
 		for _, n := range []string{"a", "b", "c", "d", "e"} {
-			r.DeliveryUnsettled = append(r.DeliveryUnsettled, UnsettledBoot{Node: "edge-" + n, Boot: "boot-" + n})
+			r.DeliveryUnsettled = append(r.DeliveryUnsettled, UnsettledBoot{Outpost: "edge-" + n, Boot: "boot-" + n})
 		}
 		r.DeliveryNote = "unsettled: the telemetry stream had not settled when the settle ran out: the ack floor reached 41, not yet past the stream's last sequence 45"
 	})
@@ -237,7 +237,7 @@ func TestDeliveryTableCauseSurvivesJSON(t *testing.T) {
 
 // The hops that joined the table beside the ingest hop each read as their own
 // figure: a sim row by its protocol (#1694), a push-lane row under its lane
-// (#1696) and never folded into the node lane's row for the same hop and
+// (#1696) and never folded into the outpost lane's row for the same hop and
 // kind, a schedule row naming skipped (#1693), and the push lane's publish row
 // by the pushes it counts, naming refused-turn (#1746), all read back from JSON.
 func TestComparePerfDeliveryNamesEveryHopsFigure(t *testing.T) {
@@ -249,18 +249,18 @@ func TestComparePerfDeliveryNamesEveryHopsFigure(t *testing.T) {
 		return r
 	}
 	runs := runsWith(3, func(_ int, r *ScaleReport) {
-		node := deliveryRow(delivery.Metric, map[delivery.Outcome]uint64{delivery.Stored: 40})
-		node.Lane = LaneNode
+		outpost := deliveryRow(delivery.Metric, map[delivery.Outcome]uint64{delivery.Stored: 40})
+		outpost.Lane = LaneOutpost
 		push := deliveryRow(delivery.Metric, map[delivery.Outcome]uint64{delivery.Stored: 6, delivery.Missing: 4})
 		push.Lane = LanePush
 		r.Delivery = []DeliveryRow{
-			lossy(DeliveryRow{Lane: LaneNode, Hop: delivery.Schedule, Kind: delivery.Metric, In: 10, Out: 8,
+			lossy(DeliveryRow{Lane: LaneOutpost, Hop: delivery.Schedule, Kind: delivery.Metric, In: 10, Out: 8,
 				Outcomes: map[delivery.Outcome]uint64{delivery.Made: 8, delivery.Skipped: 2}}),
-			lossy(DeliveryRow{Lane: LaneNode, Hop: delivery.Sim, Protocol: "snmp", In: 20, Out: 15,
+			lossy(DeliveryRow{Lane: LaneOutpost, Hop: delivery.Sim, Protocol: "snmp", In: 20, Out: 15,
 				Outcomes: map[delivery.Outcome]uint64{delivery.Returned: 15, delivery.Withheld: 5}}),
-			lossy(DeliveryRow{Lane: LaneNode, Hop: delivery.Sim, Protocol: "http", In: 20, Out: 20,
+			lossy(DeliveryRow{Lane: LaneOutpost, Hop: delivery.Sim, Protocol: "http", In: 20, Out: 20,
 				Outcomes: map[delivery.Outcome]uint64{delivery.Returned: 20}}),
-			node, push,
+			outpost, push,
 			lossy(DeliveryRow{Lane: LanePush, Hop: delivery.Publish, In: 4, Out: 3,
 				Outcomes: map[delivery.Outcome]uint64{delivery.TurnTaken: 3, delivery.RefusedTurn: 1}}),
 		}
