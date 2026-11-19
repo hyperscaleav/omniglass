@@ -322,14 +322,24 @@ func TestExtraEnvAndEnvFromReachAllContainers(t *testing.T) {
 }
 
 // TestDefaultsHaveNoExtraEnvOrEnvFrom verifies that the default chart render
-// does not add any envFrom sources beyond the chart-managed variables.
+// does not add any extra env or envFrom entries beyond the chart-managed set.
 func TestDefaultsHaveNoExtraEnvOrEnvFrom(t *testing.T) {
 	out := mustRender(t, nil)
 	d := deployment(t, out)
+	// Expected chart-managed env var counts per container. Changing these is a
+	// signal that the default variable set shipped to operators changed.
+	wantEnvCount := map[string]int{
+		"migrate":   1, // OMNIGLASS_DSN
+		"bootstrap": 2, // OMNIGLASS_DSN, OMNIGLASS_ENCRYPTION_KEY
+		"server":    5, // OMNIGLASS_DSN, OMNIGLASS_SECURE_COOKIES, OMNIGLASS_ENCRYPTION_KEY, OMNIGLASS_DATA_DIR, OMNIGLASS_NATS_STORE_DIR
+	}
 	for _, name := range []string{"server", "migrate", "bootstrap"} {
 		c := container(t, d, name)
 		if len(c.EnvFrom) != 0 {
 			t.Errorf("%s: envFrom = %v, want empty by default", name, c.EnvFrom)
+		}
+		if want := wantEnvCount[name]; len(c.Env) != want {
+			t.Errorf("%s: len(env) = %d, want %d (chart-managed only)", name, len(c.Env), want)
 		}
 	}
 }

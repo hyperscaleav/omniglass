@@ -186,7 +186,7 @@ Set a plain variable with `extraEnv`, or pull all keys from a Secret or ConfigMa
 ```yaml
 server:
   extraEnv:
-    - name: OMNIGLASS_TRUSTED_PROXIES
+    - name: "OMNIGLASS_TRUSTED_PROXIES"
       value: "10.0.0.0/8"
   envFrom:
     - secretRef:
