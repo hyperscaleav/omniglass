@@ -18,8 +18,8 @@ import { expressionText, typeExpression, warmExpressionEditor } from "../compone
 // reading its owner kind, inputs, reduce (an expression, as code), output and
 // live counts; a row opens a blade with the rule and its state per owner, in
 // the server's order; New and Edit open the one CalcRuleForm in a Drawer: the
-// inputs (a key and its alias), then the expression editor with start-from
-// templates, then the preview. Data is seeded into the query cache; writes
+// inputs (a key and its alias), then the expression editor with starters,
+// then the preview. Data is seeded into the query cache; writes
 // are caught at fetch.
 
 const mean: CalcRule = {
@@ -213,7 +213,7 @@ describe("Calc rules page", () => {
     expect(screen.queryByText("New rule")).toBeNull();
   });
 
-  it("creates a rule: the key pre-fills its alias, a template starts the expression", async () => {
+  it("creates a rule: the key pre-fills its alias, a starter starts the expression", async () => {
     const reqs = routes();
     mount();
     fireEvent.click(screen.getByText("New rule"));

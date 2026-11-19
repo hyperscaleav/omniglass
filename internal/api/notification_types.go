@@ -49,9 +49,9 @@ type notificationTypeRefInput struct {
 	Name string `path:"name" doc:"The notification type's name or uuid"`
 }
 
-// notificationTemplateDoc is the field help subject and text both carry: what
+// notificationRuleDoc is the field help subject and text both carry: what
 // a rule may read, generated from the one declaration of the fact map.
-var notificationTemplateDoc = "Subject and text are written in the rule language a label rule uses (the functions " +
+var notificationRuleDoc = "Subject and text are written in the rule language a label rule uses (the functions " +
 	strings.Join(sandbox.FuncNames(), ", ") + "; {{if}} and the builtins " + strings.Join(sandbox.Builtins(), ", ") +
 	"), reading the alarm facts " + strings.Join(storage.AlarmFactKeys(), ", ") +
 	"; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past " +
@@ -155,7 +155,7 @@ func registerNotificationTypeRoutes(api huma.API, a *authenticator, gw storage.G
 		Path:          "/notification-types",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a notification type",
-		Description:   "Registers an operator notification type (official=false). " + notificationTemplateDoc + ", and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.",
+		Description:   "Registers an operator notification type (official=false). " + notificationRuleDoc + ", and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.",
 	}, "notification_type", "create"), func(ctx context.Context, in *createNotificationTypeInput) (*notificationTypeOutput, error) {
 		t, err := gw.CreateNotificationType(ctx, actorID(ctx), storage.NotificationTypeSpec{
 			Name: in.Body.Name, Label: in.Body.Label, Description: in.Body.Description,
@@ -172,7 +172,7 @@ func registerNotificationTypeRoutes(api huma.API, a *authenticator, gw storage.G
 		Method:      http.MethodPatch,
 		Path:        "/notification-types/{name}",
 		Summary:     "Update a notification type",
-		Description: "Patches an operator type's label, description, subject or text (an absent field is unchanged). " + notificationTemplateDoc + ". An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.",
+		Description: "Patches an operator type's label, description, subject or text (an absent field is unchanged). " + notificationRuleDoc + ". An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.",
 	}, "notification_type", "update"), func(ctx context.Context, in *updateNotificationTypeInput) (*notificationTypeOutput, error) {
 		t, err := gw.UpdateNotificationType(ctx, actorID(ctx), in.Name, storage.NotificationTypePatch{
 			Label: in.Body.Label, Description: in.Body.Description, Subject: in.Body.Subject, Text: in.Body.Text,
@@ -235,9 +235,9 @@ func mapNotificationTypeErr(err error) error {
 	case errors.Is(err, storage.ErrNotificationTypeInUse):
 		return huma.Error409Conflict("an action rule still sends this notification type")
 	case errors.Is(err, storage.ErrNotificationTypeInvalid):
-		return huma.Error422UnprocessableEntity(storage.TemplateRefusal(err))
+		return huma.Error422UnprocessableEntity(storage.RuleRefusal(err))
 	case errors.Is(err, storage.ErrNotificationRender):
-		return huma.Error422UnprocessableEntity(storage.TemplateRefusal(err))
+		return huma.Error422UnprocessableEntity(storage.RuleRefusal(err))
 	}
 	return mapTypeErr(err, "notification type")
 }

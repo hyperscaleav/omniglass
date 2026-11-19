@@ -57,7 +57,7 @@ var (
 	ErrNotificationTypeInvalid  = errors.New("storage: notification type is invalid")
 	// ErrNotificationTypeInUse is a delete of a type an action rule still sends.
 	ErrNotificationTypeInUse = errors.New("storage: notification type is in use by an action rule")
-	// ErrNotificationRender is a template that parses but fails over one
+	// ErrNotificationRender is a rule that parses but fails over one
 	// alarm's facts (its output past the cap): what a delivery would record.
 	ErrNotificationRender = errors.New("storage: notification failed to render")
 )
@@ -72,17 +72,17 @@ func scanNotificationType(row pgx.Row) (*NotificationType, error) {
 	return &t, nil
 }
 
-// validateNotificationTemplates compiles both templates so a write can refuse
-// one the sandbox would refuse at render: the refusal names which template and
+// validateNotificationRules compiles both rules so a write can refuse
+// one the sandbox would refuse at render: the refusal names which field and
 // what in it, and the row is never stored.
-func validateNotificationTemplates(subject, text *string) error {
+func validateNotificationRules(subject, text *string) error {
 	if subject != nil {
-		if _, err := ParseNotificationTemplate(*subject); err != nil {
+		if _, err := ParseNotificationRule(*subject); err != nil {
 			return fmt.Errorf("%w: subject: %s", ErrNotificationTypeInvalid, err)
 		}
 	}
 	if text != nil {
-		if _, err := ParseNotificationTemplate(*text); err != nil {
+		if _, err := ParseNotificationRule(*text); err != nil {
 			return fmt.Errorf("%w: text: %s", ErrNotificationTypeInvalid, err)
 		}
 	}
@@ -91,14 +91,14 @@ func validateNotificationTemplates(subject, text *string) error {
 
 // UpsertNotificationType installs an official type in the og namespace,
 // authoritative over its own row only (the boot-seed bucket, #1431): an
-// operator's type of the same name is left exactly as it is. The seed's templates pass the same compile check
+// operator's type of the same name is left exactly as it is. The seed's rules pass the same compile check
 // the CRUD lane does, naming the row: a seed an operator would be refused
 // stops the boot instead of shipping.
 func (p *PG) UpsertNotificationType(ctx context.Context, t NotificationType) error {
 	if err := ValidateName("notification_type", t.Name); err != nil {
 		return fmt.Errorf("storage: upsert notification type %q: %w", t.Name, err)
 	}
-	if err := validateNotificationTemplates(&t.Subject, &t.Text); err != nil {
+	if err := validateNotificationRules(&t.Subject, &t.Text); err != nil {
 		return fmt.Errorf("storage: upsert notification type %q: %w", t.Name, err)
 	}
 	if _, err := p.pool.Exec(ctx, `
@@ -154,7 +154,7 @@ func (p *PG) CreateNotificationType(ctx context.Context, actorID string, spec No
 	if err := ValidateName("notification_type", spec.Name); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrNotificationTypeInvalid, err)
 	}
-	if err := validateNotificationTemplates(&spec.Subject, &spec.Text); err != nil {
+	if err := validateNotificationRules(&spec.Subject, &spec.Text); err != nil {
 		return nil, err
 	}
 	tx, err := p.pool.Begin(ctx)
@@ -202,7 +202,7 @@ func lockMutableNotificationType(ctx context.Context, tx pgx.Tx, ref string) (*N
 
 // UpdateNotificationType patches an operator type, audited.
 func (p *PG) UpdateNotificationType(ctx context.Context, actorID, ref string, patch NotificationTypePatch) (*NotificationType, error) {
-	if err := validateNotificationTemplates(patch.Subject, patch.Text); err != nil {
+	if err := validateNotificationRules(patch.Subject, patch.Text); err != nil {
 		return nil, err
 	}
 	tx, err := p.pool.Begin(ctx)
@@ -284,7 +284,7 @@ type NotificationPreview struct {
 // parse is ErrNotificationTypeInvalid; one that fails at render returns the
 // render error, which is what a delivery would record.
 func (p *PG) PreviewNotificationType(ctx context.Context, ref, componentID, alarmID, transition string, subject, text *string) (*NotificationPreview, error) {
-	if err := validateNotificationTemplates(subject, text); err != nil {
+	if err := validateNotificationRules(subject, text); err != nil {
 		return nil, err
 	}
 	t, err := getNotificationType(ctx, p.pool, ref)
@@ -332,10 +332,10 @@ func latestAlarmID(ctx context.Context, q querier, componentID string) (string, 
 	return id, nil
 }
 
-// TemplateRefusal words a template refusal or render failure for the caller:
+// RuleRefusal words a rule refusal or render failure for the caller:
 // the sentinel prefixes stripped, so it reads as the problem ("subject:
-// function "printf" is not available to a template") rather than the path.
-func TemplateRefusal(err error) string {
+// function "printf" is not available") rather than the path.
+func RuleRefusal(err error) string {
 	s := err.Error()
 	for _, p := range []string{"storage: notification type is invalid: ", "storage: notification failed to render: ", "sandbox: template does not parse: ", "sandbox: template failed to render: "} {
 		s = strings.ReplaceAll(s, p, "")
