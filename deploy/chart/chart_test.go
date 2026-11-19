@@ -271,8 +271,8 @@ func TestNotesPrintTheKeyBackupCommand(t *testing.T) {
 
 // TestExtraEnvAndEnvFromReachAllContainers verifies that server.extraEnv entries
 // (plain values and secretKeyRef) and server.envFrom sources land on the server
-// container and every init container in the default render, where bootstrap is
-// enabled (migrate and bootstrap).
+// container and the migrate and bootstrap init containers in the default render,
+// where bootstrap is enabled. wait-for-db is a readiness gate and gets neither.
 func TestExtraEnvAndEnvFromReachAllContainers(t *testing.T) {
 	out := mustRender(t, map[string]any{
 		"server": map[string]any{
@@ -322,15 +322,18 @@ func TestExtraEnvAndEnvFromReachAllContainers(t *testing.T) {
 	}
 }
 
-// TestExtraEnvWithBootstrapDisabled verifies that with bootstrap.enabled=false,
-// the production shape, server.extraEnv still reaches migrate and the server,
-// and no bootstrap init container is rendered.
+// TestExtraEnvWithBootstrapDisabled verifies that with bootstrap.enabled=false
+// (one of production's three values), server.extraEnv and server.envFrom still
+// reach migrate and the server, and no bootstrap init container is rendered.
 func TestExtraEnvWithBootstrapDisabled(t *testing.T) {
 	out := mustRender(t, map[string]any{
 		"bootstrap": map[string]any{"enabled": false},
 		"server": map[string]any{
 			"extraEnv": []any{
 				map[string]any{"name": "OMNIGLASS_TRUSTED_PROXIES", "value": "10.0.0.0/8"},
+			},
+			"envFrom": []any{
+				map[string]any{"configMapRef": map[string]any{"name": "test-config"}},
 			},
 		},
 	})
@@ -344,6 +347,16 @@ func TestExtraEnvWithBootstrapDisabled(t *testing.T) {
 		c := container(t, d, name)
 		if e, ok := envVar(c, "OMNIGLASS_TRUSTED_PROXIES"); !ok || e.Value != "10.0.0.0/8" {
 			t.Errorf("%s: OMNIGLASS_TRUSTED_PROXIES = %+v ok=%v, want value 10.0.0.0/8", name, e, ok)
+		}
+		found := false
+		for _, ef := range c.EnvFrom {
+			if ef.ConfigMapRef != nil && ef.ConfigMapRef.Name == "test-config" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("%s: envFrom = %+v, want configMapRef test-config", name, c.EnvFrom)
 		}
 	}
 }
