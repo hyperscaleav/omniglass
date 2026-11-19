@@ -37,7 +37,7 @@ Not a vibe at each gate, a check:
   the deferred items (each its own issue), and the authorization surface (the permission checked
   and the scope injected). **No worktree or branch is created until the issue exists and the
   architect has approved its scope,** so the boundary is agreed before any code, not discovered
-  at review. The session hook (`.claude/hooks/guard-main-branch.sh`) enforces the branch rule
+  at review. The PreToolUse hook (`.claude/hooks/guard-main-branch.sh`) enforces the branch rule
   mechanically: `git commit`, `merge`, `rebase`, and `push` on `main`, and any force push
   targeting `main`, are blocked with a redirect message. The one carve-out is the [autopilot](/contributing/autopilot/)
   ([ADR-0138](/architecture/decisions/#adr-0138-the-autopilot-ships-a-daily-slice-and-pr-review-is-its-approval-gate)):
