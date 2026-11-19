@@ -95,10 +95,11 @@ comments and opens with the blocking count), so agent-fix still sees one review 
 counts rounds, not lenses. A lens that fails, times out or runs out of its turns fails the check rather than passing
 without its part; rerunning the failed jobs retries it.
 
-The review is short to read (#2224). Its body opens with one verdict line, `✅ Ship · nothing found`
-or `❌ Changes requested · N blocking · M advisory`, then one strip with each lens's mark, then one
-line per finding that is not on a diff line. Each inline comment opens with its finding's title in
-bold. The failure, the fix and each lens's notes sit in collapsed `<details>` blocks under them.
+The review is short to read (#2224). Its body opens with one verdict line, `✅ Ship · nothing found`,
+`❌ Changes requested · N blocking · M advisory`, or `⚠️ N advisory` when every finding is advisory,
+then one strip with each lens's mark, then one line per finding that is not on a diff line. Each
+inline comment opens with its finding's title in bold. The failure, the fix and each lens's notes
+sit in collapsed `<details>` blocks under them.
 
 A re-review starts from what changed. After the first review, a push is reviewed from the head the
 reviewer last reviewed: the PR's own commits since, with what a merge from `main` brought in left
