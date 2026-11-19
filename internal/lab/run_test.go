@@ -60,7 +60,7 @@ func newFakeEngine(published string) *fakeEngine {
 			DevImageFor("abc123"): {VersionLabel: "abc123"},
 			PostgresImage:         {},
 		},
-		seedLog:   FormatSeedResult(SeedResult{Node: true, Summary: "the dev fleet, seeded on this lab's first run"}),
+		seedLog:   FormatSeedResult(SeedResult{Outpost: true, Summary: "the dev fleet, seeded on this lab's first run"}),
 		published: published,
 		host:      HostResources{MemBytes: 32 << 30, CPUs: 12},
 	}
@@ -214,7 +214,7 @@ func fakeServer(t *testing.T) *httptest.Server {
 		http.SetCookie(w, &http.Cookie{Name: "og_session", Value: "s", Path: "/"})
 		w.WriteHeader(http.StatusNoContent)
 	})
-	mux.HandleFunc("GET /api/v1/nodes/edge-hq/simulation", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("GET /api/v1/outposts/edge-hq/simulation", func(w http.ResponseWriter, _ *http.Request) {
 		fmt.Fprint(w, `{"connected":true,"devices":[{"component_id":"c-1","status":"running"}]}`)
 	})
 	mux.HandleFunc("GET /api/v1/components/c-1/reachability", func(w http.ResponseWriter, _ *http.Request) {
@@ -225,10 +225,18 @@ func fakeServer(t *testing.T) *httptest.Server {
 	return srv
 }
 
+// testAlive is a host whose live processes are 42 (started at "t42") and 77
+// (at "t77"); an empty start asks about the pid alone.
+func testAlive(pid int, start string) bool {
+	live := map[int]string{42: "t42", 77: "t77"}
+	got, ok := live[pid]
+	return ok && (start == "" || start == got)
+}
+
 func testRunner(eng Engine, out *bytes.Buffer) *Runner {
 	return &Runner{
 		Engine: eng, Out: out, Host: "box",
-		Alive:    func(pid int) bool { return pid == 42 },
+		Alive:    testAlive,
 		PortFree: func(string, int) error { return nil },
 		HTTP:     &http.Client{Timeout: 2 * time.Second},
 		Poll:     10 * time.Millisecond, ReadyTimeout: 2 * time.Second,
@@ -237,7 +245,7 @@ func testRunner(eng Engine, out *bytes.Buffer) *Runner {
 
 func testConfig() Config {
 	o := testOptions()
-	o.Owner = Owner{Host: "box", PID: 42}
+	o.Owner = Owner{Host: "box", PID: 42, Start: "t42"}
 	choice, _ := SelectImage("abc123", "", "")
 	o.Image = choice.Ref
 	return Config{Options: o, Image: choice, PlantedFaults: []string{"Panel SNMP"}}
@@ -254,12 +262,12 @@ func TestRunBringsTheLabUpAndReportsTheConsole(t *testing.T) {
 	if lab.BaseURL != srv.URL || !strings.HasSuffix(lab.ConsoleURL, "/web") {
 		t.Fatalf("base %q console %q", lab.BaseURL, lab.ConsoleURL)
 	}
-	want := []string{"network omniglass-lab_default", "container db", "container seed", "container server", "container node"}
+	want := []string{"network omniglass-lab_default", "container db", "container seed", "container server", "container outpost"}
 	if strings.Join(eng.created, ",") != strings.Join(want, ",") {
 		t.Fatalf("created %v, want %v", eng.created, want)
 	}
 	if len(eng.containers) != 3 {
-		t.Fatalf("%d containers left running, want db, server and node (the seed is removed once it is done)", len(eng.containers))
+		t.Fatalf("%d containers left running, want db, server and outpost (the seed is removed once it is done)", len(eng.containers))
 	}
 	for _, line := range []string{"1 of 1 simulated endpoints up", "1 broken on purpose", "the login dev / dev works"} {
 		if !strings.Contains(out.String(), line) {
@@ -285,7 +293,7 @@ func TestRunCreatesTheImageContainersFromTheCheckedImageID(t *testing.T) {
 	if _, err := testRunner(eng, &out).Run(context.Background(), cfg); err != nil {
 		t.Fatalf("%v\n%s", err, out.String())
 	}
-	for _, svc := range []string{"seed", "server", "node"} {
+	for _, svc := range []string{"seed", "server", "outpost"} {
 		if got := eng.ran[svc]; got != checked {
 			t.Errorf("the %s container was created from %q, want the checked image ID %q", svc, got, checked)
 		}
@@ -295,8 +303,8 @@ func TestRunCreatesTheImageContainersFromTheCheckedImageID(t *testing.T) {
 	}
 }
 
-// A scale lab's node for every site is created from that same ID.
-func TestScaleRunCreatesEverySiteNodeFromTheCheckedImageID(t *testing.T) {
+// A scale lab's outpost for every site is created from that same ID.
+func TestScaleRunCreatesEverySiteOutpostFromTheCheckedImageID(t *testing.T) {
 	srv := scaleServer(t, testSites, nil, nil)
 	eng := newFakeEngine(strings.TrimPrefix(srv.URL, "http://"))
 	cfg := scaleConfig()
@@ -405,7 +413,7 @@ func TestPreflightFailuresCreateNothing(t *testing.T) {
 		}, "another tree"},
 		"a live lab already running": {func(e *fakeEngine, _ *Runner, c *Config) {
 			e.containers["old"] = Resource{ID: "old", Labels: map[string]string{
-				LabelLab: DefaultProject, LabelComposeProject: DefaultProject, LabelLabHost: "box", LabelLabPID: "42"}}
+				LabelLab: DefaultProject, LabelComposeProject: DefaultProject, LabelLabHost: "box", LabelLabPID: "42", LabelLabPIDStart: "t42"}}
 		}, "already running"},
 		"a lab from another machine": {func(e *fakeEngine, _ *Runner, c *Config) {
 			e.networks["old"] = Resource{ID: "old", Name: "old", Labels: map[string]string{
@@ -435,7 +443,7 @@ func TestPreflightFailuresCreateNothing(t *testing.T) {
 func TestRunReapsWhatAKilledLabLeft(t *testing.T) {
 	srv := fakeServer(t)
 	eng := newFakeEngine(strings.TrimPrefix(srv.URL, "http://"))
-	dead := map[string]string{LabelLab: DefaultProject, LabelComposeProject: DefaultProject, LabelLabHost: "box", LabelLabPID: "9999"}
+	dead := map[string]string{LabelLab: DefaultProject, LabelComposeProject: DefaultProject, LabelLabHost: "box", LabelLabPID: "9999", LabelLabPIDStart: "t9999"}
 	eng.containers["old-db"] = Resource{ID: "old-db", Labels: dead}
 	eng.networks["omniglass-lab_default"] = Resource{ID: "n", Name: "omniglass-lab_default", Labels: dead}
 	var out bytes.Buffer
@@ -466,13 +474,13 @@ func TestFreshRemovesTheVolumesFirst(t *testing.T) {
 	}
 }
 
-// A node that never gets every endpoint up still yields a lab, saying what
+// An outpost that never gets every endpoint up still yields a lab, saying what
 // is pending, rather than taking it down.
 func TestRunSaysWhatIsPendingWhenCollectionIsSlow(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/healthz", func(w http.ResponseWriter, _ *http.Request) {})
 	mux.HandleFunc("POST /api/v1/auth/login", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
-	mux.HandleFunc("GET /api/v1/nodes/edge-hq/simulation", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("GET /api/v1/outposts/edge-hq/simulation", func(w http.ResponseWriter, _ *http.Request) {
 		fmt.Fprint(w, `{"connected":true,"devices":[{"component_id":"c-1","status":"running"}]}`)
 	})
 	mux.HandleFunc("GET /api/v1/components/c-1/reachability", func(w http.ResponseWriter, _ *http.Request) {
@@ -529,7 +537,7 @@ func TestAFailedBringUpLeavesAnotherLabAlone(t *testing.T) {
 	srv := fakeServer(t)
 	eng := newFakeEngine(strings.TrimPrefix(srv.URL, "http://"))
 	eng.seedExit, eng.seedLog = 1, "boom"
-	other := map[string]string{LabelLab: DefaultProject, LabelComposeProject: DefaultProject, LabelLabHost: "box", LabelLabPID: "77"}
+	other := map[string]string{LabelLab: DefaultProject, LabelComposeProject: DefaultProject, LabelLabHost: "box", LabelLabPID: "77", LabelLabPIDStart: "t77"}
 	r := testRunner(eng, &bytes.Buffer{})
 	// The other lab appears after this run's preflight, as a racing one would.
 	r.PortFree = func(string, int) error {
@@ -590,5 +598,56 @@ func TestSettleWaitsOutARestartButNotAStop(t *testing.T) {
 	st, err = r.settle(context.Background(), "c", ContainerState{Status: "exited"})
 	if err != nil || st.Running {
 		t.Fatalf("a stopped container: state %+v, err %v, want it still down", st, err)
+	}
+}
+
+// A previous lab's owner is judged by its pid and start time together: a pid
+// a stranger now holds (the owner was killed hard, the pid reused) reads as
+// gone, so the wedge clears, while the owner itself still reads as running.
+func TestReapJudgesAnOwnerByPIDAndStartTime(t *testing.T) {
+	for name, tc := range map[string]struct {
+		start  string
+		reaped bool
+	}{
+		"the owner itself":             {"t42", false},
+		"its pid reused by a stranger": {"t1", true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			srv := fakeServer(t)
+			eng := newFakeEngine(strings.TrimPrefix(srv.URL, "http://"))
+			eng.containers["c"] = Resource{ID: "c", Labels: map[string]string{
+				LabelLab: DefaultProject, LabelComposeProject: DefaultProject, LabelLabHost: "box", LabelLabPID: "42",
+				LabelLabPIDStart: tc.start}}
+			err := testRunner(eng, &bytes.Buffer{}).Reap(context.Background(), DefaultProject)
+			_, left := eng.containers["c"]
+			if tc.reaped && (err != nil || left) {
+				t.Fatalf("a reused pid: err %v, container left %v, want it reaped", err, left)
+			}
+			var pe *PreflightError
+			if !tc.reaped && (!errors.As(err, &pe) || !left) {
+				t.Fatalf("a live owner: err %v, container left %v, want a refusal and the container kept", err, left)
+			}
+		})
+	}
+}
+
+// A lab started before the start time was recorded cannot be told from a
+// live one, so it is refused, never removed, and the refusal names the way
+// out.
+func TestReapRefusesALabWithNoRecordedStartTime(t *testing.T) {
+	srv := fakeServer(t)
+	eng := newFakeEngine(strings.TrimPrefix(srv.URL, "http://"))
+	eng.containers["c"] = Resource{ID: "c", Labels: map[string]string{
+		LabelLab: DefaultProject, LabelComposeProject: DefaultProject, LabelLabHost: "box", LabelLabPID: "9999"}}
+	err := testRunner(eng, &bytes.Buffer{}).Reap(context.Background(), DefaultProject)
+	var pe *PreflightError
+	if !errors.As(err, &pe) {
+		t.Fatalf("got %v, want a refusal", err)
+	}
+	if want := "docker compose -p " + DefaultProject + " down"; !strings.Contains(pe.Fix, want) {
+		t.Fatalf("the refusal's fix is %q, want it to name %q", pe.Fix, want)
+	}
+	if _, ok := eng.containers["c"]; !ok {
+		t.Fatal("the reaper removed a lab whose owner it could not judge")
 	}
 }

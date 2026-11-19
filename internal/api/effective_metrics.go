@@ -122,6 +122,7 @@ func registerEffectiveMetricRoutes(api huma.API, a *authenticator, gw storage.Ga
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-system-metrics",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/systems/{name}/metrics",
 		Summary:     "List a system's effective metrics",
@@ -139,6 +140,7 @@ func registerEffectiveMetricRoutes(api huma.API, a *authenticator, gw storage.Ga
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-location-metrics",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/locations/{name}/metrics",
 		Summary:     "List a location's effective metrics",

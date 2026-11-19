@@ -17,8 +17,8 @@ import (
 )
 
 // TestReachabilityNamesWhyAVerdictIsPending drives the read an operator meets
-// on an empty install (#981): a probed endpoint no node is assigned to serves a
-// null verdict with pending no-node, one assigned to a node that has not yet
+// on an empty install (#981): a probed endpoint no outpost is assigned to serves a
+// null verdict with pending no-outpost, one assigned to an outpost that has not yet
 // probed it awaiting-probe, and one with a verdict carries no pending field.
 // Skipped under -short.
 func TestReachabilityNamesWhyAVerdictIsPending(t *testing.T) {
@@ -45,8 +45,8 @@ func TestReachabilityNamesWhyAVerdictIsPending(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-1"}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-1"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-1"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
@@ -59,9 +59,9 @@ func TestReachabilityNamesWhyAVerdictIsPending(t *testing.T) {
 		('c-verdict', 'icmp', (select id from component where name = 'disp-1'), '{"target":"10.20.4.13"}'::jsonb)`); err != nil {
 		t.Fatalf("insert endpoints: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `update endpoint set node_name = (select principal_id from node where name = 'edge-1')
+	if _, err := conn.Exec(ctx, `update endpoint set outpost_id = (select user_id from outpost where name = 'edge-1')
 		where name in ('b-assigned', 'c-verdict')`); err != nil {
-		t.Fatalf("assign node: %v", err)
+		t.Fatalf("assign outpost: %v", err)
 	}
 	if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "endpoint-reachable", Instance: "c-verdict", Value: "up", Source: "icmp", TS: time.Now().UTC()},
@@ -84,7 +84,7 @@ func TestReachabilityNamesWhyAVerdictIsPending(t *testing.T) {
 		t.Fatalf("want 3 endpoints, got %d: %s", len(r.Endpoints), out)
 	}
 	for i, want := range []struct{ name, pending string }{
-		{"a-unassigned", "no-node"},
+		{"a-unassigned", "no-outpost"},
 		{"b-assigned", "awaiting-probe"},
 		{"c-verdict", ""},
 	} {

@@ -62,7 +62,7 @@ type Spec struct {
 	Commands  []CommandBinding `json:"commands,omitempty"`
 	// Unmatched is what becomes of an inbound line on a held session that no
 	// listener claims and no exchange is owed (#817): discard (the default;
-	// the node counts it) or collection-failed (the node lands one
+	// the outpost counts it) or collection-failed (the outpost lands one
 	// collection-failed per tick naming how many and the last).
 	Unmatched string `json:"unmatched,omitempty"`
 	// Session declares the held session's auth step, its terminal replies
@@ -192,7 +192,7 @@ type Reply struct {
 	Prefix string `json:"prefix,omitempty"`
 	Regex  string `json:"regex,omitempty"`
 	// Field picks a JSON answer by one field (#1034); Correlate names the
-	// field of a JSON frame a node writes a fresh id into, the answer being
+	// field of a JSON frame an outpost writes a fresh id into, the answer being
 	// the frame that carries it back (websocket, #1034).
 	Field     *FieldMatch `json:"field,omitempty"`
 	Correlate string      `json:"correlate,omitempty"`
@@ -279,7 +279,7 @@ type Emit struct {
 	// Log marks a log line emit.
 	Log *LogEmit `json:"log,omitempty"`
 	// TS reads the record's time out of the payload; absent, the time it
-	// arrived at the node.
+	// arrived at the outpost.
 	TS *TimeField `json:"ts,omitempty"`
 }
 
@@ -795,7 +795,7 @@ func (s *Spec) Validate(cat Catalog) error {
 			}
 			stream = s.Session.Stream
 		case !canListen(s.Transport):
-			return fmt.Errorf("driver: listener %q rides %q, which has no listen path (a listener runs over a held line session, a udp socket or an http stream), so no node would run it", l.Name, s.Transport)
+			return fmt.Errorf("driver: listener %q rides %q, which has no listen path (a listener runs over a held line session, a udp socket or an http stream), so no outpost would run it", l.Name, s.Transport)
 		}
 		for i, a := range l.Arm {
 			if strings.ContainsAny(a, "\r\n") {
@@ -864,9 +864,9 @@ func (s *Spec) Validate(cat Catalog) error {
 	// declares one, or the transport has no stateless line) need a poll or a
 	// listener to hold it, or they could never run (#1049).
 	if IsHTTP(s.Transport) && len(s.Polls) == 0 && len(s.Listeners) == 0 && s.Session.IsCredentialed() {
-		// A credential reaches a node only with a task (#902): a credentialed
+		// A credential reaches an outpost only with a task (#902): a credentialed
 		// http driver with commands alone could never authenticate one.
-		return fmt.Errorf("driver: a credentialed http driver needs a poll or a listener to carry its credential to the node; its commands alone derive no task")
+		return fmt.Errorf("driver: a credentialed http driver needs a poll or a listener to carry its credential to the outpost; its commands alone derive no task")
 	}
 	if !IsHTTP(s.Transport) && len(s.Polls) == 0 && len(s.Listeners) == 0 && (s.Session != nil || (isLineTransport(s.Transport) && s.Transport != "tcp")) {
 		return fmt.Errorf("driver: commands that ride only a held session need a poll or a listener to hold it")
@@ -895,7 +895,7 @@ func (s *Spec) Validate(cat Catalog) error {
 		// Only the line-protocol actuation wire exists today (over a line
 		// transport, or as a datagram over udp, #1037), so a binding on a
 		// transport it cannot reach refuses at write rather than dispatching a
-		// request no node can send.
+		// request no outpost can send.
 		if !isLineTransport(s.Transport) && s.Transport != "udp" && !IsHTTP(s.Transport) {
 			return fmt.Errorf("driver: command binding %q rides transport %q, which has no actuation wire (only the line transports, udp and http actuate today)", c.CommandType, s.Transport)
 		}
@@ -1025,7 +1025,7 @@ func validateIdentity(family, fn string, id *IdentitySpec, records string, emits
 		return fmt.Errorf("driver: %s %q identity key %q is a %s type; an identity key is a registered property type", family, fn, id.Key, lane)
 	}
 	if c := cat.WriterClass(id.Key); c != writerclass.Collected {
-		return fmt.Errorf("driver: %s %q identity may not be keyed by %q: %s", family, fn, id.Key, writerclass.Refusal(c, id.Key, writerclass.Node, ""))
+		return fmt.Errorf("driver: %s %q identity may not be keyed by %q: %s", family, fn, id.Key, writerclass.Refusal(c, id.Key, writerclass.Outpost, ""))
 	}
 	return nil
 }
@@ -1074,7 +1074,7 @@ func validateEmit(family, fn string, em Emit, cat Catalog) error {
 				return fmt.Errorf("driver: %s %q emits %q, which no catalog holds", family, fn, em.Name)
 			}
 			if c := cat.WriterClass(em.Name); c != writerclass.Collected {
-				return fmt.Errorf("driver: %s %q may not emit %q: %s", family, fn, em.Name, writerclass.Refusal(c, em.Name, writerclass.Node, ""))
+				return fmt.Errorf("driver: %s %q may not emit %q: %s", family, fn, em.Name, writerclass.Refusal(c, em.Name, writerclass.Outpost, ""))
 			}
 			lane = l
 		}
@@ -1179,7 +1179,7 @@ func validateField(what string, f Field) error {
 }
 
 // validateTimeField holds a payload time to one extract, a layout the
-// interpreter knows, and a zone the node can load.
+// interpreter knows, and a zone the outpost can load.
 func validateTimeField(what string, tf TimeField) error {
 	if n := tf.Extract.count(); n != 1 {
 		return fmt.Errorf("driver: %s ts needs exactly one extract kind, has %d", what, n)
@@ -1194,7 +1194,7 @@ func validateTimeField(what string, tf TimeField) error {
 	}
 	if tf.Zone != "" {
 		if _, err := time.LoadLocation(tf.Zone); err != nil {
-			return fmt.Errorf("driver: %s ts zone %q is not a time zone the node knows: %v", what, tf.Zone, err)
+			return fmt.Errorf("driver: %s ts zone %q is not a time zone the outpost knows: %v", what, tf.Zone, err)
 		}
 	}
 	return nil
@@ -1235,7 +1235,7 @@ func checkPayloadSchema(what string, em Emit, schema []byte) error {
 // emittable refuses a name a driver may never emit, whatever the catalog
 // holds (ADR-0161): a reserved key (a native probe key, collection-failed, a
 // platform key) has one writer, and it is never a driver's function. The spec
-// write and the node's interpreter both ask, so a stored spec or a task
+// write and the outpost's interpreter both ask, so a stored spec or a task
 // derived before the refusal existed still cannot land one.
 func emittable(name string) error {
 	if c, ok := writerclass.Reserved(name); ok {

@@ -49,7 +49,7 @@ type sseParser struct {
 	overflow bool
 }
 
-// The bounds on what a stream can make a node hold: a line, one event's
+// The bounds on what a stream can make an outpost hold: a line, one event's
 // data, and an id. A line past its cap is read to its end and kept to the
 // cap; an event whose data passes its cap is dropped whole, its id still
 // counted; an id past its cap is ignored. None ends the connection, so one
@@ -170,7 +170,7 @@ func readSSELine(br *bufio.Reader, max int) (line string, truncated bool, err er
 
 // StreamResume is what a held stream carries across its reconnects: the
 // last event ID a reconnect resumes from, and the reconnection time the
-// server asked for. It lives in the node's memory with the endpoint, never
+// server asked for. It lives in the outpost's memory with the endpoint, never
 // persisted. Safe for concurrent use.
 type StreamResume struct {
 	mu     sync.Mutex

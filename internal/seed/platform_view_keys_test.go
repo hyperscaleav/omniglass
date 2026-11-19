@@ -10,7 +10,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// TestPlatformViewKeysAreSeeded proves the Platform health node table's key
+// TestPlatformViewKeysAreSeeded proves the Platform health outpost table's key
 // set (#1644) names only metric types the boot seed ships, each once: the
 // page renders a column per key and reads its tooltip off the catalog, so a
 // key the seed does not carry would be a column with no description and no
@@ -120,7 +120,7 @@ func TestPlatformServerGroupKeysAreSeeded(t *testing.T) {
 	for _, g := range storage.PlatformViewGroups {
 		for _, key := range g.Keys {
 			if prev, dup := seen[key]; dup {
-				t.Errorf("%s is a node column and also in server group %s", key, prev)
+				t.Errorf("%s is an outpost column and also in server group %s", key, prev)
 			}
 		}
 	}
@@ -160,8 +160,8 @@ func TestPlatformPipelineHopsAreSeeded(t *testing.T) {
 		if h.Label == "" || h.Description == "" {
 			t.Errorf("hop %q needs a label and a description: the page teaches the hop from them", h.ID)
 		}
-		if h.ComponentClass != storage.PlatformClassNode && h.ComponentClass != storage.PlatformClassServer {
-			t.Errorf("hop %q is recorded on %q, not a node or a server", h.ID, h.ComponentClass)
+		if h.ComponentClass != storage.PlatformClassOutpost && h.ComponentClass != storage.PlatformClassServer {
+			t.Errorf("hop %q is recorded on %q, not an outpost or a server", h.ID, h.ComponentClass)
 		}
 		if !strings.Contains(h.InstanceForm, "{kind}") {
 			t.Errorf("hop %q instance form %q does not carry the kind", h.ID, h.InstanceForm)

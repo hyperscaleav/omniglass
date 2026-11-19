@@ -29,7 +29,7 @@ func TestLagObserverMeanAndMax(t *testing.T) {
 	now := time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC)
 	at := func(ago time.Duration) *timestamppb.Timestamp { return timestamppb.New(now.Add(-ago)) }
 	ev := &ogv1.TelemetryBatch{
-		Metrics: []*ogv1.MetricSample{{Name: "node-tick-duration", Ts: at(4 * time.Second)}},
+		Metrics: []*ogv1.MetricSample{{Name: "outpost-tick-duration", Ts: at(4 * time.Second)}},
 		Groups: []*ogv1.TaskGroup{
 			{TaskId: "t-1", Ts: at(10 * time.Second), Metrics: []*ogv1.MetricSample{
 				{Name: "icmp-rtt-avg"}, // takes the group's ts

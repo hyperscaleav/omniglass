@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, fireEvent, screen, waitFor } from "@solidjs/testing-library";
 import Audit from "./Audit";
-import { AUDIT_PAGE, type AuditEvent } from "../lib/audit";
+import { AUDIT_PAGE, AUDIT_LOADING_ROWS, type AuditEvent } from "../lib/audit";
 import { uuidFor } from "../lib/testids";
 
 // The Audit page renders the trail newest-first (resolving the actor to a name and
@@ -11,7 +11,7 @@ import { uuidFor } from "../lib/testids";
 // exactly as a user would without a server.
 const seed: AuditEvent[] = [
   { id: "1", ts: "2026-07-07T10:02:00Z", actor: "u-alice", actor_name: "alice", verb: "login", resource: "auth" },
-  { id: "2", ts: "2026-07-07T10:01:00Z", actor: "u-alice", actor_name: "alice", real_actor: "u-root", real_actor_name: "root", verb: "update", resource: "principal", resource_id: "u-alice", old: { label: "Alice" }, new: { label: "Alice Cooper" } },
+  { id: "2", ts: "2026-07-07T10:01:00Z", actor: "u-alice", actor_name: "alice", real_actor: "u-root", real_actor_name: "root", verb: "update", resource: "user", resource_id: "u-alice", old: { label: "Alice" }, new: { label: "Alice Cooper" } },
   { id: uuidFor("3"), ts: "2026-07-07T10:00:00Z", actor: "u-bob", actor_name: "bob", verb: "delete", resource: "component", resource_id: "cmp_9f2", old: { name: "encoder" } },
   { id: uuidFor("4"), ts: "2026-07-07T09:59:00Z", actor: "u-bob", actor_name: "bob", verb: "create", resource: "secret", resource_id: "00000000-0000-4000-8000-00000000aaaa", new: { name: "core-snmp", secret_type: "snmp-community" } },
   { id: uuidFor("5"), ts: "2026-07-07T09:58:00Z", actor: "u-bob", actor_name: "bob", verb: "set", resource: "tag_binding", resource_id: "hq" },
@@ -26,6 +26,13 @@ const seed: AuditEvent[] = [
       Name: "ssh", host_key: "SHA256:7yS0pJqk0m3wQ2v9W6dXn1bT8cHf4LrZ5aEoGuKiMNs",
       Params: { target: "127.60.0.19:22", timeout: "5s" }, Inputs: { host: "127.60.0.19", login: "touch-panel-login" },
     },
+  },
+  // An agent's change through the MCP server (#1178): the channel is server-
+  // stamped, the client is what the MCP client declared, and the agent is the
+  // name its agent token was minted with.
+  {
+    id: uuidFor("8"), ts: "2026-07-07T09:55:00Z", actor: "u-carol", actor_name: "carol", verb: "disable", resource: "component",
+    resource_id: "cmp_amp", new: { name: "rack-amp" }, channel: "mcp", client: "claude-code/2.1.0", agent: "claude-desktop",
   },
 ];
 
@@ -45,6 +52,38 @@ beforeEach(() => {
 });
 
 describe("Audit page", () => {
+  // The first read holds the table's space with skeleton rows (and the footer's
+  // button keeps one label width), so the loaded rows land in place instead of
+  // shifting the page (the probe's layout-shift budget, #1461).
+  it("reserves the list's height with skeleton rows while the first page loads", async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => (release = r));
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      await gate;
+      return new Response(JSON.stringify({ events: seed }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    render(() => <Audit />);
+    expect(screen.getAllByTestId("list-loading-row")).toHaveLength(AUDIT_LOADING_ROWS);
+    expect(screen.getByText("Load older")).toBeTruthy();
+    release();
+    expect(await screen.findByText("login")).toBeTruthy();
+    expect(screen.queryAllByTestId("list-loading-row")).toHaveLength(0);
+  });
+
+  // A first page longer than the skeleton must not push the footer down the
+  // page (#1461): the rows scroll inside the card, the footer stays below them.
+  it("scrolls the rows inside the list, the footer pinned outside that region", async () => {
+    render(() => <Audit />);
+    const table = (await screen.findByText("login")).closest("table")!;
+    const region = table.parentElement!;
+    expect(region.classList.contains("overflow-y-auto")).toBe(true);
+    expect(region.contains(screen.getByText("No older events"))).toBe(false);
+    // The document scrolls, not the shell, so the list only fills a box with a
+    // definite height: without one it grows with its rows and the footer moves.
+    const shell = table.closest(".og-stack")!;
+    expect(shell.parentElement!.className).toMatch(/\bh-\[calc\(100dvh/);
+  });
+
   it("renders events with actor, verb, and resource", async () => {
     const { findByText, getByText } = render(() => <Audit />);
     expect(await findByText("login")).toBeTruthy();
@@ -90,7 +129,7 @@ describe("Audit page", () => {
 
     const { findByText, getByText } = render(() => <Audit />);
     await findByText("Load older");
-    // Re-query each poll: the footer re-renders (replacing the button node) as the
+    // Re-query each poll: the footer re-renders (replacing the button outpost) as the
     // loaded-count updates, so a captured reference would go stale. Wait for the
     // first load to finish so the button is live (not the no-op it is in flight).
     const btn = () => getByText("Load older") as HTMLButtonElement;
@@ -162,7 +201,7 @@ describe("Audit resource labels (ADR-0062)", () => {
 
   it("falls back to the raw resource_id when no image carries a name", async () => {
     const { findByText } = render(() => <Audit />);
-    // Row 2 (principal update) images carry no name key; its id renders as-is.
+    // Row 2 (user update) images carry no name key; its id renders as-is.
     expect(await findByText("u-alice")).toBeTruthy();
   });
 
@@ -205,6 +244,14 @@ describe("Audit drawer fits a jsonb change (#1088)", () => {
     expect(row("Inputs").children[2].textContent).toContain('"login": "touch-panel-login"');
   });
 
+  it("fixes the trail's column widths so masked cell text cannot size them", async () => {
+    const { container, findByText } = render(() => <Audit />);
+    await findByText("retry");
+    const table = container.querySelector("table")!;
+    expect(table.className).toContain("table-fixed");
+    expect(table.className).toContain("w-full");
+  });
+
   it("lays the change table out to the drawer's width, its values wrapping in place", async () => {
     const { findByText } = render(() => <Audit />);
     fireEvent.click(await findByText("retry"));
@@ -221,5 +268,82 @@ describe("Audit drawer fits a jsonb change (#1088)", () => {
       expect(cell.className).toContain("wrap-break-word");
     }
     expect(added.children[2].textContent).toBe("SHA256:7yS0pJqk0m3wQ2v9W6dXn1bT8cHf4LrZ5aEoGuKiMNs");
+  });
+});
+
+// How a change arrived (#1178): a row that came over the MCP server wears a
+// channel pill with the client it declared beneath; a direct write wears none.
+// The agent that acted rides beside the person it acted for.
+describe("Audit channel and client (#1178)", () => {
+  it("marks an MCP write with a channel pill, the declared client as subtext", async () => {
+    render(() => <Audit />);
+    const pill = await screen.findByText("mcp", { selector: ".badge" });
+    expect(pill.className).toContain("badge-soft");
+    const cell = pill.closest("td")!;
+    expect(cell.textContent).toContain("claude-code/2.1.0");
+    const row = pill.closest("tr")!;
+    expect(row.textContent).toContain("carol");
+    expect(row.textContent).toContain("claude-desktop");
+  });
+
+  it("leaves a direct write without a pill", async () => {
+    render(() => <Audit />);
+    await screen.findByText("login");
+    // Eight rows, one of them over MCP: exactly one pill.
+    expect(screen.getAllByTestId("audit-channel")).toHaveLength(1);
+    const loginRow = screen.getByText("login").closest("tr")!;
+    expect(loginRow.querySelector('[data-testid="audit-channel"]')).toBeNull();
+  });
+
+  const typeChip = (token: string) => {
+    const input = screen.getByRole("combobox") as HTMLInputElement;
+    fireEvent.input(input, { target: { value: token } });
+    fireEvent.keyDown(input, { key: "Enter" });
+  };
+
+  it("narrows to MCP writes with the channel filter, and to direct ones with channel:direct", async () => {
+    render(() => <Audit />);
+    await screen.findByText("login");
+    typeChip("channel:mcp");
+    expect(screen.getByText("rack-amp")).toBeTruthy();
+    expect(screen.queryByText("login")).toBeNull();
+    expect(screen.queryByText("core-snmp")).toBeNull();
+  });
+
+  it("offers direct as a channel, matching the rows with none", async () => {
+    render(() => <Audit />);
+    await screen.findByText("login");
+    typeChip("channel:direct");
+    expect(screen.getByText("login")).toBeTruthy();
+    expect(screen.queryByText("rack-amp")).toBeNull();
+  });
+
+  it("narrows to one client with the client search", async () => {
+    render(() => <Audit />);
+    await screen.findByText("login");
+    typeChip("client:claude");
+    expect(screen.getByText("rack-amp")).toBeTruthy();
+    expect(screen.queryByText("login")).toBeNull();
+  });
+
+  it("names the channel, the agent and the client in the drawer, the client as the agent reported it", async () => {
+    render(() => <Audit />);
+    fireEvent.click(await screen.findByText("rack-amp"));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.textContent).toContain("Channel");
+    expect(dialog.textContent).toContain("Client");
+    expect(dialog.textContent).toContain("as the agent reported it");
+    expect(dialog.textContent).toContain("claude-code/2.1.0");
+    expect(dialog.textContent).toContain("claude-desktop");
+    // The channel teaches what it proves and what it does not.
+    expect(screen.getByLabelText("More about Channel")).toBeTruthy();
+  });
+
+  it("names a direct write's channel as direct in the drawer, with no client", async () => {
+    render(() => <Audit />);
+    fireEvent.click(await screen.findByText("delete"));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.textContent).toContain("direct");
+    expect(dialog.textContent).not.toContain("as the agent reported it");
   });
 });

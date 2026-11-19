@@ -10,12 +10,12 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// componentTypeBody is the wire shape of a component_type registry row: the
+// componentTypeBody is the wire shape of a component_type catalog row: the
 // tree above product (mic, camera, wireless-mic under mic). Stem, Icon, and
 // Abbrev are the product's console-facing name/glyph facts, inherited from
 // the nearest ancestor that sets them (null in storage; rendered as "" here,
 // same as the other optional scalar fields). ParentID/Parent are the tree
-// link, absent for a root type. The registry lists alphabetically by
+// link, absent for a root type. The catalog lists alphabetically by
 // label.
 type componentTypeBody struct {
 	ID    string `json:"id" doc:"The component_type's uuid, the stable handle that survives a rename"`
@@ -25,18 +25,18 @@ type componentTypeBody struct {
 	Icon  string `json:"icon,omitempty" doc:"A glyph key; empty inherits the nearest ancestor's"`
 	// ResolvedIcon is the glyph this type actually SHOWS: icon when the row
 	// states one, else the nearest ancestor's (#695). It is served because the
-	// console drew every registry row by climbing the chain in TypeScript
+	// console drew every catalog row by climbing the chain in TypeScript
 	// against this package's climb in Go, which is one rule with two
 	// implementations and a wrong glyph when they disagree.
 	//
 	// It is on the LISTING and not on a single-row write response, and that is
-	// the whole cost question: the listing is the entire registry in one query,
+	// the whole cost question: the listing is the entire catalog in one query,
 	// so every ancestor is already in hand and the walk is free, while resolving
 	// one row costs a query per level for a value no caller reads.
-	ResolvedIcon string   `json:"resolved_icon,omitempty" doc:"The glyph this type shows: its own icon, else the nearest ancestor's. Served on the registry listing, where the whole chain is already in hand; a single-row write response does not carry it"`
+	ResolvedIcon string   `json:"resolved_icon,omitempty" doc:"The glyph this type shows: its own icon, else the nearest ancestor's. Served on the catalog listing, where the whole chain is already in hand; a single-row write response does not carry it"`
 	Abbrev       string   `json:"abbrev,omitempty" doc:"A compact form of label; empty inherits the nearest ancestor's"`
-	LabelRule    string   `json:"label_rule,omitempty" doc:"The label template instances of this type get; empty inherits the nearest ancestor's, then the global rule for components"`
-	DefaultTags  []string `json:"default_tags" doc:"Tags every instance of this type (or a descendant that does not override) starts with"`
+	LabelRule    string   `json:"label_rule,omitempty" doc:"The label rule instances of this type get; empty inherits the nearest ancestor's, then the global rule for components"`
+	DefaultTags  []string `json:"default_tags" doc:"Tags every instance of this type (or a descendant that does not set its own) starts with"`
 	Official     bool     `json:"official" doc:"True for a row this release ships. A shipped row is never written by an operator: an edit forks it"`
 	Forked       bool     `json:"forked" doc:"True when this shipped row carries changes of yours overriding it. Restore discards them"`
 	ParentID     *string  `json:"parent_id,omitempty" doc:"The parent component_type's id, the canonical handle; absent for a root type"`
@@ -53,11 +53,11 @@ type componentTypeBody struct {
 	// than assumed to be the parent (a fact can come from any distance up the
 	// chain), and per fact rather than per row, since one row can take its stem
 	// from a grandparent and its abbrev from its parent.
-	InheritedStem         string `json:"inherited_stem,omitempty" doc:"The stem this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon"`
+	InheritedStem         string `json:"inherited_stem,omitempty" doc:"The stem this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the catalog listing, on the same terms as resolved_icon"`
 	InheritedStemSource   string `json:"inherited_stem_source,omitempty" doc:"The name of the ancestor component_type inherited_stem comes from, which may be further up the chain than the parent"`
-	InheritedIcon         string `json:"inherited_icon,omitempty" doc:"The glyph this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon"`
+	InheritedIcon         string `json:"inherited_icon,omitempty" doc:"The glyph this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the catalog listing, on the same terms as resolved_icon"`
 	InheritedIconSource   string `json:"inherited_icon_source,omitempty" doc:"The name of the ancestor component_type inherited_icon comes from, which may be further up the chain than the parent"`
-	InheritedAbbrev       string `json:"inherited_abbrev,omitempty" doc:"The abbrev this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon"`
+	InheritedAbbrev       string `json:"inherited_abbrev,omitempty" doc:"The abbrev this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the catalog listing, on the same terms as resolved_icon"`
 	InheritedAbbrevSource string `json:"inherited_abbrev_source,omitempty" doc:"The name of the ancestor component_type inherited_abbrev comes from, which may be further up the chain than the parent"`
 }
 
@@ -95,7 +95,7 @@ type createComponentTypeInput struct {
 		Stem        string   `json:"stem,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The auto-generated component name's prefix; omit to inherit the parent's. Lowercase letters, digits, and hyphens."`
 		Icon        string   `json:"icon,omitempty" doc:"A glyph key; omit to inherit the parent's"`
 		Abbrev      string   `json:"abbrev,omitempty" doc:"A compact form of label; omit to inherit the parent's"`
-		LabelRule   string   `json:"label_rule,omitempty" doc:"A Go text/template rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the parent's, then the global component rule. A template that does not parse is refused here, 422."`
+		LabelRule   string   `json:"label_rule,omitempty" doc:"A label rule, written in Go text/template, rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the parent's, then the global component rule. A rule that does not parse is refused here, 422."`
 		DefaultTags []string `json:"default_tags,omitempty" doc:"Tags every instance of this type starts with"`
 		ParentID    string   `json:"parent_id,omitempty" doc:"The parent component_type, by name or uuid; omit for a root type"`
 	}
@@ -118,7 +118,7 @@ type updateComponentTypeInput struct {
 		Stem        *string   `json:"stem,omitempty" maxLength:"100" pattern:"^([a-z0-9][a-z0-9-]*)?$" doc:"A new name prefix (lowercase letters, digits, and hyphens); an empty string CLEARS it, so this type inherits the nearest ancestor's again. A root type has no ancestor to inherit from and is refused (422)."`
 		Icon        *string   `json:"icon,omitempty" doc:"A new glyph key; an empty string clears it, so this type inherits the nearest ancestor's again"`
 		Abbrev      *string   `json:"abbrev,omitempty" doc:"A new compact form; an empty string clears it, so this type inherits the nearest ancestor's again"`
-		LabelRule   *string   `json:"label_rule,omitempty" doc:"A new label template; an empty string clears it, so instances fall back to the nearest ancestor's rule and then the global component rule. Refused with 422 if it does not parse."`
+		LabelRule   *string   `json:"label_rule,omitempty" doc:"A new label rule; an empty string clears it, so instances fall back to the nearest ancestor's rule and then the global component rule. Refused with 422 if it does not parse."`
 		DefaultTags *[]string `json:"default_tags,omitempty" doc:"Replaces the default-tag set; omit to leave unchanged"`
 	}
 }
@@ -130,7 +130,7 @@ type componentTypeOutput struct {
 // mapComponentTypeErr translates the component_type storage sentinels into
 // HTTP status. ErrParentTypeNotFound (a create/update naming a parent that
 // does not resolve) is a 422 naming the offense; everything else falls
-// through to the shared type-registry mapping (not-found 404, duplicate 409,
+// through to the shared type-catalog mapping (not-found 404, duplicate 409,
 // official read-only 422, in-use 409).
 func mapComponentTypeErr(err error) error {
 	if errors.Is(err, storage.ErrParentTypeNotFound) {
@@ -158,9 +158,9 @@ func resolveComponentTypeParent(ctx context.Context, gw storage.Gateway, ref str
 	return parent, nil
 }
 
-// registerComponentTypeRoutes wires the component_type registry surface: list
+// registerComponentTypeRoutes wires the component_type catalog surface: list
 // (the tree, flattened with parent links), create/update/delete of custom
-// (non-official) nodes. Gated by component_type:read|create|update|delete;
+// (non-official) outposts. Gated by component_type:read|create|update|delete;
 // read sits in the viewer floor (*:read), the mutations at the admin tier,
 // the same split as location_type.
 func registerComponentTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
@@ -170,7 +170,7 @@ func registerComponentTypeRoutes(api huma.API, a *authenticator, gw storage.Gate
 		Method:      http.MethodGet,
 		Path:        "/component-types",
 		Summary:     "List component types",
-		Description: "Lists the component_type registry (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read.",
+		Description: "Lists the component_type catalog (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read.",
 	}, "component_type", "read"), func(ctx context.Context, _ *struct{}) (*listComponentTypesOutput, error) {
 		types, err := gw.ListComponentTypes(ctx)
 		if err != nil {

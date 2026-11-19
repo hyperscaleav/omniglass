@@ -12,7 +12,7 @@ import type { MemberContext } from "../lib/detail";
 
 const decl: StandardMapDecl = { aspect: 1.8, positions: [] };
 
-type Spec = [role: string, roleLabel: string, position: number, x: number, y: number, name?: string];
+type Spec = [slot: string, slotLabel: string, position: number, x: number, y: number, name?: string];
 const SPECS: Spec[] = [
   ["projection", "Projection", 1, 0.5, 0.06, "projector-1"],
   ["confidence-display", "Confidence Display", 1, 0.85, 0.12, "display-2"],
@@ -27,13 +27,13 @@ const SPECS: Spec[] = [
   ["camera", "Camera", 2, 0.65, 0.94, "cam-2"],
   ["touch-control", "Touch Control", 1, 0.08, 0.3, "panel-1"],
 ];
-const markers: MapMarker[] = SPECS.map(([role, roleLabel, position, x, y, name]) => ({
+const markers: MapMarker[] = SPECS.map(([slot, slotLabel, position, x, y, name]) => ({
   x,
   y,
-  role,
-  roleLabel,
+  slot,
+  slotLabel,
   position,
-  occupant: name ? { name, componentId: `c-${role}-${position}`, down: false } : undefined,
+  occupant: name ? { name, componentId: `c-${slot}-${position}`, down: false } : undefined,
 }));
 
 const member: MemberContext = {

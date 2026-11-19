@@ -23,7 +23,7 @@ import (
 // referenceFields maps a uuid field to the name field that must accompany it, per
 // response schema. A schema listed here must carry both.
 //
-// The registry references join the fleet references here now that every registry
+// The catalog references join the fleet references here now that every catalog
 // has a uuid primary key and a renameable `name` (epic #262, ADR-0062). A product,
 // a vendor, a driver, a standard, and their parents are addressed the same way an
 // fleet entity is: the id is the handle, the name is the label, and a response
@@ -35,7 +35,7 @@ var referenceFields = map[string]string{
 	"owner_id":           "owner_name",
 	"component_id":       "component",
 	"raised_by_rule_id":  "raised_by_rule",
-	"node_id":            "node",
+	"outpost_id":         "outpost",
 	"product_id":         "product",
 	"parent_product_id":  "parent_product",
 	"component_type_id":  "component_type",
@@ -55,7 +55,7 @@ var referenceFields = map[string]string{
 	// A dependency edge's upstream component (#1648), by name beside its uuid.
 	"upstream_id": "upstream",
 	// A person target's group or person (#1341), by name beside its uuid.
-	"principal_group_id": "principal_group",
+	"user_group_id": "user_group",
 	// An action rule's notification type (#618), by name beside its uuid.
 	"notification_type_id": "notification_type",
 	// A calc rule's input names the property or metric it reads as `key`, the
@@ -69,14 +69,14 @@ var referenceFields = map[string]string{
 	"group_id": "group",
 }
 
-// registryNameRefs is the reverse direction: a response that names a renameable
-// registry by its handle must ALSO carry the uuid, so a name-only reference (which
+// catalogNameRefs is the reverse direction: a response that names a renameable
+// catalog by its handle must ALSO carry the uuid, so a name-only reference (which
 // the forward `*_id` scan cannot see, because there is no id field to trip on)
 // cannot slip through. Keyed by the NAME field, valued by the id field it requires.
-// Only unambiguous registry-name fields belong here. An endpoint's `transport`
+// Only unambiguous catalog-name fields belong here. An endpoint's `transport`
 // is deliberately absent: transports are a code registry (ADR-0073) with no
 // uuid to pair, so the name alone IS the stable handle.
-var registryNameRefs = map[string]string{
+var catalogNameRefs = map[string]string{
 	"location_type":      "location_type_id",
 	"secret_type":        "secret_type_id",
 	"property_type_name": "property_type_id",
@@ -84,9 +84,9 @@ var registryNameRefs = map[string]string{
 }
 
 // reverseNameOnlyOK exempts a specific `Schema.field` from the reverse check: a
-// diagnostic BFF row that carries a registry name for display where the id would
+// diagnostic BFF row that carries a catalog name for display where the id would
 // be dead weight. Empty today: the one exemption it held (the reachability
-// row's interface_type) retired with the interface_type registry (ADR-0073).
+// row's interface_type) retired with the interface_type catalog (ADR-0073).
 var reverseNameOnlyOK = map[string]bool{}
 
 // Schemas where a *_id field addresses something with no name to pair it with.
@@ -95,21 +95,21 @@ var idOnlyIsCorrect = map[string]string{
 	"resource_id":      "an audit row's target is polymorphic and may since have been deleted",
 	"value_id":         "a stored property value has no name, only the property it answers",
 	"endpoint_id":      "an endpoint's name is unique only within its component: a body carries it beside the component, and the two are its address, <component>/<name> (#1133)",
-	"principal_id":     "a principal's identifier is per kind (a username, a service account's name), so a body carries it in a kind-specific field, never a generic name pair",
+	"user_id":          "a user's identifier is per kind (a username, a machine user's name), so a body carries it in a kind-specific field, never a generic name pair",
 	"scope_id":         "a scope root is a uuid handle on a subtree",
-	"target_id":        "an impersonation target is a principal, as above",
-	"node_id":          "a node is addressed by its enrollment identity, which is its primary key",
+	"target_id":        "an impersonation target is a user, as above",
+	"outpost_id":       "an outpost is addressed by its enrollment identity, which is its primary key",
 	"caused_event_id":  "an event is addressed by its bigint id; an occurrence has no name handle",
 	"settled_event_id": "an event is addressed by its bigint id; an occurrence has no name handle",
 	"correlation_id":   "a freeform string that threads related log lines and events, not a reference to a named entity",
 }
 
 // References exempt from the both-forms rule, each for a reason of its own.
-// The nine component-classification registries used to live here, back when their
+// The nine component-classification catalogs used to live here, back when their
 // name WAS their primary key; epic #262 gave each a uuid key and a renameable
 // name, so they moved into referenceFields and now carry both like any reference.
 // What remains is a set of row ids that address rows with no separate name of
-// their own (an alarm, an event, an audit row, a rule, a contract line, a role,
+// their own (an alarm, an event, an audit row, a rule, a contract line, a slot,
 // a tag binding's key).
 var exemptRefs = map[string]bool{
 	"role_id": true, "alarm_id": true, "derived_by_rule_id": true,
@@ -183,9 +183,9 @@ func TestReferencesCarryBothForms(t *testing.T) {
 					"and the name as the label", name, field, pair)
 			}
 		}
-		// Reverse direction: a name-only registry reference has no `*_id` field to
-		// trip the forward scan, so check the curated registry-name fields directly.
-		for nameField, idField := range registryNameRefs {
+		// Reverse direction: a name-only catalog reference has no `*_id` field to
+		// trip the forward scan, so check the curated catalog-name fields directly.
+		for nameField, idField := range catalogNameRefs {
 			if _, hasName := sch.Properties[nameField]; !hasName {
 				continue
 			}
@@ -194,7 +194,7 @@ func TestReferencesCarryBothForms(t *testing.T) {
 			}
 			checked++
 			if _, hasID := sch.Properties[idField]; !hasID {
-				t.Errorf("%s carries the registry name %q but not %q: a registry reference carries both, "+
+				t.Errorf("%s carries the catalog name %q but not %q: a catalog reference carries both, "+
 					"the name as the label and the id as the stable handle", name, nameField, idField)
 			}
 		}

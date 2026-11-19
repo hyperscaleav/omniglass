@@ -125,7 +125,7 @@ const cases: {
 }[] = [
   {
     name: "audit's When column (an hour that is not zero-padded)",
-    page: "guides/admin/audit.md",
+    page: "admin/audit.md",
     shot: "audit",
     value: "text=/\\d+\\/\\d+\\/\\d{4}/",
     markup: tableRow(190),
@@ -135,7 +135,7 @@ const cases: {
   },
   {
     name: "files' Added column (a day that is not zero-padded)",
-    page: "guides/admin/files.md",
+    page: "admin/files.md",
     shot: "files",
     value: "text=/[A-Z][a-z]{2} \\d{1,2}, \\d{2}:\\d{2} (AM|PM)/",
     markup: tableRow(170),
@@ -145,7 +145,7 @@ const cases: {
   },
   {
     name: "the entity blade's since-line",
-    page: "guides/operator/entities.md",
+    page: "operator/entities.md",
     shot: "entity-blade",
     value: "[data-testid=blade-since]",
     markup: bladeRow,
@@ -155,8 +155,8 @@ const cases: {
   },
   {
     name: "a system summary card's since-line",
-    page: "guides/operator/fleet.md",
-    shot: "fleet-place-systems",
+    page: "operator/fleet.md",
+    shot: "fleet-location-systems",
     value: "[data-testid=summary-since]",
     markup: summaryCard,
     narrow: "since Oct 4, 06:59 PM · 9s",
@@ -352,8 +352,8 @@ test.describe("docs screenshot masks", () => {
     await expect(shootBaseline(page, plan)).rejects.toThrow(`wider than its declared ${entry.width}px box`);
   });
 
-  // CatalogShell.tsx's subrail: each registry's entry is a label and, right-aligned
-  // at the end of the row, the live count of the registry's rows. The rail's width
+  // CatalogShell.tsx's subrail: each catalog's entry is a label and, right-aligned
+  // at the end of the row, the live count of the catalog's rows. The rail's width
   // is fixed, so the count's RIGHT edge holds still and its left edge moves with
   // its digits, which is what a declared box anchored at the top-left cannot
   // hold (#1482). A release that seeds one more driver or type moves a digit on
@@ -405,6 +405,45 @@ test.describe("docs screenshot masks", () => {
     expect(await planStandingMasks(page)).toEqual([]);
   });
 
+  // TopBar.tsx's inbox bell: a 32px link with the unread count as a badge pinned
+  // past its top-right corner (InboxIndicator.tsx). The lab raises a notification
+  // partway through a capture, so whether a shot shows the badge depends on when
+  // it was taken, and platform-health-hop flipped between runs on main (#2196).
+  const topBar = (unread: string) => `
+<style>${baseStyle}
+  header { display: flex; align-items: center; gap: 12px; height: 56px; padding: 0 24px; }
+  .bell { position: relative; display: inline-flex; width: 32px; height: 32px; align-items: center; justify-content: center; }
+  .unread { position: absolute; right: -6px; top: -4px; height: 16px; min-width: 16px; padding: 0 4px;
+    border-radius: 4px; background: #14b8a6; color: #04130f; font-size: 10px; line-height: 16px; text-align: center; }
+</style>
+<header>
+  <span style="flex: 1">Platform</span>
+  <button style="width: 32px; height: 32px">B</button>
+  <a class="bell" data-testid="inbox-indicator">&#9881;${unread ? `<span class="unread" data-testid="inbox-unread">${unread}</span>` : ""}</a>
+</header>`;
+
+  test("a baseline under the standing masks is the same with or without an unread badge", async ({ page }) => {
+    const shoot = async (unread: string) => {
+      await page.setContent(topBar(unread));
+      return shootBaseline(page, await planStandingMasks(page));
+    };
+    const none = await shoot("");
+    expect(none.equals(await shoot("1"))).toBe(true);
+    expect(none.equals(await shoot("99+"))).toBe(true);
+  });
+
+  test("the bell's padded box covers its badge and stops short of the button beside it", async ({ page }) => {
+    await page.setContent(topBar("99+"));
+    const badge = await valueBox(page, "[data-testid=inbox-unread]");
+    const button = await valueBox(page, "button");
+    const [box] = paintedBoxes(await planMasks(page, [{ selector: "[data-testid=inbox-indicator]", pad: 8 }]));
+    expect(box.x).toBeLessThanOrEqual(badge.x);
+    expect(box.y).toBeLessThanOrEqual(badge.y);
+    expect(box.x + box.width).toBeGreaterThanOrEqual(badge.x + badge.width);
+    expect(box.y + box.height).toBeGreaterThanOrEqual(badge.y + badge.height);
+    expect(box.x).toBeGreaterThan(button.x + button.width);
+  });
+
   test("a right-anchored declared box ends where its value does", async ({ page }) => {
     await page.setContent(railRow("Drivers", "10"));
     const entry = { selector: "[data-testid=catalog-entry-count]", width: 40, align: "right" as const };
@@ -431,7 +470,8 @@ test.describe("docs screenshot masks", () => {
       width: 40,
       align: "right",
     });
-    for (const bad of [42, null, {}, { width: 10 }, { selector: "x" }, { selector: "x", width: 0 }, { selector: "x", width: 1.5 }, { selector: "x", width: 10, widht: 12 }, { selector: "x", width: 10, align: "middle" }, { selector: "x", align: "right" }]) {
+    expect(normalizeMask({ selector: "[data-testid=x]", pad: 8 })).toEqual({ selector: "[data-testid=x]", pad: 8 });
+    for (const bad of [42, null, {}, { width: 10 }, { selector: "x" }, { selector: "x", width: 0 }, { selector: "x", width: 1.5 }, { selector: "x", width: 10, widht: 12 }, { selector: "x", width: 10, align: "middle" }, { selector: "x", align: "right" }, { selector: "x", pad: 0 }, { selector: "x", pad: 2.5 }, { selector: "x", pad: 8, width: 40 }]) {
       expect(() => normalizeMask(bad as never)).toThrow("invalid mask entry");
     }
   });

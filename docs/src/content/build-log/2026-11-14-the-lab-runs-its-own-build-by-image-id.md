@@ -16,5 +16,5 @@ created from that ID, so nothing re-reads a tag mid-run. `make test-lab` hands t
 id it just built; a `labintegration` case tags a differently labelled image as `omniglass:dev` after
 the build and shows a lab still comes up on its own, server and node alike. `--image` and
 `OMNIGLASS_LAB_IMAGE` still override everything. The ready file's `LAB_IMAGE` stays the reference, not
-the ID, since scripts build `FROM` it. The [lab guide](/guides/lab/#which-image-runs) teaches the
+the ID, since scripts build `FROM` it. The [lab guide](/guides/lab/#flags) teaches the
 keyed tag.

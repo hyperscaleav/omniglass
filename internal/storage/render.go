@@ -29,7 +29,7 @@ type Renders struct {
 // derives from its own placement (its root ancestor's location, walked by
 // PathOf below), never from a system it happens to belong to.
 
-// nonAccessorSegments drops every accessor ($comp/$sys/$role) from segments,
+// nonAccessorSegments drops every accessor ($comp/$sys/$slot) from segments,
 // keeping the rest in order: the one filter both renders below share.
 func nonAccessorSegments(segments []string) []string {
 	kept := make([]string, 0, len(segments))

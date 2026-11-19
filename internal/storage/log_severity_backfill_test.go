@@ -49,7 +49,7 @@ func TestLogSeverityBackfillMatchesTheGoTable(t *testing.T) {
 }
 
 // TestLogSeverityBackfillCanonicalizesBothTables is the one-time backfill (#417,
-// the 2026-10-25 comment on it): every existing log_line and node_log severity
+// the 2026-10-25 comment on it): every existing log_line and outpost_log severity
 // is mapped through the canonical alias table, a word outside it moves to the
 // severity_raw attribute with no severity (as logline.Normalize does on a new
 // line), and a blank severity becomes none. A second run changes nothing.
@@ -57,8 +57,8 @@ func TestLogSeverityBackfillCanonicalizesBothTables(t *testing.T) {
 	t.Parallel()
 	f := newPruneFixture(t)
 	all := scope.Set{All: true}
-	if _, err := f.gw.CreateNode(f.ctx, "", storage.NodeSpec{Name: "sev-node"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := f.gw.CreateOutpost(f.ctx, "", storage.OutpostSpec{Name: "sev-outpost"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	type row struct{ severity, attrs string }
 	lineRows := []row{
@@ -78,11 +78,13 @@ func TestLogSeverityBackfillCanonicalizesBothTables(t *testing.T) {
 			values (now(), (select id from component where name = 'prune-c1'), '', 'push', $1, $2, $3::jsonb)`, sev, "line "+string(rune('a'+i)), attrs)
 	}
 	for _, sev := range []string{"WARN", "fatal", "bogus"} {
-		mustExec(t, f.conn, `insert into node_log (ts, node_id, source, severity, message)
-			values (now(), (select principal_id from node where name = 'sev-node'), 'node', $1, $1)`, sev)
+		mustExec(t, f.conn, `insert into outpost_log (ts, outpost_id, source, severity, message)
+			values (now(), (select user_id from outpost where name = 'sev-outpost'), 'outpost', $1, $1)`, sev)
 	}
 
-	up := severityBackfillUp(t)
+	// The backfill predates #2059, which renamed node_log; it runs here over
+	// the table as it is named now.
+	up := strings.ReplaceAll(severityBackfillUp(t), "public.node_log", "public.outpost_log")
 	read := func(sql string) []string {
 		t.Helper()
 		rows, err := f.conn.Query(f.ctx, sql)
@@ -110,33 +112,33 @@ func TestLogSeverityBackfillCanonicalizesBothTables(t *testing.T) {
 		if lines != want {
 			t.Errorf("run %d: log_line severities\n got %s\nwant %s", run, lines, want)
 		}
-		nodes := strings.Join(read(`select coalesce(severity, '-') || '|' || coalesce(attributes->>'severity_raw', '-') from node_log order by id`), "; ")
-		if nodes != "warning|-; critical|-; -|bogus" {
-			t.Errorf("run %d: node_log severities = %s, want warning, critical, and bogus kept raw", run, nodes)
+		outposts := strings.Join(read(`select coalesce(severity, '-') || '|' || coalesce(attributes->>'severity_raw', '-') from outpost_log order by id`), "; ")
+		if outposts != "warning|-; critical|-; -|bogus" {
+			t.Errorf("run %d: outpost_log severities = %s, want warning, critical, and bogus kept raw", run, outposts)
 		}
 	}
 }
 
-// TestANodeLogLandsWithACanonicalSeverity: a node's self-log is held to the
+// TestAOutpostLogLandsWithACanonicalSeverity: an outpost's self-log is held to the
 // canonical severity at the gateway, as a component's log line is (#1145), so
-// the backfill is the last time node_log needs one: a known word becomes its
+// the backfill is the last time outpost_log needs one: a known word becomes its
 // level, an unknown one is kept as severity_raw with no severity.
-func TestANodeLogLandsWithACanonicalSeverity(t *testing.T) {
+func TestAOutpostLogLandsWithACanonicalSeverity(t *testing.T) {
 	t.Parallel()
 	f := newPruneFixture(t)
 	all := scope.Set{All: true}
-	if _, err := f.gw.CreateNode(f.ctx, "", storage.NodeSpec{Name: "sev-node"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := f.gw.CreateOutpost(f.ctx, "", storage.OutpostSpec{Name: "sev-outpost"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
-	landed, err := landOf(f.gw.LandBatch(f.ctx, storage.IngestBatch{BatchID: "node-sev", NodeLogs: []storage.NodeLogWrite{
-		{Node: "sev-node", Source: "node", Severity: "WARN", Message: "a"},
-		{Node: "sev-node", Source: "node", Severity: "bogus", Message: "b"},
+	landed, err := landOf(f.gw.LandBatch(f.ctx, storage.IngestBatch{BatchID: "outpost-sev", OutpostLogs: []storage.OutpostLogWrite{
+		{Outpost: "sev-outpost", Source: "outpost", Severity: "WARN", Message: "a"},
+		{Outpost: "sev-outpost", Source: "outpost", Severity: "bogus", Message: "b"},
 	}}))
 	if err != nil || !landed {
 		t.Fatalf("land: landed=%v err=%v", landed, err)
 	}
 	var got []string
-	rows, err := f.conn.Query(f.ctx, `select coalesce(severity, '-') || '|' || coalesce(attributes->>'severity_raw', '-') from node_log order by id`)
+	rows, err := f.conn.Query(f.ctx, `select coalesce(severity, '-') || '|' || coalesce(attributes->>'severity_raw', '-') from outpost_log order by id`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,6 +151,6 @@ func TestANodeLogLandsWithACanonicalSeverity(t *testing.T) {
 	}
 	rows.Close()
 	if strings.Join(got, "; ") != "warning|-; -|bogus" {
-		t.Fatalf("node_log rows = %v, want WARN as warning and bogus kept raw", got)
+		t.Fatalf("outpost_log rows = %v, want WARN as warning and bogus kept raw", got)
 	}
 }

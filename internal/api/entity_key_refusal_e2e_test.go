@@ -16,7 +16,7 @@ import (
 // This is the tier that matters and the tier that was missing. Asserting the
 // storage sentinel proves the gateway refuses; it says nothing about what the
 // route does with that refusal. When the key rule was first widened, five
-// registry routes threw a brand new sentinel into mapTypeErr, which had no case
+// catalog routes threw a brand new sentinel into mapTypeErr, which had no case
 // for it, so every one of them fell to the default branch and returned
 // 500 "type operation failed" for a name with a capital letter in it. The whole
 // suite stayed green, because nothing drove those routes with a bad name.
@@ -50,7 +50,7 @@ func TestIllegalKeyIsAlways422(t *testing.T) {
 		"/standards":      func(s string) map[string]any { return map[string]any{"name": s, "label": "X"} },
 		"/location-types": func(s string) map[string]any { return map[string]any{"name": s, "label": "X"} },
 		"/products":       func(s string) map[string]any { return map[string]any{"name": s, "label": "X"} },
-		"/nodes":          func(s string) map[string]any { return map[string]any{"name": s} },
+		"/outposts":       func(s string) map[string]any { return map[string]any{"name": s} },
 		"/components":     func(s string) map[string]any { return map[string]any{"name": s} },
 		"/systems":        func(s string) map[string]any { return map[string]any{"name": s} },
 		"/locations":      func(s string) map[string]any { return map[string]any{"name": s, "location_type": "room"} },

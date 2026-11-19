@@ -41,7 +41,7 @@ func TestSendPostsJSONAndDecodesTheAnswer(t *testing.T) {
 func TestSendReturnsARefusalsStatus(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "the node's simulator is not connected", http.StatusConflict)
+		http.Error(w, "the outpost's simulator is not connected", http.StatusConflict)
 	}))
 	t.Cleanup(srv.Close)
 	h := &harness{http: srv.Client(), env: map[string]string{"LAB_TOKEN": "tok"}}

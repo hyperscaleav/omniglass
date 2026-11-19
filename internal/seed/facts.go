@@ -55,7 +55,7 @@ type factsNamed struct {
 
 // factsTransport renders the code registry (internal/transport, ADR-0073) into
 // the same facts artifact the seeded YAMLs feed: the transports are build-time
-// facts of the binary, so the docs table derives from the registry rather than
+// facts of the binary, so the docs table derives from the catalog rather than
 // restating it.
 type factsTransport struct {
 	Name        string `json:"name"`
@@ -72,11 +72,11 @@ type factsTransport struct {
 }
 
 // factsLabelRule is one global label rule (#682) as the docs render it: the
-// entity kind and the template this release ships for it. An operator's own
+// entity kind and the rule this release ships for it. An operator's own
 // override is fleet data and is deliberately not a shipped fact.
 type factsLabelRule struct {
 	EntityKind string `json:"entity_kind"`
-	Template   string `json:"template"`
+	Rule       string `json:"rule"`
 }
 
 type factsLocationType struct {
@@ -95,7 +95,7 @@ type factsNameRule struct {
 	BareFirst bool   `json:"bare_first,omitempty"`
 }
 
-// factsTypeNode is one row of an INHERITING classification registry
+// factsTypeNode is one row of an INHERITING classification catalog
 // (component_type, system_type) as the docs render it (#678).
 //
 // The blank facts are rendered blank, `omitempty` and all: a child that states
@@ -175,7 +175,7 @@ type factsSeverityLevel struct {
 
 // factsEventRule is one official event rule (#920, #948) as the docs render
 // it: the criteria as their expressions (#957), the severity absent for an
-// informational rule.
+// informational rule, Disabled for one that ships off (#1985).
 type factsEventRule struct {
 	Name           string `json:"name"`
 	Label          string `json:"label,omitempty"`
@@ -185,6 +185,8 @@ type factsEventRule struct {
 	Clear          string `json:"clear,omitempty"`
 	FireSustain    string `json:"fire_sustain,omitempty"`
 	ClearSustain   string `json:"clear_sustain,omitempty"`
+	SampleWindow   string `json:"sample_window,omitempty"`
+	Disabled       bool   `json:"disabled,omitempty"`
 	Severity       string `json:"severity,omitempty"`
 	FireEventType  string `json:"fire_event_type"`
 	ClearEventType string `json:"clear_event_type,omitempty"`
@@ -268,7 +270,7 @@ func FactsJSON() ([]byte, error) {
 		return nil, fmt.Errorf("seed facts: label rules: %w", err)
 	}
 	for _, r := range rules.LabelRules {
-		doc.LabelRules = append(doc.LabelRules, factsLabelRule{EntityKind: r.EntityKind, Template: r.Template})
+		doc.LabelRules = append(doc.LabelRules, factsLabelRule{EntityKind: r.EntityKind, Rule: r.Rule})
 	}
 
 	var props propertyTypesDoc
@@ -439,8 +441,8 @@ func FactsJSON() ([]byte, error) {
 	}
 	for _, r := range ers.Rules {
 		fr := factsEventRule{Name: r.Name, Label: r.Label, Description: r.Description, SampleKey: r.SampleKey,
-			Fire: r.Fire, Clear: r.Clear, FireSustain: r.FireSustain, ClearSustain: r.ClearSustain, Severity: r.Severity,
-			FireEventType: r.FireEventType, ClearEventType: r.ClearEventType}
+			Fire: r.Fire, Clear: r.Clear, FireSustain: r.FireSustain, ClearSustain: r.ClearSustain, SampleWindow: r.SampleWindow, Severity: r.Severity,
+			FireEventType: r.FireEventType, ClearEventType: r.ClearEventType, Disabled: r.Enabled != nil && !*r.Enabled}
 		doc.EventRules = append(doc.EventRules, fr)
 	}
 

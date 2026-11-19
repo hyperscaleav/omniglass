@@ -1,0 +1,360 @@
+package api_test
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/hyperscaleav/omniglass/internal/api"
+	"github.com/hyperscaleav/omniglass/internal/seed"
+	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
+)
+
+// declaredSlotWire is one slot as its OWNER declares it: the write's echo and
+// the standard-arc read, which is where a caller confirms what actually landed.
+type declaredSlotWire struct {
+	Name           string   `json:"name"`
+	Label          string   `json:"label"`
+	Quorum         int      `json:"quorum"`
+	Capacity       *int     `json:"capacity"`
+	PositionLabels []string `json:"position_labels"`
+	AcceptedTypes  []string `json:"accepted_types"`
+	PinnedProducts []string `json:"pinned_products"`
+	Impact         string   `json:"impact"`
+	Alternate      string   `json:"alternate"`
+}
+
+// slotMaskFixture stands up an owner-token client over a standard that declares
+// one fully specified slot, the shape every case below patches.
+func slotMaskFixture(t *testing.T) (*apiClient, string, string) {
+	t.Helper()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := seededDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	t.Cleanup(gw.Close)
+	ownerTok := bootstrapOwnerTok(t, ctx, gw)
+	srv := httptest.NewServer(api.NewHandler(gw))
+	t.Cleanup(srv.Close)
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	c.do(ownerTok, http.MethodPost, "/standards", map[string]any{
+		"name": "mask-room", "label": "Mask Room",
+	}, http.StatusCreated)
+	pinned := storagetest.MintProduct(t, ctx, gw, "display")
+	c.do(ownerTok, http.MethodPatch, "/standards/mask-room/slots/main-display", map[string]any{
+		"label": "Main Display", "quorum": 2, "capacity": 3, "impact": "outage",
+		"position_labels": []string{"left", "right"},
+		"accepted_types":  []string{"display"}, "pinned_products": []string{pinned.Name},
+	}, http.StatusOK)
+	return c, ownerTok, "/standards/mask-room/slots/main-display"
+}
+
+// readDeclaredSlot reads the slot back off the standard's declaration list,
+// which is the surface an operator confirms a write on.
+func readDeclaredSlot(t *testing.T, c *apiClient, tok, name string) declaredSlotWire {
+	t.Helper()
+	var list struct {
+		Slots []declaredSlotWire `json:"slots"`
+	}
+	if err := json.Unmarshal(c.do(tok, http.MethodGet, "/standards/mask-room/slots", nil, http.StatusOK), &list); err != nil {
+		t.Fatalf("decode standard slots: %v", err)
+	}
+	for _, r := range list.Slots {
+		if r.Name == name {
+			return r
+		}
+	}
+	t.Fatalf("slot %q not in the declaration read %+v", name, list.Slots)
+	return declaredSlotWire{}
+}
+
+// TestSlotPatchWithNoMaskLeavesOmittedFieldsAlone is #639 over the wire: the
+// implied mask is the fields the body populated, so an edit that carries a
+// label changes a label and nothing else. Before the conversion
+// this route was a PUT that wholesale-replaced most of the row.
+func TestSlotPatchWithNoMaskLeavesOmittedFieldsAlone(t *testing.T) {
+	t.Parallel()
+	c, tok, path := slotMaskFixture(t)
+
+	c.do(tok, http.MethodPatch, path, map[string]any{"label": "Main Display (renamed)"}, http.StatusOK)
+
+	got := readDeclaredSlot(t, c, tok, "main-display")
+	if got.Label != "Main Display (renamed)" {
+		t.Fatalf("label = %q, want the edit to take", got.Label)
+	}
+	if got.Impact != "outage" {
+		t.Fatalf("impact = %q, want outage: an omitted field is not a cleared field (#639)", got.Impact)
+	}
+	if got.Quorum != 2 || got.Capacity == nil || *got.Capacity != 3 {
+		t.Fatalf("quorum/capacity = %d/%v, want 2/3 untouched", got.Quorum, got.Capacity)
+	}
+	if len(got.PositionLabels) != 2 || len(got.AcceptedTypes) != 1 || len(got.PinnedProducts) != 1 {
+		t.Fatalf("lists after an unrelated edit = %+v, want all three intact (#639)", got)
+	}
+}
+
+// TestSlotPatchWithAMaskClearsCapacity is #638 over the wire, the worked case
+// the primitive exists for: capacity is an integer, so it has no empty-string
+// sentinel to clear it with, and under the implied mask alone "clear it" and
+// "leave it alone" are the same request.
+func TestSlotPatchWithAMaskClearsCapacity(t *testing.T) {
+	t.Parallel()
+	c, tok, path := slotMaskFixture(t)
+
+	c.do(tok, http.MethodPatch, path, map[string]any{"update_mask": []string{"capacity"}}, http.StatusOK)
+
+	got := readDeclaredSlot(t, c, tok, "main-display")
+	if got.Capacity != nil {
+		t.Fatalf("capacity = %v, want it cleared back to unbounded (#638)", *got.Capacity)
+	}
+	if got.Impact != "outage" || got.Quorum != 2 || got.Label != "Main Display" {
+		t.Fatalf("slot after a capacity-only mask = %+v, want everything the mask does not name untouched", got)
+	}
+}
+
+// TestSlotPatchWithAMaskClearsTheLists is the other half of the doc change the
+// mask forces: an empty list is not a populated field, so clearing one means
+// naming it in the mask, not sending [].
+func TestSlotPatchWithAMaskClearsTheLists(t *testing.T) {
+	t.Parallel()
+	c, tok, path := slotMaskFixture(t)
+
+	c.do(tok, http.MethodPatch, path, map[string]any{
+		"accepted_types": []string{}, "position_labels": []string{},
+	}, http.StatusOK)
+	if got := readDeclaredSlot(t, c, tok, "main-display"); len(got.AcceptedTypes) != 1 || len(got.PositionLabels) != 2 {
+		t.Fatalf("slot after sending empty lists = %+v, want them unchanged: an empty list is not populated", got)
+	}
+
+	c.do(tok, http.MethodPatch, path, map[string]any{
+		"update_mask": []string{"accepted_types", "position_labels"},
+	}, http.StatusOK)
+	got := readDeclaredSlot(t, c, tok, "main-display")
+	if len(got.AcceptedTypes) != 0 || len(got.PositionLabels) != 0 {
+		t.Fatalf("slot after naming the lists in the mask = %+v, want both cleared", got)
+	}
+	if len(got.PinnedProducts) != 1 {
+		t.Fatalf("pinned_products = %v, want the set the mask never named left alone", got.PinnedProducts)
+	}
+}
+
+// TestSlotPatchWithAnEmptyMaskWritesNothing pins the one place the wire can
+// silently disagree with the primitive: "omitted" and "present but empty" are
+// different requests, and they survive the JSON decode as a nil slice and an
+// empty one. If a decoder ever collapsed the two, an empty mask would quietly
+// become the implied mask and start writing the body after all.
+func TestSlotPatchWithAnEmptyMaskWritesNothing(t *testing.T) {
+	t.Parallel()
+	c, tok, path := slotMaskFixture(t)
+
+	c.do(tok, http.MethodPatch, path, map[string]any{
+		"update_mask": []string{}, "label": "Ignored", "quorum": 1, "impact": "none",
+	}, http.StatusOK)
+
+	got := readDeclaredSlot(t, c, tok, "main-display")
+	if got.Label != "Main Display" || got.Quorum != 2 || got.Impact != "outage" {
+		t.Fatalf("slot after an empty mask = %+v, want it exactly as declared: the mask named no fields", got)
+	}
+}
+
+// TestSlotPatchWithAStarMaskReplacesEverything proves "*" is the PUT this route
+// used to be: every field the body omits goes back to its default.
+func TestSlotPatchWithAStarMaskReplacesEverything(t *testing.T) {
+	t.Parallel()
+	c, tok, path := slotMaskFixture(t)
+
+	c.do(tok, http.MethodPatch, path, map[string]any{
+		"update_mask": []string{"*"}, "label": "Wiped",
+	}, http.StatusOK)
+
+	got := readDeclaredSlot(t, c, tok, "main-display")
+	if got.Label != "Wiped" || got.Quorum != 1 || got.Capacity != nil || got.Impact != "degraded" {
+		t.Fatalf("slot after a full replacement = %+v, want every omitted field back to its default", got)
+	}
+	if len(got.AcceptedTypes) != 0 || len(got.PinnedProducts) != 0 || len(got.PositionLabels) != 0 {
+		t.Fatalf("lists after a full replacement = %+v, want all three cleared", got)
+	}
+}
+
+// TestSlotPatchRefusesAMaskItCannotHonor: a mask naming a field the resource
+// does not patch is a 422 that names the field, never a silent no-op, because
+// a mask is the caller stating intent and a typo that succeeds is worse than
+// one that fails.
+func TestSlotPatchRefusesAMaskItCannotHonor(t *testing.T) {
+	t.Parallel()
+	c, tok, path := slotMaskFixture(t)
+
+	for _, mask := range [][]string{{"colour"}, {"*", "quorum"}} {
+		status, body := c.send(tok, http.MethodPatch, path, map[string]any{"update_mask": mask})
+		if status != http.StatusUnprocessableEntity {
+			t.Fatalf("patch with update_mask %v: status = %d, want 422\nbody: %s", mask, status, body)
+		}
+		var problem struct {
+			Detail string `json:"detail"`
+		}
+		if err := json.Unmarshal(body, &problem); err != nil {
+			t.Fatalf("decode refusal: %v (%s)", err, body)
+		}
+		if !strings.Contains(problem.Detail, mask[0]) {
+			t.Fatalf("refusal detail = %q, want it to name %q", problem.Detail, mask[0])
+		}
+	}
+
+	// The refusal is a refusal: nothing moved.
+	if got := readDeclaredSlot(t, c, tok, "main-display"); got.Impact != "outage" || got.Quorum != 2 {
+		t.Fatalf("slot after a refused mask = %+v, want it exactly as declared", got)
+	}
+}
+
+// TestSlotAlternateRoundTrips is #640: the alternate was writable and read by
+// nothing, so an operator could put a slot into an alternate and had no API way
+// to confirm it landed, and neither the generated client nor the CLI could
+// round-trip it. Both slot reads carry it now, and the write's own echo does
+// too, so the same PATCH-then-GET that confirms every other field confirms this
+// one.
+func TestSlotAlternateRoundTrips(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	t.Cleanup(gw.Close)
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	ownerTok := bootstrapOwnerTok(t, ctx, gw)
+	srv := httptest.NewServer(api.NewHandler(gw))
+	t.Cleanup(srv.Close)
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	// A choice has no write route of its own yet, so the standard arrives
+	// with it through the audited create from a template.
+	if _, err := gw.CreateStandardFromTemplate(ctx, "", storage.StandardFromTemplate{
+		Template: "test", Name: "alt-room", Label: "Alternate Room",
+		Choices: []storage.SlotChoiceSpec{{
+			Name: "conferencing", Label: "Conferencing",
+			Alternates: []storage.AlternateSpec{
+				{Name: "all-in-one", Label: "All-in-one"},
+				{Name: "component-system", Label: "Component System"},
+			},
+		}},
+	}); err != nil {
+		t.Fatalf("create standard with choice: %v", err)
+	}
+
+	const path = "/standards/alt-room/slots/conf-bar"
+	readAlt := func() string {
+		t.Helper()
+		var list struct {
+			Slots []declaredSlotWire `json:"slots"`
+		}
+		if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/standards/alt-room/slots", nil, http.StatusOK), &list); err != nil {
+			t.Fatalf("decode standard slots: %v", err)
+		}
+		for _, r := range list.Slots {
+			if r.Name == "conf-bar" {
+				return r.Alternate
+			}
+		}
+		t.Fatalf("conf-bar not in the declaration read %+v", list.Slots)
+		return ""
+	}
+
+	// The write's own echo answers first: a caller does not have to re-read to
+	// see what it just joined.
+	var echo declaredSlotWire
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, path, map[string]any{
+		"label": "Conferencing Bar", "accepted_types": []string{"video-bar"},
+		"alternate": "conferencing/all-in-one",
+	}, http.StatusOK), &echo); err != nil {
+		t.Fatalf("decode declare echo: %v", err)
+	}
+	if echo.Alternate != "conferencing/all-in-one" {
+		t.Fatalf("declare echo alternate = %q, want conferencing/all-in-one (#640)", echo.Alternate)
+	}
+	if got := readAlt(); got != "conferencing/all-in-one" {
+		t.Fatalf("alternate on the declaration read = %q, want conferencing/all-in-one (#640)", got)
+	}
+
+	// And on the resolved per-system read, where an operator actually works.
+	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "alt-1", "standard_id": "alt-room"}, http.StatusCreated)
+	var w systemSlotsWire
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/systems/alt-1/slots", nil, http.StatusOK), &w); err != nil {
+		t.Fatalf("decode system slots: %v", err)
+	}
+	if got := w.find(t, "conf-bar").Alternate; got != "conferencing/all-in-one" {
+		t.Fatalf("alternate on the resolved read = %q, want conferencing/all-in-one (#640)", got)
+	}
+
+	// Moving between alternates, confirmed by reading it back.
+	c.do(ownerTok, http.MethodPatch, path, map[string]any{"alternate": "conferencing/component-system"}, http.StatusOK)
+	if got := readAlt(); got != "conferencing/component-system" {
+		t.Fatalf("alternate after the move = %q, want conferencing/component-system", got)
+	}
+
+	// An unrelated edit leaves it alone (#626, now visible rather than taken on
+	// trust), and an explicit empty string detaches.
+	c.do(ownerTok, http.MethodPatch, path, map[string]any{"label": "Conferencing Bar (renamed)"}, http.StatusOK)
+	if got := readAlt(); got != "conferencing/component-system" {
+		t.Fatalf("alternate after an unrelated edit = %q, want it untouched", got)
+	}
+	c.do(ownerTok, http.MethodPatch, path, map[string]any{"alternate": ""}, http.StatusOK)
+	if got := readAlt(); got != "" {
+		t.Fatalf("alternate after an explicit detach = %q, want the slot unconditional", got)
+	}
+
+	// And the mask reaches it like any other field: named with nothing to
+	// carry, it clears.
+	c.do(ownerTok, http.MethodPatch, path, map[string]any{"alternate": "conferencing/all-in-one"}, http.StatusOK)
+	c.do(ownerTok, http.MethodPatch, path, map[string]any{"update_mask": []string{"alternate"}}, http.StatusOK)
+	if got := readAlt(); got != "" {
+		t.Fatalf("alternate after a mask that names it and carries nothing = %q, want it cleared", got)
+	}
+}
+
+// TestSystemSlotPatchTakesTheSameMask pins the system arc against the standard
+// arc: the two share a body but not a handler, so a fix to one is not a fix to
+// the other (#639 names both).
+func TestSystemSlotPatchTakesTheSameMask(t *testing.T) {
+	t.Parallel()
+	c, tok, _ := slotMaskFixture(t)
+
+	c.do(tok, http.MethodPost, "/systems", map[string]any{"name": "mask-sys"}, http.StatusCreated)
+	const path = "/systems/mask-sys/slots/table-mic"
+	c.do(tok, http.MethodPatch, path, map[string]any{
+		"label": "Table Mic", "quorum": 2, "capacity": 4, "impact": "outage",
+		"accepted_types": []string{"video-bar"},
+	}, http.StatusOK)
+
+	c.do(tok, http.MethodPatch, path, map[string]any{"label": "Table Mic (renamed)"}, http.StatusOK)
+	c.do(tok, http.MethodPatch, path, map[string]any{"update_mask": []string{"capacity"}}, http.StatusOK)
+
+	var w systemSlotsWire
+	if err := json.Unmarshal(c.do(tok, http.MethodGet, "/systems/mask-sys/slots", nil, http.StatusOK), &w); err != nil {
+		t.Fatalf("decode system slots: %v", err)
+	}
+	mic := w.find(t, "table-mic")
+	if mic.Capacity != nil {
+		t.Fatalf("capacity = %v, want the system arc's mask to clear it too (#638)", *mic.Capacity)
+	}
+	if mic.Impact != "outage" || mic.Quorum != 2 || mic.Label != "Table Mic (renamed)" {
+		t.Fatalf("system-declared slot = %+v, want the rename kept and impact and quorum untouched (#639)", mic)
+	}
+	if len(mic.AcceptedTypes) != 1 || mic.AcceptedTypes[0] != "video-bar" {
+		t.Fatalf("accepted_types = %v, want the typed slot to survive both edits", mic.AcceptedTypes)
+	}
+}

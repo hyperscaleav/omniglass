@@ -61,7 +61,7 @@ type MetricInstanceSample struct {
 // classifier's contract declares (value = coalesce(the series' latest sample,
 // the contract default)), plus any ad-hoc metric the series holds that the
 // contract does not declare. Parameterized over the same ownerContracts table
-// as EffectiveProperties, so component, system, location, and node resolve
+// as EffectiveProperties, so component, system, location, and outpost resolve
 // through one code path and cannot drift apart. The instance must be within the
 // read scope; an out-of-scope instance is its non-disclosing not-found.
 //
@@ -108,9 +108,9 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 	if err != nil {
 		return nil, err
 	}
-	kindParam, transportsParam := "$2", "$3"
+	kindParam, transportsParam, nativeParam := "$2", "$3", "$4"
 	if oc.metricContractTable != "" {
-		kindParam, transportsParam = "$3", "$4"
+		kindParam, transportsParam, nativeParam = "$3", "$4", "$5"
 	}
 	sampled := fmt.Sprintf(`
 		latest as (
@@ -143,7 +143,7 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 			from live l
 			join spread sp on sp.metric_type_id = l.metric_type_id
 			order by l.metric_type_id, l.ts desc, l.id desc
-		)`, metricNewestSQL("s.id", lane), liveInstanceSQL("l.instance", kindParam, "inst.arc", transportsParam), kindParam)
+		)`, metricNewestSQL("s.id", lane), liveInstanceSQL("l.instance", kindParam, "inst.arc", transportsParam, "(select mt.name from metric_type mt where mt.id = l.metric_type_id)", nativeParam), kindParam)
 
 	var q string
 	if oc.metricContractTable == "" {
@@ -204,7 +204,7 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 	if oc.metricContractTable != "" {
 		args = append(args, writerclass.ReservedNames())
 	}
-	args = append(args, ownerKind, transportNames())
+	args = append(args, ownerKind, transportNames(), nativeKeys())
 	rows, err := p.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: effective metrics %s/%s: %w", ownerKind, ownerID, err)

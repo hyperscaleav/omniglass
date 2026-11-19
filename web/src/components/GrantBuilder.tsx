@@ -15,7 +15,7 @@ import {
   type GrantRef,
   type ScopeOp,
 } from "../lib/grantdraft";
-import type { ScopeKind } from "../lib/principals";
+import type { ScopeKind } from "../lib/users";
 import { describeError } from "../lib/format";
 import { Save, X } from "./icons";
 import Button from "./Button";
@@ -46,7 +46,7 @@ const errMsg = (e: "role-required" | "entity-required" | "duplicate"): string =>
   e === "duplicate" ? "That role is already granted at that scope." : e === "entity-required" ? "Pick an entity for that scope." : "Pick a role.";
 
 export default function GrantBuilder(props: {
-  principalId: string;
+  userId: string;
   current: ExistingGrant[];
   roles: RolePick[];
   entities: (kind: ScopedKind) => TreeNode[];
@@ -72,9 +72,9 @@ export default function GrantBuilder(props: {
   const listId = createUniqueId();
   let inputRef: HTMLInputElement | undefined;
 
-  // Re-seed the draft when the principal or its server grant set changes (a switch
+  // Re-seed the draft when the user or its server grant set changes (a switch
   // or a completed save), but not while the operator is editing locally.
-  const baseline = () => props.principalId + "|" + props.current.map((g) => g.id).join(",");
+  const baseline = () => props.userId + "|" + props.current.map((g) => g.id).join(",");
   createEffect(on(baseline, () => resetAll(), { defer: true }));
 
   const resetStaging = () => {
@@ -245,7 +245,7 @@ export default function GrantBuilder(props: {
       <div class="eyebrow mb-1.5">Role grants</div>
       {/* Chip row: existing grants (kept or marked for removal) then staged adds. */}
       <div class="flex flex-wrap items-center gap-1.5">
-        <For each={chipStates(props.current, draft())} fallback={<span class="text-xs text-base-content/40">No grants yet. This principal can sign in but has no permissions.</span>}>
+        <For each={chipStates(props.current, draft())} fallback={<span class="text-xs text-base-content/40">No grants yet. This user can sign in but has no permissions.</span>}>
           {(c) => (
             <span
               class="inline-flex items-center gap-1 rounded-field border py-[3px] pl-2.5 pr-1 font-data text-[11px]"

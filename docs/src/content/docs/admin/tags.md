@@ -1,0 +1,41 @@
+---
+title: Tags
+description: "The Tags directory: mint the governed key vocabulary, set what each key applies to and whether it cascades, and edit or delete a key."
+sidebar:
+  order: 9
+  badge:
+    text: Built
+    variant: success
+---
+
+**Catalog, under Metadata: Tags** (with `tag:read`) is the directory of the governed [tag](/architecture/tags/) key
+vocabulary: the tenant-wide set of `key: value` label names an operator binds onto the fleet. Each row
+shows the **name** (the key a binding then carries) under the **label** where the key has one, its
+**Applies to** (the entity kinds it may bind to, or **Any**), and its **Binding** (**cascades** to
+descendants, or **flat**, a per-entity label). The list reads in label order, with the keys that
+carry none at the end.
+
+- **New tag** (with `tag:create`, an admin permission) opens a create **drawer**: type a **label**
+  ("Cost Center") and the **name** follows it in kebab (`cost-center`) until you edit the name
+  yourself. The label is optional and free-form; the name is what every binding carries
+  (lowercase letters, digits, and hyphens, no dots and no underscores, unique tenant-wide), check the
+  entity kinds it **applies to** (leave
+  all unchecked for any), toggle whether its bindings **cascade**, and set its **value domain**, either free
+  text or **constrained to a fixed set** (an enum, like `environment` being one of `prod`, `staging`, `dev`).
+  An enum is enforced on every bind and shown as a strict dropdown; a free key autocompletes the values already
+  in use. Minting the vocabulary is deliberately admin-gated; *setting a value* on a key is the ordinary entity
+  write, done on that entity's own page.
+- Pick a row to open its **detail blade**. The footer **Edit** pencil (with `tag:update`) edits the
+  governance fields (applies_to, propagates); the **name** is fixed, and a tag carries no rename (only a
+  component, system, location, and user group have one). **Delete** (with `tag:delete`)
+  removes the key and, with it, every binding across the fleet, behind a confirm.
+
+Minting a **key** is admin-gated here; **setting a value** on a key is the ordinary entity write. Open a
+component, system, or location, and its detail blade carries a **Tags** panel: type a key (the picker
+offers the catalog keys that apply to that entity kind, and with `tag:create` a **Create key** shortcut
+opens this same create form), give it a value, and it binds on **Add**; the **x** on a chip removes it.
+Each write is gated by that entity's own `:update`, so an operator tags what it may already edit. The
+[Explore's filter](/operator/fleet/#finding-one-thing) then matches each location, system and component on its **effective** tags
+(the resolved cascade, keys unioning and values shadowing most-specific-wins), and the outpost list shows them in a Tags column. The same operations are
+`omniglass component setTag` / `system setTag` / `location setTag` and `omniglass component effective-tag list
+<name>` from the CLI.

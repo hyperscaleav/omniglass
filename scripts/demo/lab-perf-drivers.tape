@@ -1,8 +1,8 @@
-# The lab measures what one driver's polls cost a node
+# The lab measures what one driver's polls cost an outpost
 #
 # omniglass lab perf drivers brings up a throwaway lab with no fleet and, for each shipped driver,
-# a node of its own with the simulator beside it, so the node's cgroup holds only that driver's
-# work. It measures the node idle, then at one, two and three times a step of poll tasks, and
+# an outpost of its own with the simulator beside it, so the outpost's cgroup holds only that driver's
+# work. It measures the outpost idle, then at one, two and three times a step of poll tasks, and
 # writes the slope of CPU and memory per task to the table the docs render. Here one driver is
 # swept once at a small step and short windows; the committed table ran at 1,600 tasks a step
 # (#1871).
@@ -17,7 +17,7 @@ Show
 Type "# Ran unseen first (about six minutes): omniglass lab perf drivers --only ucc-rooms --step-tasks 100"
 Enter
 Wait
-Type "# Each step: how many tasks the node ran, then its working set and CPU over the window"
+Type "# Each step: how many tasks the outpost ran, then its working set and CPU over the window"
 Enter
 Wait
 Type `grep -E '^\[|step:|working set' /tmp/drivers.err`

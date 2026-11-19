@@ -4,7 +4,7 @@ import { getCalcRule } from "./api.gen";
 
 // The global 401 interceptor: a 401 from a PROTECTED route means a session that was
 // valid has ended (expired, reset, locked out), so it fires the registered handler
-// (which the app uses to null the principal and bounce to /login). A 401 from an
+// (which the app uses to null the user and bounce to /login). A 401 from an
 // auth endpoint is that endpoint's own normal outcome and must NOT fire it.
 describe("client 401 interceptor", () => {
   let fired: number;
@@ -24,7 +24,7 @@ describe("client 401 interceptor", () => {
 
   it("fires the handler on a 401 from a protected route", async () => {
     stub401();
-    await api.GET("/principals");
+    await api.GET("/users");
     expect(fired).toBe(1);
   });
 
@@ -42,7 +42,7 @@ describe("client 401 interceptor", () => {
 
   it("does not fire on a successful protected request", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("[]", { status: 200, headers: { "Content-Type": "application/json" } })));
-    await api.GET("/principals");
+    await api.GET("/users");
     expect(fired).toBe(0);
   });
 });
@@ -73,8 +73,8 @@ describe("client requests", () => {
 
   it("keeps a custom method's colon after a filled path param", async () => {
     stub(() => json({}));
-    await api.POST("/principals/{id}:impersonate", { params: { path: { id: "p1" } }, body: { mode: "view_as" } });
-    expect(new URL(seen[0].url).pathname).toBe("/api/v1/principals/p1:impersonate");
+    await api.POST("/users/{id}:impersonate", { params: { path: { id: "p1" } }, body: { mode: "view_as" } });
+    expect(new URL(seen[0].url).pathname).toBe("/api/v1/users/p1:impersonate");
   });
 
   it("writes the query, skipping an unset param", async () => {
@@ -100,31 +100,31 @@ describe("client requests", () => {
 
   it("sends no Content-Type without a body", async () => {
     stub(() => json({}));
-    await api.GET("/principals");
+    await api.GET("/users");
     expect(seen[0].headers.get("Content-Type")).toBeNull();
   });
 
   it("includes credentials, and the stored bearer token when there is one", async () => {
     stub(() => json({}));
-    await api.GET("/principals");
+    await api.GET("/users");
     setToken("ogp_test");
-    await api.GET("/principals");
+    await api.GET("/users");
     expect(seen[0].credentials).toBe("include");
     expect(seen[0].headers.get("Authorization")).toBeNull();
     expect(seen[1].headers.get("Authorization")).toBe("Bearer ogp_test");
   });
 
   it("returns a success's parsed body as data", async () => {
-    stub(() => json({ principals: [] }));
-    const { data, error, response } = await api.GET("/principals");
-    expect(data).toEqual({ principals: [] });
+    stub(() => json({ users: [] }));
+    const { data, error, response } = await api.GET("/users");
+    expect(data).toEqual({ users: [] });
     expect(error).toBeUndefined();
     expect(response.status).toBe(200);
   });
 
   it("returns a refusal's parsed problem as error", async () => {
     stub(() => json({ title: "Forbidden", status: 403, detail: "no" }, 403));
-    const { data, error, response } = await api.GET("/principals");
+    const { data, error, response } = await api.GET("/users");
     expect(data).toBeUndefined();
     expect(error).toEqual({ title: "Forbidden", status: 403, detail: "no" });
     expect(response.status).toBe(403);
@@ -132,7 +132,7 @@ describe("client requests", () => {
 
   it("returns a refusal's text when it is not JSON", async () => {
     stub(() => new Response("bad gateway", { status: 502 }));
-    const { error } = await api.GET("/principals");
+    const { error } = await api.GET("/users");
     expect(error).toBe("bad gateway");
   });
 
@@ -146,7 +146,7 @@ describe("client requests", () => {
 
   it("returns no data for an empty success body", async () => {
     stub(() => new Response("", { status: 200 }));
-    const { data } = await api.GET("/principals");
+    const { data } = await api.GET("/users");
     expect(data).toBeUndefined();
   });
 });

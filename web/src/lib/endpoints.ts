@@ -6,7 +6,7 @@ import type { FilterKey } from "./predicate";
 // the surfaces stay declarative and unit-testable against a mocked fetch.
 // Shapes follow the OpenAPI (see api/endpoints.go, endpointBody). An endpoint is
 // a connection on a component (or a server-hosted one): a transport (icmp, tcp,
-// ...), an optional node placement, and address/target settings in params (jsonb).
+// ...), an optional outpost placement, and address/target settings in params (jsonb).
 export type EndpointParams = { target?: string; port?: number | string } & Record<string, unknown>;
 
 export type Endpoint = {
@@ -22,7 +22,7 @@ export type Endpoint = {
   // (component names are scoped to placement, #627 Task 10, so a name
   // comparison across an unrelated component list is not reliably unique).
   component_id?: string;
-  node?: string;
+  outpost?: string;
   params?: EndpointParams;
   // Set when the endpoint was authored by a driver attach (#813): the driver's
   // name and uuid, and the effective inputs supplied at attach (secret inputs
@@ -78,7 +78,7 @@ export type CreateEndpoint = {
   transport?: string;
   label?: string;
   component?: string;
-  node?: string;
+  outpost?: string;
   params?: EndpointParams;
   // Attach: the driver (by name) whose spec derives the transport, params, and
   // tasks, and the inputs its spec declares.
@@ -92,11 +92,11 @@ export async function createEndpoint(body: CreateEndpoint): Promise<Endpoint> {
   return data as Endpoint;
 }
 
-// The node placement, the params and the label are mutable after creation (name,
+// The outpost placement, the params and the label are mutable after creation (name,
 // transport, and owning component are set at creation). An empty label clears it;
 // omitting it leaves it alone. Addressed by the surrogate id.
 // A driver-attached endpoint also takes its inputs in place (#1061).
-export type UpdateEndpoint = { node?: string; params?: EndpointParams; label?: string; inputs?: Record<string, string> };
+export type UpdateEndpoint = { outpost?: string; params?: EndpointParams; label?: string; inputs?: Record<string, string> };
 
 export async function updateEndpoint(id: string, body: UpdateEndpoint): Promise<Endpoint> {
   const { data, error } = await api.PATCH("/endpoints/{endpoint}", { params: { path: { endpoint: id } }, body });

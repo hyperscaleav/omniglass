@@ -5,7 +5,7 @@ import type { SystemType } from "../lib/system_types";
 // SystemTypeSelect: TreeSelect over the system_type tree, so the nesting
 // (av > room > board) reads in the open list and the closed value is the bare
 // label. Shared by the system classification picker (Systems.tsx, on both the
-// create form and the edit blade) and the registry admin page's parent picker
+// create form and the edit blade) and the catalog admin page's parent picker
 // (SystemTypes.tsx), the places a caller chooses a node in this tree. The option
 // value is the type's name.
 export default function SystemTypeSelect(p: {

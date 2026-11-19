@@ -110,7 +110,7 @@ for (const spec of specs) {
     // wait holds the shot until the selector shows (a figure the lab writes a
     // while after it comes up), for up to its timeout in ms, else two minutes.
     if (step.action === 'wait') await page.locator(step.selector).first().waitFor({ state: 'visible', timeout: step.timeout ?? 120_000 });
-    else if (step.action === 'click') await page.click(step.selector);
+    else if (step.action === 'click') await page.click(step.selector, { modifiers: step.modifiers });
     else if (step.action === 'hover') await page.hover(step.selector);
     else if (step.action === 'press') await page.keyboard.press(step.value);
     else if (step.action === 'fill') await page.fill(step.selector, step.value ?? '');

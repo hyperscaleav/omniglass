@@ -65,17 +65,17 @@ func TestTheIngestPartitionsAreHeldUnderTheDatabasePool(t *testing.T) {
 	}
 }
 
-// A node's partition is the one the stream's partition transform files it
+// An outpost's partition is the one the stream's partition transform files it
 // under: FNV-1a of its name, modulo the count, so the server reads the same
 // lane the stream wrote.
-func TestANodesPartitionIsTheStreamsHash(t *testing.T) {
-	for _, node := range []string{"node-a", "node-b", "node-ledger", "corp-site-17-node-2", ""} {
+func TestAOutpostsPartitionIsTheStreamsHash(t *testing.T) {
+	for _, outpost := range []string{"outpost-a", "outpost-b", "outpost-ledger", "corp-site-17-outpost-2", ""} {
 		for _, k := range []int{1, 2, 4, 7, 64} {
 			h := fnv.New32a()
-			_, _ = h.Write([]byte(node))
+			_, _ = h.Write([]byte(outpost))
 			want := int(h.Sum32() % uint32(k))
-			if got := PartitionOf(node, k); got != want {
-				t.Errorf("PartitionOf(%q, %d) = %d, want %d", node, k, got, want)
+			if got := PartitionOf(outpost, k); got != want {
+				t.Errorf("PartitionOf(%q, %d) = %d, want %d", outpost, k, got, want)
 			}
 		}
 	}
@@ -103,12 +103,12 @@ func TestEachPartitionHasItsOwnDurableAndFilter(t *testing.T) {
 	}
 }
 
-// A batch's receipt key names the node's own subject whichever partition the
+// A batch's receipt key names the outpost's own subject whichever partition the
 // stream filed it under, so a key read back is the same at any lane count.
-func TestABatchKeyNamesTheNodesOwnSubject(t *testing.T) {
+func TestABatchKeyNamesTheOutpostsOwnSubject(t *testing.T) {
 	for _, c := range []struct{ subject, want string }{
-		{"og.v1.telemetry.2.node-a", "og.v1.telemetry.node-a"},
-		{"og.v1.telemetry.node-a", "og.v1.telemetry.node-a"},
+		{"og.v1.telemetry.2.outpost-a", "og.v1.telemetry.outpost-a"},
+		{"og.v1.telemetry.outpost-a", "og.v1.telemetry.outpost-a"},
 		{"og.v1.api.telemetry", "og.v1.api.telemetry"},
 	} {
 		if got := canonicalSubject(c.subject); got != c.want {
@@ -163,10 +163,10 @@ func TestThePartitionsPastTheCountAreThePriorsAndTheDurables(t *testing.T) {
 }
 
 // A start that files by a different count than the stream did while it still
-// holds batches may land a node's earlier batches after its later ones: its
+// holds batches may land an outpost's earlier batches after its later ones: its
 // earlier batches sit under the old partition, its later ones under the new.
 // The same count, an empty stream or a new stream risks nothing.
-func TestAChangedCountOverAHeldBacklogRisksANodesOrder(t *testing.T) {
+func TestAChangedCountOverAHeldBacklogRisksAOutpostsOrder(t *testing.T) {
 	for _, c := range []struct {
 		prior, k int
 		held     uint64

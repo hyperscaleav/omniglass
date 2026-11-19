@@ -76,7 +76,7 @@ update system_role_assignment sra
 
 // TestPositionBackfillIdempotent proves the backfill statement itself: the
 // storagetest harness migrates an empty database (the boot seed creates zero
-// role assignments and devseed's fixtures are written by AssignRole AFTER
+// role assignments and devseed's fixtures are written by AssignSlot AFTER
 // migration completes), so running the migration set forward can never
 // exercise this UPDATE against a non-empty table. This test stands the
 // database at the schema right after the position column exists but before

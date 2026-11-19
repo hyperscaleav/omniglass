@@ -41,7 +41,7 @@ func TestASmallWorklistIsSentUncompressed(t *testing.T) {
 	}
 }
 
-// A reply past 64 KB is gzipped and says so, and the node reads back the
+// A reply past 64 KB is gzipped and says so, and the outpost reads back the
 // worklist it was built from.
 func TestALargeWorklistIsGzippedAndReadsBack(t *testing.T) {
 	want, raw := worklistOfSize(t, WorklistCompressAbove+1)
@@ -73,7 +73,7 @@ func TestAnUncompressedWorklistReadsBack(t *testing.T) {
 	}
 }
 
-// The server's refusal reaches the node as an error naming the reason, never
+// The server's refusal reaches the outpost as an error naming the reason, never
 // as an empty worklist that would tear down its sessions.
 func TestARefusedWorklistIsAnError(t *testing.T) {
 	_, err := DecodeWorklistReply(WorklistErrorReply("worklist read failed"), nil)
@@ -82,7 +82,7 @@ func TestARefusedWorklistIsAnError(t *testing.T) {
 	}
 }
 
-// An encoding the node does not know, or a body that does not inflate, is an
+// An encoding the outpost does not know, or a body that does not inflate, is an
 // error.
 func TestAnUnreadableWorklistIsAnError(t *testing.T) {
 	if _, err := DecodeWorklistReply(nats.Header{ContentEncodingHeader: []string{"br"}}, []byte("{}")); err == nil {

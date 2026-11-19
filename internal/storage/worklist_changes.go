@@ -10,15 +10,15 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// A write that changes what a node's worklist holds announces the node on
+// A write that changes what an outpost's worklist holds announces the outpost on
 // commit (#1945, ADR-1945; every writer beyond the endpoint's own, #1997), so
 // the bus can nudge it to pull now rather than on its next scheduled pull.
 // The announcement is a Postgres NOTIFY issued in the writing transaction:
-// Postgres delivers it only if that transaction commits, once per node
+// Postgres delivers it only if that transaction commits, once per outpost
 // however many rows the write touched. Nothing depends on it
-// arriving: a lost one costs the node only the wait until its scheduled pull.
+// arriving: a lost one costs the outpost only the wait until its scheduled pull.
 
-// worklistChangedChannel is the NOTIFY channel; each payload is a node name.
+// worklistChangedChannel is the NOTIFY channel; each payload is an outpost name.
 const worklistChangedChannel = "og_worklist_changed"
 
 // WorklistListenApp is the application_name of the connection WorklistChanges
@@ -31,44 +31,44 @@ const (
 	listenBackoffCap  = 5 * time.Second
 )
 
-// notifyWorklistChanged announces the node each endpoint is placed on, as of
-// this point in tx. A write that moves an endpoint off a node, or deletes it,
-// calls it before the change as well as after, so both nodes hear.
+// notifyWorklistChanged announces the outpost each endpoint is placed on, as of
+// this point in tx. A write that moves an endpoint off an outpost, or deletes it,
+// calls it before the change as well as after, so both outposts hear.
 func notifyWorklistChanged(ctx context.Context, tx pgx.Tx, endpointIDs ...string) error {
-	return announceNodesOf(ctx, tx, `select node_name from endpoint where id = any($2)`, endpointIDs)
+	return announceOutpostsOf(ctx, tx, `select outpost_id from endpoint where id = any($2)`, endpointIDs)
 }
 
-// announceNodesOf announces each node whose principal id endpointNodesSQL
-// selects (an endpoint.node_name column, as of this point in tx). The query's
+// announceOutpostsOf announces each outpost whose user id endpointOutpostsSQL
+// selects (an endpoint.outpost_id column, as of this point in tx). The query's
 // own arguments start at $2: $1 is the channel. It is the one way a writer
-// names the nodes it touched, so each writer states only which ones.
-func announceNodesOf(ctx context.Context, tx pgx.Tx, endpointNodesSQL string, args ...any) error {
+// names the outposts it touched, so each writer states only which ones.
+func announceOutpostsOf(ctx context.Context, tx pgx.Tx, endpointOutpostsSQL string, args ...any) error {
 	if _, err := tx.Exec(ctx, `
-		select pg_notify($1, n.name) from node n
-		where n.principal_id in (`+endpointNodesSQL+`)`,
+		select pg_notify($1, n.name) from outpost n
+		where n.user_id in (`+endpointOutpostsSQL+`)`,
 		append([]any{worklistChangedChannel}, args...)...); err != nil {
 		return fmt.Errorf("storage: announce a worklist change: %w", err)
 	}
 	return nil
 }
 
-// announceEveryNode announces every node, for a write every worklist carries
+// announceEveryOutpost announces every outpost, for a write every worklist carries
 // (the platform report window).
-func announceEveryNode(ctx context.Context, tx pgx.Tx) error {
-	if _, err := tx.Exec(ctx, `select pg_notify($1, name) from node`, worklistChangedChannel); err != nil {
+func announceEveryOutpost(ctx context.Context, tx pgx.Tx) error {
+	if _, err := tx.Exec(ctx, `select pg_notify($1, name) from outpost`, worklistChangedChannel); err != nil {
 		return fmt.Errorf("storage: announce a worklist change: %w", err)
 	}
 	return nil
 }
 
-// secretUserNodesSQL selects the nodes of the endpoints that resolve secret
+// secretUserOutpostsSQL selects the outposts of the endpoints that resolve secret
 // $2: an endpoint whose inputs name the secret and whose component the
 // secret's owner covers (the platform, the component or an ancestor, or a
 // location in the component's chain). It is a superset of the endpoints the
 // secret actually wins for, which costs a spare pull at most; a shadowed
 // endpoint's worklist does not change, but an announcement it did not need is
 // harmless where a missed one is a wait.
-const secretUserNodesSQL = `
+const secretUserOutpostsSQL = `
 	with recursive s as (
 		select name, owner_kind, component_id, location_id from secret where id = $2
 	), comps(id) as (
@@ -78,59 +78,59 @@ const secretUserNodesSQL = `
 		select location_id from s where owner_kind = 'location'
 		union select l.id from location l join locs on l.parent_id = locs.id
 	)
-	select e.node_name from endpoint e, s
+	select e.outpost_id from endpoint e, s
 	where exists (select 1 from jsonb_each_text(e.inputs) i where i.value = s.name)
 	  and (s.owner_kind = 'platform'
 	       or e.component in (select id from comps)
 	       or e.component in (select c.id from component c where c.location_id in (select id from locs)))`
 
-// pathEdgeNodesSQL selects the nodes whose worklist carries the path edge
+// pathEdgeOutpostsSQL selects the outposts whose worklist carries the path edge
 // from component $2 to upstream $3: those where both have an in-band endpoint,
-// the join NodeWorklist's path upstreams make.
-const pathEdgeNodesSQL = `
-	select i.node_name from endpoint i
-	join endpoint u on u.node_name = i.node_name and u.component = $3 and not u.out_of_band
+// the join OutpostWorklist's path upstreams make.
+const pathEdgeOutpostsSQL = `
+	select i.outpost_id from endpoint i
+	join endpoint u on u.outpost_id = i.outpost_id and u.component = $3 and not u.out_of_band
 	where i.component = $2 and not i.out_of_band`
 
-// pathDependentNodesSQL selects the nodes whose worklist carries component $2
+// pathDependentOutpostsSQL selects the outposts whose worklist carries component $2
 // as a path upstream, by name: a rename changes each of them.
-const pathDependentNodesSQL = `
-	select i.node_name from component_dependency d
+const pathDependentOutpostsSQL = `
+	select i.outpost_id from component_dependency d
 	join endpoint i on i.component = d.component_id and not i.out_of_band
-	join endpoint u on u.node_name = i.node_name and u.component = d.upstream_id and not u.out_of_band
+	join endpoint u on u.outpost_id = i.outpost_id and u.component = d.upstream_id and not u.out_of_band
 	where d.upstream_id = $2 and d.kind = 'path'`
 
-// componentNodesSQL selects the nodes of component $2's own endpoints: a
+// componentOutpostsSQL selects the outposts of component $2's own endpoints: a
 // relocation changes the location secrets only they resolve.
-const componentNodesSQL = `select node_name from endpoint where component = $2`
+const componentOutpostsSQL = `select outpost_id from endpoint where component = $2`
 
-// subtreeComponentNodesSQL selects the nodes of every endpoint on component
+// subtreeComponentOutpostsSQL selects the outposts of every endpoint on component
 // $2 or a descendant: a reparent changes which component secrets their
 // inputs resolve.
-const subtreeComponentNodesSQL = `
+const subtreeComponentOutpostsSQL = `
 	with recursive sub(id) as (
 		select $2::uuid union select c.id from component c join sub on c.parent_id = sub.id
 	)
-	select e.node_name from endpoint e where e.component in (select id from sub)`
+	select e.outpost_id from endpoint e where e.component in (select id from sub)`
 
-// subtreeLocationNodesSQL selects the nodes of every endpoint on a component
+// subtreeLocationOutpostsSQL selects the outposts of every endpoint on a component
 // placed in location $2 or below it: a location move changes the chain their
 // location secrets resolve along.
-const subtreeLocationNodesSQL = `
+const subtreeLocationOutpostsSQL = `
 	with recursive sub(id) as (
 		select $2::uuid union select l.id from location l join sub on l.parent_id = sub.id
 	)
-	select e.node_name from endpoint e join component c on c.id = e.component
+	select e.outpost_id from endpoint e join component c on c.id = e.component
 	where c.location_id in (select id from sub)`
 
-// driverSpecNodesSQL selects the nodes of every endpoint attached through
+// driverSpecOutpostsSQL selects the outposts of every endpoint attached through
 // driver $2 when its spec now differs from $3, the spec before the write. A
 // task carries its driver's session block and ladder off the live spec and no
 // task id hashes them, so an edit to either alone re-derives no task and still
 // changes the worklist; a label edit, or a spec rewritten unchanged, selects
 // none.
-const driverSpecNodesSQL = `
-	select e.node_name from endpoint e join driver d on d.id = e.driver_id
+const driverSpecOutpostsSQL = `
+	select e.outpost_id from endpoint e join driver d on d.id = e.driver_id
 	where d.id = $2 and d.spec is distinct from $3::jsonb`
 
 // priorDriverSpec reads the spec of the driver driverRowSQL selects ($1 and
@@ -148,14 +148,14 @@ func priorDriverSpec(ctx context.Context, tx pgx.Tx, driverRowSQL string, args .
 	return spec, nil
 }
 
-// WorklistChanges listens for worklist changes and sends each announced node
+// WorklistChanges listens for worklist changes and sends each announced outpost
 // name on the returned channel until ctx ends, when it closes. When the first
 // connect succeeds it returns with the listen in place, so a change committed
 // after it returns arrives. The listen holds one connection of its own,
 // outside the pool. When that connection cannot be opened, or drops, it is
 // retried on backoff, and the changes committed while it was down are not
 // replayed: a nudge only shortens the wait, so the listener never stops the
-// server, and a node it misses pulls on its schedule.
+// server, and an outpost it misses pulls on its schedule.
 func (p *PG) WorklistChanges(ctx context.Context) (<-chan string, error) {
 	conn, err := p.listenWorklist(ctx)
 	if err != nil {
@@ -218,7 +218,7 @@ func (p *PG) listenWorklist(ctx context.Context) (*pgx.Conn, error) {
 	return conn, nil
 }
 
-// forwardChanges sends each notification's node name to out until the
+// forwardChanges sends each notification's outpost name to out until the
 // connection fails or ctx ends, returning why.
 func forwardChanges(ctx context.Context, conn *pgx.Conn, out chan<- string) error {
 	for {
@@ -227,7 +227,7 @@ func forwardChanges(ctx context.Context, conn *pgx.Conn, out chan<- string) erro
 			return err
 		}
 		if n.Payload == "" {
-			continue // a bare NOTIFY names no node; nothing to nudge
+			continue // a bare NOTIFY names no outpost; nothing to nudge
 		}
 		select {
 		case out <- n.Payload:

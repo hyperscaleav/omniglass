@@ -15,6 +15,9 @@
 //       caption: ...
 //     - click: { role: button, name: Close }        # an accessible role and name
 //       caption: ...
+//     - click: '[data-testid="sim-row"]'           # held keys on a click:
+//       modifiers: [Alt]                            # Alt, Shift, Control, Meta
+//       caption: ...
 //     - hover: { role: button, name: Latency }      # the pointer rests on it, no
 //       caption: ...                                # click (a tooltip opens)
 //     - type: { target: '#login-username', text: dev }
@@ -75,6 +78,7 @@ import { PREVIEW } from './walkthroughcore.mjs';
  * @property {string} [text]
  * @property {string} [value]
  * @property {number} [timeout]
+ * @property {('Alt' | 'Shift' | 'Control' | 'Meta')[]} [modifiers]
  */
 /** @typedef {{ method: 'POST', path: string, body: Record<string, unknown> }} SetupItem */
 /** @typedef {{ path: string, target: Target, timeout: number }} Ready */
@@ -119,6 +123,7 @@ const MAX_WAIT_MS = 60_000;
 const MAX_READY_MS = 180_000;
 const MAX_HOLD_MS = 10_000;
 const COMMON = ['caption', 'hold', 'poster'];
+const MODIFIERS = ['Alt', 'Shift', 'Control', 'Meta'];
 const TOP = ['title', 'description', 'setup', 'ready', 'steps'];
 
 /**
@@ -173,7 +178,9 @@ function validateStep(raw, n) {
   const at = `step ${n}`;
   if (!isObj(raw)) return [null, [`${at} must be a mapping`]];
   const kinds = Object.keys(raw).filter((k) => KIND_NAMES.includes(k));
-  const unknown = Object.keys(raw).filter((k) => !KIND_NAMES.includes(k) && !COMMON.includes(k));
+  const unknown = Object.keys(raw).filter(
+    (k) => !KIND_NAMES.includes(k) && !COMMON.includes(k) && !(k === 'modifiers' && kinds[0] === 'click'),
+  );
   if (kinds.length === 0) {
     const named = unknown.length ? ` (unknown kind or key ${unknown.map((k) => `"${k}"`).join(', ')})` : '';
     return [null, [`${at} has no kind: one of ${KINDS.join(', ')}${named}`]];
@@ -199,6 +206,12 @@ function validateStep(raw, n) {
     case 'hover':
       problems.push(...targetProblems(v, where, false));
       step.target = v;
+      if (kind === 'click' && 'modifiers' in raw) {
+        const m = raw.modifiers;
+        if (!Array.isArray(m) || m.length === 0 || !m.every((k) => MODIFIERS.includes(k))) {
+          problems.push(`${where}: modifiers is a list of ${MODIFIERS.join(', ')}`);
+        } else step.modifiers = m;
+      }
       break;
     case 'press':
       if (!isStr(v)) problems.push(`${where} must name a key (Enter, Escape, Tab, ...)`);

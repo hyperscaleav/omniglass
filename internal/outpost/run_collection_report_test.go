@@ -1,0 +1,232 @@
+//go:build linux
+
+// The simulator serves on 127.x addresses beyond 127.0.0.1, which Linux
+// treats as local without configuration.
+
+package outpost_test
+
+import (
+	"context"
+	"fmt"
+	"net"
+	"net/http"
+	"testing"
+	"time"
+
+	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
+	"github.com/hyperscaleav/omniglass/internal/nettest"
+	"github.com/hyperscaleav/omniglass/internal/outpost"
+	"github.com/hyperscaleav/omniglass/internal/sim/profile"
+)
+
+// runOutpostReporting starts the outpost with its own collection report window, as
+// runOutpost does with the platform's: a test cannot wait the minute.
+func (s *gateStack) runOutpostReporting(name string, every time.Duration) {
+	s.runOutpostProbing(name, every, 100*time.Millisecond)
+}
+
+// runOutpostProbing is runOutpostReporting with the reachability probes on the
+// given interval, not the tenth of a second it runs them on.
+func (s *gateStack) runOutpostProbing(name string, every, probeEvery time.Duration) {
+	if s.stop != nil {
+		s.stop()
+	}
+	runCtx, cancel := context.WithCancel(s.ctx)
+	ran := make(chan error, 1)
+	go func() {
+		_, err := outpost.Run(runCtx, outpost.Config{ServerURL: s.apiURL, Name: name, Token: s.token,
+			HeartbeatEvery: 100 * time.Millisecond, ProbeEvery: probeEvery, ReportEvery: every})
+		ran <- err
+	}()
+	s.stop = func() {
+		cancel()
+		<-ran
+		s.stop = nil
+	}
+}
+
+// waitMetric waits for the endpoint's latest key to satisfy ok.
+func (s *gateStack) waitMetric(comp, instance, key string, ok func(float64) bool, what string) float64 {
+	s.t.Helper()
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		if v, landed := s.metric(comp, instance, key); landed && ok(v) {
+			return v
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	v, landed := s.metric(comp, instance, key)
+	s.t.Fatalf("%s on %s[%s] = %v (landed %v), want %s", key, comp, instance, v, landed, what)
+	return 0
+}
+
+// sameWindow waits for the endpoint's latest a and b to come from one report
+// window (one stamp), so two means read together describe the same runs.
+func (s *gateStack) sameWindow(comp, instance, a, b string) (float64, float64) {
+	s.t.Helper()
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		ma, errA := s.gw.LatestMetricInstance(s.ctx, comp, a, instance)
+		mb, errB := s.gw.LatestMetricInstance(s.ctx, comp, b, instance)
+		if errA == nil && errB == nil && ma != nil && mb != nil && ma.TS.Equal(mb.TS) {
+			return ma.Value, mb.Value
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	s.t.Fatalf("%s and %s on %s[%s] never landed from one window", a, b, comp, instance)
+	return 0, 0
+}
+
+// TestEveryEndpointReportsItsOwnCollection drives #1369 end to end over the
+// real wire: the shipped kestrel-api driver (polls, and a held event stream
+// its listeners claim) attached to a simulated bar, and to a second bar
+// whose device is gone. Each report window, the live bar's endpoint lands
+// the mean time of its polls and the messages its listeners claimed, a
+// quiet window as zero; the dead bar's endpoint lands its held polls. The
+// rows are the endpoint's own series (instance: the endpoint), owned by its
+// component, and a push may not forge them.
+func TestEveryEndpointReportsItsOwnCollection(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres + nats-server + the simulator")
+	}
+	var barProfile string
+	s := newHTTPStack(t, "edge-report", nil, func(store *profile.Store) []string {
+		barProfile = driverProfile(t, store, "kestrel-api")
+		return []string{barProfile}
+	})
+	bar := s.devices[barProfile]
+	s.component("bar-live")
+	s.component("bar-gone")
+	s.secret("bar-login", "basic-auth", map[string]string{"username": "admin", "password": "kestrel"})
+	live := s.attachHTTP("bar-live", "kestrel-api", "edge-report", map[string]string{
+		"host": s.ips[barProfile], "port": fmt.Sprint(s.httpPort(barProfile)), "login": "bar-login"})
+	// The gone bar's address refuses every connect for the test's life.
+	goneHost, gonePort, err := net.SplitHostPort(nettest.RefusedAddr(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	gone := s.attachHTTP("bar-gone", "kestrel-api", "edge-report", map[string]string{
+		"host": goneHost, "port": gonePort, "login": "bar-login"})
+	s.runOutpostReporting("edge-report", time.Second)
+
+	s.waitFor("bar-live", live.Name, "session-state", is("up"), "up: the stream held")
+
+	// The live bar's polls answer: their mean time lands, and no failure.
+	s.waitMetric("bar-live", live.Name, probekeys.PollDuration, func(v float64) bool { return v > 0 }, "a positive mean poll time")
+	// Beside it, the CPU the kernel charged those polls (#1870): some, and
+	// less than their wall time, which is mostly the bar's answer.
+	s.waitMetric("bar-live", live.Name, probekeys.PollCPUTime, func(v float64) bool { return v > 0 }, "a positive mean poll CPU time")
+	// One window's two means come from the same runs, and a run's thread
+	// cannot be on CPU longer than the run took: a CPU time that is the wall
+	// time, or more, is not the thread clock.
+	cpu, took := s.sameWindow("bar-live", live.Name, probekeys.PollCPUTime, probekeys.PollDuration)
+	if cpu >= took {
+		t.Errorf("the live bar's polls read %v ms of CPU each against %v ms of wall time; the CPU is the run's own work, under its wait on the bar", cpu, took)
+	}
+	if v, landed := s.metric("bar-live", live.Name, probekeys.PollFailureCount); landed {
+		t.Errorf("the live bar landed %v failed polls; a failure count lands only when nonzero", v)
+	}
+
+	// A change on the bar is a message the stream's listeners claim, counted
+	// in its window; the next quiet window lands zero, not nothing.
+	setVolume(t, bar, 41)
+	s.waitMetric("bar-live", live.Name, probekeys.PushMessageCount, func(v float64) bool { return v >= 1 }, "the claimed change counted")
+	s.waitMetric("bar-live", live.Name, probekeys.PushMessageCount, func(v float64) bool { return v == 0 }, "a quiet window as zero")
+
+	// The gone bar's probe reads down at the port, so its gate holds
+	// unreachable and its due polls are held (#1650): each window counts
+	// them, apart from failures.
+	s.waitMetric("bar-gone", gone.Name, probekeys.PollHeldCount, func(v float64) bool { return v >= 1 }, "the held polls counted")
+}
+
+// fastDriver authors a copy of a shipped driver whose every poll runs each
+// second, so a test sees a gate refuse due polls window after window.
+func (s *httpStack) fastDriver(shipped, name string) {
+	s.t.Helper()
+	s.everyDriver(shipped, name, "1s")
+}
+
+// latestAt is the time of the endpoint's latest key, zero when none landed.
+func (s *gateStack) latestAt(comp, instance, key string) time.Time {
+	m, err := s.gw.LatestMetricInstance(s.ctx, comp, key, instance)
+	if err != nil || m == nil {
+		return time.Time{}
+	}
+	return m.TS
+}
+
+// earliestAt is the time of the endpoint's earliest key in the last hour,
+// zero when none landed.
+func (s *gateStack) earliestAt(comp, instance, key string) time.Time {
+	s.t.Helper()
+	rows, err := s.gw.ListMetricSeries(s.ctx, "component", comp, key, time.Hour, 1000)
+	if err != nil {
+		s.t.Fatal(err)
+	}
+	var first time.Time
+	for _, m := range rows {
+		if m.Instance == instance && (first.IsZero() || m.TS.Before(first)) {
+			first = m.TS
+		}
+	}
+	return first
+}
+
+// TestAGatedPollAndARunNowCountInTheReport drives the two poll paths beside
+// the scheduled run (#1369's review): a due poll the endpoint's gate refuses
+// is a failure every window the gate holds, with no time, so a credential
+// lockout's failure count does not fall silent after its first window; and
+// a run now is a poll run, timed in its window like a scheduled one.
+func TestAGatedPollAndARunNowCountInTheReport(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres + nats-server + the simulator")
+	}
+	var barProfile string
+	s := newHTTPStack(t, "edge-gate-report", nil, func(store *profile.Store) []string {
+		barProfile = driverProfile(t, store, "kestrel-api")
+		return []string{barProfile}
+	})
+	owner := s.ownerToken()
+	s.fastDriver("kestrel-api", "bar-fast")
+	s.streamDriver("kestrel-api", "bar-slow") // its one poll runs every five minutes
+	s.component("bar-locked")
+	s.component("bar-run")
+	s.secret("bar-wrong", "basic-auth", map[string]string{"username": "admin", "password": "wrong"})
+	s.secret("bar-login", "basic-auth", map[string]string{"username": "admin", "password": "kestrel"})
+	at := map[string]string{"host": s.ips[barProfile], "port": fmt.Sprint(s.httpPort(barProfile))}
+	with := func(login string) map[string]string {
+		return map[string]string{"host": at["host"], "port": at["port"], "login": login}
+	}
+	locked := s.attachHTTP("bar-locked", "bar-fast", "edge-gate-report", with("bar-wrong"))
+	run := s.attachHTTP("bar-run", "bar-slow", "edge-gate-report", with("bar-login"))
+	s.runOutpostReporting("edge-gate-report", time.Second)
+
+	// The wrong password gates the endpoint. Two windows on, every due poll
+	// is still refused: the window counts failures and times none.
+	s.waitFor("bar-locked", locked.Name, "endpoint-rejection", func(v string) bool { return !ungated(v) }, "the endpoint gated")
+	gatedAt := time.Now().UTC()
+	s.waitMetric("bar-locked", locked.Name, probekeys.PollFailureCount, func(float64) bool {
+		return s.latestAt("bar-locked", locked.Name, probekeys.PollFailureCount).After(gatedAt.Add(2 * time.Second))
+	}, "refused polls counted two windows after the gate")
+	if failedAt, timedAt := s.latestAt("bar-locked", locked.Name, probekeys.PollFailureCount), s.latestAt("bar-locked", locked.Name, probekeys.PollDuration); !timedAt.Before(failedAt) {
+		t.Errorf("the gated window landed a poll time (%v, failures at %v); a refused poll sent nothing", timedAt, failedAt)
+	}
+
+	// The slow bar's poll ran at the start and is not due again for five
+	// minutes, so its windows land no poll time until a run now.
+	s.waitMetric("bar-run", run.Name, probekeys.PollDuration, func(v float64) bool { return v > 0 }, "the first scheduled run timed")
+	time.Sleep(2500 * time.Millisecond)
+	ranAt := time.Now().UTC()
+	if !s.latestAt("bar-run", run.Name, probekeys.PollDuration).Before(ranAt.Add(-time.Second)) {
+		t.Fatal("a poll time landed in a window with no run; the run now below would prove nothing")
+	}
+	path := "/endpoints/bar-run%2F" + run.Name + "/polls/system:run"
+	if code := s.api(owner, http.MethodPost, path, nil, nil); code != http.StatusOK {
+		t.Fatalf("run now = %d", code)
+	}
+	s.waitMetric("bar-run", run.Name, probekeys.PollDuration, func(float64) bool {
+		return s.latestAt("bar-run", run.Name, probekeys.PollDuration).After(ranAt)
+	}, "the run now timed in its window")
+}

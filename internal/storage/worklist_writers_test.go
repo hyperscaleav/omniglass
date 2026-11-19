@@ -15,8 +15,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Every write that changes what NodeWorklist serves, beyond the endpoint
-// writes, announces the nodes it touched (#1997): a secret an endpoint's
+// Every write that changes what OutpostWorklist serves, beyond the endpoint
+// writes, announces the outposts it touched (#1997): a secret an endpoint's
 // inputs resolve, a path edge, the platform report window, and a move or a
 // rename that changes which secret or which upstream name a task carries.
 // Skipped under -short.
@@ -24,7 +24,7 @@ import (
 // writersFixture is a small placed fleet: two campuses, a building and a room
 // under each of the first campus's two buildings, and four components. amp-a
 // sits in r1, amp-b in r2, amp-c is unplaced, and amp-a-card is amp-a's child.
-// Each component has one snmp endpoint on its own node, and every endpoint's
+// Each component has one snmp endpoint on its own outpost, and every endpoint's
 // community input names a platform secret: shared-comm for amp-a, amp-b and
 // the card, other-comm for amp-c.
 type writersFixture struct {
@@ -80,20 +80,20 @@ func newWritersFixture(t *testing.T) *writersFixture {
 		t.Fatal(err)
 	}
 	drv := "snmp-scalar"
-	for i, e := range []struct{ comp, node, secret string }{
+	for i, e := range []struct{ comp, outpost, secret string }{
 		{"amp-a", "edge-a", "shared-comm"},
 		{"amp-b", "edge-b", "shared-comm"},
 		{"amp-c", "edge-c", "other-comm"},
 		{"amp-a-card", "edge-d", "shared-comm"},
 	} {
-		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: e.node}, all, all); err != nil {
+		if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: e.outpost}, all, all); err != nil {
 			t.Fatal(err)
 		}
-		comp, node := e.comp, e.node
+		comp, outpost := e.comp, e.outpost
 		if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-			Driver: &drv, Component: &comp, Node: &node,
+			Driver: &drv, Component: &comp, Outpost: &outpost,
 			Inputs:     map[string]string{"host": "10.20.4." + string(rune('1'+i)), "community": e.secret},
-			SecretRead: all, CanAdmin: true,
+			SecretRead: all, SecretBind: all, CanAdmin: true,
 		}, all); err != nil {
 			t.Fatalf("attach %s: %v", e.comp, err)
 		}
@@ -112,7 +112,7 @@ func newWritersFixture(t *testing.T) *writersFixture {
 }
 
 // quiet fails on any announcement within the settle window: a write that
-// changed no node's worklist, or one that was refused, announces nothing.
+// changed no outpost's worklist, or one that was refused, announces nothing.
 func (f *writersFixture) quiet(t *testing.T, what string) {
 	t.Helper()
 	select {
@@ -210,26 +210,26 @@ func TestWorklistWritersPathEdges(t *testing.T) {
 	ctx, gw, all := f.ctx, f.gw, scope.Set{All: true}
 
 	// A task carries a path upstream only when the upstream also has an
-	// in-band endpoint on the task's node, so amp-b gains one on edge-a.
-	comp, node := "amp-b", "edge-a"
+	// in-band endpoint on the task's outpost, so amp-b gains one on edge-a.
+	comp, outpost := "amp-b", "edge-a"
 	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-		Transport: "tcp", Component: &comp, Node: &node, Params: []byte(`{"host":"10.20.4.9","port":23}`),
+		Transport: "tcp", Component: &comp, Outpost: &outpost, Params: []byte(`{"host":"10.20.4.9","port":23}`),
 	}, all); err != nil {
 		t.Fatal(err)
 	}
 	expectChanges(t, f.changes, "a second amp-b endpoint", "edge-a")
 
-	// A path edge rides the dependent's tasks on the nodes the upstream shares.
+	// A path edge rides the dependent's tasks on the outposts the upstream shares.
 	if _, err := gw.CreateComponentDependency(ctx, "", "amp-a", storage.ComponentDependencySpec{Upstream: "amp-b", Kind: storage.DependencyPath}, all, all); err != nil {
 		t.Fatal(err)
 	}
 	expectChanges(t, f.changes, "a path edge add", "edge-a")
 
-	// amp-c's node holds no amp-b endpoint, so its worklist is unchanged.
+	// amp-c's outpost holds no amp-b endpoint, so its worklist is unchanged.
 	if _, err := gw.CreateComponentDependency(ctx, "", "amp-c", storage.ComponentDependencySpec{Upstream: "amp-b", Kind: storage.DependencyPath}, all, all); err != nil {
 		t.Fatal(err)
 	}
-	f.quiet(t, "a path edge with no shared node")
+	f.quiet(t, "a path edge with no shared outpost")
 
 	// The upstream's name rides the dependent's worklist too.
 	if _, err := gw.RenameComponent(ctx, "", "amp-b", "amp-b2", all, all); err != nil {
@@ -268,47 +268,47 @@ func TestWorklistWritersReportWindow(t *testing.T) {
 	ctx, gw := f.ctx, f.gw
 	every := []string{"edge-a", "edge-b", "edge-c", "edge-d"}
 
-	if _, err := gw.UpsertSettingOverride(ctx, "", "platform", "collection", map[string]any{"report_seconds": 30}, nil); err != nil {
+	if _, err := gw.UpsertSettingBinding(ctx, "", "platform", "collection", map[string]any{"report_seconds": 30}, nil); err != nil {
 		t.Fatal(err)
 	}
 	expectChanges(t, f.changes, "a report window upsert", every...)
 
-	if _, err := gw.MergePatchSettingOverride(ctx, "", "platform", "collection", map[string]any{"report_seconds": 45}); err != nil {
+	if _, err := gw.MergePatchSettingBinding(ctx, "", "platform", "collection", map[string]any{"report_seconds": 45}); err != nil {
 		t.Fatal(err)
 	}
 	expectChanges(t, f.changes, "a report window merge-patch", every...)
 
 	// The same value again, or another namespace, moves no worklist.
-	if _, err := gw.MergePatchSettingOverride(ctx, "", "platform", "collection", map[string]any{"report_seconds": 45}); err != nil {
+	if _, err := gw.MergePatchSettingBinding(ctx, "", "platform", "collection", map[string]any{"report_seconds": 45}); err != nil {
 		t.Fatal(err)
 	}
 	f.quiet(t, "an unchanged report window")
-	if _, err := gw.MergePatchSettingOverride(ctx, "", "platform", "branding", map[string]any{"product_name": "Glass"}); err != nil {
+	if _, err := gw.MergePatchSettingBinding(ctx, "", "platform", "branding", map[string]any{"product_name": "Glass"}); err != nil {
 		t.Fatal(err)
 	}
 	f.quiet(t, "another namespace")
 
-	if err := gw.DeleteSettingOverride(ctx, "", "platform", "collection"); err != nil {
+	if err := gw.DeleteSettingBinding(ctx, "", "platform", "collection"); err != nil {
 		t.Fatal(err)
 	}
 	expectChanges(t, f.changes, "a report window restore", every...)
 
-	if err := gw.DeleteAllSettingOverrides(ctx, "", "platform"); err != nil {
+	if err := gw.DeleteAllSettingBindings(ctx, "", "platform"); err != nil {
 		t.Fatal(err)
 	}
 	f.quiet(t, "a reset with the window at its default")
-	if _, err := gw.UpsertSettingOverride(ctx, "", "platform", "collection", map[string]any{"report_seconds": 20}, nil); err != nil {
+	if _, err := gw.UpsertSettingBinding(ctx, "", "platform", "collection", map[string]any{"report_seconds": 20}, nil); err != nil {
 		t.Fatal(err)
 	}
 	expectChanges(t, f.changes, "a report window upsert", every...)
-	if err := gw.DeleteAllSettingOverrides(ctx, "", "platform"); err != nil {
+	if err := gw.DeleteAllSettingBindings(ctx, "", "platform"); err != nil {
 		t.Fatal(err)
 	}
 	expectChanges(t, f.changes, "a factory reset", every...)
 
 	// Settings that no longer resolve still take the write that repairs them,
 	// and the repair moves every worklist back onto a window.
-	if _, err := gw.UpsertSettingOverride(ctx, "", "platform", "collection", map[string]any{"report_seconds": 30}, nil); err != nil {
+	if _, err := gw.UpsertSettingBinding(ctx, "", "platform", "collection", map[string]any{"report_seconds": 30}, nil); err != nil {
 		t.Fatal(err)
 	}
 	expectChanges(t, f.changes, "a report window upsert", every...)
@@ -317,14 +317,14 @@ func TestWorklistWritersReportWindow(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Close(ctx)
-	if _, err := conn.Exec(ctx, `update setting_override set doc = '{"report_seconds": "soon"}' where namespace = 'collection'`); err != nil {
+	if _, err := conn.Exec(ctx, `update setting_binding set doc = '{"report_seconds": "soon"}' where namespace = 'collection'`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gw.MergePatchSettingOverride(ctx, "", "platform", "branding", map[string]any{"product_name": "Glass"}); err != nil {
+	if _, err := gw.MergePatchSettingBinding(ctx, "", "platform", "branding", map[string]any{"product_name": "Glass"}); err != nil {
 		t.Fatalf("a write beside settings that do not resolve: %v", err)
 	}
 	f.quiet(t, "another namespace beside settings that do not resolve")
-	if err := gw.DeleteSettingOverride(ctx, "", "platform", "collection"); err != nil {
+	if err := gw.DeleteSettingBinding(ctx, "", "platform", "collection"); err != nil {
 		t.Fatalf("the restore that repairs the settings: %v", err)
 	}
 	expectChanges(t, f.changes, "the restore that repairs the settings", every...)
@@ -339,7 +339,7 @@ func TestWorklistWritersMoves(t *testing.T) {
 	ctx, gw, all := f.ctx, f.gw, scope.Set{All: true}
 
 	// A move changes which location secrets cascade onto what moved, so the
-	// nodes of everything in the moved subtree hear it.
+	// outposts of everything in the moved subtree hear it.
 	if _, err := gw.MoveLocation(ctx, "", "hq-b1", storage.LocationMove{ParentName: strptr("hq2")}, all, all); err != nil {
 		t.Fatal(err)
 	}
@@ -372,7 +372,7 @@ func TestWorklistWritersMoves(t *testing.T) {
 
 // A driver's session block and ladder ride every task it derives, read off the
 // live spec, but no task id hashes them: an edit to either alone changes the
-// worklist of every node running the driver without re-deriving a task.
+// worklist of every outpost running the driver without re-deriving a task.
 func TestWorklistWritersDriverSpec(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {

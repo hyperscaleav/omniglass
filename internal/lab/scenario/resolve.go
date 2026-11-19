@@ -71,7 +71,7 @@ type PusherPlan struct {
 
 // Simulated is how many components the site's simulator serves: the site's
 // own and each webhook sender's (#1747), a component with an address on the
-// site's node. A token pusher is no component and is not counted.
+// site's outpost. A token pusher is no component and is not counted.
 func (s SitePlan) Simulated() int {
 	n := s.Totals.Components
 	for _, p := range s.Pushers {
@@ -97,18 +97,18 @@ type BuildingPlan struct {
 	Floors int
 }
 
-// RoleFill is one role of a planned system and the product staffing it: Count
-// components of Product fill Role. A role's fill is how a seeded system comes
+// SlotFill is one slot of a planned system and the product staffing it: Count
+// components of Product fill Slot. A slot's fill is how a seeded system comes
 // up staffed (#1555).
-type RoleFill struct {
-	Role    string
+type SlotFill struct {
+	Slot    string
 	Product string
 	Count   int
 }
 
 // SystemPlan is one planned system: its name, its generated label, its
-// standard and system type, the room it sits in, its components, and the role
-// each component fills (Roles, the same components Components counts by
+// standard and system type, the room it sits in, its components, and the slot
+// each component fills (Slots, the same components Components counts by
 // product).
 type SystemPlan struct {
 	Name       string
@@ -119,12 +119,12 @@ type SystemPlan struct {
 	Floor      string
 	Room       string
 	Components []Count
-	Roles      []RoleFill
+	Slots      []SlotFill
 }
 
-// SiteNode is the name of the edge node a site's components are placed on:
-// the scale lab runs one node per site (#1554), named for the site.
-func SiteNode(site string) string { return "edge-" + site }
+// SiteOutpost is the name of the edge outpost a site's components are placed on:
+// the scale lab runs one outpost per site (#1554), named for the site.
+func SiteOutpost(site string) string { return "edge-" + site }
 
 // Totals counts systems and components, systems per standard (in manifest
 // order) and components per product (by name).
@@ -340,7 +340,7 @@ func resolveSite(scenario, name, label string, a *Archetype, n int, c *compiled,
 				Floor:      fl.name,
 				Room:       fmt.Sprintf("%s-%02d", fl.name, j/len(floors)+1),
 				Components: cs.components,
-				Roles:      cs.roles,
+				Slots:      cs.slots,
 			})
 			j++
 		}

@@ -10,7 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// The notification_type registry (#618, #1319): the outbound peer of
+// The notification_type catalog (#618, #1319): the outbound peer of
 // command_type, saying WHAT a message about an alarm says. A row carries two
 // templates, a one-line subject and a body text, each rendered through the
 // shared template sandbox (internal/sandbox) over the alarm fact map
@@ -31,7 +31,7 @@ type NotificationType struct {
 }
 
 // NotificationTypeSpec is the create input; Name is fixed at creation and
-// moves only through the registry rename.
+// moves only through the catalog rename.
 type NotificationTypeSpec struct {
 	Name        string
 	Label       string
@@ -48,7 +48,7 @@ type NotificationTypePatch struct {
 	Text        *string
 }
 
-// Notification type sentinels. A row the registry rename refuses answers
+// Notification type sentinels. A row the catalog rename refuses answers
 // with the shared ErrTypeOfficial / ErrTypeExists / ErrTypeNotFound.
 var (
 	ErrNotificationTypeNotFound = errors.New("storage: notification type not found")
@@ -139,7 +139,7 @@ func getNotificationType(ctx context.Context, q querier, ref string) (*Notificat
 	if err := RejectAddressForm("notification_type", ref); err != nil {
 		return nil, err
 	}
-	t, err := scanNotificationType(q.QueryRow(ctx, `select `+notificationTypeCols+` from `+refRows("notification_type", ref)+` notification_type where `+registryRefCol(ref)+` = $1`, ref))
+	t, err := scanNotificationType(q.QueryRow(ctx, `select `+notificationTypeCols+` from `+refRows("notification_type", ref)+` notification_type where `+catalogRefCol(ref)+` = $1`, ref))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotificationTypeNotFound
 	}
@@ -187,7 +187,7 @@ func lockMutableNotificationType(ctx context.Context, tx pgx.Tx, ref string) (*N
 	if err := RejectAddressForm("notification_type", ref); err != nil {
 		return nil, err
 	}
-	t, err := scanNotificationType(tx.QueryRow(ctx, `select `+notificationTypeCols+` from notification_type where id = (select r.id from `+refRows("notification_type", ref)+` r where r.`+registryRefCol(ref)+` = $1) for update`, ref))
+	t, err := scanNotificationType(tx.QueryRow(ctx, `select `+notificationTypeCols+` from notification_type where id = (select r.id from `+refRows("notification_type", ref)+` r where r.`+catalogRefCol(ref)+` = $1) for update`, ref))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotificationTypeNotFound
 	}
@@ -252,7 +252,7 @@ func (p *PG) DeleteNotificationType(ctx context.Context, actorID, ref string) er
 	// back to the official type for the transition, as a rule naming none
 	// sends. Only a platform rule, which an admin can see and edit, holds it.
 	if _, err := tx.Exec(ctx, `update action_rule set notification_type_id = null, updated_at = now()
-		where notification_type_id = $1 and owner_principal_id is not null`, before.ID); err != nil {
+		where notification_type_id = $1 and owner_user_id is not null`, before.ID); err != nil {
 		return fmt.Errorf("storage: release personal rules from notification type %q: %w", ref, err)
 	}
 	if _, err := tx.Exec(ctx, `delete from notification_type where id = $1`, before.ID); err != nil {

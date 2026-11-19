@@ -107,6 +107,18 @@ describe("walkthrough script validation", () => {
     expect(bad({ title: "T", steps: [{ press: "a", caption: "a", poster: "yes" }, done] })).toBe("w.yaml: step 1 (press): poster is true or absent");
   });
 
+  it("holds modifier keys through a click, and only a click", () => {
+    const done = { wait: { text: "x" }, caption: "c" };
+    expect(ok([{ click: "#row", modifiers: ["Alt", "Shift"], caption: "a" }, done]).steps[0].modifiers).toEqual(["Alt", "Shift"]);
+    expect(ok([{ click: "#row", caption: "a" }, done]).steps[0].modifiers).toBeUndefined();
+    expect(bad({ title: "T", steps: [{ click: "#row", modifiers: ["Hyper"], caption: "a" }, done] })).toBe(
+      "w.yaml: step 1 (click): modifiers is a list of Alt, Shift, Control, Meta",
+    );
+    expect(bad({ title: "T", steps: [{ hover: "#row", modifiers: ["Alt"], caption: "a" }, done] })).toBe(
+      'w.yaml: step 1 (hover) has unknown key "modifiers"',
+    );
+  });
+
   it("refuses exact on a selector target, where it means nothing", () => {
     expect(bad({ title: "T", steps: [{ wait: { selector: "#x", exact: true }, caption: "a" }] })).toBe(
       'w.yaml: step 1 (wait) has unknown key "exact"',

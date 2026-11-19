@@ -24,7 +24,7 @@ type systemBody struct {
 	LabelGenerated bool              `json:"label_generated" doc:"Whether the platform rendered this label from a label rule rather than an operator typing it. Read-only: write label to claim it, write an empty label to hand it back."`
 	Standard       string            `json:"standard,omitempty" doc:"The standard's handle, for display; omitted for a one-off system"`
 	StandardID     string            `json:"standard_id,omitempty" doc:"The standard's uuid; the stable form of standard"`
-	SystemType     string            `json:"system_type,omitempty" doc:"The system_type's name, for display: what kind of space this is (board, class, video-wall). Omitted for an unclassified system. Distinct from standard, which is the blueprint it is built to."`
+	SystemType     string            `json:"system_type,omitempty" doc:"The system_type's name, for display: what this system is for (board, class, video-wall). Omitted for an unclassified system. Distinct from standard, which is the contract it is built to."`
 	SystemTypeID   string            `json:"system_type_id,omitempty" doc:"The system_type's uuid; the stable form of system_type"`
 	ParentID       *string           `json:"parent_id,omitempty" doc:"The parent system's id, the canonical handle"`
 	Parent         *string           `json:"parent,omitempty" doc:"The parent system's name, for display; absent for a root system"`
@@ -60,7 +60,7 @@ type systemOutput struct {
 	Body systemBody
 }
 
-// standardBody is the wire shape of a standard: the blueprint a system conforms
+// standardBody is the wire shape of a standard: the contract a system is built
 // to, the system-side counterpart of a product. The catalog lists alphabetically
 // by label.
 type standardBody struct {
@@ -70,11 +70,11 @@ type standardBody struct {
 	ParentStandard   string `json:"parent_standard,omitempty" doc:"The parent standard's handle"`
 	ParentStandardID string `json:"parent_standard_id,omitempty" doc:"The parent standard's uuid; the stable form of parent_standard"`
 	Official         bool   `json:"official"`
-	// The room-layout declaration (#791, ADR-0128): {aspect, positions:[{role,
+	// The room-layout declaration (#791, ADR-0128): {aspect, positions:[{slot,
 	// position, x, y}]}, coordinates normalized to [0, 1] against the aspect.
 	// Absent when the standard declares none; every conforming system's zoom
 	// renders the same room from it.
-	Map json.RawMessage `json:"map,omitempty" doc:"The standard's room layout: aspect (width over height) and one normalized position per role position; absent when undeclared"`
+	Map json.RawMessage `json:"map,omitempty" doc:"The standard's room layout: aspect (width over height) and one normalized position per slot position; absent when undeclared"`
 }
 
 func toStandardBody(st *storage.Standard) standardBody {
@@ -108,7 +108,7 @@ type updateStandardInput struct {
 	Body struct {
 		Label            *string         `json:"label,omitempty" doc:"A new operator-facing label"`
 		ParentStandardID *string         `json:"parent_standard_id,omitempty" doc:"A new variant parent, by handle or uuid; omit to leave unchanged, \"\" to clear it back to a standalone standard"`
-		Map              json.RawMessage `json:"map,omitempty" doc:"The room-layout declaration to store; JSON null clears it; absent leaves it. Validated: positive aspect, coordinates in [0, 1], 1-based positions, no duplicate (role, position) pair"`
+		Map              json.RawMessage `json:"map,omitempty" doc:"The room-layout declaration to store; JSON null clears it; absent leaves it. Validated: positive aspect, coordinates in [0, 1], 1-based positions, no duplicate (slot, position) pair"`
 	}
 }
 
@@ -127,13 +127,13 @@ type createSystemInput struct {
 		// ordinal in this placement, suppressing the ordinal for the first of
 		// that stem in the bucket, and marks name_generated. Supplied, it is
 		// validated exactly as before. Omitting it without a system_type is a
-		// 422: the stem lives on that registry row.
+		// 422: the stem lives on that catalog row.
 		Name       string `json:"name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the system_type's stem."`
 		Label      string `json:"label,omitempty" doc:"What an operator reads; the name is the address"`
 		StandardID string `json:"standard_id,omitempty" doc:"The standard it conforms to, by handle or uuid; omit for a one-off system"`
 		// Nullable for now: a floor on system_type_id waits until the shipped
 		// tree has proven out.
-		SystemTypeID string  `json:"system_type_id,omitempty" doc:"The system_type it is classified as (what kind of space it is), by name or uuid; omit to leave it unclassified"`
+		SystemTypeID string  `json:"system_type_id,omitempty" doc:"The system_type it is classified as (what it is for), by name or uuid; omit to leave it unclassified"`
 		Parent       *string `json:"parent,omitempty" doc:"Parent system name; omit for a root system"`
 		Location     *string `json:"location,omitempty" doc:"Location name this system is placed at"`
 		// The create form's ordinal precondition (#702); see
@@ -285,10 +285,11 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "update-system",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodPatch,
 		Path:        "/systems/{name}",
 		Summary:     "Update a system",
-		Description: "Patches a system's label, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. A new standard declaring a role name the system declares itself is a 409 naming the role, since a role name must mean one role in a system. A standard change carries the system's staffing in the same transaction: each occupant of an inherited role moves onto the new standard's role of the same name when it is still a typed match and the role has room, and is released, staying a member, otherwise; clearing the standard releases every inherited assignment. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
+		Description: "Patches a system's label, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. A new standard declaring a slot name the system declares itself is a 409 naming the slot, since a slot name must mean one slot in a system. A standard change carries the system's staffing in the same transaction: each occupant of an inherited slot moves onto the new standard's slot of the same name when it is still a typed match and the slot has room, and is released, staying a member, otherwise; clearing the standard releases every inherited assignment. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
 	}, "system", "update"), func(ctx context.Context, in *updateSystemInput) (*systemOutput, error) {
 		s, err := gw.UpdateSystem(ctx, actorID(ctx), in.Name, storage.SystemPatch{
 			Label: in.Body.Label,
@@ -432,7 +433,7 @@ func mapSystemErr(err error) error {
 	}
 	// A standard change onto a standard declaring a name the system declares
 	// itself (#503).
-	if msg, ok := roleCollisionMessage(err); ok {
+	if msg, ok := slotCollisionMessage(err); ok {
 		return huma.Error409Conflict(msg)
 	}
 	switch {
@@ -461,7 +462,7 @@ func mapSystemErr(err error) error {
 	case errors.Is(err, storage.ErrSystemTypeRequiredForName):
 		return errNoGeneratedName("a system with no system_type has no stem to generate a name from: supply a name, classify it, or :rename it before un-classifying it")
 	case errors.Is(err, storage.ErrSystemTypeNoStem):
-		return errNoGeneratedName("this system_type has no stem to generate a name from; supply a name explicitly, or fix the system_type registry")
+		return errNoGeneratedName("this system_type has no stem to generate a name from; supply a name explicitly, or fix the system_type catalog")
 	case errors.Is(err, storage.ErrLocationNotFound):
 		return huma.Error422UnprocessableEntity("location not found")
 	default:
@@ -471,7 +472,7 @@ func mapSystemErr(err error) error {
 
 // mapStandardErr translates the standard storage sentinels into HTTP status. An
 // unknown parent is a 422; everything else falls through to the shared
-// type-registry mapping (not-found 404, duplicate 409, official read-only 422,
+// type-catalog mapping (not-found 404, duplicate 409, official read-only 422,
 // in-use 409).
 func mapStandardErr(err error) error {
 	if errors.Is(err, storage.ErrParentStandardNotFound) {
@@ -484,8 +485,8 @@ func mapStandardErr(err error) error {
 }
 
 // registerStandardRoutes wires the standard catalog CRUD surface, on the same
-// pattern as products. A standard is not a bare type registry: it carries a
-// declared property contract (and later a role set), so it is a Catalog entity
+// pattern as products. A standard is not a bare type catalog: it carries a
+// declared property contract (and later a slot set), so it is a Catalog entity
 // gated by its own standard:read|create|update|delete rather than the inherited
 // type:*. standard:read sits in the viewer read-floor (*:read), the mutations at
 // the admin tier, exactly like product:*.
@@ -495,7 +496,7 @@ func registerStandardRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodGet,
 		Path:        "/standards",
 		Summary:     "List standards",
-		Description: "Lists the standard catalog, ordered alphabetically by label. A standard is the blueprint a system conforms to. Gated by standard:read.",
+		Description: "Lists the standard catalog, ordered alphabetically by label. A standard is the contract a system is built to. Gated by standard:read.",
 	}, "standard", "read"), func(ctx context.Context, _ *struct{}) (*listStandardsOutput, error) {
 		items, err := gw.ListStandards(ctx)
 		if err != nil {

@@ -37,14 +37,14 @@ func (c *catalogStore) ListEventTypes(context.Context) ([]storage.EventType, err
 	return nil, nil
 }
 
-// TestACollisionIsLoggedOnRebuildAndHourlyNotPerBatch is #1298: a registry
-// name collision is logged when the registry is built with it, and again once
+// TestACollisionIsLoggedOnRebuildAndHourlyNotPerBatch is #1298: a catalog
+// name collision is logged when the catalog is built with it, and again once
 // an hour while it persists, never on every batch; once it is cleared, nothing
 // more is logged.
 func TestACollisionIsLoggedOnRebuildAndHourlyNotPerBatch(t *testing.T) {
 	var logged bytes.Buffer
 	now := time.Date(2026, 10, 28, 4, 0, 0, 0, time.UTC)
-	cache := &registryCache{
+	cache := &catalogCache{
 		now: func() time.Time { return now },
 		log: slog.New(slog.NewTextHandler(&logged, nil)),
 	}
@@ -52,7 +52,7 @@ func TestACollisionIsLoggedOnRebuildAndHourlyNotPerBatch(t *testing.T) {
 		metrics:    []storage.MetricType{{Name: "input"}},
 		properties: []storage.PropertyType{{Name: "input"}, {Name: "power"}},
 	}
-	warnings := func() int { return strings.Count(logged.String(), "registry name collision") }
+	warnings := func() int { return strings.Count(logged.String(), "catalog name collision") }
 	batch := func(after time.Duration) {
 		t.Helper()
 		now = now.Add(after)
@@ -63,7 +63,7 @@ func TestACollisionIsLoggedOnRebuildAndHourlyNotPerBatch(t *testing.T) {
 
 	batch(0)
 	if warnings() != 1 || !strings.Contains(logged.String(), "input") {
-		t.Fatalf("building a registry with a collision: %d warnings, want 1 naming input:\n%s", warnings(), logged.String())
+		t.Fatalf("building a catalog with a collision: %d warnings, want 1 naming input:\n%s", warnings(), logged.String())
 	}
 	for i := 0; i < 100; i++ {
 		batch(2 * time.Second)
@@ -90,7 +90,7 @@ func TestACollisionIsLoggedOnRebuildAndHourlyNotPerBatch(t *testing.T) {
 		t.Fatalf("a rebuild with the collision standing: %d warnings, want it logged at once (3)", warnings())
 	}
 
-	// Deleting one side clears it: the registry rebuilds without a collision
+	// Deleting one side clears it: the catalog rebuilds without a collision
 	// and nothing more is logged, however long it runs.
 	store.fp, store.properties = "b", []storage.PropertyType{{Name: "power"}}
 	batch(fingerprintEvery)
@@ -102,7 +102,7 @@ func TestACollisionIsLoggedOnRebuildAndHourlyNotPerBatch(t *testing.T) {
 
 // TestTheConsumerLogsACollisionOnceAcrossBatches holds the warning out of the
 // per-batch path: the ingest consumer lands 100 batches carrying samples while
-// a collision stands and logs it once, when its registry is built.
+// a collision stands and logs it once, when its catalog is built.
 func TestTheConsumerLogsACollisionOnceAcrossBatches(t *testing.T) {
 	var logged bytes.Buffer
 	prior := slog.Default()
@@ -115,14 +115,14 @@ func TestTheConsumerLogsACollisionOnceAcrossBatches(t *testing.T) {
 	}}
 	owner := &storage.TaskOwner{ComponentID: "c-1"}
 	for i := 0; i < 100; i++ {
-		ev := &ogv1.TelemetryBatch{TaskId: "t-1", NodeId: "node-a",
+		ev := &ogv1.TelemetryBatch{TaskId: "t-1", OutpostId: "outpost-a",
 			Metrics: []*ogv1.MetricSample{{Name: "volume", Value: float64(i)}}}
 		if err := s.land(context.Background(), "", ev, ingestBinding{SampleOwner: owner, Arc: componentArc(*owner),
-			Writer: storage.NodeWriter(owner.ComponentID, "")}); err != nil {
+			Writer: storage.OutpostWriter(owner.ComponentID, "")}); err != nil {
 			t.Fatalf("batch %d: %v", i, err)
 		}
 	}
-	if n := strings.Count(logged.String(), "registry name collision"); n != 1 {
+	if n := strings.Count(logged.String(), "catalog name collision"); n != 1 {
 		t.Fatalf("100 batches while a collision stood logged it %d times, want once", n)
 	}
 }
@@ -130,12 +130,12 @@ func TestTheConsumerLogsACollisionOnceAcrossBatches(t *testing.T) {
 // A name the platform ships that an operator already holds in another catalog is
 // not a collision (#1307): the operator's row resolves and their samples land
 // where they always did. It is still said, since it changes what the name means
-// on this install: once when the registry is built with it, and with the
+// on this install: once when the catalog is built with it, and with the
 // collision reminder's cadence, never per batch, and nothing once it is gone.
 func TestAShadowedOfficialNameIsToldOnRebuildAndHourlyNotPerBatch(t *testing.T) {
 	var logged bytes.Buffer
 	now := time.Date(2026, 10, 29, 4, 0, 0, 0, time.UTC)
-	cache := &registryCache{
+	cache := &catalogCache{
 		now: func() time.Time { return now },
 		log: slog.New(slog.NewTextHandler(&logged, nil)),
 	}
@@ -154,9 +154,9 @@ func TestAShadowedOfficialNameIsToldOnRebuildAndHourlyNotPerBatch(t *testing.T) 
 
 	batch(0)
 	if told() != 1 || !strings.Contains(logged.String(), "input") {
-		t.Fatalf("building a registry with a shadowed name: %d notices, want 1 naming input:\n%s", told(), logged.String())
+		t.Fatalf("building a catalog with a shadowed name: %d notices, want 1 naming input:\n%s", told(), logged.String())
 	}
-	if strings.Contains(logged.String(), "registry name collision") {
+	if strings.Contains(logged.String(), "catalog name collision") {
 		t.Fatalf("a shadowed name was reported as a collision:\n%s", logged.String())
 	}
 	for i := 0; i < 100; i++ {

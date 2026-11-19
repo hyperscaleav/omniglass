@@ -12,11 +12,11 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// TestCatalogFingerprintMovesWithEveryRegistryTable: the fingerprint the
-// ingest registry cache keys on (#1279) holds still while nothing changes, and
-// moves on any insert, update or delete in any table the registry is built
-// from, so a cached registry can never outlive the catalog it was read from.
-func TestCatalogFingerprintMovesWithEveryRegistryTable(t *testing.T) {
+// TestCatalogFingerprintMovesWithEveryCatalogTable: the fingerprint the
+// ingest catalog cache keys on (#1279) holds still while nothing changes, and
+// moves on any insert, update or delete in any table the catalog is built
+// from, so a cached catalog can never outlive the catalog it was read from.
+func TestCatalogFingerprintMovesWithEveryCatalogTable(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -88,7 +88,7 @@ func TestCatalogFingerprintMovesWithEveryRegistryTable(t *testing.T) {
 }
 
 // TestCatalogFingerprintCoversThePlannedRelations is the exact half of the
-// drift guard (#1279): each registry list statement is planned as written,
+// drift guard (#1279): each catalog list statement is planned as written,
 // and every relation the plan reads, in any subplan, must be a table the
 // catalog fingerprint covers. Unlike the text scan in the internal test, a
 // plan sees comma joins, quoted names, views and functions over tables.
@@ -103,7 +103,7 @@ func TestCatalogFingerprintCoversThePlannedRelations(t *testing.T) {
 		t.Fatalf("connect: %v", err)
 	}
 	t.Cleanup(func() { _ = conn.Close(ctx) })
-	for _, q := range storage.ExportRegistryListSQL {
+	for _, q := range storage.ExportCatalogListSQL {
 		var plan []byte
 		if err := conn.QueryRow(ctx, "explain (format json) "+q).Scan(&plan); err != nil {
 			t.Fatalf("explain %q: %v", q, err)
@@ -117,8 +117,8 @@ func TestCatalogFingerprintCoversThePlannedRelations(t *testing.T) {
 			t.Fatalf("the plan of %q reads no relation: the guard would pass vacuously", q)
 		}
 		for _, r := range relations {
-			if !slices.Contains(storage.ExportRegistryTables, r) {
-				t.Errorf("a registry list statement reads %s, which the catalog fingerprint does not cover; add it to registryTables", r)
+			if !slices.Contains(storage.ExportCatalogTables, r) {
+				t.Errorf("a catalog list statement reads %s, which the catalog fingerprint does not cover; add it to catalogTables", r)
 			}
 		}
 	}
@@ -126,9 +126,9 @@ func TestCatalogFingerprintCoversThePlannedRelations(t *testing.T) {
 
 // plannedRelations collects every "Relation Name" in an EXPLAIN (FORMAT JSON)
 // tree, subplans included.
-func plannedRelations(node any) []string {
+func plannedRelations(outpost any) []string {
 	var out []string
-	switch n := node.(type) {
+	switch n := outpost.(type) {
 	case map[string]any:
 		for k, v := range n {
 			if name, ok := v.(string); ok && k == "Relation Name" {

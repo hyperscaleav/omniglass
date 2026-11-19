@@ -58,13 +58,13 @@ type soakPlatformView struct {
 		Name    string `json:"name"`
 		Version string `json:"version"`
 	} `json:"servers"`
-	Nodes []struct {
+	Outposts []struct {
 		Name    string   `json:"name"`
 		Loss    *float64 `json:"loss"`
 		Figures map[string]struct {
 			Value float64 `json:"value"`
 		} `json:"figures"`
-	} `json:"nodes"`
+	} `json:"outposts"`
 	Pipeline *struct {
 		Hops []struct {
 			ID          string     `json:"id"`
@@ -110,7 +110,7 @@ func ReadSoak(ctx context.Context, get SoakGetter, since, until time.Time) (Soak
 		return SoakReading{}, fmt.Errorf("read the platform health view: %w", err)
 	}
 	if !view.FiguresRead || view.System == nil || view.Pipeline == nil {
-		return SoakReading{}, errors.New("the token cannot read the whole platform health page (it needs node, system and component read over everything): a verdict from part of the page would pass what it could not see")
+		return SoakReading{}, errors.New("the token cannot read the whole platform health page (it needs outpost, system and component read over everything): a verdict from part of the page would pass what it could not see")
 	}
 	build, err := soakBuild(view)
 	if err != nil {
@@ -156,7 +156,7 @@ func soakBuild(view soakPlatformView) (string, error) {
 
 // soakLosses is every loss ratio the platform health page carries: each
 // delivery hop (its total, each kind, each component's share) over the newest
-// window and the last hour, the end to end, each node's loss, and each node's
+// window and the last hour, the end to end, each outpost's loss, and each outpost's
 // worklist pull loss. A ratio the page leaves absent (nothing went in) is
 // not read as one.
 func soakLosses(view soakPlatformView) []SoakLoss {
@@ -188,11 +188,11 @@ func soakLosses(view soakPlatformView) []SoakLoss {
 	}
 	add("end to end, newest window", view.Pipeline.EndToEndTotal.Newest)
 	add("end to end, last hour", view.Pipeline.EndToEndTotal.LastHour)
-	for _, n := range view.Nodes {
-		add("node "+n.Name+", last hour", n.Loss)
+	for _, n := range view.Outposts {
+		add("outpost "+n.Name+", last hour", n.Loss)
 		if f, ok := n.Figures[writerclass.WorklistPullLossRatio]; ok {
 			v := f.Value
-			add("node "+n.Name+", worklist pull", &v)
+			add("outpost "+n.Name+", worklist pull", &v)
 		}
 	}
 	return out

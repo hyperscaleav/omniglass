@@ -60,10 +60,10 @@ type setProductPropertyInput struct {
 }
 
 // registerProductPropertyRoutes wires the product's declared-property contract,
-// a sub-collection of the product registry and gated with it: the read rides the
+// a sub-collection of the product catalog and gated with it: the read rides the
 // product:read viewer floor, the writes sit at product:update / product:delete.
 // Official products ship their contract with the release, so an operator write
-// against one is refused (422) the same way its registry row is.
+// against one is refused (422) the same way its catalog row is.
 func registerProductPropertyRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-product-properties",
@@ -139,7 +139,7 @@ func encodePropertyJSON(v any, field string) (json.RawMessage, error) {
 // mapProductPropertyErr translates the contract storage sentinels into HTTP
 // status. A property the catalog does not know is a 422 (the request names a
 // property that does not exist), everything else falls through to the shared
-// type-registry mapping, where the product is the type: not-found 404, official
+// type-catalog mapping, where the product is the type: not-found 404, official
 // read-only 422.
 func mapProductPropertyErr(err error) error {
 	if errors.Is(err, storage.ErrPropertyTypeNotFound) {

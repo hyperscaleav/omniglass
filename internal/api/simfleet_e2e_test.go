@@ -27,36 +27,36 @@ type fakeHub struct {
 	*simhub.Registry
 	mu    sync.Mutex
 	fired []struct {
-		node string
-		op   collection.SimOperation
+		outpost string
+		op      collection.SimOperation
 	}
 	fireErr error
-	// observation answers EndpointObservation by node; a node absent from it
-	// has no simulator. observeErr, when set, answers every node.
+	// observation answers EndpointObservation by outpost; an outpost absent from it
+	// has no simulator. observeErr, when set, answers every outpost.
 	observation map[string]collection.EndpointObservation
 	observeErr  error
 }
 
-func (h *fakeHub) EndpointObservation(_ context.Context, node string) (collection.EndpointObservation, error) {
+func (h *fakeHub) EndpointObservation(_ context.Context, outpost string) (collection.EndpointObservation, error) {
 	if h.observeErr != nil {
 		return collection.EndpointObservation{}, h.observeErr
 	}
-	o, ok := h.observation[node]
+	o, ok := h.observation[outpost]
 	if !ok {
 		return o, collection.ErrNoSimulator
 	}
 	return o, nil
 }
 
-func (h *fakeHub) SimStatus(node string) (simhub.Status, bool) { return h.Status(node) }
+func (h *fakeHub) SimStatus(outpost string) (simhub.Status, bool) { return h.Status(outpost) }
 
-func (h *fakeHub) FireSimOperation(_ context.Context, node string, op collection.SimOperation) (collection.SimOperationResult, error) {
+func (h *fakeHub) FireSimOperation(_ context.Context, outpost string, op collection.SimOperation) (collection.SimOperationResult, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.fired = append(h.fired, struct {
-		node string
-		op   collection.SimOperation
-	}{node, op})
+		outpost string
+		op      collection.SimOperation
+	}{outpost, op})
 	if h.fireErr != nil {
 		return collection.SimOperationResult{}, h.fireErr
 	}
@@ -65,19 +65,19 @@ func (h *fakeHub) FireSimOperation(_ context.Context, node string, op collection
 
 type fleetBody struct {
 	Connected bool `json:"connected"`
-	Nodes     []struct {
-		Node       string `json:"node"`
+	Outposts  []struct {
+		Outpost    string `json:"outpost"`
 		Connected  bool   `json:"connected"`
 		Components []struct {
 			Component string `json:"component"`
 			Address   string `json:"address"`
 		} `json:"components"`
-	} `json:"nodes"`
+	} `json:"outposts"`
 }
 
 type componentSimBody struct {
 	Simulated bool   `json:"simulated"`
-	Node      string `json:"node"`
+	Outpost   string `json:"outpost"`
 	Product   string `json:"product"`
 	Profile   string `json:"profile"`
 	Address   string `json:"address"`
@@ -123,7 +123,7 @@ func TestSimulationFleetAPI(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 	for _, n := range []string{"site-a", "site-b"} {
-		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: n}, all, all); err != nil {
+		if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: n}, all, all); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -134,8 +134,8 @@ func TestSimulationFleetAPI(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "loose"}, all, all, all, all); err != nil {
 		t.Fatal(err)
 	}
-	comp, node := "panel-1", "site-a"
-	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "tcp", Component: &comp, Node: &node,
+	comp, outpost := "panel-1", "site-a"
+	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "tcp", Component: &comp, Outpost: &outpost,
 		Params: []byte(`{"target":"127.60.0.1:51325"}`)}, all); err != nil {
 		t.Fatal(err)
 	}
@@ -168,20 +168,20 @@ func TestSimulationFleetAPI(t *testing.T) {
 	// which is what hides the console's Simulation page.
 	var fleet fleetBody
 	get(ownerTok, "/simulation", &fleet)
-	if fleet.Connected || len(fleet.Nodes) != 0 {
+	if fleet.Connected || len(fleet.Outposts) != 0 {
 		t.Fatalf("before any simulator: %+v", fleet)
 	}
 
 	hub.Pulled("site-a", collection.SimCapabilities{PortOffset: 10000}, []string{panelID})
 	get(viewer, "/simulation", &fleet)
-	if !fleet.Connected || len(fleet.Nodes) != 1 || fleet.Nodes[0].Node != "site-a" || !fleet.Nodes[0].Connected ||
-		len(fleet.Nodes[0].Components) != 1 || fleet.Nodes[0].Components[0].Component != "panel-1" {
+	if !fleet.Connected || len(fleet.Outposts) != 1 || fleet.Outposts[0].Outpost != "site-a" || !fleet.Outposts[0].Connected ||
+		len(fleet.Outposts[0].Components) != 1 || fleet.Outposts[0].Components[0].Component != "panel-1" {
 		t.Fatalf("fleet = %+v, want site-a's simulator serving panel-1", fleet)
 	}
 	c.do("", http.MethodGet, "/simulation", nil, http.StatusUnauthorized)
 
-	// simulation:read is the whole gate (no node read needed): a caller
-	// scoped to one component sees the node that simulates it, with only
+	// simulation:read is the whole gate (no outpost read needed): a caller
+	// scoped to one component sees the outpost that simulates it, with only
 	// that component; a caller whose scope holds no simulated component
 	// sees no simulator at all, so the console hides its page.
 	scopedTo := func(component string) string {
@@ -190,16 +190,16 @@ func TestSimulationFleetAPI(t *testing.T) {
 			t.Fatal(err)
 		}
 		var pid string
-		if err := conn.QueryRow(ctx, `insert into principal (kind) values ('service') returning id`).Scan(&pid); err != nil {
+		if err := conn.QueryRow(ctx, `insert into users (kind) values ('machine') returning id`).Scan(&pid); err != nil {
 			t.Fatal(err)
 		}
 		for _, q := range []struct {
 			sql  string
 			args []any
 		}{
-			{`insert into service (principal_id, name) values ($1, $2)`, []any{pid, "simfleet-scoped-" + component}},
-			{`insert into credential (principal_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`, []any{pid, hash, prefix}},
-			{`insert into principal_grant (principal_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'sim-scoped-reader'), 'component', (select id::text from component where name = $2))`, []any{pid, component}},
+			{`insert into machine (user_id, name) values ($1, $2)`, []any{pid, "simfleet-scoped-" + component}},
+			{`insert into credential (user_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`, []any{pid, hash, prefix}},
+			{`insert into user_grant (user_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'sim-scoped-reader'), 'component', (select id::text from component where name = $2))`, []any{pid, component}},
 		} {
 			if _, err := conn.Exec(ctx, q.sql, q.args...); err != nil {
 				t.Fatalf("%s: %v", q.sql, err)
@@ -209,13 +209,13 @@ func TestSimulationFleetAPI(t *testing.T) {
 	}
 	var scoped fleetBody
 	get(scopedTo("panel-1"), "/simulation", &scoped)
-	if !scoped.Connected || len(scoped.Nodes) != 1 || scoped.Nodes[0].Node != "site-a" ||
-		len(scoped.Nodes[0].Components) != 1 || scoped.Nodes[0].Components[0].Component != "panel-1" {
+	if !scoped.Connected || len(scoped.Outposts) != 1 || scoped.Outposts[0].Outpost != "site-a" ||
+		len(scoped.Outposts[0].Components) != 1 || scoped.Outposts[0].Components[0].Component != "panel-1" {
 		t.Fatalf("a caller scoped to panel-1 reads %+v, want site-a with panel-1", scoped)
 	}
 	var elsewhere fleetBody
 	get(scopedTo("loose"), "/simulation", &elsewhere)
-	if elsewhere.Connected || len(elsewhere.Nodes) != 0 {
+	if elsewhere.Connected || len(elsewhere.Outposts) != 0 {
 		t.Fatalf("a caller scoped to no simulated component reads %+v, want no simulator", elsewhere)
 	}
 
@@ -242,7 +242,7 @@ func TestSimulationFleetAPI(t *testing.T) {
 	// with its routes, commands and OIDs, ports as the simulator binds them.
 	var sim componentSimBody
 	get(viewer, "/components/panel-1/simulation", &sim)
-	if !sim.Simulated || sim.Node != "site-a" || sim.Product != panel || sim.Profile != prof.Name || sim.Address != "127.60.0.1" {
+	if !sim.Simulated || sim.Outpost != "site-a" || sim.Product != panel || sim.Profile != prof.Name || sim.Address != "127.60.0.1" {
 		t.Fatalf("panel-1 simulation = %+v", sim)
 	}
 	byName := map[string]int{}
@@ -292,7 +292,7 @@ func TestSimulationFleetAPI(t *testing.T) {
 		map[string]any{"surface": lineSurface, "command": "SET INPUT hdmi2"}, http.StatusOK), &fired); err != nil {
 		t.Fatal(err)
 	}
-	if fired.Body != "INPUT hdmi2" || len(hub.fired) != 1 || hub.fired[0].node != "site-a" ||
+	if fired.Body != "INPUT hdmi2" || len(hub.fired) != 1 || hub.fired[0].outpost != "site-a" ||
 		hub.fired[0].op.ComponentID != panelID || hub.fired[0].op.Kind != "command" || hub.fired[0].op.Protocol != "tcp" {
 		t.Fatalf("fired %+v, answer %+v", hub.fired, fired)
 	}
@@ -311,40 +311,40 @@ func TestSimulationFleetAPI(t *testing.T) {
 
 	// Add a simulated device from a profile: a component of the product,
 	// at a free address in the simulated block, with the endpoint the
-	// planner picks (the NVP attach, no secret needed), on the node.
+	// planner picks (the NVP attach, no secret needed), on the outpost.
 	var added struct {
 		Component string `json:"component"`
 		Address   string `json:"address"`
 		Endpoints int    `json:"endpoints"`
 	}
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/nodes/site-a/simulation/components",
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/outposts/site-a/simulation/components",
 		map[string]any{"name": "panel-9", "product": panel}, http.StatusCreated), &added); err != nil {
 		t.Fatal(err)
 	}
 	if added.Component != "panel-9" || added.Address != "127.60.0.2" || added.Endpoints != 1 {
 		t.Fatalf("added = %+v, want panel-9 at the free 127.60.0.2 with one endpoint", added)
 	}
-	var driver, onNode string
-	if err := conn.QueryRow(ctx, `select coalesce(d.name, ''), n.name from endpoint e join node n on n.principal_id = e.node_name
-		left join driver d on d.id = e.driver_id where e.component = (select id from component where name = 'panel-9')`).Scan(&driver, &onNode); err != nil {
+	var driver, onOutpost string
+	if err := conn.QueryRow(ctx, `select coalesce(d.name, ''), n.name from endpoint e join outpost n on n.user_id = e.outpost_id
+		left join driver d on d.id = e.driver_id where e.component = (select id from component where name = 'panel-9')`).Scan(&driver, &onOutpost); err != nil {
 		t.Fatal(err)
 	}
-	if driver != "newtron-panel-nvp" || onNode != "site-a" {
-		t.Fatalf("panel-9's endpoint is %q on %q, want a newtron-panel-nvp attach on site-a", driver, onNode)
+	if driver != "newtron-panel-nvp" || onOutpost != "site-a" {
+		t.Fatalf("panel-9's endpoint is %q on %q, want a newtron-panel-nvp attach on site-a", driver, onOutpost)
 	}
 	var withNew simulationBody
-	get(ownerTok, "/nodes/site-a/simulation", &withNew)
+	get(ownerTok, "/outposts/site-a/simulation", &withNew)
 	if len(withNew.Devices) != 2 {
 		t.Fatalf("site-a lists %d devices after the add, want 2", len(withNew.Devices))
 	}
-	c.do(viewer, http.MethodPost, "/nodes/site-a/simulation/components", map[string]any{"name": "panel-10", "product": panel}, http.StatusForbidden)
+	c.do(viewer, http.MethodPost, "/outposts/site-a/simulation/components", map[string]any{"name": "panel-10", "product": panel}, http.StatusForbidden)
 	// A product no profile simulates (a minted one) is refused, naming why.
 	unsimulated := storagetest.MintProduct(t, ctx, gw, "")
-	out := c.do(ownerTok, http.MethodPost, "/nodes/site-a/simulation/components", map[string]any{"name": "panel-10", "product": unsimulated.Name}, http.StatusUnprocessableEntity)
+	out := c.do(ownerTok, http.MethodPost, "/outposts/site-a/simulation/components", map[string]any{"name": "panel-10", "product": unsimulated.Name}, http.StatusUnprocessableEntity)
 	if !strings.Contains(string(out), "simulat") {
 		t.Fatalf("an unsimulated product was refused with %s, want it to say why", out)
 	}
-	c.do(ownerTok, http.MethodPost, "/nodes/site-b/simulation/components", map[string]any{"name": "panel-11", "product": panel}, http.StatusConflict)
+	c.do(ownerTok, http.MethodPost, "/outposts/site-b/simulation/components", map[string]any{"name": "panel-11", "product": panel}, http.StatusConflict)
 
 	// A component name repeats across places: the add wires the component it
 	// created, never a namesake elsewhere.
@@ -357,7 +357,7 @@ func TestSimulationFleetAPI(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dup", ProductName: &panel, LocationName: &locA}, all, all, all, all); err != nil {
 		t.Fatal(err)
 	}
-	c.do(ownerTok, http.MethodPost, "/nodes/site-a/simulation/components", map[string]any{"name": "dup", "product": panel, "location": "loc-b"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/outposts/site-a/simulation/components", map[string]any{"name": "dup", "product": panel, "location": "loc-b"}, http.StatusCreated)
 	var dupEndpoints map[string]int = map[string]int{}
 	rows, err := conn.Query(ctx, `select l.name, count(e.id) from component c join location l on l.id = c.location_id
 		left join endpoint e on e.component = c.id where c.name = 'dup' group by l.name`)

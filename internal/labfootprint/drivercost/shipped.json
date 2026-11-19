@@ -610,7 +610,7 @@
       "thread_share": 0.07937172753481665,
       "memory_residual": 0.04425546806649164,
       "cpu_residual": 0.03465312034695096,
-      "warm_not_measured": "newtron-core-nvp warm: the loaded line starts 8.9 MiB below the idle node, so the first tasks filled heap it already held and no jump shows",
+      "warm_not_measured": "newtron-core-nvp warm: the loaded line starts 8.9 MiB below the idle outpost, so the first tasks filled heap it already held and no jump shows",
       "steps": [
         {
           "components": 0,
@@ -659,7 +659,7 @@
       "thread_share": 0.07268206815367872,
       "memory_residual": 0.018033676853664055,
       "cpu_residual": 0.033793952127477364,
-      "warm_not_measured": "newtron-panel-nvp warm: the loaded line starts 20.7 MiB below the idle node, so the first tasks filled heap it already held and no jump shows",
+      "warm_not_measured": "newtron-panel-nvp warm: the loaded line starts 20.7 MiB below the idle outpost, so the first tasks filled heap it already held and no jump shows",
       "steps": [
         {
           "components": 0,
@@ -707,7 +707,7 @@
       "thread_share": 0.05546836770676224,
       "memory_residual": 0.008597553557818185,
       "cpu_residual": 0.050595174961038505,
-      "warm_not_measured": "newtron-slate-nvp warm: the loaded line starts 24.1 MiB below the idle node, so the first tasks filled heap it already held and no jump shows",
+      "warm_not_measured": "newtron-slate-nvp warm: the loaded line starts 24.1 MiB below the idle outpost, so the first tasks filled heap it already held and no jump shows",
       "steps": [
         {
           "components": 0,
@@ -853,7 +853,7 @@
       "thread_share": 0.08715933666116962,
       "memory_residual": 0.0028828363667655673,
       "cpu_residual": 0.026131800445725942,
-      "warm_not_measured": "recording-service-api warm: the loaded line starts 13.5 MiB below the idle node, so the first tasks filled heap it already held and no jump shows",
+      "warm_not_measured": "recording-service-api warm: the loaded line starts 13.5 MiB below the idle outpost, so the first tasks filled heap it already held and no jump shows",
       "steps": [
         {
           "components": 0,
@@ -901,7 +901,7 @@
       "thread_share": 0.08990660250947524,
       "memory_residual": 0.0066391385312929395,
       "cpu_residual": 0.0244977726551972,
-      "warm_not_measured": "snmp-generic warm: the loaded line starts 19.2 MiB below the idle node, so the first tasks filled heap it already held and no jump shows",
+      "warm_not_measured": "snmp-generic warm: the loaded line starts 19.2 MiB below the idle outpost, so the first tasks filled heap it already held and no jump shows",
       "steps": [
         {
           "components": 0,
@@ -949,7 +949,7 @@
       "thread_share": 0.09656943291312788,
       "memory_residual": 0.0008840115836000055,
       "cpu_residual": 0.06485356071348179,
-      "warm_not_measured": "ucc-rooms warm: the loaded line starts 15.7 MiB below the idle node, so the first tasks filled heap it already held and no jump shows",
+      "warm_not_measured": "ucc-rooms warm: the loaded line starts 15.7 MiB below the idle outpost, so the first tasks filled heap it already held and no jump shows",
       "steps": [
         {
           "components": 0,

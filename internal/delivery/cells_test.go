@@ -50,7 +50,7 @@ func TestLedgerCellsOfAnEmptyLedger(t *testing.T) {
 	}
 }
 
-// TestLedgerCellsSaturateAtInt64: a node's count past int64 packs at
+// TestLedgerCellsSaturateAtInt64: an outpost's count past int64 packs at
 // int64's ceiling rather than wrapping negative, so its receipt still reads.
 func TestLedgerCellsSaturateAtInt64(t *testing.T) {
 	got := delivery.Declared{delivery.Metric: {Count: math.MaxUint64, Before: math.MaxInt64 + 1}}.Cells()
@@ -63,7 +63,7 @@ func TestLedgerCellsSaturateAtInt64(t *testing.T) {
 	}
 }
 
-// TestLedgerCellsLeaveAnUnknownKindOut: a kind a newer node declares has no
+// TestLedgerCellsLeaveAnUnknownKindOut: a kind a newer outpost declares has no
 // slot here, and no reader counts it.
 func TestLedgerCellsLeaveAnUnknownKindOut(t *testing.T) {
 	got := delivery.Declared{"trace": {Count: 1}}.Cells()
@@ -208,7 +208,7 @@ func TestTallyCellsRefuseWhatHasNoCode(t *testing.T) {
 	}
 }
 
-// TestTallyCellsSaturateAtInt32: a count past int32, as a node's ledger
+// TestTallyCellsSaturateAtInt32: a count past int32, as an outpost's ledger
 // declaring more than it could have sent leaves on its shortfall, packs at
 // int32's ceiling: it still reads as loss, and the batch still lands.
 func TestTallyCellsSaturateAtInt32(t *testing.T) {

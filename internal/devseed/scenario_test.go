@@ -121,7 +121,7 @@ func TestReplicateCopiesWholeRoomsOnly(t *testing.T) {
 	for _, s := range doc.Systems {
 		sysAt[s.Key] = s.Location
 	}
-	for _, ra := range doc.RoleAssignments[len(base.RoleAssignments):] {
+	for _, ra := range doc.SlotAssignments[len(base.SlotAssignments):] {
 		if sysAt[ra.System] != compAt[ra.Component] {
 			t.Errorf("copied assignment %+v staffs a component from another room", ra)
 		}
@@ -297,10 +297,10 @@ func openSeededGateway(t *testing.T) (context.Context, *storage.PG, *pgx.Conn) {
 type fleetCounts struct{ locations, components, systems, assignments, alarms int }
 
 // The operator's fleet, without the platform's own rows (#1625): the boot
-// seed's platform system, each node's platform component, and the membership
+// seed's platform system, each outpost's platform component, and the membership
 // that joins them. Devseed seeds a fleet; the platform is not part of it.
 const (
-	fleetComponentCount = `select count(*) from component where id not in (select platform_component_id from node where platform_component_id is not null)`
+	fleetComponentCount = `select count(*) from component where id not in (select platform_component_id from outpost where platform_component_id is not null)`
 	fleetSystemCount    = `select count(*) from system where name <> 'platform'`
 	fleetMemberCount    = `select count(*) from system_member m join system s on s.id = m.system_id where s.name <> 'platform'`
 )
@@ -312,7 +312,7 @@ func countFleet(t *testing.T, ctx context.Context, conn *pgx.Conn) fleetCounts {
 		`select count(*) from location`:               &c.locations,
 		fleetComponentCount:                           &c.components,
 		fleetSystemCount:                              &c.systems,
-		`select count(*) from system_role_assignment`: &c.assignments,
+		`select count(*) from system_slot_assignment`: &c.assignments,
 		`select count(*) from alarm`:                  &c.alarms,
 	} {
 		if err := conn.QueryRow(ctx, q).Scan(dst); err != nil {

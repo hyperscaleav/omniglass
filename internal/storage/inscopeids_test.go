@@ -75,7 +75,7 @@ func TestInScopeIDs(t *testing.T) {
 	if m, err := gw.InScopeIDs(ctx, "location", nil, all); err != nil || len(m) != 0 {
 		t.Fatalf("empty ids: %+v err %v", m, err)
 	}
-	if m, err := gw.InScopeIDs(ctx, "principal", ids, all); err != nil || len(m) != 0 {
+	if m, err := gw.InScopeIDs(ctx, "user", ids, all); err != nil || len(m) != 0 {
 		t.Fatalf("non-tree resource: want empty, got %+v err %v", m, err)
 	}
 }

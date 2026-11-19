@@ -27,7 +27,7 @@ import (
 
 // TestAWebhookEndpointReportsItsOwnPosts drives #1369's push half over the
 // real wire: the simulated UCC service posts its signed webhooks to the real
-// API. A webhook-fed component has no node and no poll, yet each report
+// API. A webhook-fed component has no outpost and no poll, yet each report
 // window lands its endpoint's accepted posts as its own series, then one
 // zero once the stream goes quiet, and a window with refused posts (a bad
 // signature) lands their count.

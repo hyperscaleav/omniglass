@@ -18,7 +18,7 @@ fleet, the example fleet having a bad day, or the example fleet at enterprise si
 ## The probe and its digest
 
 `make probe` brings up a throwaway [lab](/guides/lab/) of its own (the fleet picked by
-`STACK_SCENARIO`; a fresh install runs no node), visits every route in the console's route manifest, and replays
+`STACK_SCENARIO`; a fresh install runs no outpost), visits every route in the console's route manifest, and replays
 every [walkthrough](/contributing/demos/) at machine speed, a beat after each action rather
 than a person's pace, all on that one lab in alphabetical order: unlike the recorder, which gives each
 walkthrough a lab of its own, a walkthrough here meets whatever the ones before it left behind (the
@@ -67,7 +67,7 @@ is the whole day, and `web/e2e/explorer.mjs` makes every decision in it that nee
    token for the mission's user. `probe.sh replay <script>` plays one walkthrough script against
    it in a directory of its own with a still per step (exit 0 reached its end, 1 failed at a
    step, 2 never ran), which is how the run drives the console and how a repro is proven.
-   `probe.sh node <name> <token>` runs a node the persona enrolled on the lab's network, how a
+   `probe.sh outpost <name> <token>` runs an outpost the persona enrolled on the lab's network, how a
    fresh install gets a collector. `probe.sh release` tears it all down.
 3. **Pursue the goal** as the persona: the CLI first, the API where the CLI has no verb, the
    console through replayed scripts, never screenshot by screenshot. The run keeps a journal of

@@ -6,13 +6,13 @@ import { SECRET_TYPES_KEY, type SecretType } from "../lib/secret_types";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 
-// The Secret Types page is the release-owned registry of secret shapes, read-only
+// The Secret Types page is the release-owned catalog of secret shapes, read-only
 // by DESIGN, not by permission: the seed upserts it authoritatively (ON
 // CONFLICT DO UPDATE) so a release can correct it, and no write route exists.
 // The read-only-ness must therefore hold for an owner exactly as for anyone
 // else: no create affordance, no edit pencil, no destructive action. The page
 // is reached only by holders of secret:read (nav + route guard gate on the
-// secret resource); a viewer-floor principal never mounts it, which the nav
+// secret resource); a viewer-floor user never mounts it, which the nav
 // tests in lib/nav.test.ts prove from the other side.
 const seed: SecretType[] = [
   {
@@ -29,8 +29,8 @@ const seed: SecretType[] = [
 
 const asides = () => document.querySelectorAll("aside[data-blade]");
 
-const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const operator: Me = { principal: { id: "u-op", kind: "human" }, human: { username: "op" }, permissions: ["*:read", "secret:read,reveal,create,update"], grants: [] };
+const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
+const operator: Me = { user: { id: "u-op", kind: "person" }, person: { username: "op" }, permissions: ["*:read", "secret:read,reveal,create,update"], grants: [] };
 
 function mount(me: Me = admin) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
@@ -46,7 +46,7 @@ function mount(me: Me = admin) {
 describe("SecretTypes page", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("lists the registry rows with name and label in one column", () => {
+  it("lists the catalog rows with name and label in one column", () => {
     mount();
     expect(screen.getByText("snmp-community")).toBeTruthy();
     expect(screen.getByText("basic-auth")).toBeTruthy();

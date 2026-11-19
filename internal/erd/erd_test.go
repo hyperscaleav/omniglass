@@ -10,7 +10,7 @@ import "testing"
 func TestRenderClustersAndEdges(t *testing.T) {
 	s := Schema{Tables: []Table{
 		{
-			Name:    "principal",
+			Name:    "user",
 			Columns: []Column{{Name: "id", Type: "uuid", PK: true}},
 		},
 		{
@@ -27,7 +27,7 @@ func TestRenderClustersAndEdges(t *testing.T) {
 		},
 	}}
 	clusters := []Cluster{
-		{Name: "identity", Tables: []string{"principal"}},
+		{Name: "identity", Tables: []string{"user"}},
 		{Name: "telemetry", Tables: []string{"property"}},
 	}
 
@@ -39,7 +39,7 @@ func TestRenderClustersAndEdges(t *testing.T) {
 	want := `direction: right
 
 identity: {
-  principal: {
+  user: {
     shape: sql_table
     id: uuid {constraint: primary_key}
   }

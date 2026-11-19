@@ -9,7 +9,7 @@ import Components from "./pages/Components";
 import Profile from "./pages/Profile";
 import Subscriptions from "./pages/Subscriptions";
 import Inbox from "./pages/Inbox";
-import Nodes from "./pages/Nodes";
+import Outposts from "./pages/Outposts";
 import PlatformHealth from "./pages/PlatformHealth";
 import Simulation from "./pages/Simulation";
 import Users from "./pages/Users";
@@ -41,13 +41,14 @@ import Products from "./pages/Products";
 import Files from "./pages/Files";
 import Audit from "./pages/Audit";
 import Settings from "./pages/Settings";
+import OAuthConsent from "./pages/OAuthConsent";
 import SectionStub from "./pages/SectionStub";
 import NotFound from "./pages/NotFound";
 
-// The page registry the route manifest resolves against: routes.tsx and the
+// The page catalog the route manifest resolves against: routes.tsx and the
 // manifest (lib/routemanifest.ts, pure data) together are the router's source,
 // and route-manifest-guard.test.ts pins that every manifest entry names a key
-// here. Separate from index.tsx so tests can import the registry without
+// here. Separate from index.tsx so tests can import the catalog without
 // index.tsx's render side effect.
 export const PAGES: Record<string, Component> = {
   Login,
@@ -58,9 +59,10 @@ export const PAGES: Record<string, Component> = {
   Systems,
   Components,
   Profile,
+  OAuthConsent,
   Subscriptions,
   Inbox,
-  Nodes,
+  Outposts,
   PlatformHealth,
   Simulation,
   Users,

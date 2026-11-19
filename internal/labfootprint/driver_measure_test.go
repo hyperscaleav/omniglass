@@ -11,12 +11,12 @@ import (
 )
 
 // A sweep's lab is its own and holds nothing but what the sweep adds: no
-// fleet, no node of its own, bound to the process that runs it.
+// fleet, no outpost of its own, bound to the process that runs it.
 func TestADriverSweepsLabIsEmptyAndItsOwn(t *testing.T) {
 	args := driverRunArgs(DriverConfig{Project: "omniglass-sweep"}, "/x/lab.env", 42)
 	got := strings.Join(args, " ")
 	for _, want := range []string{"lab run", "--ephemeral", "--project omniglass-sweep", "--port 0",
-		"--ready-file /x/lab.env", "--while-pid 42", "--scenario empty", "--no-node", "--cadence lab"} {
+		"--ready-file /x/lab.env", "--while-pid 42", "--scenario empty", "--no-outpost", "--cadence lab"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("args %q lack %q", got, want)
 		}
@@ -58,7 +58,7 @@ func TestADriverIsMeasuredIdleThenAtThreeLoads(t *testing.T) {
 	}
 }
 
-func TestASweepsComponentsAreNamedUnderItsNode(t *testing.T) {
+func TestASweepsComponentsAreNamedUnderItsOutpost(t *testing.T) {
 	if got := sweepComponentName("sweep-http-json", 7); got != "sweep-http-json-0007" {
 		t.Fatalf("name = %q", got)
 	}
@@ -131,7 +131,7 @@ func TestAStepTooSmallToSeeMemoryGrowsToTheCap(t *testing.T) {
 }
 
 // Only a sweep whose memory did not fit is taken again: one that measured
-// it is done, and one that failed for any other reason (the node never
+// it is done, and one that failed for any other reason (the outpost never
 // came up) would fail the same way at a bigger step.
 func TestOnlyAMemoryMissIsSweptAgain(t *testing.T) {
 	for _, c := range []struct {
@@ -142,7 +142,7 @@ func TestOnlyAMemoryMissIsSweptAgain(t *testing.T) {
 		{"measured", driverAttempt{row: DriverCost{Driver: "d"}}, false},
 		{"memory missed", driverAttempt{row: DriverCost{MemoryNotMeasured: "not a line"}}, true},
 		{"neither fit", driverAttempt{err: noFitError("d memory: x; d cpu: y")}, true},
-		{"broke", driverAttempt{err: errors.New("start the node: no")}, false},
+		{"broke", driverAttempt{err: errors.New("start the outpost: no")}, false},
 		{"worklist undelivered", driverAttempt{err: worklistUndeliveredError{installed: 16000, held: 24000}}, false},
 	} {
 		if got := c.a.wantsBiggerStep(); got != c.want {
@@ -176,12 +176,12 @@ func TestADriversKeptSweepIsItsMostMeasured(t *testing.T) {
 	}
 }
 
-// A step whose worklist the node never installed measured a node running
+// A step whose worklist the outpost never installed measured an outpost running
 // an older one (#1586): the server refuses a reply over the bus's payload
-// cap and the node keeps what it had. The sweep halves the step, never back
+// cap and the outpost keeps what it had. The sweep halves the step, never back
 // to one already swept, until the worklist arrives; and a step that missed
 // memory below the refused one grows no further than half of it.
-func TestAWorklistTheNodeNeverTookHalvesTheStep(t *testing.T) {
+func TestAWorklistTheOutpostNeverTookHalvesTheStep(t *testing.T) {
 	refused := driverAttempt{err: worklistUndeliveredError{installed: 16000, held: 24000}}
 	missed := driverAttempt{row: DriverCost{MemoryNotMeasured: "not a line"}}
 	measured := driverAttempt{row: DriverCost{Driver: "d"}}
@@ -206,7 +206,7 @@ func TestAWorklistTheNodeNeverTookHalvesTheStep(t *testing.T) {
 	}
 }
 
-func TestAnUndeliveredWorklistSaysWhatTheNodeRuns(t *testing.T) {
+func TestAnUndeliveredWorklistSaysWhatTheOutpostRuns(t *testing.T) {
 	got := worklistUndeliveredError{installed: 16000, held: 24000}.Error()
 	for _, want := range []string{"16000", "24000", "max payload", "#1586"} {
 		if !strings.Contains(got, want) {

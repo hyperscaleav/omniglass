@@ -1,12 +1,12 @@
 import { api } from "../api/client";
-import type { CreateComponentFromTemplateInputBody, CreateComponentFromTemplateOutputBody, CreateLocationsFromTemplateInputBody, CreateLocationsFromTemplateOutputBody, CreateStandardFromTemplateInputBody, CreateSystemFromTemplateInputBody, CreateSystemFromTemplateOutputBody, TemplateBody, TemplatePlaceBody, TemplateRoleBody } from "../api/api.gen";
+import type { CreateComponentFromTemplateInputBody, CreateComponentFromTemplateOutputBody, CreateLocationsFromTemplateInputBody, CreateLocationsFromTemplateOutputBody, CreateStandardFromTemplateInputBody, CreateSystemFromTemplateInputBody, CreateSystemFromTemplateOutputBody, TemplateBody, TemplateLocationBody, TemplateSlotBody } from "../api/api.gen";
 import type { Chip } from "./predicate";
 import { entityLabel } from "./entities";
 
 // The template catalog's data layer (#827, #1329): the binary's shipped
 // templates, read-only, and the four routes that start something from one. A
 // template is an example an operator clones: creating a standard, a component,
-// a system or a subtree of places from a template writes ordinary rows the
+// a system or a subtree of locations from a template writes ordinary rows the
 // operator owns, and nothing points back at the template (ADR-0071). Shapes are
 // the generated client's; everything below the fetches is pure, so the page's
 // rules (which kinds a URL asks for, what a form posts, where a success lands)
@@ -14,8 +14,8 @@ import { entityLabel } from "./entities";
 
 export type Template = TemplateBody;
 export type TemplateKind = Template["kind"];
-export type TemplatePlace = TemplatePlaceBody;
-export type TemplateRole = TemplateRoleBody;
+export type TemplateLocation = TemplateLocationBody;
+export type TemplateSlot = TemplateSlotBody;
 
 export type StandardFromTemplateBody = CreateStandardFromTemplateInputBody;
 export type ComponentFromTemplateBody = CreateComponentFromTemplateInputBody;
@@ -31,11 +31,11 @@ export const TEMPLATE_HINT =
   "A template is an example you clone. Starting from one writes ordinary rows that are yours from that moment: nothing points back at the template, so a later release can change it without touching your fleet.";
 
 // The kinds in catalog order, and the one word an operator reads for each.
-export const TEMPLATE_KINDS: TemplateKind[] = ["standard_template", "system_template", "place_template", "component_template"];
+export const TEMPLATE_KINDS: TemplateKind[] = ["standard_template", "system_template", "location_template", "component_template"];
 export const KIND_WORD: Record<TemplateKind, string> = {
   standard_template: "standard",
   system_template: "system",
-  place_template: "place",
+  location_template: "location",
   component_template: "component",
 };
 
@@ -88,18 +88,18 @@ export function parseKinds(raw: string | string[] | undefined | null): TemplateK
 
 // templatesHref is the address of the Templates page filtered to kinds, with a
 // place to start at carried as the form's default target.
-export function templatesHref(kinds: TemplateKind[], place?: string): string {
+export function templatesHref(kinds: TemplateKind[], location?: string): string {
   const q = new URLSearchParams();
   if (kinds.length) q.set("kind", kinds.join(","));
-  if (place) q.set("place", place);
+  if (location) q.set("location", location);
   const qs = q.toString().replace(/%2C/g, ",");
   return `/templates${qs ? `?${qs}` : ""}`;
 }
 
 // The kind a fleet create flow starts from: a location's create starts from a
-// place template, the others from their own kind.
+// location template, the others from their own kind.
 export const CREATE_KIND: Record<"location" | "system" | "component", TemplateKind> = {
-  location: "place_template",
+  location: "location_template",
   system: "system_template",
   component: "component_template",
 };
@@ -137,7 +137,7 @@ export function ofKinds(rows: Template[], kinds: TemplateKind[]): Template[] {
 export const START_RESOURCE: Record<TemplateKind, "standard" | "system" | "location" | "component"> = {
   standard_template: "standard",
   system_template: "system",
-  place_template: "location",
+  location_template: "location",
   component_template: "component",
 };
 
@@ -160,10 +160,10 @@ export type StartContext = {
 
 const SYSTEM_NEEDS: Perm[] = [["system", "create"], ["system", "read"], ["system", "update"], ["component", "create"], ["component", "update"]];
 
-// The standards a place template's systems are built to.
-function placeStandards(p: TemplatePlace, all: Template[]): string[] {
+// The standards a location template's systems are built to.
+function locationStandards(p: TemplateLocation, all: Template[]): string[] {
   const out: string[] = [];
-  for (const r of placeTreeRows(p)) {
+  for (const r of locationTreeRows(p)) {
     if (r.kind !== "system") continue;
     const st = all.find((x) => x.kind === "system_template" && x.name === r.template)?.system?.standard;
     if (st) out.push(st);
@@ -190,10 +190,10 @@ export function startNeeds(t: Template, ctx: StartContext): Perm[] {
       if (ctx.address) add(["endpoint", "create"]);
       break;
     }
-    case "place_template": {
+    case "location_template": {
       add(["location", "create"]);
-      const stds = t.place ? placeStandards(t.place, ctx.all) : [];
-      const carries = t.place ? placeTreeRows(t.place).some((r) => r.kind === "system") : false;
+      const stds = t.location ? locationStandards(t.location, ctx.all) : [];
+      const carries = t.location ? locationTreeRows(t.location).some((r) => r.kind === "system") : false;
       if (carries) SYSTEM_NEEDS.forEach(add);
       if (stds.some((s) => !ctx.held(s))) add(["standard", "create"]);
       break;
@@ -213,73 +213,73 @@ export const permText = (ps: Perm[]): string => ps.map(([r, a]) => `${r}:${a}`).
 // summary is the one line a list row says about what the template makes.
 export function templateSummary(t: Template): string {
   if (t.standard) {
-    const roles = t.standard.roles?.length ?? 0;
-    const head = `${roles} ${roles === 1 ? "role" : "roles"}`;
+    const slots = t.standard.slots?.length ?? 0;
+    const head = `${slots} ${slots === 1 ? "slot" : "slots"}`;
     return t.standard.parent ? `${head}, a variant of ${t.standard.parent}` : head;
   }
   if (t.system) {
-    const roles = Object.keys(t.system.roles ?? {}).length;
-    return `built to ${t.system.standard}, ${roles} ${roles === 1 ? "component" : "components"}`;
+    const slots = Object.keys(t.system.slots ?? {}).length;
+    return `built to ${t.system.standard}, ${slots} ${slots === 1 ? "component" : "components"}`;
   }
-  if (t.place) {
-    const rows = placeTreeRows(t.place);
-    const places = rows.filter((r) => r.kind === "place").length;
+  if (t.location) {
+    const rows = locationTreeRows(t.location);
+    const locations = rows.filter((r) => r.kind === "location").length;
     const systems = rows.filter((r) => r.kind === "system").length;
-    const p = `${places} ${places === 1 ? "place" : "places"}`;
+    const p = `${locations} ${locations === 1 ? "location" : "locations"}`;
     return systems ? `${p}, ${systems} ${systems === 1 ? "system" : "systems"}` : p;
   }
   if (t.component) return t.component.product;
   return "";
 }
 
-// A place template's subtree, flattened in pre-order for the indented tree: a
-// place row, then the systems that land in it, then the places beneath it.
-export type PlaceTreeRow =
-  | { kind: "place"; depth: number; type: string; name?: string; label?: string }
+// A location template's subtree, flattened in pre-order for the indented tree: a
+// location row, then the systems that land in it, then the locations beneath it.
+export type LocationTreeRow =
+  | { kind: "location"; depth: number; type: string; name?: string; label?: string }
   | { kind: "system"; depth: number; template: string; label?: string };
 
-export function placeTreeRows(p: TemplatePlace, depth = 0): PlaceTreeRow[] {
-  const out: PlaceTreeRow[] = [{ kind: "place", depth, type: p.type, name: p.name, label: p.label }];
+export function locationTreeRows(p: TemplateLocation, depth = 0): LocationTreeRow[] {
+  const out: LocationTreeRow[] = [{ kind: "location", depth, type: p.type, name: p.name, label: p.label }];
   for (const s of p.systems ?? []) out.push({ kind: "system", depth: depth + 1, template: s.template, label: s.label });
-  for (const c of p.places ?? []) out.push(...placeTreeRows(c, depth + 1));
+  for (const c of p.locations ?? []) out.push(...locationTreeRows(c, depth + 1));
   return out;
 }
 
-// A role a system template staffs, with how many components fill it and what
+// A slot a system template staffs, with how many components fill it and what
 // fills it. The count is the quorum of the standard the plan builds to: the
-// fleet's own standard of that name when it holds one (its roles passed as
+// fleet's own standard of that name when it holds one (its slots passed as
 // `held`, which is what the route reads), else the standard template it creates the standard from
 // (one when the catalog does not hold that either).
-export type RoleSlot = { role: string; label: string; count: number; fill: string };
+export type SlotFill = { slot: string; label: string; count: number; fill: string };
 type DeclaredLike = { name: string; label?: string; quorum: number };
 
-export function systemRoleSlots(t: Template, all: Template[], held?: DeclaredLike[]): RoleSlot[] {
+export function systemSlotFills(t: Template, all: Template[], held?: DeclaredLike[]): SlotFill[] {
   if (!t.system) return [];
   const tpl = all.find((x) => x.kind === "standard_template" && x.name === t.system!.standard);
-  const roles: DeclaredLike[] = held ?? tpl?.standard?.roles ?? [];
-  const declared = new Map(roles.map((r) => [r.name, r]));
-  return Object.entries(t.system.roles ?? {})
-    .map(([role, f]) => {
-      const r = declared.get(role);
+  const slots: DeclaredLike[] = held ?? tpl?.standard?.slots ?? [];
+  const declared = new Map(slots.map((r) => [r.name, r]));
+  return Object.entries(t.system.slots ?? {})
+    .map(([slot, f]) => {
+      const r = declared.get(slot);
       const comp = f.component ? all.find((x) => x.kind === "component_template" && x.name === f.component) : undefined;
       return {
-        role,
-        label: r ? entityLabel(r) : role,
+        slot,
+        label: r ? entityLabel(r) : slot,
         count: Math.max(1, r?.quorum ?? 1),
         fill: comp ? entityLabel(comp) : (f.component ?? f.product ?? ""),
       };
     })
-    .sort((a, b) => declaredOrder(roles, a.role) - declaredOrder(roles, b.role) || a.role.localeCompare(b.role));
+    .sort((a, b) => declaredOrder(slots, a.slot) - declaredOrder(slots, b.slot) || a.slot.localeCompare(b.slot));
 }
 
-function declaredOrder(roles: DeclaredLike[], role: string): number {
-  const i = roles.findIndex((r) => r.name === role);
+function declaredOrder(slots: DeclaredLike[], slot: string): number {
+  const i = slots.findIndex((r) => r.name === slot);
   return i < 0 ? Number.MAX_SAFE_INTEGER : i;
 }
 
-// The quorum cell: "2" for an exact role, "1 to 3" for a capped range, "2 or
+// The quorum cell: "2" for an exact slot, "1 to 3" for a capped range, "2 or
 // more" for an uncapped one beyond its floor.
-export function quorumText(r: TemplateRole): string {
+export function quorumText(r: TemplateSlot): string {
   if (r.capacity == null) return r.quorum > 1 ? `${r.quorum} or more` : "1 or more";
   return r.capacity === r.quorum ? String(r.quorum) : `${r.quorum} to ${r.capacity}`;
 }
@@ -300,10 +300,10 @@ export function standardBody(template: string, d: StandardDraft): StandardFromTe
 }
 
 export type ComponentDraft = {
-  place: string;
+  location: string;
   name: string;
   label: string;
-  node: string;
+  outpost: string;
   address: string;
   // A driver secret input's name -> the name of a secret of yours; empty omits it.
   secrets: Record<string, string>;
@@ -318,56 +318,56 @@ export function componentBody(template: string, d: ComponentDraft): ComponentFro
   for (const [k, v] of Object.entries(d.secrets)) if (opt(v)) inputs[k] = v.trim();
   return {
     template,
-    location: opt(d.place),
+    location: opt(d.location),
     name: opt(d.name),
     label: opt(d.label),
-    node: opt(d.node),
+    outpost: opt(d.outpost),
     inputs: Object.keys(inputs).length ? inputs : undefined,
   };
 }
 
 export type SystemDraft = {
-  place: string;
+  location: string;
   name: string;
   label: string;
   standard: string;
-  node: string;
-  // Per role, one address per component slot in order; an empty one leaves
+  outpost: string;
+  // Per slot, one address per component slot in order; an empty one leaves
   // that component unattached.
   addresses: Record<string, string[]>;
 };
 
 export function systemBody(template: string, d: SystemDraft): SystemFromTemplateBody {
   const attach: Record<string, Record<string, string>[]> = {};
-  for (const [role, list] of Object.entries(d.addresses)) {
+  for (const [slot, list] of Object.entries(d.addresses)) {
     // Keep the slots in order up to the last address given, so the second
-    // component of a role can attach while the first does not.
+    // component of a slot can attach while the first does not.
     let last = -1;
     list.forEach((a, i) => { if (opt(a)) last = i; });
     if (last < 0) continue;
-    attach[role] = list.slice(0, last + 1).map((a): Record<string, string> => (opt(a) ? { [ADDRESS_INPUT]: a.trim() } : {}));
+    attach[slot] = list.slice(0, last + 1).map((a): Record<string, string> => (opt(a) ? { [ADDRESS_INPUT]: a.trim() } : {}));
   }
   return {
     template,
-    location: opt(d.place),
+    location: opt(d.location),
     name: opt(d.name),
     label: opt(d.label),
     standard: opt(d.standard),
-    node: opt(d.node),
+    outpost: opt(d.outpost),
     attach: Object.keys(attach).length ? attach : undefined,
   };
 }
 
-export type PlacesDraft = { parent: string; name: string; label: string };
+export type LocationsDraft = { parent: string; name: string; label: string };
 
-export function placesBody(template: string, d: PlacesDraft): LocationsFromTemplateBody {
+export function locationsBody(template: string, d: LocationsDraft): LocationsFromTemplateBody {
   return { template, parent: opt(d.parent), name: opt(d.name), label: opt(d.label) };
 }
 
-// An address with no node to place its endpoint on is refused by the API
-// (422); the form says so beside the node before submit.
-export function needsNode(d: { node: string; address?: string; addresses?: Record<string, string[]> }): boolean {
-  if (opt(d.node)) return false;
+// An address with no outpost to place its endpoint on is refused by the API
+// (422); the form says so beside the outpost before submit.
+export function needsOutpost(d: { outpost: string; address?: string; addresses?: Record<string, string[]> }): boolean {
+  if (opt(d.outpost)) return false;
   if (opt(d.address)) return true;
   return Object.values(d.addresses ?? {}).some((l) => l.some((a) => !!opt(a)));
 }
@@ -385,19 +385,19 @@ export function landingHref(base: string, template: string, extra: Record<string
 
 // --- Which place --------------------------------------------------------------
 
-// A place is offered and posted by its dotted path (hq.west.level-2), which the
+// A location is offered and posted by its dotted path (hq.west.level-2), which the
 // start routes take and which is unique, so the form's choice reads the same in
 // a script as on screen; a row the list has not pathed yet falls back to its
-// uuid. placeRef resolves a carried default (the create flows carry a uuid) to
+// uuid. locationRef resolves a carried default (the create flows carry a uuid) to
 // that value.
-type PlaceRow = { id: string; name: string; path?: string };
+type LocationRow = { id: string; name: string; path?: string };
 
-export function placeValue(l: PlaceRow): string {
+export function locationValue(l: LocationRow): string {
   return l.path || l.id;
 }
 
-export function placeRef(rows: PlaceRow[], ref: string | undefined): string {
+export function locationRef(rows: LocationRow[], ref: string | undefined): string {
   if (!ref) return "";
   const hit = rows.find((l) => l.id === ref || l.path === ref) ?? (rows.filter((l) => l.name === ref).length === 1 ? rows.find((l) => l.name === ref) : undefined);
-  return hit ? placeValue(hit) : ref;
+  return hit ? locationValue(hit) : ref;
 }

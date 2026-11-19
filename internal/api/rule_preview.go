@@ -14,8 +14,8 @@ type previewEventRuleInput struct {
 	Body struct {
 		SampleKey     string         `json:"sample_key" minLength:"1" doc:"The property or metric the candidate rule reads"`
 		Selector      *selectorBody  `json:"selector,omitempty" required:"false" doc:"The components it watches; absent or empty, every component"`
-		FireCriteria  criteriaInput  `json:"fire_criteria" doc:"The criteria its condition starts on: {expr}, or the short form {op, value}"`
-		ClearCriteria *criteriaInput `json:"clear_criteria,omitempty" required:"false" doc:"The criteria it ends on; absent, the negation of fire_criteria"`
+		FireCriteria  criteriaInput  `json:"fire_criteria" doc:"The criteria it fires on: {expr}, or the short form {op, value}"`
+		ClearCriteria *criteriaInput `json:"clear_criteria,omitempty" required:"false" doc:"The criteria it clears on; absent, the negation of fire_criteria"`
 		FireSustain   string         `json:"fire_sustain,omitempty" required:"false" doc:"Accepted so a rule body previews as it is, and ignored: a preview judges each sample alone"`
 		ClearSustain  string         `json:"clear_sustain,omitempty" required:"false" doc:"Accepted and ignored, like fire_sustain"`
 	}
@@ -55,10 +55,11 @@ type previewEventRuleOutput struct {
 func registerEventRulePreviewRoute(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "preview-event-rule",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodPost,
 		Path:        "/event-rules:preview",
 		Summary:     "Preview an event rule",
-		Description: "Judges a candidate rule (sample key, selector, criteria) without writing anything, as the ingest would have with no sustains (the answer says they are ignored): over each series it selects on components the caller may read, from the state its newest deciding sample in the 7 days before the window set (state_unknown when there is none), through every sample in the last 24 hours that the ingest would have judged (a late sample older than one before it decides nothing). Answers the edges it would have written and the series it would hold in force now. Its reads are index probes per series, capped at row_cap window samples taken a whole series at a time: series_judged of series_total, and truncated when the cap stopped it. A selector naming a component the caller cannot read is the same 422 as one that does not exist. Criteria take {expr} or {op, value}; one that does not compile is a 422 naming the criteria, line and column. Gated by rule:read.",
+		Description: "Judges a candidate rule (sample key, selector, criteria) without writing anything, as the ingest would have with no sustains (the answer says they are ignored): over each series it selects on components the caller may read, from the state its newest deciding sample in the 7 days before the window set (state_unknown when there is none), through every sample in the last 24 hours that the ingest would have judged (a late sample older than one before it decides nothing). Answers the edges it would have written and the series it would hold in force now. Its reads are index probes per series, capped at row_cap window samples taken a whole series at a time: series_judged of series_total, and truncated when the cap stopped it. A selector naming a component the caller cannot read is the same 422 as one that does not exist. Criteria take {expr} or {op, value}; one that does not compile is a 422 naming the criteria, line and column, and criteria that read window or age (a trend rule's) are a 422, since each sample is judged alone. Gated by rule:read.",
 	}, "rule", "read"), func(ctx context.Context, in *previewEventRuleInput) (*previewEventRuleOutput, error) {
 		b := in.Body
 		fire, err := fromCriteriaBody(b.FireCriteria)

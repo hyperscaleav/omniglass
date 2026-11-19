@@ -162,7 +162,7 @@ const ErrSystemBindNeedsUpdate = "creating a component into a system writes that
 // in the update scope alone, so a system outside it came back as the
 // non-disclosing "system not found" (422), which a caller that had just read
 // that system on the same screen could only read as a broken platform. A
-// principal with a location-scoped deploy grant is exactly that caller: the
+// user with a location-scoped deploy grant is exactly that caller: the
 // cross-tier expansion is unbuilt (#10), so its system:update scope is empty
 // while its viewer floor reads every system in the fleet.
 //
@@ -262,6 +262,7 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "update-component",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodPatch,
 		Path:        "/components/{name}",
 		Summary:     "Update a component",
@@ -375,7 +376,7 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Path:          "/components/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a component",
-		Description:   "Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system role it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.",
+		Description:   "Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.",
 	}, "component", "delete"), func(ctx context.Context, in *componentPathInput) (*struct{}, error) {
 		if err := gw.DeleteComponent(ctx, actorID(ctx), in.Name,
 			a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "component", "delete")); err != nil {
@@ -436,7 +437,7 @@ func mapComponentErr(err error) error {
 	case errors.Is(err, storage.ErrComponentHasEndpoints):
 		return huma.Error409Conflict(componentEndpointsMessage(err))
 	case errors.Is(err, storage.ErrReferenced):
-		return huma.Error409Conflict("component is still referenced by another record, for example a system role it staffs")
+		return huma.Error409Conflict("component is still referenced by another record, for example a system slot it staffs")
 	case errors.Is(err, storage.ErrComponentExists):
 		return huma.Error409Conflict("component name already exists")
 	case errors.Is(err, storage.ErrEntityNameIsUUID):
@@ -459,7 +460,7 @@ func mapComponentErr(err error) error {
 	case errors.Is(err, storage.ErrProductNotFound):
 		return huma.Error422UnprocessableEntity("product not found")
 	case errors.Is(err, storage.ErrComponentTypeNoStem):
-		return errNoGeneratedName("this product's component_type has no stem to generate a name from; supply a name explicitly, or fix the component_type registry")
+		return errNoGeneratedName("this product's component_type has no stem to generate a name from; supply a name explicitly, or fix the component_type catalog")
 	default:
 		return huma.Error500InternalServerError("component operation failed")
 	}

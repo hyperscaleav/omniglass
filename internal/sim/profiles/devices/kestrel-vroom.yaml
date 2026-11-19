@@ -36,7 +36,7 @@ name: kestrel-vroom
 manufacturer: Kestrel
 model: "VRoom"
 device_type: video-codec
-# Case-study hostname role ("video-bar"). slug_prefix only seeds the
+# Case-study hostname slot ("video-bar"). slug_prefix only seeds the
 # stable internal HostID slug; hostnames come from the system-profile
 # suffix.
 slug_prefix: video-bar

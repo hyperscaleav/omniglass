@@ -35,7 +35,7 @@ const PHASES = [
 // Binding constraints copied from the plan's Global Constraints. Handed to every
 // reviewer verbatim as its attention lens.
 const CONSTRAINTS = `
-- No em dashes anywhere (code comments, docs, commit subjects). No AI/assistant attribution.
+- No em dashes anywhere (code comments, docs, commit subjects).
 - Commit subjects: conventional-commit type, lowercase first letter after the prefix.
 - Migrations: run-once, never edited after applied, idempotent (add column if not exists), timestamp > 20260709160000.
 - Every gateway method added in THREE places: storage.Gateway interface, *PG impl, UnimplementedGateway.

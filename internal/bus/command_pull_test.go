@@ -16,7 +16,7 @@ type commandsOf struct {
 	err error
 }
 
-func (s commandsOf) PendingNodeCommands(context.Context, string) ([]storage.CommandDelivery, error) {
+func (s commandsOf) PendingOutpostCommands(context.Context, string) ([]storage.CommandDelivery, error) {
 	return nil, s.err
 }
 
@@ -35,8 +35,8 @@ func warnLines(t *testing.T, logged string) []string {
 	return out
 }
 
-// A command pull whose queue read fails is logged once at WARN with the node
-// and the error, and the node is sent nothing (it re-pulls next tick).
+// A command pull whose queue read fails is logged once at WARN with the outpost
+// and the error, and the outpost is sent nothing (it re-pulls next tick).
 func TestAFailedCommandPullIsLogged(t *testing.T) {
 	logged := capture(t, slog.LevelDebug)
 	s := &Server{store: commandsOf{err: errors.New("pool exhausted")}}
@@ -47,12 +47,12 @@ func TestAFailedCommandPullIsLogged(t *testing.T) {
 		t.Errorf("answered %d times, want no reply", calls)
 	}
 	lines := warnLines(t, logged.String())
-	if len(lines) != 1 || !strings.Contains(lines[0], "node=edge-1") || !strings.Contains(lines[0], "pool exhausted") {
-		t.Fatalf("logged %q, want one WARN line naming the node and the error", logged.String())
+	if len(lines) != 1 || !strings.Contains(lines[0], "outpost=edge-1") || !strings.Contains(lines[0], "pool exhausted") {
+		t.Fatalf("logged %q, want one WARN line naming the outpost and the error", logged.String())
 	}
 }
 
-// A reply the node never receives is logged at WARN with the node and the
+// A reply the outpost never receives is logged at WARN with the outpost and the
 // error.
 func TestAnUnsentCommandPullReplyIsLogged(t *testing.T) {
 	logged := capture(t, slog.LevelDebug)
@@ -60,12 +60,12 @@ func TestAnUnsentCommandPullReplyIsLogged(t *testing.T) {
 	s.answerCommands(context.Background(), "edge-1", func([]byte) error { return errors.New("nats: connection closed") })
 
 	lines := warnLines(t, logged.String())
-	if len(lines) != 1 || !strings.Contains(lines[0], "node=edge-1") || !strings.Contains(lines[0], "connection closed") {
-		t.Fatalf("logged %q, want one WARN line naming the node and the error", logged.String())
+	if len(lines) != 1 || !strings.Contains(lines[0], "outpost=edge-1") || !strings.Contains(lines[0], "connection closed") {
+		t.Fatalf("logged %q, want one WARN line naming the outpost and the error", logged.String())
 	}
 }
 
-// A status report the server cannot parse is logged at WARN with the node
+// A status report the server cannot parse is logged at WARN with the outpost
 // and the error, never silently dropped.
 func TestAnUnparseableCommandStatusIsLogged(t *testing.T) {
 	logged := capture(t, slog.LevelDebug)
@@ -73,7 +73,7 @@ func TestAnUnparseableCommandStatusIsLogged(t *testing.T) {
 	s.recordCommandStatus(context.Background(), "edge-1", []byte("{not json"))
 
 	lines := warnLines(t, logged.String())
-	if len(lines) != 1 || !strings.Contains(lines[0], "node=edge-1") {
-		t.Fatalf("logged %q, want one WARN line naming the node", logged.String())
+	if len(lines) != 1 || !strings.Contains(lines[0], "outpost=edge-1") {
+		t.Fatalf("logged %q, want one WARN line naming the outpost", logged.String())
 	}
 }

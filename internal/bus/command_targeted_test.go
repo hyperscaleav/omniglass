@@ -15,11 +15,11 @@ import (
 )
 
 // TestACommandTypeCreatedBetweenBatchesSettlesOnTheNext is #1299's acceptance:
-// the consumer carries the command-targeted property names on the registry it
+// the consumer carries the command-targeted property names on the catalog it
 // keeps between batches, and a command type created between two batches is
 // honored by the second (one past the fingerprint's interval, #1928). A batch lands lamp-mode while nothing commands it;
 // then a command type targeting lamp-mode is created and a command issued, and
-// the next batch's lamp-mode observation settles it. A registry kept past the
+// the next batch's lamp-mode observation settles it. A catalog kept past the
 // command type's creation would not know lamp-mode is commanded, and the
 // command would wait out its window instead.
 func TestACommandTypeCreatedBetweenBatchesSettlesOnTheNext(t *testing.T) {
@@ -42,15 +42,15 @@ func TestACommandTypeCreatedBetweenBatchesSettlesOnTheNext(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 	all := scope.Set{All: true}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-a"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "outpost-a"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	comp, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "projector-1"}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("component: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, node_name, params) values
-		('pj-ip', 'tcp', $1::uuid, (select principal_id from node where name = 'node-a'), '{"target":"10.0.0.7:4352"}'::jsonb)`, comp.ID); err != nil {
+	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
+		('pj-ip', 'tcp', $1::uuid, (select user_id from outpost where name = 'outpost-a'), '{"target":"10.0.0.7:4352"}'::jsonb)`, comp.ID); err != nil {
 		t.Fatalf("insert endpoint: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, enabled) values
@@ -61,31 +61,31 @@ func TestACommandTypeCreatedBetweenBatchesSettlesOnTheNext(t *testing.T) {
 		t.Fatalf("bootstrap owner: %v", err)
 	}
 	var actor string
-	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&actor); err != nil {
+	if err := conn.QueryRow(ctx, `select user_id from person where username = 'root'`).Scan(&actor); err != nil {
 		t.Fatalf("resolve actor: %v", err)
 	}
 	if _, err := gw.CreatePropertyType(ctx, "", storage.PropertyTypeSpec{Name: "lamp-mode", Label: "Lamp mode", DataType: "string"}); err != nil {
 		t.Fatalf("property type: %v", err)
 	}
-	owner, ok, err := gw.ResolveTaskOwner(ctx, "t-pj", "node-a")
+	owner, ok, err := gw.ResolveTaskOwner(ctx, "t-pj", "outpost-a")
 	if err != nil || !ok {
 		t.Fatalf("resolve task owner: ok=%v err=%v", ok, err)
 	}
 	s := &Server{store: gw, orphans: newOrphanTally(orphanWindow)}
 	now := time.Now()
-	s.registry.now = func() time.Time { return now }
+	s.catalog.now = func() time.Time { return now }
 	land := func(id, mode string) {
 		t.Helper()
 		now = now.Add(fingerprintEvery)
-		if err := s.land(ctx, id, &ogv1.TelemetryBatch{TaskId: "t-pj", NodeId: "node-a",
+		if err := s.land(ctx, id, &ogv1.TelemetryBatch{TaskId: "t-pj", OutpostId: "outpost-a",
 			Properties: []*ogv1.PropertySample{{Name: "lamp-mode", ValueJson: `"` + mode + `"`}}},
-			ingestBinding{LogNode: "node-a", SampleOwner: &owner, Arc: componentArc(owner),
-				Writer: storage.NodeWriter(owner.ComponentID, owner.EndpointName)}); err != nil {
+			ingestBinding{LogOutpost: "outpost-a", SampleOwner: &owner, Arc: componentArc(owner),
+				Writer: storage.OutpostWriter(owner.ComponentID, owner.EndpointName)}); err != nil {
 			t.Fatalf("land %s: %v", id, err)
 		}
 	}
 
-	// Nothing commands lamp-mode yet; the registry is built and kept.
+	// Nothing commands lamp-mode yet; the catalog is built and kept.
 	land("b-1", "normal")
 
 	if _, err := gw.CreateCommandType(ctx, "", storage.CommandTypeSpec{Name: "set-lamp-mode", Label: "Set lamp mode",

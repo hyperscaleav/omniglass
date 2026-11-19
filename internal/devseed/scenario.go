@@ -15,7 +15,7 @@ import (
 // needs (#964): a fresh install, the example fleet, that fleet in trouble, or
 // that fleet at enterprise size. Every scenario other than the fresh install is
 // the example fleet plus a pure expansion of it, never a second hand-written
-// fixture: the expansions read the products, standards, roles and location
+// fixture: the expansions read the products, standards, slots and location
 // types off the fixture itself, so they cannot drift from the boot seed or name
 // a location type in code (location types are customer data).
 
@@ -125,7 +125,7 @@ func Replicate(base Doc, p ReplicaParams) Doc {
 	out.Components = append([]Component(nil), base.Components...)
 	out.Systems = append([]System(nil), base.Systems...)
 	out.Members = append([]Member(nil), base.Members...)
-	out.RoleAssignments = append([]RoleAssignment(nil), base.RoleAssignments...)
+	out.SlotAssignments = append([]SlotAssignment(nil), base.SlotAssignments...)
 	out.ComponentDependencies = append([]ComponentDependency(nil), base.ComponentDependencies...)
 
 	rooms := selfContainedRooms(base)
@@ -209,9 +209,9 @@ func Replicate(base Doc, p ReplicaParams) Doc {
 						out.Members = append(out.Members, Member{System: copyKey(m.System), Component: copyKey(m.Component)})
 					}
 				}
-				for _, ra := range base.RoleAssignments {
+				for _, ra := range base.SlotAssignments {
 					if sysAt[ra.System] == l.Key {
-						out.RoleAssignments = append(out.RoleAssignments, RoleAssignment{System: copyKey(ra.System), Role: ra.Role, Component: copyKey(ra.Component)})
+						out.SlotAssignments = append(out.SlotAssignments, SlotAssignment{System: copyKey(ra.System), Slot: ra.Slot, Component: copyKey(ra.Component)})
 					}
 				}
 				for _, d := range base.ComponentDependencies {
@@ -268,7 +268,7 @@ func selfContainedRooms(doc Doc) []string {
 	for _, m := range doc.Members {
 		link(m.System, m.Component)
 	}
-	for _, ra := range doc.RoleAssignments {
+	for _, ra := range doc.SlotAssignments {
 		link(ra.System, ra.Component)
 	}
 	var out []string

@@ -89,7 +89,7 @@ func faceDemands(p *profile.DeviceProfile, secretType string, fields map[string]
 	return false
 }
 
-// TestPlantedSecretsAreNotReferencedBeneathTheirOwner: a node refuses a secret
+// TestPlantedSecretsAreNotReferencedBeneathTheirOwner: an outpost refuses a secret
 // name with more than one copy cascading onto a component (#820, it does not
 // rank them as the effective view does), so a name planted below the platform
 // must be referenced by no endpoint on a component the extra copy covers: the
@@ -150,7 +150,7 @@ func TestPlantedSecretsAreNotReferencedBeneathTheirOwner(t *testing.T) {
 		for _, e := range doc.SimEndpoints {
 			for _, ref := range e.Inputs {
 				if ref == s.Name && covers(s, e.Component) {
-					t.Errorf("%s is planted at %s %s, and the endpoint %q on %s references it: the node would refuse the ambiguous name",
+					t.Errorf("%s is planted at %s %s, and the endpoint %q on %s references it: the outpost would refuse the ambiguous name",
 						s.Name, s.OwnerKind, s.Owner, e.Label, e.Component)
 				}
 			}

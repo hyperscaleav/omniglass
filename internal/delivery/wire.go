@@ -73,7 +73,7 @@ func causesOf(m map[Outcome]map[Kind]uint64) []Outcome {
 }
 
 // FromProto is the stamp a batch's ledger carries. A kind the package does
-// not know is kept under its own name, so a newer node's count is not lost.
+// not know is kept under its own name, so a newer outpost's count is not lost.
 func FromProto(l *ogv1.DeliveryLedger) Stamp {
 	s := Stamp{
 		Boot:     l.GetBoot(),
@@ -117,11 +117,11 @@ func GroupItems(into map[Kind]int, g *ogv1.TaskGroup) {
 }
 
 // BatchItems is a batch's items per kind, what its ledger declares and what
-// the server decodes: its node-self samples are metrics, its self-logs and
+// the server decodes: its outpost-self samples are metrics, its self-logs and
 // task log lines logs, and each group counts as GroupItems does.
 func BatchItems(ev *ogv1.TelemetryBatch) map[Kind]int {
 	k := map[Kind]int{
-		Metric:   len(ev.GetMetrics()) + len(ev.GetNodeSelf().GetMetrics()),
+		Metric:   len(ev.GetMetrics()) + len(ev.GetOutpostSelf().GetMetrics()),
 		Property: len(ev.GetProperties()),
 		Event:    len(ev.GetEvents()),
 		Log:      len(ev.GetLogs()) + len(ev.GetTaskLogs()),

@@ -1,4 +1,4 @@
-// Package scope is the pure ABAC scope resolver: given a principal's grants and
+// Package scope is the pure ABAC scope resolver: given a user's grants and
 // the role index, it computes visible_set(P, action) for a resource, the union
 // (over only the grants whose role carries that action) of each grant's scope.
 // It has no I/O: it answers "which scope roots", and the Storage Gateway expands
@@ -18,7 +18,7 @@ const (
 	OpSelf            = "self"              // the root row only (read/update/delete); no descendants, no create-placement
 )
 
-// Grant is the scope-relevant view of a principal's grant: the role it carries
+// Grant is the scope-relevant view of a user's grant: the role it carries
 // and the scope it confers. It mirrors storage.Grant without the storage
 // dependency, so this package stays pure.
 type Grant struct {
@@ -77,8 +77,8 @@ func (s Set) Empty() bool {
 // AdmitsChain reports whether one row is inside s, judged from its ancestry:
 // chain is the row's own id first, then its ancestors in any order (an empty
 // chain is a row that does not exist). It is inScopeTree's rule with the walk
-// already done, so a caller judging many principals against one row walks
-// the tree once and resolves each principal here, purely (#1341, the
+// already done, so a caller judging many users against one row walks
+// the tree once and resolves each user here, purely (#1341, the
 // queue-time recipient filter): the row is a self root, or it or an ancestor
 // is an inclusive subtree root, or a strict ancestor is an excluded root. It
 // ignores LocationIDs: a chain is one tier's ancestry and carries no placement,
@@ -277,7 +277,7 @@ func applicableKinds(resource string) map[string]bool {
 		//
 		// A command is the same shape for the same reason (#749): it is issued TO
 		// a component, and it resolves from grants carrying command:issue, so a
-		// principal that may command one room cannot command another it can
+		// user that may command one room cannot command another it can
 		// merely see. Registering it here is what makes command:issue resolvable
 		// at all: without it the resource falls to the default below, every grant
 		// but an all-scoped one resolves to the empty set, and a route fencing on
@@ -295,6 +295,12 @@ func applicableKinds(resource string) map[string]bool {
 		// (#618): notification:retry resolves on the component tier from the
 		// grants carrying it.
 		return map[string]bool{"component": true}
+	case "assistant":
+		// A person's own omnibot conversations (#2113): owned by a user,
+		// not placed on any tier, and fenced by the owner predicate every query
+		// carries, never by a scope set. No route resolves a scope for it, so
+		// it records as fleet-wide: a decision, not an omission.
+		return map[string]bool{"all": true}
 	case "telemetry":
 		// Pushed telemetry resolves on the component and system tiers, the two
 		// owner kinds the push route accepts (ADR-0752, widened by ADR-0422):
@@ -306,7 +312,7 @@ func applicableKinds(resource string) map[string]bool {
 		// location root could never match either chain while telling Covers a
 		// telemetry scope may be checked against the location table. It
 		// resolves from telemetry:push rather than a read permission, since a
-		// principal often holds a wide read and a narrow write; the read
+		// user often holds a wide read and a narrow write; the read
 		// decides only which refusal the caller is owed.
 		return map[string]bool{"component": true, "system": true}
 	case "secret", "variable", "field":
@@ -316,9 +322,9 @@ func applicableKinds(resource string) map[string]bool {
 		// the specific owner within it.
 		return map[string]bool{"location": true, "system": true, "component": true}
 	case "audit", "command_type", "component_type", "driver", "event_type", "file",
-		"location_type", "metric_type", "node", "notification_target",
-		"notification_type", "platform", "principal", "principal_grant",
-		"principal_group", "product", "property_type", "role", "rule", "settings",
+		"location_type", "metric_type", "outpost", "notification_target",
+		"notification_type", "platform", "user", "user_grant",
+		"user_group", "product", "property_type", "role", "rule", "settings",
 		"severity_level", "simulation", "standard", "system_type", "tag", "template",
 		"vendor":
 		// Fleet-wide: no tier contains these, so only an all-scoped grant confers

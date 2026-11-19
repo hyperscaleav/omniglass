@@ -127,12 +127,12 @@ func checkDocShape(t *testing.T, doc devseed.Doc) {
 			t.Errorf("member %+v references a key not in the fixtures", m)
 		}
 	}
-	for _, ra := range doc.RoleAssignments {
+	for _, ra := range doc.SlotAssignments {
 		if !seenSys[ra.System] || !seenComp[ra.Component] {
-			t.Errorf("role assignment %+v references a key not in the fixtures", ra)
+			t.Errorf("slot assignment %+v references a key not in the fixtures", ra)
 		}
-		if ra.Role == "" {
-			t.Errorf("role assignment %+v names no role", ra)
+		if ra.Slot == "" {
+			t.Errorf("slot assignment %+v names no slot", ra)
 		}
 	}
 
@@ -414,12 +414,12 @@ func TestRunIdempotent(t *testing.T) {
 	// The breadth block adds one raised-then-cleared pair (#796) beside the
 	// fixture's standing alarms; a second run must add nothing to either.
 	if alarms != len(fixtures.Alarms)+1 {
-		t.Errorf("alarms = %d, want %d: a second run re-raised instead of finding the standing condition", alarms, len(fixtures.Alarms)+1)
+		t.Errorf("alarms = %d, want %d: a second run re-raised instead of finding the standing alarm", alarms, len(fixtures.Alarms)+1)
 	}
 	// Membership and staffing are counted too, because they are where a resolver
 	// that zipped the fixture onto the fleet in the wrong order shows up: every
 	// name and label would still be right, and the second Run would staff a
-	// second device into a role the first Run already filled. The expected
+	// second device into a slot the first Run already filled. The expected
 	// membership count is the distinct (system, component) pairs the fixture
 	// implies: an assignment creates the membership as a side effect, so a
 	// component both listed and staffed in one system is one row, and the
@@ -428,7 +428,7 @@ func TestRunIdempotent(t *testing.T) {
 	for _, m := range fixtures.Members {
 		pairs[m.System+"\x00"+m.Component] = true
 	}
-	for _, ra := range fixtures.RoleAssignments {
+	for _, ra := range fixtures.SlotAssignments {
 		pairs[ra.System+"\x00"+ra.Component] = true
 	}
 	var members, assignments int
@@ -438,11 +438,11 @@ func TestRunIdempotent(t *testing.T) {
 	if members != len(pairs) {
 		t.Errorf("system members = %d, want %d (the distinct system-component pairs the fixture implies)", members, len(pairs))
 	}
-	if err := conn.QueryRow(ctx, `select count(*) from system_role_assignment`).Scan(&assignments); err != nil {
-		t.Fatalf("count role assignments: %v", err)
+	if err := conn.QueryRow(ctx, `select count(*) from system_slot_assignment`).Scan(&assignments); err != nil {
+		t.Fatalf("count slot assignments: %v", err)
 	}
-	if assignments != len(fixtures.RoleAssignments) {
-		t.Errorf("role assignments = %d, want %d (the fixture's own, unchanged by the second Run)", assignments, len(fixtures.RoleAssignments))
+	if assignments != len(fixtures.SlotAssignments) {
+		t.Errorf("slot assignments = %d, want %d (the fixture's own, unchanged by the second Run)", assignments, len(fixtures.SlotAssignments))
 	}
 
 	// Dependency edges lean on the gateway's duplicate refusal to be
@@ -463,14 +463,14 @@ func TestRunIdempotent(t *testing.T) {
 	if campuses != 4 {
 		t.Errorf("campuses = %d, want 4 (hq, east, airport, harbor)", campuses)
 	}
-	if err := conn.QueryRow(ctx, `select count(*) from principal where kind = 'human'`).Scan(&humans); err != nil {
+	if err := conn.QueryRow(ctx, `select count(*) from users where kind = 'person'`).Scan(&humans); err != nil {
 		t.Fatalf("count humans: %v", err)
 	}
 	if humans != 4 {
-		t.Errorf("human principals = %d, want 4", humans)
+		t.Errorf("people = %d, want 4", humans)
 	}
 	// The four people's grants, and the simulated pusher's one (#1370).
-	if err := conn.QueryRow(ctx, `select count(*) from principal_grant`).Scan(&grants); err != nil {
+	if err := conn.QueryRow(ctx, `select count(*) from user_grant`).Scan(&grants); err != nil {
 		t.Fatalf("count grants: %v", err)
 	}
 	if grants != 5 {
@@ -525,7 +525,7 @@ func TestRunIdempotent(t *testing.T) {
 	if err := conn.QueryRow(ctx, `
 		select count(*) from credential
 		where kind = 'password'
-		  and principal_id in (select principal_id from human
+		  and user_id in (select user_id from person
 		    where username in ('operator', 'viewer', 'viewer-hq', 'tech-east'))`).Scan(&pwCreds); err != nil {
 		t.Fatalf("count password creds: %v", err)
 	}
@@ -543,8 +543,8 @@ func TestRunIdempotent(t *testing.T) {
 	assertGrant(t, conn, ctx, "viewer-hq", "viewer", "location", "hq", "subtree")
 	assertGrant(t, conn, ctx, "tech-east", "deploy", "location", "east", "subtree_excl_root")
 
-	// The worked reachability check: an enrolled node, a DSP with two protocol-named
-	// interfaces (web/http, qrc/tcp) placed on the node, a poll task over each, and the
+	// The worked reachability check: an enrolled outpost, a DSP with two protocol-named
+	// interfaces (web/http, qrc/tcp) placed on the outpost, a poll task over each, and the
 	// samples the panel reads. Every count is over two Runs, so a duplicate here is
 	// the seed failing to be idempotent.
 	all := scope.Set{All: true}
@@ -560,13 +560,13 @@ func TestRunIdempotent(t *testing.T) {
 		t.Errorf("reachability component rows = %d, want 1 (seed not idempotent)", reachComps)
 	}
 
-	// The node is created, enrolled, and claimed, so it reads as enrolled.
-	node, err := gw.GetNode(ctx, "edge-hq", all)
+	// The outpost is created, enrolled, and claimed, so it reads as enrolled.
+	outpost, err := gw.GetOutpost(ctx, "edge-hq", all)
 	if err != nil {
-		t.Fatalf("get seeded node: %v", err)
+		t.Fatalf("get seeded outpost: %v", err)
 	}
-	if !node.Enrolled {
-		t.Errorf("node edge-hq enrolled = false, want true (created, enrolled, and claimed)")
+	if !outpost.Enrolled {
+		t.Errorf("outpost edge-hq enrolled = false, want true (created, enrolled, and claimed)")
 	}
 
 	// Two interfaces on the DSP, each named by its protocol and typed by its transport:
@@ -595,8 +595,8 @@ func TestRunIdempotent(t *testing.T) {
 		t.Errorf("tcp interface type = %q, want tcp", tcpIf.Transport)
 	}
 	for _, it := range []*storage.Endpoint{httpIf, tcpIf} {
-		if it.Node == nil || *it.Node != "edge-hq" {
-			t.Errorf("interface %s node = %v, want edge-hq", it.Name, it.Node)
+		if it.Outpost == nil || *it.Outpost != "edge-hq" {
+			t.Errorf("interface %s outpost = %v, want edge-hq", it.Name, it.Outpost)
 		}
 	}
 	// The reach checks only: with the simulated fleet the dsp also carries
@@ -937,10 +937,10 @@ func TestSeededLabelsRenderFromTheirRules(t *testing.T) {
 		{table: "system", place: "boardroom-b", name: "boardroom", label: "Boardroom B", platform: true},
 		// The same-BUCKET same-type siblings live in the media lab: a place
 		// holding several systems names each one's kind after it, and the
-		// ordinal follows the name, so `classroom` reads "Media Lab Classroom"
-		// and `classroom-2` "Media Lab Classroom 2" (#693, #872).
-		{table: "system", place: "media-lab", name: "classroom", label: "Media Lab Classroom", platform: true},
-		{table: "system", place: "media-lab", name: "classroom-2", label: "Media Lab Classroom 2", platform: true},
+		// ordinal follows the name, so `classroom` reads "Media Lab Teaching"
+		// and `classroom-2` "Media Lab Teaching 2" (#693, #872).
+		{table: "system", place: "media-lab", name: "classroom", label: "Media Lab Teaching", platform: true},
+		{table: "system", place: "media-lab", name: "classroom-2", label: "Media Lab Teaching 2", platform: true},
 		// The two floors, which used to be here as PINS over a generated name
 		// (`1` labelled Level 2). They are named for their designations now, so
 		// the rule renders those designations and the platform holds the pen.
@@ -1017,7 +1017,7 @@ func TestSeededStaffingLandsOnTheRightDevices(t *testing.T) {
 
 	for _, tc := range []struct {
 		room string
-		want map[string]string // role -> the component names filling it, joined
+		want map[string]string // slot -> the component names filling it, joined
 	}{
 		// Both halves mint `boardroom` in their own rooms, so the room is the
 		// address here. The shared rack staffs dsp and amplifier in BOTH,
@@ -1036,10 +1036,10 @@ func TestSeededStaffingLandsOnTheRightDevices(t *testing.T) {
 	} {
 		rows, err := conn.Query(ctx, `
 			select r.name, c.name
-			from system_role_assignment a
+			from system_slot_assignment a
 			join system s on s.id = a.system_id
 			join location l on l.id = s.location_id
-			join system_role r on r.id = a.role_id
+			join system_slot r on r.id = a.slot_id
 			join component c on c.id = a.component_id
 			where l.name = $1
 			order by r.name, c.name`, tc.room)
@@ -1048,22 +1048,22 @@ func TestSeededStaffingLandsOnTheRightDevices(t *testing.T) {
 		}
 		got := map[string]string{}
 		for rows.Next() {
-			var role, comp string
-			if err := rows.Scan(&role, &comp); err != nil {
+			var slot, comp string
+			if err := rows.Scan(&slot, &comp); err != nil {
 				t.Fatalf("scan staffing: %v", err)
 			}
-			if got[role] != "" {
-				got[role] += ","
+			if got[slot] != "" {
+				got[slot] += ","
 			}
-			got[role] += comp
+			got[slot] += comp
 		}
 		if err := rows.Err(); err != nil {
 			t.Fatalf("iterate staffing: %v", err)
 		}
 		rows.Close()
-		for role, want := range tc.want {
-			if got[role] != want {
-				t.Errorf("the system in %q: role %q is filled by %q, want %q", tc.room, role, got[role], want)
+		for slot, want := range tc.want {
+			if got[slot] != want {
+				t.Errorf("the system in %q: slot %q is filled by %q, want %q", tc.room, slot, got[slot], want)
 			}
 		}
 		if len(got) != len(tc.want) {
@@ -1079,12 +1079,12 @@ func TestSeededStaffingLandsOnTheRightDevices(t *testing.T) {
 		join system s on s.id = m.system_id
 		join component c on c.id = m.component_id
 		where s.name = 'boardroom' and c.name = 'power-1'
-		  and not exists (select 1 from system_role_assignment a
+		  and not exists (select 1 from system_slot_assignment a
 		    where a.system_id = m.system_id and a.component_id = m.component_id)`).Scan(&unstaffed); err != nil {
 		t.Fatalf("read the unstaffed member: %v", err)
 	}
 	if unstaffed != 1 {
-		t.Errorf("the power conditioner is a member of boardroom filling no role in %d rows, want 1", unstaffed)
+		t.Errorf("the power conditioner is a member of boardroom filling no slot in %d rows, want 1", unstaffed)
 	}
 }
 
@@ -1286,7 +1286,7 @@ func assertGrant(t *testing.T, conn *pgx.Conn, ctx context.Context, username, ro
 	var gotScopeID *string
 	if err := conn.QueryRow(ctx, `
 		select g.scope_kind, g.scope_op, g.scope_id
-		from principal_grant g join human h on h.principal_id = g.principal_id
+		from user_grant g join person h on h.user_id = g.user_id
 		where h.username = $1 and g.role_id = (select id from role where name = $2)`, username, role).Scan(&gotKind, &gotOp, &gotScopeID); err != nil {
 		t.Fatalf("read grant for %s/%s: %v", username, role, err)
 	}
@@ -1311,7 +1311,7 @@ func assertGrant(t *testing.T, conn *pgx.Conn, ctx context.Context, username, ro
 // TestFixturesMakeAnFleetWorthLookingAt guards what the fleet canvas (#630)
 // needs from the dev fleet, which is a different bar from what the earlier
 // fixtures were built to clear. Those existed to teach one thing each (a shared
-// component, a member with no role, the platform-reach lesson) and a handful of
+// component, a member with no slot, the platform-reach lesson) and a handful of
 // rows says all of that. A canvas is judged on whether an operator can read a
 // real fleet in it, and a dozen dots in one room cannot answer that either way.
 //
@@ -1417,7 +1417,7 @@ func TestFixturesMakeAnFleetWorthLookingAt(t *testing.T) {
 			continue
 		}
 		any := false
-		for _, a := range doc.RoleAssignments {
+		for _, a := range doc.SlotAssignments {
 			if a.System == s.Key {
 				any = true
 				break
@@ -1446,7 +1446,7 @@ func TestFixturesMakeAnFleetWorthLookingAt(t *testing.T) {
 	for _, m := range doc.Members {
 		note(m.Component, m.System)
 	}
-	for _, a := range doc.RoleAssignments {
+	for _, a := range doc.SlotAssignments {
 		note(a.Component, a.System)
 	}
 	crossRoot := false
@@ -1569,7 +1569,7 @@ func fixtureComponentNames(doc devseed.Doc) []string {
 }
 
 // The deployed-fleet invariant (#785): a real estate is mostly rooms whose
-// every role is staffed to quorum; commissioning is the exception that
+// every slot is staffed to quorum; commissioning is the exception that
 // carries the teaching, not the norm. This pins the ruling so a future
 // volume block cannot quietly regress the fleet back to a wall of
 // incomplete: every system in the fixture is staffed to its standard's
@@ -1581,11 +1581,11 @@ func TestFixtureFleetReadsDeployed(t *testing.T) {
 		"briefing-av": "the ONE provisioning system: deployed except its scheduling panel",
 	}
 	staffed := map[string]map[string]int{}
-	for _, ra := range doc.RoleAssignments {
+	for _, ra := range doc.SlotAssignments {
 		if staffed[ra.System] == nil {
 			staffed[ra.System] = map[string]int{}
 		}
-		staffed[ra.System][ra.Role]++
+		staffed[ra.System][ra.Slot]++
 	}
 	// The archetype quorums (#796): what "deployed" means per standard.
 	mr := map[string]int{"video-bar": 1, "main-display": 1, "touch-control": 1, "scheduling-panel": 1}
@@ -1615,9 +1615,9 @@ func TestFixtureFleetReadsDeployed(t *testing.T) {
 			continue
 		}
 		got := staffed[s.Key]
-		for role, q := range want {
-			if got[role] < q {
-				t.Errorf("system %q (%s) staffs %s %d/%d; a deployed room fills every role (#785), and only the named teaching cases stay short", s.Key, s.Standard, role, got[role], q)
+		for slot, q := range want {
+			if got[slot] < q {
+				t.Errorf("system %q (%s) staffs %s %d/%d; a deployed room fills every slot (#785), and only the named teaching cases stay short", s.Key, s.Standard, slot, got[slot], q)
 			}
 		}
 	}
@@ -1689,7 +1689,7 @@ func TestSeededStandardsDeclareTheRoomKPIs(t *testing.T) {
 
 // TestSeededFleetIsSimulated proves the dev fleet is wired for the
 // simulator: every component whose product a simulator profile serves has
-// an endpoint on the dev node at an address in the simulated block, the SNMP
+// an endpoint on the dev outpost at an address in the simulated block, the SNMP
 // and line-protocol products through their drivers, and a second run adds
 // nothing.
 func TestSeededFleetIsSimulated(t *testing.T) {
@@ -1710,7 +1710,7 @@ func TestSeededFleetIsSimulated(t *testing.T) {
 	rows, err := conn.Query(ctx, `
 		select c.id, p.name from component c join product p on p.id = c.product_id
 		where not exists (select 1 from endpoint e where e.component = c.id
-			and e.node_name = (select principal_id from node where name = 'edge-hq')
+			and e.outpost_id = (select user_id from outpost where name = 'edge-hq')
 			and e.params->>'target' like '127.60.%')`)
 	if err != nil {
 		t.Fatal(err)
@@ -1797,7 +1797,7 @@ func TestSeededFleetIsSimulated(t *testing.T) {
 }
 
 // TestReachabilityDemoIsSimulatedWithTheFleet proves the worked reachability
-// check stays truthful under a live node: with the simulated fleet, the demo
+// check stays truthful under a live outpost: with the simulated fleet, the demo
 // DSP is a simulated polaris-dsp-16 whose endpoints target its simulated
 // address (HTTP and the line protocol at their real ports); without
 // it (the docs screenshots), the demo is untouched.
@@ -1935,20 +1935,20 @@ func TestSimulatedFleetAtRealPorts(t *testing.T) {
 // TestSeededFleetHoldsARejectedSession proves the dev fleet carries a held
 // session worth showing (#1059): the huddle's touch panel also answers NVP over
 // telnet behind a login, and the endpoint seeded on it logs in with the secret
-// holding the password from before a rotation, so a live node reads its
+// holding the password from before a rotation, so a live outpost reads its
 // session rejected beside Retry. The rotated secret holds the right one, and
 // pointing the endpoint's login at it is the fix the walkthrough teaches. A
 // second run adds nothing.
 func TestSeededFleetHoldsARejectedSession(t *testing.T) {
 	t.Parallel()
 	ctx, conn, gw := seededFleet(t)
-	type ep struct{ host, port, login, node string }
+	type ep struct{ host, port, login, outpost string }
 	telnet := func() (ep, int) {
 		t.Helper()
 		var e ep
 		var n int
 		rows, err := conn.Query(ctx, `
-			select e.inputs->>'host', e.inputs->>'port', e.inputs->>'login', (select n.name from node n where n.principal_id = e.node_name)
+			select e.inputs->>'host', e.inputs->>'port', e.inputs->>'login', (select n.name from outpost n where n.user_id = e.outpost_id)
 			from endpoint e join driver d on d.id = e.driver_id join component c on c.id = e.component join location l on l.id = c.location_id
 			where d.name = 'newtron-nvp-telnet' and l.name = 'huddle'`)
 		if err != nil {
@@ -1957,7 +1957,7 @@ func TestSeededFleetHoldsARejectedSession(t *testing.T) {
 		defer rows.Close()
 		for rows.Next() {
 			n++
-			if err := rows.Scan(&e.host, &e.port, &e.login, &e.node); err != nil {
+			if err := rows.Scan(&e.host, &e.port, &e.login, &e.outpost); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -1975,9 +1975,9 @@ func TestSeededFleetHoldsARejectedSession(t *testing.T) {
 		t.Fatalf("the huddle panel's nvp endpoint: %v", err)
 	}
 	// The panel's own simulated address, its real telnet port, on the dev
-	// node, with the stale login.
-	if got.host != nvpHost || got.port != "23" || got.node != "edge-hq" || got.login != "sim-panel-login" {
-		t.Fatalf("huddle telnet endpoint = %+v, want host %s, port 23, node edge-hq, login sim-panel-login", got, nvpHost)
+	// outpost, with the stale login.
+	if got.host != nvpHost || got.port != "23" || got.outpost != "edge-hq" || got.login != "sim-panel-login" {
+		t.Fatalf("huddle telnet endpoint = %+v, want host %s, port 23, outpost edge-hq, login sim-panel-login", got, nvpHost)
 	}
 
 	all := scope.Set{All: true}
@@ -2013,7 +2013,7 @@ func TestSeededFleetHoldsARejectedSession(t *testing.T) {
 // TestSeededFleetHoldsAProbeGate pins the refusal a lab shows on an
 // endpoint holding no session (#1110): the auditorium's touch panel answers
 // SNMP, and its snmp-generic endpoint reads its community from a secret
-// holding the one the panel's agent knows and refuses, so a live node's
+// holding the one the panel's agent knows and refuses, so a live outpost's
 // reachability probe meets authorizationError, gates the endpoint at the
 // session rung, and the console shows the refusal's reason beside Retry with
 // no session pill. Pointing the community at the fleet's own secret lifts it.
@@ -2021,11 +2021,11 @@ func TestSeededFleetHoldsARejectedSession(t *testing.T) {
 func TestSeededFleetHoldsAProbeGate(t *testing.T) {
 	t.Parallel()
 	ctx, conn, gw := seededFleet(t)
-	type ep struct{ id, host, port, community, node string }
+	type ep struct{ id, host, port, community, outpost string }
 	snmpEndpoints := func() []ep {
 		t.Helper()
 		rows, err := conn.Query(ctx, `
-			select e.id::text, e.inputs->>'host', e.inputs->>'port', e.inputs->>'community', (select n.name from node n where n.principal_id = e.node_name)
+			select e.id::text, e.inputs->>'host', e.inputs->>'port', e.inputs->>'community', (select n.name from outpost n where n.user_id = e.outpost_id)
 			from endpoint e join driver d on d.id = e.driver_id join component c on c.id = e.component
 			where d.name = 'snmp-generic' and c.id = (select c2.id from component c2 join location l on l.id = c2.location_id
 				join product p on p.id = c2.product_id where l.name = 'auditorium' and p.name = 'newtron-panel-7')`)
@@ -2036,7 +2036,7 @@ func TestSeededFleetHoldsAProbeGate(t *testing.T) {
 		var out []ep
 		for rows.Next() {
 			var e ep
-			if err := rows.Scan(&e.id, &e.host, &e.port, &e.community, &e.node); err != nil {
+			if err := rows.Scan(&e.id, &e.host, &e.port, &e.community, &e.outpost); err != nil {
 				t.Fatal(err)
 			}
 			out = append(out, e)
@@ -2048,8 +2048,8 @@ func TestSeededFleetHoldsAProbeGate(t *testing.T) {
 		t.Fatalf("auditorium touch panel snmp endpoints: want 1, got %d", len(got))
 	}
 	e := got[0]
-	if !strings.HasPrefix(e.host, "127.60.") || e.port != "161" || e.node != "edge-hq" || e.community != "sim-snmp-revoked" {
-		t.Fatalf("auditorium snmp endpoint = %+v, want the panel's simulated address, port 161, node edge-hq, community sim-snmp-revoked", e)
+	if !strings.HasPrefix(e.host, "127.60.") || e.port != "161" || e.outpost != "edge-hq" || e.community != "sim-snmp-revoked" {
+		t.Fatalf("auditorium snmp endpoint = %+v, want the panel's simulated address, port 161, outpost edge-hq, community sim-snmp-revoked", e)
 	}
 
 	// The secret holds the community the panel's agent refuses, by the
@@ -2111,7 +2111,7 @@ func TestSeededFleetHoldsAProbeGate(t *testing.T) {
 // shows (#1078): the touch panel in the briefing place answers NVP over its ssh
 // console, and its endpoint pins a host key from before the panel was
 // reimaged, so the simulated panel's own key (minted when the simulator
-// starts) never matches it and a live node reads the session rejected with
+// starts) never matches it and a live outpost reads the session rejected with
 // class host-key, both keys named, beside Trust this key. The login is the
 // panel's right one, so trusting the offered key brings the session up. A
 // second run neither adds an endpoint nor moves the pin an operator may have
@@ -2119,11 +2119,11 @@ func TestSeededFleetHoldsAProbeGate(t *testing.T) {
 func TestSeededFleetHoldsAHostKeyRejection(t *testing.T) {
 	t.Parallel()
 	ctx, conn, gw := seededFleet(t)
-	type ep struct{ id, name, host, port, login, node string }
+	type ep struct{ id, name, host, port, login, outpost string }
 	sshEndpoints := func() []ep {
 		t.Helper()
 		rows, err := conn.Query(ctx, `
-			select e.id::text, e.name, e.inputs->>'host', e.inputs->>'port', e.inputs->>'login', (select n.name from node n where n.principal_id = e.node_name)
+			select e.id::text, e.name, e.inputs->>'host', e.inputs->>'port', e.inputs->>'login', (select n.name from outpost n where n.user_id = e.outpost_id)
 			from endpoint e join driver d on d.id = e.driver_id join component c on c.id = e.component join location l on l.id = c.location_id
 			where d.name = 'newtron-nvp-ssh' and l.name = 'briefing'`)
 		if err != nil {
@@ -2133,7 +2133,7 @@ func TestSeededFleetHoldsAHostKeyRejection(t *testing.T) {
 		var out []ep
 		for rows.Next() {
 			var e ep
-			if err := rows.Scan(&e.id, &e.name, &e.host, &e.port, &e.login, &e.node); err != nil {
+			if err := rows.Scan(&e.id, &e.name, &e.host, &e.port, &e.login, &e.outpost); err != nil {
 				t.Fatal(err)
 			}
 			out = append(out, e)
@@ -2145,13 +2145,13 @@ func TestSeededFleetHoldsAHostKeyRejection(t *testing.T) {
 		t.Fatalf("briefing ssh endpoints: want 1, got %d", len(got))
 	}
 	e := got[0]
-	if !strings.HasPrefix(e.host, "127.60.") || e.port != "22" || e.node != "edge-hq" || e.login != "sim-panel-login-rotated" {
-		t.Fatalf("briefing ssh endpoint = %+v, want the panel's simulated address, port 22, node edge-hq, the panel's right login", e)
+	if !strings.HasPrefix(e.host, "127.60.") || e.port != "22" || e.outpost != "edge-hq" || e.login != "sim-panel-login-rotated" {
+		t.Fatalf("briefing ssh endpoint = %+v, want the panel's simulated address, port 22, outpost edge-hq, the panel's right login", e)
 	}
 	const stalePin = "SHA256:twSJOxqCcLND44UmG2UgaA2xfebMGW5hCWNq2eHE16M"
 	pin := func() string {
 		t.Helper()
-		wl, err := gw.NodeWorklist(ctx, "edge-hq")
+		wl, err := gw.OutpostWorklist(ctx, "edge-hq")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -2187,15 +2187,15 @@ func TestSeededFleetHoldsAHostKeyRejection(t *testing.T) {
 // TLS face with an endpoint attached (#1035): the huddle's touch panel also
 // answers NVP over TLS, and the seeded newtron-nvp-tls endpoint targets its
 // simulated address at the driver's port, pinning the panel's key on first
-// use, on the dev node. A second run adds nothing.
+// use, on the dev outpost. A second run adds nothing.
 func TestSeededFleetHoldsATLSEndpoint(t *testing.T) {
 	t.Parallel()
 	ctx, conn, gw := seededFleet(t)
-	type ep struct{ host, port, mode, target, node string }
+	type ep struct{ host, port, mode, target, outpost string }
 	tlsEndpoints := func() ([]ep, error) {
 		rows, err := conn.Query(ctx, `
 			select e.inputs->>'host', e.inputs->>'port', coalesce(e.inputs->>'tls-mode', ''), e.params->>'target',
-				(select n.name from node n where n.principal_id = e.node_name)
+				(select n.name from outpost n where n.user_id = e.outpost_id)
 			from endpoint e join driver d on d.id = e.driver_id join component c on c.id = e.component join location l on l.id = c.location_id
 			where d.name = 'newtron-nvp-tls' and l.name = 'huddle' and e.name = 'tls'`)
 		if err != nil {
@@ -2205,7 +2205,7 @@ func TestSeededFleetHoldsATLSEndpoint(t *testing.T) {
 		var out []ep
 		for rows.Next() {
 			var e ep
-			if err := rows.Scan(&e.host, &e.port, &e.mode, &e.target, &e.node); err != nil {
+			if err := rows.Scan(&e.host, &e.port, &e.mode, &e.target, &e.outpost); err != nil {
 				return nil, err
 			}
 			out = append(out, e)
@@ -2226,7 +2226,7 @@ func TestSeededFleetHoldsATLSEndpoint(t *testing.T) {
 		where d.name = 'newtron-panel-nvp' and l.name = 'huddle'`).Scan(&nvpHost); err != nil {
 		t.Fatalf("the huddle panel's nvp endpoint: %v", err)
 	}
-	if e := got[0]; e.host != nvpHost || e.port != "51326" || e.mode != "pin" || e.target != nvpHost+":51326" || e.node != "edge-hq" {
+	if e := got[0]; e.host != nvpHost || e.port != "51326" || e.mode != "pin" || e.target != nvpHost+":51326" || e.outpost != "edge-hq" {
 		t.Fatalf("huddle tls endpoint = %+v, want host %s, port 51326, pin, on edge-hq", e, nvpHost)
 	}
 	if err := devseed.Run(ctx, gw, ""); err != nil {
@@ -2241,16 +2241,16 @@ func TestSeededFleetHoldsATLSEndpoint(t *testing.T) {
 // NVP datagram face with an endpoint attached (#1037): the huddle's touch
 // panel also answers NVP over udp, and the seeded newtron-nvp-udp endpoint
 // targets its simulated address at the driver's port, with no listen port
-// (the node binds its own and the panel pushes to the source of the
-// subscribe), on the dev node. A second run adds nothing.
+// (the outpost binds its own and the panel pushes to the source of the
+// subscribe), on the dev outpost. A second run adds nothing.
 func TestSeededFleetHoldsAUDPEndpoint(t *testing.T) {
 	t.Parallel()
 	ctx, conn, gw := seededFleet(t)
-	type ep struct{ host, port, listen, target, node string }
+	type ep struct{ host, port, listen, target, outpost string }
 	udpEndpoints := func() ([]ep, error) {
 		rows, err := conn.Query(ctx, `
 			select e.inputs->>'host', e.inputs->>'port', coalesce(e.params->>'listen-port', ''), e.params->>'target',
-				(select n.name from node n where n.principal_id = e.node_name)
+				(select n.name from outpost n where n.user_id = e.outpost_id)
 			from endpoint e join driver d on d.id = e.driver_id join component c on c.id = e.component join location l on l.id = c.location_id
 			where d.name = 'newtron-nvp-udp' and l.name = 'huddle' and e.name = 'udp'`)
 		if err != nil {
@@ -2260,7 +2260,7 @@ func TestSeededFleetHoldsAUDPEndpoint(t *testing.T) {
 		var out []ep
 		for rows.Next() {
 			var e ep
-			if err := rows.Scan(&e.host, &e.port, &e.listen, &e.target, &e.node); err != nil {
+			if err := rows.Scan(&e.host, &e.port, &e.listen, &e.target, &e.outpost); err != nil {
 				return nil, err
 			}
 			out = append(out, e)
@@ -2281,7 +2281,7 @@ func TestSeededFleetHoldsAUDPEndpoint(t *testing.T) {
 		where d.name = 'newtron-panel-nvp' and l.name = 'huddle'`).Scan(&nvpHost); err != nil {
 		t.Fatalf("the huddle panel's nvp endpoint: %v", err)
 	}
-	if e := got[0]; e.host != nvpHost || e.port != "51327" || e.listen != "" || e.target != nvpHost+":51327" || e.node != "edge-hq" {
+	if e := got[0]; e.host != nvpHost || e.port != "51327" || e.listen != "" || e.target != nvpHost+":51327" || e.outpost != "edge-hq" {
 		t.Fatalf("huddle udp endpoint = %+v, want host %s, port 51327, no listen port, on edge-hq", e, nvpHost)
 	}
 	if err := devseed.Run(ctx, gw, ""); err != nil {

@@ -1,0 +1,108 @@
+name: agent-open-pr
+
+# Open a PR as the agents' App from a branch a Claude session pushed (#2175),
+# so the PR's author is hyperscale-agent[bot] and a maintainer's approval
+# counts. A PR a session opens with a person's token is that person's, and
+# GitHub never counts an author's own approval.
+#
+# A session pushes its claude/ branch, then dispatches this workflow with the
+# branch, a title and a body. Only a maintainer may dispatch it, only for a
+# claude/ branch with no open PR; the decision is scripts/agent-trust.sh open
+# (tested in go test ./scripts/). The PR is opened with the App's token, so
+# agent-review and the required checks start on it as on any other PR.
+#
+# Off until the repo variable AGENT_CI_ENABLED is "true". The guide is
+# docs/contributing/agents-in-ci.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: The claude/ branch to open the PR from
+        required: true
+        type: string
+      title:
+        description: The PR title
+        required: true
+        type: string
+      body:
+        description: The PR body (markdown)
+        required: true
+        type: string
+      draft:
+        description: Open it as a draft
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-open-pr-${{ inputs.branch }}
+  cancel-in-progress: false
+
+jobs:
+  open:
+    if: vars.AGENT_CI_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      REPO: ${{ github.repository }}
+      ORG: ${{ github.repository_owner }}
+      BASE: ${{ github.event.repository.default_branch }}
+      BRANCH: ${{ inputs.branch }}
+    steps:
+      - name: Mint the agent App token
+        id: app
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.AGENT_APP_CLIENT_ID }}
+          private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+
+      # The default branch, so the gate runs the trusted script, never the
+      # branch's copy of it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          path: trusted
+
+      - name: Decide whether this dispatch may open a PR
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          SENDER: ${{ github.triggering_actor }}
+        run: |
+          trust=trusted/scripts/agent-trust.sh
+          teams=$("$trust" teams "$ORG")
+          open_prs=$(gh pr list --repo "$REPO" --head "$BRANCH" --state open --json number --jq length)
+          facts=$(jq -n --arg sender "$SENDER" --arg ref "$BRANCH" --argjson open "$open_prs" --argjson teams "$teams" \
+            '{sender: $sender, head_ref: $ref, open_prs: $open} + $teams')
+          decision=$(printf '%s' "$facts" | "$trust" open)
+          echo "agent-trust open: $decision"
+          if [ "$decision" != run ]; then
+            echo "::error::${decision}"
+            exit 1
+          fi
+          if ! gh api "repos/$REPO/git/ref/heads/$BRANCH" --silent 2>/dev/null; then
+            echo "::error::refuse: $BRANCH is not pushed to $REPO"
+            exit 1
+          fi
+
+      - name: Open the PR as the agents' App
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          TITLE: ${{ inputs.title }}
+          BODY: ${{ inputs.body }}
+          DRAFT: ${{ inputs.draft }}
+        run: |
+          printf '%s\n' "$BODY" > "$RUNNER_TEMP/body.md"
+          args=(--repo "$REPO" --base "$BASE" --head "$BRANCH" --title "$TITLE" --body-file "$RUNNER_TEMP/body.md")
+          if [ "$DRAFT" = true ]; then args+=(--draft); fi
+          url=$(gh pr create "${args[@]}")
+          echo "Opened $url"
+          echo "Opened $url as the agents' App." >> "$GITHUB_STEP_SUMMARY"

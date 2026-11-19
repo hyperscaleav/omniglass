@@ -16,9 +16,9 @@ func TestCommandQueueMetricsWritesTheGaugesAndTheWindowsCounts(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC)
 	oldest := now.Add(-90 * time.Second)
-	read := CommandQueueRead{Now: now, Nodes: []CommandQueue{
-		{Node: "edge-a", ComponentID: "pa", Pending: 3, Oldest: &oldest, Stuck: 1, Redelivered: 2, ExpiredUnexecuted: 1},
-		{Node: "edge-b", ComponentID: "pb"},
+	read := CommandQueueRead{Now: now, Outposts: []CommandQueue{
+		{Outpost: "edge-a", ComponentID: "pa", Pending: 3, Oldest: &oldest, Stuck: 1, Redelivered: 2, ExpiredUnexecuted: 1},
+		{Outpost: "edge-b", ComponentID: "pb"},
 	}}
 	at := func(c, key, instance string, v float64) PlatformMetric {
 		return PlatformMetric{ComponentID: c, Key: key, Instance: instance, Value: v, TS: now}
@@ -62,11 +62,11 @@ func TestCommandQueueCountsReturnToZeroAfterTheirWindow(t *testing.T) {
 	t.Parallel()
 	t0 := time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC)
 	t1, t2 := t0.Add(15*time.Second), t0.Add(30*time.Second)
-	event := CommandQueueMetrics(CommandQueueRead{Now: t1, Nodes: []CommandQueue{
-		{Node: "edge-a", ComponentID: "pa", Redelivered: 1, ExpiredUndelivered: 1, ExpiredUnexecuted: 1},
+	event := CommandQueueMetrics(CommandQueueRead{Now: t1, Outposts: []CommandQueue{
+		{Outpost: "edge-a", ComponentID: "pa", Redelivered: 1, ExpiredUndelivered: 1, ExpiredUnexecuted: 1},
 	}}, t0)
-	quiet := CommandQueueMetrics(CommandQueueRead{Now: t2, Nodes: []CommandQueue{
-		{Node: "edge-a", ComponentID: "pa"},
+	quiet := CommandQueueMetrics(CommandQueueRead{Now: t2, Outposts: []CommandQueue{
+		{Outpost: "edge-a", ComponentID: "pa"},
 	}}, t1)
 
 	type series struct{ key, instance string }

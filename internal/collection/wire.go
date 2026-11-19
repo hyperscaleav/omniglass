@@ -8,68 +8,70 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
-// The node-server control-plane wire, checkpoint 2: JSON over NATS. The
+// The outpost-server control-plane wire, checkpoint 2: JSON over NATS. The
 // telemetry Event (protobuf over JetStream) is checkpoint 3. Subjects encode the
-// node name in their last token, and each node's NATS credential is permitted
-// only its own subjects, so the subject IS the per-node isolation boundary.
+// outpost name in their last token, and each outpost's NATS credential is permitted
+// only its own subjects, so the subject IS the per-outpost isolation boundary.
 const (
 	// subjectPrefix namespaces every control-plane subject.
 	subjectPrefix = "og.v1."
 	// WorklistWildcard / HeartbeatWildcard are the server-side subscriptions
-	// (single-token node wildcard), so a node name is always one subject token.
+	// (single-token outpost wildcard), so an outpost name is always one subject token.
 	WorklistWildcard  = subjectPrefix + "worklist.*"
 	HeartbeatWildcard = subjectPrefix + "heartbeat.*"
 	// CommandWildcard / CommandStatusWildcard are the server-side subscriptions
 	// for the command queue pull and the execution reports (#815).
 	CommandWildcard       = subjectPrefix + "command.*"
 	CommandStatusWildcard = subjectPrefix + "commandstatus.*"
-	// TelemetryWildcard is the server-side JetStream stream subject: every node's
-	// telemetry publish (single-token node wildcard), mirroring WorklistWildcard.
+	// TelemetryWildcard is the server-side JetStream stream subject: every outpost's
+	// telemetry publish (single-token outpost wildcard), mirroring WorklistWildcard.
 	TelemetryWildcard = subjectPrefix + "telemetry.*"
 	// APITelemetrySubject is the trusted push lane: the API publishes a batch here
 	// after it has authorized the caller against the declared owner, so the consumer
-	// believes that owner. Only the server's own credential can publish here (a node
+	// believes that owner. Only the server's own credential can publish here (an outpost
 	// grant is an explicit allow-list of its own subjects).
 	//
 	// It is deliberately NOT a token under TelemetryWildcard. That wildcard is
-	// single-token and a node's grant covers og.v1.telemetry.<its-own-name>, so a
-	// node named "api" (or whatever literal we reserved there) would be handed the
+	// single-token and an outpost's grant covers og.v1.telemetry.<its-own-name>, so a
+	// outpost named "api" (or whatever literal we reserved there) would be handed the
 	// trusted subject and could publish a forged, pre-authorized owner. Putting the
 	// lane in its own segment makes that structurally impossible rather than
-	// dependent on nobody choosing an awkward node name.
+	// dependent on nobody choosing an awkward outpost name.
 	APITelemetrySubject = subjectPrefix + "api.telemetry"
 )
 
-// WorklistSubject is where a node requests its worklist (request-reply).
-func WorklistSubject(node string) string { return subjectPrefix + "worklist." + node }
+// WorklistSubject is where an outpost requests its worklist (request-reply).
+func WorklistSubject(outpost string) string { return subjectPrefix + "worklist." + outpost }
 
-// HeartbeatSubject is where a node publishes its liveness heartbeat.
-func HeartbeatSubject(node string) string { return subjectPrefix + "heartbeat." + node }
+// HeartbeatSubject is where an outpost publishes its liveness heartbeat.
+func HeartbeatSubject(outpost string) string { return subjectPrefix + "heartbeat." + outpost }
 
-// TelemetrySubject is a node's telemetry publish subject, bound into the
+// TelemetrySubject is an outpost's telemetry publish subject, bound into the
 // OG_TELEMETRY JetStream stream.
-func TelemetrySubject(node string) string { return subjectPrefix + "telemetry." + node }
+func TelemetrySubject(outpost string) string { return subjectPrefix + "telemetry." + outpost }
 
-// WorklistChangedSubject is where the server nudges a node to re-pull its
+// WorklistChangedSubject is where the server nudges an outpost to re-pull its
 // worklist the moment a committed write changes it (#1945). The message is
-// empty: the nudge says only "pull now", and the node coalesces a burst.
-func WorklistChangedSubject(node string) string { return subjectPrefix + "worklist-changed." + node }
+// empty: the nudge says only "pull now", and the outpost coalesces a burst.
+func WorklistChangedSubject(outpost string) string {
+	return subjectPrefix + "worklist-changed." + outpost
+}
 
-// CommandSubject is where a node pulls its pending command queue (#815), a
+// CommandSubject is where an outpost pulls its pending command queue (#815), a
 // request-reply mirroring the worklist: the reply is the commands resolved and
-// rendered for this node, marked dispatched by the pull itself.
-func CommandSubject(node string) string { return subjectPrefix + "command." + node }
+// rendered for this outpost, marked dispatched by the pull itself.
+func CommandSubject(outpost string) string { return subjectPrefix + "command." + outpost }
 
-// CommandStatusSubject is where a node reports a command's execution outcome.
-func CommandStatusSubject(node string) string { return subjectPrefix + "commandstatus." + node }
+// CommandStatusSubject is where an outpost reports a command's execution outcome.
+func CommandStatusSubject(outpost string) string { return subjectPrefix + "commandstatus." + outpost }
 
-// InboxPrefix is a node's private request-reply inbox namespace, so a node's
-// subscribe grant covers only its own reply inboxes, never another node's.
-func InboxPrefix(node string) string { return "_INBOX." + node }
+// InboxPrefix is an outpost's private request-reply inbox namespace, so an outpost's
+// subscribe grant covers only its own reply inboxes, never another outpost's.
+func InboxPrefix(outpost string) string { return "_INBOX." + outpost }
 
-// NodeFromSubject extracts the node name (the last subject token) from a
-// control-plane subject, e.g. og.v1.heartbeat.node-a -> node-a.
-func NodeFromSubject(subject string) string {
+// OutpostFromSubject extracts the outpost name (the last subject token) from a
+// control-plane subject, e.g. og.v1.heartbeat.outpost-a -> outpost-a.
+func OutpostFromSubject(subject string) string {
 	if i := strings.LastIndex(subject, "."); i >= 0 {
 		return subject[i+1:]
 	}
@@ -78,11 +80,11 @@ func NodeFromSubject(subject string) string {
 
 // TaskSpec is one enabled task in a worklist reply: the content-addressed task
 // plus the placement-bound endpoint it runs over. EndpointID is the
-// node-unique endpoint key (names are unique only per component), which a
+// outpost-unique endpoint key (names are unique only per component), which a
 // held session is keyed by (#816). EndpointParams and Spec are
 // raw jsonb passed through from storage. Secrets carries a driver task's
 // unsealed secret inputs (#814), resolved server-side at reply time; the
-// per-node subject grant is the isolation boundary, so a node only ever
+// per-outpost subject grant is the isolation boundary, so an outpost only ever
 // receives the credentials of endpoints placed on it.
 type TaskSpec struct {
 	ID             string                       `json:"id"`
@@ -93,6 +95,11 @@ type TaskSpec struct {
 	EndpointParams json.RawMessage              `json:"endpoint_params,omitempty"`
 	Spec           json.RawMessage              `json:"spec,omitempty"`
 	Secrets        map[string]map[string]string `json:"secrets,omitempty"`
+	// Mask is the plaintext of each field of Secrets its secret type marks
+	// secret: what the outpost masks out of everything the task collects
+	// before it publishes, so a component echoing its credential back never
+	// puts it on the stream.
+	Mask []string `json:"mask,omitempty"`
 	// Session is the endpoint's driver's session block (#1049): its auth
 	// step, terminal replies and re-probe, read off the live driver spec.
 	Session *driver.SessionSpec `json:"session,omitempty"`
@@ -100,11 +107,11 @@ type TaskSpec struct {
 	// rejected session redials once when it moves, and nothing else moves it.
 	SessionRetry int64 `json:"session_retry,omitempty"`
 	// HostKey is the ssh host key the endpoint's session pins (#1032): the
-	// operator's declared key, else the key the node trusted on first use;
+	// operator's declared key, else the key the outpost trusted on first use;
 	// empty before first use.
 	HostKey string `json:"host_key,omitempty"`
 	// CertificatePin is the tls public key the endpoint pins (#1035): the
-	// operator's declared key, else the key the node trusted on first use,
+	// operator's declared key, else the key the outpost trusted on first use,
 	// empty before first use. Delivered in every mode; only pin mode judges
 	// a handshake by it.
 	CertificatePin string `json:"certificate_pin,omitempty"`
@@ -113,7 +120,7 @@ type TaskSpec struct {
 	// A gate holds while it is unchanged. Never logged.
 	Fingerprint string `json:"fingerprint,omitempty"`
 	// Rejection is the endpoint's last published endpoint-rejection, so a
-	// restarted node honors a gate it did not see happen.
+	// restarted outpost honors a gate it did not see happen.
 	Rejection string `json:"rejection,omitempty"`
 	// Ladder is the endpoint's resolved reachability ladder (ADR-0158);
 	// nil for a bare endpoint.
@@ -124,13 +131,13 @@ type TaskSpec struct {
 	ComponentID string `json:"component_id,omitempty"`
 	// PathUpstreams is every component the endpoint's component is reached
 	// through (a path dependency, #1652), with the upstream's in-band
-	// endpoints placed on this node. None for an out-of-band endpoint,
+	// endpoints placed on this outpost. None for an out-of-band endpoint,
 	// which is never held by a path upstream.
 	PathUpstreams []PathUpstream `json:"path_upstreams,omitempty"`
 }
 
 // PathUpstream is one path upstream of a task's component (#1652): the
-// upstream component, its name, and its in-band endpoints on the task's node,
+// upstream component, its name, and its in-band endpoints on the task's outpost,
 // whose gates hold the task's endpoint.
 type PathUpstream struct {
 	ComponentID   string   `json:"component_id"`
@@ -138,7 +145,7 @@ type PathUpstream struct {
 	EndpointIDs   []string `json:"endpoint_ids"`
 }
 
-// WorklistReply is the server's response to a worklist request: the node's
+// WorklistReply is the server's response to a worklist request: the outpost's
 // enabled tasks plus the config generation (advances at operator-config pace).
 // Its JSON is the grouped wire (worklist_group.go, #1583): tasks under their
 // endpoint, which carries its fields once, so these fields take no tags.
@@ -147,7 +154,7 @@ type WorklistReply struct {
 	ConfigGeneration int64
 	// ReportSeconds is the platform's collection report window (#1369,
 	// collection.report_seconds): how long each endpoint's collection
-	// telemetry covers. Zero leaves the node's own.
+	// telemetry covers. Zero leaves the outpost's own.
 	ReportSeconds int
 }
 
@@ -157,13 +164,13 @@ func (w WorklistReply) ReportEvery() time.Duration {
 	return time.Duration(w.ReportSeconds) * time.Second
 }
 
-// Heartbeat is a node's liveness publish payload.
+// Heartbeat is an outpost's liveness publish payload.
 type Heartbeat struct {
-	Node string    `json:"node"`
-	At   time.Time `json:"at"`
+	Outpost string    `json:"outpost"`
+	At      time.Time `json:"at"`
 }
 
-// CommandDelivery is one command rendered for a node's queue (#815): what to
+// CommandDelivery is one command rendered for an outpost's queue (#815): what to
 // send (the rendered line), over which transport, to which target.
 type CommandDelivery struct {
 	ID          int64  `json:"id"`
@@ -171,7 +178,7 @@ type CommandDelivery struct {
 	Transport   string `json:"transport"`
 	Target      string `json:"target"`
 	Line        string `json:"line,omitempty"`
-	// EndpointID is the endpoint the command dispatched to, so a node that
+	// EndpointID is the endpoint the command dispatched to, so an outpost that
 	// holds a session there actuates over it (#817); Reply is the binding's
 	// declared reply shape, which picks the answer out of that session's
 	// pushes.
@@ -187,12 +194,12 @@ type CommandDelivery struct {
 	Retries int `json:"retries,omitempty"`
 	// Request is an http command's rendered request (#902): its method,
 	// path, query, headers, body and the format its answer is read in. It
-	// never carries a credential: the node applies the endpoint's declared
+	// never carries a credential: the outpost applies the endpoint's declared
 	// scheme from what its worklist delivered.
 	Request *driver.Request `json:"request,omitempty"`
 	// Disruptive says the command takes its device down (#1651): before it
-	// sends, the node closes the gate of every endpoint in HoldEndpoints
-	// (each endpoint of the component placed on this node), runs nothing
+	// sends, the outpost closes the gate of every endpoint in HoldEndpoints
+	// (each endpoint of the component placed on this outpost), runs nothing
 	// against them for QuietSeconds, then reopens each on its own first up
 	// verdict, with HoldSeconds the counted backstop.
 	Disruptive    bool     `json:"disruptive,omitempty"`
@@ -206,7 +213,7 @@ type CommandPullReply struct {
 	Commands []CommandDelivery `json:"commands"`
 }
 
-// CommandStatus is a node's execution report for one command: an empty Error
+// CommandStatus is an outpost's execution report for one command: an empty Error
 // is a successful actuation. Settlement stays the server's separate judgment
 // of observed against intended.
 type CommandStatus struct {

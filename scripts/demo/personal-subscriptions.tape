@@ -7,16 +7,16 @@
 # the platform's rule list never see it (#1341, #1353).
 
 Hide
-Type `demo_hush 'omniglass principal create --username ivy --email ivy@example.com && omniglass principal grant create ivy --role viewer --scope-kind component --scope-id panel-2'`
+Type `demo_hush 'omniglass user create --username ivy --email ivy@example.com && omniglass user grant create ivy --role viewer --scope-kind component --scope-id panel-2'`
 Enter
 Wait
-Type `demo_hush 'omniglass principal create --username jon && omniglass principal grant create jon --role viewer --scope-kind all'`
+Type `demo_hush 'omniglass user create --username jon && omniglass user grant create jon --role viewer --scope-kind all'`
 Enter
 Wait
-Type `demo_hush 'ivy=$(omniglass principal impersonate ivy --mode act_as | jq -r .token)'`
+Type `demo_hush 'ivy=$(omniglass user impersonate ivy --mode act_as | jq -r .token)'`
 Enter
 Wait
-Type `demo_hush 'jon=$(omniglass principal impersonate jon --mode act_as | jq -r .token)'`
+Type `demo_hush 'jon=$(omniglass user impersonate jon --mode act_as | jq -r .token)'`
 Enter
 Wait
 Type `demo_hush 'omniglass component alarm create panel-2 --severity average --message "slow to wake"'`

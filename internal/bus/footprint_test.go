@@ -24,7 +24,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// The ingest footprint (#1272): what one node batch costs the database, counted.
+// The ingest footprint (#1272): what one outpost batch costs the database, counted.
 //
 // This is the counting instrument of ADR-0094 extended from reads to ingest.
 // The standard workload (internal/footprint) is delivered through the real
@@ -32,7 +32,7 @@ import (
 // catalog fingerprint read, LandBatch with its receipt, locks, transition guard and rule
 // evaluation, and the endpoint's seen stamp. Only the transport is a double.
 // The fleet is the dev scenario's, seeded for real, and every batch is bound to
-// one of its simulated endpoints' tasks, so the node writer's binding check
+// one of its simulated endpoints' tasks, so the outpost writer's binding check
 // runs as it does in production.
 //
 // What gates, all deterministic: statements per batch (exact), rows per
@@ -45,7 +45,7 @@ import (
 // with checkpoint timing, and wall-clock time, which BenchmarkIngestFootprint
 // measures and ADR-0094 forbids gating on.
 
-const footprintNode = "edge-hq"
+const footprintOutpost = "edge-hq"
 
 // footprintTicks is how many checks the measurement window spans, after one
 // warm-up check that lands every property's first value.
@@ -59,12 +59,12 @@ const (
 	// wantStatementsPerBatch is every statement one batch costs, from the
 	// owner resolution to the endpoint's seen stamp. Exact. 31 until #1279,
 	// which replaced the three catalog reads with one fingerprint read and a
-	// registry kept between batches (29); #1274 resolves each owner and reads
+	// catalog kept between batches (29); #1274 resolves each owner and reads
 	// the clock once per batch and lands the metric lane in one statement (19);
-	// #1299 carries the command-targeted property names on the kept registry,
+	// #1299 carries the command-targeted property names on the kept catalog,
 	// so the property lane no longer reads them in the batch's transaction
-	// (18). Until #1582 a batch was one task's check; since, it is one node
-	// tick, a group for every task the node checked (215 here), resolved in
+	// (18). Until #1582 a batch was one task's check; since, it is one outpost
+	// tick, a group for every task the outpost checked (215 here), resolved in
 	// one read, landed in one transaction and stamped seen in one write, so
 	// 19 statements carry what 215 batches of 18 did. #1592 moved the probe
 	// states (icmp-reachable, tcp-open) from the metric lane to the property
@@ -134,11 +134,11 @@ func newFootprintFixture(tb testing.TB) *footprintFixture {
 	if err := devseed.RunScenario(ctx, gw, "", dev, devseed.Options{SimFleet: true}); err != nil {
 		tb.Fatalf("dev seed: %v", err)
 	}
-	wl, err := gw.NodeWorklist(ctx, footprintNode)
+	wl, err := gw.OutpostWorklist(ctx, footprintOutpost)
 	if err != nil {
 		tb.Fatalf("worklist: %v", err)
 	}
-	// One poll task per endpoint: a node checks each endpoint once per tick.
+	// One poll task per endpoint: an outpost checks each endpoint once per tick.
 	byEndpoint := map[string]string{}
 	for _, t := range wl.Tasks {
 		if t.Mode != "poll" {
@@ -150,11 +150,11 @@ func newFootprintFixture(tb testing.TB) *footprintFixture {
 	}
 	var tasks []footprint.Task
 	for _, id := range byEndpoint {
-		tasks = append(tasks, footprint.Task{ID: id, Node: footprintNode})
+		tasks = append(tasks, footprint.Task{ID: id, Outpost: footprintOutpost})
 	}
 	sort.Slice(tasks, func(i, j int) bool { return tasks[i].ID < tasks[j].ID })
 	if len(tasks) == 0 {
-		tb.Fatalf("the dev scenario placed no poll task on %s", footprintNode)
+		tb.Fatalf("the dev scenario placed no poll task on %s", footprintOutpost)
 	}
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
@@ -162,11 +162,11 @@ func newFootprintFixture(tb testing.TB) *footprintFixture {
 	}
 	tb.Cleanup(func() { _ = conn.Close(context.Background()) })
 	srv := &Server{store: gw, orphans: newOrphanTally(orphanWindow)}
-	// The registry's clock stands still, so the warm-up reads the catalogs'
+	// The catalog's clock stands still, so the warm-up reads the catalogs'
 	// fingerprint and the window's batches fall inside its interval, as a
-	// fleet's do once more than a few nodes tick (#1928).
+	// fleet's do once more than a few outposts tick (#1928).
 	frozen := time.Now()
-	srv.registry.now = func() time.Time { return frozen }
+	srv.catalog.now = func() time.Time { return frozen }
 	return &footprintFixture{
 		srv:     srv,
 		counter: counter,
@@ -180,7 +180,7 @@ func newFootprintFixture(tb testing.TB) *footprintFixture {
 	}
 }
 
-// deliver hands one node tick, a group for each of tasks (#1582), to the
+// deliver hands one outpost tick, a group for each of tasks (#1582), to the
 // handler as JetStream would, and fails unless the batch was acked and every
 // group landed: a refused, orphaned or redelivered group means the workload no
 // longer fits the fleet, and every count after it would lie.
@@ -192,7 +192,7 @@ func (f *footprintFixture) deliver(tb testing.TB, tasks []footprint.Task, tick i
 	}
 	f.seq++
 	m := &deliveredMsg{
-		subject: collection.TelemetrySubject(footprintNode),
+		subject: collection.TelemetrySubject(footprintOutpost),
 		data:    data,
 		header:  nats.Header{jetstream.MsgIDHeader: []string{fmt.Sprintf("fp-%d", f.seq)}},
 	}
@@ -205,10 +205,10 @@ func (f *footprintFixture) deliver(tb testing.TB, tasks []footprint.Task, tick i
 	}
 }
 
-// tickBatch is one node tick of the standard workload: each task's check as
-// its own group, in task order, on the footprint node.
+// tickBatch is one outpost tick of the standard workload: each task's check as
+// its own group, in task order, on the footprint outpost.
 func (f *footprintFixture) tickBatch(tasks []footprint.Task, tick int) *ogv1.TelemetryBatch {
-	ev := &ogv1.TelemetryBatch{NodeId: footprintNode}
+	ev := &ogv1.TelemetryBatch{OutpostId: footprintOutpost}
 	for _, task := range tasks {
 		ev.Groups = append(ev.Groups, asTick(f.work.Batch(task, tick)).GetGroups()...)
 	}
@@ -321,7 +321,7 @@ func TestIngestFootprint(t *testing.T) {
 
 	statements := f.counter.N()
 	lsn1 := f.walLSN(t)
-	// One batch is one node tick (#1582), a group for every task, so the
+	// One batch is one outpost tick (#1582), a group for every task, so the
 	// statements and the receipt are per tick and the rows per check.
 	batches := footprintTicks
 	checks := footprintTicks * len(f.tasks)
@@ -391,7 +391,7 @@ func TestIngestFootprint(t *testing.T) {
 }
 
 // BenchmarkIngestFootprint is the timed half (#1272): the wall-clock cost of one
-// node tick through the real handler, one batch of a group per task (#1582),
+// outpost tick through the real handler, one batch of a group per task (#1582),
 // at a small fleet and the whole dev fleet, about a factor of ten apart
 // (ADR-0094: two sizes, so a constant reads apart from a linear cost).
 // Diagnostic only: run with make bench before and after a change that claims
@@ -429,7 +429,7 @@ func firstBatchStatements(c *querycount.Counter, n int) []string {
 	return all[:n]
 }
 
-// deliveredMsg is the transport double: a JetStream delivery carrying a node's
+// deliveredMsg is the transport double: a JetStream delivery carrying an outpost's
 // batch on its own subject with a message id, recording how the handler
 // answered it. Everything behind it is real.
 type deliveredMsg struct {

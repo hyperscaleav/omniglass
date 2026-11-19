@@ -11,8 +11,8 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/lab"
 )
 
-// sweepPingGroupRange is the lab's own range for its nodes, so the sweep's
-// node runs the pinger as the lab's do.
+// sweepPingGroupRange is the lab's own range for its outposts, so the sweep's
+// outpost runs the pinger as the lab's do.
 const sweepPingGroupRange = "0 65535"
 
 // parseLabLabels reads the LAB_LABELS a ready file holds: space-separated
@@ -66,19 +66,19 @@ func (v sweepVars) serviceLabels(service string) map[string]string {
 	return l
 }
 
-func (v sweepVars) nodeEnv(node, token string) []string {
-	return []string{"OMNIGLASS_SERVER=" + v.server, "OMNIGLASS_NODE_NAME=" + node, "OMNIGLASS_NODE_TOKEN=" + token}
+func (v sweepVars) outpostEnv(outpost, token string) []string {
+	return []string{"OMNIGLASS_SERVER=" + v.server, "OMNIGLASS_OUTPOST_NAME=" + outpost, "OMNIGLASS_OUTPOST_TOKEN=" + token}
 }
 
-// sweepCadence is the product's own cadence, the one a deployed node runs, so
-// the node's background work (heartbeat, probe, worklist pull) weighs on its
+// sweepCadence is the product's own cadence, the one a deployed outpost runs, so
+// the outpost's background work (heartbeat, probe, worklist pull) weighs on its
 // cgroup as it would in the field rather than at the lab's fast clock.
 func sweepCadence() (lab.Cadence, error) { return lab.LookupCadence(lab.CadenceDefault, false) }
 
-// sweepNodeService is the node a driver is measured on: the lab's node, with
+// sweepOutpostService is the outpost a driver is measured on: the lab's outpost, with
 // no simulator and no impairments in its process, so its cgroup's CPU and
-// memory are the node's own work.
-func sweepNodeService(env map[string]string, node, token string) (lab.Service, error) {
+// memory are the outpost's own work.
+func sweepOutpostService(env map[string]string, outpost, token string) (lab.Service, error) {
 	v, err := readSweepVars(env)
 	if err != nil {
 		return lab.Service{}, err
@@ -88,24 +88,24 @@ func sweepNodeService(env map[string]string, node, token string) (lab.Service, e
 		return lab.Service{}, err
 	}
 	return lab.Service{
-		Name: node, Container: v.project + "-" + node + "-1", Image: v.image,
-		Cmd: []string{"node", "run", "--heartbeat", cad.Heartbeat,
+		Name: outpost, Container: v.project + "-" + outpost + "-1", Image: v.image,
+		Cmd: []string{"outpost", "run", "--heartbeat", cad.Heartbeat,
 			"--probe-every", cad.ProbeEvery, "--worklist-every", cad.WorklistEvery},
-		Env: v.nodeEnv(node, token),
-		// As the lab's nodes: root inside its own container, which the pinger
+		Env: v.outpostEnv(outpost, token),
+		// As the lab's outposts: root inside its own container, which the pinger
 		// and NET_ADMIN need under distroless.
 		User:    "0:0",
 		CapAdd:  []string{"NET_ADMIN"},
 		Sysctls: map[string]string{"net.ipv4.ping_group_range": sweepPingGroupRange},
-		Labels:  v.serviceLabels(node),
-		Role:    "The node a driver's cost is measured on, with no simulator in its process.",
+		Labels:  v.serviceLabels(outpost),
+		Role:    "The outpost a driver's cost is measured on, with no simulator in its process.",
 	}, nil
 }
 
-// sweepSimService is the simulator beside a sweep node, in the node's network
-// namespace: it serves the node's simulated components on the loopback the
-// node polls, and its CPU lands in a cgroup of its own.
-func sweepSimService(env map[string]string, node, token, nodeID string) (lab.Service, error) {
+// sweepSimService is the simulator beside a sweep outpost, in the outpost's network
+// namespace: it serves the outpost's simulated components on the loopback the
+// outpost polls, and its CPU lands in a cgroup of its own.
+func sweepSimService(env map[string]string, outpost, token, outpostID string) (lab.Service, error) {
 	v, err := readSweepVars(env)
 	if err != nil {
 		return lab.Service{}, err
@@ -114,22 +114,24 @@ func sweepSimService(env map[string]string, node, token, nodeID string) (lab.Ser
 	if err != nil {
 		return lab.Service{}, err
 	}
-	service := node + "-sim"
+	service := outpost + "-sim"
 	return lab.Service{
 		Name: service, Container: v.project + "-" + service + "-1", Image: v.image,
 		Cmd: []string{"sim", "run", "--poll", cad.SimPoll},
-		Env: v.nodeEnv(node, token),
+		Env: v.outpostEnv(outpost, token),
 		// Root, to bind the simulated components' ports below 1024.
 		User:      "0:0",
-		NetworkOf: nodeID,
+		NetworkOf: outpostID,
 		Labels:    v.serviceLabels(service),
-		Role:      "The simulator serving a sweep node's components on that node's loopback.",
+		Role:      "The simulator serving a sweep outpost's components on that outpost's loopback.",
 	}, nil
 }
 
-// sweepNodeName is a driver's node at a step: a driver swept again at a
-// bigger step takes a fresh node, its first one's rows still in the lab.
-func sweepNodeName(driver string, step int) string { return fmt.Sprintf("sweep-%s-%d", driver, step) }
+// sweepOutpostName is a driver's outpost at a step: a driver swept again at a
+// bigger step takes a fresh outpost, its first one's rows still in the lab.
+func sweepOutpostName(driver string, step int) string {
+	return fmt.Sprintf("sweep-%s-%d", driver, step)
+}
 
 // componentsPerStep is how many components move a driver's task count by
 // about target: each component brings one task per poll.
@@ -147,42 +149,42 @@ func sweepWindow(window time.Duration, polls []time.Duration) time.Duration {
 	return max(window, slices.Max(polls))
 }
 
-// heldTasksQuery counts every enabled task the server holds for a node, the
+// heldTasksQuery counts every enabled task the server holds for an outpost, the
 // driver's polls and the components' probes: the worklist it sends.
-func heldTasksQuery(node string) string {
+func heldTasksQuery(outpost string) string {
 	return "select count(*) from task t join endpoint i on i.id = t.endpoint_id " +
-		"join node n on n.principal_id = i.node_name " +
-		"where t.enabled and n.name = " + sqlLiteral(node)
+		"join outpost n on n.user_id = i.outpost_id " +
+		"where t.enabled and n.name = " + sqlLiteral(outpost)
 }
 
-// installedWorklistQuery reads the size of the worklist a node last
+// installedWorklistQuery reads the size of the worklist an outpost last
 // installed, which it reports from its platform component, named for it; -1
 // before its first.
-func installedWorklistQuery(node string) string {
+func installedWorklistQuery(outpost string) string {
 	return "select coalesce((select m.value from metric m " +
 		"join metric_series s on s.id = m.series_id " +
 		"join metric_type mt on mt.id = s.metric_type_id " +
 		"join component c on c.id = s.component_id " +
-		"where mt.name = 'worklist-task-count' and c.name = " + sqlLiteral(node) +
+		"where mt.name = 'worklist-task-count' and c.name = " + sqlLiteral(outpost) +
 		" order by m.ts desc limit 1), -1)"
 }
 
-// driverTasksQuery counts the enabled driver polls a node runs.
-func driverTasksQuery(node string) string {
+// driverTasksQuery counts the enabled driver polls an outpost runs.
+func driverTasksQuery(outpost string) string {
 	return "select count(*) from task t join endpoint i on i.id = t.endpoint_id " +
-		"join node n on n.principal_id = i.node_name " +
+		"join outpost n on n.user_id = i.outpost_id " +
 		"where t.enabled and t.mode = 'poll' and coalesce(t.spec->>'driver','') <> '' " +
-		"and n.name = " + sqlLiteral(node)
+		"and n.name = " + sqlLiteral(outpost)
 }
 
 // pollCPUQuery is the mean poll-cpu-time of the reports wholly inside [from,
 // to), in milliseconds per run. A report stamped T covers [T-report, T), so
 // the first one inside is stamped from+report and the last one to.
-func pollCPUQuery(node string, from, to time.Time, report time.Duration) string {
+func pollCPUQuery(outpost string, from, to time.Time, report time.Duration) string {
 	return "select coalesce(avg(m.value),0) from metric m " +
 		"join metric_series s on s.id = m.series_id " +
 		"join metric_type mt on mt.id = s.metric_type_id " +
-		"join node n on n.principal_id = s.collector_node_id " +
-		"where mt.name = 'poll-cpu-time' and n.name = " + sqlLiteral(node) +
+		"join outpost n on n.user_id = s.collector_outpost_id " +
+		"where mt.name = 'poll-cpu-time' and n.name = " + sqlLiteral(outpost) +
 		" and m.ts >= to_timestamp(" + epochLiteral(from.Add(report)) + ") and m.ts <= to_timestamp(" + epochLiteral(to) + ")"
 }

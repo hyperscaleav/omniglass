@@ -96,14 +96,14 @@ func (e *PlacementError) Unwrap() error { return ErrPlacementNotAllowed }
 // unconstrained. Three paths call this before writing: CreateLocation, the
 // reparent in MoveLocation, and the reclassify-in-place in UpdateLocation (the
 // final type against the current parent), so retyping cannot bypass what a move
-// would refuse. A childType that does not exist in the registry is
+// would refuse. A childType that does not exist in the catalog is
 // left to the insert's FK check (ErrUnknownType), not this validator.
 func (p *PG) validatePlacement(ctx context.Context, q querier, childType string, parentType *string) error {
 	// Resolved over the operator's shadow, not read from the official row: an
 	// operator who forked a shipped type to widen where it may sit is placing
 	// locations by THEIR rule, and reading the shipped column here would
 	// enforce a constraint they had already replaced.
-	lt, err := scanLocationTypeResolved(q.QueryRow(ctx, locationTypeResolved+` where lt.id = (select r.id from `+refRows("location_type", childType)+` r where r.`+registryRefCol(childType)+` = $1)`, childType))
+	lt, err := scanLocationTypeResolved(q.QueryRow(ctx, locationTypeResolved+` where lt.id = (select r.id from `+refRows("location_type", childType)+` r where r.`+catalogRefCol(childType)+` = $1)`, childType))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
@@ -229,16 +229,16 @@ type LocationMove struct {
 	ParentName *string
 }
 
-// LocationType is a registry row classifying a location: a stable id, the
+// LocationType is a catalog row classifying a location: a stable id, the
 // official flag, a label, an icon (a glyph key the console renders as
 // the leading glyph on every location of this type), and AllowedParentTypes,
 // the placement constraint: a set of location_type ids and/or RootPlacement
 // this type may be placed under. An empty set is unconstrained. It is the
-// only shape-definer for a location, which has no template. The registry
+// only shape-definer for a location, which has no template. The catalog
 // lists alphabetically by label; there is no ordering field.
 type LocationType struct {
 	// ID is the uuid primary key, Name the renameable slug handle (ADR-0062). The
-	// allowed_parent_types array still holds slugs, a within-registry reference by
+	// allowed_parent_types array still holds slugs, a within-catalog reference by
 	// name that this epic leaves as-is.
 	ID                 string
 	Name               string
@@ -246,27 +246,27 @@ type LocationType struct {
 	Label              string
 	Icon               string
 	AllowedParentTypes []string
-	// LabelRule is this type's label template (#682), nullable: null defers to
+	// LabelRule is this type's label rule (#682), nullable: null defers to
 	// the global tier. A location_type is flat (no parent link), so there is
 	// nothing to inherit from and the two tiers are the whole ladder.
 	LabelRule *string
 	// NameRule is this type's opt-in to GENERATING the names of the locations
 	// it classifies (#687), nullable: null means an operator names every one of
 	// them, which is where all four shipped types stay (ADR-0103). Unlike
-	// LabelRule it is a declaration rather than a template, and unlike
+	// LabelRule it is a declaration rather than a rule string, and unlike
 	// LabelRule it has no tier above it to defer to: a name either comes from
 	// this rule or from the operator (ADR-0102).
 	NameRule *NameRule
-	// Forked is derived at read time from the presence of a registry_shadow
-	// row, never stored on the registry itself (#703, ADR-0095). Official alone
+	// Forked is derived at read time from the presence of a catalog_shadow
+	// row, never stored on the catalog itself (#703, ADR-0095). Official alone
 	// is "shipped", neither is "yours", both together is "yours, overriding
 	// shipped".
 	Forked bool
 }
 
-// locationTypeRegistry is this registry's key in registry_shadow. The second
-// adopter of the fork primitive (registryshadow.go), after component_type.
-const locationTypeRegistry = "location_type"
+// locationTypeCatalog is this catalog's key in catalog_shadow. The second
+// adopter of the fork primitive (catalogshadow.go), after component_type.
+const locationTypeCatalog = "location_type"
 
 // locationTypeResolved selects a location_type together with its operator
 // shadow, the read every caller outside the seed goes through. The join is a
@@ -275,7 +275,7 @@ const locationTypeRegistry = "location_type"
 const locationTypeResolved = `
 	select lt.id, lt.name, lt.official, coalesce(lt.label, ''), lt.icon, lt.allowed_parent_types, lt.label_rule, lt.name_rule, s.image
 	from location_type lt
-	left join registry_shadow s on s.registry = '` + locationTypeRegistry + `' and s.row_id = lt.id`
+	left join catalog_shadow s on s.catalog = '` + locationTypeCatalog + `' and s.row_id = lt.id`
 
 // UpsertLocationType installs or updates a location type by name, the boot-seed
 // phase's write and the authoritative one: ON CONFLICT DO UPDATE, so a value a
@@ -285,7 +285,7 @@ const locationTypeResolved = `
 //
 // It stomps nothing an operator owns, because an operator does not own these
 // rows any more: a shipped location type seeds official=true and their edit of
-// one is a fork in registry_shadow, resolved OVER this row on every read
+// one is a fork in catalog_shadow, resolved OVER this row on every read
 // (ADR-0095). The insert-if-absent it replaced was the other half of the same
 // bargain, and it is what made a withdrawal unreachable.
 func (p *PG) UpsertLocationType(ctx context.Context, lt LocationType) error {
@@ -343,11 +343,11 @@ func normalizeAllowedParentTypes(s []string) []string {
 // ListLocationTypes returns every location type, ordered alphabetically by
 // label then name, each row resolved over its operator shadow. A forked
 // row is one row here, not two: the shadow is an overlay on the row it names,
-// never a second entry in the registry.
+// never a second entry in the catalog.
 //
 // The ORDER BY reads the resolved label (the shadow's when there is one)
 // so a relabelling fork sorts where an operator expects it, and it stays in SQL
-// so the collation the registry has always ordered by is the one it still
+// so the collation the catalog has always ordered by is the one it still
 // orders by.
 //
 // The ORDER BY resolves the shadow on the PRESENCE of the key rather than with a
@@ -380,7 +380,7 @@ func (p *PG) ListLocationTypes(ctx context.Context) ([]LocationType, error) {
 // namespace is not part of the address and never reaches a caller (ADR-0095
 // decision 1).
 func (p *PG) GetLocationType(ctx context.Context, ref string) (*LocationType, error) {
-	lt, err := scanLocationTypeResolved(p.pool.QueryRow(ctx, locationTypeResolved+` where lt.id = (select r.id from `+refRows("location_type", ref)+` r where r.`+registryRefCol(ref)+` = $1)`, ref))
+	lt, err := scanLocationTypeResolved(p.pool.QueryRow(ctx, locationTypeResolved+` where lt.id = (select r.id from `+refRows("location_type", ref)+` r where r.`+catalogRefCol(ref)+` = $1)`, ref))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTypeNotFound
 	}
@@ -449,7 +449,7 @@ func scanLocationTypeResolved(row pgx.Row) (*LocationType, error) {
 //
 // It deliberately omits id, name and official. Those are structure, and
 // structure is official space: a shadow restates a row's facts, it never
-// renames the row or changes where it came from. This registry has no parent
+// renames the row or changes where it came from. This catalog has no parent
 // link to omit, being flat.
 func locationTypeShadowImage(lt LocationType) ([]byte, error) {
 	var rule *NameRule
@@ -472,7 +472,7 @@ func locationTypeShadowImage(lt LocationType) ([]byte, error) {
 
 // applyLocationTypeImage overlays a shadow image onto the official row. An
 // empty image is the unforked case and returns the row untouched; a key the
-// image does not carry (a column added to the registry after the fork was
+// image does not carry (a column added to the catalog after the fork was
 // taken) falls back to the official value; a key it carries as null clears the
 // column, which on name_rule means "an operator names these locations" and is
 // the answer #692 exists to make reachable, not an absence.
@@ -720,7 +720,7 @@ func (p *PG) UpdateLocationType(ctx context.Context, actorID, ref string, patch 
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// The registry row is locked in its OWN statement, before the read that
+	// The catalog row is locked in its OWN statement, before the read that
 	// resolves the shadow over it. The patch is applied in Go over the row that
 	// read returned, so without the lock two concurrent patches of different
 	// fields could each write a whole row computed from the same starting point
@@ -731,12 +731,12 @@ func (p *PG) UpdateLocationType(ctx context.Context, actorID, ref string, patch 
 	// It was `for update of lt` on this read until #709: that is one statement,
 	// so its snapshot predates the wait and the shadow it resolved was stale,
 	// which serialised the two transactions without making the second read what
-	// the first wrote. See lockRegistryRow for why the separate statement is
+	// the first wrote. See lockCatalogRow for why the separate statement is
 	// what closes it.
-	if err := lockRegistryRow(ctx, tx, "location_type", ref); err != nil {
+	if err := lockCatalogRow(ctx, tx, "location_type", ref); err != nil {
 		return nil, err
 	}
-	current, err := scanLocationTypeResolved(tx.QueryRow(ctx, locationTypeResolved+` where lt.id = (select r.id from `+refRows("location_type", ref)+` r where r.`+registryRefCol(ref)+` = $1)`, ref))
+	current, err := scanLocationTypeResolved(tx.QueryRow(ctx, locationTypeResolved+` where lt.id = (select r.id from `+refRows("location_type", ref)+` r where r.`+catalogRefCol(ref)+` = $1)`, ref))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound
@@ -757,7 +757,7 @@ func (p *PG) UpdateLocationType(ctx context.Context, actorID, ref string, patch 
 		return p.forkLocationType(ctx, tx, actorID, *current, updated)
 	}
 
-	before, err := registryAuditImage(ctx, tx, "location_type", current.ID)
+	before, err := catalogAuditImage(ctx, tx, "location_type", current.ID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound
@@ -780,7 +780,7 @@ func (p *PG) UpdateLocationType(ctx context.Context, actorID, ref string, patch 
 		}
 		return nil, fmt.Errorf("storage: update location_type %q: %w", ref, err)
 	}
-	after, err := registryAuditImage(ctx, tx, "location_type", current.ID)
+	after, err := catalogAuditImage(ctx, tx, "location_type", current.ID)
 	if err != nil {
 		return nil, fmt.Errorf("storage: audit image location_type %q: %w", ref, err)
 	}
@@ -814,10 +814,10 @@ func (p *PG) forkLocationType(ctx context.Context, tx pgx.Tx, actorID string, cu
 	if err != nil {
 		return nil, err
 	}
-	if err := putShadowImage(ctx, tx, locationTypeRegistry, rowID, after); err != nil {
+	if err := putShadowImage(ctx, tx, locationTypeCatalog, rowID, after); err != nil {
 		return nil, err
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", locationTypeRegistry, current.ID,
+	if err := writeAuditRes(ctx, tx, actorID, "update", locationTypeCatalog, current.ID,
 		json.RawMessage(before), json.RawMessage(after)); err != nil {
 		return nil, err
 	}
@@ -849,10 +849,10 @@ func (p *PG) RestoreLocationType(ctx context.Context, actorID, ref string) (*Loc
 	// restore that read a stale shadow would report ErrTypeNotForked for a fork
 	// a concurrent edit had just taken, or audit an image that was already
 	// replaced (#709).
-	if err := lockRegistryRow(ctx, tx, "location_type", ref); err != nil {
+	if err := lockCatalogRow(ctx, tx, "location_type", ref); err != nil {
 		return nil, err
 	}
-	current, err := scanLocationTypeResolved(tx.QueryRow(ctx, locationTypeResolved+` where lt.id = (select r.id from `+refRows("location_type", ref)+` r where r.`+registryRefCol(ref)+` = $1)`, ref))
+	current, err := scanLocationTypeResolved(tx.QueryRow(ctx, locationTypeResolved+` where lt.id = (select r.id from `+refRows("location_type", ref)+` r where r.`+catalogRefCol(ref)+` = $1)`, ref))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound
@@ -870,7 +870,7 @@ func (p *PG) RestoreLocationType(ctx context.Context, actorID, ref string) (*Loc
 	if err != nil {
 		return nil, err
 	}
-	dropped, err := dropShadowImage(ctx, tx, locationTypeRegistry, rowID)
+	dropped, err := dropShadowImage(ctx, tx, locationTypeCatalog, rowID)
 	if err != nil {
 		return nil, err
 	}
@@ -881,7 +881,7 @@ func (p *PG) RestoreLocationType(ctx context.Context, actorID, ref string) (*Loc
 	if err != nil {
 		return nil, fmt.Errorf("storage: reload location_type %q: %w", ref, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "restore", locationTypeRegistry, current.ID,
+	if err := writeAuditRes(ctx, tx, actorID, "restore", locationTypeCatalog, current.ID,
 		json.RawMessage(before), nil); err != nil {
 		return nil, err
 	}
@@ -1055,7 +1055,7 @@ func (p *PG) createLocationTx(ctx context.Context, tx pgx.Tx, actorID string, sp
 	// row is inserted with no label and stamped below.
 	l, err := scanLocation(tx.QueryRow(ctx, `
 		insert into location (name, label, location_type, parent_id, name_generated, ordinal, label_generated)
-		values ($1, $2, (select id from `+refRows("location_type", spec.LocationType)+` location_type where `+registryRefCol(spec.LocationType)+` = $3), $4, $5, $6, $7)
+		values ($1, $2, (select id from `+refRows("location_type", spec.LocationType)+` location_type where `+catalogRefCol(spec.LocationType)+` = $3), $4, $5, $6, $7)
 		returning `+locationCols,
 		name, labelOrNull(spec.Label), spec.LocationType, parentID, generated, ordinal, strings.TrimSpace(spec.Label) == ""))
 	if err != nil {
@@ -1093,7 +1093,7 @@ func (p *PG) UpdateLocation(ctx context.Context, actorID, name string, patch Loc
 	// resolves nothing, and coalesce keeps the current value, same as before.
 	typeRefCol := "name"
 	if patch.LocationType != nil {
-		typeRefCol = registryRefCol(*patch.LocationType)
+		typeRefCol = catalogRefCol(*patch.LocationType)
 	}
 	// A reclassify that leaves the location still platform-named (#687) may no
 	// longer fit its old type's rule: a deck reclassified as a wing needs the
@@ -1208,7 +1208,7 @@ func (p *PG) validateReclassify(ctx context.Context, q querier, newTypeID string
 
 // restatedType returns nil for a type ref that re-states what the row already
 // carries, so the caller can skip resolving it. It compares against whichever
-// form the ref is written in, the pair every registry reference is addressed by
+// form the ref is written in, the pair every catalog reference is addressed by
 // (ADR-0062): a name against the row's name, a uuid against the row's id.
 //
 // It is a fast path, not a correctness one, and only in the safe direction: a
@@ -1241,7 +1241,7 @@ func resolveLocationTypeID(ctx context.Context, q querier, ref *string) (*string
 		return nil, nil
 	}
 	var id string
-	err := q.QueryRow(ctx, `select id from `+refRows("location_type", *ref)+` location_type where `+registryRefCol(*ref)+` = $1`, *ref).Scan(&id)
+	err := q.QueryRow(ctx, `select id from `+refRows("location_type", *ref)+` location_type where `+catalogRefCol(*ref)+` = $1`, *ref).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -1370,9 +1370,9 @@ func (p *PG) MoveLocation(ctx context.Context, actorID, name string, move Locati
 		}
 	}
 	// A reparent changes the location chain every component below resolves its
-	// secrets along, so each node collecting one of them hears.
+	// secrets along, so each outpost collecting one of them hears.
 	if !sameOptional(before.ParentID, after.ParentID) {
-		if err := announceNodesOf(ctx, tx, subtreeLocationNodesSQL, after.ID); err != nil {
+		if err := announceOutpostsOf(ctx, tx, subtreeLocationOutpostsSQL, after.ID); err != nil {
 			return nil, err
 		}
 	}
@@ -1592,24 +1592,25 @@ func writeAuditRes(ctx context.Context, tx pgx.Tx, actorID, verb, resource, reso
 	}
 	newJSON = withTemplateDetail(ctx, newJSON)
 	// channel and client say how the action arrived (#1162): set on the context by
-	// the MCP dispatch, null for a direct API call.
+	// the MCP dispatch, null for a direct API call. agent names the agent an
+	// agent token acts as (#1179), on the actor's behalf; null otherwise.
 	channel, client := auditChannelFrom(ctx)
 	// actor_username / real_actor_username denormalize the actor's IDENTIFIER at
-	// write time, so the row still names its actor after that principal is purged
+	// write time, so the row still names its actor after that user is purged
 	// (the foreign keys go null, the text remains). The identifier of a null id is
 	// null.
 	//
 	// The order is bound as an expression rather than resolved in Go, which is the
-	// one place principalIdent's policy is not applied by principalIdent itself:
+	// one place userIdent's policy is not applied by userIdent itself:
 	// this insert runs inside the CALLER's transaction on every operator write, so
 	// a Go resolution would cost a second round trip there, and the alarm write
 	// path pins its statement count as an exact equation (alarm_cost_test.go) that
-	// counts this insert. principal_ident_test.go holds the two shapes to the same
+	// counts this insert. user_ident_test.go holds the two shapes to the same
 	// answer.
 	if _, err := tx.Exec(ctx, `
-		insert into audit_log (actor_principal_id, real_actor_principal_id, actor_username, real_actor_username, verb, resource, resource_id, old, new, channel, client)
-		values ($1, $2, `+principalIdentSQL("$1")+`, `+principalIdentSQL("$2")+`, $3, $4, $5, $6, $7, $8, $9)`,
-		nullize(actorID), nullize(realActorFrom(ctx)), verb, resource, resourceID, oldJSON, newJSON, channel, client); err != nil {
+		insert into audit_log (actor_user_id, real_actor_user_id, actor_username, real_actor_username, verb, resource, resource_id, old, new, channel, client, agent)
+		values ($1, $2, `+userIdentSQL("$1")+`, `+userIdentSQL("$2")+`, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		nullize(actorID), nullize(realActorFrom(ctx)), verb, resource, resourceID, oldJSON, newJSON, channel, client, agentFrom(ctx)); err != nil {
 		return fmt.Errorf("storage: write audit: %w", err)
 	}
 	return nil

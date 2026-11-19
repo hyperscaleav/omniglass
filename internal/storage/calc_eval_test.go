@@ -181,7 +181,7 @@ func TestCalcPropertyOutputAndEventRule(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := r.gw.CreateEventRule(r.ctx, "", storage.EventRuleSpec{Name: "busy-now", SampleKey: "busy-flag",
-		Fire: rules.Criteria{Expr: "value"}, Severity: "high", FireEventType: "condition-started"}, r.all); err != nil {
+		Fire: rules.Criteria{Expr: "value"}, Severity: "high", FireEventType: "rule-fired"}, r.all); err != nil {
 		t.Fatal(err)
 	}
 	r.property("in-call", "false")

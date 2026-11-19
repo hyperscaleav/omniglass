@@ -171,13 +171,13 @@ func TestComponentMetricsNameTheShownEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
-	node := "edge"
+	outpost := "edge"
 	for _, ep := range []struct{ transport, target string }{{"http", "10.0.0.1:80"}, {"tcp", "10.0.0.1:1710"}} {
 		if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-			Transport: ep.transport, Component: &comp.ID, Node: &node,
+			Transport: ep.transport, Component: &comp.ID, Outpost: &outpost,
 			Params: []byte(`{"target":"` + ep.target + `"}`),
 		}, all); err != nil {
 			t.Fatalf("create %s endpoint: %v", ep.transport, err)
@@ -193,7 +193,7 @@ func TestComponentMetricsNameTheShownEndpoint(t *testing.T) {
 		{"tcp", "tcp-connect-time", 4.8, 2 * time.Second},
 		{"tcp", "icmp-rtt-avg", 1, time.Second},
 	} {
-		if err := gw.InsertMetricSamples(ctx, storage.NodeWriter(comp.ID, s.ep), []storage.MetricSampleWrite{{
+		if err := gw.InsertMetricSamples(ctx, storage.OutpostWriter(comp.ID, s.ep), []storage.MetricSampleWrite{{
 			OwnerKind: "component", OwnerID: comp.ID, Key: s.key, Instance: s.ep, Value: s.v, Source: "test", TS: base.Add(s.at),
 		}}); err != nil {
 			t.Fatalf("observe %s on %s: %v", s.key, s.ep, err)

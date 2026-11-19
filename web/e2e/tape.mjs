@@ -1,5 +1,5 @@
 // The command line of tapelib.mjs (#1132), run by the terminal recorder
-// (web/e2e/tapes.sh) in the Playwright container (node, no install):
+// (web/e2e/tapes.sh) in the Playwright container (outpost, no install):
 //
 //   node e2e/tape.mjs wrap <tape>
 //       the tape the recorder plays, on stdout: <tape> held to the house rules

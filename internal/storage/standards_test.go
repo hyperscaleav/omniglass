@@ -172,7 +172,7 @@ func TestSystemStandardOptional(t *testing.T) {
 }
 
 // The standard's map declaration (#791, ADR-0128): normalized 2D positions
-// per role position against a declared aspect, data on the standard so every
+// per slot position against a declared aspect, data on the standard so every
 // conforming system renders the same room for free. The map is a display
 // declaration, validated in Go (bounds, duplicate positions), stored as one
 // jsonb value, nil when the standard declares none.
@@ -196,7 +196,7 @@ func TestStandardMapDeclaration(t *testing.T) {
 		t.Fatalf("a new standard declares no map, got %s", st.Map)
 	}
 
-	mapJSON := json.RawMessage(`{"aspect":1.6,"positions":[{"role":"room-mic","position":1,"x":0.3,"y":0.5},{"role":"room-mic","position":2,"x":0.7,"y":0.5},{"role":"main-display","position":1,"x":0.5,"y":0.05}]}`)
+	mapJSON := json.RawMessage(`{"aspect":1.6,"positions":[{"slot":"room-mic","position":1,"x":0.3,"y":0.5},{"slot":"room-mic","position":2,"x":0.7,"y":0.5},{"slot":"main-display","position":1,"x":0.5,"y":0.05}]}`)
 	patched, err := gw.UpdateStandard(ctx, "", st.ID, storage.StandardPatch{Map: &mapJSON})
 	if err != nil {
 		t.Fatalf("declare map: %v", err)
@@ -209,12 +209,12 @@ func TestStandardMapDeclaration(t *testing.T) {
 		t.Fatalf("map round-trip = %+v", m)
 	}
 
-	// Out-of-bounds coordinates and duplicate (role, position) pairs are
+	// Out-of-bounds coordinates and duplicate (slot, position) pairs are
 	// refused as validation, not stored garbage.
 	for _, bad := range []string{
-		`{"aspect":1.6,"positions":[{"role":"r","position":1,"x":1.2,"y":0.5}]}`,
-		`{"aspect":0,"positions":[{"role":"r","position":1,"x":0.5,"y":0.5}]}`,
-		`{"aspect":1,"positions":[{"role":"r","position":1,"x":0.1,"y":0.1},{"role":"r","position":1,"x":0.2,"y":0.2}]}`,
+		`{"aspect":1.6,"positions":[{"slot":"r","position":1,"x":1.2,"y":0.5}]}`,
+		`{"aspect":0,"positions":[{"slot":"r","position":1,"x":0.5,"y":0.5}]}`,
+		`{"aspect":1,"positions":[{"slot":"r","position":1,"x":0.1,"y":0.1},{"slot":"r","position":1,"x":0.2,"y":0.2}]}`,
 	} {
 		b := json.RawMessage(bad)
 		if _, err := gw.UpdateStandard(ctx, "", st.ID, storage.StandardPatch{Map: &b}); !errors.Is(err, storage.ErrStandardMapInvalid) {

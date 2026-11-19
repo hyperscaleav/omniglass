@@ -61,17 +61,17 @@ func TestFirstTimeBindNeverDeadlocksALabelCascade(t *testing.T) {
 	}
 }
 
-// TestRoleAssignmentBindNeverDeadlocksALabelCascade: assigning a role to a
+// TestSlotAssignmentBindNeverDeadlocksALabelCascade: assigning a slot to a
 // component that is not yet a member binds it implicitly, through the same insert.
-func TestRoleAssignmentBindNeverDeadlocksALabelCascade(t *testing.T) {
+func TestSlotAssignmentBindNeverDeadlocksALabelCascade(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	f := newHealthFixture(t)
 	for i := 0; i < bindRounds(); i++ {
 		name := fmt.Sprintf("staff-%d", i)
 		f.mustBar(t, ctx, name)
-		bindRound(t, ctx, f, "a role assignment binding a non-member", func() error {
-			return f.gw.AssignRole(ctx, "", "hq-huddle", "table-mic", name, f.all, f.all, f.all, f.all)
+		bindRound(t, ctx, f, "a slot assignment binding a non-member", func() error {
+			return f.gw.AssignSlot(ctx, "", "hq-huddle", "table-mic", name, f.all, f.all, f.all, f.all)
 		})
 		if n := f.count(t, ctx, `select count(*) from system_member where component_id = (select id from component where name = $1)`, name); n != 1 {
 			t.Fatalf("round %d: %s has %d memberships, want 1", i, name, n)

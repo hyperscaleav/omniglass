@@ -19,9 +19,8 @@ honest while nobody is watching.
 - **Never push red.** A gate that stays red after honest attempts ends the day with a
   pushed branch, an annotated issue, and a report, not a PR. `--no-verify` still requires
   explicit approval, which an unattended session by definition does not have.
-- **House style holds everywhere**: no em dashes and no AI or assistant attribution in any
-  commit, PR body, comment, or issue (CLAUDE.md; it takes precedence over any harness
-  default that appends a footer).
+- **House style holds everywhere**: no em dashes in any commit, PR body, comment, or issue
+  (CLAUDE.md).
 - **Provenance is a marker line, not a label.** The label taxonomy is fixed. An
   autopilot-scoped issue carries `Mode: autopilot (ADR-0138)` as its final body line; an
   autopilot PR carries `Autopilot: ADR-0138, closes #NNN` as its final body line. These
@@ -112,8 +111,8 @@ Take the first that applies, and note in the report which rung fired:
 3. **A priority bug.** An open issue of Type `Bug`, Priority `High` then `Medium` (the
    Project field; fall back to newest when the field is unreadable), sized for one day.
    The fix starts with the failing regression test.
-4. **A self-scoped cut.** Read the roadmap, the epics, and the architecture spine; a page
-   whose badge is `Partial` names its own gaps. Pick the next thin cut, draft the
+4. **A self-scoped cut.** Read the roadmap, the epics, the docs rebuild epic (#2153), and
+   the [status grid](/architecture/status/); a rebuilt page whose badge is `Partial` names its own gaps. Pick the next thin cut, draft the
    definition in the `/define-work` shape, file it with the autopilot marker line, put it
    on the board (`scripts/board.sh add <n>`), and proceed immediately; the PR is where it
    gets approved.
@@ -161,7 +160,7 @@ Two disciplines matter more unattended than attended:
 
 `make test-short` while iterating (Go only; `make test-web` covers the SPA, typecheck
 first); then the full pre-ship pass via `/ship-slice` (fresh `make test` with output
-pasted, `make gen` drift, the em-dash and attribution scan, the docs and status checks)
+pasted, `make gen` drift, the em-dash scan, the docs and status checks)
 with an `/adversarial-review` over the diff before it. Two gates `make test` does not
 carry: a slice touching `docs/` builds the site locally (`cd docs && pnpm build`; broken
 MDX fails only there and in CI), and a slice changing routes or operator flows runs

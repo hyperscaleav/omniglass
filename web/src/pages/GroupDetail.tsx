@@ -16,7 +16,7 @@ import {
 } from "../lib/groups";
 import { useSearchParams } from "@solidjs/router";
 import { useEditParam } from "../lib/editurl";
-import { type ScopeKind, PRINCIPALS_KEY, ROLES_KEY, listPrincipals, listRoles, principalName } from "../lib/principals";
+import { type ScopeKind, USERS_KEY, ROLES_KEY, listUsers, listRoles, userName, kindLabel } from "../lib/users";
 import { listLocations } from "../lib/locations";
 import { listSystems } from "../lib/systems";
 import { listComponents } from "../lib/components";
@@ -35,19 +35,19 @@ export function GroupDetail(props: { id: string }) {
   const me = useMe();
   const blades = useBlades();
   const edit = useBladeEdit();
-  const canManage = () => can(me.data, "principal_group", "update");
-  const canDelete = () => can(me.data, "principal_group", "delete");
-  const canGrant = () => can(me.data, "principal_grant", "create");
-  const canRevoke = () => can(me.data, "principal_grant", "delete");
+  const canManage = () => can(me.data, "user_group", "update");
+  const canDelete = () => can(me.data, "user_group", "delete");
+  const canGrant = () => can(me.data, "user_grant", "create");
+  const canRevoke = () => can(me.data, "user_grant", "delete");
 
   const group = useQuery(() => ({ queryKey: [...GROUPS_KEY, props.id], queryFn: () => getGroup(props.id) }));
   const members = useQuery(() => ({ queryKey: [...GROUPS_KEY, props.id, "members"], queryFn: () => listGroupMembers(props.id) }));
-  const principals = useQuery(() => ({ queryKey: PRINCIPALS_KEY, queryFn: () => listPrincipals(), enabled: canManage() }));
+  const users = useQuery(() => ({ queryKey: USERS_KEY, queryFn: () => listUsers(), enabled: canManage() }));
 
   const editing = () => edit.editing();
   const canDrillMembers = () => blades.stack()[0]?.kind === "group";
 
-  // Staged member changes (applied on Save): principals to add, and current members
+  // Staged member changes (applied on Save): users to add, and current members
   // to remove. The list below always shows the effective post-save membership.
   const [pendAdd, setPendAdd] = createSignal<string[]>([]);
   const [pendRemove, setPendRemove] = createSignal<Set<string>>(new Set());
@@ -66,19 +66,19 @@ export function GroupDetail(props: { id: string }) {
     }
   }));
 
-  const principalById = (id: string) => (principals.data ?? []).find((p) => p.id === id);
+  const userById = (id: string) => (users.data ?? []).find((p) => p.id === id);
   const memberItems = createMemo(() => {
     const kept = (members.data ?? [])
-      .filter((m) => !pendRemove().has(m.principal_id))
-      .map((m) => ({ id: m.principal_id, kind: "user", name: memberName(m), badge: m.kind }));
+      .filter((m) => !pendRemove().has(m.user_id))
+      .map((m) => ({ id: m.user_id, kind: "user", name: memberName(m), badge: kindLabel(m.kind) }));
     const added = pendAdd().map((id) => {
-      const p = principalById(id);
-      return { id, kind: "user", name: p ? principalName(p) : id, badge: p?.kind ?? "" };
+      const p = userById(id);
+      return { id, kind: "user", name: p ? userName(p) : id, badge: p ? kindLabel(p.kind) : "" };
     });
     return [...kept, ...added];
   });
   const shownIds = createMemo(() => new Set(memberItems().map((i) => i.id)));
-  const addable = createMemo(() => (principals.data ?? []).filter((p) => !shownIds().has(p.id)));
+  const addable = createMemo(() => (users.data ?? []).filter((p) => !shownIds().has(p.id)));
 
   const stageRemove = (id: string) => {
     if (pendAdd().includes(id)) setPendAdd((a) => a.filter((x) => x !== id));
@@ -95,7 +95,7 @@ export function GroupDetail(props: { id: string }) {
 
   edit.bind({
     editable: canManage,
-    destructive: () => (canDelete() ? { label: "Delete group", tone: "danger", onClick: removeGroup } : undefined),
+    destructive: () => (canDelete() ? { label: "Delete user group", tone: "danger", onClick: removeGroup } : undefined),
     save: async () => {
       setErr(null);
       try {
@@ -132,7 +132,7 @@ export function GroupDetail(props: { id: string }) {
   useEditParam(edit, { ready: () => !!group.data && linked(), canUpdate: canManage });
 
   async function removeGroup() {
-    if (!confirm(`Delete the group "${group.data ? groupName(group.data) : ""}"? Members keep their direct grants; they stop inheriting this group's.`)) return;
+    if (!confirm(`Delete the user group "${group.data ? groupName(group.data) : ""}"? Members keep their direct grants; they stop inheriting this group's.`)) return;
     try {
       await deleteGroup(props.id);
       // The group is gone, so close the blade first (unmounting its detail, members,
@@ -183,7 +183,7 @@ export function GroupDetail(props: { id: string }) {
         empty="No members yet."
         onOpen={!editing() && canDrillMembers() ? (item) => blades.push({ kind: "user", id: item.id }) : undefined}
         onRemove={editing() ? (item) => stageRemove(item.id) : undefined}
-        add={editing() ? { placeholder: "Add a member...", options: addable().map((p) => ({ id: p.id, label: principalName(p) })), onAdd: stageAdd, canAdd: true } : undefined}
+        add={editing() ? { placeholder: "Add a member...", options: addable().map((p) => ({ id: p.id, label: userName(p) })), onAdd: stageAdd, canAdd: true } : undefined}
       />
 
       <div>
@@ -240,7 +240,7 @@ function GroupGrantEditor(props: { id: string; editing: boolean; canGrant: boole
 
   return (
     <GrantBuilder
-      principalId={props.id}
+      userId={props.id}
       current={current()}
       roles={(roles.data ?? []).map((r) => ({ id: r.id, label: entityLabel(r), title: [r.description, `Grants: ${(r.effective_permissions ?? r.permissions).join(", ")}`].filter(Boolean).join("\n\n") }))}
       entities={entities}
@@ -255,7 +255,7 @@ function GroupGrantEditor(props: { id: string; editing: boolean; canGrant: boole
 
 function GroupTitle(props: { id: string }) {
   const group = useQuery(() => ({ queryKey: [...GROUPS_KEY, props.id], queryFn: () => getGroup(props.id) }));
-  return <>{group.data ? groupName(group.data) : "Group"}</>;
+  return <>{group.data ? groupName(group.data) : "User group"}</>;
 }
 
 export const groupBlade: BladeDef = {

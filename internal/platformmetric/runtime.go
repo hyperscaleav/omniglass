@@ -1,6 +1,6 @@
 // Package platformmetric reads the figures Omniglass reports about itself
 // (#1094): the platform metrics a process lands on its own platform component.
-// The read is at the edge, one sampler of the Go runtime that the node and the
+// The read is at the edge, one sampler of the Go runtime that the outpost and the
 // server share, and what it reads turns into readings by a pure step, so the
 // keys and units are unit-tested without a runtime to read.
 package platformmetric
@@ -26,8 +26,8 @@ type Reading struct {
 // Process is what one Go process costs at a moment: its goroutines, the bytes
 // its heap's live and not yet swept objects hold, how many collections it has
 // run, the most recent collection's stop-the-world pause, the CPU time it has
-// spent since it started, and the file descriptors it holds open (-1 where
-// the platform does not expose them).
+// spent since it started, the file descriptors it holds open (-1 where
+// the platform does not expose them), and how long it has run.
 type Process struct {
 	Goroutines  int
 	HeapBytes   uint64
@@ -35,7 +35,12 @@ type Process struct {
 	LastGCPause time.Duration
 	CPU         time.Duration
 	FDs         int
+	Uptime      time.Duration
 }
+
+// processStart is when this process started, as near as the package can
+// tell: its initialization, before main runs.
+var processStart = time.Now()
 
 // The runtime/metrics names ReadProcess reads: the heap's object bytes, and
 // the CPU time the runtime has accounted, total and idle, so the time spent
@@ -70,7 +75,7 @@ func ReadProcess() Process {
 		pause = gc.Pause[0]
 	}
 	return Process{Goroutines: runtime.NumGoroutine(), HeapBytes: heap, GCs: gc.NumGC, LastGCPause: pause,
-		CPU: time.Duration(cpu * float64(time.Second)), FDs: openFDs()}
+		CPU: time.Duration(cpu * float64(time.Second)), FDs: openFDs(), Uptime: time.Since(processStart)}
 }
 
 // openFDs counts this process's open file descriptors, or -1 where the
@@ -84,11 +89,13 @@ func openFDs() int {
 }
 
 // Readings are p's platform metrics as it stands: process-goroutine-count,
-// process-heap-size in bytes, process-gc-pause in milliseconds and
-// process-fd-count. A process that has not collected yet has no pause to
-// report, and one whose platform exposes no descriptors no fd count, so each
-// reads none rather than a zero that never happened. CPU time is a delta
-// between two reads, so Runtime reads it.
+// process-heap-size in bytes, process-gc-pause in milliseconds,
+// process-fd-count and process-uptime in seconds (#1985: a rule's age on a
+// process's own key runs from it, so a restart's refill is not a trend). A
+// process that has not collected yet has no pause to report, one whose
+// platform exposes no descriptors no fd count, and a Process read no uptime,
+// so each reads none rather than a zero that never happened. CPU time is a
+// delta between two reads, so Runtime reads it.
 func (p Process) Readings() []Reading {
 	out := []Reading{
 		{Key: writerclass.ProcessGoroutineCount, Value: float64(p.Goroutines)},
@@ -100,10 +107,13 @@ func (p Process) Readings() []Reading {
 	if p.FDs >= 0 {
 		out = append(out, Reading{Key: writerclass.ProcessFDCount, Value: float64(p.FDs)})
 	}
+	if p.Uptime > 0 {
+		out = append(out, Reading{Key: writerclass.ProcessUptime, Value: p.Uptime.Seconds()})
+	}
 	return out
 }
 
-// Runtime is the one runtime sampler the server and the node share (#1628):
+// Runtime is the one runtime sampler the server and the outpost share (#1628):
 // it reads a Process into its readings and adds process-cpu-seconds, the CPU
 // time spent since the read before. The zero value is ready; its first read
 // has nothing to subtract, so it reads no CPU time.
@@ -124,7 +134,7 @@ func (rt *Runtime) Readings(p Process) []Reading {
 }
 
 // RuntimeSampler gauges the process read by read each window, CPU time as
-// the window's own: the server's runtime figures, on the sampler the node
+// the window's own: the server's runtime figures, on the sampler the outpost
 // reports its own through.
 func RuntimeSampler(read func() Process) Sampler {
 	var rt Runtime

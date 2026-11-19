@@ -19,10 +19,10 @@ import (
 )
 
 // TestTelemetryPushRefusesNativeKeys holds the push lane to #1080: a key a
-// native probe writes is the node's own observation (a reachability verdict or
-// one of its rungs, a probe metric or timing, the node's account of its held
+// native probe writes is the outpost's own observation (a reachability verdict or
+// one of its rungs, a probe metric or timing, the outpost's account of its held
 // session, the gate and host key that steer it), which the console reads as
-// the node's. So a push is refused each one BY NAME: on its own lane and on
+// the outpost's. So a push is refused each one BY NAME: on its own lane and on
 // every other, whatever instance it names, alone or in a batch beside rows
 // that land. The keys come from probekeys, the one declaration the probes emit
 // from, so a key added there is covered here without editing this test.
@@ -83,14 +83,14 @@ func TestTelemetryPushRefusesNativeKeys(t *testing.T) {
 	}
 	refusedByName := func(r pushResp, key string) bool {
 		for _, rej := range r.Rejected {
-			if rej.Name == key && strings.Contains(rej.Reason, key) && strings.Contains(rej.Reason, "only the node") {
+			if rej.Name == key && strings.Contains(rej.Reason, key) && strings.Contains(rej.Reason, "only the outpost") {
 				return true
 			}
 		}
 		return false
 	}
 
-	// The node-only keys, and the native keys ruled pushable (each with its
+	// The outpost-only keys, and the native keys ruled pushable (each with its
 	// reason in probekeys), which a push may write on their own lane.
 	var native []string
 	for _, key := range probekeys.Native() {
@@ -98,7 +98,7 @@ func TestTelemetryPushRefusesNativeKeys(t *testing.T) {
 		if !ok {
 			t.Fatalf("native key %s is seeded on no lane", key)
 		}
-		if !probekeys.IsNodeOnly(key) {
+		if !probekeys.IsOutpostOnly(key) {
 			r := push(map[string]any{s.lane: []map[string]any{item(s.lane, key, "ssh", s.value)}})
 			if r.Accepted.Metrics+r.Accepted.Properties != 1 || len(r.Rejected) != 0 {
 				t.Errorf("push of pushable native key %s = %+v, want it accepted", key, r)
@@ -108,11 +108,11 @@ func TestTelemetryPushRefusesNativeKeys(t *testing.T) {
 		native = append(native, key)
 	}
 	if len(native) == 0 {
-		t.Fatal("probekeys rules no native key node-only")
+		t.Fatal("probekeys rules no native key outpost-only")
 	}
 	for _, key := range native {
 		s := seeded[key]
-		// Its own lane, then every other: a node-only name is refused as such
+		// Its own lane, then every other: an outpost-only name is refused as such
 		// wherever it rides, not merely as unregistered on a lane it is not.
 		for _, lane := range []string{"metrics", "properties", "events"} {
 			for _, instance := range []string{"", "ssh", "bar-1-tcp"} {
@@ -124,9 +124,9 @@ func TestTelemetryPushRefusesNativeKeys(t *testing.T) {
 		}
 	}
 
-	// A batch: every node-only key on its seeded lane, one of them twice,
+	// A batch: every outpost-only key on its seeded lane, one of them twice,
 	// beside one metric and one property a push may write. The two land; each
-	// node-only entry is reported by name and none is published.
+	// outpost-only entry is reported by name and none is published.
 	var metrics, properties, events []map[string]any
 	for _, key := range append(slices.Clone(native), native[0]) {
 		s := seeded[key]
@@ -152,11 +152,11 @@ func TestTelemetryPushRefusesNativeKeys(t *testing.T) {
 	slices.Sort(rejected)
 	want := slices.Sorted(slices.Values(append(slices.Clone(native), native[0])))
 	if !slices.Equal(rejected, want) {
-		t.Fatalf("batch rejected %v, want every node-only entry %v", rejected, want)
+		t.Fatalf("batch rejected %v, want every outpost-only entry %v", rejected, want)
 	}
 
-	// Casing and spacing variants of a node-only key never reach a node's
-	// series: each is refused (as node-only, before the registry's exact,
+	// Casing and spacing variants of an outpost-only key never reach an outpost's
+	// series: each is refused (as outpost-only, before the catalog's exact,
 	// lowercase lookup would refuse it as unregistered).
 	for _, variant := range []string{"TCP-Open", "Endpoint-Reachable", " session-state", "endpoint-rejection ", "SSH-HOST-KEY"} {
 		r := push(map[string]any{
@@ -164,8 +164,8 @@ func TestTelemetryPushRefusesNativeKeys(t *testing.T) {
 			"properties": []map[string]any{{"name": variant, "instance": "ssh", "value": "up"}},
 		})
 		if r.Accepted.Metrics+r.Accepted.Properties != 0 || len(r.Rejected) != 2 ||
-			!strings.Contains(r.Rejected[0].Reason, "only the node") || !strings.Contains(r.Rejected[1].Reason, "only the node") {
-			t.Errorf("push of variant %q = %+v, want both refused as node-only", variant, r)
+			!strings.Contains(r.Rejected[0].Reason, "only the outpost") || !strings.Contains(r.Rejected[1].Reason, "only the outpost") {
+			t.Errorf("push of variant %q = %+v, want both refused as outpost-only", variant, r)
 		}
 	}
 
@@ -225,7 +225,7 @@ func pushHarness(t *testing.T, ctx context.Context) (storage.Gateway, *apiClient
 	}
 	// bar-1's ssh endpoint, so a push naming the instance "ssh" names an
 	// endpoint of its owner, as the push lane requires (ADR-0456). Placed on no
-	// node: nothing here dials it.
+	// outpost: nothing here dials it.
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
 		t.Fatalf("connect: %v", err)

@@ -14,7 +14,7 @@ import (
 // registry without its built-in set is a failing test here, not a silent gap
 // in the lab.
 
-func TestEveryDeclaredBuiltInKeyIsRuledNodeProbeOrPlatform(t *testing.T) {
+func TestEveryDeclaredBuiltInKeyIsRuledOutpostProbeOrPlatform(t *testing.T) {
 	for _, tr := range transport.All() {
 		keys := slices.Concat(tr.BuiltIn, tr.Answered)
 		for _, k := range keys {
@@ -23,7 +23,7 @@ func TestEveryDeclaredBuiltInKeyIsRuledNodeProbeOrPlatform(t *testing.T) {
 				t.Errorf("%s declares %q, which no reserved writer class rules", tr.Name, k)
 				continue
 			}
-			want := writerclass.NodeProbe
+			want := writerclass.OutpostProbe
 			if tr.Push {
 				want = writerclass.Platform
 			}

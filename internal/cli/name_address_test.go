@@ -140,7 +140,7 @@ func TestDotSegmentArgumentsAreRefused(t *testing.T) {
 	}))
 	defer srv.Close()
 	for _, arg := range []string{"..", "."} {
-		out, err := runCLI(t, "principal-group", "member", "delete", "night-shift", arg, "--server", srv.URL)
+		out, err := runCLI(t, "user-group", "member", "delete", "night-shift", arg, "--server", srv.URL)
 		if err == nil || !strings.Contains(err.Error(), "dot segment") {
 			t.Errorf("member delete night-shift %s = %v (%s), want a refusal naming the dot segment", arg, err, out)
 		}

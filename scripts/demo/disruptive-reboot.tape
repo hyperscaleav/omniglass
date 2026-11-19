@@ -1,8 +1,8 @@
 # A reboot closes its device's gates until each endpoint reads up again
 #
-# A reboot takes its device down, and the node used to read the outage as poll failures. Now reboot
+# A reboot takes its device down, and the outpost used to read the outage as poll failures. Now reboot
 # is a disruptive command type with a quiet period and a hold backstop: its delivery closes the gate
-# of every endpoint of the component on that node with the disrupted reason, nothing runs against
+# of every endpoint of the component on that outpost with the disrupted reason, nothing runs against
 # them during the quiet, a run now answers 409 naming the reboot, held polls count as held, and each
 # endpoint reopens on its own first up verdict after the quiet (#1651).
 
@@ -19,7 +19,7 @@ Type `omniglass command-type create --name power-cycle --disruptive --quiet-seco
 Enter
 Wait
 
-Type "# An occupancy sensor whose driver carries the reboot, collected by its edge node"
+Type "# An occupancy sensor whose driver carries the reboot, collected by its edge outpost"
 Enter
 Wait
 Type `s='east.hall.mezzanine.class-202.$comp.sensor-1'`
@@ -39,7 +39,7 @@ Wait
 Type `demo_hush 'omniglass endpoint delete "$s/http"'`
 Enter
 Wait
-Type `demo_hush 'omniglass endpoint create --component "$s" --driver census-reboot --node edge-hq --inputs "$inputs"'`
+Type `demo_hush 'omniglass endpoint create --component "$s" --driver census-reboot --outpost edge-hq --inputs "$inputs"'`
 Enter
 Wait
 Type `demo_until 150 'omniglass endpoint poll run "$s/http" occupancy > /dev/null 2>&1'`

@@ -11,7 +11,7 @@ import (
 // The set-at-a-time type-chain walk (#695, widened by #716's console half).
 // Until #695, the console climbed the type chain in TypeScript for icons while
 // the gateway climbed it in Go, and the two walks could disagree about which
-// glyph a type shows. This resolves it over a registry listing the caller
+// glyph a type shows. This resolves it over a catalog listing the caller
 // already holds, so the answer is served rather than recomputed in the browser.
 //
 // It is pure by construction: rows in, resolved facts out, no querier and no
@@ -82,7 +82,7 @@ func TestComponentTypeChainFactsClimbToTheNearestAncestorThatSetsOne(t *testing.
 }
 
 // A chain that sets no icon anywhere resolves to nothing, not to a default. The
-// fallback glyph is the console's to choose (it differs per registry), and a
+// fallback glyph is the console's to choose (it differs per catalog), and a
 // server that invented one here would make an absence indistinguishable from a
 // type that really is drawn as a box.
 func TestComponentTypeChainFactsLeaveAnUnsetChainEmpty(t *testing.T) {
@@ -103,7 +103,7 @@ func TestComponentTypeChainFactsLeaveAnUnsetChainEmpty(t *testing.T) {
 
 // A parent id pointing at a row the listing does not carry stops the walk
 // rather than panicking. It cannot happen through the API (the listing is the
-// whole registry, unfiltered), which is exactly why it is pinned: the day
+// whole catalog, unfiltered), which is exactly why it is pinned: the day
 // somebody filters the list, this is the behaviour they inherit.
 func TestComponentTypeChainFactsStopAtAnAbsentParent(t *testing.T) {
 	t.Parallel()
@@ -117,7 +117,7 @@ func TestComponentTypeChainFactsStopAtAnAbsentParent(t *testing.T) {
 	}
 }
 
-// A cycle is data a client sent us, not data the registry can hold, and the
+// A cycle is data a client sent us, not data the catalog can hold, and the
 // walk is depth-bounded rather than visited-set-bounded for the same reason the
 // query walk is: the bound is the thing under test, so a cycle must terminate.
 func TestComponentTypeChainFactsTerminateOnACycle(t *testing.T) {

@@ -337,7 +337,7 @@ func TestALogLineIsNeverLostToAClassificationMiss(t *testing.T) {
 // TestANonFiniteValueFaultsAndNeverPanics (adversarial review, finding 1): a
 // component reporting NaN or Inf where an attribute casts to a number, or a
 // scale pushing past the float range, is a fault naming the field, never a
-// panic that takes the node down. A log line still lands without it.
+// panic that takes the outpost down. A log line still lands without it.
 func TestANonFiniteValueFaultsAndNeverPanics(t *testing.T) {
 	arrival := time.Now().UTC()
 	for _, raw := range []string{"NaN", "inf", "-Infinity", "1e308"} {

@@ -16,63 +16,63 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// A service principal's identifier (#563). The column is the username analogue
-// for kind=service: the only operator-visible handle the row has, denormalized
+// A machine user's identifier (#563). The column is the username analogue
+// for kind=machine: the only operator-visible handle the row has, denormalized
 // as bare text into the audit trail and into an alarm's acknowledgement. So it
-// is a `name`, and it is unique for the same reason `human.username` is.
+// is a `name`, and it is unique for the same reason `person.username` is.
 //
 // Both tests write the profile rows directly. That is not a shortcut around the
-// gateway: there is no create path for a service principal anywhere in the
+// gateway: there is no create path for a machine user anywhere in the
 // platform, which is itself why the uniqueness question had never been forced.
 
-// TestAServicePrincipalReadsBackItsName is the round trip through both principal
+// TestAMachineReadsBackItsName is the round trip through both user
 // read paths: the single-row load and the batched directory load, which are
 // separate implementations of the same fact (#671) and drift apart if only one
 // is driven.
-func TestAServicePrincipalReadsBackItsName(t *testing.T) {
+func TestAMachineReadsBackItsName(t *testing.T) {
 	t.Parallel()
 	gw, dsn := secretGateway(t)
 	ctx := context.Background()
-	id := insertServicePrincipal(t, dsn, "ingest-bot")
+	id := insertMachine(t, dsn, "ingest-bot")
 
-	pr, err := gw.GetPrincipal(ctx, id, scope.Set{All: true})
+	pr, err := gw.GetUser(ctx, id, scope.Set{All: true})
 	if err != nil {
-		t.Fatalf("get principal: %v", err)
+		t.Fatalf("get user: %v", err)
 	}
-	if pr.Service == nil {
-		t.Fatal("a service principal came back with no service profile")
+	if pr.Machine == nil {
+		t.Fatal("a machine user came back with no service profile")
 	}
-	if pr.Service.Name != "ingest-bot" {
-		t.Errorf("the single-row read names the service %q, want %q", pr.Service.Name, "ingest-bot")
+	if pr.Machine.Name != "ingest-bot" {
+		t.Errorf("the single-row read names the service %q, want %q", pr.Machine.Name, "ingest-bot")
 	}
 
-	prs, err := gw.ListPrincipals(ctx, scope.Set{All: true}, false)
+	prs, err := gw.ListUsers(ctx, scope.Set{All: true}, false)
 	if err != nil {
-		t.Fatalf("list principals: %v", err)
+		t.Fatalf("list users: %v", err)
 	}
-	var found *storage.Principal
+	var found *storage.User
 	for i := range prs {
 		if prs[i].ID == id {
 			found = &prs[i]
 		}
 	}
 	if found == nil {
-		t.Fatal("the service principal is missing from the directory")
+		t.Fatal("the machine is missing from the directory")
 	}
-	if found.Service == nil || found.Service.Name != "ingest-bot" {
-		t.Errorf("the batched directory read names the service %+v, want %q", found.Service, "ingest-bot")
+	if found.Machine == nil || found.Machine.Name != "ingest-bot" {
+		t.Errorf("the batched directory read names the service %+v, want %q", found.Machine, "ingest-bot")
 	}
 }
 
-// TestTwoServicePrincipalsCannotShareAName is the uniqueness floor. The string
+// TestTwoMachinesCannotShareAName is the uniqueness floor. The string
 // is written into audit_log as bare text so the trail survives a purge, and into
 // an alarm's acknowledgement on every read; a duplicate makes both of those
 // unresolvable after the fact, with no uuid left beside the text to tell them
 // apart.
-func TestTwoServicePrincipalsCannotShareAName(t *testing.T) {
+func TestTwoMachinesCannotShareAName(t *testing.T) {
 	t.Parallel()
 	dsn := storagetest.NewDSN(t)
-	insertServicePrincipal(t, dsn, "ingest-bot")
+	insertMachine(t, dsn, "ingest-bot")
 
 	ctx := context.Background()
 	conn, err := pgx.Connect(ctx, dsn)
@@ -82,12 +82,12 @@ func TestTwoServicePrincipalsCannotShareAName(t *testing.T) {
 	defer conn.Close(ctx)
 	var pid string
 	if err := conn.QueryRow(ctx,
-		`insert into principal (kind) values ('service') returning id`).Scan(&pid); err != nil {
-		t.Fatalf("insert principal: %v", err)
+		`insert into users (kind) values ('machine') returning id`).Scan(&pid); err != nil {
+		t.Fatalf("insert user: %v", err)
 	}
-	_, err = conn.Exec(ctx, `insert into service (principal_id, name) values ($1, 'ingest-bot')`, pid)
+	_, err = conn.Exec(ctx, `insert into machine (user_id, name) values ($1, 'ingest-bot')`, pid)
 	if err == nil {
-		t.Fatal("two service principals took the same name: the identifier does not identify")
+		t.Fatal("two machines took the same name: the identifier does not identify")
 	}
 	var pgErr *pgconn.PgError
 	if !errors.As(err, &pgErr) || pgErr.Code != "23505" {
@@ -97,14 +97,14 @@ func TestTwoServicePrincipalsCannotShareAName(t *testing.T) {
 	// A DIFFERENT name is still fine, so the constraint is on the column and not
 	// on the table.
 	if _, err := conn.Exec(ctx,
-		`insert into service (principal_id, name) values ($1, 'ingest-bot-2')`, pid); err != nil {
-		t.Fatalf("a second service account under its own name was refused: %v", err)
+		`insert into machine (user_id, name) values ($1, 'ingest-bot-2')`, pid); err != nil {
+		t.Fatalf("a second machine user under its own name was refused: %v", err)
 	}
 }
 
-// insertServicePrincipal creates a service principal and its profile row and
-// returns the principal id.
-func insertServicePrincipal(t *testing.T, dsn, name string) string {
+// insertMachine creates a machine user and its profile row and
+// returns the user id.
+func insertMachine(t *testing.T, dsn, name string) string {
 	t.Helper()
 	ctx := context.Background()
 	conn, err := pgx.Connect(ctx, dsn)
@@ -114,11 +114,11 @@ func insertServicePrincipal(t *testing.T, dsn, name string) string {
 	defer conn.Close(ctx)
 	var pid string
 	if err := conn.QueryRow(ctx,
-		`insert into principal (kind) values ('service') returning id`).Scan(&pid); err != nil {
-		t.Fatalf("insert principal: %v", err)
+		`insert into users (kind) values ('machine') returning id`).Scan(&pid); err != nil {
+		t.Fatalf("insert user: %v", err)
 	}
 	if _, err := conn.Exec(ctx,
-		`insert into service (principal_id, name) values ($1, $2)`, pid, name); err != nil {
+		`insert into machine (user_id, name) values ($1, $2)`, pid, name); err != nil {
 		t.Fatalf("insert service: %v", err)
 	}
 	return pid
@@ -160,7 +160,7 @@ func dedupeSQL(t *testing.T) string {
 // never exercise this UPDATE against duplicates: the acceptance behaviour
 // "existing rows migrate with no operator action" would otherwise be a claim
 // with nothing behind it. This stands the schema right after the rename and
-// before the floor, writes three service accounts sharing one name in a known
+// before the floor, writes three machine users sharing one name in a known
 // creation order, and runs the extracted SQL twice.
 func TestServiceNameDedupeKeepsTheOldestAndIsIdempotent(t *testing.T) {
 	t.Parallel()

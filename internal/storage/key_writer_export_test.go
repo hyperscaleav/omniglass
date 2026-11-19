@@ -17,9 +17,9 @@ import (
 // drives every entry with a writer its key's class does not admit. A new write
 // path is registered here, with a refusal case there, or both fail.
 var SampleWritePaths = map[string][]writerclass.Writer{
-	"writeMetricSets":       {writerclass.Node, writerclass.Push, writerclass.Fanout, writerclass.CalcRule},
-	"writePropertySets":     {writerclass.Node, writerclass.Push, writerclass.Fanout, writerclass.CalcRule},
-	"writeEventSets":        {writerclass.Node, writerclass.Push, writerclass.Fanout},
+	"writeMetricSets":       {writerclass.Outpost, writerclass.Push, writerclass.Fanout, writerclass.CalcRule},
+	"writePropertySets":     {writerclass.Outpost, writerclass.Push, writerclass.Fanout, writerclass.CalcRule},
+	"writeEventSets":        {writerclass.Outpost, writerclass.Push, writerclass.Fanout},
 	"recordHealth":          {writerclass.Process},
 	"IssueCommand":          {writerclass.Command},
 	"writeReplyObservation": {writerclass.CommandReply},

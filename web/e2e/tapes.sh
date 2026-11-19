@@ -30,7 +30,7 @@
 # lab comes up), plays it on the lab network as
 # this user, with the lab's server and an owner token in the CLI's env and
 # the lab's container logs readable under /stack/logs/ (server.log, and
-# node.log, the node and its in-process simulator); a tape that declares
+# outpost.log, the outpost and its in-process simulator); a tape that declares
 # `# demo-needs: database` also gets a database of its own on the lab's
 # Postgres (OMNIGLASS_DSN, and psql), created before it and dropped after (#1313); ffprobe reads the
 # MP4's length; and tape.mjs judges the recording. A demo is a test: a command
@@ -167,12 +167,12 @@ reap_demo_images() {
 
 # The lab's container logs, followed into out/stack-logs/ for a tape to read
 # (mounted at /stack/logs/) and for the artifact to keep: the server's, and
-# the node's, which carries its in-process simulator's too.
+# the outpost's, which carries its in-process simulator's too.
 LOG_PIDS=()
 follow_logs() {
   local name
   mkdir -p "$OUT/stack-logs"
-  for name in server:"$LAB_SERVER" node:"$LAB_NODE"; do
+  for name in server:"$LAB_SERVER" outpost:"$LAB_OUTPOST"; do
     docker logs -f "${name#*:}" >"$OUT/stack-logs/${name%%:*}.log" 2>&1 &
     LOG_PIDS+=($!)
   done

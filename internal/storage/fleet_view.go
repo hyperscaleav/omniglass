@@ -15,7 +15,7 @@ import (
 // /systems and /components itself. A five-figure component list fetched to draw
 // squares is a page that never loads; a dot needs an id, a verdict, and two
 // flags, so that is all this carries. Everything an operator can only see after
-// clicking (product, tags, properties, the role chain) is deliberately absent
+// clicking (product, tags, properties, the slot chain) is deliberately absent
 // and is the drill-down read's job.
 //
 // The shape is FLAT on purpose: locations carry their parent id rather than
@@ -27,7 +27,7 @@ import (
 //
 // Scope is injected per tier, in the query, through the same scopedListSQL
 // primitive every other tree read uses. The three sets are separate arguments
-// rather than one, because they answer three different permissions: a principal
+// rather than one, because they answer three different permissions: a user
 // who may read the place tree but not its components gets the shape of their
 // fleet with no contents, which is a legitimate view and not an error.
 

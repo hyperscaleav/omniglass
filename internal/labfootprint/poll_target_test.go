@@ -7,12 +7,12 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/closedloop"
 )
 
-// Each row lands on its node's targets at the interval that node runs it: a
+// Each row lands on its outpost's targets at the interval that outpost runs it: a
 // driver poll at its schedule (never faster than the heartbeat, each tick
-// when it declares none), a probe at the node's probe interval.
-func TestParsePollTargetsAppliesEachNodesCadence(t *testing.T) {
+// when it declares none), a probe at the outpost's probe interval.
+func TestParsePollTargetsAppliesEachOutpostsCadence(t *testing.T) {
 	out := "edge-a|c1|http|45s\nedge-a|c1|tcp|\nedge-a|c2|snmp|0s\nedge-b|c3|tcp|\nedge-z|c4|tcp|\n"
-	cadence := map[string]closedloop.NodeCadence{
+	cadence := map[string]closedloop.OutpostCadence{
 		"edge-a": {Heartbeat: 5 * time.Second, ProbeEvery: 30 * time.Second},
 		"edge-b": {Heartbeat: 10 * time.Second},
 	}
@@ -23,10 +23,10 @@ func TestParsePollTargetsAppliesEachNodesCadence(t *testing.T) {
 	want := map[string][]closedloop.PollTarget{
 		"edge-a": {{ComponentID: "c1", Transport: "http", Interval: 45 * time.Second}, {ComponentID: "c1", Transport: "tcp", Interval: 30 * time.Second}, {ComponentID: "c2", Transport: "snmp", Interval: 5 * time.Second}},
 		"edge-b": {{ComponentID: "c3", Transport: "tcp", Interval: 10 * time.Second}},
-		"edge-z": {{ComponentID: "c4", Transport: "tcp", Interval: ParseNodeCadence(nil).Heartbeat}},
+		"edge-z": {{ComponentID: "c4", Transport: "tcp", Interval: ParseOutpostCadence(nil).Heartbeat}},
 	}
 	if len(got) != len(want) {
-		t.Fatalf("nodes = %v, want %v", got, want)
+		t.Fatalf("outposts = %v, want %v", got, want)
 	}
 	for n, ts := range want {
 		if len(got[n]) != len(ts) {

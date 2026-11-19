@@ -326,7 +326,7 @@ type CalcPreview struct {
 // cycle, takes no key another enabled rule or a collection writes), so a
 // rule that could not be saved is refused here with the same error; given a
 // saved rule's name it is judged as an edit of that rule. The candidate is
-// compiled and the key registry read once; a component preview selects the
+// compiled and the key catalog read once; a component preview selects the
 // components holding one of its inputs, as the tick would mark them.
 func (p *PG) PreviewCalcRule(ctx context.Context, spec CalcRuleSpec, components, systems scope.Set) (*CalcPreview, error) {
 	tx, err := p.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})

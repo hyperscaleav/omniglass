@@ -7,8 +7,8 @@ summary: "`system_type` is promoted to **`standard`**, the blueprint a system co
 
 - **Date:** 2026-07-21 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
   [API](/architecture/api/), [identity and access](/architecture/identity-access/),
-  [storage](/architecture/storage/), [Standards guide](/guides/admin/standards/),
-  [Types guide](/guides/admin/types/), [Properties guide](/guides/admin/properties/)
+  [storage](/architecture/storage/), [Standards guide](/admin/standards/),
+  [Types guide](/guides/admin/types/), [Properties guide](/admin/properties/)
 - **Decision:** Three moves land together, because each one only makes sense with the others.
 
   **1. `system_type` is promoted to `standard`.** A **standard** is the **blueprint a system conforms to**

@@ -6,7 +6,7 @@ import { uuidFor } from "./testids";
 // root.
 // Ids are uuids post-ADR-0062, so fixtures mint them from a handle rather than
 // putting the handle in the id slot: a fixture that fakes the shape lets a real
-// join break ship green (registry-fixture-guard).
+// join break ship green (catalog-fixture-guard).
 const loc = (handle: string, name: string, type: string, parent?: string) => ({
   id: uuidFor(handle),
   name,
@@ -66,7 +66,7 @@ describe("ancestors", () => {
 });
 
 describe("childrenIndex", () => {
-  it("inverts the parent pointers, so a place knows what sits beneath it", () => {
+  it("inverts the parent pointers, so a location knows what sits beneath it", () => {
     const kids = childrenIndex(view);
     expect((kids.get(uuidFor("l-b1")) ?? []).map((l) => l.name).sort()).toEqual(["hq-r1", "hq-r2"]);
     expect(kids.get(uuidFor("l-r1"))).toBeUndefined();

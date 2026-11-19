@@ -116,6 +116,7 @@ type systemEventsOutput struct {
 func registerSystemEventRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-system-events",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/systems/{name}/events",
 		Summary:     "List a system's recent events, members included",

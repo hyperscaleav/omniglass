@@ -195,7 +195,7 @@ func TestLoginLockoutEndpoint(t *testing.T) {
 		t.Fatalf("raw conn: %v", err)
 	}
 	defer conn.Close(ctx)
-	if _, err := conn.Exec(ctx, `update human set locked_until = now() - interval '1 hour' where username = 'ops'`); err != nil {
+	if _, err := conn.Exec(ctx, `update person set locked_until = now() - interval '1 hour' where username = 'ops'`); err != nil {
 		t.Fatalf("expire lock: %v", err)
 	}
 	if code := login("orange-boat-42x"); code != http.StatusNoContent {

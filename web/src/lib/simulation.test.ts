@@ -132,11 +132,11 @@ describe("a simulated component's status", () => {
 });
 
 describe("the add-component rule", () => {
-  it("requires a node, a product and a well-formed name", () => {
-    expect(validateAddComponent({ node: "", product: "", name: "", location: "" })).toEqual({
-      node: expect.any(String), product: expect.any(String), name: "Name the new component.",
+  it("requires an outpost, a product and a well-formed name", () => {
+    expect(validateAddComponent({ outpost: "", product: "", name: "", location: "" })).toEqual({
+      outpost: expect.any(String), product: expect.any(String), name: "Name the new component.",
     });
-    expect(validateAddComponent({ node: "edge-hq", product: "boreal-edge-55", name: "lab-display", location: "" })).toEqual({});
+    expect(validateAddComponent({ outpost: "edge-hq", product: "boreal-edge-55", name: "lab-display", location: "" })).toEqual({});
     expect(entityNameError("Lab.Display")).toMatch(/Lowercase/);
     expect(entityNameError("x".repeat(101))).toBe("At most 100 characters.");
   });
@@ -171,29 +171,29 @@ describe("catalog and counts", () => {
 
 describe("the sidebar's poll", () => {
   it("asks every SIDEBAR_POLL_MS while a simulator is connected, and backs off otherwise", () => {
-    expect(sidebarPollMs({ connected: true, nodes: [] })).toBe(SIDEBAR_POLL_MS);
-    expect(sidebarPollMs({ connected: false, nodes: [] })).toBe(SIDEBAR_IDLE_POLL_MS);
+    expect(sidebarPollMs({ connected: true, outposts: [] })).toBe(SIDEBAR_POLL_MS);
+    expect(sidebarPollMs({ connected: false, outposts: [] })).toBe(SIDEBAR_IDLE_POLL_MS);
     expect(sidebarPollMs(undefined)).toBe(SIDEBAR_IDLE_POLL_MS);
     expect(SIDEBAR_IDLE_POLL_MS).toBeGreaterThan(SIDEBAR_POLL_MS);
   });
 });
 
 describe("simulatorConnected", () => {
-  const me = (permissions: string[]) => ({ principal: { id: "p", kind: "human" }, permissions, grants: [] });
+  const me = (permissions: string[]) => ({ user: { id: "p", kind: "person" }, permissions, grants: [] });
   it("holds only for a simulation reader with a simulator connected (#1647)", () => {
-    expect(simulatorConnected(me(["simulation:read"]), { connected: true, nodes: [] })).toBe(true);
-    expect(simulatorConnected(me(["simulation:read"]), { connected: false, nodes: [] })).toBe(false);
+    expect(simulatorConnected(me(["simulation:read"]), { connected: true, outposts: [] })).toBe(true);
+    expect(simulatorConnected(me(["simulation:read"]), { connected: false, outposts: [] })).toBe(false);
     expect(simulatorConnected(me(["simulation:read"]), undefined)).toBe(false);
-    expect(simulatorConnected(me(["node:read"]), { connected: true, nodes: [] })).toBe(false);
-    expect(simulatorConnected(undefined, { connected: true, nodes: [] })).toBe(false);
+    expect(simulatorConnected(me(["outpost:read"]), { connected: true, outposts: [] })).toBe(false);
+    expect(simulatorConnected(undefined, { connected: true, outposts: [] })).toBe(false);
   });
 });
 
 describe("validateAddSystem and addSystemBody", () => {
-  const d = { node: "edge-hq", standard: "meeting-room", system_type: "room-system", name: "", location: "" };
-  it("asks for node, standard and type, and lets the name be empty", () => {
+  const d = { outpost: "edge-hq", standard: "meeting-room", system_type: "room-system", name: "", location: "" };
+  it("asks for outpost, standard and type, and lets the name be empty", () => {
     expect(validateAddSystem(d)).toEqual({});
-    expect(Object.keys(validateAddSystem({ ...d, node: "", standard: "", system_type: "" })).sort()).toEqual(["node", "standard", "system_type"]);
+    expect(Object.keys(validateAddSystem({ ...d, outpost: "", standard: "", system_type: "" })).sort()).toEqual(["outpost", "standard", "system_type"]);
   });
   it("holds a typed name to the entity name rule", () => {
     expect(validateAddSystem({ ...d, name: "Lab Room" }).name).toBeTruthy();
@@ -206,13 +206,13 @@ describe("validateAddSystem and addSystemBody", () => {
 });
 
 describe("planShortfall", () => {
-  it("lists the roles nothing simulated fits and how many they are short", () => {
-    const s = planShortfall({ standard: "s", alternates: {}, components: 1, roles: [
-      { role: "display", product: "p", count: 1 },
-      { role: "camera", count: 0, missing: 2, reason: "none" },
+  it("lists the slots nothing simulated fits and how many they are short", () => {
+    const s = planShortfall({ standard: "s", alternates: {}, components: 1, slots: [
+      { slot: "display", product: "p", count: 1 },
+      { slot: "camera", count: 0, missing: 2, reason: "none" },
     ] });
-    expect(s.roles.map((r) => r.role)).toEqual(["camera"]);
+    expect(s.slots.map((r) => r.slot)).toEqual(["camera"]);
     expect(s.missing).toBe(2);
-    expect(planShortfall(undefined)).toEqual({ roles: [], missing: 0 });
+    expect(planShortfall(undefined)).toEqual({ slots: [], missing: 0 });
   });
 });

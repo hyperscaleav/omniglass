@@ -50,7 +50,7 @@ func TestStandardsAPI(t *testing.T) {
 	// the standard:read floor (*:read): one forked from a template here, since
 	// the boot seeds none.
 	c.do(ownerTok, http.MethodPost, "/standards:createFromTemplate", map[string]any{"template": "classroom"}, http.StatusCreated)
-	viewerTok := principalWithGrants(t, ctx, dsn, "standard-viewer", []grant{{role: "viewer", scopeKind: "all"}})
+	viewerTok := userWithGrants(t, ctx, dsn, "standard-viewer", []grant{{role: "viewer", scopeKind: "all"}})
 	var listed struct {
 		Standards []struct {
 			ID       string `json:"id"`
@@ -153,8 +153,8 @@ func TestStandardMapOnTheWire(t *testing.T) {
 	mapDecl := map[string]any{
 		"aspect": 1.6,
 		"positions": []map[string]any{
-			{"role": "room-mic", "position": 1, "x": 0.3, "y": 0.5},
-			{"role": "main-display", "position": 1, "x": 0.5, "y": 0.05},
+			{"slot": "room-mic", "position": 1, "x": 0.3, "y": 0.5},
+			{"slot": "main-display", "position": 1, "x": 0.5, "y": 0.05},
 		},
 	}
 	c.do(ownerTok, http.MethodPatch, "/standards/"+created.ID, map[string]any{"map": mapDecl}, http.StatusOK)
@@ -163,7 +163,7 @@ func TestStandardMapOnTheWire(t *testing.T) {
 		Map *struct {
 			Aspect    float64 `json:"aspect"`
 			Positions []struct {
-				Role string  `json:"role"`
+				Slot string  `json:"slot"`
 				X    float64 `json:"x"`
 			} `json:"positions"`
 		} `json:"map"`
@@ -176,7 +176,7 @@ func TestStandardMapOnTheWire(t *testing.T) {
 	}
 
 	// Out of bounds is a 422, not stored garbage.
-	c.do(ownerTok, http.MethodPatch, "/standards/"+created.ID, map[string]any{"map": map[string]any{"aspect": 1.6, "positions": []map[string]any{{"role": "r", "position": 1, "x": 1.2, "y": 0.5}}}}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPatch, "/standards/"+created.ID, map[string]any{"map": map[string]any{"aspect": 1.6, "positions": []map[string]any{{"slot": "r", "position": 1, "x": 1.2, "y": 0.5}}}}, http.StatusUnprocessableEntity)
 
 	// JSON null clears the declaration.
 	c.do(ownerTok, http.MethodPatch, "/standards/"+created.ID, map[string]any{"map": nil}, http.StatusOK)

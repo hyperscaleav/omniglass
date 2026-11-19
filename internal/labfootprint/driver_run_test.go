@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hyperscaleav/omniglass/internal/node"
+	"github.com/hyperscaleav/omniglass/internal/outpost"
 )
 
 func TestALabsLabelsReadBackFromItsReadyFile(t *testing.T) {
@@ -36,48 +36,48 @@ func sweepEnv() map[string]string {
 	}
 }
 
-// The node a driver is measured on runs with no simulator in its process,
-// so its cgroup holds only the node's own work; it otherwise runs as the
-// lab's nodes do: root in its own container, for the pinger and NET_ADMIN.
-func TestASweepNodeRunsWithoutTheSimulator(t *testing.T) {
-	s, err := sweepNodeService(sweepEnv(), "sweep-http-json", "tok")
+// The outpost a driver is measured on runs with no simulator in its process,
+// so its cgroup holds only the outpost's own work; it otherwise runs as the
+// lab's outposts do: root in its own container, for the pinger and NET_ADMIN.
+func TestASweepOutpostRunsWithoutTheSimulator(t *testing.T) {
+	s, err := sweepOutpostService(sweepEnv(), "sweep-http-json", "tok")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if s.Image != "omniglass:test" || s.User != "0:0" || !slices.Equal(s.CapAdd, []string{"NET_ADMIN"}) {
-		t.Fatalf("node spec = %+v", s)
+		t.Fatalf("outpost spec = %+v", s)
 	}
 	if s.Sysctls["net.ipv4.ping_group_range"] != "0 65535" {
 		t.Fatalf("sysctls = %v, want the pinger's group range", s.Sysctls)
 	}
-	if s.Cmd[0] != "node" || s.Cmd[1] != "run" || slices.Contains(s.Cmd, "--simulate") || slices.Contains(s.Cmd, "--impairments") {
-		t.Fatalf("cmd = %v, want node run without the simulator or impairments", s.Cmd)
+	if s.Cmd[0] != "outpost" || s.Cmd[1] != "run" || slices.Contains(s.Cmd, "--simulate") || slices.Contains(s.Cmd, "--impairments") {
+		t.Fatalf("cmd = %v, want outpost run without the simulator or impairments", s.Cmd)
 	}
-	for _, e := range []string{"OMNIGLASS_SERVER=http://server:8080", "OMNIGLASS_NODE_NAME=sweep-http-json", "OMNIGLASS_NODE_TOKEN=tok"} {
+	for _, e := range []string{"OMNIGLASS_SERVER=http://server:8080", "OMNIGLASS_OUTPOST_NAME=sweep-http-json", "OMNIGLASS_OUTPOST_TOKEN=tok"} {
 		if !slices.Contains(s.Env, e) {
 			t.Fatalf("env %v lacks %s", s.Env, e)
 		}
 	}
 	if s.NetworkOf != "" || s.Publish != nil {
-		t.Fatalf("the node joins the lab network and publishes nothing: %+v", s)
+		t.Fatalf("the outpost joins the lab network and publishes nothing: %+v", s)
 	}
 	if s.Labels["com.docker.compose.project"] != "og-sweep" || s.Labels["omniglass.lab"] != "og-sweep" {
-		t.Fatalf("labels = %v, want the lab's own, so its teardown removes the node", s.Labels)
+		t.Fatalf("labels = %v, want the lab's own, so its teardown removes the outpost", s.Labels)
 	}
 	if !strings.HasPrefix(s.Container, "og-sweep-") {
 		t.Fatalf("container = %q, want it named under the project", s.Container)
 	}
 }
 
-// The simulator runs beside the node, in the node's network namespace, so
-// it serves the simulated components on the loopback the node polls.
-func TestASweepSimulatorSharesTheNodesLoopback(t *testing.T) {
-	s, err := sweepSimService(sweepEnv(), "sweep-http-json", "tok", "node123")
+// The simulator runs beside the outpost, in the outpost's network namespace, so
+// it serves the simulated components on the loopback the outpost polls.
+func TestASweepSimulatorSharesTheOutpostsLoopback(t *testing.T) {
+	s, err := sweepSimService(sweepEnv(), "sweep-http-json", "tok", "outpost123")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.NetworkOf != "node123" {
-		t.Fatalf("network of = %q, want the node's container", s.NetworkOf)
+	if s.NetworkOf != "outpost123" {
+		t.Fatalf("network of = %q, want the outpost's container", s.NetworkOf)
 	}
 	if s.Cmd[0] != "sim" || s.Cmd[1] != "run" {
 		t.Fatalf("cmd = %v, want sim run", s.Cmd)
@@ -85,15 +85,15 @@ func TestASweepSimulatorSharesTheNodesLoopback(t *testing.T) {
 	if s.User != "0:0" {
 		t.Fatalf("user = %q, want root, to bind the simulated ports below 1024", s.User)
 	}
-	if !slices.Contains(s.Env, "OMNIGLASS_NODE_NAME=sweep-http-json") || !slices.Contains(s.Env, "OMNIGLASS_NODE_TOKEN=tok") {
-		t.Fatalf("env = %v, want the node's identity", s.Env)
+	if !slices.Contains(s.Env, "OMNIGLASS_OUTPOST_NAME=sweep-http-json") || !slices.Contains(s.Env, "OMNIGLASS_OUTPOST_TOKEN=tok") {
+		t.Fatalf("env = %v, want the outpost's identity", s.Env)
 	}
 	if s.Labels["omniglass.lab"] != "og-sweep" {
 		t.Fatalf("labels = %v, want the lab's own", s.Labels)
 	}
-	n, _ := sweepNodeService(sweepEnv(), "sweep-http-json", "tok")
+	n, _ := sweepOutpostService(sweepEnv(), "sweep-http-json", "tok")
 	if s.Container == n.Container {
-		t.Fatal("the simulator and the node need containers of their own names")
+		t.Fatal("the simulator and the outpost need containers of their own names")
 	}
 }
 
@@ -101,17 +101,17 @@ func TestASweepNeedsTheLabsReadyVariables(t *testing.T) {
 	for _, k := range []string{"LAB_PROJECT", "LAB_NETWORK", "LAB_SERVER_URL", "LAB_IMAGE", "LAB_LABELS"} {
 		env := sweepEnv()
 		delete(env, k)
-		if _, err := sweepNodeService(env, "n", "t"); err == nil {
+		if _, err := sweepOutpostService(env, "n", "t"); err == nil {
 			t.Fatalf("a ready file without %s, want an error", k)
 		}
 	}
 }
 
-// A node is named for its driver and its step, since a driver re-swept at a
-// bigger step takes a fresh node beside the first.
-func TestASweepNodeIsNamedForItsDriverAndStep(t *testing.T) {
-	if got := sweepNodeName("kestrel-relay-api", 1600); got != "sweep-kestrel-relay-api-1600" {
-		t.Fatalf("node = %q", got)
+// An outpost is named for its driver and its step, since a driver re-swept at a
+// bigger step takes a fresh outpost beside the first.
+func TestASweepOutpostIsNamedForItsDriverAndStep(t *testing.T) {
+	if got := sweepOutpostName("kestrel-relay-api", 1600); got != "sweep-kestrel-relay-api-1600" {
+		t.Fatalf("outpost = %q", got)
 	}
 }
 
@@ -148,7 +148,7 @@ func TestASweepWindowHoldsTheSlowestPoll(t *testing.T) {
 	}
 }
 
-func TestASweepsQueriesNameTheNodeAsALiteral(t *testing.T) {
+func TestASweepsQueriesNameTheOutpostAsALiteral(t *testing.T) {
 	q := driverTasksQuery("sweep-o'brien")
 	for _, want := range []string{"t.mode = 'poll'", "t.enabled", "'sweep-o''brien'"} {
 		if !strings.Contains(q, want) {
@@ -157,9 +157,9 @@ func TestASweepsQueriesNameTheNodeAsALiteral(t *testing.T) {
 	}
 }
 
-// The node's installed worklist is matched against every enabled task the
+// The outpost's installed worklist is matched against every enabled task the
 // server holds for it, probes included, since the worklist carries both.
-func TestANodesWorklistQueriesReadTheInstalledAndTheHeld(t *testing.T) {
+func TestAOutpostsWorklistQueriesReadTheInstalledAndTheHeld(t *testing.T) {
 	q := installedWorklistQuery("sweep-o'brien")
 	for _, want := range []string{"'worklist-task-count'", "'sweep-o''brien'", "order by m.ts desc limit 1"} {
 		if !strings.Contains(q, want) {
@@ -168,7 +168,7 @@ func TestANodesWorklistQueriesReadTheInstalledAndTheHeld(t *testing.T) {
 	}
 	q = heldTasksQuery("sweep-o'brien")
 	if !strings.Contains(q, "t.enabled") || !strings.Contains(q, "'sweep-o''brien'") || strings.Contains(q, "mode") || strings.Contains(q, "driver") {
-		t.Fatalf("held query is not every enabled task of the node:\n%s", q)
+		t.Fatalf("held query is not every enabled task of the outpost:\n%s", q)
 	}
 }
 
@@ -186,17 +186,17 @@ func TestAStepsPollCPUIsTheReportsWhollyInsideIt(t *testing.T) {
 	}
 }
 
-// The sweep node runs the product's default cadence, what a deployment's
-// node runs at, so the worklist pull and the heartbeat in its cgroup are a
+// The sweep outpost runs the product's default cadence, what a deployment's
+// outpost runs at, so the worklist pull and the heartbeat in its cgroup are a
 // deployment's and not the lab's quicker ones.
-func TestASweepNodeRunsTheProductsCadence(t *testing.T) {
-	s, err := sweepNodeService(sweepEnv(), "sweep-x", "tok")
+func TestASweepOutpostRunsTheProductsCadence(t *testing.T) {
+	s, err := sweepOutpostService(sweepEnv(), "sweep-x", "tok")
 	if err != nil {
 		t.Fatal(err)
 	}
 	cmd := strings.Join(s.Cmd, " ")
-	for _, want := range []string{"--heartbeat " + node.DefaultHeartbeat.String(), "--probe-every " + node.DefaultProbeEvery.String(),
-		"--worklist-every " + node.DefaultWorklistEvery.String()} {
+	for _, want := range []string{"--heartbeat " + outpost.DefaultHeartbeat.String(), "--probe-every " + outpost.DefaultProbeEvery.String(),
+		"--worklist-every " + outpost.DefaultWorklistEvery.String()} {
 		if !strings.Contains(cmd, want) {
 			t.Fatalf("cmd = %s, want %s", cmd, want)
 		}

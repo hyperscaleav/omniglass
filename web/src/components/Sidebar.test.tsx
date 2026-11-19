@@ -13,8 +13,8 @@ const jpegB64 = "/9j/4AAQSkZJRg==";
 
 function meWith(hasAvatar: boolean): Me {
   return {
-    principal: { id: "u-me", kind: "human" },
-    human: { username: "ada", label: "Ada Lovelace", has_avatar: hasAvatar },
+    user: { id: "u-me", kind: "person" },
+    person: { username: "ada", label: "Ada Lovelace", has_avatar: hasAvatar },
     permissions: [">"],
     grants: [],
   };

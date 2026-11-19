@@ -1,6 +1,6 @@
 // Package settings is the pure resolution engine of the settings store. It deep
 // merges ordered layers (the type's declared defaults, an operator file, the
-// platform DB override) into an effective document, tracks per-key provenance,
+// platform DB binding) into an effective document, tracks per-key provenance,
 // and enforces locks. It performs no I/O beyond reading the operator file: the DB
 // layer is supplied by the caller (the Storage Gateway). This is the primitive; the
 // API and the SPA consume it.
@@ -19,7 +19,7 @@ import (
 )
 
 // Doc is a settings document: namespace to key to value. Values stay as decoded
-// generic types so merge is presence-based (a key present overrides; a key absent
+// generic types so merge is presence-based (a key present shadows; a key absent
 // inherits the lower layer).
 type Doc = map[string]map[string]any
 

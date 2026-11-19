@@ -1,4 +1,5 @@
 import { api } from "../api/client";
+import { ListAuditLogChannel } from "../api/api.gen";
 import type { FilterKey } from "./predicate";
 
 // The audit data layer: a thin typed wrapper over the generated client for the
@@ -19,13 +20,35 @@ export type AuditEvent = {
   // owns redaction, so whatever arrives here is safe to render.
   old?: unknown;
   new?: unknown;
+  // How the action arrived (#1162): mcp for a tool call on the MCP server,
+  // omnibot for one omnibot made (#1166), absent for a direct API call. Stamped by the server, never by a caller.
+  channel?: string;
+  // The name and version the MCP client declared about itself, as asserted.
+  client?: string;
+  // The agent that acted on the actor's behalf, from its agent token (#1179).
+  agent?: string;
 };
+
+// DIRECT_CHANNEL names a row with no channel: a plain API call. It is the
+// filter value the API's `channel=direct` takes too, never a stored channel.
+export const DIRECT_CHANNEL = "direct";
+
+// channelOf is the channel a row arrived through, direct when it carries none.
+export const channelOf = (e: AuditEvent): string => e.channel || DIRECT_CHANNEL;
+
+// KNOWN_CHANNELS is every value the API's channel filter takes, from the
+// generated enum, so the facet offers a channel before any loaded row has it.
+export const KNOWN_CHANNELS: string[] = Object.values(ListAuditLogChannel);
 
 export const AUDIT_KEY = ["audit-log"] as const;
 
 // The number of rows a single page fetches; "load older" pages back from the
 // oldest loaded row via the server `before` cursor. Kept under the server's 500 cap.
 export const AUDIT_PAGE = 100;
+
+// The skeleton rows the table holds while the first page loads: a screenful, so
+// the loaded rows land in place rather than shifting the page (#1461).
+export const AUDIT_LOADING_ROWS = 12;
 
 // listAuditLog fetches one page, newest first. `before` (an RFC3339 timestamp)
 // pages backward for load-older; `limit` bounds the page. `resource`/`verb` are the
@@ -49,7 +72,7 @@ export async function listAuditLog(params?: {
 
 // actorLabel resolves an event's actor to something human: the username if the
 // actor is a human, else the id, else "system" (a platform-internal write). Under
-// impersonation the actor is the principal whose identity was assumed (the target).
+// impersonation the actor is the user whose identity was assumed (the target).
 export function actorLabel(e: AuditEvent): string {
   return e.actor_name || e.actor || "system";
 }
@@ -73,8 +96,8 @@ const RESOURCE_LABEL_KEYS: Record<string, string[]> = {
   property: ["PropertyTypeName", "property_type_name"],
   alarm: ["component", "Component"],
   command: ["command_type"],
-  system_role_assignment: ["role"],
-  principal_grant: ["Role", "role"],
+  system_slot_assignment: ["slot"],
+  user_grant: ["Role", "role"],
 };
 
 // resourceLabel resolves the friendly handle an operator reads for a row's
@@ -98,7 +121,9 @@ const uniqSorted = (xs: string[]): string[] => [...new Set(xs.filter(Boolean))].
 
 // auditFilterKeys are the faceted-search fields for the audit trail, consumed by
 // the shared FilterBar exactly as the inventory list views do: who (the acting
-// principal), action (the verb), resource (the kind), and id (the resource id).
+// user), action (the verb), resource (the kind), id (the resource id), and
+// how it arrived: channel (direct or mcp), the client an MCP caller declared,
+// and the agent that acted.
 // Matching is client-side over the loaded rows via lib/predicate. `who` is the
 // substring default so a bare term searches the actor. Time is navigated by
 // load-older + newest-first, not a facet (the predicate compares gt/lt
@@ -110,4 +135,9 @@ export const auditFilterKeys: FilterKey<AuditEvent>[] = [
   { key: "action", type: "string", hint: "exact", get: (e) => e.verb, values: (rows) => uniqSorted(rows.map((e) => e.verb)) },
   { key: "resource", type: "string", hint: "exact", get: (e) => e.resource, values: (rows) => uniqSorted(rows.map((e) => e.resource)) },
   { key: "id", type: "string", hint: "substring", get: (e) => `${resourceLabel(e)} ${e.resource_id ?? ""}` },
+  // Every known channel is offered, direct included: it is the channel most
+  // rows have, and the one that answers "what did NOT come through an agent?".
+  { key: "channel", type: "string", hint: "exact", get: channelOf, values: (rows) => uniqSorted([...KNOWN_CHANNELS, ...rows.map(channelOf)]) },
+  { key: "client", type: "string", hint: "substring", get: (e) => e.client ?? "", values: (rows) => uniqSorted(rows.map((e) => e.client ?? "")) },
+  { key: "agent", type: "string", hint: "exact", get: (e) => e.agent ?? "", values: (rows) => uniqSorted(rows.map((e) => e.agent ?? "")) },
 ];

@@ -11,11 +11,11 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// TestDisablePrincipal proves the soft-disable path against a real Postgres: a
-// disabled principal cannot authenticate by password or bearer, enabling restores
+// TestDisableUser proves the soft-disable path against a real Postgres: a
+// disabled user cannot authenticate by password or bearer, enabling restores
 // it, the last active owner cannot be disabled, and a swap is allowed. Skipped
 // under -short.
-func TestDisablePrincipal(t *testing.T) {
+func TestDisableUser(t *testing.T) {
 	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -35,7 +35,7 @@ func TestDisablePrincipal(t *testing.T) {
 	all := scope.Set{All: true}
 
 	pwHash, _ := auth.HashPassword("alice-s3cret")
-	alice, err := gw.CreateHumanPrincipal(ctx, root.ID, storage.HumanSpec{Username: "alice", PasswordHash: pwHash}, all)
+	alice, err := gw.CreatePerson(ctx, root.ID, storage.PersonSpec{Username: "alice", PasswordHash: pwHash}, all)
 	if err != nil {
 		t.Fatalf("create alice: %v", err)
 	}
@@ -46,7 +46,7 @@ func TestDisablePrincipal(t *testing.T) {
 	}
 
 	// Disable alice: both auth paths are refused, and the directory shows inactive.
-	if err := gw.SetPrincipalActive(ctx, root.ID, alice.ID, false, all); err != nil {
+	if err := gw.SetUserActive(ctx, root.ID, alice.ID, false, all); err != nil {
 		t.Fatalf("disable: %v", err)
 	}
 	// A correct password against a disabled account is a distinct, disclosable
@@ -62,12 +62,12 @@ func TestDisablePrincipal(t *testing.T) {
 	if _, err := gw.AuthenticateBearer(ctx, bh); !errors.Is(err, storage.ErrCredentialNotFound) {
 		t.Fatalf("disabled bearer: want ErrCredentialNotFound, got %v", err)
 	}
-	if got, _ := gw.GetPrincipal(ctx, alice.ID, all); got.Active {
+	if got, _ := gw.GetUser(ctx, alice.ID, all); got.Active {
 		t.Fatal("alice should read inactive")
 	}
 
 	// Enable alice: access is restored.
-	if err := gw.SetPrincipalActive(ctx, root.ID, alice.ID, true, all); err != nil {
+	if err := gw.SetUserActive(ctx, root.ID, alice.ID, true, all); err != nil {
 		t.Fatalf("enable: %v", err)
 	}
 	if _, err := gw.AuthenticatePassword(ctx, "alice", "alice-s3cret"); err != nil {
@@ -75,22 +75,22 @@ func TestDisablePrincipal(t *testing.T) {
 	}
 
 	// The last active owner cannot be disabled.
-	if err := gw.SetPrincipalActive(ctx, root.ID, root.ID, false, all); !errors.Is(err, storage.ErrLastOwner) {
+	if err := gw.SetUserActive(ctx, root.ID, root.ID, false, all); !errors.Is(err, storage.ErrLastOwner) {
 		t.Fatalf("disable last owner: want ErrLastOwner, got %v", err)
 	}
 	// After a swap (alice becomes an active owner) the old owner can be disabled.
 	if _, err := gw.CreateGrant(ctx, root.ID, alice.ID, storage.GrantSpec{Role: "owner", ScopeKind: "all"}, all); err != nil {
 		t.Fatalf("grant alice owner: %v", err)
 	}
-	if err := gw.SetPrincipalActive(ctx, root.ID, root.ID, false, all); err != nil {
+	if err := gw.SetUserActive(ctx, root.ID, root.ID, false, all); err != nil {
 		t.Fatalf("disable old owner after swap should succeed: %v", err)
 	}
 
 	// Scope and not-found guards.
-	if err := gw.SetPrincipalActive(ctx, root.ID, alice.ID, false, scope.Set{}); !errors.Is(err, storage.ErrPrincipalForbidden) {
-		t.Fatalf("scoped disable: want ErrPrincipalForbidden, got %v", err)
+	if err := gw.SetUserActive(ctx, root.ID, alice.ID, false, scope.Set{}); !errors.Is(err, storage.ErrUserForbidden) {
+		t.Fatalf("scoped disable: want ErrUserForbidden, got %v", err)
 	}
-	if err := gw.SetPrincipalActive(ctx, root.ID, "00000000-0000-0000-0000-000000000000", false, all); !errors.Is(err, storage.ErrPrincipalNotFound) {
-		t.Fatalf("unknown disable: want ErrPrincipalNotFound, got %v", err)
+	if err := gw.SetUserActive(ctx, root.ID, "00000000-0000-0000-0000-000000000000", false, all); !errors.Is(err, storage.ErrUserNotFound) {
+		t.Fatalf("unknown disable: want ErrUserNotFound, got %v", err)
 	}
 }

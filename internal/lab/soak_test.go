@@ -18,7 +18,7 @@ func cleanWeek() SoakReading {
 		Since: soakStart,
 		Until: soakStart.Add(SoakMinWindow),
 		Losses: []SoakLoss{
-			{Where: "node hop, last hour", Ratio: 0},
+			{Where: "outpost hop, last hour", Ratio: 0},
 			{Where: "end to end, newest", Ratio: 0},
 		},
 	}
@@ -134,7 +134,7 @@ func TestJudgeSoakNamesEveryReason(t *testing.T) {
 		{Component: "edge-hq", Rule: "checkin-age", RaisedAt: soakStart.Add(time.Hour)},
 		clearedAfter(soakStart.Add(2*time.Hour), 3*time.Hour),
 	}
-	r.Losses = append(r.Losses, SoakLoss{Where: "node hop, newest", Ratio: 1})
+	r.Losses = append(r.Losses, SoakLoss{Where: "outpost hop, newest", Ratio: 1})
 	v := JudgeSoak(r, SoakAlarmTolerance)
 	if v.Pass || len(v.Reasons) != 3 {
 		t.Fatalf("verdict = %+v, want a fail with three reasons", v)

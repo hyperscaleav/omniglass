@@ -13,7 +13,7 @@ import (
 )
 
 // The sim hop (#1694) against real sockets: a simulated SNMP agent and the
-// node's real tallied getter, bracketed the way the scale lab brackets them.
+// outpost's real tallied getter, bracketed the way the scale lab brackets them.
 // A healthy window reads loss 0; an agent that withholds its answers (a
 // community it does not know, so it stays silent) reads every withheld
 // request as the hop's loss, and names withheld as the cause.
@@ -56,7 +56,7 @@ func TestSimHopReadsWithheldAnswersAsLossOverRealSockets(t *testing.T) {
 			settledBy(t, dev, int64(c.right+c.wrong))
 			end := bracketRead(dev, tally)
 
-			rows := SimDeliveryOf([]closedloop.NodeBracket{{Node: "edge", Start: start, End: end, Window: time.Minute}})
+			rows := SimDeliveryOf([]closedloop.OutpostBracket{{Outpost: "edge", Start: start, End: end, Window: time.Minute}})
 			if len(rows) != 1 {
 				t.Fatalf("sim rows = %+v, want one snmp row", rows)
 			}
@@ -80,17 +80,17 @@ func TestSimHopReadsWithheldAnswersAsLossOverRealSockets(t *testing.T) {
 }
 
 // bracketRead is one closed-loop bracket over a lone device: the sim, the
-// node's tally, the sim again.
+// outpost's tally, the sim again.
 func bracketRead(dev *sim.Device, tally *collection.RequestTally) collection.EndpointObservation {
 	before := simRead(dev)
-	node := tally.Snapshot(time.Now())
-	return collection.EndpointObservation{SimBefore: before, Node: node, SimAfter: simRead(dev)}
+	outpost := tally.Snapshot(time.Now())
+	return collection.EndpointObservation{SimBefore: before, Outpost: outpost, SimAfter: simRead(dev)}
 }
 
 // simRead is the device's snmp counters in the wire form the server reads.
 func simRead(dev *sim.Device) collection.SimObservation {
 	c := dev.Observed("snmp")
-	return collection.SimObservation{Node: "edge", At: time.Now(), FleetGeneration: 1, Devices: 1, Protocols: []collection.SimProtocolObservation{{
+	return collection.SimObservation{Outpost: "edge", At: time.Now(), FleetGeneration: 1, Devices: 1, Protocols: []collection.SimProtocolObservation{{
 		Protocol: "snmp", Accepted: c.Accepted, Received: c.Received, InFlight: c.InFlight, Answered: c.Answered,
 		Refused: c.Refused, Error: c.Error, Dropped: c.Dropped, Withheld: c.Withheld, Served: 1,
 	}}}

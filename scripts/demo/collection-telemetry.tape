@@ -2,7 +2,7 @@
 #
 # Beside what a driver reads from the device, every endpoint carries data about its own collection,
 # built in and on by default: once a report window (collection.report_seconds, a minute), the mean
-# time of its polls and the CPU they cost the node (#1870), the messages its listeners claimed, and
+# time of its polls and the CPU they cost the outpost (#1870), the messages its listeners claimed, and
 # for a webhook endpoint the posts the server accepted and refused. A device that only pushes still
 # has telemetry of its own (#1369).
 
@@ -94,7 +94,7 @@ Type "clear"
 Enter
 Wait
 Show
-Type "# No node and no poll, yet its own series: the posts the server accepted, and the one it refused"
+Type "# No outpost and no poll, yet its own series: the posts the server accepted, and the one it refused"
 Enter
 Wait
 Type `omniglass component metric list "$ucc" | jq -c '.metrics[] | select(.metric_type_name | startswith("webhook-")) | {metric: .metric_type_name, endpoint: .instance, value}'`

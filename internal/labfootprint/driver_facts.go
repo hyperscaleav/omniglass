@@ -150,7 +150,7 @@ func spreadOf(v []float64) *Spread {
 	return &Spread{Median: mid, Min: v[0], Max: v[len(v)-1], N: len(v)}
 }
 
-// KindCostFact is one kind of work at one interval, the unit a node is sized
+// KindCostFact is one kind of work at one interval, the unit an outpost is sized
 // by: the transport, a poll interval its swept drivers ship (none for a kind
 // that only listens), the drivers that poll at it, and the cost of the kind's
 // measured drivers. A run costs what the kind costs at any interval; the
