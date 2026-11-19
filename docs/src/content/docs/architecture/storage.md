@@ -450,6 +450,8 @@ where b.series_id = $1 order by b.span_start, b.span;
   read a series' samples through one Storage Gateway read (`metricReadSQL`, `metricNewestSQL`,
   `MetricSeriesSamples`), so each answers the same before a day folds and after
   ([ADR-1530](/architecture/decisions/#adr-1530-a-series-read-takes-a-folded-day-from-its-blocks-and-the-rest-from-raw-rows)).
+  The judge's window averages and series and process ages (`ruleWindowSQL`, `ruleAgeSQL`,
+  `processAgeSQL`) still read raw rows directly until they move to the blocks (#1572).
   A late sample lands raw and merges, so a folded day holds it twice; the read takes each day of
   each lineage from one source. A day is read from its blocks when a block of its lineage covers it
   (an hour or day block of the day, or its ISO week's block) and the day is intact (`blockIntact`,
@@ -459,7 +461,8 @@ where b.series_id = $1 order by b.span_start, b.span;
   and lineage, so a folded week costs the read one probe a row; one ten-day series of 864,000
   samples at one a second reads hourly buckets in about 1.3 s, most of it the sort that picks each
   bucket's last. A series' current value is its newest raw row unless a block holds a newer sample,
-  and `TestNoDirectMetricReads` fails on any other read of the raw table outside the folds.
+  and `TestNoDirectMetricReads` fails on any read of the raw table not listed in its
+  `directMetricReaders` allowlist, each entry with its reason.
 - **Raw rows stay.** The blocks are written beside the raw rows, which no pass drops yet.
   `VerifyMetricBlocks` pairs every block still inside its window with its raw rows, sample by
   sample, and names any that differ. The early drop of raw days and the block prune follow (#1574);
