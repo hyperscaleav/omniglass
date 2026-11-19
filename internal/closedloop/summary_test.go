@@ -8,16 +8,16 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/obsstat"
 )
 
-// The report sums the nodes: per protocol the window's traffic and its
-// merged latency, per node the concurrency the endpoints saw beside the
-// node's own gauges, and each gap's loss with its masking total.
+// The report sums the outposts: per protocol the window's traffic and its
+// merged latency, per outpost the concurrency the endpoints saw beside the
+// outpost's own gauges, and each gap's loss with its masking total.
 func TestSummarizeEndpoints(t *testing.T) {
 	a, b := balanced(), balanced()
-	b.Node = "core"
+	b.Outpost = "core"
 	for _, o := range []*collection.SimObservation{&b.Start.SimBefore, &b.Start.SimAfter, &b.End.SimBefore, &b.End.SimAfter} {
-		o.Node = "core"
+		o.Outpost = "core"
 	}
-	b.End.Node.Node = "core"
+	b.End.Outpost.Outpost = "core"
 	// Latency: 10 http answers at 100 us on edge, 10 at 10 ms on core.
 	fast := make([]uint64, obsstat.LatencyBucket(100)+1)
 	fast[obsstat.LatencyBucket(100)] = 10
@@ -31,18 +31,18 @@ func TestSummarizeEndpoints(t *testing.T) {
 		o.Faces = []collection.SimFaceOverlap{{ComponentID: "d1", Component: "dsp", Face: "api", Protocol: "http", Received: 9, Overlapped: 6}}
 	})
 	endSims(&b, func(o *collection.SimObservation) { protocol(o, "http").Latency = slow })
-	a.End.Node.QueueDepth = &collection.GaugeReading{HighWater: []obsstat.EpochHigh{{Epoch: obsstat.EpochOf(windowStart.Add(time.Minute)), Max: 7}}}
-	b.End.Node.BatchesDropped = 2
+	a.End.Outpost.QueueDepth = &collection.GaugeReading{HighWater: []obsstat.EpochHigh{{Epoch: obsstat.EpochOf(windowStart.Add(time.Minute)), Max: 7}}}
+	b.End.Outpost.BatchesDropped = 2
 	// core polls one more http target, one too slow for the window, and an
 	// icmp target the sim never sees.
 	b.Targets = append(b.Targets, PollTarget{ComponentID: "c-http-2", Transport: "https", Interval: 5 * time.Second},
 		PollTarget{ComponentID: "c-slow", Transport: "http", Interval: time.Minute},
 		PollTarget{ComponentID: "c-ping", Transport: "icmp", Interval: 5 * time.Second})
 
-	r := SummarizeEndpoints([]NodeBracket{a, b})
+	r := SummarizeEndpoints([]OutpostBracket{a, b})
 	h := r.Protocol("http")
 	if h == nil || h.Received != 120 || h.Accepted != 120 || h.Answered != 120 {
-		t.Fatalf("http = %+v, want both nodes' 60 requests", h)
+		t.Fatalf("http = %+v, want both outposts' 60 requests", h)
 	}
 	if h.PollTargets != 3 || r.Protocol("snmp").PollTargets != 2 || r.Protocol("tcp").PollTargets != 0 {
 		t.Fatalf("poll targets: http %d, snmp %d, tcp %d, want 3, 2 and 0 (a target due under twice in the window is not counted)",
@@ -57,11 +57,11 @@ func TestSummarizeEndpoints(t *testing.T) {
 	if h.InFlightHigh["edge"] != 4 {
 		t.Fatalf("http in-flight high = %v, want edge's 4 in the window, not the 99 before it", h.InFlightHigh)
 	}
-	if len(r.Nodes) != 2 || r.Nodes[1].Node != "edge" || r.Nodes[1].ArrivalHigh != 7 {
-		t.Fatalf("nodes = %+v, want edge's arrival high 4 + 3", r.Nodes)
+	if len(r.Outposts) != 2 || r.Outposts[1].Outpost != "edge" || r.Outposts[1].ArrivalHigh != 7 {
+		t.Fatalf("outposts = %+v, want edge's arrival high 4 + 3", r.Outposts)
 	}
-	if q := r.Nodes[1].DispatchQueueDepth; q == nil || *q != 7 || r.Nodes[1].BusyWorkers != nil || r.Nodes[0].DispatchQueueDepth != nil {
-		t.Fatalf("gauges = %+v", r.Nodes)
+	if q := r.Outposts[1].DispatchQueueDepth; q == nil || *q != 7 || r.Outposts[1].BusyWorkers != nil || r.Outposts[0].DispatchQueueDepth != nil {
+		t.Fatalf("gauges = %+v", r.Outposts)
 	}
 	if len(r.WorstFaces) != 1 || r.WorstFaces[0].ComponentID != "d1" {
 		t.Fatalf("worst faces = %+v", r.WorstFaces)

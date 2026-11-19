@@ -60,6 +60,10 @@ const metricBlockFile = "20261107004352_metric_block.sql"
 // metric_block.
 const metricBlockLineageFile = "20261107202741_metric_block_lineage.sql"
 
+// metricTrendDirtyRawOnlyFile alters the trend's dirty marks (#1560), which
+// the trend migration creates and the wide lane does not have.
+const metricTrendDirtyRawOnlyFile = "20261115064629_metric_trend_dirty_raw_only.sql"
+
 // belowNarrowMetric stands a fixture's database just below the narrow metric
 // lane (#1275): the backfill is frozen at the wide metric table it ran
 // against, so it runs there, as it did on every install.
@@ -75,7 +79,8 @@ const metricBlockLineageFile = "20261107202741_metric_block_lineage.sql"
 // its sample table; the blocks, #1528, reference metric_series, and their
 // lineage, #1534, alters them) cannot stand beside the wide table and is left
 // to that forward migrate: metricTrendFile, metricMillisFile,
-// metricDayMigration, metricBlockFile and metricBlockLineageFile.
+// metricDayMigration, metricBlockFile, metricBlockLineageFile and
+// metricTrendDirtyRawOnlyFile.
 func belowNarrowMetric(t *testing.T, dsn string) {
 	t.Helper()
 	if err := migrate.RollbackBelow(dsn, metricNarrowVersion); err != nil {
@@ -101,7 +106,7 @@ func belowNarrowMetric(t *testing.T, dsn string) {
 		}
 		up, _, _ := strings.Cut(string(raw), "-- migrate:down")
 		if e.Name() == metricTrendFile || e.Name() == metricMillisFile || e.Name() == metricDayMigration || e.Name() == metricBlockFile ||
-			e.Name() == metricBlockLineageFile {
+			e.Name() == metricBlockLineageFile || e.Name() == metricTrendDirtyRawOnlyFile {
 			continue
 		}
 		if _, err := conn.Exec(context.Background(), strings.TrimPrefix(up, "-- migrate:up")); err != nil {
@@ -142,7 +147,7 @@ var bornUnderTheRuling = map[string]bool{
 
 // TestLegacyBackfillNamesTheRuling: the key lists the backfill holds rows to
 // are the code's ruling as of the migration, so a typo cannot leave a class
-// of legacy rows untouched: every node-probe key and every pinnable key the
+// of legacy rows untouched: every outpost-probe key and every pinnable key the
 // code declares is listed (or born after the migration, bornUnderTheRuling),
 // and nothing the code does not declare.
 func TestLegacyBackfillNamesTheRuling(t *testing.T) {
@@ -174,7 +179,8 @@ func TestLegacyBackfillNamesTheRuling(t *testing.T) {
 			}
 		}
 	}
-	held("node_probe", list("node_probe"), probekeys.NodeOnly())
+	// The applied migration keeps its pre-rename name for the list (#2059).
+	held("node_probe", list("node_probe"), probekeys.OutpostOnly())
 	var pins []string
 	for _, k := range writerclass.ReservedNames() {
 		if writerclass.Pinnable(k) {
@@ -217,8 +223,8 @@ func TestLegacyBackfillRetiresWhatTheRulingRefuses(t *testing.T) {
 	}
 	hour := time.Now().UTC().Add(-time.Hour)
 
-	// ssh: the node learned honest; then a pin was planted through the plain
-	// property route, and the node published the planted key it then held.
+	// ssh: the outpost learned honest; then a pin was planted through the plain
+	// property route, and the outpost published the planted key it then held.
 	honest, planted := key("h"), key("p")
 	exec(`insert into property (ts, owner_kind, component_id, property_type_id, instance, provenance, source, value)
 		values ($1, 'component', $2::uuid, (select id from property_type where name = 'ssh-host-key'), 'ssh', 'observed', 'ssh', to_jsonb($3::text))`,
@@ -247,7 +253,7 @@ func TestLegacyBackfillRetiresWhatTheRulingRefuses(t *testing.T) {
 		t.Fatalf("an unstamped :retry pin is delivered (%q) before the backfill; the stamp is what makes it trusted", got)
 	}
 
-	// Node-probe rows: the node's honest ones, and the refused kinds.
+	// Outpost-probe rows: the outpost's honest ones, and the refused kinds.
 	exec(`insert into property (ts, owner_kind, component_id, property_type_id, instance, provenance, source, value)
 		select v.ts, 'component', $1::uuid, (select id from property_type where name = v.key), v.instance, v.provenance, 'ssh', to_jsonb(v.value)
 		from (values
@@ -271,7 +277,7 @@ func TestLegacyBackfillRetiresWhatTheRulingRefuses(t *testing.T) {
 		t.Fatalf("issue a command: %v", err)
 	}
 	// A command's reply, read off the device, recorded as an observation of
-	// a node-probe key a command type was let target before the ruling: the
+	// an outpost-probe key a command type was let target before the ruling: the
 	// row carries the instant the command executed. And a collection-failed
 	// an event rule derived.
 	exec(`insert into command_type (name, description, settle_window_seconds, target_property_type_id, official)
@@ -302,23 +308,23 @@ func TestLegacyBackfillRetiresWhatTheRulingRefuses(t *testing.T) {
 		t.Fatalf("run the backfill: %v", err)
 	}
 
-	// The pins: the planted one and its echo are retired, the node's honest
+	// The pins: the planted one and its echo are retired, the outpost's honest
 	// key is the pin again, and the legacy :retry pin is stamped and
 	// delivered.
 	if got := f.endpointTask(t, "ssh").HostKey; got != honest {
-		t.Errorf("after the backfill the ssh pin is %q, want the key the node learned before the plant", got)
+		t.Errorf("after the backfill the ssh pin is %q, want the key the outpost learned before the plant", got)
 	}
 	if got := f.endpointTask(t, "tls").CertificatePin; got != trusted {
 		t.Errorf("after the backfill the tls pin is %q, want the operator's :retry pin", got)
 	}
-	// The node-probe reads serve the node's honest rows.
+	// The outpost-probe reads serve the outpost's honest rows.
 	if got, err := f.gw.LatestProperty(f.ctx, "disp-1", "endpoint-reachable", "ssh"); err != nil || got == nil || got.Value != "down" {
-		t.Errorf("LatestProperty = %+v (%v), want the node's down", got, err)
+		t.Errorf("LatestProperty = %+v (%v), want the outpost's down", got, err)
 	}
 	if got := f.count(t, `select value::int from metric where component_id = '`+d1+`'
 			and metric_type_id = (select id from metric_type where name = 'tcp-connect-time') and instance = 'ssh'
 			and provenance = 'observed' order by ts desc limit 1`); got != 0 {
-		t.Errorf("the newest observed tcp-connect-time on ssh is %d, want the node's 0", got)
+		t.Errorf("the newest observed tcp-connect-time on ssh is %d, want the outpost's 0", got)
 	}
 	evs, err := f.gw.ListComponentEvents(f.ctx, "disp-1", 0, 50)
 	if err != nil {
@@ -447,9 +453,9 @@ func TestLegacyBackfillDownRestoresTheRows(t *testing.T) {
 }
 
 // TestRetiredPlantedPinIsNeverRelearned: a pin retired as planted stays out
-// of force however it comes back as an observation: a node still on an
+// of force however it comes back as an observation: an outpost still on an
 // older binary republishes it from memory, or an echo stamped by a lagging
-// node clock (dated before the plant, though published after it) survives
+// outpost clock (dated before the plant, though published after it) survives
 // in the series. Neither is delivered as the pin until an operator's :retry
 // confirms the key.
 func TestRetiredPlantedPinIsNeverRelearned(t *testing.T) {
@@ -465,7 +471,7 @@ func TestRetiredPlantedPinIsNeverRelearned(t *testing.T) {
 	for _, pc := range pinCases {
 		planted := "SHA256:" + strings.Repeat("x", 43)
 		f.plantPin(t, pc.property, pc.transport, planted)
-		// The node's echo, its clock ten minutes slow: dated before the plant.
+		// The outpost's echo, its clock ten minutes slow: dated before the plant.
 		if _, err := f.conn.Exec(f.ctx, `insert into property (ts, owner_kind, component_id, property_type_id, instance, provenance, source, value)
 			values (now() - interval '10 minutes', 'component', $1::uuid, (select id from property_type where name = $2), $3, 'observed', $3, to_jsonb($4::text))`,
 			d1, pc.property, pc.transport, planted); err != nil {
@@ -482,8 +488,8 @@ func TestRetiredPlantedPinIsNeverRelearned(t *testing.T) {
 			t.Errorf("%s: %d rows of the planted key survive the backfill", pc.transport, n)
 		}
 
-		// A node still holding the planted key republishes it as observed.
-		if err := f.gw.InsertPropertySamples(f.ctx, storage.NodeWriter(d1, pc.transport), []storage.PropertySampleWrite{
+		// An outpost still holding the planted key republishes it as observed.
+		if err := f.gw.InsertPropertySamples(f.ctx, storage.OutpostWriter(d1, pc.transport), []storage.PropertySampleWrite{
 			{OwnerKind: "component", OwnerID: d1, Key: pc.property, Instance: pc.transport, Value: planted}}); err != nil {
 			t.Fatalf("%s: the republish: %v", pc.transport, err)
 		}
@@ -502,7 +508,7 @@ func TestRetiredPlantedPinIsNeverRelearned(t *testing.T) {
 		if !slices.ContainsFunc(vs, func(v storage.RulingViolation) bool {
 			return v.Key == pc.property && strings.Contains(v.Where, "endpoint disp-1/"+pc.transport)
 		}) {
-			t.Errorf("%s: the boot audit does not name the endpoint whose node offers a retired pin's key: %+v", pc.transport, vs)
+			t.Errorf("%s: the boot audit does not name the endpoint whose outpost offers a retired pin's key: %+v", pc.transport, vs)
 		}
 
 		// An operator's :retry confirms the key: it is the pin again.
@@ -519,21 +525,21 @@ func TestRetiredPlantedPinIsNeverRelearned(t *testing.T) {
 	}
 }
 
-// TestRetiredRowsReleaseTheConditionsTheyRaised: a condition, and the alarm
+// TestRetiredRowsReleaseTheFiringsTheyRaised: a firing, and the alarm
 // with it, that a now-retired row raised (one under an instance naming no
 // endpoint, one dated a year ahead) is released by the boot heal, and one a
 // retired row cleared is raised again: a series with nothing left ends its
-// condition, a series whose newest sample is the node's honest one is judged
+// firing, a series whose newest sample is the outpost's honest one is judged
 // against it. A series that cannot be healed (a legacy rule whose fire event
 // the ruling now reserves) is logged and skipped, never stopping the rest, and
 // the heal runs once over what was retired: a second heal judges nothing.
-func TestRetiredRowsReleaseTheConditionsTheyRaised(t *testing.T) {
+func TestRetiredRowsReleaseTheFiringsTheyRaised(t *testing.T) {
 	t.Parallel()
 	r := newEdgeRig(t)
 	belowNarrowMetric(t, r.f.dsn)
-	r.rule(storage.EventRuleSpec{Name: "edge", Severity: "high", ClearEventType: "condition-ended"})
+	r.rule(storage.EventRuleSpec{Name: "edge", Severity: "high", ClearEventType: "rule-cleared"})
 	if _, err := r.f.gw.CreateEventRule(r.ctx, "", storage.EventRuleSpec{Name: "legacy", SampleKey: "endpoint-reachable",
-		Fire: criteria("eq", "down"), Clear: ptrCriteria(criteria("eq", "up")), FireEventType: "condition-started",
+		Fire: criteria("eq", "down"), Clear: ptrCriteria(criteria("eq", "up")), FireEventType: "rule-fired",
 		Selector: storage.EventRuleSelector{Components: []string{"bar-1"}}}, r.f.all); err != nil {
 		t.Fatal(err)
 	}
@@ -551,8 +557,8 @@ func TestRetiredRowsReleaseTheConditionsTheyRaised(t *testing.T) {
 		}
 	}
 
-	// tcp: the node's honest up, then a down a year ahead. ghost: a down
-	// under an instance bar-1 has no endpoint for. http: the node's honest
+	// tcp: the outpost's honest up, then a down a year ahead. ghost: a down
+	// under an instance bar-1 has no endpoint for. http: the outpost's honest
 	// down, then an up a year ahead that cleared it.
 	r.observe("tcp", "up")
 	r.observe("tcp", "down")
@@ -561,9 +567,9 @@ func TestRetiredRowsReleaseTheConditionsTheyRaised(t *testing.T) {
 	r.observe("http", "down")
 	r.observe("http", "up")
 	forwardDate("http")
-	if r.openAlarm("tcp") == "" || r.openAlarm("ghost") == "" || r.openAlarm("http") != "" || r.conditions() != 2 {
-		t.Fatalf("the seed left alarms tcp %q, ghost %q, http %q with %d conditions; want tcp and ghost open",
-			r.openAlarm("tcp"), r.openAlarm("ghost"), r.openAlarm("http"), r.conditions())
+	if r.openAlarm("tcp") == "" || r.openAlarm("ghost") == "" || r.openAlarm("http") != "" || r.firings() != 2 {
+		t.Fatalf("the seed left alarms tcp %q, ghost %q, http %q with %d firings; want tcp and ghost open",
+			r.openAlarm("tcp"), r.openAlarm("ghost"), r.openAlarm("http"), r.firings())
 	}
 	// The legacy rule's fire event is one the ruling now reserves.
 	if _, err := r.f.conn.Exec(r.ctx, `update event_rule set fire_event_type_id = (select id from event_type where name = 'collection-failed')
@@ -583,8 +589,8 @@ func TestRetiredRowsReleaseTheConditionsTheyRaised(t *testing.T) {
 	if r.openAlarm("tcp") != "" || r.openAlarm("ghost") != "" {
 		t.Errorf("after the heal alarms tcp %q, ghost %q stay open; want both released", r.openAlarm("tcp"), r.openAlarm("ghost"))
 	}
-	if r.openAlarm("http") == "" || r.conditions() != 1 {
-		t.Errorf("after the heal http's alarm is %q with %d conditions; want the honest down raised again", r.openAlarm("http"), r.conditions())
+	if r.openAlarm("http") == "" || r.firings() != 1 {
+		t.Errorf("after the heal http's alarm is %q with %d firings; want the honest down raised again", r.openAlarm("http"), r.firings())
 	}
 	events := len(r.events())
 	if n, err := r.f.gw.HealRetiredSeries(r.ctx); err != nil || n != 0 {
@@ -595,9 +601,9 @@ func TestRetiredRowsReleaseTheConditionsTheyRaised(t *testing.T) {
 	}
 }
 
-// TestPinLearnedBeforeAPlantStaysThePin: a key the node learned on first use
+// TestPinLearnedBeforeAPlantStaysThePin: a key the outpost learned on first use
 // before someone declared the same key through the plain property route is
-// the node's own, so retiring the declared row leaves it the pin in force.
+// the outpost's own, so retiring the declared row leaves it the pin in force.
 func TestPinLearnedBeforeAPlantStaysThePin(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
@@ -610,7 +616,7 @@ func TestPinLearnedBeforeAPlantStaysThePin(t *testing.T) {
 	learned := "SHA256:" + strings.Repeat("k", 43)
 	observe := func() {
 		t.Helper()
-		if err := f.gw.InsertPropertySamples(f.ctx, storage.NodeWriter(d1, "ssh"), []storage.PropertySampleWrite{
+		if err := f.gw.InsertPropertySamples(f.ctx, storage.OutpostWriter(d1, "ssh"), []storage.PropertySampleWrite{
 			{OwnerKind: "component", OwnerID: d1, Key: "ssh-host-key", Instance: "ssh", Value: learned}}); err != nil {
 			t.Fatal(err)
 		}
@@ -621,10 +627,10 @@ func TestPinLearnedBeforeAPlantStaysThePin(t *testing.T) {
 		t.Fatalf("run the backfill: %v", err)
 	}
 	if got := f.endpointTask(t, "ssh").HostKey; got != learned {
-		t.Fatalf("after the backfill the pin is %q, want the key the node learned before the plant", got)
+		t.Fatalf("after the backfill the pin is %q, want the key the outpost learned before the plant", got)
 	}
 	observe()
 	if got := f.endpointTask(t, "ssh").HostKey; got != learned {
-		t.Fatalf("after the node publishes it again the pin is %q, want the key it learned", got)
+		t.Fatalf("after the outpost publishes it again the pin is %q, want the key it learned", got)
 	}
 }

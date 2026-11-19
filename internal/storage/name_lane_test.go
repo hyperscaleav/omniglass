@@ -12,7 +12,7 @@ import (
 // The one rule for which row a bare name resolves to (#1307, #1432): the search
 // path. A name the operator's local rows hold resolves there, in whichever of
 // the three catalogs; otherwise to the og row; one holder per tier, or nothing
-// (a collision). A reserved key (the node's or the platform's own) is never
+// (a collision). A reserved key (the outpost's or the platform's own) is never
 // shadowed, and a namespace other than local and og never answers a bare name.
 func TestResolveNameLane(t *testing.T) {
 	t.Parallel()
@@ -66,7 +66,7 @@ func TestResolveNameIn(t *testing.T) {
 	}
 }
 
-// Every reader of a bare name agrees with the registry on which catalog a
+// Every reader of a bare name agrees with the catalog on which catalog a
 // shadowed name is in, or a rule, a calc rule or a shipped driver would read the
 // platform's row while ingest writes the operator's. An operator's row of the
 // name first, then the release that ships it, in each direction.
@@ -107,7 +107,7 @@ func TestEveryNameResolverAgreesWithTheShadow(t *testing.T) {
 	}
 
 	// A driver's emit is validated against the operator's lane: the catalog a
-	// spec is checked against names the lane the registry resolves to.
+	// spec is checked against names the lane the catalog resolves to.
 	lanes, err := gw.DriverCatalogLanes(ctx)
 	if err != nil {
 		t.Fatal(err)

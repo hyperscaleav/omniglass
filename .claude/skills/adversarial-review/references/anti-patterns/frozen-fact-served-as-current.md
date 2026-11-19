@@ -11,7 +11,7 @@
 - **Second instance (#821):** a gate that stops a transport's only probe. Beneath an snmp auth
   gate the get carries the refused community, so nothing was sent and nothing landed: the verdict
   stayed up and the row read responding against a powered-off agent. Fix: give the held tick its
-  own reading (the held rung lands down, rejected, `collectSNMPRung`, internal/node/snmp.go; as
+  own reading (the held rung lands down, rejected, `collectSNMPRung`, internal/outpost/snmp.go; as
   udp's gated rung does), so the verdict follows.
 - **Third instance (#456):** an owner-level reduction over every instance of a key. A deleted
   endpoint's last reading is frozen (nothing prunes a series' latest row, and a changed transport
@@ -20,8 +20,11 @@
   once saw. Fix: reduce over live observers only, an instance that names a transport the owner
   has no endpoint of being a retired one (`latestObservedPerInstanceSQL`,
   internal/storage/instance_values.go). Age is no test on a transition-only property, where a
-  live, unchanged value carries an old ts. Residual, open as #1217: an endpoint that still exists
-  but whose driver no longer emits the key keeps its last reading live.
+  live, unchanged value carries an old ts. The residual, fixed in #1217: an endpoint that still
+  exists but whose driver's current spec no longer emits the key kept its last reading live, so the
+  same predicate now asks the spec (`driverEmitsSQL`, internal/storage/instance_values.go), with a
+  native probe key and a driverless endpoint staying live. Cue: a liveness test that checks the
+  observer exists but not that it still writes the thing read.
 - **Fourth instance (#1297):** a generic read that lists every observed key. The properties read
   first listed every key an owner has an observed row of, so the native probe keys came with it:
   under a certificate gate `tls-certificate-expiry` read as the component's current value, the
@@ -43,7 +46,7 @@
 - **Seventh instance (#1644):** a latest-sample read over a count written only when nonzero. The
   Platform health view took each key's latest sample, but the window counts (overruns, skips,
   drops, publish failures, expired commands) write nothing for a window that counted nothing, so a
-  node that dropped five batches last week showed five under Spool Drops for good; and a
+  outpost that dropped five batches last week showed five under Spool Drops for good; and a
   `distinct on` per key kept one instance of a split count, showing unexecuted 1 for an expired
   total of 3. Fix: a window count reads only within two report windows of the read, and a key is
   the sum of its instances at its newest time (`platformFigures`, `PlatformWindowKeys`,

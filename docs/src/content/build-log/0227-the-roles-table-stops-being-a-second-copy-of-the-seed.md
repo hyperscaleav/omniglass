@@ -25,4 +25,4 @@ form: bullet
   stays hand-written beside it, per role: why the IAM directories are out of `viewer`'s reach, why an
   admin-sensitive secret is a 404 rather than a 403, why a `deploy` grant reaches exactly one tier, why
   `admin` is not the superuser. That split is the rule the page now follows, and it is the same one
-  [the access guide](/guides/admin/access/) already followed.
+  [the access guide](/admin/access/) already followed.

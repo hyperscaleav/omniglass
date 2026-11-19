@@ -55,13 +55,13 @@ type HTTPResult struct {
 func NewHTTPProber() HTTPProber { return httpProber{} }
 
 // NewTalliedHTTPProber is the real HTTP probe counting its connection and its
-// request on the node's tally (#1639).
+// request on the outpost's tally (#1639).
 func NewTalliedHTTPProber(tally *RequestTally) HTTPProber { return httpProber{tally: tally} }
 
 type httpProber struct{ tally *RequestTally }
 
 // probeTransport is the probe's transport: one request per connection, so a
-// connection the node opens is one the component accepts for one request.
+// connection the outpost opens is one the component accepts for one request.
 func probeTransport(dial func(context.Context, string, string) (net.Conn, error)) *http.Transport {
 	return &http.Transport{DialContext: dial, DisableKeepAlives: true}
 }
@@ -136,7 +136,7 @@ func (p httpProber) Probe(ctx context.Context, t HTTPTask) (HTTPResult, error) {
 	if err != nil {
 		return HTTPResult{}, fmt.Errorf("collection: http probe %s: %w", t.Target, err)
 	}
-	req.Header.Set("User-Agent", "omniglass-node")
+	req.Header.Set("User-Agent", "omniglass-outpost")
 	start := time.Now()
 	resp, err := client.Do(req)
 	mu.Lock()

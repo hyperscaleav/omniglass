@@ -1,0 +1,360 @@
+package outpost
+
+import (
+	"context"
+	"encoding/json"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/hyperscaleav/omniglass/internal/collection"
+)
+
+// TestParseTCPTask: the dial target and timeout come off the interface params;
+// an empty target is a usage error the caller skips on.
+func TestParseTCPTask(t *testing.T) {
+	t.Parallel()
+	spec := collection.TaskSpec{ID: "t1", Transport: "tcp", EndpointParams: json.RawMessage(`{"target":"10.0.0.5:22","timeout":"2s"}`)}
+	got, err := parseTCPTask(spec)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if got.Target != "10.0.0.5:22" || got.Timeout.String() != "2s" {
+		t.Fatalf("parse = %+v, want target 10.0.0.5:22 timeout 2s", got)
+	}
+
+	if _, err := parseTCPTask(collection.TaskSpec{ID: "t2", Transport: "tcp", EndpointParams: json.RawMessage(`{}`)}); err == nil {
+		t.Fatal("empty target: want error")
+	}
+}
+
+// TestParseICMPTask: the ping target, count, and timeout come off the interface
+// params; an empty target is a usage error the caller skips on.
+func TestParseICMPTask(t *testing.T) {
+	t.Parallel()
+	spec := collection.TaskSpec{ID: "t1", Transport: "icmp", EndpointParams: json.RawMessage(`{"target":"10.0.0.5","count":3,"timeout":"2s"}`)}
+	got, err := parseICMPTask(spec)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if got.Target != "10.0.0.5" || got.Count != 3 || got.Timeout.String() != "2s" {
+		t.Fatalf("parse = %+v, want target 10.0.0.5 count 3 timeout 2s", got)
+	}
+
+	if _, err := parseICMPTask(collection.TaskSpec{ID: "t2", Transport: "icmp", EndpointParams: json.RawMessage(`{}`)}); err == nil {
+		t.Fatal("empty target: want error")
+	}
+}
+
+// TestGroupForLanes: the group carries the task id, no component identity,
+// and each produced sample rides its own lane (#594): a probe's timing on
+// metrics, its result (a state, #1592) and the text verdict on properties as
+// canonical JSON text, the result's reason riding as a label. The
+// probes know their lanes statically, so no catalog is consulted outpost-side.
+func TestGroupForLanes(t *testing.T) {
+	t.Parallel()
+	dps := []collection.Sample{
+		collection.ProbeResult(collection.SignalTCPOpen, true, time.Time{}, collection.Responded),
+		{Name: collection.SignalTCPConnectTime, Value: 3.5},
+		{Name: collection.SignalEndpointReachable, Text: collection.VerdictUp, IsText: true},
+	}
+	ev := groupFor("t1", dps)
+	if ev.GetTaskId() != "t1" {
+		t.Fatalf("group task id = %q, want t1", ev.GetTaskId())
+	}
+	if len(ev.GetMetrics()) != 1 || len(ev.GetProperties()) != 2 {
+		t.Fatalf("lanes = %d metrics / %d properties, want 1/2", len(ev.GetMetrics()), len(ev.GetProperties()))
+	}
+	timing := ev.GetMetrics()[0]
+	if timing.GetName() != collection.SignalTCPConnectTime || timing.GetValue() != 3.5 {
+		t.Fatalf("metric = %+v, want tcp-connect-time=3.5", timing)
+	}
+	result := ev.GetProperties()[0]
+	if result.GetName() != collection.SignalTCPOpen || result.GetValueJson() != `"open"` || result.GetLabels()[collection.ReasonLabel] != string(collection.Responded) {
+		t.Fatalf("result property = %+v, want tcp-open with value_json %q and the reason label", result, `"open"`)
+	}
+	verdict := ev.GetProperties()[1]
+	if verdict.GetName() != collection.SignalEndpointReachable || verdict.GetValueJson() != `"up"` {
+		t.Fatalf("verdict property = %+v, want endpoint-reachable with value_json %q", verdict, `"up"`)
+	}
+}
+
+// TestGroupForTS: a sample the probe stamped keeps its ts verbatim; an
+// unstamped sample carries NO per-sample ts, so the group ts governs at ingest.
+// The old wire stamped timestamppb.New(zero) on unstamped samples, which reads
+// as the year one downstream, so absence must be encoded as absence.
+func TestGroupForTS(t *testing.T) {
+	t.Parallel()
+	stamped := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	dps := []collection.Sample{
+		{Name: collection.SignalTCPConnectTime, Value: 1, TS: stamped},
+		{Name: collection.SignalTCPConnectTime, Value: 3.5},
+	}
+	ev := groupFor("t1", dps)
+	if ev.GetTs() == nil {
+		t.Fatal("group ts must be stamped so unstamped samples resolve to it")
+	}
+	if got := ev.GetMetrics()[0].GetTs(); got == nil || !got.AsTime().Equal(stamped) {
+		t.Fatalf("stamped sample ts = %v, want %v verbatim", got, stamped)
+	}
+	if got := ev.GetMetrics()[1].GetTs(); got != nil {
+		t.Fatalf("unstamped sample ts = %v, want none (the group ts governs)", got)
+	}
+}
+
+// TestAppendVerdict proves the outpost-side transition-only invariant: the first
+// observation emits a verdict, an unchanged verdict on the next tick emits
+// nothing, and a flip emits again. This is the primary defense; the ingest guard
+// is the restart net.
+func TestAppendVerdict(t *testing.T) {
+	t.Parallel()
+	verdicts := map[string]string{}
+	up := []collection.Sample{{Name: collection.SignalTCPOpen, Text: collection.PortOpen, IsText: true}}
+	down := []collection.Sample{{Name: collection.SignalTCPOpen, Text: collection.PortClosed, IsText: true}}
+
+	// First observation (up): the verdict is appended.
+	got := appendVerdict(up, "if-1", verdicts)
+	if len(got) != 2 || !got[1].IsText || got[1].Text != collection.VerdictUp {
+		t.Fatalf("first tick: want an up verdict appended, got %+v", got)
+	}
+
+	// Same up again: no transition, nothing appended.
+	if got := appendVerdict(up, "if-1", verdicts); len(got) != 1 {
+		t.Fatalf("unchanged tick: want no verdict appended, got %+v", got)
+	}
+
+	// Flip to down: the verdict is appended again.
+	got = appendVerdict(down, "if-1", verdicts)
+	if len(got) != 2 || got[1].Text != collection.VerdictDown {
+		t.Fatalf("flip tick: want a down verdict appended, got %+v", got)
+	}
+
+	// A different interface tracks independently (first observation emits).
+	if got := appendVerdict(up, "if-2", verdicts); len(got) != 2 {
+		t.Fatalf("other interface: want its own first verdict, got %+v", got)
+	}
+
+	// An interface whose probe carries no reachability metric has no verdict.
+	if got := appendVerdict([]collection.Sample{{Name: collection.SignalTCPConnectTime, Value: 3}}, "if-3", verdicts); len(got) != 1 {
+		t.Fatalf("no reachability metric: want no verdict, got %+v", got)
+	}
+}
+
+// TestParseHTTPTask / TestParseSSHTask: the L7 tasks come off the endpoint
+// params (#812); the ssh credential is optional and rides plain params until
+// the driver spec's secret references (#813).
+func TestParseHTTPTask(t *testing.T) {
+	t.Parallel()
+	spec := collection.TaskSpec{ID: "t1", Transport: "http", EndpointParams: json.RawMessage(`{"target":"10.0.0.5:80","timeout":"3s"}`)}
+	got, err := parseHTTPTask(spec)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if got.Target != "10.0.0.5:80" || got.Timeout.String() != "3s" {
+		t.Fatalf("parse = %+v", got)
+	}
+	if _, err := parseHTTPTask(collection.TaskSpec{ID: "t2", Transport: "http", EndpointParams: json.RawMessage(`{}`)}); err == nil {
+		t.Fatal("empty target: want error")
+	}
+}
+
+func TestParseSSHTask(t *testing.T) {
+	t.Parallel()
+	spec := collection.TaskSpec{ID: "t1", Transport: "ssh", EndpointParams: json.RawMessage(`{"target":"10.0.0.5:22","username":"svc","password":"pw"}`)}
+	got, err := parseSSHTask(spec)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if got.Target != "10.0.0.5:22" || got.Username != "svc" || got.Password != "pw" {
+		t.Fatalf("parse = %+v", got)
+	}
+}
+
+// TestCollectTaskDispatchesTheLadder: the http and ssh transports reach their
+// own L7 probes since #812, no longer the plain tcp connect.
+func TestCollectTaskDispatchesTheLadder(t *testing.T) {
+	t.Parallel()
+	runner := &collection.Runner{
+		HTTP: dispatchHTTPFake{},
+		SSH:  dispatchSSHFake{},
+	}
+	dps, err := collectTask(t.Context(), runner, collection.TaskSpec{ID: "h", Transport: "http", EndpointParams: json.RawMessage(`{"target":"a:80"}`)})
+	if err != nil {
+		t.Fatalf("http dispatch: %v", err)
+	}
+	if !hasSample(dps, "http-response-time") {
+		t.Fatalf("http dispatch missed the L7 probe: %v", names(dps))
+	}
+	dps, err = collectTask(t.Context(), runner, collection.TaskSpec{ID: "s", Transport: "ssh", EndpointParams: json.RawMessage(`{"target":"a:22","username":"u","password":"p"}`)})
+	if err != nil {
+		t.Fatalf("ssh dispatch: %v", err)
+	}
+	if !hasSample(dps, "ssh-handshake-time") || !hasSample(dps, "endpoint-authenticated") {
+		t.Fatalf("ssh dispatch missed the L7 probe: %v", names(dps))
+	}
+}
+
+type dispatchHTTPFake struct{}
+
+func (dispatchHTTPFake) Probe(_ context.Context, _ collection.HTTPTask) (collection.HTTPResult, error) {
+	return collection.HTTPResult{Dialed: true, Responded: true, DialMS: 1, ResponseMS: 2, Reason: collection.Responded}, nil
+}
+
+type dispatchSSHFake struct{}
+
+func (dispatchSSHFake) Probe(_ context.Context, _ string, _ collection.SSHCredential, _ time.Duration) (collection.SSHResult, error) {
+	return collection.SSHResult{Dialed: true, Responded: true, AuthAttempted: true, Authenticated: true, DialMS: 1, HandshakeMS: 2, Reason: collection.Responded}, nil
+}
+
+func hasSample(dps []collection.Sample, name string) bool {
+	for _, d := range dps {
+		if d.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func names(dps []collection.Sample) []string {
+	var out []string
+	for _, d := range dps {
+		out = append(out, d.Name)
+	}
+	return out
+}
+
+// fakeGetter serves a canned SNMP response for the driver-poll dispatch test.
+type fakeGetter struct {
+	res map[string]string
+	err error
+}
+
+func (f fakeGetter) Get(context.Context, string, string, []string, time.Duration) (map[string]string, error) {
+	return f.res, f.err
+}
+
+// TestCollectDriverTask proves the outpost-side driver dispatch (#814): a baked
+// poll task fetches with the worklist-delivered credential and lands its emits
+// typed by lane, and each fault is a story, never a silent drop.
+func TestCollectDriverTask(t *testing.T) {
+	t.Parallel()
+	spec := json.RawMessage(`{"driver": "snmp-generic", "function": "scalars",
+		"request": {"get": ["1.3.6.1.2.1.1.1.0", "1.3.6.1.2.1.1.3.0"]},
+		"emits": [
+			{"name": "model-number", "lane": "property", "extract": {"oid": "1.3.6.1.2.1.1.1.0"}},
+			{"name": "uptime", "lane": "metric", "extract": {"oid": "1.3.6.1.2.1.1.3.0"}, "transform": {"scale": 0.01}}
+		]}`)
+	task := collection.TaskSpec{
+		ID: "d1", Mode: "poll", Transport: "snmp",
+		EndpointParams: json.RawMessage(`{"target":"10.20.4.40:161"}`),
+		Spec:           spec,
+		Secrets:        map[string]map[string]string{"community": {"community": "lab-public"}},
+	}
+
+	runner := &collection.Runner{SNMP: fakeGetter{res: map[string]string{
+		"1.3.6.1.2.1.1.1.0": "Boreal AirWall 3",
+		"1.3.6.1.2.1.1.3.0": "8123456",
+	}}}
+	dps, faults := collectDriverTask(t.Context(), runner, task, nil)
+	if len(faults) != 0 {
+		t.Fatalf("faults: %v", faults)
+	}
+	ev := groupFor(task.ID, dps)
+	if len(ev.Metrics) != 1 || ev.Metrics[0].Name != "uptime" || ev.Metrics[0].Value != 81234.56 {
+		t.Fatalf("metric lane = %+v, want the scaled uptime", ev.Metrics)
+	}
+	if len(ev.Properties) != 1 || ev.Properties[0].Name != "model-number" || ev.Properties[0].ValueJson != `"Boreal AirWall 3"` {
+		t.Fatalf("property lane = %+v, want the sysDescr text", ev.Properties)
+	}
+
+	// A silent agent is one fault covering the fetch, and no samples at all.
+	runner = &collection.Runner{SNMP: fakeGetter{err: context.DeadlineExceeded}}
+	dps, faults = collectDriverTask(t.Context(), runner, task, nil)
+	if len(dps) != 0 || len(faults) != 1 {
+		t.Fatalf("failed fetch: dps %v faults %v", dps, faults)
+	}
+
+	// A missing credential faults by name before any wire work.
+	bare := task
+	bare.Secrets = nil
+	_, faults = collectDriverTask(t.Context(), &collection.Runner{SNMP: fakeGetter{}}, bare, nil)
+	if len(faults) != 1 || !strings.Contains(faults[0].Error(), "community") {
+		t.Fatalf("missing credential: faults %v", faults)
+	}
+}
+
+// lineRecorder records the lines an actuation sends and answers each one.
+type lineRecorder struct {
+	sent []string
+	err  error
+}
+
+func (l *lineRecorder) Exchange(_ context.Context, _, line string, _ time.Duration) (string, error) {
+	if l.err != nil {
+		return "", l.err
+	}
+	l.sent = append(l.sent, line)
+	return "OK", nil
+}
+
+// TestExecuteDelivery pins the actuation contract (#815): a rendered line goes
+// to the device once, any answer counts as actuated (settlement judges the
+// outcome), and a transport with no actuator is a failure story, not a panic.
+func TestExecuteDelivery(t *testing.T) {
+	t.Parallel()
+	rec := &lineRecorder{}
+	runner := &collection.Runner{Line: rec}
+	d := collection.CommandDelivery{ID: 7, CommandType: "set-input", Transport: "tcp", Target: "10.0.0.5:4998", Line: "SET INPUT hdmi-2"}
+	reply, out := executeDelivery(t.Context(), runner, d, nil)
+	if out != "" {
+		t.Fatalf("actuation failed: %s", out)
+	}
+	if reply != "OK" {
+		t.Fatalf("reply = %q, want the device's answer carried back for settlement", reply)
+	}
+	if len(rec.sent) != 1 || rec.sent[0] != "SET INPUT hdmi-2" {
+		t.Fatalf("device saw %v", rec.sent)
+	}
+	if _, out := executeDelivery(t.Context(), runner, collection.CommandDelivery{ID: 8, Transport: "snmp"}, nil); out == "" {
+		t.Fatal("an unactuatable transport reported success")
+	}
+	rec.err = context.DeadlineExceeded
+	if _, out := executeDelivery(t.Context(), runner, d, nil); out == "" {
+		t.Fatal("a dead device reported success")
+	}
+}
+
+// A websocket endpoint's probe is an http GET / (#1034) that lands on the
+// face's own listener, so it tallies under websocket, where the sim counts
+// it; an http endpoint's probe stays on http (#1647).
+func TestAProbeTalliesUnderItsEndpointsTransport(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		transport string
+		want      collection.TallyTransport
+	}{
+		{"http", collection.TallyHTTP},
+		{"https", collection.TallyHTTP},
+		{"websocket", collection.TallyWebSocket},
+		{"wss", collection.TallyWebSocket},
+	} {
+		t.Run(tc.transport, func(t *testing.T) {
+			t.Parallel()
+			fake := &tallyRecordingHTTPFake{}
+			task := collection.TaskSpec{ID: "p", Transport: tc.transport, EndpointID: "ep", EndpointParams: json.RawMessage(`{"target":"a:443"}`)}
+			if _, err := collectProbe(t.Context(), &collection.Runner{HTTP: fake}, task, nil); err != nil {
+				t.Fatal(err)
+			}
+			if len(fake.tallies) != 1 || fake.tallies[0] != tc.want {
+				t.Fatalf("a %s probe tallied under %v, want %v", tc.transport, fake.tallies, tc.want)
+			}
+		})
+	}
+}
+
+type tallyRecordingHTTPFake struct{ tallies []collection.TallyTransport }
+
+func (f *tallyRecordingHTTPFake) Probe(_ context.Context, t collection.HTTPTask) (collection.HTTPResult, error) {
+	f.tallies = append(f.tallies, t.Tally)
+	return collection.HTTPResult{Dialed: true, Responded: true, Handshaken: true, Accepted: true, Reason: collection.Responded}, nil
+}

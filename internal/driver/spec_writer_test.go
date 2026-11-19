@@ -17,7 +17,7 @@ func reservedEmits() []string {
 }
 
 // TestValidateRefusesAnEmitAnotherWriterOwns holds a driver to the keys it may
-// write (ADR-0161): a spec emitting a node-probe or platform key is refused at
+// write (ADR-0161): a spec emitting an outpost-probe or platform key is refused at
 // write, naming the key, with or without a catalog (the refusal is the
 // writer-class ruling, not a catalog lookup), on a poll and on a listener.
 func TestValidateRefusesAnEmitAnotherWriterOwns(t *testing.T) {
@@ -45,10 +45,10 @@ func TestValidateRefusesAnEmitAnotherWriterOwns(t *testing.T) {
 	}
 }
 
-// TestInterpretRefusesAReservedEmit is the node's half: a baked function
+// TestInterpretRefusesAReservedEmit is the outpost's half: a baked function
 // carrying an emit a driver may not write (one derived before the write-time
 // refusal existed) yields a fault naming the key, never a sample, so a stored
-// legacy task cannot land a node-probe value through a driver.
+// legacy task cannot land an outpost-probe value through a driver.
 func TestInterpretRefusesAReservedEmit(t *testing.T) {
 	for _, key := range reservedEmits() {
 		fn := &driver.BakedFunction{

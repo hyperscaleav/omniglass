@@ -260,7 +260,7 @@ function CreateVariableForm(p: { onCreated: (v: Variable) => void }): JSX.Elemen
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
 
   // The operator types the label and the cascade name follows it, until they
-  // take the name over by hand (createIdentity, the registry-page affordance).
+  // take the name over by hand (createIdentity, the catalog-page affordance).
   const { display, setDisplay, name, setName, nameDerived } = createIdentity();
   const [valueType, setValueType] = createSignal<ValueType>("string");
   const [ownerKind, setOwnerKind] = createSignal<OwnerKind>("platform");
@@ -269,7 +269,7 @@ function CreateVariableForm(p: { onCreated: (v: Variable) => void }): JSX.Elemen
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
 
-  // The Scope select offers only the tiers this principal may actually write at.
+  // The Scope select offers only the tiers this user may actually write at.
   // The platform tier is install-wide, gated server-side on platform:create on top
   // of variable:create, so offering it to a caller holding only the resource half
   // would be offering a control the server refuses.

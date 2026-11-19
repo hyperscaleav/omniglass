@@ -10,7 +10,7 @@ import (
 )
 
 // The connection fingerprint's table check (#1056 ruling): every field the
-// worklist delivers to a node, and so every field a dialer or probe can read
+// worklist delivers to an outpost, and so every field a dialer or probe can read
 // to connect, is either an input of the fingerprint or declared not one, with
 // why. A field added to a task without a decision here fails, so a new
 // transport cannot read an endpoint, secret or driver field the fingerprint
@@ -35,6 +35,7 @@ var taskFieldFingerprint = map[string]string{
 	"Rejection":     "-", // the gate the digest is compared against
 	"ComponentID":   "-", // whose endpoint it is: the key a path upstream names (#1652)
 	"PathUpstreams": "-", // what the endpoint is reached through: a gate input, not a dial input
+	"Mask":          "-", // the plaintext of Secrets' secret fields, masked out of what is collected; Secrets covers it
 }
 
 func TestEveryTaskFieldIsAFingerprintInputOrDeclaredNotOne(t *testing.T) {

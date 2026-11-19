@@ -3,7 +3,7 @@ title: API first
 description: The Go API is the single integration contract; the SPA, CLI, and YAML tooling are generated clients of it.
 ---
 
-The Go HTTP API is the **single integration contract**. The SPA, the CLI, the node
+The Go HTTP API is the **single integration contract**. The SPA, the CLI, the outpost
 worklist, and the YAML authoring tooling are all **generated clients** of it. Nothing but
 the API talks to the database, and the API is described by one machine-readable spec that
 cannot drift from the implementation.
@@ -37,6 +37,43 @@ One command runs them all (`make gen`); two focused targets regenerate a subset
 (`make gen-proto` for the protobuf wire, `make gen-web` for the spec plus the typed SPA
 client). The committed `*.pb.go` lets a contributor build without protoc or a running
 server.
+
+### After main moves
+
+Two derived files are held to a merge-friendly layout by tests: one entry per line, map keys
+sorted, list entries in their source order. For those two, hunks that touch different entries merge
+on their own:
+
+- `docs/src/generated/seed.json`: `cmd/seedgen`'s tests hold the layout, and
+  `internal/seed`'s merge test adds two property types at different points in one YAML, regenerates
+  each branch, and requires git's line merge of the two `seed.json` files to come back clean and
+  equal to a fresh render.
+- `api/openapi.json`: `cmd/openapigen`'s canonical-layout test holds the same shape.
+
+The other generators' outputs carry no such layout test, so a merge of two branches that both
+regenerated them may conflict even when the sources did not. What every generator is held to is the
+weaker property, determinism. `gen-drift` runs `make gen` on every PR and diffs its outputs against
+the committed ones, a second run held byte-identical to the author's first (the two
+`web/src/lib/*.gen.ts` files it does not diff are held the same way by `make test`). Locally,
+`make gen-twice` runs `make gen` twice and fails if the second run moves a byte of the tree.
+
+When main has moved under your branch:
+
+1. Rebase or merge `origin/main`.
+2. Resolve conflicts in the **sources** only (a seed YAML, a Go struct). A derived file's conflict
+   markers do not need reading: skip them.
+3. Run `make gen`. It overwrites every derived file from the merged sources, so a conflict left in
+   one (resolved any way, or not at all) is replaced.
+4. Commit the result.
+
+A merge that comes back clean can still leave a derived file stale (your row and theirs both merged,
+but a count or a summary the generator computes moved), which is what `gen-drift` catches; step 3
+fixes it the same way. The conflicts that remain are real: two PRs adding a row at the very same
+spot of one list conflict in the YAML and the derived file alike: resolve the YAML by hand and let
+the regeneration settle the derived file.
+
+`internal/simfleet/plan.go` and `internal/sim/profiles/coverage.yaml` are not derived: no generator
+writes them, so they are edited and merged like any source.
 
 ## A name is the address, a uuid is identity
 
@@ -86,16 +123,16 @@ One exception, narrow: **an entity addressed by id**, because nobody names it (a
 value, an audit row, a grant). A name that is unique only inside something else is not an exception
 to addressing: it is addressed by that something and its name, `<component>/<endpoint name>` for an
 endpoint named after its transport, `<owner>/<name>` for a secret or a variable
-([ADR-1133](/architecture/decisions/#adr-1133-every-operator-resource-answers-to-its-name-and-an-endpoint-is-its-component-and-its-name)). A **registry**
+([ADR-1133](/architecture/decisions/#adr-1133-every-operator-resource-answers-to-its-name-and-an-endpoint-is-its-component-and-its-name)). A **catalog**
 used to be a second exception, a slug-keyed catalog whose id *was* its
-name (`product_id: "kestrel-vroom"`); that is gone. Every registry now has a uuid primary key and
+name (`product_id: "kestrel-vroom"`); that is gone. Every catalog now has a uuid primary key and
 a renameable `name` ([ADR-0062](/architecture/decisions/#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle)),
 so it obeys the rule like any fleet entity.
 
 **Every foreign key stores the target's primary key**, a uuid, with no exception: a rename then
 has nothing to rewrite, because nothing points at the friendly name. A `_id` column holding a
 name, kept alive by `on update cascade`, is the shape this rule exists to prevent; that machinery
-is now retired everywhere, including the last place it lived, the registries.
+is now retired everywhere, including the last place it lived, the catalogs.
 
 **A path or a join field accepts either form.** `GET /components/{ref}` and a body's
 `{"parent": "..."}` both take a uuid or a name; the uuid is tried first, so an id never
@@ -107,7 +144,7 @@ generated reference, and `TestDemoScriptsCarryNoHardCodedUUIDs` on every committ
 [demo](/contributing/demos/), where no uuid is excused at all.
 
 `TestReferencesCarryBothForms` enforces this over the generated OpenAPI in both directions, so a body
-cannot silently reintroduce a uuid-only reference (a `*_id` with no name) nor a name-only registry
+cannot silently reintroduce a uuid-only reference (a `*_id` with no name) nor a name-only catalog
 reference. Its exempt list is the whole of the remaining exception (the nameless entities and a
 still-slug-keyed taxonomy), and adding to it is a decision: if the target has a name, carry the
 name.
@@ -125,16 +162,20 @@ Every operation lives under `/api/v1/*`. The path shape is derivable, not specia
   `DELETE` removes. No upsert/register shortcuts.
 - **`:verb` (not `/verb`) for non-CRUD custom methods**: `/components/{name}:rename`,
   `/components/{name}/commands:issue`, `/auth/me:changePassword`,
-  `/auth/me/sessions/{id}:revoke`, `/nodes:claim`, `/principals/{id}:disable`.
+  `/auth/me/sessions/{id}:revoke`, `/outposts:claim`, `/users/{id}:disable`.
 - **A rename is a custom method, not a field write.** Every renameable collection carries a
   `:rename`, gated `<resource>:rename` and not `<resource>:update`, because moving a name breaks the
   bookmarks, runbooks, and integration config held outside the platform while nothing inside it
   breaks (every reference stores the uuid). That is why `name` is absent from the `PATCH` body of a
-  component, a system, a location, and a principal group
+  component, a system, a location, and a user group
   ([ADR-0076](/architecture/decisions/)).
 - **Singular kind sub-segments**: `/rules/calc`, `/property-types`,
   `/location-types`, `/types/event`.
-- **official / private namespace** on every registry and rule family (below).
+- **A derived CLI name must be unique.** The CLI command path is derived from the route
+  ([ADR-0059](/architecture/decisions/)), and when two operations derive one path (an item
+  `:test` and a collection `:test` on one resource both give `<resource> test`) `make gen`
+  fails naming both operations and the path; give one a distinct custom verb.
+- **official / private namespace** on every catalog and rule family (below).
 - **List conventions** (AIP-132 target): `filter` / `orderBy` / `pageSize`+
   `pageToken` (cursor, never offset) / `fields`. The `filter` runs through the one
   [expression engine](/architecture/expressions/) (Expr, one dialect, not pluggable), the same

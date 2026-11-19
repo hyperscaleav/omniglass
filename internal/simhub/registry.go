@@ -1,5 +1,5 @@
 // Package simhub is the server's view of the simulators running beside its
-// nodes: what each can do, which devices it serves, and how often each device
+// outposts: what each can do, which devices it serves, and how often each device
 // has been reached. It is in-memory and per server process; the hits are a
 // live signal for the console, not telemetry, so nothing is persisted.
 package simhub
@@ -19,9 +19,9 @@ import (
 // fleet's rate and only stops a misbehaving credential.
 const MaxHitsPerBatch = 10_000
 
-// SilenceTTL is how long a node's simulator may go without pulling or
+// SilenceTTL is how long an outpost's simulator may go without pulling or
 // reporting before the registry drops it: ten of the simulator's default
-// ten-second pulls. A simulator torn down without its node being deleted
+// ten-second pulls. A simulator torn down without its outpost being deleted
 // ages out instead of reading offline until the server restarts.
 const SilenceTTL = 100 * time.Second
 
@@ -38,7 +38,7 @@ type DeviceHits struct {
 	LastProtocol string
 }
 
-// Status is a snapshot of one node's simulator.
+// Status is a snapshot of one outpost's simulator.
 type Status struct {
 	LastSeen     time.Time
 	Capabilities collection.SimCapabilities
@@ -57,7 +57,7 @@ type Status struct {
 	Impairments collection.SimImpairmentStatus
 }
 
-type nodeState struct {
+type outpostState struct {
 	lastSeen time.Time
 	// heardAt is the latest pull or report: what the TTL measures, where
 	// lastSeen (the pull alone) is what the console reads as connected.
@@ -70,51 +70,51 @@ type nodeState struct {
 	devices map[string]*DeviceHits
 }
 
-// Registry holds every node's simulator status. Safe for concurrent use.
+// Registry holds every outpost's simulator status. Safe for concurrent use.
 type Registry struct {
-	mu    sync.Mutex
-	nodes map[string]*nodeState
-	now   func() time.Time
-	// told is the node and protocol pairs the hub has said it dropped hits
+	mu       sync.Mutex
+	outposts map[string]*outpostState
+	now      func() time.Time
+	// told is the outpost and protocol pairs the hub has said it dropped hits
 	// of, so it says so once for each (at most maxToldProtocols).
 	told map[string]bool
 }
 
 // New returns an empty registry.
 func New() *Registry {
-	return &Registry{nodes: map[string]*nodeState{}, now: time.Now, told: map[string]bool{}}
+	return &Registry{outposts: map[string]*outpostState{}, now: time.Now, told: map[string]bool{}}
 }
 
-// tell says once, for each node and protocol, that the hub drops hits of a
+// tell says once, for each outpost and protocol, that the hub drops hits of a
 // protocol it does not count (#1366: the websocket hits the hub rejected
 // without a word, so a component read as having none). The protocol is
 // clipped and made valid UTF-8, since the simulator's report is not trusted
 // with the log.
-func (r *Registry) tell(node, protocol string) {
+func (r *Registry) tell(outpost, protocol string) {
 	protocol = strings.ToValidUTF8(protocol, "?")
 	if len(protocol) > 40 {
 		protocol = protocol[:40] + "..."
 	}
-	key := node + "\x00" + protocol
+	key := outpost + "\x00" + protocol
 	if r.told[key] || len(r.told) >= maxToldProtocols {
 		return
 	}
 	r.told[key] = true
 	slog.Warn("simulator hit dropped: the hub does not count this protocol", "facility", "simulation",
-		"node", node, "protocol", protocol)
+		"outpost", outpost, "protocol", protocol)
 }
 
 // Pulled records a simulator's device-list pull: its capabilities, the time,
 // and the components the server handed it. Hits are accepted only for those,
 // and the tallies of components no longer listed are dropped.
-func (r *Registry) Pulled(node string, caps collection.SimCapabilities, componentIDs []string) {
+func (r *Registry) Pulled(outpost string, caps collection.SimCapabilities, componentIDs []string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.expire()
-	st := r.nodes[node]
+	st := r.outposts[outpost]
 	if st == nil {
-		st = &nodeState{serving: map[string]bool{}, devices: map[string]*DeviceHits{}}
-		r.nodes[node] = st
+		st = &outpostState{serving: map[string]bool{}, devices: map[string]*DeviceHits{}}
+		r.outposts[outpost] = st
 	}
 	st.lastSeen = r.now()
 	st.heardAt = st.lastSeen
@@ -142,17 +142,17 @@ func (r *Registry) Pulled(node string, caps collection.SimCapabilities, componen
 	}
 }
 
-// Report records a hit batch from a node's simulator, keeping only devices
-// the node was handed (a simulator cannot report on another node's
+// Report records a hit batch from an outpost's simulator, keeping only devices
+// the outpost was handed (a simulator cannot report on another outpost's
 // components, or on components it invented), known protocols, and at most
 // MaxHitsPerBatch hits. A hit is stamped with the time the server heard it,
 // not the simulator's clock. It returns how many hits were accepted and
 // rejected.
-func (r *Registry) Report(node string, b collection.SimHitBatch) (accepted, rejected int) {
+func (r *Registry) Report(outpost string, b collection.SimHitBatch) (accepted, rejected int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.expire()
-	st := r.nodes[node]
+	st := r.outposts[outpost]
 	if st == nil {
 		return 0, len(b.Hits)
 	}
@@ -171,7 +171,7 @@ func (r *Registry) Report(node string, b collection.SimHitBatch) (accepted, reje
 	for _, h := range b.Hits {
 		known := collection.IsSimProtocol(h.Protocol)
 		if st.listed[h.ComponentID] && !known {
-			r.tell(node, h.Protocol)
+			r.tell(outpost, h.Protocol)
 		}
 		if !st.listed[h.ComponentID] || !known || accepted == MaxHitsPerBatch {
 			rejected++
@@ -190,46 +190,46 @@ func (r *Registry) Report(node string, b collection.SimHitBatch) (accepted, reje
 	return accepted, rejected
 }
 
-// Forget drops a node's entry, for a node that was deleted. A simulator that
+// Forget drops an outpost's entry, for an outpost that was deleted. A simulator that
 // still runs for it is taken as new on its next pull.
-func (r *Registry) Forget(node string) {
+func (r *Registry) Forget(outpost string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	delete(r.nodes, node)
+	delete(r.outposts, outpost)
 }
 
-// expire drops every node unheard for SilenceTTL. The caller holds mu.
+// expire drops every outpost unheard for SilenceTTL. The caller holds mu.
 func (r *Registry) expire() {
 	now := r.now()
-	for n, st := range r.nodes {
+	for n, st := range r.outposts {
 		if now.Sub(st.heardAt) > SilenceTTL {
-			delete(r.nodes, n)
+			delete(r.outposts, n)
 		}
 	}
 }
 
-// Nodes lists the nodes whose simulator has pulled and been heard from within
+// Outposts lists the outposts whose simulator has pulled and been heard from within
 // SilenceTTL, sorted.
-func (r *Registry) Nodes() []string {
+func (r *Registry) Outposts() []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.expire()
-	out := make([]string, 0, len(r.nodes))
-	for n := range r.nodes {
+	out := make([]string, 0, len(r.outposts))
+	for n := range r.outposts {
 		out = append(out, n)
 	}
 	sort.Strings(out)
 	return out
 }
 
-// Status returns a copy of a node's simulator status, or false when no
-// simulator has pulled for that node since the server started, or it has been
+// Status returns a copy of an outpost's simulator status, or false when no
+// simulator has pulled for that outpost since the server started, or it has been
 // forgotten or silent for SilenceTTL.
-func (r *Registry) Status(node string) (Status, bool) {
+func (r *Registry) Status(outpost string) (Status, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.expire()
-	st := r.nodes[node]
+	st := r.outposts[outpost]
 	if st == nil {
 		return Status{}, false
 	}
@@ -262,7 +262,7 @@ func (r *Registry) Status(node string) (Status, bool) {
 	return out, true
 }
 
-// filterListed keeps only the components the node was handed: a simulator
+// filterListed keeps only the components the outpost was handed: a simulator
 // reports on its own devices, never others.
 func filterListed(listed map[string]bool, ids []string) []string {
 	var out []string

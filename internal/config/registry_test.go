@@ -12,7 +12,7 @@ import (
 // the two audit-found gaps (the secret-key pair the container guide omitted)
 // are declared.
 func TestRegistryShape(t *testing.T) {
-	scopes := map[string]bool{"server": true, "node": true, "cli": true, "test": true}
+	scopes := map[string]bool{"server": true, "outpost": true, "cli": true, "test": true}
 	seen := map[string]bool{}
 	for _, v := range Registry {
 		if v.Key == "" || v.Doc == "" {
@@ -31,7 +31,7 @@ func TestRegistryShape(t *testing.T) {
 			t.Errorf("registry entry %s: unexpected key shape", v.Key)
 		}
 	}
-	for _, want := range []string{"OMNIGLASS_ENCRYPTION_KEY", "OMNIGLASS_ENCRYPTION_KEY_FILE", "OMNIGLASS_DSN", "DATABASE_URL", "OMNIGLASS_SERVER", "OMNIGLASS_NODE_TOKEN"} {
+	for _, want := range []string{"OMNIGLASS_ENCRYPTION_KEY", "OMNIGLASS_ENCRYPTION_KEY_FILE", "OMNIGLASS_DSN", "DATABASE_URL", "OMNIGLASS_SERVER", "OMNIGLASS_OUTPOST_TOKEN"} {
 		if !seen[want] {
 			t.Errorf("registry missing %s", want)
 		}

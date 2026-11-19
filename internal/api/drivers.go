@@ -11,7 +11,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// driverBody is the wire shape of a driver registry row. The registry lists
+// driverBody is the wire shape of a driver catalog row. The catalog lists
 // alphabetically by label, like vendor.
 type driverBody struct {
 	ID       string          `json:"id" doc:"The driver's uuid, the stable handle that survives a rename"`
@@ -61,8 +61,8 @@ type driverOutput struct {
 	Body driverBody
 }
 
-// registerDriverRoutes wires the driver registry CRUD surface, on the same
-// pattern as the vendor and component/location/system type registries. Gated by
+// registerDriverRoutes wires the driver catalog CRUD surface, on the same
+// pattern as the vendor and component/location/system type catalogs. Gated by
 // driver:read|create|update|delete: driver:read sits in the viewer read-floor
 // (*:read), the mutations at the admin tier, exactly like type:*.
 func registerDriverRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
@@ -72,7 +72,7 @@ func registerDriverRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/drivers",
 		Summary:     "List drivers",
-		Description: "Lists the driver registry, ordered alphabetically by label. Populates the driver picker on the product form. Gated by driver:read.",
+		Description: "Lists the driver catalog, ordered alphabetically by label. Populates the driver picker on the product form. Gated by driver:read.",
 	}, "driver", "read"), func(ctx context.Context, _ *struct{}) (*listDriversOutput, error) {
 		drivers, err := gw.ListDrivers(ctx)
 		if err != nil {
@@ -152,7 +152,7 @@ func registerDriverRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	})
 }
 
-// mapDriverErr layers the spec write gate over the registry mapper: a spec
+// mapDriverErr layers the spec write gate over the catalog mapper: a spec
 // that fails validation is a 422 carrying the fault by name, so an author
 // fixes the spec rather than reading a generic refusal.
 func mapDriverErr(err error) error {

@@ -15,11 +15,11 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// TestDeletedNodeLeavesTheSimulatorRegistry holds that decommissioning a node
+// TestDeletedOutpostLeavesTheSimulatorRegistry holds that decommissioning an outpost
 // drops its simulator from the server's registry in the same process: the
 // fleet no longer lists it and its own simulation read is a 404, not a stale
 // status.
-func TestDeletedNodeLeavesTheSimulatorRegistry(t *testing.T) {
+func TestDeletedOutpostLeavesTheSimulatorRegistry(t *testing.T) {
 	t.Parallel()
 	dsn := seededDSN(t)
 	ctx := context.Background()
@@ -39,16 +39,16 @@ func TestDeletedNodeLeavesTheSimulatorRegistry(t *testing.T) {
 	panel, _ := lineProtocolProduct(t, ctx, gw)
 	ids := map[string]string{}
 	for i, n := range []string{"site-a", "site-b"} {
-		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: n}, all, all); err != nil {
+		if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: n}, all, all); err != nil {
 			t.Fatal(err)
 		}
-		comp, node := "panel-"+n, n
+		comp, outpost := "panel-"+n, n
 		created, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: comp, ProductName: &panel}, all, all, all, all)
 		if err != nil {
 			t.Fatal(err)
 		}
 		ids[n] = created.ID
-		if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "tcp", Component: &comp, Node: &node,
+		if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "tcp", Component: &comp, Outpost: &outpost,
 			Params: []byte(`{"target":"127.60.0.` + string(rune('1'+i)) + `:51325"}`)}, all); err != nil {
 			t.Fatal(err)
 		}
@@ -60,31 +60,31 @@ func TestDeletedNodeLeavesTheSimulatorRegistry(t *testing.T) {
 	srv := httptest.NewServer(api.NewHandler(gw, api.WithSimHub(hub)))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
-	fleetNodes := func() []string {
+	fleetOutposts := func() []string {
 		t.Helper()
 		var fleet fleetBody
 		if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/simulation", nil, http.StatusOK), &fleet); err != nil {
 			t.Fatal(err)
 		}
 		var out []string
-		for _, n := range fleet.Nodes {
-			out = append(out, n.Node)
+		for _, n := range fleet.Outposts {
+			out = append(out, n.Outpost)
 		}
 		return out
 	}
 
-	if got := fleetNodes(); len(got) != 2 {
-		t.Fatalf("before the delete the fleet lists %v, want both nodes", got)
+	if got := fleetOutposts(); len(got) != 2 {
+		t.Fatalf("before the delete the fleet lists %v, want both outposts", got)
 	}
-	c.do(ownerTok, http.MethodGet, "/nodes/site-a/simulation", nil, http.StatusOK)
+	c.do(ownerTok, http.MethodGet, "/outposts/site-a/simulation", nil, http.StatusOK)
 
-	c.do(ownerTok, http.MethodDelete, "/nodes/site-a", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/outposts/site-a", nil, http.StatusNoContent)
 
-	if got := fleetNodes(); len(got) != 1 || got[0] != "site-b" {
+	if got := fleetOutposts(); len(got) != 1 || got[0] != "site-b" {
 		t.Fatalf("after the delete the fleet lists %v, want only site-b", got)
 	}
 	if _, ok := hub.Status("site-a"); ok {
-		t.Fatal("the registry still holds the deleted node")
+		t.Fatal("the registry still holds the deleted outpost")
 	}
-	c.do(ownerTok, http.MethodGet, "/nodes/site-a/simulation", nil, http.StatusNotFound)
+	c.do(ownerTok, http.MethodGet, "/outposts/site-a/simulation", nil, http.StatusNotFound)
 }

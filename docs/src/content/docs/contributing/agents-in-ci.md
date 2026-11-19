@@ -1,0 +1,198 @@
+---
+title: "Agents in CI"
+description: "How Claude Code agents build, review and fix Omniglass work in GitHub Actions, who can start them, and what they can and cannot touch."
+---
+
+Three workflows run Claude Code agents (Anthropic's `claude-code-action`) on GitHub-hosted
+runners, the same runners the [test gate](/contributing/release-ci/) uses, so testcontainers work
+and no self-hosted runner ever runs code from a public repo. They are the only builder: the
+homelab harness dispatcher they replace is retired. None of them changes a required check or a
+ruleset, and none can merge ([ADR-2175](/architecture/decisions/#adr-2175-agent-work-runs-in-github-actions-picked-by-label)).
+
+| Workflow | Starts on | Does |
+| --- | --- | --- |
+| `agent-build.yml` | `run:dev-gha` on an issue | builds the ticket into a draft PR that closes it, and marks it ready when done |
+| `agent-review.yml` | every same-repo PR that is opened, pushed, reopened or marked ready, and every merge-queue entry | runs the [adversarial review](https://github.com/hyperscaleav/omniglass/tree/main/.claude/skills/adversarial-review) read-only as parallel lenses, posts their findings as one review, and passes its check only when it says ship |
+| `agent-fix.yml` | `@hyperscale-agent` (or `@claude`) on a PR, a review that requests changes, or agent-review's own Changes requested | pushes a fix to the PR's branch |
+
+A fourth, `agent-open-pr.yml`, runs no agent: it opens a PR as the agents' App from a branch a
+Claude session pushed, as described in [PRs from a session](#prs-from-a-session).
+
+## The flow
+
+Work moves through five stages, and the architect has three gates in them: starting the work,
+merging it, and releasing it. Everything between the gates runs without a person.
+
+1. **Backlog.** Ideas land as issues from anywhere: exploration, scoping, bug reports, the
+   agents' own follow-ups.
+2. **Todo.** The architect and the assistant groom the backlog about daily into tickets in the
+   standard format (`/define-work`), with a `tier:*` and `risk:*` label. A ticket that needs
+   another one first says so with GitHub's **blocked by** link, and a build refuses to start
+   while any blocker is open. **Gate 1:** applying `run:dev-gha` is the
+   approval to start.
+3. **Build and review.** The builder opens a draft PR, and marks it ready once `make test`
+   passes and `/ship-slice` is clean. Ready starts agent-review; its Changes requested starts
+   agent-fix, whose push starts agent-review again. The loop ends when the reviewer says ship,
+   which turns its check green, or after five fix rounds, when the PR parks with `needs-fred`.
+4. **Merge.** **Gate 2:** the architect approves a PR whose checks are all green, the reviewer's
+   verdict among them, and queues it; the [merge queue](/contributing/release-ci/#merging-through-the-queue)
+   reruns the required checks on it on top of `main` and squash-merges it when they pass. There is
+   no staging branch: `main` is the integration branch, a feature that is not ready ships dark
+   behind a flag, and a bad merge is reverted on `main`.
+5. **Release.** A `release/x.y` branch is cut from `main` and tagged `rc.N`
+   ([release CI](/contributing/release-ci/)). Only fixes are cherry-picked onto it, never
+   features. **Gate 3:** the architect approves the final tag.
+
+## Building a ticket
+
+Apply `run:dev-gha` to an approved issue. The run starts only when all of these hold, and
+otherwise takes the label off and comments why:
+
+- **You are on the `maintainers` team.** GitHub lets anyone with triage access apply any label,
+  so the workflow checks the team itself.
+- **The issue was written by the `maintainers` or `contributors` team.** A ticket from outside
+  the project is rewritten by a maintainer first.
+- **No open PR already closes it.**
+- **Nothing it is blocked by is still open.** Mark the order with GitHub's issue dependencies
+  (**blocked by** on the issue). If the list cannot be read, the build is refused, not guessed.
+
+The label comes off as the build starts, so applying it again is the retry. The run locks the
+issue's conversation to collaborators while it works, moves the ticket to In Progress, and
+follows CLAUDE.md like any session: test first, docs with the change, a draft PR with the
+template that says `Closes #<n>`, then `/ship-slice`, then ready for review. Linking the PR
+moves the ticket to In Review. The model follows the ticket's tier: sonnet for `tier:jr` and
+`tier:mid`, opus for `tier:sr`, with a turn cap per tier and a 240 minute limit. A run that
+stops early comments on the issue with its link; one that runs out of room leaves the PR a
+draft saying what is left.
+
+## Review on every PR
+
+Every same-repo PR that is not a draft or from dependabot gets one adversarial review: inline findings, each with
+its failure scenario, and one summary review that requests changes or comments. It never
+approves. Its check, `agent-review`, is the verdict: red while its latest review on the PR's
+head requests changes or opens with a blocking count, green when it says ship. The review is composed and the verdict read
+with the default branch's `scripts/agent-review.sh` and `scripts/agent-trust.sh`, so a PR
+cannot rewrite its own check. The one exception was the PR that added `agent-review.sh`
+(#2211): main had no copy yet, so its own review used the PR's. The check is not in either main ruleset yet; making it required
+is the architect's call. Opus reviews PRs that close a `risk:high` ticket, sonnet the rest. The
+reviewer reads the diff and the code, never the PR's conversation.
+
+The review runs as lenses side by side, so a large PR takes minutes, not the twenty one agent
+took sweeping it alone (#2211). Each lens is its own job, `lens (<name>)`, with its own context
+and a read-only token:
+
+| Lens | Sweeps |
+| --- | --- |
+| `catalog-1`, `catalog-2`, ... | the [anti-pattern catalog](https://github.com/hyperscaleav/omniglass/tree/main/.claude/skills/adversarial-review/references/anti-patterns), dealt into even shards in name order (`SHARDS` in `scripts/agent-review.sh` sets how many), so a new entry joins a shard without a workflow change |
+| `invariants` | the skill's invariants: routes gated, queries scoped, audits in-transaction, migrations idempotent, no fixed test ports, no mocked system under test |
+| `neighbor` | the docs claims the diff falsifies |
+
+A lens posts nothing. It returns its surviving findings as JSON, and the `agent-review` job,
+which waits for every lens, posts them as one review: a finding on a diff line becomes an inline
+comment, any other goes in the review's body. One blocking finding from any lens makes it
+request changes (on a PR its own App wrote, GitHub allows only a comment, so the review
+comments and opens with the blocking count), so agent-fix still sees one review per round and the five-round cap still
+counts rounds, not lenses. A lens that fails, times out or runs out of its 80 turns fails the check rather than passing
+without its part; rerunning the failed jobs retries it.
+
+The review posts as a second GitHub App, `hyperscale-reviewer`, when one is set up. GitHub lets
+no App request changes on a PR it wrote, and the agents' App writes most PRs here, so without
+the second App a blocking review on one of those can only comment. The check still fails, since
+the verdict reads the blocking count at the top of the comment, but agent-fix does not start.
+
+In the merge queue the check reports without reviewing again: it reads the verdict already
+given on the queued PR's head, so `agent-review` can be made required without holding the queue.
+A draft, a fork PR and a dependabot PR are not reviewed, and their check passes with the reason
+in its log, as a skipped check would.
+
+## Asking for a fix
+
+Mention `@hyperscale-agent` in a PR comment or a review comment, or submit a review that requests
+changes, and an agent addresses that feedback and pushes to the PR's branch. `@claude` still works
+too. The agent reads only the comment or review that started it. Write the ask the way you would to a colleague:
+
+```text
+@hyperscale-agent the retry in poller.go never backs off; add the backoff and a test for it
+```
+
+When agent-review requests changes, agent-fix answers it automatically, up to five rounds per
+PR. After the fifth the PR parks: it gets the `needs-fred` label and a comment, and waits for a
+person to request changes, mention `@hyperscale-agent` or take it over. Fork PRs
+are skipped.
+
+## Seeing an agent at work
+
+An agent run says so where it was started. agent-build posts one comment on the issue and
+agent-fix posts one on the PR, each saying the agent is working, with a link to the run. When
+the run stops, the same comment is edited to say what happened: the PR a build opened, the commit
+a fix pushed, or that nothing was pushed, followed by the agent's own few lines on why. A run that
+breaks says so in that comment too, with the reason its job gave (all its turns used, say) and how
+to retry.
+
+agent-fix also puts an `agent-fix` check on the PR's head. It stays in progress while the agent
+works, then finishes as success when the run pushed, neutral when it pushed nothing, and failure
+when the run broke. A run that pushed shows the finished check on the new head as well, since a
+PR lists only its head's checks. The check is not required; it is there to be seen.
+
+## PRs from a session
+
+A Claude session that opens its PR with a person's token makes that person the author, and GitHub
+never counts an author's approval, so the architect could only merge it by bypassing the rules.
+Instead the session pushes its work to a `claude/` branch and dispatches `agent-open-pr.yml` with
+the branch, a title and a body. The workflow opens the PR with the agents' App token, so the
+author is `hyperscale-agent[bot]` and the architect's approval counts. A PR the App opens starts
+agent-review and the required checks like any other.
+
+Only a maintainer may dispatch it, only for a `claude/` branch that is already pushed and has no
+open PR. The gate is `scripts/agent-trust.sh open`; a refusal fails the run with its reason.
+
+## Who can start what
+
+| Who | Can start |
+| --- | --- |
+| `maintainers` team | builds (`run:dev-gha`), fixes, PRs from a session's branch |
+| `contributors` team | fixes, and their comments reach a building agent |
+| anyone else | nothing; their comments never reach a model |
+
+A team member also needs write access to the repo for a mention to run, because the action
+itself refuses anyone without it. The gate is `scripts/agent-trust.sh`, tested in
+`go test ./scripts/`.
+
+## What keeps outside text away from the model
+
+The repo is public, so anyone can open an issue or comment. Labels are not the risk (only
+triage access can set them); text a model reads while holding a write token is. Layers, each
+enforced in the workflow rather than asked of the model:
+
+1. **The ticket arrives as a file.** The build reads a file the workflow writes: the issue body
+   and only the two teams' comments. The fix reads only the feedback that started it.
+2. **The conversation is locked** to collaborators while a build runs.
+3. **No outside code runs next to a token.** The workflows use `pull_request`, never
+   `pull_request_target`, and skip forks. No bot is admitted but the agents' own App and the
+   reviewer App.
+4. **The token is narrow.** The agents' App has no Workflows permission, so an agent cannot edit
+   these files, and both main rulesets still need the architect's approval to merge. The
+   reviewer's lenses hold read-only tokens; only the `agent-review` job, which runs no model,
+   can write a review.
+
+The action also strips hidden content (HTML comments, invisible characters, image alt text,
+hidden attributes) from what it hands the model.
+
+## Setup
+
+The workflows do nothing until the repo variable `AGENT_CI_ENABLED` is `true`. Before that, an
+org owner:
+
+- adds the secret `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`; switching to an API key
+  or Bedrock later is one input per workflow);
+- adds the variable `AGENT_APP_CLIENT_ID` and the secret `AGENT_APP_PRIVATE_KEY` for the agents'
+  GitHub App, which needs Contents, Pull requests and Issues write, Checks write (for the
+  `agent-fix` check), Projects write (for the board), org Members read (for the team checks),
+  and no Workflows permission;
+- adds the variable `REVIEWER_APP_CLIENT_ID` and the secret `REVIEWER_APP_PRIVATE_KEY` for the
+  reviewer App, `hyperscale-reviewer`, which needs only Contents read and Pull requests write;
+  without them agent-review posts as the agents' App, as above;
+- creates the `contributors` team (`maintainers` exists), and creates the `run:dev-gha` label.
+
+Every run draws on the subscription the token belongs to, and parallel runs share its limits. A
+run that hits a limit fails and is retried by applying the label again.

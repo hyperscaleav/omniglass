@@ -2,7 +2,7 @@ import { Show, createMemo } from "solid-js";
 import { useQuery } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import { identityColumn } from "../components/IdentityCell";
-import { type Role, ROLES_KEY, listRoles, roleFilterKeys, effectivePerms } from "../lib/principals";
+import { type Role, ROLES_KEY, listRoles, roleFilterKeys, effectivePerms } from "../lib/users";
 import { identityRegistry } from "../lib/identityBlades";
 
 // Roles: the catalog of roles on the shared FlatList surface (the same list shell

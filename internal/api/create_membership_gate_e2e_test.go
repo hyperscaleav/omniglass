@@ -19,15 +19,15 @@ import (
 // PRIMARY MEMBERSHIP from it. That is the same row PUT
 // /systems/{name}/members/{component} writes, and that route requires the
 // system:update permission plus the system:update scope, while the create asked
-// for neither: a principal holding component:create and no system permission at
+// for neither: a user holding component:create and no system permission at
 // all could write a membership through the create that the membership route
 // refused it. The architect's ruling (2026-08-12) shifts the create to
 // system:update and accepts the consequence, which is that an operator-tier
-// principal can no longer create a component INTO a system: an operator
+// user can no longer create a component INTO a system: an operator
 // maintains components, a deploy tech builds out systems and their membership.
 
 // TestCreatingAComponentIntoASystemNeedsTheMembershipPermission drives the
-// permission half, with the two principals side by side so the refusal is a
+// permission half, with the two users side by side so the refusal is a
 // permission boundary and not a broken route.
 func TestCreatingAComponentIntoASystemNeedsTheMembershipPermission(t *testing.T) {
 	t.Parallel()
@@ -58,15 +58,15 @@ func TestCreatingAComponentIntoASystemNeedsTheMembershipPermission(t *testing.T)
 
 	// The operator tier: component:create,update,rename,move and no system
 	// permission of any kind, beside the all-scoped viewer floor a real
-	// principal carries, so system:READ is held and only system:update is not.
+	// user carries, so system:READ is held and only system:update is not.
 	// That is what makes this test about the permission that moved rather than
 	// about visibility.
-	operator := principalWithGrants(t, ctx, dsn, "rack-operator", []grant{
+	operator := userWithGrants(t, ctx, dsn, "rack-operator", []grant{
 		{role: "operator", scopeKind: "component", scopeID: rack},
 		{role: "viewer", scopeKind: "all"},
 	})
 	// The deploy tier holds both halves: it builds systems and their membership.
-	deploy := principalWithGrants(t, ctx, dsn, "rack-deploy", []grant{
+	deploy := userWithGrants(t, ctx, dsn, "rack-deploy", []grant{
 		{role: "deploy", scopeKind: "component", scopeID: rack},
 		{role: "deploy", scopeKind: "system", scopeID: entityID(t, c, ownerTok, "/systems", "av")},
 		{role: "viewer", scopeKind: "all"},
@@ -92,7 +92,7 @@ func TestCreatingAComponentIntoASystemNeedsTheMembershipPermission(t *testing.T)
 	// Nothing was written: the refusal is not a half-create.
 	c.do(operator, http.MethodGet, "/components/panel-b", nil, http.StatusNotFound)
 
-	// The membership ROUTE refuses the same principal the same way, which is the
+	// The membership ROUTE refuses the same user the same way, which is the
 	// agreement the ruling is about: one permission, one answer, whichever path
 	// writes the row.
 	panelA := entityID(t, c, operator, "/components", "panel-a")
@@ -100,7 +100,7 @@ func TestCreatingAComponentIntoASystemNeedsTheMembershipPermission(t *testing.T)
 		t.Fatalf("operator membership write = %d, want 403 (the two paths must agree)\nbody: %s", st, b)
 	}
 
-	// The deploy principal runs the create the operator was refused, and the
+	// The deploy user runs the create the operator was refused, and the
 	// membership it wrote is real.
 	created := createdID(t, c.do(deploy, http.MethodPost, "/components", map[string]any{
 		"name": "panel-c", "product": "generic-device", "parent": rack, "system": "av",
@@ -121,17 +121,17 @@ func TestCreatingAComponentIntoASystemNeedsTheMembershipPermission(t *testing.T)
 }
 
 // TestTheCreatesSystemBindResolvesInTheUpdateScope is the SCOPE half, which the
-// permission test above cannot see: a principal holding system:update somewhere
-// must not bind a system it may only READ. The narrow principal here holds the
+// permission test above cannot see: a user holding system:update somewhere
+// must not bind a system it may only READ. The narrow user here holds the
 // all-scoped viewer floor, so before this slice the bind resolved in a
 // system:read scope covering the whole fleet and the create was served.
 func TestTheCreatesSystemBindResolvesInTheUpdateScope(t *testing.T) {
 	t.Parallel()
 	f := newPlacementFixture(t)
 
-	// The fixture's narrow principal, plus the read floor: system:read now
+	// The fixture's narrow user, plus the read floor: system:read now
 	// covers av-b, system:update still stops at av-a.
-	floored := principalWithGrants(t, f.c.ctx, f.dsn, "wing-a-deploy-floored", []grant{
+	floored := userWithGrants(t, f.c.ctx, f.dsn, "wing-a-deploy-floored", []grant{
 		{role: "deploy", scopeKind: "component", scopeID: f.rackID},
 		{role: "deploy", scopeKind: "system", scopeID: f.sysAID},
 		{role: "viewer", scopeKind: "all"},
@@ -171,11 +171,11 @@ func TestTheCreatesSystemBindResolvesInTheUpdateScope(t *testing.T) {
 // system:read while the create beside it moved to system:update, so a caller
 // could be served a preview naming a system it may read and may not bind, and
 // the create it previewed then refused. Nothing hit it in practice because the
-// console does not offer the picker to a principal that cannot use it, which
+// console does not offer the picker to a user that cannot use it, which
 // restores the agreement by the caller's good behaviour rather than by the
 // platform.
 //
-// Both halves of the create's gate are driven here, against the same principals
+// Both halves of the create's gate are driven here, against the same users
 // the create's own tests use, and each refusal is asserted to be the SAME
 // refusal on both routes rather than merely a refusal.
 func TestTheDraftRefusesTheSystemBindTheCreateRefuses(t *testing.T) {
@@ -185,13 +185,13 @@ func TestTheDraftRefusesTheSystemBindTheCreateRefuses(t *testing.T) {
 	// The permission half: component:create and no system:update at all, beside
 	// the all-scoped viewer floor, so system:read is held and only the write
 	// permission is missing.
-	operator := principalWithGrants(t, f.c.ctx, f.dsn, "rack-operator-draft", []grant{
+	operator := userWithGrants(t, f.c.ctx, f.dsn, "rack-operator-draft", []grant{
 		{role: "operator", scopeKind: "component", scopeID: f.rackID},
 		{role: "viewer", scopeKind: "all"},
 	})
 	// The scope half: system:update held over av-a and not over av-b, which the
 	// viewer floor still lets it read.
-	floored := principalWithGrants(t, f.c.ctx, f.dsn, "wing-a-deploy-draft", []grant{
+	floored := userWithGrants(t, f.c.ctx, f.dsn, "wing-a-deploy-draft", []grant{
 		{role: "deploy", scopeKind: "component", scopeID: f.rackID},
 		{role: "deploy", scopeKind: "system", scopeID: f.sysAID},
 		{role: "viewer", scopeKind: "all"},

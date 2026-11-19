@@ -11,7 +11,7 @@ import (
 )
 
 // TestProductPatchClearsANullableField pins #260 on the product, the first
-// registry to get it: every nullable column a product patch can write follows
+// catalog to get it: every nullable column a product patch can write follows
 // the house three-state string convention (api.md): an omitted field (nil) is
 // unchanged, an explicit "" CLEARS the column back to SQL NULL, and a value
 // sets it. Before, vendor_id, driver_id, parent_product_id and icon were written

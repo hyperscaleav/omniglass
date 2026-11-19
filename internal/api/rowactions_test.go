@@ -31,7 +31,7 @@ func TestRowActionsAPI(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	ownerTok := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
+	ownerTok := userWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
 	body := func(name, parent string) map[string]any {
 		// A child needs a type placement-compatible with a campus parent
 		// (allowed_parent_types constrains same-type nesting); campus at root,
@@ -81,7 +81,7 @@ func TestRowActionsAPI(t *testing.T) {
 	}
 
 	// Viewer@all: sees every row, but no write actions (read-only).
-	viewerTok := principalWithGrants(t, ctx, dsn, "viewer-all", []grant{{role: "viewer", scopeKind: "all"}})
+	viewerTok := userWithGrants(t, ctx, dsn, "viewer-all", []grant{{role: "viewer", scopeKind: "all"}})
 	va := listActions(viewerTok)
 	if len(va) != 3 {
 		t.Fatalf("viewer should see 3 rows, got %v", va)
@@ -95,7 +95,7 @@ func TestRowActionsAPI(t *testing.T) {
 	// Deploy @ root with subtree_excl_root: root gets create only (placement keeps
 	// the root, but update/delete exclude it, and deploy has no delete); the child
 	// gets create+update; "other" is out of scope entirely.
-	deployTok := principalWithGrants(t, ctx, dsn, "integrator",
+	deployTok := userWithGrants(t, ctx, dsn, "integrator",
 		[]grant{{role: "deploy", scopeKind: "location", scopeID: rootID, scopeOp: "subtree_excl_root"}})
 	da := listActions(deployTok)
 	if _, ok := da["other"]; ok {

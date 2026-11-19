@@ -41,7 +41,7 @@ func (p notificationPreviewWire) fact(name string) (string, bool) {
 	return "", false
 }
 
-// TestNotificationTypeAPI drives the notification_type registry (#618, #1319)
+// TestNotificationTypeAPI drives the notification_type catalog (#618, #1319)
 // over HTTP: the official types are read-only to everyone, an operator
 // writes its own and a viewer reads both and writes neither; a template the
 // sandbox refuses is a 422 naming the problem and is never stored; a fact
@@ -74,7 +74,7 @@ func TestNotificationTypeAPI(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 	viewer := setupAllViewer(t, ctx, dsn, "nt-viewer")
-	operator := principalWithGrants(t, ctx, dsn, "nt-operator", []grant{{role: "operator", scopeKind: "all"}})
+	operator := userWithGrants(t, ctx, dsn, "nt-operator", []grant{{role: "operator", scopeKind: "all"}})
 
 	var list struct {
 		NotificationTypes []notificationTypeWire `json:"notification_types"`

@@ -34,6 +34,14 @@ export type FlatConfig<T> = {
   entity: { name: string; plural: string };
   rows: Accessor<T[]>;
   loading?: Accessor<boolean>;
+  // Opt in to holding the table's space while `loading`: this many skeleton rows
+  // replace the "Loading…" line, so the loaded rows land in place instead of
+  // shifting what sits below the list (the probe's layout-shift budget).
+  loadingRows?: number;
+  // Lay the table out with fixed column widths (table-layout: fixed), so cell
+  // content never sizes a column. For a list whose cells vary run to run or are
+  // masked in a screenshot (the audit trail); columns with no width split the rest.
+  fixedLayout?: boolean;
   error?: Accessor<unknown>;
   filterKeys: FilterKeys<T>;
   filterPlaceholder?: string;
@@ -61,7 +69,7 @@ export type FlatConfig<T> = {
   rowId?: (r: T) => string;
   openId?: () => string | undefined;
   // When present, a row (and openId) opens a cross-entity blade stack instead of
-  // the single Drawer detail. `rootKind` is the kind a row opens; `registry` maps
+  // the single Drawer detail. `rootKind` is the kind a row opens; `catalog` maps
   // each kind to its blade renderers; a body drills via useBlades(). Requires rowId.
   // The blade stack and the Drawer detail are mutually exclusive; a config sets one.
   // `rowKind` maps a ROW to its kind for a mixed-kind surface; absent, every row
@@ -77,8 +85,8 @@ export type FlatConfig<T> = {
   onChips?: (chips: Chip[]) => void;
   // Fill mode (optional, forwarded to ListShell): for a page that caps its own
   // height, the table region takes the surplus and scrolls internally under
-  // sticky column headers instead of growing the page. Off (every shipped page
-  // today), the list grows with content exactly as before.
+  // sticky column headers instead of growing the page (the audit trail, whose
+  // first page outgrows its skeleton). Off, the list grows with content.
   fill?: boolean;
 };
 
@@ -182,7 +190,7 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
                   "min-h-0 flex-1 overflow-y-auto [&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 [&_thead_th]:bg-base-200": cfg.fill,
                 }}
               >
-                <table class="table table-sm">
+                <table class={cfg.fixedLayout ? "table table-sm table-fixed w-full" : "table table-sm"}>
                   <Show when={cfg.columns.some((c) => c.width)}>
                     <colgroup>
                       <For each={cfg.columns}>{(c) => <col style={c.width ? { width: c.width } : undefined} />}</For>
@@ -199,11 +207,24 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
                     <For
                       each={shown()}
                       fallback={
-                        <tr>
-                          <td colspan={span()} class="py-8 text-center text-base-content/40">
-                            {cfg.loading?.() ? "Loading…" : filtering() ? `No ${cfg.entity.plural.toLowerCase()} match the filter.` : (cfg.empty ?? `No ${cfg.entity.plural.toLowerCase()} yet.`)}
-                          </td>
-                        </tr>
+                        <Show
+                          when={cfg.loading?.() && cfg.loadingRows}
+                          fallback={
+                            <tr>
+                              <td colspan={span()} class="py-8 text-center text-base-content/40">
+                                {cfg.loading?.() ? "Loading…" : filtering() ? `No ${cfg.entity.plural.toLowerCase()} match the filter.` : (cfg.empty ?? `No ${cfg.entity.plural.toLowerCase()} yet.`)}
+                              </td>
+                            </tr>
+                          }
+                        >
+                          <For each={Array.from({ length: cfg.loadingRows! })}>
+                            {() => (
+                              <tr data-testid="list-loading-row" aria-hidden="true">
+                                <td colspan={span()}><div class="skeleton h-5 w-full" /></td>
+                              </tr>
+                            )}
+                          </For>
+                        </Show>
                       }
                     >
                       {(r) => (

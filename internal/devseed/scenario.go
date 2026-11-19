@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
@@ -14,7 +15,7 @@ import (
 // needs (#964): a fresh install, the example fleet, that fleet in trouble, or
 // that fleet at enterprise size. Every scenario other than the fresh install is
 // the example fleet plus a pure expansion of it, never a second hand-written
-// fixture: the expansions read the products, standards, roles and location
+// fixture: the expansions read the products, standards, slots and location
 // types off the fixture itself, so they cannot drift from the boot seed or name
 // a location type in code (location types are customer data).
 
@@ -42,7 +43,9 @@ var scenarios = []Scenario{
 	{
 		Name:    "degraded",
 		Summary: "the example fleet with an open alarm on one in every " + strconv.Itoa(DegradedEvery) + " components",
-		expand:  func(d Doc) Doc { return Degrade(d, DegradedEvery) },
+		expand: func(d Doc) Doc {
+			return Degrade(d, DegradedEvery, shippedProductTypes(), seed.ShippedComponentTypeParents())
+		},
 	},
 	{
 		Name: "large",
@@ -122,7 +125,7 @@ func Replicate(base Doc, p ReplicaParams) Doc {
 	out.Components = append([]Component(nil), base.Components...)
 	out.Systems = append([]System(nil), base.Systems...)
 	out.Members = append([]Member(nil), base.Members...)
-	out.RoleAssignments = append([]RoleAssignment(nil), base.RoleAssignments...)
+	out.SlotAssignments = append([]SlotAssignment(nil), base.SlotAssignments...)
 	out.ComponentDependencies = append([]ComponentDependency(nil), base.ComponentDependencies...)
 
 	rooms := selfContainedRooms(base)
@@ -206,9 +209,9 @@ func Replicate(base Doc, p ReplicaParams) Doc {
 						out.Members = append(out.Members, Member{System: copyKey(m.System), Component: copyKey(m.Component)})
 					}
 				}
-				for _, ra := range base.RoleAssignments {
+				for _, ra := range base.SlotAssignments {
 					if sysAt[ra.System] == l.Key {
-						out.RoleAssignments = append(out.RoleAssignments, RoleAssignment{System: copyKey(ra.System), Role: ra.Role, Component: copyKey(ra.Component)})
+						out.SlotAssignments = append(out.SlotAssignments, SlotAssignment{System: copyKey(ra.System), Slot: ra.Slot, Component: copyKey(ra.Component)})
 					}
 				}
 				for _, d := range base.ComponentDependencies {
@@ -265,7 +268,7 @@ func selfContainedRooms(doc Doc) []string {
 	for _, m := range doc.Members {
 		link(m.System, m.Component)
 	}
-	for _, ra := range doc.RoleAssignments {
+	for _, ra := range doc.SlotAssignments {
 		link(ra.System, ra.Component)
 	}
 	var out []string
@@ -277,17 +280,56 @@ func selfContainedRooms(doc Doc) []string {
 	return out
 }
 
+// shippedProductTypes maps each official product id to the component type it is
+// classified under: what Degrade reads to fit an alarm to a device.
+func shippedProductTypes() map[string]string {
+	prods := seed.ShippedProducts()
+	out := make(map[string]string, len(prods))
+	for _, p := range prods {
+		out[p.Name] = p.ComponentType
+	}
+	return out
+}
+
+// alarmFits reports whether template t can be raised on a component of the given
+// type: an unrestricted template fits anything, else the type or one of its
+// ancestors (walked through parents) must be listed in AppliesTo.
+func alarmFits(t Alarm, componentType string, parents map[string]string) bool {
+	if len(t.AppliesTo) == 0 {
+		return true
+	}
+	for ty, seen := componentType, 0; ty != "" && seen <= len(parents); ty, seen = parents[ty], seen+1 {
+		for _, want := range t.AppliesTo {
+			if want == ty {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // Degrade returns base plus an open alarm on every n-th component (in fixture
 // order) that has none, so most rooms carry a fault and the fleet reads as a bad
 // day rather than a quiet one. The severities and messages cycle through the
 // ones the example fleet's own alarms use, so a severity is never named here
-// that the boot seed does not ship. Pure; a re-run raises the same dedup keys,
-// which the seed's alarm write already treats as standing.
-func Degrade(base Doc, n int) Doc {
+// that the boot seed does not ship. A template that declares AppliesTo is raised
+// only on a component whose type (via productTypes, product id to component type,
+// and its ancestors in typeParents) it lists; a component no cycled template
+// fits gets the first unrestricted template instead, so the density holds. Pure;
+// a re-run raises the same dedup keys, which the seed's alarm write already
+// treats as standing.
+func Degrade(base Doc, n int, productTypes, typeParents map[string]string) Doc {
 	out := base
 	out.Alarms = append([]Alarm(nil), base.Alarms...)
 	if n <= 0 || len(base.Alarms) == 0 {
 		return out
+	}
+	fallback := -1
+	for i, a := range base.Alarms {
+		if len(a.AppliesTo) == 0 {
+			fallback = i
+			break
+		}
 	}
 	alarmed := map[string]bool{}
 	for _, a := range base.Alarms {
@@ -299,6 +341,12 @@ func Degrade(base Doc, n int) Doc {
 			continue
 		}
 		tmpl := base.Alarms[k%len(base.Alarms)]
+		if !alarmFits(tmpl, productTypes[c.Product], typeParents) {
+			if fallback < 0 {
+				continue
+			}
+			tmpl = base.Alarms[fallback]
+		}
 		out.Alarms = append(out.Alarms, Alarm{
 			Component: c.Key, Severity: tmpl.Severity, Message: tmpl.Message,
 			DedupKey: "degraded-" + tmpl.DedupKey,

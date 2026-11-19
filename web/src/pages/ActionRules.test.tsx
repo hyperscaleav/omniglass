@@ -16,8 +16,8 @@ import { NOTIFICATION_TYPES_KEY } from "../lib/notification_types";
 // save. The lists are seeded into the query cache; fetch answers the writes
 // and the expression check, and refuses anything else.
 const at = "2026-10-29T00:00:00Z";
-const admin: Me = { principal: { id: uuidFor("u-root"), kind: "human" }, human: { username: "root" }, permissions: [">"], fleet_permissions: [">"], grants: [{ role: "owner", scope_kind: "all" }] };
-const viewer: Me = { principal: { id: uuidFor("u-view"), kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], fleet_permissions: ["*:read"], grants: [{ role: "viewer", scope_kind: "all" }] };
+const admin: Me = { user: { id: uuidFor("u-root"), kind: "person" }, person: { username: "root" }, permissions: [">"], fleet_permissions: [">"], grants: [{ role: "owner", scope_kind: "all" }] };
+const viewer: Me = { user: { id: uuidFor("u-view"), kind: "person" }, person: { username: "viewer" }, permissions: ["*:read"], fleet_permissions: ["*:read"], grants: [{ role: "viewer", scope_kind: "all" }] };
 
 const pageOps: ActionRule = {
   id: uuidFor("r-1"), name: "page-ops", label: "Page ops", on: ["raised", "cleared"], when: "severity_rank >= 40", targets: ["ops-chat"],
@@ -27,7 +27,12 @@ const quiet: ActionRule = {
   id: uuidFor("r-2"), name: "everything", on: ["raised"], targets: ["ops-mailbox"], official: false, opt_out_allowed: true, enabled: false,
   created_at: at, updated_at: at,
 };
-const target = (name: string): NotificationTarget => ({ id: uuidFor(name), name, kind: "webhook", auth: "none", enabled: true, created_at: at, updated_at: at });
+// The shipped rule (#1987): official, so its enabled switch is the only part an operator edits here.
+const shipped: ActionRule = {
+  id: uuidFor("r-3"), name: "platform-alarms-to-admins", label: "Platform alarms to admins", on: ["raised", "cleared"], when: "platform",
+  targets: ["platform-admins", "platform-owners"], official: true, opt_out_allowed: false, enabled: true, created_at: at, updated_at: at,
+};
+const target = (name: string): NotificationTarget => ({ id: uuidFor(name), name, kind: "webhook", auth: "none", official: false, enabled: true, created_at: at, updated_at: at });
 const note = (over: Partial<Notification>): Notification => ({
   id: uuidFor("n"), alarm: "a", attempts: 1, channel: "webhook", component: "display-1", component_id: "c-1", created_at: at,
   notification_type: "alarm-raised", status: "sent", subject: "s", target: "ops-chat", text: "t", transition: "raised", action_rule: "page-ops",
@@ -40,7 +45,7 @@ const validated = (ok = true) => json({ ok, site: "action", value_type: "bool", 
 function mount(me: Me = admin, recent: Notification[] = []) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...ME_KEY], me);
-  qc.setQueryData([...ACTION_RULES_KEY], [pageOps, quiet]);
+  qc.setQueryData([...ACTION_RULES_KEY], [pageOps, quiet, shipped]);
   qc.setQueryData([...NOTIFICATION_TARGETS_KEY], [target("ops-chat"), target("ops-mailbox")]);
   qc.setQueryData([...NOTIFICATION_TYPES_KEY], [{ id: uuidFor("ty"), name: "alarm-raised", official: true, subject: "", text: "", created_at: at, updated_at: at }]);
   qc.setQueryData([...recentNotificationsKey({})], recent);
@@ -130,6 +135,31 @@ describe("ActionRules", () => {
     const blade = await openBlade("everything");
     fireEvent.click(within(blade).getByText("Enable"));
     await waitFor(() => expect(body).toEqual({ enabled: true }));
+  });
+
+  it("disables the shipped rule from its blade footer, its edit greyed and no delete (#1987)", async () => {
+    let body: unknown;
+    stubFetch(async (req) => {
+      if (req.method === "PATCH" && req.url.endsWith("/action-rules/platform-alarms-to-admins")) {
+        body = await req.json();
+        return json({ ...shipped, enabled: false });
+      }
+      if (req.method === "GET" && req.url.endsWith("/action-rules")) return json({ action_rules: [pageOps, quiet, { ...shipped, enabled: false }] });
+      return refuse(req);
+    });
+    mount();
+    const blade = await openBlade("Platform alarms to admins");
+    expect(within(blade).queryByLabelText("More actions")).toBeNull();
+    expect((within(blade).getByText("Edit").closest("button") as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(within(blade).getByText("Disable"));
+    await waitFor(() => expect(body).toEqual({ enabled: false }));
+  });
+
+  it("keeps the shipped rule wholly locked to a reader", async () => {
+    stubFetch(refuse);
+    mount(viewer);
+    const blade = await openBlade("Platform alarms to admins");
+    expect(within(blade).queryByText("Disable")).toBeNull();
   });
 
   it("creates a rule once its when compiles, sending the targets picked", async () => {

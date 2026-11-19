@@ -2,7 +2,7 @@
 #
 # Two simulated Kestrel bars in the depot's Bay 1, one commanded over https by the shipped
 # kestrel-api driver and one over its control socket by kestrel-ws: set-volume with --wait
-# answers settled, the bar's reply its evidence. A third bar, behind a node that is powered
+# answers settled, the bar's reply its evidence. A third bar, behind an outpost that is powered
 # off, reads queued, then timed out with the reason, and the outcome lands on its timeline (#1155).
 
 Type "# Two Kestrel bars in the depot's Bay 1, by their dotted addresses"
@@ -22,7 +22,7 @@ Wait
 Type `demo_hush 'omniglass secret create --name depot-bar-login --owner-kind platform --secret-type basic-auth --fields "{\"username\":\"admin\",\"password\":\"kestrel\"}"'`
 Enter
 Wait
-Type `demo_hush 'omniglass endpoint create --component "$socket" --driver kestrel-ws --node edge-hq --inputs "{\"host\":\"$addr\",\"port\":\"9443\",\"login\":\"depot-bar-login\"}"'`
+Type `demo_hush 'omniglass endpoint create --component "$socket" --driver kestrel-ws --outpost edge-hq --inputs "{\"host\":\"$addr\",\"port\":\"9443\",\"login\":\"depot-bar-login\"}"'`
 Enter
 Wait
 Type `demo_until 120 'omniglass component reachability list "$socket" | jq -e ".endpoints[] | select(.endpoint == \"wss\") | .session.state == \"up\""'`
@@ -36,13 +36,13 @@ Show
 Type "# Over https: --wait blocks until the bar's reply settles it"
 Enter
 Wait
-Type `omniglass component command issue "$web" --command-type set-volume --value 42 --wait | jq -c '{status, endpoint, driver, settled_by, reason, reply}'`
+Type `omniglass component command issue "$web" --command-type set-volume --value 0.42 --wait | jq -c '{status, endpoint, driver, settled_by, reason, reply}'`
 Enter
 Wait
 Type "# Over the control socket: the answer frame carries back the minted id, and the value set"
 Enter
 Wait
-Type `omniglass component command issue "$socket" --command-type set-volume --value 37 --wait | jq -c '{status, endpoint, driver, reason, reply: (.reply | fromjson | {type, value})}'`
+Type `omniglass component command issue "$socket" --command-type set-volume --value 0.37 --wait | jq -c '{status, endpoint, driver, reason, reply: (.reply | fromjson | {type, value})}'`
 Enter
 Wait
 Type "# Each reads back by its id under its component, the whole arc stamped"
@@ -58,7 +58,7 @@ Enter
 Wait
 Show
 
-Type "# A third bar, collected by a node that is powered off: the command waits in its queue"
+Type "# A third bar, collected by an outpost that is powered off: the command waits in its queue"
 Enter
 Wait
 Type `dark='depot.bay-1.$comp.dark-bar'`
@@ -66,18 +66,18 @@ Enter
 Wait
 
 Hide
-Type `demo_hush 'omniglass node create --name edge-depot-dark --label "Depot edge (powered off)"'`
+Type `demo_hush 'omniglass outpost create --name edge-depot-dark --label "Depot edge (powered off)"'`
 Enter
 Wait
 Type `demo_hush 'omniglass component create --name dark-bar --product kestrel-vroom --location depot.bay-1'`
 Enter
 Wait
-Type `demo_hush 'omniglass endpoint create --component "$dark" --driver kestrel-api --node edge-depot-dark --inputs "{\"host\":\"127.60.9.250\",\"login\":\"depot-bar-login\"}"'`
+Type `demo_hush 'omniglass endpoint create --component "$dark" --driver kestrel-api --outpost edge-depot-dark --inputs "{\"host\":\"127.60.9.250\",\"login\":\"depot-bar-login\"}"'`
 Enter
 Wait
 Show
 
-Type `omniglass component command issue "$dark" --command-type set-volume --value 30 | jq -c '{status, phase, endpoint, node, settle_window_seconds}'`
+Type `omniglass component command issue "$dark" --command-type set-volume --value 0.3 | jq -c '{status, phase, endpoint, outpost, settle_window_seconds}'`
 Enter
 Wait
 

@@ -19,7 +19,7 @@ It is two things at once, on purpose:
 
 ## Design principles
 
-- **Single binary, run modes.** One artifact runs as `server`, `node`, or `migrate`.
+- **Single binary, run modes.** One artifact runs as `server`, `outpost`, or `migrate`.
 - **BYO Postgres.** Standard managed PostgreSQL. No bespoke datastore.
 - **API first.** The Go API is the contract; the web app and CLI are generated clients.
 - **Test first.** A behavior change ships with the test that failed before it.
@@ -33,7 +33,7 @@ It is two things at once, on purpose:
 ## Quick start
 
 With Docker running (Linux, macOS or Windows), three commands bring up a working omniglass to learn
-on: the server and console, its own Postgres, and an edge node collecting from a simulated fleet.
+on: the server and console, its own Postgres, and an edge outpost collecting from a simulated fleet.
 
 ```bash
 git clone https://github.com/hyperscaleav/omniglass.git && cd omniglass
@@ -44,7 +44,7 @@ make                      # builds bin/omniglass and the omniglass:dev image, wi
 `make lab` is the short form of the last two. With a
 [release binary](https://github.com/hyperscaleav/omniglass/releases), run `omniglass lab run`.
 The console is at `http://127.0.0.1:8080/web`, signed in as `dev` / `dev`.
-[Try omniglass in five minutes](https://docs.omniglass.hyperscaleav.com/guides/lab/) is the guide:
+[Your first ten minutes](https://docs.omniglass.hyperscaleav.com/start/first-ten-minutes/) is the guide:
 what runs, the guided walkthroughs to follow, and why Docker is required.
 
 ## Repository layout
@@ -59,7 +59,7 @@ go.mod            the Go module
 The code lands one vertical slice at a time, into this target shape:
 
 ```
-cmd/omniglass     entrypoint (server | node | migrate)
+cmd/omniglass     entrypoint (server | outpost | migrate)
 internal/         the application (storage gateway, collection, rules, api, ...)
 db/migrations/    dbmate schema migrations (pure DDL)
 web/              the operator SPA
@@ -69,7 +69,7 @@ web/              the operator SPA
 
 The architecture, concepts, and contributor guide live in [`docs/`](docs/) and are
 published at [docs.omniglass.hyperscaleav.com](https://docs.omniglass.hyperscaleav.com).
-Start with the architecture spine.
+Start with [Start here](https://docs.omniglass.hyperscaleav.com/start/).
 
 ## Contributing
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/health"
@@ -29,9 +30,9 @@ import (
 //
 // Recompute at the write, inside the caller's transaction. Every mutation that
 // can change health recomputes the affected chain before it commits: raising or
-// clearing an alarm, staffing or unstaffing a role, declaring or withdrawing one,
+// clearing an alarm, staffing or unstaffing a slot, declaring or withdrawing one,
 // creating a system, and changing the standard it conforms to or the location it
-// sits in. A component's own condition is now purely its active alarms (#626),
+// sits in. A component's own health is now purely its active alarms (#626),
 // so a product swap or a capability fact no longer belongs to that list. The
 // alternative, RECORDING on read, would stamp every transition at the moment
 // somebody opened a page, which is precisely the inaccuracy the record exists to
@@ -39,12 +40,12 @@ import (
 //
 // A missing trigger is therefore a hole in the history, and it used to be a hole
 // in the answer too: the reads served the last recorded value, so an entity no
-// write had touched yet read healthy no matter what its roles said. The reads now
+// write had touched yet read healthy no matter what its slots said. The reads now
 // COMPUTE the verdict they serve from the same rows they show (see SystemHealth
 // and LocationHealth) without recording anything, so an incomplete trigger set can
 // cost an edge in the history but can never make a report contradict itself.
 //
-// One owner at a time. Both rules above are compare-then-act: read what the roles
+// One owner at a time. Both rules above are compare-then-act: read what the slots
 // say, compare it with the last recorded value, write only on a difference. Two
 // transactions doing that at once for the same owner each read a state the other
 // was about to change, so both could conclude they were recording an edge (two
@@ -78,9 +79,9 @@ type txQuerier interface {
 }
 
 // HealthReport answers "what is this entity's health, and why". Verdict is
-// derived from the very evidence the report carries (the roles for a system, the
+// derived from the very evidence the report carries (the slots for a system, the
 // systems for a location), so the two halves can never contradict each other: a
-// report that says healthy beside an impaired outage role is worse than no report.
+// report that says healthy beside an impaired outage slot is worse than no report.
 // Deriving it is a pure computation over rows the read already loaded, so it
 // writes nothing and cannot invent a transition. Transitions stay the recorded
 // edges, which is a different question ("when did this change") and the one the
@@ -89,42 +90,42 @@ type HealthReport struct {
 	OwnerKind   string
 	OwnerID     string
 	Verdict     string
-	Roles       []HealthRole   // system reports: the roles that contributed
+	Slots       []HealthSlot   // system reports: the slots that contributed
 	Systems     []HealthSystem // location reports: the systems beneath it
 	Transitions []HealthTransition
 }
 
-// HealthRole is one contributing role, with the causing chain when it is
+// HealthSlot is one contributing slot, with the causing chain when it is
 // impaired. Down and Alarms are what turn a verdict into something an
 // operator can act on: which assigned components are not occupying their
-// slot, and the alarms that took them down. A satisfied role carries
-// neither, and a role that is merely short-staffed (nobody down, just nobody
+// slot, and the alarms that took them down. A satisfied slot carries
+// neither, and a slot that is merely short-staffed (nobody down, just nobody
 // assigned) carries Down empty too.
 //
 // Choice, Alternate and Active are the #626 grouping, carried onto the
 // report so a consumer can group what the verdict already groups: Choice
-// and Alternate are empty for an unconditional role (it always counts), and
-// Active is true for every unconditional role but only for the roles of a
+// and Alternate are empty for an unconditional slot (it always counts), and
+// Active is true for every unconditional slot but only for the slots of a
 // choice's currently-winning alternate (internal/health.Choice.Active).
-// Without this, the verdict and the role list can read as contradicting
+// Without this, the verdict and the slot list can read as contradicting
 // each other: a satisfied all-in-one alternate reads healthy while the
-// same report lists its unbuilt component-system alternate's roles as
-// impaired, with nothing to say those roles are not the reason.
-type HealthRole struct {
+// same report lists its unbuilt component-system alternate's slots as
+// impaired, with nothing to say those slots are not the reason.
+type HealthSlot struct {
 	Name       string
 	Label      string
 	Impact     string
 	Quorum     int
 	Satisfying int
-	Short      int // how many more occupants the role needs to reach quorum
-	Spare      int // how many occupants the role has beyond quorum
+	Short      int // how many more occupants the slot needs to reach quorum
+	Spare      int // how many occupants the slot has beyond quorum
 	Impaired   bool
 	AssignedTo []string
 	Down       []string // assigned components whose own verdict is outage
 	Alarms     []Alarm  // the active alarms on those down components
-	Choice     string   // the choice this role belongs to; empty when unconditional
+	Choice     string   // the choice this slot belongs to; empty when unconditional
 	Alternate  string   // the alternate within Choice; empty when unconditional
-	Active     bool     // true for an unconditional role, or a role in its choice's active alternate
+	Active     bool     // true for an unconditional slot, or a slot in its choice's active alternate
 }
 
 // HealthSystem is one system under a location, with its recorded verdict. It is
@@ -141,9 +142,9 @@ type HealthTransition struct {
 	Value string
 }
 
-// resolvedRole is a system's role with everything both the verdict and the report
+// resolvedSlot is a system's slot with everything both the verdict and the report
 // need: the declaration and who fills it, each with its own current verdict.
-type resolvedRole struct {
+type resolvedSlot struct {
 	ID       string
 	Name     string
 	Label    string
@@ -153,14 +154,14 @@ type resolvedRole struct {
 	// AssignedIDs is Assigned's own component id, index for index: the pure
 	// health.Component the rollup and the report both consume carries only a
 	// Name (display), so a caller that needs to look a specific assignee back
-	// up unambiguously (explainRole's active-alarm read) takes the id from
+	// up unambiguously (explainSlot's active-alarm read) takes the id from
 	// here rather than the name Assigned carries, which #627 no longer
 	// guarantees is unique.
 	AssignedIDs []string
 	// ChoiceID, ChoiceName, AlternateID, AlternateName and AlternatePos are
-	// set when this role joins one alternate of a choice (#626); nil means
-	// unconditional (system_role.alternate_id is NULL), always folded
-	// directly rather than grouped. splitHealthRoles is what turns these
+	// set when this slot joins one alternate of a choice (#626); nil means
+	// unconditional (system_slot.alternate_id is NULL), always folded
+	// directly rather than grouped. splitHealthSlots is what turns these
 	// back into health.SystemVerdictWith's shape.
 	ChoiceID      *string
 	ChoiceName    *string
@@ -204,7 +205,7 @@ type ownerRef struct {
 // recomputeChain is the shape every trigger reduces to: some components whose own
 // verdict may have moved, plus some systems and some locations named explicitly.
 // The explicit lists matter for the writes that REMOVE a link (unassigning a
-// component, withdrawing a role, moving a system out of a location), where walking
+// component, withdrawing a slot, moving a system out of a location), where walking
 // the current rows would no longer find the entity that just changed.
 //
 // Every owner is locked before its inputs are resolved, and the lock is held to
@@ -215,7 +216,7 @@ type ownerRef struct {
 // other's locks.
 //
 // Each owner is recomputed once per call, however many of its descendants the
-// call touches, and from its direct inputs only: a system from its roles, a
+// call touches, and from its direct inputs only: a system from its slots, a
 // location from its children's recorded verdicts (locationVerdict). So the
 // cost of a write is its chain's length, not the size of the fleet under it
 // (#1562).
@@ -245,11 +246,11 @@ func (p *PG) recomputeChain(ctx context.Context, q txQuerier, components, system
 		if err := lockHealthOwner(ctx, q, "system", s.ID); err != nil {
 			return err
 		}
-		roles, err := p.resolveHealthRoles(ctx, q, s.ID)
+		slots, err := p.resolveHealthSlots(ctx, q, s.ID)
 		if err != nil {
 			return err
 		}
-		unconditional, choices, _ := splitHealthRoles(roles)
+		unconditional, choices, _ := splitHealthSlots(slots)
 		if err := recordHealth(ctx, q, "system", s.ID, health.SystemVerdictWith(unconditional, choices)); err != nil {
 			return err
 		}
@@ -445,7 +446,7 @@ func (p *PG) resolveLocationRefs(ctx context.Context, q txQuerier, refs []string
 }
 
 // recomputeSystems is the trigger shape for a declaration change, which moves a
-// system's roles without touching any component.
+// system's slots without touching any component.
 func (p *PG) recomputeSystems(ctx context.Context, q txQuerier, systems ...string) error {
 	refs, err := p.resolveSystemRefs(ctx, q, systems)
 	if err != nil {
@@ -529,8 +530,8 @@ func (p *PG) recomputeMovedLocation(ctx context.Context, q txQuerier, moved owne
 // to tell "healthy since we started watching" from "never evaluated".
 // ownerID is an id for a component/system/location owner (recomputeChain
 // always has one, via ownerRef; SystemHealth and LocationHealth resolve their
-// own before calling healthTransitions below), a name for a node (unchanged;
-// node names stay globally unique). See ownerArcExprN.
+// own before calling healthTransitions below), a name for an outpost (unchanged;
+// outpost names stay globally unique). See ownerArcExprN.
 func recordHealth(ctx context.Context, q txQuerier, ownerKind, ownerID string, v health.Verdict) error {
 	col, err := ownerColumn(ownerKind)
 	if err != nil {
@@ -572,7 +573,7 @@ func recordHealth(ctx context.Context, q txQuerier, ownerKind, ownerID string, v
 // Every caller across all four files resolves the reference to an id once,
 // before it ever reaches this expression (recomputeChain's ownerRef in this
 // file; ownerArcValue in the others), so ownerID is always already an id for
-// these three kinds, never a bare name. A node stays name-resolved: node names
+// these three kinds, never a bare name. An outpost stays name-resolved: outpost names
 // remain globally unique (they ride NATS subjects), so there is nothing to
 // convert.
 func ownerArcExpr(ownerKind string) string { return ownerArcExprN(ownerKind, 2) }
@@ -583,8 +584,8 @@ func ownerArcExprN(ownerKind string, n int) string {
 	switch ownerKind {
 	case "component", "system", "location":
 		return fmt.Sprintf("$%d::uuid", n)
-	case "node":
-		return fmt.Sprintf("(select principal_id from node where name = $%d::text)", n)
+	case "outpost":
+		return fmt.Sprintf("(select user_id from outpost where name = $%d::text)", n)
 	}
 	return fmt.Sprintf("$%d::text", n)
 }
@@ -608,11 +609,24 @@ func (p *PG) activeAlarmRanks(ctx context.Context, q txQuerier, componentID stri
 
 // ComponentVerdict is one component's own current verdict, by its id, the
 // one its active alarms make: the same live computation the recompute
-// records, so a reader of one component need not read the fleet for it.
+// records, so a reader of one component need not read the fleet for it. A
+// component nothing has ever observed reads "unknown" rather than healthy
+// (#1454): the same answer the fleet view's dots give, so the component's own
+// page and the outline never disagree about a device nothing has collected
+// from. "unknown" is a reading of this read alone; it never enters the rollup.
 func (p *PG) ComponentVerdict(ctx context.Context, componentID string) (string, error) {
 	v, err := p.componentVerdict(ctx, p.pool, componentID)
 	if err != nil {
 		return "", err
+	}
+	if v == health.Healthy {
+		var observed bool
+		if err := p.pool.QueryRow(ctx, `select `+componentObservedSQL(`$1::uuid`), componentID).Scan(&observed); err != nil {
+			return "", fmt.Errorf("storage: component observed %q: %w", componentID, err)
+		}
+		if !observed {
+			return "unknown", nil
+		}
 	}
 	return v.String(), nil
 }
@@ -631,14 +645,14 @@ func (p *PG) componentVerdict(ctx context.Context, q txQuerier, componentID stri
 	return health.ComponentVerdict(ranks), nil
 }
 
-// systemsStaffedBy lists the systems this component fills a role in, the systems
+// systemsStaffedBy lists the systems this component fills a slot in, the systems
 // whose verdict its condition can move, each as an ownerRef: the query already
 // joins by id (ra.component_id = ra.system_id -> s.id), so returning the id
 // alongside the name costs nothing and is what lets recomputeChain's caller
 // avoid a second, ambiguity-prone name lookup for every system it just found.
 func (p *PG) systemsStaffedBy(ctx context.Context, q txQuerier, componentID string) ([]ownerRef, error) {
 	rows, err := q.Query(ctx, `
-		select distinct s.id, s.name from system_role_assignment ra join system s on s.id = ra.system_id
+		select distinct s.id, s.name from system_slot_assignment ra join system s on s.id = ra.system_id
 		where ra.component_id = $1::uuid order by 2`,
 		componentID)
 	if err != nil {
@@ -649,7 +663,7 @@ func (p *PG) systemsStaffedBy(ctx context.Context, q txQuerier, componentID stri
 }
 
 // conformingSystems lists the systems a standard's declaration reaches, each as
-// an ownerRef. Declaring a role on a standard moves every conforming system at
+// an ownerRef. Declaring a slot on a standard moves every conforming system at
 // once, which is the arc a per-system recompute would miss. id is selected
 // alongside name (both are right there in the same row, keyed on
 // standard_id, an unambiguous FK): the caller hands these straight to
@@ -664,11 +678,11 @@ func (p *PG) conformingSystems(ctx context.Context, q txQuerier, standardID stri
 	return scanOwnerRefs(rows, "conforming systems")
 }
 
-// systemsForRoleOwner resolves the systems one role declaration reaches, each
+// systemsForSlotOwner resolves the systems one slot declaration reaches, each
 // as an ownerRef: the single system for an ad-hoc declaration (resolved once,
 // ambiguity-safe), every conforming system for a standard's, since those
 // inherit it live.
-func (p *PG) systemsForRoleOwner(ctx context.Context, q txQuerier, ownerKind, ownerID string) ([]ownerRef, error) {
+func (p *PG) systemsForSlotOwner(ctx context.Context, q txQuerier, ownerKind, ownerID string) ([]ownerRef, error) {
 	if ownerKind == "standard" {
 		return p.conformingSystems(ctx, q, ownerID)
 	}
@@ -798,7 +812,7 @@ func (p *PG) locationVerdict(ctx context.Context, q txQuerier, locationID string
 
 // SystemVerdict is one system's recorded health verdict, the single fact a list
 // row's badge renders. Deliberately not a HealthReport: the report resolves every
-// role, its occupants, their alarms and thirty days of transitions, which is the
+// slot, its occupants, their alarms and thirty days of transitions, which is the
 // right read for one system's panel and the wrong one to pay N times to colour a
 // column (#653).
 type SystemVerdict struct {
@@ -823,27 +837,21 @@ type SystemVerdict struct {
 // A system with nothing recorded is reported HEALTHY rather than omitted, and
 // that default is not a guess: recordHealth only writes on a TRANSITION, so a
 // system that has never been recomputed has no row, and SystemVerdictWith over no
-// impaired active role is Healthy. TestSystemVerdictsAgreeWithTheReport holds
+// impaired active slot is Healthy. TestSystemVerdictsAgreeWithTheReport holds
 // this read to SystemHealth's own verdict, defaulted rows included, so the two
 // cannot drift.
 func (p *PG) SystemVerdicts(ctx context.Context, read scope.Set) ([]SystemVerdict, error) {
 	if read.Empty() {
 		return nil, nil
 	}
-	args := []any{}
-	key := "$1"
-	if !read.All {
-		roots := uuidRoots(read.IDs)
-		selfIDs := uuidRoots(read.SelfIDs)
-		if len(roots) == 0 && len(selfIDs) == 0 {
-			return nil, nil // every scope root is malformed: nothing is in scope
-		}
-		args = append(args, roots, selfIDs)
-		key = "$3"
+	args, ok := scopedListArgs(systemConfig.table, read)
+	if !ok {
+		return nil, nil // every scope root is malformed: nothing is in scope
 	}
 	args = append(args, healthKey)
+	key := "$" + strconv.Itoa(len(args))
 	rows, err := p.pool.Query(ctx, `
-		with sys as (`+scopedListSQL(systemConfig.table, "id", read.All)+`),
+		with sys as (`+scopedListSQL(systemConfig.table, "id", read)+`),
 		latest as (
 			select distinct on (v.system_id) v.system_id, v.value #>> '{}' as verdict
 			from property v
@@ -869,89 +877,89 @@ func (p *PG) SystemVerdicts(ctx context.Context, read scope.Set) ([]SystemVerdic
 	return out, rows.Err()
 }
 
-// resolveHealthRoles resolves a system's roles from both arcs (inherited from its
+// resolveHealthSlots resolves a system's slots from both arcs (inherited from its
 // standard, declared on the system) with each assigned component's own current
-// verdict. It is the resolution EffectiveRoles does, carried far enough for the
+// verdict. It is the resolution EffectiveSlots does, carried far enough for the
 // verdict: the quorum, the impact, and who occupies the slot today. Takes the
 // system's id directly (see activeAlarmSeverities).
-func (p *PG) resolveHealthRoles(ctx context.Context, q txQuerier, systemID string) ([]resolvedRole, error) {
+func (p *PG) resolveHealthSlots(ctx context.Context, q txQuerier, systemID string) ([]resolvedSlot, error) {
 	// A correlated subquery for assigned, not a GROUP BY: array_agg(distinct
 	// ... order by ra.position) is rejected by Postgres outright (the ORDER
 	// BY expression must appear in the DISTINCT argument list), and this
 	// query joins nothing else that would fan assignment rows out, so the
-	// subquery form EffectiveRoles needs for its extra joins works here too,
+	// subquery form EffectiveSlots needs for its extra joins works here too,
 	// ordered by the occupant's position (#626) rather than alphabetically.
 	rows, err := q.Query(ctx, `
 		with sys as (
 			select id, name, standard_id from system where id = $1::uuid
 		),
-		roles as (
-			-- a role of the system: declared on it or inherited from its
-			-- standard (roleOfSystemSQL, the same fact a system calc rule's
+		slots as (
+			-- a slot of the system: declared on it or inherited from its
+			-- standard (slotOfSystemSQL, the same fact a system calc rule's
 			-- members read)
 			select r.id, r.name, coalesce(r.label, '') as label, r.quorum, r.impact, r.alternate_id
-			from sys join system_role r on `+roleOfSystemSQL("r", "sys")+`
+			from sys join system_slot r on `+slotOfSystemSQL("r", "sys")+`
 		)
-		select roles.id, roles.name, roles.label, roles.quorum, roles.impact,
+		select slots.id, slots.name, slots.label, slots.quorum, slots.impact,
 		       -- names for display, ids to look an assignee's own verdict up
 		       -- unambiguously (#627): both come off the same
 		       -- ra.component_id = ac.id join, so carrying the id costs
 		       -- nothing extra here and saves every caller from re-resolving
 		       -- one from a name that might no longer be unique.
 		       coalesce((select array_agg(ac.name order by ra.position)
-		                   from system_role_assignment ra join component ac on ac.id = ra.component_id
-		                  where ra.role_id = roles.id and ra.system_id = sys.id), '{}'),
+		                   from system_slot_assignment ra join component ac on ac.id = ra.component_id
+		                  where ra.slot_id = slots.id and ra.system_id = sys.id), '{}'),
 		       coalesce((select array_agg(ac.id order by ra.position)
-		                   from system_role_assignment ra join component ac on ac.id = ra.component_id
-		                  where ra.role_id = roles.id and ra.system_id = sys.id), '{}'),
-		       roles.alternate_id, ca.name, ca.position, rc.id, rc.name
-		-- sys first, then roles: a bare comma before a JOIN...ON only puts the
+		                   from system_slot_assignment ra join component ac on ac.id = ra.component_id
+		                  where ra.slot_id = slots.id and ra.system_id = sys.id), '{}'),
+		       slots.alternate_id, ca.name, ca.position, rc.id, rc.name
+		-- sys first, then slots: a bare comma before a JOIN...ON only puts the
 		-- item immediately to its right in scope for that ON clause, so
-		-- "roles, sys left join choice_alternate" would leave "roles"
-		-- invisible to ca's ON clause. roles must be adjacent to the joins
+		-- "slots, sys left join choice_alternate" would leave "slots"
+		-- invisible to ca's ON clause. slots must be adjacent to the joins
 		-- that reference it; sys is only needed by the correlated subquery
 		-- above, which (unlike an ON clause) can reach any FROM-list item.
-		from sys, roles
-		left join choice_alternate ca on ca.id = roles.alternate_id
-		left join role_choice rc on rc.id = ca.choice_id
-		order by roles.name`, systemID)
+		from sys, slots
+		left join choice_alternate ca on ca.id = slots.alternate_id
+		left join slot_choice rc on rc.id = ca.choice_id
+		order by slots.name`, systemID)
 	if err != nil {
-		return nil, fmt.Errorf("storage: resolve health roles %q: %w", systemID, err)
+		return nil, fmt.Errorf("storage: resolve health slots %q: %w", systemID, err)
 	}
 
-	type rawRole struct {
-		resolvedRole
+	type rawSlot struct {
+		resolvedSlot
 		assignedTo  []string
 		assignedIDs []string
 	}
-	var raw []rawRole
+	var raw []rawSlot
 	for rows.Next() {
-		var r rawRole
+		var r rawSlot
 		if err := rows.Scan(&r.ID, &r.Name, &r.Label, &r.Quorum, &r.Impact,
 			&r.assignedTo, &r.assignedIDs, &r.AlternateID, &r.AlternateName, &r.AlternatePos, &r.ChoiceID, &r.ChoiceName); err != nil {
 			rows.Close()
-			return nil, fmt.Errorf("storage: scan health role %q: %w", systemID, err)
+			return nil, fmt.Errorf("storage: scan health slot %q: %w", systemID, err)
 		}
 		raw = append(raw, r)
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
-		return nil, fmt.Errorf("storage: iterate health roles %q: %w", systemID, err)
+		return nil, fmt.Errorf("storage: iterate health slots %q: %w", systemID, err)
 	}
 	rows.Close()
 
-	// A component fills at most one role per system (#626), so an id can no
-	// longer repeat across this system's role list: the cache below costs
+	// A component fills at most one slot per system (#626), so an id can no
+	// longer repeat across this system's slot list: the cache below costs
 	// nothing to keep even so, since a miss is just one extra query, not a
 	// wrong answer. Keyed by id, not name: two components could share a name
 	// once #627 lands, and a name-keyed cache would hand one assignee's
 	// verdict to the other.
 	resolved := map[string]health.Component{}
-	out := make([]resolvedRole, 0, len(raw))
+	out := make([]resolvedSlot, 0, len(raw))
 	for _, r := range raw {
-		role := r.resolvedRole
-		role.Assigned = make([]health.Component, 0, len(r.assignedTo))
-		role.AssignedIDs = append([]string(nil), r.assignedIDs...)
+		slot := r.resolvedSlot
+		slot.Assigned = make([]health.Component, 0, len(r.assignedTo))
+		slot.AssignedIDs = append([]string(nil), r.assignedIDs...)
 		for i, name := range r.assignedTo {
 			id := r.assignedIDs[i]
 			c, ok := resolved[id]
@@ -963,27 +971,27 @@ func (p *PG) resolveHealthRoles(ctx context.Context, q txQuerier, systemID strin
 				c = health.Component{Name: name, Verdict: v}
 				resolved[id] = c
 			}
-			role.Assigned = append(role.Assigned, c)
+			slot.Assigned = append(slot.Assigned, c)
 		}
-		out = append(out, role)
+		out = append(out, slot)
 	}
 	return out, nil
 }
 
-// splitHealthRoles partitions a system's resolved roles into the two shapes
-// health.SystemVerdictWith takes (#626): the roles that always count
-// (system_role.alternate_id is NULL) and the roles grouped by the choice and
-// alternate they belong to, each alternate's roles ordered by
+// splitHealthSlots partitions a system's resolved slots into the two shapes
+// health.SystemVerdictWith takes (#626): the slots that always count
+// (system_slot.alternate_id is NULL) and the slots grouped by the choice and
+// alternate they belong to, each alternate's slots ordered by
 // choice_alternate.position (internal/health.Choice.Active's tie-break).
-// Flattening every role through a single fold, the way the pre-#626
-// healthRoles did, is not merely incomplete once a choice exists: an
+// Flattening every slot through a single fold, the way the pre-#626
+// healthSlots did, is not merely incomplete once a choice exists: an
 // all-in-one room's satisfied video-bar alternate would still take the
 // system to outage over its component-system alternate's five unstaffed
-// roles, because nothing would tell the fold those five are optional.
+// slots, because nothing would tell the fold those five are optional.
 //
 // Building this from a map rather than relying on the query's ORDER BY
 // keeping same-choice rows contiguous is deliberate: the query orders by
-// roles.name (for the unrelated per-role report this same read serves), not
+// slots.name (for the unrelated per-slot report this same read serves), not
 // by choice or position, so grouping has to happen here regardless of scan
 // order. Choices are then sorted by name and each choice's alternates by
 // position for a deterministic, map-iteration-free result.
@@ -992,24 +1000,24 @@ func (p *PG) resolveHealthRoles(ctx context.Context, q txQuerier, systemID strin
 // health.Choice carries only a Name (the pure package has no notion of a
 // storage id), but two DISTINCT choices can share one, a system inheriting
 // a standard-owned "conferencing" while also declaring its own ad-hoc
-// "conferencing" (role_choice_name_key is scoped to one owner arc, not
+// "conferencing" (slot_choice_name_key is scoped to one owner arc, not
 // globally). A caller building a name-keyed lookup from choices alone would
-// silently collapse the two; byID is what lets explainRole (SystemHealth)
-// resolve a role's active status by the same id resolvedRole already
+// silently collapse the two; byID is what lets explainSlot (SystemHealth)
+// resolve a slot's active status by the same id resolvedSlot already
 // carries instead.
-func splitHealthRoles(rs []resolvedRole) (unconditional []health.Role, choices []health.Choice, byID map[string]health.Choice) {
+func splitHealthSlots(rs []resolvedSlot) (unconditional []health.Slot, choices []health.Choice, byID map[string]health.Choice) {
 	type altGroup struct {
 		name  string
 		pos   int
-		roles []health.Role
+		slots []health.Slot
 	}
 	choiceNames := map[string]string{}              // choice id -> name
 	choiceAlts := map[string]map[string]*altGroup{} // choice id -> alternate id -> group
 
 	for _, r := range rs {
-		role := health.Role{Name: r.Name, Quorum: r.Quorum, Impact: r.Impact, Assigned: r.Assigned}
+		slot := health.Slot{Name: r.Name, Quorum: r.Quorum, Impact: r.Impact, Assigned: r.Assigned}
 		if r.ChoiceID == nil {
-			unconditional = append(unconditional, role)
+			unconditional = append(unconditional, slot)
 			continue
 		}
 		cid, aid := *r.ChoiceID, *r.AlternateID
@@ -1026,7 +1034,7 @@ func splitHealthRoles(rs []resolvedRole) (unconditional []health.Role, choices [
 			g = &altGroup{name: *r.AlternateName, pos: pos}
 			choiceAlts[cid][aid] = g
 		}
-		g.roles = append(g.roles, role)
+		g.slots = append(g.slots, slot)
 	}
 
 	cids := make([]string, 0, len(choiceNames))
@@ -1044,7 +1052,7 @@ func splitHealthRoles(rs []resolvedRole) (unconditional []health.Role, choices [
 		sort.Slice(alts, func(i, j int) bool { return alts[i].pos < alts[j].pos })
 		out := health.Choice{Name: choiceNames[cid]}
 		for _, g := range alts {
-			out.Alternates = append(out.Alternates, health.Alternate{Name: g.name, Roles: g.roles})
+			out.Alternates = append(out.Alternates, health.Alternate{Name: g.name, Slots: g.slots})
 		}
 		choices = append(choices, out)
 		if byID == nil {
@@ -1055,19 +1063,19 @@ func splitHealthRoles(rs []resolvedRole) (unconditional []health.Role, choices [
 	return unconditional, choices, byID
 }
 
-// SystemHealth reports a system's current verdict, the roles that produced it,
+// SystemHealth reports a system's current verdict, the slots that produced it,
 // and its recorded transitions inside window, counted back from the DATABASE's
 // clock rather than the server's (#719, tsSince); a zero window returns the
 // whole history. The system must be in the read scope; out of scope is the
 // non-disclosing ErrSystemNotFound.
 //
-// The verdict is the rollup of the roles served beside it, not the last recorded
+// The verdict is the rollup of the slots served beside it, not the last recorded
 // value. The two agree whenever the trigger set is complete, and where they would
-// disagree the resolved roles are the honest answer: a system that conforms to a
-// standard whose roles nobody has staffed is broken from the moment it exists.
-// "The roles served beside it" is the flat list, not the fold's inputs
-// directly: a choice's non-active alternate still serves its roles here
-// (each with Active false, HealthRole), so the verdict can be healthy while
+// disagree the resolved slots are the honest answer: a system that conforms to a
+// standard whose slots nobody has staffed is broken from the moment it exists.
+// "The slots served beside it" is the flat list, not the fold's inputs
+// directly: a choice's non-active alternate still serves its slots here
+// (each with Active false, HealthSlot), so the verdict can be healthy while
 // the list beside it shows impaired rows, and Active is what tells the two
 // apart rather than that being a disagreement.
 func (p *PG) SystemHealth(ctx context.Context, systemName string, window time.Duration, read scope.Set) (*HealthReport, error) {
@@ -1084,19 +1092,19 @@ func (p *PG) SystemHealth(ctx context.Context, systemName string, window time.Du
 	if err != nil {
 		return nil, err
 	}
-	rep := &HealthReport{OwnerKind: "system", OwnerID: systemName, Roles: []HealthRole{}}
-	roles, err := p.resolveHealthRoles(ctx, p.pool, sys.ID)
+	rep := &HealthReport{OwnerKind: "system", OwnerID: systemName, Slots: []HealthSlot{}}
+	slots, err := p.resolveHealthSlots(ctx, p.pool, sys.ID)
 	if err != nil {
 		return nil, err
 	}
-	unconditional, choices, choicesByID := splitHealthRoles(roles)
+	unconditional, choices, choicesByID := splitHealthSlots(slots)
 	rep.Verdict = health.SystemVerdictWith(unconditional, choices).String()
-	// The same choices splitHealthRoles just grouped for the verdict name
-	// which alternate is active in each, so explainRole can mark every role
+	// The same choices splitHealthSlots just grouped for the verdict name
+	// which alternate is active in each, so explainSlot can mark every slot
 	// with whether it is the reason the verdict reads what it does or a
-	// roads-not-taken alternate's role: the report would otherwise repeat
+	// roads-not-taken alternate's slot: the report would otherwise repeat
 	// the pre-#626 contradiction the fold itself was built to fix, just one
-	// level lower, listing an unbuilt alternate's roles as impaired beside a
+	// level lower, listing an unbuilt alternate's slots as impaired beside a
 	// verdict that already knows to ignore them. Keyed by choice id
 	// (choicesByID), not name: a system can reach two distinct choices that
 	// happen to share a name (its standard's and its own ad-hoc one), and a
@@ -1107,12 +1115,12 @@ func (p *PG) SystemHealth(ctx context.Context, systemName string, window time.Du
 			activeAlt[cid] = active.Name
 		}
 	}
-	for i := range roles {
-		row, err := p.explainRole(ctx, p.pool, roles[i], activeAlt)
+	for i := range slots {
+		row, err := p.explainSlot(ctx, p.pool, slots[i], activeAlt)
 		if err != nil {
 			return nil, err
 		}
-		rep.Roles = append(rep.Roles, row)
+		rep.Slots = append(rep.Slots, row)
 	}
 	if rep.Transitions, err = healthTransitions(ctx, p.pool, "system", sys.ID, window); err != nil {
 		return nil, err
@@ -1123,7 +1131,7 @@ func (p *PG) SystemHealth(ctx context.Context, systemName string, window time.Du
 // LocationHealth reports a location's current verdict, the systems beneath it
 // with theirs, and its recorded transitions. The systems are the drill-down: a
 // degraded location names which system is at fault, and the system health read
-// names the role, which occupant is down, and the alarm.
+// names the slot, which occupant is down, and the alarm.
 //
 // The verdict is the rollup of exactly those systems, so the headline and the
 // drill-down can never disagree: a location cannot read healthy over a system it
@@ -1158,32 +1166,32 @@ func systemVerdicts(systems []HealthSystem) []health.Verdict {
 	return out
 }
 
-// explainRole turns a resolved role into the report row, adding the causing chain
-// when the role is impaired: which assigned components are not occupying their
-// slot (down), and which active alarms took them down. A satisfied role needs
+// explainSlot turns a resolved slot into the report row, adding the causing chain
+// when the slot is impaired: which assigned components are not occupying their
+// slot (down), and which active alarms took them down. A satisfied slot needs
 // no explanation, so it costs no alarm read. activeAlt is the choice-id to
 // active-alternate-name lookup SystemHealth built from the same
-// splitHealthRoles grouping the verdict itself folds, so a role's Active flag
+// splitHealthSlots grouping the verdict itself folds, so a slot's Active flag
 // can never disagree with what actually decided the verdict. Keyed by id, not
 // name: two distinct choices (a system's own and its standard's) can share a
 // name, and a name-keyed lookup would answer for the wrong one.
-func (p *PG) explainRole(ctx context.Context, q txQuerier, r resolvedRole, activeAlt map[string]string) (HealthRole, error) {
-	role := health.Role{Name: r.Name, Quorum: r.Quorum, Impact: r.Impact, Assigned: r.Assigned}
+func (p *PG) explainSlot(ctx context.Context, q txQuerier, r resolvedSlot, activeAlt map[string]string) (HealthSlot, error) {
+	slot := health.Slot{Name: r.Name, Quorum: r.Quorum, Impact: r.Impact, Assigned: r.Assigned}
 	var choiceName, altName string
 	active := true // unconditional: always counts
 	if r.ChoiceID != nil {
 		choiceName, altName = *r.ChoiceName, *r.AlternateName
 		active = activeAlt[*r.ChoiceID] == altName
 	}
-	row := HealthRole{
+	row := HealthSlot{
 		Name:       r.Name,
 		Label:      r.Label,
 		Impact:     r.Impact,
 		Quorum:     r.Quorum,
-		Satisfying: role.Satisfying(),
-		Short:      role.Short(),
-		Spare:      role.Spare(),
-		Impaired:   role.Impaired(),
+		Satisfying: slot.Satisfying(),
+		Short:      slot.Short(),
+		Spare:      slot.Spare(),
+		Impaired:   slot.Impaired(),
 		AssignedTo: make([]string, 0, len(r.Assigned)),
 		Down:       []string{},
 		Alarms:     []Alarm{},
@@ -1203,8 +1211,8 @@ func (p *PG) explainRole(ctx context.Context, q txQuerier, r resolvedRole, activ
 			continue
 		}
 		row.Down = append(row.Down, c.Name)
-		// r.AssignedIDs[i] is the same assignee: resolvedRole keeps the two
-		// slices built together (resolveHealthRoles), so an id-by-name
+		// r.AssignedIDs[i] is the same assignee: resolvedSlot keeps the two
+		// slices built together (resolveHealthSlots), so an id-by-name
 		// re-lookup here, ambiguous once #627 lands, is never needed.
 		alarms, err := p.activeAlarms(ctx, q, r.AssignedIDs[i])
 		if err != nil {
@@ -1212,7 +1220,7 @@ func (p *PG) explainRole(ctx context.Context, q txQuerier, r resolvedRole, activ
 		}
 		row.Alarms = append(row.Alarms, alarms...)
 	}
-	// The role may be short-staffed rather than broken: nobody was assigned at
+	// The slot may be short-staffed rather than broken: nobody was assigned at
 	// all, so nobody is "down" and there is no alarm to name.
 	return row, nil
 }
@@ -1257,7 +1265,7 @@ func (p *PG) subtreeSystemHealth(ctx context.Context, q txQuerier, locationID st
 // the same ordered flip sequence the reachability strip reads, on the owner arc
 // rather than the component-and-instance one. ownerID follows recordHealth's
 // contract (see ownerArcExprN): an id for component/system/location, a name for
-// node. The window's boundary is the database's own (tsSince, #719).
+// outpost. The window's boundary is the database's own (tsSince, #719).
 func healthTransitions(ctx context.Context, q txQuerier, ownerKind, ownerID string, window time.Duration) ([]HealthTransition, error) {
 	col, err := ownerColumn(ownerKind)
 	if err != nil {

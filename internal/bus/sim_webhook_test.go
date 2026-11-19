@@ -23,12 +23,12 @@ import (
 // TestSimlistCarriesAWebhookSubscriptionToTheSimulatorAlone proves the fence
 // of ADR-1370. The simulator plays the external SaaS that posts to a webhook
 // endpoint, so it holds what that SaaS would: the endpoint's path (its token)
-// and the key it signs with. Any node credential may pull its simlist, so the
-// fence is server-held facts the node cannot assert: the database carries the
+// and the key it signs with. Any outpost credential may pull its simlist, so the
+// fence is server-held facts the outpost cannot assert: the database carries the
 // lab mark (only the lab's trusted seed sets it), and the component sits in
 // the simulated block (127.60.0.0/16, which only the seed allocates). A
 // database with no lab mark hands out nothing; a real device's webhook, or
-// one on another loopback address, never; and the node's own worklist
+// one on another loopback address, never; and the outpost's own worklist
 // carries neither the token nor the key. A platform account's bound room ids
 // (#1747) ride its subscription, so the simulator can add each room.
 func TestSimlistCarriesAWebhookSubscriptionToTheSimulatorAlone(t *testing.T) {
@@ -46,17 +46,17 @@ func TestSimlistCarriesAWebhookSubscriptionToTheSimulatorAlone(t *testing.T) {
 		t.Fatal(err)
 	}
 	all := scope.Set{All: true}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-a"}, all, all); err != nil {
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "outpost-a"}, all, all); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gw.SetEnrollmentToken(ctx, "", "node-a", hashHex("secret-a"), all); err != nil {
+	if _, err := gw.SetEnrollmentToken(ctx, "", "outpost-a", hashHex("secret-a"), all); err != nil {
 		t.Fatal(err)
 	}
 	const key = "ucc-signing-key-1370"
-	node := "node-a"
+	outpost := "outpost-a"
 	// ucc-sim is simulated (its probe reaches the simulated block); ucc-real
 	// is a real service on the network, webhook and all; ucc-local is a
-	// service on the node's own host, a loopback address outside the block.
+	// service on the outpost's own host, a loopback address outside the block.
 	for name, target := range map[string]string{"ucc-sim": "127.60.0.7:443", "ucc-real": "10.20.30.40:443", "ucc-local": "127.0.0.1:8443"} {
 		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: name}, all, all, all, all); err != nil {
 			t.Fatal(err)
@@ -68,10 +68,10 @@ func TestSimlistCarriesAWebhookSubscriptionToTheSimulatorAlone(t *testing.T) {
 		}
 		drv := "ucc-webhook"
 		if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp,
-			Inputs: map[string]string{"signing-key": "signing-" + name}, SecretRead: all, CanAdmin: true}, all); err != nil {
+			Inputs: map[string]string{"signing-key": "signing-" + name}, SecretRead: all, SecretBind: all, CanAdmin: true}, all); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "tcp", Component: &comp, Node: &node,
+		if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "tcp", Component: &comp, Outpost: &outpost,
 			Params: []byte(`{"target":"` + target + `"}`)}, all); err != nil {
 			t.Fatal(err)
 		}
@@ -102,8 +102,8 @@ func TestSimlistCarriesAWebhookSubscriptionToTheSimulatorAlone(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer srv.Shutdown()
-	nc, err := nats.Connect(srv.ClientURL(), nats.UserInfo("node-a", "secret-a"),
-		nats.CustomInboxPrefix(collection.InboxPrefix("node-a")))
+	nc, err := nats.Connect(srv.ClientURL(), nats.UserInfo("outpost-a", "secret-a"),
+		nats.CustomInboxPrefix(collection.InboxPrefix("outpost-a")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestSimlistCarriesAWebhookSubscriptionToTheSimulatorAlone(t *testing.T) {
 
 	pull := func() ([]byte, map[string]*collection.SimWebhook) {
 		t.Helper()
-		msg, err := nc.Request(collection.SimlistSubject("node-a"), []byte(`{}`), 3*time.Second)
+		msg, err := nc.Request(collection.SimlistSubject("outpost-a"), []byte(`{}`), 3*time.Second)
 		if err != nil {
 			t.Fatalf("simlist request: %v", err)
 		}
@@ -126,7 +126,7 @@ func TestSimlistCarriesAWebhookSubscriptionToTheSimulatorAlone(t *testing.T) {
 		return msg.Data, got
 	}
 
-	// No lab mark: a node's simlist hands out no subscription at all.
+	// No lab mark: an outpost's simlist hands out no subscription at all.
 	if data, got := pull(); got["ucc-sim"] != nil || strings.Contains(string(data), simTok) || strings.Contains(string(data), key) {
 		t.Fatalf("with no lab mark the simlist carries a subscription: %s", data)
 	}
@@ -148,9 +148,9 @@ func TestSimlistCarriesAWebhookSubscriptionToTheSimulatorAlone(t *testing.T) {
 		t.Fatal("the simlist carries a webhook token of a component outside the simulated block")
 	}
 
-	// The worklist, which a node pulls whether or not it simulates, carries
+	// The worklist, which an outpost pulls whether or not it simulates, carries
 	// neither secret.
-	wl, err := nc.Request(collection.WorklistSubject("node-a"), nil, 3*time.Second)
+	wl, err := nc.Request(collection.WorklistSubject("outpost-a"), nil, 3*time.Second)
 	if err != nil {
 		t.Fatalf("worklist request: %v", err)
 	}

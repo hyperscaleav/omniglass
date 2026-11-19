@@ -101,3 +101,26 @@ func TestParseReadsAListAndRefusesAnythingElse(t *testing.T) {
 		}
 	}
 }
+
+// A forwarded scheme or host is believed only from a trusted proxy, so the
+// peer itself is what Proxied judges, never a header it sent.
+func TestProxiedBelievesOnlyATrustedPeer(t *testing.T) {
+	cases := []struct {
+		remote string
+		want   bool
+	}{
+		{"10.42.0.7:8080", true},
+		{"127.0.0.1", true},
+		{"[::ffff:10.0.0.1]:443", true},
+		{"203.0.113.9:443", false},
+		{"garbage", false},
+	}
+	for _, c := range cases {
+		if got := clientaddr.Default.Proxied(c.remote); got != c.want {
+			t.Errorf("Proxied(%q) = %v, want %v", c.remote, got, c.want)
+		}
+	}
+	if (clientaddr.Trust{}).Proxied("127.0.0.1:9") {
+		t.Error("an empty list trusted loopback")
+	}
+}

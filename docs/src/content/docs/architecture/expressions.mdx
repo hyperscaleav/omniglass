@@ -1,10 +1,9 @@
 ---
 title: Expressions
 description: "Omniglass expressions: one engine built on Expr and extended with Omniglass functions, behind every operator-authored expression leaf."
+# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
 sidebar:
-  badge:
-    text: Partial
-    variant: note
+  hidden: true
 ---
 
 import ExpressionSites from '../../../components/ExpressionSites.astro';
@@ -49,7 +48,17 @@ Expressions are **sandboxed**: no I/O, no network, no unbounded loops, bounded e
   over a list, one value out), and admitted by name where a site binds lists: `max` and `min` over one
   list of numbers (or over numbers), `avg`, `sum` (with or without a predicate), `majority` (the most
   common text or bool, its strings charged their bytes, a tie to the value that sorts first), and the
-  one-list `any` and `all` over bools beside their predicate forms. A list function given anything but
+  one-list `any` and `all` over bools beside their predicate forms. The **trend functions** (#1985)
+  read a list of timestamped points, each a record or map with a number `value` and its `at` in unix
+  seconds: **`slope`** is the least-squares rise per second through them, **`span`** the seconds from
+  the oldest to the newest, and **`growth`** the fitted rise across that span as a share of the
+  points' mean (`slope * span / |mean|`), so `growth(window) > 0.25` reads "rose by more than a
+  quarter of its level" whatever the key's unit. Each is one pass, and a list with fewer than two
+  points, or no time between them, has no trend: 0. A fit, not the newest point less the oldest, so a
+  noisy flat series reads near 0 and one outlier at either end does not read as a rise. They are
+  admitted where a site binds such a list: an [event rule's `window`](/architecture/alarms-actions/#a-trend-rule-reads-a-window-not-a-sample)
+  (beside its number `age`, how long the series has run, the gate that keeps a fill or a restart's
+  refill from reading as a trend) and a calc rule's windowed input. A list function given anything but
   its list is refused at compile time on the argument. Their names, like every builtin's, can never be
   bound, so admitting one later never changes what a stored expression means. Expr parses `any`, `all`
   and `sum` as predicate builtins only, so a call of one with a single argument is told apart before
@@ -63,7 +72,7 @@ Expressions are **sandboxed**: no I/O, no network, no unbounded loops, bounded e
   holds concrete data types (no interface, so no value whose behavior is chosen at run time). A `$`
   name (Expr's dynamic `$env`, or the engine's own plumbing) is refused, so a site's bindings are
   the whole namespace.
-- **Caps and budgets.** A source is at most 4096 bytes and 1000 syntax nodes, and a list or map
+- **Caps and budgets.** A source is at most 4096 bytes and 1000 syntax outposts, and a list or map
   literal at most 64 entries. A run is bounded by **its site's budget** of what it allocates and
   what it walks, deterministically; a criteria's is small, and no site's exceeds a fixed ceiling. A
   wall-clock deadline backs the budget for charged work only: it cannot interrupt a native call,
@@ -92,9 +101,9 @@ from a struct type built when the rule is written, so its table describes them r
 with the list functions it admits and the names an alias may not take (both generated, and the
 console's alias check is generated from the same list). The **action** site (#618) is an
 [action rule](/architecture/alarms-actions/#the-action_rule-when-a-message-is-sent)'s `when`: true or
-false for one alarm transition, its bindings the alarm facts a notification template reads in
+false for one alarm transition, its bindings the alarm facts a notification's subject and text read in
 snake_case plus the severity's rank, held to that one declaration by a test, so a predicate and a
-template see the same alarm. The console's **expression field**
+rule see the same alarm. The console's **expression field**
 (the rule drawer's **Write as an expression**, #960, and the calc rule's reduce) is that route's face, a
 code editor on CodeMirror 6 (#1000) driven entirely by the route's answer: Expr highlighted as it is
 written, completion of exactly the site's bindings and builtins (as a word is begun, or on Ctrl-Space),
@@ -143,7 +152,7 @@ marking the field invalid nor stopping a save. Beneath the field each diagnostic
 its code to its entry in the table below, and offers its fix as a button (a keyboard user reaches it with
 Tab; in the editor, F8 moves to the next diagnostic and Mod-Shift-M lists them with their fixes). A fix is
 an edit of the author's own, so Ctrl-Z takes it back. A stored rule's warnings show on its blade as a note,
-never an alert.
+never an error banner.
 
 The first rules (#1054) are the mistakes authors made first: counting with `sum`, comparing a measured
 number to a decimal with `==`, spelling `all` as a count against a length, and an input the reduce never
@@ -179,7 +188,7 @@ Stored values are always in their `property_type`'s **canonical unit**; **`conve
 "<unit>")`** lets an operator author against a non-canonical one. The **source unit is
 inferred** from the bound property's canonical unit; the **target** must be a registered unit
 in the **same family** (a compile error otherwise). The conversion comes from the
-[unit registry](/architecture/properties/#units-one-canonical-unit-per-metric): `to_canonical` /
+[unit catalog](/architecture/properties/#units-one-canonical-unit-per-metric): `to_canonical` /
 `from_canonical` transforms, **affine** or an **Expr** for the rare nonlinear one. So
 `convert(value, "fahrenheit") > 100` reads in Fahrenheit while storage stays in canonical
 celsius. A function rather than a per-unit method: data-driven, general, available wherever
@@ -204,7 +213,7 @@ expressions run.
 No driver site evaluates an expression today: a [driver spec](/architecture/collection/#drivers-the-declarative-menu)
 locates and transforms with declared selectors and a `cast` / `scale` / enum `map`, and the expression
 engine is not its dependency. Its configuration values are typed **inputs** supplied at attach, a
-secret input a reference resolved under the caller's own secret scope and delivered to the node
+secret input a reference resolved under the caller's own secret scope and delivered to the outpost
 unsealed in its worklist, so an operator value is always data the interpreter reads, never text it
 runs.
 :::
@@ -216,7 +225,7 @@ runs.
 When a driver site gains an expression ([#1331](https://github.com/hyperscaleav/omniglass/issues/1331)),
 its environment exposes: `$var:<name>` (a variable through the cascade), `$prop.<key>` (properties,
 readable for branching; was `$dp.<key>`, renamed with the ADR-0065 vocabulary), `$event` (a
-listener's payload), and the extractor-local inputs a transform reads (`raw`, `groups`, `node`,
+listener's payload), and the extractor-local inputs a transform reads (`raw`, `groups`, `outpost`,
 `item`). Rule and view contexts bind their own documented environments (the candidate entity, the
 property, the resource row).
 
@@ -232,7 +241,7 @@ line, error string, or property label.
 
 ## Divergence and `disagree(A, B)`
 
-**`disagree(A, B)`** compares two provenances or sources of one key: config drift, reconcile
+**`disagree(A, B)`** compares two provenances or sources of one key: drift from the declared value, reconcile
 conflict, and cross-source disagreement are all the one operator, surfacing **divergence**,
 the universal anomaly signal. Reading both sides as inputs (never writing a verdict back into
 either) keeps the pipeline's DAG acyclic.

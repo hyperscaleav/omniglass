@@ -8,13 +8,13 @@ import (
 	"strings"
 )
 
-// Progress is how far the node has come: the simulator's components, and
-// the simulated endpoints the node collects.
+// Progress is how far the outpost has come: the simulator's components, and
+// the simulated endpoints the outpost collects.
 type Progress struct {
 	Connected  bool
 	Components int
 	Running    int
-	// Endpoints and Up count the simulated endpoints the node dials, but the
+	// Endpoints and Up count the simulated endpoints the outpost dials, but the
 	// planted faults; Planted counts those. A pushed endpoint (a webhook)
 	// carries no reachability verdict by design and is not counted.
 	Endpoints int
@@ -32,7 +32,7 @@ func readProgress(ctx context.Context, c *http.Client, base string, planted map[
 			Status      string `json:"status"`
 		} `json:"devices"`
 	}
-	if err := getJSON(ctx, c, base+"/api/v1/nodes/"+NodeName+"/simulation", &sim); err != nil {
+	if err := getJSON(ctx, c, base+"/api/v1/outposts/"+OutpostName+"/simulation", &sim); err != nil {
 		return Progress{}, err
 	}
 	p := Progress{Connected: sim.Connected, Components: len(sim.Devices)}
@@ -53,7 +53,7 @@ func readProgress(ctx context.Context, c *http.Client, base string, planted map[
 }
 
 // reachCount is a component's simulated endpoints as readiness counts them:
-// those the node dials but the planted faults, those of them up, and the
+// those the outpost dials but the planted faults, those of them up, and the
 // planted ones.
 type reachCount struct {
 	Endpoints, Up, Planted int
@@ -114,8 +114,8 @@ func doJSON(c *http.Client, req *http.Request, want int, into any) error {
 
 // SeedResult is what the lab's seed one-off reports on its last line.
 type SeedResult struct {
-	// Node is whether the seeded fleet places the lab's node.
-	Node bool
+	// Outpost is whether the seeded fleet places the lab's outpost.
+	Outpost bool
 	// Summary is the line the status shows.
 	Summary string
 }
@@ -126,11 +126,11 @@ const SeedMarker = "omniglass-lab-seed:"
 // FormatSeedResult is the report line the seed prints, read back by
 // ParseSeedResult.
 func FormatSeedResult(r SeedResult) string {
-	node := "absent"
-	if r.Node {
-		node = "present"
+	outpost := "absent"
+	if r.Outpost {
+		outpost = "present"
 	}
-	return fmt.Sprintf("%s node=%s %s", SeedMarker, node, r.Summary)
+	return fmt.Sprintf("%s outpost=%s %s", SeedMarker, outpost, r.Summary)
 }
 
 // ParseSeedResult reads the seed's report from its log.
@@ -142,8 +142,8 @@ func ParseSeedResult(log string) SeedResult {
 			continue
 		}
 		rest = strings.TrimSpace(rest)
-		node, summary, _ := strings.Cut(rest, " ")
-		return SeedResult{Node: node == "node=present", Summary: summary}
+		outpost, summary, _ := strings.Cut(rest, " ")
+		return SeedResult{Outpost: outpost == "outpost=present", Summary: summary}
 	}
-	return SeedResult{Node: true, Summary: "seeded"}
+	return SeedResult{Outpost: true, Summary: "seeded"}
 }

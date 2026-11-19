@@ -12,13 +12,13 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// TestNodeWorklistResolvesEachComponentsOwnSecret pins the confused-deputy
-// guard of the set-based secret resolve (#1581): one node pulls endpoints on
+// TestOutpostWorklistResolvesEachComponentsOwnSecret pins the confused-deputy
+// guard of the set-based secret resolve (#1581): one outpost pulls endpoints on
 // components of every cascade shape, every one referencing a secret by the
 // same name, and the one statement that resolves them all hands each component
 // the secret its own chain owns, never a sibling's. A shape whose chain owns
 // none of the name, or more than one, delivers absence.
-func TestNodeWorklistResolvesEachComponentsOwnSecret(t *testing.T) {
+func TestOutpostWorklistResolvesEachComponentsOwnSecret(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -33,8 +33,8 @@ func TestNodeWorklistResolvesEachComponentsOwnSecret(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 	all := scope.Set{All: true}
-	node, drv := "edge-s", "snmp-scalar"
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: node}, all, all); err != nil {
+	outpost, drv := "edge-s", "snmp-scalar"
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: outpost}, all, all); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: drv, Label: "SNMP Scalar", Version: "1.0.0", Spec: []byte(snmpSpec)}); err != nil {
@@ -88,8 +88,8 @@ func TestNodeWorklistResolvesEachComponentsOwnSecret(t *testing.T) {
 		if ref == "" {
 			ref = "cred"
 		}
-		ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp, Node: &node,
-			Inputs: map[string]string{"host": "10.20.4.40", "community": ref}, SecretRead: all, CanAdmin: true}, all)
+		ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp, Outpost: &outpost,
+			Inputs: map[string]string{"host": "10.20.4.40", "community": ref}, SecretRead: all, SecretBind: all, CanAdmin: true}, all)
 		if err != nil {
 			t.Fatalf("attach %s: %v", comp, err)
 		}
@@ -113,7 +113,7 @@ func TestNodeWorklistResolvesEachComponentsOwnSecret(t *testing.T) {
 		}
 	}
 
-	wl, err := gw.NodeWorklist(ctx, node)
+	wl, err := gw.OutpostWorklist(ctx, outpost)
 	if err != nil {
 		t.Fatalf("worklist: %v", err)
 	}

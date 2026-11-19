@@ -6,8 +6,10 @@ import AlarmsPanel from "./AlarmsPanel";
 import { componentAlarmsKey, type Alarm } from "../lib/alarms";
 import { MAJOR_LEVEL, SEEDED_LEVELS, seedSeverityLevels } from "../lib/testseverity";
 import type { SeverityLevel } from "../lib/severity";
+import { ME_KEY, type Me } from "../lib/auth";
+import { pendingTriage, requestTriage } from "../lib/handover";
 
-// The alarms panel is where fleet health starts: a condition on this component
+// The alarms panel is where fleet health starts: an alarm on this component
 // that impairs its own verdict wholesale (#626). Rows are seeded into the query
 // cache so no server is needed; the raise / clear writes are faked where a test
 // drives one.
@@ -58,8 +60,10 @@ function json(body: unknown, status = 200, type = "application/json") {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": type } });
 }
 
-function mount(opts: { rows?: Alarm[]; canUpdate?: boolean; canAcknowledge?: boolean; canSnooze?: boolean; levels?: SeverityLevel[] } = {}) {
+function mount(opts: { rows?: Alarm[]; canUpdate?: boolean; canAcknowledge?: boolean; canSnooze?: boolean; levels?: SeverityLevel[]; me?: Me } = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+  // The signed-in person; a default with no permissions keeps useMe from fetching.
+  qc.setQueryData([...ME_KEY], opts.me ?? { user: { id: "u-0", kind: "person" }, person: { username: "op" }, permissions: [], grants: [] });
   qc.setQueryData([...componentAlarmsKey("disp-1")], opts.rows ?? alarms);
   seedSeverityLevels(qc, opts.levels ?? SEEDED_LEVELS);
   return render(() => (
@@ -87,7 +91,7 @@ describe("AlarmsPanel", () => {
         component: "disp-1",
         alarm_id: "a-1",
         entries: [
-          { at: ago(2 * 3_600_000 + 14_000), kind: "event", what: "condition-started", rule: "lamp-life", instance: "lamp", message: "Lamp hours exceeded" },
+          { at: ago(2 * 3_600_000 + 14_000), kind: "event", what: "rule-fired", rule: "lamp-life", instance: "lamp", message: "Lamp hours exceeded" },
           { at: ago(2 * 3_600_000 + 14_000), kind: "audit", what: "raise", rule: "lamp-life", message: "Lamp hours exceeded" },
           { at: ago(134_000), kind: "audit", what: "acknowledge", actor: "jordan" },
         ],
@@ -106,7 +110,7 @@ describe("AlarmsPanel", () => {
     expect(document.getElementById(controls)?.contains(list)).toBe(true);
     const items = within(list).getAllByRole("listitem").map((li) => li.textContent ?? "");
     expect(items).toHaveLength(3);
-    expect(items[0]).toContain("condition-started");
+    expect(items[0]).toContain("rule-fired");
     expect(items[0]).toContain("rule lamp-life");
     expect(items[0]).toContain("Lamp hours exceeded");
     expect(items[0]).toMatch(/2h 0m ago/);
@@ -148,6 +152,24 @@ describe("AlarmsPanel", () => {
     const row = alarmRow(getByText("HDMI board failed"));
     expect(within(row).getByText("High")).toBeTruthy();
     expect(within(row).getByText(/raised 1h ago/)).toBeTruthy();
+  });
+
+  // One click hands omnibot the alarm to troubleshoot (#2164): each active
+  // row offers it to a person who may ask omnibot, by component and rule.
+  it("offers each active alarm to omnibot to troubleshoot, for a person who may ask it", () => {
+    const asker: Me = { user: { id: "u-1", kind: "person" }, person: { username: "jo" }, permissions: ["assistant:use"], grants: [] };
+    const { getByText, getAllByRole } = mount({ me: asker });
+    expect(getAllByRole("button", { name: /with omnibot$/ })).toHaveLength(2);
+    expect(within(alarmRow(getByText("Firmware mismatch"))).queryByRole("button", { name: /with omnibot$/ })).toBeNull();
+    fireEvent.click(within(alarmRow(getByText("Lamp hours exceeded"))).getByRole("button", { name: "Troubleshoot Lamp hours exceeded with omnibot" }));
+    expect(pendingTriage()).toEqual({ kind: "alarm", ref: "disp-1/lamp-life" });
+    requestTriage(undefined);
+  });
+
+  it("offers no troubleshooting to a person who may not ask omnibot", () => {
+    const reader: Me = { user: { id: "u-2", kind: "person" }, person: { username: "lee" }, permissions: ["component:read"], grants: [] };
+    const { queryAllByRole } = mount({ me: reader });
+    expect(queryAllByRole("button", { name: /with omnibot$/ })).toHaveLength(0);
   });
 
   it("names the event rule that raised an alarm, and says nothing for one an operator raised", () => {
@@ -304,9 +326,9 @@ describe("AlarmsPanel", () => {
     expect(within(group).getByText(/never acknowledged/)).toBeTruthy();
   });
 
-  // Severity is the registry's (#917): the form lists its levels least to most
+  // Severity is the catalog's (#917): the form lists its levels least to most
   // severe, shows each label with what it does, and sends the name.
-  it("offers the registry's levels, labelled, least to most severe", () => {
+  it("offers the catalog's levels, labelled, least to most severe", () => {
     const { getByLabelText } = mount();
     const options = [...(getByLabelText("Alarm severity") as HTMLSelectElement).options];
     expect(options.map((o) => o.value)).toEqual(["info", "warning", "average", "high", "disaster"]);
@@ -332,7 +354,7 @@ describe("AlarmsPanel", () => {
     expect(JSON.parse(await post!.text()).severity).toBe("info");
   });
 
-  it("offers, renders and sorts an operator-defined level by the registry alone", async () => {
+  it("offers, renders and sorts an operator-defined level by the catalog alone", async () => {
     let post: Request | undefined;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
@@ -355,7 +377,7 @@ describe("AlarmsPanel", () => {
     expect(JSON.parse(await post!.text()).severity).toBe("major");
   });
 
-  it("shows a snoozed condition on every row of it, active or cleared, and offers Snooze only with alarm:snooze (#1318)", () => {
+  it("shows a snoozed alarm on every row of it, active or cleared, and offers Snooze only with alarm:snooze (#1318)", () => {
     const until = new Date(Date.now() + 3_600_000).toISOString();
     const rows = alarms.map((a) => (a.id === "a-1" || a.id === "a-0" ? { ...a, snoozed_until: until, snoozed_by: "jordan" } : a));
     const viewer = mount({ rows, canSnooze: false });

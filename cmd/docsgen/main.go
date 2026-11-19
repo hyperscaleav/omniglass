@@ -77,7 +77,7 @@ func writeGlobalFlags(b *bytes.Buffer, root *cobra.Command) {
 // clients of it) gets its own detail block before its children.
 func render(b *bytes.Buffer, cmd *cobra.Command, depth int) {
 	if cmd.HasAvailableSubCommands() {
-		if cmd.Runnable() {
+		if cmd.Runnable() && !cli.IsGroup(cmd) {
 			writeLeaf(b, cmd, depth)
 		} else {
 			heading(b, depth, "`"+cmd.CommandPath()+"`")
@@ -98,7 +98,7 @@ func writeLeaf(b *bytes.Buffer, cmd *cobra.Command, depth int) {
 	if cmd.Short != "" {
 		b.WriteString(cmd.Short + "\n\n")
 	}
-	// A runnable group's own run takes what its Use names (`node simulation
+	// A runnable group's own run takes what its Use names (`outpost simulation
 	// <name>`); its subcommands are listed beneath it, so no [command] here.
 	use := strings.Replace(cmd.UseLine(), " [command]", "", 1)
 	b.WriteString("```\n" + use + "\n```\n\n")

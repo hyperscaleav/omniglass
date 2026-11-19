@@ -10,7 +10,7 @@ import (
 // struct. Defaults fill every leaf that declares one, so a mismatch is a
 // programming error surfaced as an error. An optional setting (no default tag,
 // json omitempty) that no level set is absent and reads as its zero value, which
-// its reader takes as unset (RetentionSettings.NodeLogDays, #1350).
+// its reader takes as unset (RetentionSettings.OutpostLogDays, #1350).
 func Typed(d Doc) (Settings, error) {
 	var s Settings
 	b, err := json.Marshal(d)

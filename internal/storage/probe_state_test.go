@@ -13,7 +13,7 @@ import (
 )
 
 // TestProbeStateLandsOnChangeOnly pins the probe states' move to the property
-// lane (#1592): a node's reachability result (icmp-reachable up/down, tcp-open
+// lane (#1592): an outpost's reachability result (icmp-reachable up/down, tcp-open
 // open/closed) is a transition-only property, so a steady endpoint probed
 // every tick writes one row for its state while its timing companion
 // (icmp-rtt-avg, tcp-connect-time) lands a metric row every tick; a flip
@@ -40,8 +40,8 @@ func TestProbeStateLandsOnChangeOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-1"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-1"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
@@ -49,18 +49,18 @@ func TestProbeStateLandsOnChangeOnly(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = conn.Close(context.Background()) })
 	var telnetID string
-	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, node_name, params) values
-		('icmp', 'icmp', $1::uuid, (select principal_id from node where name = 'edge-1'), '{"target":"10.0.0.1"}'::jsonb)`, comp.ID); err != nil {
+	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
+		('icmp', 'icmp', $1::uuid, (select user_id from outpost where name = 'edge-1'), '{"target":"10.0.0.1"}'::jsonb)`, comp.ID); err != nil {
 		t.Fatalf("icmp endpoint: %v", err)
 	}
-	if err := conn.QueryRow(ctx, `insert into endpoint (name, transport, component, node_name, params) values
-		('telnet', 'telnet', $1::uuid, (select principal_id from node where name = 'edge-1'), '{"target":"10.0.0.1:23"}'::jsonb) returning id`, comp.ID).Scan(&telnetID); err != nil {
+	if err := conn.QueryRow(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
+		('telnet', 'telnet', $1::uuid, (select user_id from outpost where name = 'edge-1'), '{"target":"10.0.0.1:23"}'::jsonb) returning id`, comp.ID).Scan(&telnetID); err != nil {
 		t.Fatalf("telnet endpoint: %v", err)
 	}
 
 	base := time.Now().UTC().Truncate(time.Microsecond).Add(-10 * time.Minute)
 	tick := 0
-	// probe lands one tick of an endpoint's probe as the node's batch carries
+	// probe lands one tick of an endpoint's probe as the outpost's batch carries
 	// it: the state in the property lane, the timing in the metric lane.
 	probe := func(endpoint, stateKey, state, timingKey string, ms float64) {
 		t.Helper()
@@ -68,12 +68,12 @@ func TestProbeStateLandsOnChangeOnly(t *testing.T) {
 		at := base.Add(time.Duration(tick) * 30 * time.Second)
 		b := storage.IngestBatch{
 			BatchID: endpoint + "-" + at.Format(time.RFC3339Nano),
-			Writer:  storage.NodeWriter(comp.ID, endpoint),
+			Writer:  storage.OutpostWriter(comp.ID, endpoint),
 			Properties: []storage.PropertySampleWrite{{
-				OwnerKind: "component", OwnerID: comp.ID, Key: stateKey, Instance: endpoint, Value: state, Source: "node", TS: at,
+				OwnerKind: "component", OwnerID: comp.ID, Key: stateKey, Instance: endpoint, Value: state, Source: "outpost", TS: at,
 			}},
 			Metrics: []storage.MetricSampleWrite{{
-				OwnerKind: "component", OwnerID: comp.ID, Key: timingKey, Instance: endpoint, Value: ms, Source: "node", TS: at,
+				OwnerKind: "component", OwnerID: comp.ID, Key: timingKey, Instance: endpoint, Value: ms, Source: "outpost", TS: at,
 			}},
 		}
 		if _, err := gw.LandBatch(ctx, b); err != nil {

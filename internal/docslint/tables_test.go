@@ -38,8 +38,8 @@ func TestSchemaColumnsLoad(t *testing.T) {
 	if len(tables) < 40 {
 		t.Fatalf("only %d tables loaded; the live schema has ~51", len(tables))
 	}
-	if !tables["audit_log"]["actor_principal_id"] {
-		t.Error("audit_log.actor_principal_id missing: the column facts did not load")
+	if !tables["audit_log"]["actor_user_id"] {
+		t.Error("audit_log.actor_user_id missing: the column facts did not load")
 	}
 }
 

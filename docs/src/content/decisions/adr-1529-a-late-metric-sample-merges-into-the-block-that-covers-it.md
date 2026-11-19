@@ -2,12 +2,12 @@
 title: "A late metric sample merges into the block that covers it"
 date: 2026-11-07
 status: Accepted
-summary: "A late observed sample for a day the block fold has passed merges into its covering block (the hour block of its hour, the day block of its day, else its ISO week's block once the week has folded) in its own batch's transaction, each block rewritten once a batch from the block alone, never from the raw rows. The fold and the merge are ordered by a block advisory lock of their own, which only late batches take, not by the trend lock. The block keeps the span it was folded at. The raw row still lands until #1530. A sample older than its series' window is dropped and logged, the rest of its batch landing. A dirtied trend hour of a folded day recomputes from its block while the day is intact (the merge's own test, `blockIntact`), else from its raw rows. A late batch waits for a fold with no timeout. #1528's dirtied-day rebuild is removed."
-refs: [1529, 1528, 1265, 1276, 1530, 1546]
+summary: "A late observed sample for a day the block fold has passed merges into its covering block (the hour block of its hour, the day block of its day, else its ISO week's block once the week has folded) in its own batch's transaction, each block rewritten once a batch from the block alone, never from the raw rows. The fold and the merge are ordered by a block advisory lock of their own, which only late batches take, not by the trend lock. The block keeps the span it was folded at. The raw row still lands until #1530. A sample older than its series' window is dropped and logged, the rest of its batch landing. A dirtied trend hour of a folded day recomputes from its block while the day is intact (the merge's own test, `blockIntact`) and the merge did not skip one of its samples (`raw_only`), else from its raw rows. A late batch waits for a fold with no timeout, held by an `InProgress` heartbeat against the 150 s redelivery bound. #1528's dirtied-day rebuild is removed."
+refs: [1529, 1528, 1265, 1276, 1530, 1546, 1560]
 ---
 
 - **Date:** 2026-11-07 | **Status:** Accepted | **Pages:** [storage](/architecture/storage/)
-- **Decision:** (#1529, amended by #1546 in decisions 1, 7, 8 and 9; amends [ADR-1528](#adr-1528-observed-metric-samples-fold-into-lossless-blocks-sized-by-their-sample-count)'s decision 9, the dirtied-day rebuild.)
+- **Decision:** (#1529, amended by #1546 in decisions 1, 7, 8 and 9, and by #1560 in decisions 7 and 9; amends [ADR-1528](#adr-1528-observed-metric-samples-fold-into-lossless-blocks-sized-by-their-sample-count)'s decision 9, the dirtied-day rebuild.)
   1. **The covering block.** A late observed sample (one landing in an hour the trend compaction has
      announced, [ADR-1276](#adr-1276-hourly-trends-close-an-hour-a-day-after-it-ends-and-hold-back-the-prune))
      whose UTC day the day fold has passed for its series, and which is still inside its series' window,
@@ -55,6 +55,20 @@ refs: [1529, 1528, 1265, 1276, 1530, 1546]
      from the day's block would leave the sample out of a trend row that is kept for `trend_days`, so
      such an hour reads its raw rows, which exist until #1530. Each hour reads exactly one source.
      When #1530 drops raw rows early it must keep this case covered.
+
+     The merge and the recompute run in different transactions, and an operator can widen the window
+     between them (`retention_days` or `retention.metric_days`). The recompute then finds the day
+     intact where the merge, which skipped the late sample, found it not, and would read the hour from
+     a block that lacks the sample. So when the merge skips a sample of a folded day it sets
+     `metric_trend_dirty.raw_only` on the sample's hour, in the batch's own statement and transaction,
+     and the recompute reads an `raw_only` hour from its raw rows whatever the window is by then
+     (`TestAWindowWidenedAfterTheMergeLeavesTheLateSampleInItsTrend`, on each span). The mark is
+     consumed with the dirty row, so a later sample of the hour needs no clearing. #1530's raw drop
+     must leave the raw rows of a `raw_only` hour until its recompute has run, which the dirty mark
+     already orders (the drop is past `trend_days` of the hour's close, the recompute is the next
+     pass). The block itself still lacks the sample, so `VerifyMetricBlocks` still reports it after
+     the window widens, the block holding its raw rows to the window it was folded under; rebuilding
+     a block is #1543.
   8. **The rebuild is removed.** `metric_block_dirty`, the rebuild pass and `BlockCompaction.Rebuilt`
      go. An on-time batch is unchanged at 18 statements. A batch with a late sample (one landing in an
      announced hour) adds 3: the settings read, the block lock and the merge. A batch carrying a sample
@@ -69,10 +83,22 @@ refs: [1529, 1528, 1265, 1276, 1530, 1546]
      there, and what it fails is the compaction (the next pass retries it), not the batch. It cannot
      occur on one server: `retentionPass` runs the trend fold and the block fold one after the other,
      so no fold holds the block lock while a compaction waits. The merge sets no `lock_timeout`
-     (`TestMergeLateBlocksSetsNoLockTimeout`): the consumer Terms a message after
-     `maxTelemetryDeliveries` (5) redeliveries, about 15 s, so any fold chunk longer than that would
-     drop the batch, its on-time rows included. A late batch waits for the fold to commit and lands
-     once (`TestALateBatchWaitsOutAFoldWithoutBeingGivenUp` holds the lock for 21 s).
+     (`TestMergeLateBlocksSetsNoLockTimeout`). The consumer Terms a message after
+     `maxTelemetryDeliveries` (5) deliveries, each given `telemetryAckWait` (30 s) to ack, so a batch
+     left unacked is given up on after at most 5 x 30 s = 150 s, not the 15 s the redeliveries alone
+     suggest, and a fold chunk longer than that would drop the batch, its on-time rows included. A
+     redelivery also does harm before then: it spends a delivery, and the stream's single ack-pending
+     slot (`MaxAckPending` 1) frees at the redelivery, so another server can land the publisher's next
+     batch while this one still waits behind the fold, which breaks the order the slot keeps. So the
+     consumer holds the message while the landing runs: `landing` sends `InProgress` every
+     `telemetryAckWait/3` (10 s), which resets the AckWait without spending a delivery, and stops when
+     the landing returns. A late batch waits for the fold to commit, is delivered once and lands once,
+     and the publisher's next batch lands after it (`TestALateBatchBehindAFoldIsHeldByItsHeartbeat`
+     holds the lock past several AckWaits against real Postgres and JetStream;
+     `TestLandingBeatsWhileItRunsAndStopsWhenItReturns` and
+     `TestHandleTelemetryBeatsWhileItLandsOnEachLane` hold the beat to an interval inside the
+     AckWait, on both lanes; `TestALateBatchWaitsOutAFoldWithoutBeingGivenUp` holds the lock for
+     21 s at the storage layer).
 - **Context:** #1528 rebuilt a dirtied day from its raw rows, which #1530 is about to drop early. The
   rebuild ran under the trend lock taken exclusive, which stalled the ingest while it read whole days.
   A merge costs the batch that carries the late samples, in proportion to the blocks it touches.
@@ -82,8 +108,9 @@ refs: [1529, 1528, 1265, 1276, 1530, 1546]
   three block rewrites cost 3,896 bytes.
 - **Not chosen:**
   - **The trend lock, as the issue proposed.** See decision 3.
-  - **A lock timeout on the merge.** A batch that gave up would be redelivered at most four times in
-    about 15 s, then Term'd; a fold chunk can run longer. See decision 9.
+  - **A lock timeout on the merge.** A batch that gave up would be redelivered at most four times
+    and Term'd after 150 s of AckWaits, and each redelivery frees the ack-pending slot early. See
+    decision 9.
   - **Merging without the raw row now.** Every reader still reads raw rows until #1530.
   - **Re-spanning a merged day.** It would rewrite a day's blocks and its week's block on one sample,
     which is ADR-1528's rebuild again.

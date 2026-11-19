@@ -202,7 +202,7 @@ func TestSystemTypeFactsInheritOverrideMidChain(t *testing.T) {
 // against the SHIPPED tree rather than a fixture, because the seed is what
 // #657's name and label rules will read. `board` sets its own stem and abbrev
 // but no icon, and its parent `room` overrides the root `av`'s icon, so a
-// boardroom's resolved icon must be room's and never av's. It fails if the seed
+// boardroom's resolved icon must be collaboration's and never av's. It fails if the seed
 // stops setting an icon mid-chain, or if the walk takes the root's value.
 func TestSeededSystemTypeInheritsMidChain(t *testing.T) {
 	t.Parallel()
@@ -220,37 +220,37 @@ func TestSeededSystemTypeInheritsMidChain(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get seeded av: %v", err)
 	}
-	room, err := gw.GetSystemType(ctx, "room")
+	collab, err := gw.GetSystemType(ctx, "collaboration")
 	if err != nil {
-		t.Fatalf("get seeded room: %v", err)
+		t.Fatalf("get seeded collaboration: %v", err)
 	}
 	board, err := gw.GetSystemType(ctx, "board")
 	if err != nil {
 		t.Fatalf("get seeded board: %v", err)
 	}
 
-	// The fixture's own premise: the chain really is three deep, and room
+	// The fixture's own premise: the chain really is three deep, and collaboration
 	// really does override av's icon. Without these the assertion below could
 	// pass on a flat or uniform tree.
-	if board.ParentID == nil || *board.ParentID != room.ID {
-		t.Fatalf("board's parent = %v, want room (%v)", board.ParentID, room.ID)
+	if board.ParentID == nil || *board.ParentID != collab.ID {
+		t.Fatalf("board's parent = %v, want collaboration (%v)", board.ParentID, collab.ID)
 	}
-	if room.ParentID == nil || *room.ParentID != av.ID {
-		t.Fatalf("room's parent = %v, want av (%v)", room.ParentID, av.ID)
+	if collab.ParentID == nil || *collab.ParentID != av.ID {
+		t.Fatalf("collaboration's parent = %v, want av (%v)", collab.ParentID, av.ID)
 	}
 	if board.Icon != nil {
 		t.Fatalf("board sets its own icon (%q); this test needs it to inherit one", *board.Icon)
 	}
-	if room.Icon == nil || av.Icon == nil || *room.Icon == *av.Icon {
-		t.Fatalf("room icon %v and av icon %v must both be set and differ, or the walk cannot be told apart", room.Icon, av.Icon)
+	if collab.Icon == nil || av.Icon == nil || *collab.Icon == *av.Icon {
+		t.Fatalf("collaboration icon %v and av icon %v must both be set and differ, or the walk cannot be told apart", collab.Icon, av.Icon)
 	}
 
 	stem, icon, abbrev, err := gw.ResolveSystemTypeFacts(ctx, board.ID)
 	if err != nil {
 		t.Fatalf("resolve board facts: %v", err)
 	}
-	if icon != *room.Icon {
-		t.Errorf("board icon = %q, want room's %q (the nearest ancestor that sets one), not av's %q", icon, *room.Icon, *av.Icon)
+	if icon != *collab.Icon {
+		t.Errorf("board icon = %q, want collaboration's %q (the nearest ancestor that sets one), not av's %q", icon, *collab.Icon, *av.Icon)
 	}
 	if stem != "boardroom" {
 		t.Errorf("board stem = %q, want its own %q: this is what #657's name rule mints from", stem, "boardroom")
@@ -260,9 +260,9 @@ func TestSeededSystemTypeInheritsMidChain(t *testing.T) {
 	}
 }
 
-// TestSystemTypeDeleteRestricted proves both refusals the registry owes: a type
+// TestSystemTypeDeleteRestricted proves both refusals the catalog owes: a type
 // that still parents another type, and a type that still classifies a system.
-// The #507 lesson is that a registry delete must never cascade through
+// The #507 lesson is that a catalog delete must never cascade through
 // classified rows, so each refusal leaves the world exactly as it was.
 func TestSystemTypeDeleteRestricted(t *testing.T) {
 	t.Parallel()
@@ -390,10 +390,10 @@ func TestSystemCarriesItsType(t *testing.T) {
 }
 
 // TestSystemTypeRenameKeepsItsSystems proves the classification survives a
-// rename of the registry row: system.system_type_id holds the uuid (ADR-0062),
+// rename of the catalog row: system.system_type_id holds the uuid (ADR-0062),
 // never a copy of the name, so the pointer cannot go stale and the projected
 // handle follows the row to its new name. The rename runs as raw SQL because
-// the registry has no rename leg on the gateway (component_type has none
+// the catalog has no rename leg on the gateway (component_type has none
 // either); the invariant under test is the storage shape, not the verb.
 func TestSystemTypeRenameKeepsItsSystems(t *testing.T) {
 	t.Parallel()
@@ -463,17 +463,17 @@ func TestSeedSystemTypesIdempotent(t *testing.T) {
 		t.Fatal("no system_types after seeding; the seed shipped nothing")
 	}
 
-	room, err := gw.GetSystemType(ctx, "room")
+	collab, err := gw.GetSystemType(ctx, "collaboration")
 	if err != nil {
-		t.Fatalf("get seeded room: %v", err)
+		t.Fatalf("get seeded collaboration: %v", err)
 	}
-	if !room.Official {
-		t.Fatalf("seeded room official=false, want true")
+	if !collab.Official {
+		t.Fatalf("seeded collaboration official=false, want true")
 	}
 
 	// An operator row the seed must never touch.
 	mine, err := gw.CreateSystemType(ctx, "", storage.SystemType{
-		Name: "sid-mine", Label: "Mine", ParentID: &room.ID, Abbrev: strp("mn"),
+		Name: "sid-mine", Label: "Mine", ParentID: &collab.ID, Abbrev: strp("mn"),
 	})
 	if err != nil {
 		t.Fatalf("create operator row: %v", err)
@@ -490,12 +490,12 @@ func TestSeedSystemTypesIdempotent(t *testing.T) {
 		t.Fatalf("count after re-seed = %d, want %d (the shipped set updated in place, plus the one operator row)", len(second), len(first)+1)
 	}
 
-	roomAgain, err := gw.GetSystemType(ctx, "room")
+	collabAgain, err := gw.GetSystemType(ctx, "collaboration")
 	if err != nil {
-		t.Fatalf("get seeded room after re-seed: %v", err)
+		t.Fatalf("get seeded collaboration after re-seed: %v", err)
 	}
-	if roomAgain.ID != room.ID {
-		t.Fatalf("room id changed across re-seed: %v -> %v, want stable (upsert, not insert)", room.ID, roomAgain.ID)
+	if collabAgain.ID != collab.ID {
+		t.Fatalf("collaboration id changed across re-seed: %v -> %v, want stable (upsert, not insert)", collab.ID, collabAgain.ID)
 	}
 
 	mineAgain, err := gw.GetSystemType(ctx, "sid-mine")
@@ -508,15 +508,15 @@ func TestSeedSystemTypesIdempotent(t *testing.T) {
 
 	// A seeded child resolves its parent by the real id the loader looked up,
 	// and the official rows are read-only on both mutating verbs.
-	if room.ParentID == nil {
-		t.Fatal("seeded room has no parent; the shipped tree must nest under av")
+	if collab.ParentID == nil {
+		t.Fatal("seeded collaboration has no parent; the shipped tree must nest under av")
 	}
 	x := "X"
-	if _, err := gw.UpdateSystemType(ctx, "", "room", storage.SystemTypePatch{Label: &x}); !errors.Is(err, storage.ErrTypeOfficial) {
-		t.Fatalf("patch official room err = %v, want ErrTypeOfficial", err)
+	if _, err := gw.UpdateSystemType(ctx, "", "collaboration", storage.SystemTypePatch{Label: &x}); !errors.Is(err, storage.ErrTypeOfficial) {
+		t.Fatalf("patch official collaboration err = %v, want ErrTypeOfficial", err)
 	}
-	if err := gw.DeleteSystemType(ctx, "", "room"); !errors.Is(err, storage.ErrTypeOfficial) {
-		t.Fatalf("delete official room err = %v, want ErrTypeOfficial", err)
+	if err := gw.DeleteSystemType(ctx, "", "collaboration"); !errors.Is(err, storage.ErrTypeOfficial) {
+		t.Fatalf("delete official collaboration err = %v, want ErrTypeOfficial", err)
 	}
 }
 

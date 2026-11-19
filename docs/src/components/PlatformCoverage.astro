@@ -1,0 +1,31 @@
+---
+// Which Platform health figures alarm and which do not (#1983), rendered from
+// the seed facts: each figure of the page joined to the shipped event rules
+// that watch it, or to the reason it has none (docs/src/generated/seed.json,
+// written by make gen from internal/seed). A figure gains a rule, or an
+// exemption, in the change that adds it, and a test fails otherwise, so this
+// table cannot list a figure as unwatched that a rule watches or the reverse.
+import seed from '../generated/seed.json';
+
+const rows = seed.platform_figures;
+if (!rows || rows.length === 0) {
+  throw new Error('PlatformCoverage: seed.json has no platform_figures (run make gen)');
+}
+---
+
+<table class="seeded-set">
+  <thead><tr><th>Figure</th><th>Panel</th><th>Watched by</th></tr></thead>
+  <tbody>
+    {rows.map((r) => (
+      <tr>
+        <td><code>{r.key}</code></td>
+        <td>{r.group}</td>
+        <td>
+          {r.rules
+            ? r.rules.map((n, i) => (<>{i > 0 ? ', ' : ''}<code>{n}</code></>))
+            : <em>no rule: {r.exemption}</em>}
+        </td>
+      </tr>
+    ))}
+  </tbody>
+</table>

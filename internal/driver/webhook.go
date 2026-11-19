@@ -188,8 +188,8 @@ func (s *Spec) validateWebhookSession() error {
 	if ss == nil || ss.Scheme == "" {
 		return fmt.Errorf("driver: a webhook driver declares how a post is authenticated: session.scheme is one of %s (none checks nothing and reads unsigned)", schemeList())
 	}
-	if ss.Login != nil || len(ss.Terminal) > 0 || ss.Reprobe != "" || ss.PTY || ss.Exec != "" || ss.Stream != nil || ss.Upgrade != nil || ss.APIKey != nil {
-		return fmt.Errorf("driver: a webhook session declares its scheme, its credential and its webhook block, and no login, terminal rule, reprobe, stream, upgrade or api key: nothing is dialed")
+	if ss.Login != nil || len(ss.Terminal) > 0 || ss.Reprobe != "" || ss.PTY || ss.Exec != "" || ss.ConnectQuiet != "" || ss.Stream != nil || ss.Upgrade != nil || ss.APIKey != nil {
+		return fmt.Errorf("driver: a webhook session declares its scheme, its credential and its webhook block, and no login, terminal rule, reprobe, connect_quiet, stream, upgrade or api key: nothing is dialed")
 	}
 	w := ss.Webhook
 	if w == nil {

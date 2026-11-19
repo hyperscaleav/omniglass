@@ -12,9 +12,9 @@
   internal/logline/logline.go, applied in `InsertLogLines`), and where text is read off the wire
   for a record whose insert path does not hold it.
 - **Regressed by one-transaction landing (#311):** once an ingest batch lands all or nothing, a
-  NUL in any lane's value (a pushed property, an event's message or attributes, a node's self-log
+  NUL in any lane's value (a pushed property, an event's message or attributes, an outpost's self-log
   of a device reply) fails every row that rode with it, after the push route answered 202. Fix:
-  the gateway cleans every sample, event and node-log write the same way (`cleanPropertyWrites`
+  the gateway cleans every sample, event and outpost-log write the same way (`cleanPropertyWrites`
   and its siblings, internal/storage/nul_clean.go), and any value the database can refuse must be
   cleaned or refused before a composed transaction, never left to fail it.
 - **Third instance (#1321 review, fixed in the same slice):** a notification template's string
@@ -31,6 +31,6 @@
   never fail the transition.
 - **Fourth instance (#1388 review, fixed in the same slice):** the fan-out recorded each unbound
   sample's raw wire name in the inbox's `keys_carried` text array before any catalog lookup, so a
-  node-lane sample named with a NUL failed the inbox upsert and, with it, the batch's one
+  outpost-lane sample named with a NUL failed the inbox upsert and, with it, the batch's one
   transaction. Fix: only a name the lane's catalog holds is remembered (bounded at 32 per row), and
   a received identity is held to `driver.ValidIdentity` before it reaches a read or the inbox.

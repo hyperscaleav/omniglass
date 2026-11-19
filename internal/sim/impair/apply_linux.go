@@ -29,7 +29,7 @@ const (
 type Netlink struct{}
 
 // NewNetlink returns the kernel applier. It needs NET_ADMIN in the network
-// namespace the simulator shares with its node.
+// namespace the simulator shares with its outpost.
 func NewNetlink() *Netlink { return &Netlink{} }
 
 // Apply makes the network realize the plan, replacing whatever the simulator

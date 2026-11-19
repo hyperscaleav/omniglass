@@ -2,8 +2,8 @@ package storage
 
 import "github.com/hyperscaleav/omniglass/internal/logline"
 
-// The sample, event and node-log lanes hold what came off a wire (a device's
-// line, a pushed value, a reply a node logged) to what Postgres stores: a NUL
+// The sample, event and outpost-log lanes hold what came off a wire (a device's
+// line, a pushed value, a reply an outpost logged) to what Postgres stores: a NUL
 // in any text or jsonb value is replaced with U+FFFD before the insert
 // (logline.Clean, logline.CleanAttributes), as the log-line lane does. An
 // ingest batch lands all or nothing (LandBatch), so one value Postgres
@@ -42,10 +42,10 @@ func cleanEventWrites(evs []EventWrite) []EventWrite {
 	return out
 }
 
-// cleanNodeLogWrites is lines with NUL replaced in every text field and
+// cleanOutpostLogWrites is lines with NUL replaced in every text field and
 // every string of the attributes and labels.
-func cleanNodeLogWrites(lines []NodeLogWrite) []NodeLogWrite {
-	out := make([]NodeLogWrite, len(lines))
+func cleanOutpostLogWrites(lines []OutpostLogWrite) []OutpostLogWrite {
+	out := make([]OutpostLogWrite, len(lines))
 	for i, l := range lines {
 		l.Message, l.Source = logline.Clean(l.Message), logline.Clean(l.Source)
 		l.Severity, l.Facility, l.CorrelationID = logline.Clean(l.Severity), logline.Clean(l.Facility), logline.Clean(l.CorrelationID)

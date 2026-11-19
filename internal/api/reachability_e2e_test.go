@@ -26,7 +26,7 @@ type reachResp struct {
 		Endpoint string `json:"endpoint"`
 		Type     string `json:"transport"`
 		Address  string `json:"address"`
-		Node     string `json:"node"`
+		Outpost  string `json:"outpost"`
 		// LastSeen is the endpoint's freshness: when ingest last landed a
 		// batch it delivered, where the verdict's ts is its last transition
 		// (#931, #933).
@@ -293,7 +293,7 @@ func TestReachabilityCarriesTheHeldSession(t *testing.T) {
 	}
 	// A standing listen task is what holds an endpoint's session (ADR-0150
 	// point 3): telnet and tcp hold one; http's listen task was removed (its
-	// driver lost the listener), so the node tore its session down.
+	// driver lost the listener), so the outpost tore its session down.
 	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, spec) select 'listen-' || name, 'listen', id, '{}'::jsonb
 		from endpoint where name in ('telnet', 'tcp', 'ssh') and component = (select id from component where name = 'panel-1')`); err != nil {
 		t.Fatalf("insert listen tasks: %v", err)
@@ -537,7 +537,7 @@ func TestReachabilityCarriesTheTLSFacts(t *testing.T) {
 	}
 
 	// The operator accepts the offered key: the pin served is the pin in
-	// force, the declared key, though the node publishes no observation of
+	// force, the declared key, though the outpost publishes no observation of
 	// a pin it is handed back (ADR-0161).
 	if _, err := gw.RetryEndpoint(ctx, "", ep.ID, storage.RetryPin{Certificate: offered}, all, all); err != nil {
 		t.Fatalf("accept the offered key: %v", err)

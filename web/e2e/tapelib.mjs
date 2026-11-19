@@ -36,7 +36,15 @@
 //   pattern, which could match the command's own typed text) before the next
 //   Type or the end, so every command finishes on screen, and a failing one is
 //   caught (the prelude lists each command line that exits non-zero, and any
-//   such fails the demo); nothing rides after a Hide, Show or Wait on its line;
+//   such fails the demo); a command that asks its own question (a y/N) may be
+//   answered once a Wait+Screen or Wait+Line pattern that none of the text typed
+//   since the last prompt matches has shown the question, and still ends on a
+//   prompt Wait; nothing rides after a Hide, Show or Wait on its line;
+// - a `# demo-needs: <need>` comment line declares what the recorder must stage
+//   for the tape, and an unknown need is refused: docker-socket (the tape
+//   drives Docker itself) or database (a database of its own on the lab's
+//   Postgres, in OMNIGLASS_DSN, with psql to stage rows in it); the two do not
+//   combine (see NEEDS);
 // - no uuid in typed text: a demo addresses a resource by name or dotted
 //   address, and looks an id up by name inside the tape;
 // - Hide and Show alternate, ending shown, and something is typed on screen;
@@ -55,8 +63,8 @@
 //
 // Inside the terminal (web/e2e/tape/prelude.sh, sourced unseen first): the
 // lab's server and an owner token are in the CLI's env; the lab's container
-// logs are files under /stack/logs/ (server.log, and node.log, which carries
-// the node's in-process simulator too); and
+// logs are files under /stack/logs/ (server.log, and outpost.log, which carries
+// the outpost's in-process simulator too); and
 // demo_hush '<code>' runs code unseen, demo_until <seconds> '<code>' retries it
 // until it succeeds, each erasing its own command line, so a hidden block
 // leaves the screen as it found it.
@@ -116,6 +124,17 @@ export function holdTable(holdMs) {
   return t;
 }
 
+// Whether a Wait's pattern matches `text`; one JavaScript cannot compile
+// counts as a match, so it proves nothing.
+/** @param {string} re @param {string} text */
+const matches = (re, text) => {
+  try {
+    return new RegExp(re).test(text);
+  } catch {
+    return true;
+  }
+};
+
 // A typed line that is a caption: bash runs nothing for it.
 /** @param {string} typed */
 const caption = (typed) => typed.trimStart().startsWith('#');
@@ -174,6 +193,19 @@ export const MAX_GIF_BYTES = 5_000_000;
 // almost nothing to encode.
 export const MAX_SECONDS = 180;
 
+// What a tape may declare it needs of the recorder (`# demo-needs: <need>`, one
+// per line, anywhere in the file). A tape that declares none gets the lab's
+// server and an owner token in the CLI's env and nothing else.
+//   docker-socket  the Docker socket, on the host's network (lab-first-run
+//                  types omniglass lab run, #1193), where the recorder opts in
+//   database       a throwaway database of its own on the lab's Postgres,
+//                  created before the tape and dropped after it, its DSN in
+//                  OMNIGLASS_DSN (#1313); never the lab's own database, since
+//                  a tape may stamp a schema no later tape could migrate. It
+//                  rides the lab's network, which the socket tape's host
+//                  network cannot reach, so the two do not combine.
+export const NEEDS = Object.freeze(['docker-socket', 'database']);
+
 const MAX_TITLE = 100;
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 const DURATION = /^\d+(?:\.\d+)?(?:ms|s|m)$/;
@@ -182,7 +214,7 @@ const RECORDERS = new Set(['Set', 'Output', 'Require', 'Source', 'Env', 'Screens
 // Typed text that reaches the pacing rule's hooks: the prompt variables, the
 // DEMO_ variables the recorder and the prelude set, the prelude's demo__ names,
 // the shell's history (the prelude reads each line's number from it to pace and
-// to check it, so a line history skips is neither), and, in a command's place
+// to check it, so a line history skips is neither), and, in a command's location
 // (behind env, command, builtin or a path, too), an exec or a trap (either
 // replaces what the prelude installed; an exec that only opens or closes a
 // file descriptor replaces nothing) or an interactive shell (it would run
@@ -198,7 +230,7 @@ const HOOKS = new RegExp(
 );
 const KEYS = new Set(['Enter', 'Backspace', 'Delete', 'Tab', 'Space', 'Up', 'Down', 'Left', 'Right', 'Escape']);
 
-/** @typedef {{ id: string, title: string, description: string, body: string[] }} Tape */
+/** @typedef {{ id: string, title: string, description: string, needs: string[], body: string[] }} Tape */
 /**
  * What tapes.sh writes as demo.json once a recording passes; `budget` is the
  * mark only a pass carries.
@@ -240,11 +272,27 @@ export function parseTape(id, text, file) {
   const title = block[0] ?? '';
   if (!title) throw new Error(`${file}: a tape opens with its title as a comment (# <title>)`);
   if (title.length > MAX_TITLE) throw new Error(`${file}: the title is over ${MAX_TITLE} characters`);
-  const description = block.slice(1).filter(Boolean).join(' ');
+  const needLine = /^#\s*demo-needs:\s*(.*?)\s*$/;
+  const description = block.slice(1).filter((l) => l && !l.startsWith('demo-needs:')).join(' ');
+  /** @type {string[]} */
+  const needs = [];
+  lines.forEach((l, i) => {
+    const m = needLine.exec(l);
+    if (!m) return;
+    if (!NEEDS.includes(m[1])) fail(i + 1, `unknown demo-needs "${m[1]}" (a tape needs one of: ${NEEDS.join(', ')})`);
+    if (!needs.includes(m[1])) needs.push(m[1]);
+  });
+  if (needs.includes('docker-socket') && needs.includes('database')) {
+    throw new Error(`${file}: a tape needing docker-socket cannot need database (the socket runs on the host's network, which cannot reach the lab's Postgres)`);
+  }
 
   let hidden = false;
   let hiddenAt = 0;
   let pendingEnter = 0;
+  // The text typed since the last prompt Wait, and whether a pattern it cannot
+  // match has appeared since: the running command is asking, so a Type answers.
+  let typedSince = '';
+  let answerable = false;
   let typedOnScreen = false;
   for (let i = head; i < lines.length; i++) {
     const n = i + 1;
@@ -265,7 +313,9 @@ export function parseTape(id, text, file) {
       if (!caption(/** @type {string} */ (s)) && HOOKS.test(/** @type {string} */ (s))) {
         fail(n, "types into the pacing rule's hooks (the prompt, its hold tables, the prelude's own names, the shell's history, a new shell or a trap); a tape's commands are paced, never the pacing");
       }
-      if (pendingEnter) fail(pendingEnter, 'the command entered here is not waited on (a Wait) before the next Type');
+      if (pendingEnter && !answerable) fail(pendingEnter, 'the command entered here is not waited on (a Wait) before the next Type');
+      answerable = false;
+      typedSince += s;
       if (!hidden) typedOnScreen = true;
     } else if (name === 'Enter') {
       if (rest !== '' && !/^\d+$/.test(rest)) fail(n, 'Enter takes an optional repeat count');
@@ -276,7 +326,13 @@ export function parseTape(id, text, file) {
       }
       // Only a wait for the prompt finishes a command: a pattern can match the
       // command's own typed text, and let the next step run before it ends.
-      if (name === 'Wait' && rest === '') pendingEnter = 0;
+      if (name === 'Wait' && rest === '') {
+        pendingEnter = 0;
+        typedSince = '';
+        answerable = false;
+      } else if (pendingEnter && rest !== '') {
+        answerable = !matches(rest.slice(1, -1), typedSince);
+      }
     } else if (name === 'Sleep') {
       fail(n, "Sleep is the pacing rule's: the prelude holds each command's output and each caption on screen (web/e2e/tape/pace.sh), so a tape adds no hold of its own");
     } else if (name === 'Hide' || name === 'Show') {
@@ -295,7 +351,7 @@ export function parseTape(id, text, file) {
   if (pendingEnter) fail(pendingEnter, 'the command entered here is not waited on (a Wait) before the tape ends');
   if (hidden) fail(hiddenAt, 'Hide is never followed by a Show, so the end of the tape would not be recorded');
   if (!typedOnScreen) throw new Error(`${file}: the tape types nothing on screen`);
-  return { id, title, description, body: lines.slice(head) };
+  return { id, title, description, needs, body: lines.slice(head) };
 }
 
 // The tape the recorder plays: the outputs, the house settings, the prelude

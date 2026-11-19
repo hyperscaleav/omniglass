@@ -28,7 +28,7 @@ type sessionRow struct {
 // binary (issue #172, slice 1): a signed-in user lists their own sessions with the
 // current one flagged (a bounded "session", not a "token"), the response never leaks
 // the secret, a user can revoke another of their own sessions so it stops
-// authenticating, a credential id that is not theirs is a 404 (no cross-principal
+// authenticating, a credential id that is not theirs is a 404 (no cross-user
 // revoke), and revoking the current session signs it out. Skipped under -short.
 func TestSelfServiceSessions(t *testing.T) {
 	t.Parallel()
@@ -195,20 +195,20 @@ func TestSelfServiceSessions(t *testing.T) {
 		t.Fatalf("unknown id: want 404, got %d", code)
 	}
 
-	// Cross-principal: another user's credential id is a 404, and that user is
-	// untouched (the revoke is scoped to the caller's own principal).
+	// Cross-user: another user's credential id is a 404, and that user is
+	// untouched (the revoke is scoped to the caller's own user).
 	alicePw, _ := auth.HashPassword("purple-canyon-7z")
-	opsID, err := gw.ResolvePrincipalRef(ctx, "ops")
+	opsID, err := gw.ResolveUserRef(ctx, "ops")
 	if err != nil {
 		t.Fatalf("resolve ops: %v", err)
 	}
-	if _, err := gw.CreateHumanPrincipal(ctx, opsID, storage.HumanSpec{Username: "alice", PasswordHash: alicePw}, scope.Set{All: true}); err != nil {
+	if _, err := gw.CreatePerson(ctx, opsID, storage.PersonSpec{Username: "alice", PasswordHash: alicePw}, scope.Set{All: true}); err != nil {
 		t.Fatalf("create alice: %v", err)
 	}
 	cookieAlice := login("alice", "purple-canyon-7z")
 	aliceSession := current(listSessions(cookieAlice))
 	if code := revoke(cookieA, aliceSession.ID); code != http.StatusNotFound {
-		t.Fatalf("revoking another principal's session: want 404, got %d", code)
+		t.Fatalf("revoking another user's session: want 404, got %d", code)
 	}
 	if code := meStatus(cookieAlice); code != http.StatusOK {
 		t.Fatalf("alice's session must be untouched by ops's revoke: want 200, got %d", code)

@@ -8,11 +8,11 @@ import (
 )
 
 // SimHopCount is the sim hop (#1694) on one protocol: In is every request the
-// simulated endpoints settled inside the window on traffic the node tallies,
-// Lost the ones whose reply never reached the node. Lost splits by why: the
+// simulated endpoints settled inside the window on traffic the outpost tallies,
+// Lost the ones whose reply never reached the outpost. Lost splits by why: the
 // sim withheld the answer (a wrong community, its own datagram loss), the
 // sim could not write it (dropped), or it left the sim and never came back
-// (not returned: lost on the way, or late past the node's timeout). The
+// (not returned: lost on the way, or late past the outpost's timeout). The
 // counts are requests, not telemetry items: the sim cannot know which kinds
 // an answer would have carried.
 type SimHopCount struct {
@@ -24,23 +24,23 @@ type SimHopCount struct {
 	NotReturned int64  `json:"not_returned"`
 }
 
-// SimHop reads one node's sim hop, a count per protocol the node tallied that
+// SimHop reads one outpost's sim hop, a count per protocol the outpost tallied that
 // the sim settled anything on, in protocol order. It reads the narrowest sim
 // span (the start's second read to the end's first), as the
 // answered-not-returned gap does: a reply the sim settled there either came
-// back, is in flight at the node's end read, belongs to traffic the node does
+// back, is in flight at the outpost's end read, belongs to traffic the outpost does
 // not tally, or was lost. A refusal or error that came back is returned: the
-// device said no, and the task reports it. A node that restarted reads
+// device said no, and the task reports it. An outpost that restarted reads
 // nothing, since no figure for it is meaningful.
-func SimHop(b NodeBracket) []SimHopCount {
+func SimHop(b OutpostBracket) []SimHopCount {
 	if restarted(b) {
 		return nil
 	}
 	s1, s1a, s2b, s2 := b.Start.SimBefore, b.Start.SimAfter, b.End.SimBefore, b.End.SimAfter
 	var out []SimHopCount
-	for _, n2 := range b.End.Node.Transports {
+	for _, n2 := range b.End.Outpost.Transports {
 		p := n2.Transport
-		n1 := tallyRow(b.Start.Node, p)
+		n1 := tallyRow(b.Start.Outpost, p)
 		got := func(c collection.TallyCounters) int64 { return c.Answered + c.Refused + c.Error }
 		received := s2.Protocol(p).Received - s1.Protocol(p).Received
 		untallied := max(received-(n2.Sent-n1.Sent), 0)
@@ -58,9 +58,9 @@ func SimHop(b NodeBracket) []SimHopCount {
 	return out
 }
 
-// SimHops is the window's sim hop over every node, summed per protocol, in
-// protocol order; nil when no node settled anything it tallies.
-func SimHops(brackets []NodeBracket) []SimHopCount {
+// SimHops is the window's sim hop over every outpost, summed per protocol, in
+// protocol order; nil when no outpost settled anything it tallies.
+func SimHops(brackets []OutpostBracket) []SimHopCount {
 	sum := map[string]SimHopCount{}
 	for _, b := range brackets {
 		for _, c := range SimHop(b) {

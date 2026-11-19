@@ -31,7 +31,7 @@ func EndToEnd(hops ...float64) float64 {
 
 // Receipt is one landed batch as its receipt records it.
 type Receipt struct {
-	Node       string
+	Outpost    string
 	Boot       string
 	Seq        uint64
 	Minted     time.Time
@@ -39,11 +39,11 @@ type Receipt struct {
 	Deliveries int
 	Declared   Declared
 	Outcome    Tally
-	// Loss is the node's own account the batch carried (#1692).
-	Loss NodeLoss
+	// Loss is the outpost's own account the batch carried (#1692).
+	Loss OutpostLoss
 }
 
-// Window is a stretch of node time, (From, To]: a receipt is in it when its
+// Window is a stretch of outpost time, (From, To]: a receipt is in it when its
 // batch was minted in it.
 type Window struct{ From, To time.Time }
 
@@ -95,22 +95,22 @@ func (t *Total) add(o Outcome, n uint64) {
 	}
 }
 
-// boots groups receipts by (node, boot), each boot's receipts sorted by seq
+// boots groups receipts by (outpost, boot), each boot's receipts sorted by seq
 // with duplicates of a seq dropped, so arrival order and a receipt read twice
 // change nothing. A receipt with no ledger (no boot or seq) is skipped; the
-// push lane's receipts key on the server's boot with no node (#1696).
+// push lane's receipts key on the server's boot with no outpost (#1696).
 func boots(receipts []Receipt) [][]Receipt {
-	type bootKey struct{ node, boot string }
+	type bootKey struct{ outpost, boot string }
 	by := map[bootKey][]Receipt{}
 	for _, r := range receipts {
 		if r.Boot == "" || r.Seq == 0 {
 			continue
 		}
-		k := bootKey{r.Node, r.Boot}
+		k := bootKey{r.Outpost, r.Boot}
 		by[k] = append(by[k], r)
 	}
 	keys := slices.SortedFunc(maps.Keys(by), func(a, b bootKey) int {
-		return cmp.Or(cmp.Compare(a.node, b.node), cmp.Compare(a.boot, b.boot))
+		return cmp.Or(cmp.Compare(a.outpost, b.outpost), cmp.Compare(a.boot, b.boot))
 	})
 	out := make([][]Receipt, 0, len(keys))
 	for _, k := range keys {
@@ -124,11 +124,11 @@ func boots(receipts []Receipt) [][]Receipt {
 
 // Reconcile is the ingest hop over a window: per kind, in is the declared
 // items of the window's receipts plus the items of the gaps the window owns
-// that the node shipped, out is their stored, coalesced and unbound items,
+// that the outpost shipped, out is their stored, coalesced and unbound items,
 // and missing is those gap items plus any shortfall the ingest counted
-// between declared and decoded. A gap's items the node's runs account for
-// (dropped at the spool, refused by the bus) are the node hop's loss
-// (ReconcileNode), never the ingest's.
+// between declared and decoded. A gap's items the outpost's runs account for
+// (dropped at the spool, refused by the bus) are the outpost hop's loss
+// (ReconcileOutpost), never the ingest's.
 //
 // Every gap has exactly one owner whatever order its batches arrived in: a
 // gap between two present receipts belongs to the window of its lower
@@ -169,7 +169,7 @@ func Reconcile(w Window, receipts []Receipt) map[Kind]Total {
 				}
 				if declared > counted {
 					// Declared but never counted: the ingest read less than
-					// the node said it sent.
+					// the outpost said it sent.
 					add(k, Missing, declared-counted)
 				}
 				if r.Deliveries > 1 {
@@ -197,8 +197,8 @@ func gapAbove(rs []Receipt, i int, k Kind) uint64 {
 	return hi.Before - end
 }
 
-// Boot names one node boot.
-type Boot struct{ Node, Boot string }
+// Boot names one outpost boot.
+type Boot struct{ Outpost, Boot string }
 
 // Unsettled is every boot with a receipt in the window whose batches are not
 // all known yet: none of its landed receipts was minted after the window, or
@@ -209,7 +209,7 @@ func Unsettled(w Window, receipts []Receipt) []Boot {
 	proven := Proven(w, receipts)
 	var out []Boot
 	for _, rs := range boots(receipts) {
-		b := Boot{Node: rs[0].Node, Boot: rs[0].Boot}
+		b := Boot{Outpost: rs[0].Outpost, Boot: rs[0].Boot}
 		if _, ok := proven[b]; !ok && slices.ContainsFunc(rs, func(r Receipt) bool { return w.Contains(r.Minted) }) {
 			out = append(out, b)
 		}
@@ -245,7 +245,7 @@ func Proven(w Window, receipts []Receipt) map[Boot]time.Time {
 			}
 		}
 		if !at.IsZero() {
-			out[Boot{Node: rs[0].Node, Boot: rs[0].Boot}] = at
+			out[Boot{Outpost: rs[0].Outpost, Boot: rs[0].Boot}] = at
 		}
 	}
 	return out

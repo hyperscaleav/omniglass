@@ -13,13 +13,13 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/obsstat"
 )
 
-// The node's request tally (#1639): the node half of the closed loop a scale
+// The outpost's request tally (#1639): the outpost half of the closed loop a scale
 // lab reconciles against what each simulated endpoint observed. A transport
 // counts a connection when the connect (and any TLS handshake) succeeds and a
-// request where its bytes leave the node: an http request once its connection
+// request where its bytes leave the outpost: an http request once its connection
 // is up, an snmp datagram once the socket took it. A tally is plain counters,
-// injected through the node's config, never a package global, and never
-// published as metric rows: the lab pulls it on a subject the node answers.
+// injected through the outpost's config, never a package global, and never
+// published as metric rows: the lab pulls it on a subject the outpost answers.
 // TODO(#1661): tally the session and stream exchanges (ssh, telnet, tcp
 // session lines, udp, websocket, the http session and stream transports),
 // which reach the sim untallied today.
@@ -48,7 +48,7 @@ func (t TallyTransport) String() string {
 	return "unknown"
 }
 
-// TallyOutcome is how a request the node sent settled.
+// TallyOutcome is how a request the outpost sent settled.
 type TallyOutcome uint8
 
 const (
@@ -102,7 +102,7 @@ func (g *gaugeTally) read() *GaugeReading {
 	return &GaugeReading{Current: g.current.Load(), HighWater: g.high.Epochs()}
 }
 
-// RequestTally counts what one node sent. Every method is safe on a nil
+// RequestTally counts what one outpost sent. Every method is safe on a nil
 // tally, which counts nothing.
 type RequestTally struct {
 	started             time.Time
@@ -241,9 +241,9 @@ func (g *GaugeReading) High(from, to time.Time) int64 {
 }
 
 // RequestTallySnapshot is a whole tally at one read. Transports carries only
-// those the node touched; a gauge no pool reported is nil.
+// those the outpost touched; a gauge no pool reported is nil.
 type RequestTallySnapshot struct {
-	Node                string          `json:"node"`
+	Outpost             string          `json:"outpost"`
 	At                  time.Time       `json:"at"`
 	Started             time.Time       `json:"started"`
 	Transports          []TallyCounters `json:"transports,omitempty"`

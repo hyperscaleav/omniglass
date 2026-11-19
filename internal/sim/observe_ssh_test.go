@@ -29,7 +29,7 @@ func TestObservedSSHExecAnswered(t *testing.T) {
 	if _, ec, err := sshExec(addr, "admin", "kestrel", "show version"); err != nil || ec != 0 {
 		t.Fatalf("exec: exit %d, %v", ec, err)
 	}
-	c := observedEventually(t, dev, "ssh", func(c ObservationCounters) bool { return c.Settled() == 1 && c.OpenConnections == 0 })
+	c := observedEventually(t, dev, "ssh", func(c ObservationCounters) bool { return c.Settled() == 1 && c.OpenConnections == 0 && c.InFlight == 0 })
 	if c.Accepted != 1 || c.Received != 1 || c.Answered != 1 || c.InFlight != 0 {
 		t.Fatalf("one answered exec = %+v", c)
 	}
@@ -64,7 +64,7 @@ func TestObservedSSHWrongPasswordIsRefused(t *testing.T) {
 		client.Close()
 		t.Fatal("a wrong password was let in")
 	}
-	c := observedEventually(t, dev, "ssh", func(c ObservationCounters) bool { return c.Settled() == 1 && c.OpenConnections == 0 })
+	c := observedEventually(t, dev, "ssh", func(c ObservationCounters) bool { return c.Settled() == 1 && c.OpenConnections == 0 && c.InFlight == 0 })
 	if c.Accepted != 1 || c.Received != 1 || c.Refused != 1 {
 		t.Fatalf("a wrong password = %+v, want one refused request", c)
 	}

@@ -47,7 +47,7 @@ func TestRetentionStatusReadsThePartitionsAndTheSizes(t *testing.T) {
 	if !st.Partitions[0].From.Equal(old) {
 		t.Errorf("oldest partition starts %s, want the day created 40 days back %s", st.Partitions[0].From, old)
 	}
-	tables := []string{"log_line", "metric", "metric_block", "metric_trend", "node_log", "property"}
+	tables := []string{"log_line", "metric", "metric_block", "metric_trend", "outpost_log", "property"}
 	if got := slices.Sorted(maps.Keys(st.TableBytes)); !slices.Equal(got, tables) {
 		t.Errorf("sized tables %v, want %v", got, tables)
 	}
@@ -61,22 +61,58 @@ func TestRetentionStatusReadsThePartitionsAndTheSizes(t *testing.T) {
 	}
 }
 
+// TestDatabaseSizeReadsTheDatabase (#1985): the db-size read is the
+// database's own bytes, more than any one table's, and grows as rows land.
+func TestDatabaseSizeReadsTheDatabase(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	gw, ctx, dsn := platformGatewayDSN(t)
+	before, err := gw.DatabaseSize(ctx)
+	if err != nil {
+		t.Fatalf("read the database size: %v", err)
+	}
+	st, err := gw.RetentionStatus(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if before <= st.TableBytes["metric"] || before <= st.TableBytes["property"] {
+		t.Errorf("database sized %d bytes, want more than any table's %v", before, st.TableBytes)
+	}
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	if _, err := conn.Exec(ctx, `create table db_size_ballast as select repeat('x', 1000) as pad from generate_series(1, 4000)`); err != nil {
+		t.Fatal(err)
+	}
+	after, err := gw.DatabaseSize(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after <= before {
+		t.Errorf("database sized %d bytes after 4 MB landed, want more than %d", after, before)
+	}
+}
+
 // TestRetentionKeysAreTheProcesssAlone (#1629): the retention pass's figures
 // are platform keys, so the process lands them on a platform component and a
-// node, a push or an operator writing one is refused.
+// outpost, a push or an operator writing one is refused.
 func TestRetentionKeysAreTheProcesssAlone(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
 	gw, ctx := platformGateway(t)
-	comp := platformNode(t, ctx, gw, "edge-r")
+	comp := platformOutpost(t, ctx, gw, "edge-r")
 	now := time.Now().UTC()
 	for _, key := range writerclass.RetentionKeys() {
 		if err := gw.RecordPlatformMetrics(ctx, []storage.PlatformMetric{{ComponentID: comp.ID, Key: key, Instance: "metric", Value: 1, TS: now}}); err != nil {
 			t.Errorf("the process writing %s: %v", key, err)
 		}
-		for _, w := range []storage.KeyWriter{storage.NodeWriter(comp.ID, ""), storage.PushWriter(), {Kind: writerclass.Operator}} {
+		for _, w := range []storage.KeyWriter{storage.OutpostWriter(comp.ID, ""), storage.PushWriter(), {Kind: writerclass.Operator}} {
 			err := gw.InsertMetricSamples(ctx, w, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: comp.ID,
 				Key: key, Instance: "metric", Value: 1, TS: now}})
 			if !errors.Is(err, storage.ErrKeyWriterRefused) {

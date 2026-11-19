@@ -47,7 +47,7 @@ func TestResolveSecretArcKinds(t *testing.T) {
 // nothing while telling Covers a telemetry scope may be checked against the
 // location table. This is the fence on POST /telemetry:push, and it is resolved
 // from telemetry:push rather than component:read or system:read on purpose: a
-// principal routinely holds a wide read and a narrow write (viewer over the
+// user routinely holds a wide read and a narrow write (viewer over the
 // fleet plus operator on one component), so resolving the read scope would let
 // it push anywhere it can see.
 func TestResolveTelemetryComponentAndSystemTiers(t *testing.T) {
@@ -293,11 +293,11 @@ func TestResolveSystemKind(t *testing.T) {
 	if set.All || len(set.IDs) != 1 || set.IDs[0] != "av" {
 		t.Fatalf("system scope = %+v, want [av]", set)
 	}
-	// ...but a location-scoped grant does NOT confer system access (no cross-tier
-	// cascade yet).
-	other := scope.Resolve([]scope.Grant{{Role: "owner", ScopeKind: "location", ScopeID: "hq"}}, idx, "system", "read")
+	// ...but a location-scoped grant does NOT confer system modify access (the
+	// cross-tier expansion covers read and create only, #1498).
+	other := scope.Resolve([]scope.Grant{{Role: "owner", ScopeKind: "location", ScopeID: "hq"}}, idx, "system", "update")
 	if !other.Empty() {
-		t.Fatalf("location grant should not confer system scope, got %+v", other)
+		t.Fatalf("location grant should not confer system update scope, got %+v", other)
 	}
 }
 
@@ -340,7 +340,7 @@ func TestResolveInterfaceTaskCascade(t *testing.T) {
 // TestResolveAlarmResolvesOnTheComponentTierFromItsOwnAction pins the scope half
 // of #728. An alarm hangs off a component, so the component tier is what contains
 // it; the load-bearing part is that the acknowledgement resolves from
-// alarm:acknowledge and NOT from the component gate, since a principal commonly
+// alarm:acknowledge and NOT from the component gate, since a user commonly
 // holds a wide component read beside a narrow write and either one deciding who
 // may acknowledge is a defect.
 func TestResolveAlarmResolvesOnTheComponentTierFromItsOwnAction(t *testing.T) {
@@ -453,7 +453,7 @@ func TestResolveDedupRoots(t *testing.T) {
 // a tree table, and Resolve stamps every set with the resource it was resolved
 // for so the gateway can ask exactly that.
 func TestRegisteredSeparatesADecisionFromAnOmission(t *testing.T) {
-	for _, r := range []string{"component", "command", "telemetry", "secret", "node", "platform"} {
+	for _, r := range []string{"component", "command", "telemetry", "secret", "outpost", "platform", "assistant"} {
 		if !scope.Registered(r) {
 			t.Errorf("Registered(%q) = false, want true", r)
 		}
@@ -462,12 +462,117 @@ func TestRegisteredSeparatesADecisionFromAnOmission(t *testing.T) {
 		t.Error("Registered(widget) = true, want false: nothing registers it")
 	}
 	for _, tier := range []string{"location", "system", "component"} {
-		if scope.Covers("node", tier) {
-			t.Errorf("Covers(node, %s) = true, want false: a fleet-wide resource has no tier", tier)
+		if scope.Covers("outpost", tier) {
+			t.Errorf("Covers(outpost, %s) = true, want false: a fleet-wide resource has no tier", tier)
+		}
+		if scope.Covers("assistant", tier) {
+			t.Errorf("Covers(assistant, %s) = true, want false: a conversation is fenced by its owner, not a tier", tier)
 		}
 	}
 	g := []scope.Grant{{Role: "operator", ScopeKind: "component", ScopeID: "C"}}
 	if s := scope.Resolve(g, index(), "widget", "read"); !s.Empty() || s.Resource != "widget" {
 		t.Fatalf("Resolve for an unregistered resource = %+v, want empty and stamped widget", s)
+	}
+}
+
+// deployIndex adds the shipped deploy shape to the resolver index: it builds
+// on all three tree tiers and inherits the viewer read floor.
+func deployIndex() rbac.RoleIndex {
+	return rbac.NewRoleIndex([]rbac.Role{
+		{ID: "viewer", Permissions: []string{"*:read"}},
+		{ID: "deploy", Inherits: []string{"viewer"}, Permissions: []string{
+			"location:create,update,rename,move",
+			"system:create,update,rename,move",
+			"component:create,update,rename,move",
+		}},
+	})
+}
+
+// A location-kind grant reaches the systems and components placed beneath it
+// for read and create (#1498): the set carries the location root as a
+// cross-tier root, never as a same-tier id, so the tree walk on the system or
+// component table still matches only its own tier's roots.
+func TestResolveLocationGrantReachesSystemsAndComponentsForReadAndCreate(t *testing.T) {
+	idx := deployIndex()
+	for _, op := range []string{scope.OpSubtree, scope.OpSubtreeExclRoot, ""} {
+		g := []scope.Grant{{Role: "deploy", ScopeKind: "location", ScopeID: "east", ScopeOp: op}}
+		for _, resource := range []string{"system", "component"} {
+			for _, action := range []string{"read", "create"} {
+				set := scope.Resolve(g, idx, resource, action)
+				if set.Empty() || set.All || len(set.IDs) != 0 || len(set.SelfIDs) != 0 ||
+					len(set.LocationIDs) != 1 || set.LocationIDs[0] != "east" {
+					t.Errorf("op %q %s:%s = %+v, want LocationIDs [east] and nothing else", op, resource, action, set)
+				}
+			}
+		}
+	}
+}
+
+// The modify actions keep today's reach (#1498, #10): a location grant
+// updates, renames, moves, or deletes no system or component.
+func TestResolveLocationGrantModifiesNoSystemOrComponent(t *testing.T) {
+	idx := rbac.NewRoleIndex([]rbac.Role{{ID: "owner", Permissions: []string{"*:*"}}})
+	g := []scope.Grant{{Role: "owner", ScopeKind: "location", ScopeID: "east"}}
+	for _, resource := range []string{"system", "component"} {
+		for _, action := range []string{"update", "rename", "move", "delete"} {
+			if set := scope.Resolve(g, idx, resource, action); !set.Empty() {
+				t.Errorf("%s:%s from a location grant = %+v, want empty", resource, action, set)
+			}
+		}
+	}
+}
+
+// A self location grant is a leaf-lock on one node: it grows nothing under it
+// on any tier, so it confers no cross-tier create, and no cross-tier read.
+func TestResolveSelfLocationGrantReachesNoSystemOrComponent(t *testing.T) {
+	idx := deployIndex()
+	g := []scope.Grant{{Role: "deploy", ScopeKind: "location", ScopeID: "room", ScopeOp: scope.OpSelf}}
+	for _, resource := range []string{"system", "component"} {
+		for _, action := range []string{"read", "create"} {
+			if set := scope.Resolve(g, idx, resource, action); !set.Empty() {
+				t.Errorf("%s:%s from a self location grant = %+v, want empty", resource, action, set)
+			}
+		}
+	}
+}
+
+// The cross-tier roots follow the per-action union: a role that does not carry
+// the action contributes no location root, and the roots are deduplicated.
+func TestResolveLocationRootsFollowTheAction(t *testing.T) {
+	idx := deployIndex()
+	g := []scope.Grant{
+		{Role: "viewer", ScopeKind: "location", ScopeID: "west"},
+		{Role: "deploy", ScopeKind: "location", ScopeID: "east"},
+		{Role: "deploy", ScopeKind: "location", ScopeID: "east", ScopeOp: scope.OpSubtreeExclRoot},
+	}
+	create := scope.Resolve(g, idx, "component", "create")
+	if len(create.LocationIDs) != 1 || create.LocationIDs[0] != "east" {
+		t.Fatalf("component create = %+v, want LocationIDs [east] (a viewer grant creates nothing)", create)
+	}
+	read := scope.Resolve(g, idx, "component", "read")
+	if len(read.LocationIDs) != 2 || read.LocationIDs[0] != "west" || read.LocationIDs[1] != "east" {
+		t.Fatalf("component read = %+v, want LocationIDs [west east]", read)
+	}
+}
+
+// Only the system and component tiers expand: the resources that hang off a
+// component (endpoint, task, alarm, command, notification) and telemetry keep
+// their own tier, and a system-kind grant still confers no location access.
+func TestResolveCrossTierStopsAtSystemsAndComponents(t *testing.T) {
+	idx := rbac.NewRoleIndex([]rbac.Role{{ID: "owner", Permissions: []string{"*:*"}}})
+	loc := []scope.Grant{{Role: "owner", ScopeKind: "location", ScopeID: "east"}}
+	for _, resource := range []string{"endpoint", "task", "alarm", "command", "notification", "telemetry"} {
+		if set := scope.Resolve(loc, idx, resource, "read"); !set.Empty() {
+			t.Errorf("%s:read from a location grant = %+v, want empty", resource, set)
+		}
+	}
+	sys := []scope.Grant{{Role: "owner", ScopeKind: "system", ScopeID: "av"}}
+	for _, action := range []string{"read", "create"} {
+		if set := scope.Resolve(sys, idx, "location", action); !set.Empty() {
+			t.Errorf("location:%s from a system grant = %+v, want empty", action, set)
+		}
+		if set := scope.Resolve(sys, idx, "component", action); len(set.LocationIDs) != 0 {
+			t.Errorf("component:%s from a system grant = %+v, want no location roots", action, set)
+		}
 	}
 }

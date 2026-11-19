@@ -120,7 +120,7 @@ func checkInvocation(idx map[string]*cobra.Command, words []string) error {
 			continue
 		}
 		leftover := words[k:]
-		if len(leftover) > 0 && cmd.Run == nil && cmd.RunE == nil && cmd.HasSubCommands() {
+		if len(leftover) > 0 && IsGroup(cmd) {
 			return fmt.Errorf("%q resolves to the %q command group, which takes no arguments; %q is a wrong or doubled segment",
 				strings.Join(words, " "), strings.Join(words[:k], " "), leftover[0])
 		}
@@ -138,7 +138,7 @@ func TestCheckInvocationRejectsDoubledSegments(t *testing.T) {
 
 	bad := [][]string{
 		{"component", "component", "effective-tag", "list", "codec-1"},
-		{"principal", "principal", "avatar", "list"},
+		{"user", "user", "avatar", "list"},
 		{"component", "component", "reachability", "list", "disp-1"},
 		{"nonexistent-noun", "list"},
 	}
@@ -150,10 +150,10 @@ func TestCheckInvocationRejectsDoubledSegments(t *testing.T) {
 
 	good := [][]string{
 		{"component", "effective-tag", "list", "codec-1"},
-		{"principal", "avatar", "list"},
+		{"user", "avatar", "list"},
 		{"location", "get", "hq"},
 		{"component"}, // a bare group mention in prose is fine
-		{"node", "enroll", "field-1"},
+		{"outpost", "enroll", "field-1"},
 	}
 	for _, words := range good {
 		if err := checkInvocation(idx, words); err != nil {

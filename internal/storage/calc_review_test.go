@@ -59,6 +59,28 @@ func TestCalcMarkHeldByUncommittedBatch(t *testing.T) {
 	}
 }
 
+// A write that re-marks a mark already pending writes no new tuple (#1928):
+// the upsert's guard leaves the row as it was, and the conflict still locks
+// it (TestCalcMarkHeldByUncommittedBatch), so the coalescing costs no dead
+// row per sample.
+func TestCalcRemarkWritesNoTuple(t *testing.T) {
+	t.Parallel()
+	r := newEvalRig(t)
+	r.avgRule("echo", "room-temperature", "avg-temp")
+	r.metric("room-temperature", "", 30)
+	if n := r.pending(); n != 1 {
+		t.Fatalf("%d marks, want 1", n)
+	}
+	before := scalar(t, r.conn, `select ctid::text from calc_pending`)
+	r.metric("room-temperature", "", 31)
+	if n := r.pending(); n != 1 {
+		t.Fatalf("%d marks after the re-mark, want 1", n)
+	}
+	if after := scalar(t, r.conn, `select ctid::text from calc_pending`); after != before {
+		t.Fatalf("the re-mark moved the mark from %s to %s: it wrote a new tuple", before, after)
+	}
+}
+
 // The ingest and the tick lock two marks in opposite orders (the tick has
 // deleted (first, c) and its write marks (second, c); a batch marks
 // (second, c) then (first, c)): Postgres aborts one with a deadlock, and the

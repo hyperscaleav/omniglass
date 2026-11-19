@@ -92,7 +92,7 @@ func TestLocationTypeCRUD(t *testing.T) {
 }
 
 // TestCreateLocationTypeReturnsAndAuditsItsID is the regression for a defect
-// this registry carried from the start and #687 surfaced by editing the
+// this catalog carried from the start and #687 surfaced by editing the
 // statement: the insert said `returning id` and ran through Exec, so the value
 // was discarded and nothing ever assigned it. A create answered with an empty
 // id (the field its own wire schema calls "the stable handle that survives a
@@ -121,7 +121,7 @@ func TestCreateLocationTypeReturnsAndAuditsItsID(t *testing.T) {
 	if _, parseErr := uuid.Parse(lt.ID); parseErr != nil {
 		t.Fatalf("the created type's id = %q, want the uuid the database minted: %v", lt.ID, parseErr)
 	}
-	// And it is the id the registry actually holds, not merely a well-shaped one.
+	// And it is the id the catalog actually holds, not merely a well-shaped one.
 	types, err := gw.ListLocationTypes(ctx)
 	if err != nil {
 		t.Fatalf("list: %v", err)
@@ -133,7 +133,7 @@ func TestCreateLocationTypeReturnsAndAuditsItsID(t *testing.T) {
 		}
 	}
 	if stored != lt.ID {
-		t.Fatalf("create returned id %q, the registry holds %q", lt.ID, stored)
+		t.Fatalf("create returned id %q, the catalog holds %q", lt.ID, stored)
 	}
 
 	entries, err := gw.ListAuditLog(ctx, storage.AuditFilter{Resource: "location_type"})

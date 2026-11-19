@@ -14,7 +14,7 @@ import (
 // TestPasswordRotationClearsLockout proves that rotating a password clears the
 // brute-force lockout (issue #171): before this, the lock only expired lazily at the
 // next login, so an admin reset left the account locked for the rest of the window.
-// Both rotation lanes clear it: SetPrincipalPassword (the admin reset, keyed on id,
+// Both rotation lanes clear it: SetUserPassword (the admin reset, keyed on id,
 // the reachable intervention while an account is locked) and SetPassword (the
 // self-service change / CLI set-password, keyed on username). A locked account whose
 // password is rotated authenticates immediately with the new secret, with no wait for
@@ -40,7 +40,7 @@ func TestPasswordRotationClearsLockout(t *testing.T) {
 	all := scope.Set{All: true}
 
 	oldHash, _ := auth.HashPassword("orange-boat-42x")
-	alice, err := gw.CreateHumanPrincipal(ctx, root.ID, storage.HumanSpec{Username: "alice", PasswordHash: oldHash}, all)
+	alice, err := gw.CreatePerson(ctx, root.ID, storage.PersonSpec{Username: "alice", PasswordHash: oldHash}, all)
 	if err != nil {
 		t.Fatalf("create alice: %v", err)
 	}
@@ -59,11 +59,11 @@ func TestPasswordRotationClearsLockout(t *testing.T) {
 		}
 	}
 
-	// Admin reset (SetPrincipalPassword) clears the lock: the new secret authenticates
+	// Admin reset (SetUserPassword) clears the lock: the new secret authenticates
 	// immediately, with no wait for the 15-minute window to pass.
 	lockAlice()
 	adminHash, _ := auth.HashPassword("purple-canyon-7")
-	if err := gw.SetPrincipalPassword(ctx, root.ID, alice.ID, adminHash, all); err != nil {
+	if err := gw.SetUserPassword(ctx, root.ID, alice.ID, adminHash, all); err != nil {
 		t.Fatalf("admin reset password: %v", err)
 	}
 	if _, err := gw.AuthenticatePassword(ctx, "alice", "purple-canyon-7"); err != nil {

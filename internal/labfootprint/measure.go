@@ -166,26 +166,26 @@ func BatchRates(batches, samples int64, dt time.Duration) (samplesPerBatch, batc
 	return samplesPerBatch, batchesPerSecond
 }
 
-// FoldNodes is w with every node container (any but the server and the
-// database) summed into one node row, so a lab with a node per site (the
-// corporate scenario, #1719) reports the server, node and database rows a
-// one-node lab does. CPU and working set add across containers.
-func FoldNodes(w Window) Window {
+// FoldOutposts is w with every outpost container (any but the server and the
+// database) summed into one outpost row, so a lab with an outpost per site (the
+// corporate scenario, #1719) reports the server, outpost and database rows a
+// one-outpost lab does. CPU and working set add across containers.
+func FoldOutposts(w Window) Window {
 	out := w
 	out.Containers = map[string]ContainerWindow{}
-	var node ContainerWindow
-	nodes := 0
+	var outpost ContainerWindow
+	outposts := 0
 	for name, c := range w.Containers {
 		if name == "server" || name == "db" {
 			out.Containers[name] = c
 			continue
 		}
-		node.Millicores += c.Millicores
-		node.WorkingSetMiB += c.WorkingSetMiB
-		nodes++
+		outpost.Millicores += c.Millicores
+		outpost.WorkingSetMiB += c.WorkingSetMiB
+		outposts++
 	}
-	if nodes > 0 {
-		out.Containers["node"] = node
+	if outposts > 0 {
+		out.Containers["outpost"] = outpost
 	}
 	return out
 }

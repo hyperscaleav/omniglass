@@ -87,7 +87,7 @@ func scanPropertyType(row pgx.Row) (*PropertyType, error) {
 	return &prop, nil
 }
 
-// GetPropertyType returns one property by name. The registry is fleet-wide reference
+// GetPropertyType returns one property by name. The catalog is fleet-wide reference
 // data, so there is no scope injection.
 func (p *PG) GetPropertyType(ctx context.Context, name string) (*PropertyType, error) {
 	if err := RejectAddressForm("property_type", name); err != nil {
@@ -142,15 +142,15 @@ func (p *PG) CreatePropertyType(ctx context.Context, actorID string, spec Proper
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// Cross-registry uniqueness, the mirror of the check in CreateEventType: the
-	// three ingest registries (property, metric, event) share one resolution
+	// Cross-catalog uniqueness, the mirror of the check in CreateEventType: the
+	// three ingest catalogs (property, metric, event) share one resolution
 	// namespace, and a name in two of them resolves to nothing at ingest, so refuse
 	// it here where the operator can still choose a different one.
 	var clash bool
 	if err := tx.QueryRow(ctx,
 		`select exists (select 1 from event_type_in_effect() event_type where name = $1)
 		     or exists (select 1 from metric_type_in_effect() metric_type where name = $1)`, spec.Name).Scan(&clash); err != nil {
-		return nil, fmt.Errorf("storage: check registry clash for %q: %w", spec.Name, err)
+		return nil, fmt.Errorf("storage: check catalog clash for %q: %w", spec.Name, err)
 	}
 	if clash {
 		return nil, ErrPropertyTypeExists
@@ -193,7 +193,7 @@ func (p *PG) UpdatePropertyType(ctx context.Context, actorID, name string, patch
 	if err := guardPropertyMutable(ctx, tx, name); err != nil {
 		return nil, err
 	}
-	before, err := registryAuditImage(ctx, tx, "property_type", name)
+	before, err := catalogAuditImage(ctx, tx, "property_type", name)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrPropertyTypeNotFound
@@ -219,7 +219,7 @@ func (p *PG) UpdatePropertyType(ctx context.Context, actorID, name string, patch
 		}
 		return nil, fmt.Errorf("storage: reload property %q: %w", name, err)
 	}
-	after, err := registryAuditImage(ctx, tx, "property_type", name)
+	after, err := catalogAuditImage(ctx, tx, "property_type", name)
 	if err != nil {
 		return nil, fmt.Errorf("storage: audit image property_type %q: %w", name, err)
 	}
@@ -246,7 +246,7 @@ func (p *PG) DeletePropertyType(ctx context.Context, actorID, name string) error
 	if err := guardPropertyMutable(ctx, tx, name); err != nil {
 		return err
 	}
-	before, err := registryAuditImage(ctx, tx, "property_type", name)
+	before, err := catalogAuditImage(ctx, tx, "property_type", name)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrPropertyTypeNotFound

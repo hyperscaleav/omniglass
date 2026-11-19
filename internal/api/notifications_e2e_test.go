@@ -159,7 +159,7 @@ func TestAnAlarmTransitionIsDeliveredEndToEnd(t *testing.T) {
 
 	// :retry is an operator's; a viewer reads it and may not retry it.
 	viewer := setupAllViewer(t, ctx, dsn, "n-viewer")
-	operator := principalWithGrants(t, ctx, dsn, "n-operator", []grant{{role: "operator", scopeKind: "all"}})
+	operator := userWithGrants(t, ctx, dsn, "n-operator", []grant{{role: "operator", scopeKind: "all"}})
 	c.do(viewer, http.MethodGet, "/notifications/"+failedID, nil, http.StatusOK)
 	c.do(viewer, http.MethodPost, "/notifications/"+failedID+":retry", nil, http.StatusForbidden)
 	failing.Store(false)
@@ -191,12 +191,12 @@ func TestAnAlarmTransitionIsDeliveredEndToEnd(t *testing.T) {
 		t.Fatalf("timeline = %v", seq)
 	}
 
-	// A principal scoped to display-2 lists no notification about display-1.
+	// A user scoped to display-2 lists no notification about display-1.
 	var d2 struct{ ID string }
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/display-2", nil, http.StatusOK), &d2); err != nil {
 		t.Fatal(err)
 	}
-	scoped := principalWithGrants(t, ctx, dsn, "n-scoped", []grant{{role: "viewer", scopeKind: "component", scopeID: d2.ID}})
+	scoped := userWithGrants(t, ctx, dsn, "n-scoped", []grant{{role: "viewer", scopeKind: "component", scopeID: d2.ID}})
 	if err := json.Unmarshal(c.do(scoped, http.MethodGet, "/notifications", nil, http.StatusOK), &list); err != nil {
 		t.Fatal(err)
 	}

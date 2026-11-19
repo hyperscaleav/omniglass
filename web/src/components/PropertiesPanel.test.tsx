@@ -23,7 +23,7 @@ const seed: EffectiveProperty[] = [
   { property_type_name: "mount.height_cm", property_type_id: "mount.height_cm-id", label: "Mount height", data_type: "int", required: false, is_set: true, from_contract: false, set_value: 210, value: 210, value_id: "v-mount" },
 ];
 
-const owner: Me = { principal: { id: "p", kind: "human" }, permissions: [">"], grants: [] };
+const owner: Me = { user: { id: "p", kind: "person" }, permissions: [">"], grants: [] };
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });

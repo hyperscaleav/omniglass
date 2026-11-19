@@ -5,8 +5,9 @@ refs: [1230, 1287, 1286, 1293, 1295]
 ---
 
 The Helm chart now exposes `server.extraEnv` and `server.envFrom` so operators can set any registry
-variable without editing the chart: `OMNIGLASS_ENCRYPTION_KEY_FILE`, `OMNIGLASS_TRUSTED_PROXIES`,
-and any other configuration the chart does not inline. Both values are passed to the server and the
-init containers (migrate and bootstrap), so all can reach the same registry. The [helm guide](/guides/helm/#server-environment)
-now documents both with examples and names the issue the sentence promised them (#1287). A render test,
-the first `helm template` check in the gate, validates the values appear in the manifests.
+variable without editing the chart: `OMNIGLASS_TRUSTED_PROXIES`, `OMNIGLASS_ENCRYPTION_KEY`, and
+any other configuration the chart does not inline. Both values are passed to the server and the
+init containers (migrate and bootstrap), so all three containers reach the same configuration. The
+[helm guide](/guides/helm/#server-environment) now documents both values with examples, replacing the
+previous guidance that pointed at a file-path variable through `envFrom`. A render test using the
+Helm Go library validates the values appear on all three containers in the manifests.

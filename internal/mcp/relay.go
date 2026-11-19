@@ -21,8 +21,8 @@ const metaKeyClientInfo = "io.modelcontextprotocol/clientInfo"
 // Relay serves MCP over in and out (stdio, for an agent that launches
 // `omniglass mcp` as a local server) by relaying to the server's streamable
 // HTTP endpoint at endpoint with token (#1162). There is one MCP implementation,
-// the server's: the relay connects first, serves exactly the tools the server
-// lists, and forwards each call, with the calling client's declared identity,
+// the server's: the relay connects first, serves exactly the tools and prompts
+// the server lists, and forwards each call, with the calling client's declared identity,
 // so the server dispatches, authorizes and audits it as it does any MCP call.
 // The token is sent only to the endpoint's own origin and never followed across
 // a redirect, and it appears in no error the relay returns.
@@ -60,6 +60,21 @@ func Relay(ctx context.Context, in io.Reader, out io.Writer, endpoint, token, ve
 			}
 			return conn.callTool(ctx, params)
 		})
+	}
+	if info != nil && info.Capabilities != nil && info.Capabilities.Prompts != nil {
+		for prompt, err := range remote.Prompts(ctx, nil) {
+			if err != nil {
+				return fmt.Errorf("omniglass mcp: list the server's prompts: %w", err)
+			}
+			name := prompt.Name
+			local.AddPrompt(prompt, func(ctx context.Context, req *sdk.GetPromptRequest) (*sdk.GetPromptResult, error) {
+				params := &sdk.GetPromptParams{Name: name}
+				if req.Params != nil {
+					params.Arguments = req.Params.Arguments
+				}
+				return conn.getPrompt(ctx, params)
+			})
+		}
 	}
 	err = local.Run(ctx, &sdk.IOTransport{Reader: io.NopCloser(in), Writer: nopWriteCloser{out}})
 	if err != nil && (errors.Is(err, io.EOF) || errors.Is(err, context.Canceled)) {
@@ -107,6 +122,21 @@ func (c *remoteConn) callTool(ctx context.Context, params *sdk.CallToolParams) (
 	default:
 		return nil, err
 	}
+}
+
+// getPrompt forwards a prompt get. A get changes nothing, so it is retried once
+// over a fresh session after either a lost session or a closed connection.
+func (c *remoteConn) getPrompt(ctx context.Context, params *sdk.GetPromptParams) (*sdk.GetPromptResult, error) {
+	cs := c.session()
+	res, err := cs.GetPrompt(ctx, params)
+	if err != nil && (errors.Is(err, sdk.ErrSessionMissing) || errors.Is(err, sdk.ErrConnectionClosed)) {
+		fresh, derr := c.renew(ctx, cs)
+		if derr != nil {
+			return nil, derr
+		}
+		return fresh.GetPrompt(ctx, params)
+	}
+	return res, err
 }
 
 // renew replaces stale with a fresh session, unless another call already did.

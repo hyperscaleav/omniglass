@@ -12,6 +12,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/hyperscaleav/omniglass/internal/seed"
+	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 	"github.com/hyperscaleav/omniglass/internal/template"
 )
 
@@ -67,7 +68,7 @@ func TestRealBrandMatcher(t *testing.T) {
 // vocabulary for simulated systems (#914): the platform's. A simulated system
 // is built to a standard from the template catalog, so the catalog embeds no
 // room archetype (systems/) or fleet manifest (fleets/) of its own, and no
-// file names a role or system type the platform's standards and system types
+// file names a slot or system type the platform's standards and system types
 // do not.
 func TestCatalogCarriesNoLabSystemVocabulary(t *testing.T) {
 	for _, dir := range []string{"systems", "fleets"} {
@@ -83,7 +84,7 @@ func TestCatalogCarriesNoLabSystemVocabulary(t *testing.T) {
 	std := template.Shipped()
 	for _, tpl := range std.List(template.KindStandard) {
 		known[tpl.Name] = true
-		for _, r := range tpl.Standard.Roles {
+		for _, r := range tpl.Standard.Slots {
 			known[r.Name] = true
 		}
 	}
@@ -103,7 +104,7 @@ func TestCatalogCarriesNoLabSystemVocabulary(t *testing.T) {
 		}
 		for _, name := range systemVocabulary(doc) {
 			if !known[name] {
-				t.Errorf("%s names the role or system type %q, which is no standard role or system type of the platform", p, name)
+				t.Errorf("%s names the slot or system type %q, which is no standard slot or system type of the platform", p, name)
 			}
 		}
 		return nil
@@ -113,14 +114,14 @@ func TestCatalogCarriesNoLabSystemVocabulary(t *testing.T) {
 	}
 }
 
-// systemVocabulary is every value a decoded YAML tree gives a role or
+// systemVocabulary is every value a decoded YAML tree gives a slot or
 // system_type key.
 func systemVocabulary(n any) []string {
 	var out []string
 	switch v := n.(type) {
 	case map[string]any:
 		for k, c := range v {
-			if s, ok := c.(string); ok && (k == "role" || k == "system_type") {
+			if s, ok := c.(string); ok && (k == "slot" || k == "system_type") {
 				out = append(out, s)
 				continue
 			}
@@ -134,9 +135,9 @@ func systemVocabulary(n any) []string {
 	return out
 }
 
-func TestSystemVocabularyFindsRolesAndTypes(t *testing.T) {
+func TestSystemVocabularyFindsSlotsAndTypes(t *testing.T) {
 	var doc any
-	src := "devices:\n  - role: video-bar\n  - nested: {system_type: Boardroom}\n  - name: kestrel\n"
+	src := "devices:\n  - slot: video-bar\n  - nested: {system_type: Boardroom}\n  - name: kestrel\n"
 	if err := yaml.Unmarshal([]byte(src), &doc); err != nil {
 		t.Fatal(err)
 	}
@@ -146,5 +147,37 @@ func TestSystemVocabularyFindsRolesAndTypes(t *testing.T) {
 	}
 	if len(got) != 2 || !got["video-bar"] || !got["Boardroom"] {
 		t.Errorf("systemVocabulary = %v, want video-bar and Boardroom", got)
+	}
+}
+
+// The lab shows one UCC fan-out shape (#1390): the account-wide
+// conduit. The per-room ucc-service profile, and the coverage.yaml mention of
+// it, are retired with the instances that used it.
+func TestPerRoomUCCServiceProfileIsRetired(t *testing.T) {
+	store, err := profile.LoadStoreFS(FS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := store.Devices["ucc-service"]; ok {
+		t.Error("the ucc-service device profile still loads: the lab's one UCC shape is the account-wide conduit (#1390)")
+	}
+	if _, _, ok := store.ForProduct("ucc-service"); ok {
+		t.Error("a simulator profile still serves the ucc-service product (#1390)")
+	}
+	ucc := 0
+	for name := range store.Devices {
+		if strings.HasPrefix(name, "ucc-") {
+			ucc++
+		}
+	}
+	if ucc != 1 {
+		t.Errorf("%d ucc device profiles load, want the one account-wide conduit", ucc)
+	}
+	raw, err := fs.ReadFile(FS, "coverage.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(raw, []byte("ucc-service")) {
+		t.Error("coverage.yaml still names ucc-service (#1390)")
 	}
 }

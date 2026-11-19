@@ -65,11 +65,11 @@ func newHealthFixture(t *testing.T) *healthFixture {
 		t.Fatalf("create system: %v", err)
 	}
 	// One table mic, quorum 1, an impaired one degrades its system.
-	if _, err := gw.SetSystemRole(ctx, "", "standard", "health-huddle", storage.SystemRoleSpec{
+	if _, err := gw.SetSystemSlot(ctx, "", "standard", "health-huddle", storage.SystemSlotSpec{
 		Name: "table-mic", Label: "Table microphone", Quorum: 1,
 		AcceptedTypes: []string{"video-bar"}, Impact: "degraded",
 	}); err != nil {
-		t.Fatalf("declare role: %v", err)
+		t.Fatalf("declare slot: %v", err)
 	}
 
 	// A minted video-bar product satisfies the accepted type; tests that need
@@ -78,7 +78,7 @@ func newHealthFixture(t *testing.T) *healthFixture {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1", ProductName: &f.bar.Name}, f.all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if err := gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all, f.all, f.all, f.all); err != nil {
+	if err := gw.AssignSlot(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all, f.all, f.all, f.all); err != nil {
 		t.Fatalf("assign: %v", err)
 	}
 	return f
@@ -164,10 +164,10 @@ func TestHealthTransitionsThroughTheChain(t *testing.T) {
 	f := newHealthFixture(t)
 	ctx := context.Background()
 
-	// Baseline. Staffing the role already recorded a healthy start for everything
+	// Baseline. Staffing the slot already recorded a healthy start for everything
 	// in the chain, so the assertions below are on the DELTA an alarm causes.
 	// The component's own arc reads the alarm severity directly (outage, once
-	// the deciding alarm is critical); everything above it reads the role's
+	// the deciding alarm is critical); everything above it reads the slot's
 	// declared impact (degraded), a different axis entirely.
 	type owner struct {
 		kind, id, downWant string
@@ -185,7 +185,7 @@ func TestHealthTransitionsThroughTheChain(t *testing.T) {
 		before[o] = n
 	}
 
-	// The high alarm takes bar-1 down, its only occupant, so the role drops
+	// The high alarm takes bar-1 down, its only occupant, so the slot drops
 	// below quorum.
 	alarm, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
 		Severity: "high", Message: "mic array not responding",
@@ -206,7 +206,7 @@ func TestHealthTransitionsThroughTheChain(t *testing.T) {
 	}
 
 	// A SECOND, lesser alarm that changes nothing: the component is already
-	// outage from the first, worse wins so it stays outage, and the role is
+	// outage from the first, worse wins so it stays outage, and the slot is
 	// already below quorum, so no verdict in the chain moves. Nothing may be
 	// written. This is the property the whole recording design exists for.
 	second, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
@@ -257,7 +257,7 @@ func TestHealthTransitionsThroughTheChain(t *testing.T) {
 }
 
 // TestHealthReportNamesTheCause is the reconciliation UX in one assertion: a
-// degraded system must say WHICH role is impaired, WHICH assigned component is
+// degraded system must say WHICH slot is impaired, WHICH assigned component is
 // down, and WHICH alarm took it down. A verdict an operator cannot act on is not
 // worth recording.
 func TestHealthReportNamesTheCause(t *testing.T) {
@@ -277,38 +277,38 @@ func TestHealthReportNamesTheCause(t *testing.T) {
 		t.Fatalf("system health: %v", err)
 	}
 	if rep.Verdict != "degraded" {
-		t.Fatalf("system verdict = %q, want degraded (the role's impact, not the alarm's severity)", rep.Verdict)
+		t.Fatalf("system verdict = %q, want degraded (the slot's impact, not the alarm's severity)", rep.Verdict)
 	}
-	if len(rep.Roles) != 1 {
-		t.Fatalf("roles = %+v, want the one table-mic", rep.Roles)
+	if len(rep.Slots) != 1 {
+		t.Fatalf("slots = %+v, want the one table-mic", rep.Slots)
 	}
-	role := rep.Roles[0]
-	if role.Name != "table-mic" || !role.Impaired || role.Satisfying != 0 || role.Quorum != 1 {
-		t.Fatalf("role = %+v, want table-mic impaired with 0 of 1 satisfying", role)
+	slot := rep.Slots[0]
+	if slot.Name != "table-mic" || !slot.Impaired || slot.Satisfying != 0 || slot.Quorum != 1 {
+		t.Fatalf("slot = %+v, want table-mic impaired with 0 of 1 satisfying", slot)
 	}
-	if role.Impact != "degraded" {
-		t.Errorf("role impact = %q, want degraded", role.Impact)
+	if slot.Impact != "degraded" {
+		t.Errorf("slot impact = %q, want degraded", slot.Impact)
 	}
-	if !hasAll(role.Down, "bar-1") || len(role.Down) != 1 {
-		t.Errorf("down = %v, want exactly the assigned component the alarm took down (bar-1)", role.Down)
+	if !hasAll(slot.Down, "bar-1") || len(slot.Down) != 1 {
+		t.Errorf("down = %v, want exactly the assigned component the alarm took down (bar-1)", slot.Down)
 	}
-	if len(role.Alarms) != 1 || role.Alarms[0].ID != alarm.ID {
-		t.Fatalf("alarms = %+v, want the one that caused it (%s)", role.Alarms, alarm.ID)
+	if len(slot.Alarms) != 1 || slot.Alarms[0].ID != alarm.ID {
+		t.Fatalf("alarms = %+v, want the one that caused it (%s)", slot.Alarms, alarm.ID)
 	}
-	if role.Alarms[0].Message != "mic array not responding" {
-		t.Errorf("alarm message = %q, want the operator's own words back", role.Alarms[0].Message)
+	if slot.Alarms[0].Message != "mic array not responding" {
+		t.Errorf("alarm message = %q, want the operator's own words back", slot.Alarms[0].Message)
 	}
 	// The transitions are the edges, oldest first, and the series tells the whole
 	// story of the fixture: healthy the moment the system was created (its standard
-	// wanted nothing yet), degraded when the role was declared with nobody filling
+	// wanted nothing yet), degraded when the slot was declared with nobody filling
 	// it, healthy once the bar was assigned, degraded again now. Four writes, four
 	// edges, no samples in between.
 	if got := verdictSeq(rep.Transitions); !sameSeq(got, []string{"healthy", "incomplete", "healthy", "degraded"}) {
-		t.Fatalf("transitions = %v, want healthy (created), incomplete (role declared unstaffed), healthy (staffed), degraded (alarm)", got)
+		t.Fatalf("transitions = %v, want healthy (created), incomplete (slot declared unstaffed), healthy (staffed), degraded (alarm)", got)
 	}
 
 	// The location report is the drill-down: it names the system at fault rather
-	// than repeating the role detail, which the system read already answers.
+	// than repeating the slot detail, which the system read already answers.
 	loc, err := f.gw.LocationHealth(ctx, "hq", 0, f.all)
 	if err != nil {
 		t.Fatalf("location health: %v", err)
@@ -322,7 +322,7 @@ func TestHealthReportNamesTheCause(t *testing.T) {
 }
 
 // TestHealthImpactAndQuorum proves the two declaration-side levers actually reach
-// the verdict: a role whose impact is outage escalates its system past degraded,
+// the verdict: a slot whose impact is outage escalates its system past degraded,
 // and one whose impact is none never escalates it at all. Both are recomputed at
 // the declaration write, so changing impact alone moves recorded health.
 func TestHealthImpactAndQuorum(t *testing.T) {
@@ -339,13 +339,13 @@ func TestHealthImpactAndQuorum(t *testing.T) {
 		t.Fatalf("system = %q, want degraded", v)
 	}
 
-	// Re-declaring the role with impact outage escalates the same broken component:
+	// Re-declaring the slot with impact outage escalates the same broken component:
 	// the slot it was filling is what decides, not the component.
-	if _, err := f.gw.SetSystemRole(ctx, "", "standard", "health-huddle", storage.SystemRoleSpec{
+	if _, err := f.gw.SetSystemSlot(ctx, "", "standard", "health-huddle", storage.SystemSlotSpec{
 		Name: "table-mic", Label: "Table microphone", Quorum: 1,
 		AcceptedTypes: []string{"video-bar"}, Impact: "outage",
 	}); err != nil {
-		t.Fatalf("re-declare role as outage: %v", err)
+		t.Fatalf("re-declare slot as outage: %v", err)
 	}
 	if _, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "outage" {
 		t.Fatalf("system after impact=outage = %q, want outage", v)
@@ -354,13 +354,13 @@ func TestHealthImpactAndQuorum(t *testing.T) {
 		t.Errorf("location after impact=outage = %q, want outage (worst-wins climbs)", v)
 	}
 
-	// impact none: the role is still impaired, but its failure is declared not to
+	// impact none: the slot is still impaired, but its failure is declared not to
 	// matter, so the system reads healthy again.
-	if _, err := f.gw.SetSystemRole(ctx, "", "standard", "health-huddle", storage.SystemRoleSpec{
+	if _, err := f.gw.SetSystemSlot(ctx, "", "standard", "health-huddle", storage.SystemSlotSpec{
 		Name: "table-mic", Label: "Table microphone", Quorum: 1,
 		AcceptedTypes: []string{"video-bar"}, Impact: "none",
 	}); err != nil {
-		t.Fatalf("re-declare role as none: %v", err)
+		t.Fatalf("re-declare slot as none: %v", err)
 	}
 	if _, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "healthy" {
 		t.Fatalf("system after impact=none = %q, want healthy", v)
@@ -368,19 +368,19 @@ func TestHealthImpactAndQuorum(t *testing.T) {
 	// The component itself is still alarmed: impact governs the system, never the
 	// component's own condition.
 	if _, v := f.recorded(t, ctx, "component", "bar-1"); v != "outage" {
-		t.Errorf("component = %q, want outage regardless of the role's impact", v)
+		t.Errorf("component = %q, want outage regardless of the slot's impact", v)
 	}
 
 	// An unknown impact is a named refusal, not a constraint violation.
-	if _, err := f.gw.SetSystemRole(ctx, "", "standard", "health-huddle", storage.SystemRoleSpec{
+	if _, err := f.gw.SetSystemSlot(ctx, "", "standard", "health-huddle", storage.SystemSlotSpec{
 		Name: "table-mic", Quorum: 1, Impact: "catastrophic",
-	}); !errors.Is(err, storage.ErrRoleImpact) {
-		t.Errorf("bad impact: err = %v, want ErrRoleImpact", err)
+	}); !errors.Is(err, storage.ErrSlotImpact) {
+		t.Errorf("bad impact: err = %v, want ErrSlotImpact", err)
 	}
 }
 
 // TestHealthMovesOnUnassign proves the trigger set covers the writes that REMOVE
-// a link. Unassigning the last satisfying component impairs the role, and the
+// a link. Unassigning the last satisfying component impairs the slot, and the
 // assignment row is already gone by then, so a recompute that walked the
 // component's assignments would silently miss the system it just left.
 func TestHealthMovesOnUnassign(t *testing.T) {
@@ -391,14 +391,14 @@ func TestHealthMovesOnUnassign(t *testing.T) {
 	if _, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "healthy" {
 		t.Fatalf("baseline system = %q, want healthy", v)
 	}
-	if err := f.gw.UnassignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all, f.all, f.all, f.all); err != nil {
+	if err := f.gw.UnassignSlot(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all, f.all, f.all, f.all); err != nil {
 		t.Fatalf("unassign: %v", err)
 	}
 	if _, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "incomplete" {
 		t.Fatalf("system after unassigning the only component = %q, want incomplete (unstaffed, not broken)", v)
 	}
 	// Staffing it again recovers, which is the same trigger in the other direction.
-	if err := f.gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all, f.all, f.all, f.all); err != nil {
+	if err := f.gw.AssignSlot(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all, f.all, f.all, f.all); err != nil {
 		t.Fatalf("re-assign: %v", err)
 	}
 	if _, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "healthy" {
@@ -473,55 +473,55 @@ func TestAlarmListingAndRefusals(t *testing.T) {
 	}
 }
 
-// pureRoles projects a report's role rows back onto the pure rollup's input,
+// pureSlots projects a report's slot rows back onto the pure rollup's input,
 // synthesizing one satisfying component for each the report counts as satisfying.
 // It is how the consistency assertions below judge the served verdict with the
 // same function the recompute uses, against the evidence the report itself shows.
-func pureRoles(rows []storage.HealthRole) []health.Role {
-	out := make([]health.Role, 0, len(rows))
+func pureSlots(rows []storage.HealthSlot) []health.Slot {
+	out := make([]health.Slot, 0, len(rows))
 	for _, r := range rows {
-		role := health.Role{Name: r.Name, Quorum: r.Quorum, Impact: r.Impact}
+		slot := health.Slot{Name: r.Name, Quorum: r.Quorum, Impact: r.Impact}
 		for i := 0; i < r.Satisfying; i++ {
-			role.Assigned = append(role.Assigned, health.Component{
+			slot.Assigned = append(slot.Assigned, health.Component{
 				Name: fmt.Sprintf("%s-%d", r.Name, i), Verdict: health.Healthy,
 			})
 		}
-		out = append(out, role)
+		out = append(out, slot)
 	}
 	return out
 }
 
 // mustAgree is the invariant the report owes an operator: the headline verdict and
 // the evidence printed beside it must be the same judgement. A report that says
-// healthy next to an impaired outage role is worse than no report, because it is
+// healthy next to an impaired outage slot is worse than no report, because it is
 // believed.
 func mustAgree(t *testing.T, rep *storage.HealthReport) {
 	t.Helper()
-	want := health.SystemVerdict(pureRoles(rep.Roles)).String()
+	want := health.SystemVerdict(pureSlots(rep.Slots)).String()
 	if rep.Verdict != want {
-		t.Fatalf("verdict %q contradicts its own roles (which roll up to %q): %+v", rep.Verdict, want, rep.Roles)
+		t.Fatalf("verdict %q contradicts its own slots (which roll up to %q): %+v", rep.Verdict, want, rep.Slots)
 	}
 }
 
 // TestHealthReportOfAFreshSystem is the regression. A system created against a
-// standard that already declares roles inherits them the instant it exists, and
+// standard that already declares slots inherits them the instant it exists, and
 // nobody is assigned, so it is broken before anyone touches it. Reading it must
-// say so, and must not say healthy beside the impaired role it is printing.
+// say so, and must not say healthy beside the impaired slot it is printing.
 func TestHealthReportOfAFreshSystem(t *testing.T) {
 	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 
-	// The standard and its role exist BEFORE the system does, which is the ordering
+	// The standard and its slot exist BEFORE the system does, which is the ordering
 	// that used to leave nothing recorded for the system at read time.
 	if err := f.gw.UpsertStandard(ctx, storage.Standard{Name: "health-podium", Label: "Health Podium"}); err != nil {
 		t.Fatalf("create standard: %v", err)
 	}
-	if _, err := f.gw.SetSystemRole(ctx, "", "standard", "health-podium", storage.SystemRoleSpec{
+	if _, err := f.gw.SetSystemSlot(ctx, "", "standard", "health-podium", storage.SystemSlotSpec{
 		Name: "mic", Label: "Microphone", Quorum: 1,
 		AcceptedTypes: []string{"video-bar"}, Impact: "outage",
 	}); err != nil {
-		t.Fatalf("declare role: %v", err)
+		t.Fatalf("declare slot: %v", err)
 	}
 	std, room := "health-podium", "hq-r1"
 	if _, err := f.gw.CreateSystem(ctx, "", storage.SystemSpec{
@@ -534,11 +534,11 @@ func TestHealthReportOfAFreshSystem(t *testing.T) {
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}
-	if len(rep.Roles) != 1 || !rep.Roles[0].Impaired || rep.Roles[0].Impact != "outage" {
-		t.Fatalf("roles = %+v, want the one inherited mic role, impaired at impact outage", rep.Roles)
+	if len(rep.Slots) != 1 || !rep.Slots[0].Impaired || rep.Slots[0].Impact != "outage" {
+		t.Fatalf("slots = %+v, want the one inherited mic slot, impaired at impact outage", rep.Slots)
 	}
 	if rep.Verdict != "incomplete" {
-		t.Fatalf("verdict = %q, want incomplete: an unstaffed outage-impact role is not healthy, and not broken either (#631)", rep.Verdict)
+		t.Fatalf("verdict = %q, want incomplete: an unstaffed outage-impact slot is not healthy, and not broken either (#631)", rep.Verdict)
 	}
 	mustAgree(t, rep)
 
@@ -597,7 +597,7 @@ func TestHealthSurvivesARename(t *testing.T) {
 }
 
 // TestHealthMovesOnStandardChange proves the standard swap is a trigger: it
-// replaces the whole inherited role set, so the verdict can flip with no alarm and
+// replaces the whole inherited slot set, so the verdict can flip with no alarm and
 // no assignment involved.
 func TestHealthMovesOnStandardChange(t *testing.T) {
 	t.Parallel()
@@ -607,10 +607,10 @@ func TestHealthMovesOnStandardChange(t *testing.T) {
 	if err := f.gw.UpsertStandard(ctx, storage.Standard{Name: "health-podium", Label: "Health Podium"}); err != nil {
 		t.Fatalf("create standard: %v", err)
 	}
-	if _, err := f.gw.SetSystemRole(ctx, "", "standard", "health-podium", storage.SystemRoleSpec{
+	if _, err := f.gw.SetSystemSlot(ctx, "", "standard", "health-podium", storage.SystemSlotSpec{
 		Name: "mic", Quorum: 1, AcceptedTypes: []string{"video-bar"}, Impact: "outage",
 	}); err != nil {
-		t.Fatalf("declare role: %v", err)
+		t.Fatalf("declare slot: %v", err)
 	}
 	// A second standard that claims nothing at all: conforming to it is what makes
 	// the system healthy again.
@@ -643,8 +643,8 @@ func TestHealthMovesOnStandardChange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}
-	if len(rep.Roles) != 0 {
-		t.Fatalf("roles = %+v, want none: the old standard's roles left with it", rep.Roles)
+	if len(rep.Slots) != 0 {
+		t.Fatalf("slots = %+v, want none: the old standard's slots left with it", rep.Slots)
 	}
 	mustAgree(t, rep)
 
@@ -661,8 +661,8 @@ func TestHealthMovesOnStandardChange(t *testing.T) {
 
 // TestHealthIgnoresProductChange proves a product swap is NOT a health trigger
 // any more (#626): a component's own verdict is purely its active alarms, so
-// reclassifying it, even to a type no role would accept, moves nothing already
-// recorded. The typed-slot guard is enforced at the NEXT AssignRole, not
+// reclassifying it, even to a type no slot would accept, moves nothing already
+// recorded. The typed-slot guard is enforced at the NEXT AssignSlot, not
 // continuously against an existing assignment.
 func TestHealthIgnoresProductChange(t *testing.T) {
 	t.Parallel()
@@ -687,8 +687,8 @@ func TestHealthIgnoresProductChange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}
-	if len(rep.Roles) != 1 || rep.Roles[0].Impaired || rep.Roles[0].Satisfying != 1 {
-		t.Fatalf("role = %+v, want table-mic still satisfied by its unchanged assignment", rep.Roles)
+	if len(rep.Slots) != 1 || rep.Slots[0].Impaired || rep.Slots[0].Satisfying != 1 {
+		t.Fatalf("slot = %+v, want table-mic still satisfied by its unchanged assignment", rep.Slots)
 	}
 	mustAgree(t, rep)
 
@@ -806,7 +806,7 @@ func TestHealthMovesOnLocationMove(t *testing.T) {
 	}, f.all, all); err != nil {
 		t.Fatalf("create anchor system: %v", err)
 	}
-	// Conforming to the fixture's standard with nobody staffing its role is
+	// Conforming to the fixture's standard with nobody staffing its slot is
 	// what makes this system incomplete, with no alarm needed.
 	std, moverRoom := "health-huddle", "mover-room"
 	if _, err := f.gw.CreateSystem(ctx, "", storage.SystemSpec{
@@ -908,8 +908,8 @@ func TestHealthReadScope(t *testing.T) {
 // TestAlarmImpairsComponentImpairsSlot is the new chain end to end: alarm ->
 // component verdict -> occupied slot -> impact. table-mic wants quorum 1 and
 // bar-1 is its only occupant, so an alarm on bar-1 (naming no capability: the
-// concept is retired) takes the component down, the role loses its only
-// occupant, and the system's verdict moves to the role's declared impact.
+// concept is retired) takes the component down, the slot loses its only
+// occupant, and the system's verdict moves to the slot's declared impact.
 func TestAlarmImpairsComponentImpairsSlot(t *testing.T) {
 	t.Parallel()
 	f := newHealthFixture(t)
@@ -933,18 +933,18 @@ func TestAlarmImpairsComponentImpairsSlot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}
-	if len(rep.Roles) != 1 || rep.Roles[0].Name != "table-mic" {
-		t.Fatalf("roles = %+v, want the one table-mic", rep.Roles)
+	if len(rep.Slots) != 1 || rep.Slots[0].Name != "table-mic" {
+		t.Fatalf("slots = %+v, want the one table-mic", rep.Slots)
 	}
-	role := rep.Roles[0]
-	if role.Satisfying != 0 {
-		t.Errorf("satisfying = %d, want 0: the alarm impairs the component wholesale, not per capability", role.Satisfying)
+	slot := rep.Slots[0]
+	if slot.Satisfying != 0 {
+		t.Errorf("satisfying = %d, want 0: the alarm impairs the component wholesale, not per capability", slot.Satisfying)
 	}
-	if !role.Impaired {
-		t.Errorf("role impaired = %v, want true: quorum 1 with 0 satisfying", role.Impaired)
+	if !slot.Impaired {
+		t.Errorf("slot impaired = %v, want true: quorum 1 with 0 satisfying", slot.Impaired)
 	}
 	if rep.Verdict != "degraded" {
-		t.Fatalf("system verdict = %q, want degraded (the role's declared impact)", rep.Verdict)
+		t.Fatalf("system verdict = %q, want degraded (the slot's declared impact)", rep.Verdict)
 	}
 	if _, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "degraded" {
 		t.Errorf("recorded system = %q, want degraded", v)
@@ -954,7 +954,7 @@ func TestAlarmImpairsComponentImpairsSlot(t *testing.T) {
 // TestDegradedOccupantStillSatisfies pins the boundary #626 and the epic both
 // state verbatim: "an occupant satisfies its slot when its component verdict
 // is not down". Down means outage; a merely degraded component (an info or
-// warning alarm) still occupies the slot it fills, so the role stays
+// warning alarm) still occupies the slot it fills, so the slot stays
 // satisfied and the system's verdict does not move.
 func TestDegradedOccupantStillSatisfies(t *testing.T) {
 	t.Parallel()
@@ -974,31 +974,31 @@ func TestDegradedOccupantStillSatisfies(t *testing.T) {
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}
-	if len(rep.Roles) != 1 {
-		t.Fatalf("roles = %+v, want the one table-mic", rep.Roles)
+	if len(rep.Slots) != 1 {
+		t.Fatalf("slots = %+v, want the one table-mic", rep.Slots)
 	}
-	role := rep.Roles[0]
-	if role.Satisfying != 1 {
-		t.Errorf("satisfying = %d, want 1: a degraded occupant still occupies its slot", role.Satisfying)
+	slot := rep.Slots[0]
+	if slot.Satisfying != 1 {
+		t.Errorf("satisfying = %d, want 1: a degraded occupant still occupies its slot", slot.Satisfying)
 	}
-	if role.Impaired {
-		t.Errorf("role impaired = %v, want false: quorum 1 is still met by the degraded occupant", role.Impaired)
+	if slot.Impaired {
+		t.Errorf("slot impaired = %v, want false: quorum 1 is still met by the degraded occupant", slot.Impaired)
 	}
 	if rep.Verdict != "healthy" {
-		t.Fatalf("system verdict = %q, want healthy: the role never lost its occupant", rep.Verdict)
+		t.Fatalf("system verdict = %q, want healthy: the slot never lost its occupant", rep.Verdict)
 	}
 	// A component's own verdict is recorded regardless of whether it fills a
-	// role, but nothing about the system's own recorded arc should move: no
-	// role went from satisfied to impaired, so no new transition is due.
+	// slot, but nothing about the system's own recorded arc should move: no
+	// slot went from satisfied to impaired, so no new transition is due.
 	if _, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "healthy" {
 		t.Errorf("recorded system = %q, want healthy: nothing may be written for a no-op", v)
 	}
 }
 
-// TestAlarmOnSpareDoesNotShort proves the other half of the arithmetic: a role
+// TestAlarmOnSpareDoesNotShort proves the other half of the arithmetic: a slot
 // staffed past its quorum absorbs one down occupant without moving. Two
-// components fill a quorum-1 role; an alarm on one of them takes it down, but
-// the other still occupies the slot, so the role, and the system above it,
+// components fill a quorum-1 slot; an alarm on one of them takes it down, but
+// the other still occupies the slot, so the slot, and the system above it,
 // hold healthy.
 func TestAlarmOnSpareDoesNotShort(t *testing.T) {
 	t.Parallel()
@@ -1008,7 +1008,7 @@ func TestAlarmOnSpareDoesNotShort(t *testing.T) {
 	if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-2", ProductName: &f.bar.Name}, f.all, all, all, all); err != nil {
 		t.Fatalf("create second component: %v", err)
 	}
-	if err := f.gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "bar-2", f.all, f.all, f.all, f.all); err != nil {
+	if err := f.gw.AssignSlot(ctx, "", "hq-huddle", "table-mic", "bar-2", f.all, f.all, f.all, f.all); err != nil {
 		t.Fatalf("assign spare: %v", err)
 	}
 	if _, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "healthy" {
@@ -1028,12 +1028,12 @@ func TestAlarmOnSpareDoesNotShort(t *testing.T) {
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}
-	role := rep.Roles[0]
-	if role.Satisfying != 1 {
-		t.Errorf("satisfying = %d, want 1: bar-2 still occupies the slot", role.Satisfying)
+	slot := rep.Slots[0]
+	if slot.Satisfying != 1 {
+		t.Errorf("satisfying = %d, want 1: bar-2 still occupies the slot", slot.Satisfying)
 	}
-	if role.Impaired {
-		t.Errorf("role impaired = %v, want false: quorum 1 is still met by the spare", role.Impaired)
+	if slot.Impaired {
+		t.Errorf("slot impaired = %v, want false: quorum 1 is still met by the spare", slot.Impaired)
 	}
 	if rep.Verdict != "healthy" {
 		t.Fatalf("system verdict = %q, want healthy: the down component is not the only occupant", rep.Verdict)
@@ -1044,9 +1044,9 @@ func TestAlarmOnSpareDoesNotShort(t *testing.T) {
 }
 
 // TestShortAndUnderstaffedDivergeOnCriticalAlarm pins the vocabulary split
-// (#626): the roles read's understaffed (EffectiveRole.Understaffed, quorum
+// (#626): the slots read's understaffed (EffectiveSlot.Understaffed, quorum
 // minus assignment rows) is health-blind assignment arithmetic, while the
-// health read's short (HealthRole.Short, quorum minus components whose own
+// health read's short (HealthSlot.Short, quorum minus components whose own
 // verdict is not outage) is occupancy-aware. A warning alarm degrades the
 // assignee but it still occupies its slot (Occupies is Verdict != Outage),
 // so the two figures agree; a critical alarm takes the assignee out of its
@@ -1065,24 +1065,24 @@ func TestShortAndUnderstaffedDivergeOnCriticalAlarm(t *testing.T) {
 			t.Fatalf("raise alarm: %v", err)
 		}
 
-		roles, err := f.gw.EffectiveRoles(ctx, "hq-huddle", f.all)
+		slots, err := f.gw.EffectiveSlots(ctx, "hq-huddle", f.all)
 		if err != nil {
-			t.Fatalf("effective roles: %v", err)
+			t.Fatalf("effective slots: %v", err)
 		}
-		if len(roles) != 1 || roles[0].Understaffed() != 0 {
-			t.Fatalf("understaffed = %+v, want 0: the assignment row is untouched by a warning", roles)
+		if len(slots) != 1 || slots[0].Understaffed() != 0 {
+			t.Fatalf("understaffed = %+v, want 0: the assignment row is untouched by a warning", slots)
 		}
 
 		rep, err := f.gw.SystemHealth(ctx, "hq-huddle", 0, f.all)
 		if err != nil {
 			t.Fatalf("system health: %v", err)
 		}
-		role := rep.Roles[0]
-		if role.Short != 0 || role.Impaired {
-			t.Fatalf("short = %d impaired = %v, want 0/false: a degraded component still occupies its slot", role.Short, role.Impaired)
+		slot := rep.Slots[0]
+		if slot.Short != 0 || slot.Impaired {
+			t.Fatalf("short = %d impaired = %v, want 0/false: a degraded component still occupies its slot", slot.Short, slot.Impaired)
 		}
-		if roles[0].Understaffed() != role.Short {
-			t.Fatalf("understaffed (%d) and short (%d) must agree when nothing has stopped occupying its slot", roles[0].Understaffed(), role.Short)
+		if slots[0].Understaffed() != slot.Short {
+			t.Fatalf("understaffed (%d) and short (%d) must agree when nothing has stopped occupying its slot", slots[0].Understaffed(), slot.Short)
 		}
 	})
 
@@ -1096,28 +1096,28 @@ func TestShortAndUnderstaffedDivergeOnCriticalAlarm(t *testing.T) {
 			t.Fatalf("raise alarm: %v", err)
 		}
 
-		roles, err := f.gw.EffectiveRoles(ctx, "hq-huddle", f.all)
+		slots, err := f.gw.EffectiveSlots(ctx, "hq-huddle", f.all)
 		if err != nil {
-			t.Fatalf("effective roles: %v", err)
+			t.Fatalf("effective slots: %v", err)
 		}
-		if len(roles) != 1 || roles[0].Understaffed() != 0 {
-			t.Fatalf("understaffed = %+v, want 0: the assignment row is untouched, understaffed is health-blind", roles)
+		if len(slots) != 1 || slots[0].Understaffed() != 0 {
+			t.Fatalf("understaffed = %+v, want 0: the assignment row is untouched, understaffed is health-blind", slots)
 		}
 
 		rep, err := f.gw.SystemHealth(ctx, "hq-huddle", 0, f.all)
 		if err != nil {
 			t.Fatalf("system health: %v", err)
 		}
-		role := rep.Roles[0]
-		if role.Short != 1 || !role.Impaired {
-			t.Fatalf("short = %d impaired = %v, want 1/true: bar-1 no longer occupies its slot", role.Short, role.Impaired)
+		slot := rep.Slots[0]
+		if slot.Short != 1 || !slot.Impaired {
+			t.Fatalf("short = %d impaired = %v, want 1/true: bar-1 no longer occupies its slot", slot.Short, slot.Impaired)
 		}
 
-		// Same role, same instant, two answers that are each correct under their
+		// Same slot, same instant, two answers that are each correct under their
 		// own definition: understaffed says the slot is fully assigned, short
 		// says it is not actually staffed. The divergence itself is the point.
-		if roles[0].Understaffed() == role.Short {
-			t.Fatalf("understaffed (%d) and short (%d) must diverge on a critical alarm", roles[0].Understaffed(), role.Short)
+		if slots[0].Understaffed() == slot.Short {
+			t.Fatalf("understaffed (%d) and short (%d) must diverge on a critical alarm", slots[0].Understaffed(), slot.Short)
 		}
 	})
 }

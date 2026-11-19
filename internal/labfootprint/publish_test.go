@@ -66,7 +66,7 @@ func TestScaleDeliveryReadsARefusedPushAsRefused(t *testing.T) {
 	run.Delivery.Publish = PublishCount{Calls: 4, Refused: 1}
 	rep := SummarizeScale(run)
 	if len(rep.Delivery) != 4 {
-		t.Fatalf("delivery rows = %+v, want the node lane's two, then push publish and push ingest", rep.Delivery)
+		t.Fatalf("delivery rows = %+v, want the outpost lane's two, then push publish and push ingest", rep.Delivery)
 	}
 	pub, ing := rep.Delivery[2], rep.Delivery[3]
 	if pub.Lane != LanePush || pub.Hop != delivery.Publish || pub.In != 4 || pub.Out != 3 || pub.Loss == nil || *pub.Loss != 0.25 ||
@@ -77,12 +77,12 @@ func TestScaleDeliveryReadsARefusedPushAsRefused(t *testing.T) {
 		t.Errorf("push ingest row = %+v, want 0 loss, nothing missing", ing)
 	}
 	if got := rep.DeliveryEndToEnd[delivery.Metric]; got != 0 {
-		t.Errorf("node end to end metric = %v, want 0: the push lane's publish row is its own", got)
+		t.Errorf("outpost end to end metric = %v, want 0: the push lane's publish row is its own", got)
 	}
 	table := rep.Table()
 	for _, want := range []string{
-		"pushes      push  publish  4        3        0.25     -      refused-turn",
-		"publish     push  " + publishLabel,
+		"pushes      push     publish  4        3        0.25     -      refused-turn",
+		"publish     push     " + publishLabel,
 	} {
 		if !strings.Contains(table, want) {
 			t.Errorf("the table has no %q:\n%s", want, table)

@@ -15,7 +15,7 @@ import (
 // messages are text frames, routed by the router a line session uses
 // (ADR-0151). A request is a frame: a line sent verbatim, or a JSON body
 // rendered injection-safe as an http body is. Its reply is picked out of the
-// frames by a shape, as a line's is, or by correlation: the node mints an id
+// frames by a shape, as a line's is, or by correlation: the outpost mints an id
 // into a declared field of the frame, and the answer is the frame carrying
 // that id back, whatever pushes interleave. The upgrade rides the session's
 // scheme or its http login, and its path is the session's upgrade request.
@@ -68,20 +68,20 @@ func (r *Reply) Correlated(frame, id string) (string, *Reply, error) {
 		return "", nil, fmt.Errorf("driver: a correlated frame is a JSON object, and this one is not")
 	}
 	keys := strings.Split(r.Correlate, ".")
-	node := doc
+	outpost := doc
 	for _, k := range keys[:len(keys)-1] {
-		v, present := node[k]
+		v, present := outpost[k]
 		next, ok := v.(map[string]any)
 		switch {
 		case !present:
 			next = map[string]any{}
-			node[k] = next
+			outpost[k] = next
 		case !ok:
 			return "", nil, fmt.Errorf("driver: a correlated frame's %s is not an object, so %s cannot be written into it", k, r.Correlate)
 		}
-		node = next
+		outpost = next
 	}
-	node[keys[len(keys)-1]] = id
+	outpost[keys[len(keys)-1]] = id
 	out, err := json.Marshal(doc)
 	if err != nil {
 		return "", nil, fmt.Errorf("driver: bind the correlated frame: %v", err)
@@ -100,7 +100,7 @@ func (r Request) Bind() (string, *Reply, error) {
 	return r.Reply.Correlated(frame, MintCorrelation())
 }
 
-// validateFrameRequest refuses a websocket request no node could send: a
+// validateFrameRequest refuses a websocket request no outpost could send: a
 // line or a JSON body, never both and never neither, and none of http's
 // other fields; a reply shape of one kind; a correlation only on a JSON
 // object frame.
@@ -131,8 +131,8 @@ func validateFrameRequest(what string, r Request) error {
 		if !ok {
 			return fmt.Errorf("driver: %s reply correlates by %s, which needs a body that is a JSON object", what, rep.Correlate)
 		}
-		// The path runs through objects (or keys the node creates), and its
-		// last key is the node's to write: a body that sets it would have
+		// The path runs through objects (or keys the outpost creates), and its
+		// last key is the outpost's to write: a body that sets it would have
 		// its value silently replaced.
 		keys := strings.Split(rep.Correlate, ".")
 		for i, k := range keys {
@@ -141,7 +141,7 @@ func validateFrameRequest(what string, r Request) error {
 				break
 			}
 			if i == len(keys)-1 {
-				return fmt.Errorf("driver: %s body sets %s, which the node writes a fresh id into; leave it out", what, rep.Correlate)
+				return fmt.Errorf("driver: %s body sets %s, which the outpost writes a fresh id into; leave it out", what, rep.Correlate)
 			}
 			next, isObj := v.(map[string]any)
 			if !isObj {
@@ -158,7 +158,7 @@ func reservedUpgradeHeader(name string) bool {
 	return slices.Contains(upgradeReserved, strings.ToLower(name))
 }
 
-// validateWebSocketSession refuses a websocket session block no node could
+// validateWebSocketSession refuses a websocket session block no outpost could
 // run: the upgrade a GET with a path, setting none of the headers the
 // upgrade owns; a scheme (basic, bearer, api-key) or an http login, not
 // both and never digest, which answers a challenge per request; no stream,
