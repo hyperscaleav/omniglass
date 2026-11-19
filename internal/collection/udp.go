@@ -191,14 +191,19 @@ func resolveUDPAddr(ctx context.Context, network, target string) (*net.UDPAddr, 
 	if len(ips) == 0 {
 		return nil, &net.DNSError{Err: "no addresses found", Name: host, IsNotFound: true}
 	}
-	addr := ips[0]
+	return net.UDPAddrFromAddrPort(netip.AddrPortFrom(preferIPv4(ips), uint16(port))), nil
+}
+
+// preferIPv4 picks a resolved name's IPv4 address when it has one, else its
+// first. LookupNetIP may answer an IPv4 address in its IPv6-mapped form, which
+// is not Is4 and which a udp4 socket cannot send to, so each is unmapped first.
+func preferIPv4(ips []netip.Addr) netip.Addr {
 	for _, ip := range ips {
-		if ip.Is4() {
-			addr = ip
-			break
+		if ip = ip.Unmap(); ip.Is4() {
+			return ip
 		}
 	}
-	return net.UDPAddrFromAddrPort(netip.AddrPortFrom(addr, uint16(port))), nil
+	return ips[0].Unmap()
 }
 
 // SessionTimeout is the timeout an endpoint's exchange runs under: the
