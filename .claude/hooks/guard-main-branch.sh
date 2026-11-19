@@ -49,11 +49,20 @@ case "$command" in
       printf 'Blocked: push from main is not allowed.\nCreate a feature branch first (see the slice workflow in CLAUDE.md).\n' >&2
       exit 2
     fi
-    # Block any force push that targets main, from any branch. main must be a
-    # whole refspec side (main, +main, HEAD:main, x:refs/heads/main), so a
-    # branch such as feature/main-nav or main-rewrite is not mistaken for it.
-    if echo "$command" | grep -qE '(--force|--force-with-lease|-f($|[[:space:]]))' && \
-       echo "$command" | grep -qE '(^|[[:space:]+:])(refs/heads/)?main($|[[:space:]])'; then
+    # Normalize away shell quoting so "main" and 'main' are caught.
+    command_clean=$(printf '%s' "$command" | tr -d "\"'")
+    # Block force pushes targeting main from any branch.  main must be a whole
+    # refspec side so feature/main-nav or main-rewrite are not mistaken for it.
+    # Form 1: explicit force flag (-f, --force, --force-with-lease) with main as
+    #          a refspec destination.
+    if echo "$command_clean" | grep -qE '(--force|--force-with-lease|-f($|[[:space:]]))' && \
+       echo "$command_clean" | grep -qE '(^|[[:space:]+:])(refs/heads/)?main($|[[:space:]])'; then
+      printf 'Blocked: force push to main is not allowed (see CLAUDE.md).\n' >&2
+      exit 2
+    fi
+    # Form 2: + prefix on the refspec itself (git push origin +main or
+    #          +HEAD:main), which forces without an explicit flag.
+    if echo "$command_clean" | grep -qE '(^|[[:space:]])\+([^[:space:]:]+:)?(refs/heads/)?main($|[[:space:]])'; then
       printf 'Blocked: force push to main is not allowed (see CLAUDE.md).\n' >&2
       exit 2
     fi

@@ -100,9 +100,39 @@ func TestGuardMainBranchHook(t *testing.T) {
 			blocked: true,
 		},
 		{
+			name:    "force via + refspec prefix to main is blocked",
+			branch:  "feat/my-feature",
+			command: "git push origin +main",
+			blocked: true,
+		},
+		{
+			name:    "force via + refspec prefix HEAD:main is blocked",
+			branch:  "feat/my-feature",
+			command: "git push origin +HEAD:main",
+			blocked: true,
+		},
+		{
+			name:    "force push to main with quoted refspec is blocked",
+			branch:  "feat/my-feature",
+			command: `git push -f origin "main"`,
+			blocked: true,
+		},
+		{
+			name:    "force via + prefix with quoted main is blocked",
+			branch:  "feat/my-feature",
+			command: `git push origin +"main"`,
+			blocked: true,
+		},
+		{
 			name:    "force push to a branch named feature/main-nav passes",
 			branch:  "feature/main-nav",
 			command: "git push --force origin feature/main-nav",
+			blocked: false,
+		},
+		{
+			name:    "force via + prefix to feature/main-nav passes",
+			branch:  "feat/my-feature",
+			command: "git push origin +feature/main-nav",
 			blocked: false,
 		},
 		{
