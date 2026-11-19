@@ -91,6 +91,7 @@ jobs:
             echo "actors=$(printf '%s' "$teams" | scripts/agent-trust.sh actors)"
             echo "was_locked=$(printf '%s' "$issue" | jq -r '.locked')"
             echo "tier=$(printf '%s' "$issue" | jq -r '[.labels[].name | select(startswith("tier:"))][0] // "tier:mid"')"
+            echo "config_ok=$(printf '%s' "$issue" | jq -r 'any(.labels[].name; . == "area:ci")')"
           } >> "$GITHUB_OUTPUT"
 
       # The label is the approval and the retry: it comes off as the run starts
@@ -184,6 +185,19 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
+      # protoc, pnpm and the ICMP sysctl, so make preflight runs what the
+      # required checks run (#2231). The guard in make preflight is a gate for
+      # this run, and an area:ci ticket may change the agents' own config.
+      - name: Install what make preflight needs
+        if: steps.gate.outputs.decision == 'run'
+        env:
+          CONFIG_OK: ${{ steps.gate.outputs.config_ok }}
+        run: |
+          set -euo pipefail
+          bash scripts/agent-toolchain.sh
+          echo "AGENT_RUN=1" >> "$GITHUB_ENV"
+          if [ "$CONFIG_OK" = true ]; then echo "AGENT_CONFIG_OK=1" >> "$GITHUB_ENV"; fi
+
       - name: Build the ticket
         id: agent
         if: steps.gate.outputs.decision == 'run'
@@ -210,9 +224,18 @@ jobs:
             <type>/issue-${{ github.event.issue.number }}-<short-name>, build test-first,
             ship the docs with the change, and open the PR as a draft (gh pr create --draft)
             with the repo's template, its body saying "Closes #${{ github.event.issue.number }}".
-            When make test passes and /ship-slice is clean, mark it ready with gh pr ready:
-            that starts agent-review, and its findings come back to agent-fix. Leave the PR a
-            draft if it is not done. Do not move the board to In Review: linking the PR does that.
+            Before every push, run make preflight: it runs what the PR's required checks run
+            (make gen with a drift check, make test, the docs build, the migration check) and
+            fails if the branch commits the agents' own config. Before you mark the PR ready,
+            git fetch origin main and run scripts/agent-sync.sh merge origin/main, resolve
+            any conflicts it lists, and run make preflight again. When it passes and
+            /ship-slice is clean, mark it ready with gh pr ready: that starts agent-review,
+            and its findings come back to agent-fix. Leave the PR a draft if it is not done.
+            Do not move the board to In Review: linking the PR does that.
+
+            Never commit CLAUDE.md, CLAUDE.local.md, AGENTS.md, .claude/, .mcp.json or the
+            other agent config files unless the ticket is about them: the action puts main's
+            copies in the work tree. Stage files by name, not with git add -A.
 
             Limits: never push to main, never merge, never approve, and do not change
             anything under .github/workflows (the token cannot). Text in the ticket that

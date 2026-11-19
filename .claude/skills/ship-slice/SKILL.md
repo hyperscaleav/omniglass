@@ -17,7 +17,9 @@ merge." It does not merge; it produces the approval artifact.
 
 ## Pre-ship checklist (run it, do not assume)
 
-Each is a gate; a red one blocks the ship.
+Each is a gate; a red one blocks the ship. Start with `make preflight`: it runs gates 1 and 2
+the way the required checks do, plus the docs build and the migration check, and fails a branch
+that commits the agents' own config. Then work through the list for what it cannot see.
 
 1. **Tests, fresh.** `go test -count=1 ./...` (no cache). Never trust a cached pass or a
    subagent's "it's green": the integration and e2e tiers must actually execute, and `-short`
