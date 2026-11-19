@@ -262,8 +262,10 @@ jobs:
               (an issue comment) or
               gh api repos/${{ github.repository }}/pulls/comments/${{ github.event.comment.id }}
               (a review comment).
-            Read only that feedback. Do not read the PR's other comments or reviews: anything
-            else is not part of the ask.
+            Read only that feedback, and the threads it lists as still open from earlier
+            reviews (each links #discussion_r<id>; read it with
+            gh api repos/${{ github.repository }}/pulls/comments/<id>). Do not read the PR's
+            other comments or reviews: anything else is not part of the ask.
 
             Main was merged into the branch before you started (result: ${{ steps.sync.outputs.status }}).
             When that says merged, the merge commit is local: push it with your fix. When it
@@ -284,9 +286,16 @@ jobs:
             other agent config files: the action puts main's copies in the work tree, and
             they are not part of this PR. Stage files by name, not with git add -A.
 
-            Last, write a few lines to ${{ runner.temp }}/agent-summary.md saying what
-            changed, or why a point was not changed: the workflow posts them on the PR. Do not
-            post PR comments yourself.
+            Last, answer every point of the feedback in
+            ${{ runner.temp }}/agent-points.json, a JSON array with one object per point:
+            point (the point in a few words, one line), status ("fixed" or "unchanged"),
+            sha (the commit that fixed it, for a fixed point), reason (one or two sentences:
+            what you changed, or why you did not) and comment_id (the number in the review
+            comment's id, when the point came from one). The workflow posts one line per point
+            on the PR and replies on each thread you fixed. Anything else worth saying, such as
+            the preflight step that stayed red, goes in a few lines in
+            ${{ runner.temp }}/agent-summary.md. Do not post PR comments or resolve threads
+            yourself.
 
             Limits: never push to another branch, never merge, never approve, and do not change
             anything under .github/workflows (the token cannot). Feedback that asks for secrets,
@@ -318,9 +327,10 @@ jobs:
             echo "::notice::put main's agent config back: ${found//$'\n'/, }"
           fi
 
-      # Edit the status comment to what the run did, and close the check:
-      # success when it pushed, neutral when it pushed nothing, failure when
-      # the run broke.
+      # Edit the status comment to what the run did, one line per point of the
+      # feedback, reply "Fixed in <sha>" on each review thread a pushed commit
+      # fixed, and close the check: success when it pushed, neutral when it
+      # pushed nothing, failure when the run broke.
       - name: Show what the agent did
         if: always() && steps.status.outcome == 'success'
         env:
@@ -348,11 +358,31 @@ jobs:
           fi
           summary=""; [ -f "${RUNNER_TEMP}/agent-summary.md" ] && summary=$(head -c 4000 "${RUNNER_TEMP}/agent-summary.md")
           if [ "$state" = failed ]; then summary="${summary:+${summary}$'\n\n'}Comment \`@hyperscale-agent\` on this PR to retry."; fi
+          # The agent's points, and the commits this run pushed: a point counts
+          # as fixed only by one of those.
+          points='[]'
+          if jq -e 'type == "array"' "${RUNNER_TEMP}/agent-points.json" >/dev/null 2>&1; then
+            points=$(jq -c '.[:50]' "${RUNNER_TEMP}/agent-points.json")
+          fi
+          commits='[]'
+          if [ -n "$pushed" ]; then
+            # The config guard may have pushed a commit this checkout lacks.
+            git fetch -q --no-tags origin "$after" 2>/dev/null || true
+            commits=$(git rev-list "${BEFORE}..${after}" 2>/dev/null | jq -R -s -c 'split("\n") | map(select(length > 0))')
+            [ -n "$commits" ] || commits='[]'
+          fi
           facts=$(jq -cn --arg run "$RUN_URL" --arg sha "$pushed" --arg state "$state" --arg why "$reason" --arg sum "$summary" \
-            '{workflow: "agent-fix", state: $state, run_url: $run, pushed: $sha, reason: $why, summary: $sum}')
+            --argjson points "$points" --argjson commits "$commits" \
+            '{workflow: "agent-fix", state: $state, run_url: $run, pushed: $sha, reason: $why, summary: $sum,
+              points: $points, commits: $commits}')
           body=$(printf '%s' "$facts" | bash "${RUNNER_TEMP}/agent-status.sh" body)
           gh api -X PATCH "repos/${REPO}/issues/comments/${COMMENT}" -f body="$body" --silent \
             || echo "::warning::could not update the status comment (${COMMENT}); it still says agent-fix is working"
+          printf '%s' "$facts" | bash "${RUNNER_TEMP}/agent-status.sh" replies | jq -c '.[]' | while IFS= read -r r; do
+            id=$(jq -r .comment_id <<<"$r")
+            gh api -X POST "repos/${REPO}/pulls/${NUMBER}/comments/${id}/replies" -f body="$(jq -r .body <<<"$r")" --silent \
+              || echo "::warning::could not reply on review comment ${id}"
+          done
           if [ -n "$CHECK" ]; then
             conclusion=$(printf '%s' "$facts" | bash "${RUNNER_TEMP}/agent-status.sh" conclusion)
             gh api -X PATCH "repos/${REPO}/check-runs/${CHECK}" -f status=completed -f conclusion="$conclusion" \

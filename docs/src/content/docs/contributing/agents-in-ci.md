@@ -92,8 +92,32 @@ which waits for every lens, posts them as one review: a finding on a diff line b
 comment, any other goes in the review's body. One blocking finding from any lens makes it
 request changes (on a PR its own App wrote, GitHub allows only a comment, so the review
 comments and opens with the blocking count), so agent-fix still sees one review per round and the five-round cap still
-counts rounds, not lenses. A lens that fails, times out or runs out of its 80 turns fails the check rather than passing
+counts rounds, not lenses. A lens that fails, times out or runs out of its turns fails the check rather than passing
 without its part; rerunning the failed jobs retries it.
+
+The review is short to read (#2224). Its body opens with one verdict line, `✅ Ship · nothing found`
+or `❌ Changes requested · N blocking · M advisory`, then one strip with each lens's mark, then one
+line per finding that is not on a diff line. Each inline comment opens with its finding's title in
+bold. The failure, the fix and each lens's notes sit in collapsed `<details>` blocks under them.
+
+A re-review starts from what changed. After the first review, a push is reviewed from the head the
+reviewer last reviewed: the PR's own commits since, with what a merge from `main` brought in left
+out. That diff is where the lenses look first, not a fence: they read any code, pull up the whole
+PR diff, and run `go build`, `go vet` and `go test` when a finding turns on what the code does, and
+they raise a finding wherever the new changes cause or expose a problem. A force push that
+rewrites that history, or a last review that left a blocking finding in its body rather than on a
+line, gets a full review instead. The diff under review also picks the lenses and their turns. A diff that touches no code (Go, web, shell, SQL or the workflows) runs the
+`neighbor` lens alone, and the turn limit grows with the diff, from 40 for up to 100 changed lines
+to 120 past 2,000.
+
+Open findings carry forward, and each one is rechecked. Every unresolved thread the reviewer
+opened, outdated ones included, still counts in the next verdict. When any are open, the re-review
+adds a `recheck` lens that goes through them one by one against the PR as it is now and says fixed
+or open for each. The reviewer then replies on each thread (`✅ Verified fixed at <sha>` or
+`❌ Still open at <sha>`, with what it saw) and resolves the fixed ones. A thread stops counting only
+when the recheck lens says fixed and no other lens raised it again, or when a person resolves it,
+so a blocker nobody fixed keeps the check red. A finding a lens raises again on an open thread is
+not posted twice.
 
 The review posts as a second GitHub App, `hyperscale-reviewer`, when one is set up. GitHub lets
 no App request changes on a PR it wrote, and the agents' App writes most PRs here, so without
@@ -114,6 +138,11 @@ too. The agent reads only the comment or review that started it. Write the ask t
 ```text
 @hyperscale-agent the retry in poller.go never backs off; add the backoff and a test for it
 ```
+
+agent-fix answers each point on one line in its status comment, `✅ Fixed in <sha>` or
+`↩️ Not changed`, with its reasons collapsed under them, and replies `✅ Fixed in <sha>` on each
+review thread a commit it pushed fixed. A point counts as fixed only when its commit is one the run
+pushed. It never resolves a thread: the reviewer's recheck does that once it has seen the fix.
 
 When agent-review requests changes, agent-fix answers it automatically, up to five rounds per
 PR. After the fifth the PR parks: it gets the `needs-fred` label and a comment, and waits for a

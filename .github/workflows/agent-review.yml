@@ -15,6 +15,16 @@ name: agent-review
 # Changes-requested review from it starts agent-fix, up to five rounds per PR,
 # then the PR parks with needs-fred.
 #
+# A re-review starts from what changed (#2224): the PR's own commits since the
+# head the reviewer last reviewed, without what a merge from main brought in,
+# with fewer lenses and turns for a small diff. That diff is where the lenses
+# look first, not a fence: they read any code and run Go's checks as they need.
+# Open findings carry forward: a recheck lens judges each unresolved reviewer
+# thread on its own, and a thread stops counting only when it says fixed and no
+# lens raised it again. The reviewer replies on each thread it judged and
+# resolves the fixed ones, so a blocker nobody fixed keeps the check red.
+# scripts/agent-review.sh decides all of it.
+#
 # In the merge queue the check reports too, without a new review: it reads the
 # verdict already given on the queued PR's head, so a required agent-review
 # never holds the queue (#2182).
@@ -32,6 +42,24 @@ on:
 
 permissions:
   contents: read
+
+env:
+  # The PR's review threads, for the reviewer's open findings
+  # (agent-review.sh threads).
+  THREADS_QUERY: >-
+    query($owner: String!, $name: String!, $number: Int!, $endCursor: String) {
+      repository(owner: $owner, name: $name) {
+        pullRequest(number: $number) {
+          reviewThreads(first: 100, after: $endCursor) {
+            pageInfo { hasNextPage endCursor }
+            nodes {
+              id isResolved isOutdated path line startLine originalLine originalStartLine
+              comments(first: 1) { nodes { databaseId url body author { login } } }
+            }
+          }
+        }
+      }
+    }
 
 concurrency:
   group: agent-review-${{ github.event.pull_request.number || github.ref }}
@@ -58,6 +86,9 @@ jobs:
       # A matrix needs one entry even when the lens job is skipped.
       lenses: ${{ steps.lenses.outputs.lenses || '[{"name":"none","task":""}]' }}
       lens_names: ${{ steps.lenses.outputs.names }}
+      review_mode: ${{ steps.lenses.outputs.mode }}
+      review_base: ${{ steps.lenses.outputs.base }}
+      turns: ${{ steps.lenses.outputs.turns }}
     steps:
       - name: Mint the agent App token
         id: app
@@ -120,10 +151,14 @@ jobs:
       # The lenses are dealt by the default branch's script, like the verdict;
       # the catalog they deal out is the PR's, since that is what each lens
       # reads in its own checkout.
+      # The PR's head itself, not the merge commit, with its history, so the
+      # diff to review can be worked out from the last reviewed head.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: steps.what.outputs.mode == 'review'
         with:
+          ref: ${{ steps.what.outputs.head_sha }}
           persist-credentials: false
+          fetch-depth: 0
           path: head
           sparse-checkout: |
             .claude/skills/adversarial-review
@@ -137,28 +172,105 @@ jobs:
           path: trusted
           sparse-checkout: scripts
 
+      # Only to learn the reviewer App's login, when one is set up, so its
+      # last review can be found.
+      - name: Mint the reviewer App token
+        id: reviewer
+        if: steps.what.outputs.mode == 'review' && vars.REVIEWER_APP_CLIENT_ID != ''
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.REVIEWER_APP_CLIENT_ID }}
+          private-key: ${{ secrets.REVIEWER_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-pull-requests: read
+
+      # What to review: the PR's own changes since the reviewer's last review
+      # when that review can anchor one, the whole PR otherwise. The diff picks
+      # the lenses and the turn limit.
       - name: Deal out the lenses
         id: lenses
         if: steps.what.outputs.mode == 'review'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          NUMBER: ${{ steps.what.outputs.number }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          POSTER: ${{ steps.reviewer.outputs.app-slug && format('{0}[bot]', steps.reviewer.outputs.app-slug) || steps.who.outputs.bot_name }}
+          BOT: ${{ steps.who.outputs.bot_name }}
         run: |
           set -euo pipefail
-          script=trusted/scripts/agent-review.sh
+          script=$GITHUB_WORKSPACE/trusted/scripts/agent-review.sh
           if [ ! -f "$script" ]; then
             # Only until #2211 lands: main has no copy to trust yet.
             echo "::warning::the default branch has no scripts/agent-review.sh; using the PR's copy"
-            script=head/scripts/agent-review.sh
+            script=$GITHUB_WORKSPACE/head/scripts/agent-review.sh
           fi
-          lenses=$(bash "$script" lenses head/.claude/skills/adversarial-review/references/anti-patterns)
-          echo "lenses=$lenses" >> "$GITHUB_OUTPUT"
-          echo "names=$(jq -c 'map(.name)' <<<"$lenses")" >> "$GITHUB_OUTPUT"
+          catalog=head/.claude/skills/adversarial-review/references/anti-patterns
+          mkdir -p "$RUNNER_TEMP/review"
+          diff=$RUNNER_TEMP/review/review.diff
+          mode=full; base=""; turns=80
+          if bash "$script" turns 0 >/dev/null 2>&1; then
+            last=$(gh api "repos/${REPO}/pulls/${NUMBER}/reviews" --paginate \
+                --jq '.[] | {user: .user.login, commit_id, body: (.body // "")}' \
+              | jq -s -c --arg bot "$POSTER" '{reviewer_bot: $bot, reviews: .}' \
+              | bash "$script" incremental-base)
+            args=("$diff" "origin/$BASE_REF"); [ -n "$last" ] && args+=("$last")
+            said=$(cd head && bash "$script" delta "${args[@]}")
+            echo "review: $said"
+            case "$said" in "incremental "*) mode=incremental; base=$last ;; esac
+            lines=$(grep -E '^[+-]' "$diff" | grep -cvE '^(\+\+\+|---)( |$)' || true)
+            turns=$(bash "$script" turns "${lines:-0}")
+            echo "$lines changed line(s): $turns turns per lens"
+            # Each open reviewer thread goes to the recheck lens, when the
+            # default branch's script has one.
+            open=$RUNNER_TEMP/review/open.json
+            printf '[]' > "$open"
+            if bash "$script" lenses "$catalog" "" "$open" >/dev/null 2>&1; then
+              gh api graphql --paginate -F owner="${REPO%%/*}" -F name="${REPO#*/}" -F number="$NUMBER" \
+                  -f query="$THREADS_QUERY" --jq '.data.repository.pullRequest.reviewThreads.nodes[]' \
+                | jq -s -c --arg a "$POSTER" --arg b "$BOT" '{bots: [$a, $b], threads: .}' \
+                | bash "$script" threads > "$open"
+              echo "$(jq length "$open") open finding(s) to recheck"
+              lenses=$(bash "$script" lenses "$catalog" "$diff" "$open")
+            else
+              echo "::warning::the default branch's agent-review.sh has no recheck lens; open findings only carry forward"
+              lenses=$(bash "$script" lenses "$catalog" "$diff")
+            fi
+          else
+            # Only until #2224 lands: main's copy reviews the whole PR.
+            echo "::warning::the default branch's agent-review.sh has no incremental re-review; reviewing the whole PR"
+            lenses=$(bash "$script" lenses "$catalog")
+          fi
+          {
+            echo "lenses=$lenses"
+            echo "names=$(jq -c 'map(.name)' <<<"$lenses")"
+            echo "mode=$mode"
+            echo "base=$base"
+            echo "turns=$turns"
+          } >> "$GITHUB_OUTPUT"
           jq -r '.[] | "\(.name): \(.task)"' <<<"$lenses"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: steps.lenses.outputs.mode == 'incremental'
+        with:
+          name: agent-review-diff
+          path: ${{ runner.temp }}/review/review.diff
+          if-no-files-found: error
+          retention-days: 1
+          overwrite: true
 
   # One job per lens, side by side. Each holds a read-only token, posts
   # nothing, and hands its findings to the agent-review job as an artifact.
   lens:
     name: lens (${{ matrix.lens.name }})
     needs: plan
-    if: needs.plan.outputs.mode == 'review'
+    # A lens may build and test the PR's code next to the Claude token, so a
+    # fork's code never runs here: plan already skips forks, and this job checks
+    # again on its own.
+    if: >-
+      needs.plan.outputs.mode == 'review'
+      && github.event_name == 'pull_request'
+      && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -186,6 +298,19 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
+      # A lens may build and test the PR's Go code to settle a finding.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # A re-review starts from the PR's own changes since the last reviewed head.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: needs.plan.outputs.review_mode == 'incremental'
+        with:
+          name: agent-review-diff
+          path: .agent-review
+
       - name: Review through this lens
         id: review
         uses: anthropics/claude-code-action@c3d45e8e941e1b2ad7b278c57482d9c5bf1f35b3 # v1.0.99
@@ -197,12 +322,14 @@ jobs:
           # Pushes by the agents' own App (agent-build, agent-fix) are reviewed
           # too; no other bot is admitted.
           allowed_bots: ${{ steps.app.outputs.app-slug }}
-          # 80 turns: 40 ran out on large PRs (#2056); a small PR stops well short.
+          # The turn limit scales with the diff under review (agent-review.sh
+          # turns): 40 ran out on large PRs (#2056), and a one-line push needs
+          # far fewer than those did.
           claude_args: >-
             --model ${{ needs.plan.outputs.model }}
-            --max-turns 80
-            --allowedTools "Read,Glob,Grep,Skill,StructuredOutput,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*)"
-            --json-schema '{"type":"object","properties":{"summary":{"type":"string","description":"One line on what this lens swept and what survived"},"findings":{"type":"array","items":{"type":"object","properties":{"severity":{"type":"string","enum":["blocking","advisory"]},"path":{"type":"string","description":"Repo-relative path of the file"},"line":{"type":"integer","minimum":0,"description":"A line of the PR version of the file that the diff adds or changes, or 0 when there is none"},"rule":{"type":"string","description":"The catalog id or the invariant"},"failure":{"type":"string","description":"Inputs and state, then the wrong outcome, concretely"},"fix":{"type":"string","description":"The pattern, with an exemplar path"}},"required":["severity","path","line","rule","failure","fix"]}}},"required":["summary","findings"]}'
+            --max-turns ${{ needs.plan.outputs.turns || 80 }}
+            --allowedTools "Read,Glob,Grep,Skill,StructuredOutput,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(go build:*),Bash(go vet:*),Bash(go test:*)"
+            --json-schema '{"type":"object","properties":{"summary":{"type":"string","description":"One line on what this lens swept and what survived"},"findings":{"type":"array","items":{"type":"object","properties":{"severity":{"type":"string","enum":["blocking","advisory"]},"path":{"type":"string","description":"Repo-relative path of the file"},"line":{"type":"integer","minimum":0,"description":"A line of the PR version of the file that the diff adds or changes, or 0 when there is none"},"rule":{"type":"string","description":"The catalog id or the invariant"},"title":{"type":"string","maxLength":80,"description":"The finding in a few words, 80 characters at most"},"failure":{"type":"string","description":"Inputs and state, then the wrong outcome, concretely, in two sentences at most"},"fix":{"type":"string","description":"The pattern, with an exemplar path, in two sentences at most"}},"required":["severity","path","line","rule","title","failure","fix"]}},"rechecks":{"type":"array","description":"The recheck lens only: one per earlier finding it was given","items":{"type":"object","properties":{"comment_id":{"type":"integer"},"status":{"type":"string","enum":["fixed","open"]},"note":{"type":"string","maxLength":300,"description":"What you saw, in one sentence"}},"required":["comment_id","status","note"]}}},"required":["summary","findings"]}'
           prompt: |
             You are the ${{ matrix.lens.name }} lens of the adversarial review of PR
             #${{ needs.plan.outputs.number }} of ${{ github.repository }}. The review is split
@@ -212,17 +339,21 @@ jobs:
             ${{ matrix.lens.task }}
 
             Load the adversarial-review skill (.claude/skills/adversarial-review) for its
-            posture and procedure. The PR's head is checked out here; the base is
-            origin/${{ github.event.pull_request.base.ref }}, so the diff is
+            posture and procedure. The PR is checked out here; the base is
+            origin/${{ github.event.pull_request.base.ref }}, so the PR's diff is
             git diff origin/${{ github.event.pull_request.base.ref }}...HEAD.
 
-            Read the diff and the code. Do not read the PR's conversation or its review
-            comments: the review stands on the code alone. Change no files, push nothing and
-            post nothing, no comments and no reviews.
+            ${{ needs.plan.outputs.review_mode == 'incremental' && format('This is a re-review. Start from .agent-review/review.diff: the PR''s own changes since {0}, the head the reviewer last reviewed, with what a merge from the base brought in left out. It is where to look first, not a fence: read any code and the whole PR diff as you need, and raise a finding wherever those changes cause or expose a problem. Findings from earlier reviews are on their own threads, and the recheck lens judges each of them. If the file is empty, nothing of the PR''s own changed since then: unless you are the recheck lens, return no findings.', needs.plan.outputs.review_base) || 'Review the whole diff.' }}
+
+            Read the diff and the code. You may run go build, go vet and go test on the
+            packages involved when a finding turns on what the code does. Do not read the
+            PR's conversation or its review comments: the review stands on the code alone.
+            Change no files, push nothing and post nothing, no comments and no reviews.
 
             Refute in both directions and keep only the findings that survive, each with a
             concrete failure scenario traced through the code. Return them as the structured
-            output, with severity as the skill defines blocking and advisory, and line set to a
+            output, with severity as the skill defines blocking and advisory, a short title,
+            failure and fix in two sentences each, and line set to a
             line of the PR's version of the file that the diff adds or changes, or 0 when the
             finding has none (a stale doc claim elsewhere, say). With no survivors, findings
             is empty and summary says what you swept.
@@ -237,7 +368,7 @@ jobs:
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/lens"
           printf '%s' "$FINDINGS" | jq -c --arg name "$LENS" \
-            '{name: $name, summary: (.summary // ""), findings: (.findings // [])}' > "$RUNNER_TEMP/lens/$LENS.json"
+            '{name: $name, summary: (.summary // ""), findings: (.findings // []), rechecks: (.rechecks // [])}' > "$RUNNER_TEMP/lens/$LENS.json"
           jq -r '"\(.findings | length) finding(s): \(.summary)"' "$RUNNER_TEMP/lens/$LENS.json"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -330,6 +461,7 @@ jobs:
           GH_TOKEN: ${{ steps.reviewer.outputs.token || steps.app.outputs.token }}
           POSTER: ${{ steps.reviewer.outputs.app-slug && format('{0}[bot]', steps.reviewer.outputs.app-slug) || needs.plan.outputs.bot_name }}
           AUTHOR: ${{ github.event.pull_request.user.login }}
+          BOT: ${{ needs.plan.outputs.bot_name }}
           LENSES: ${{ needs.lens.result }}
           EXPECTED: ${{ needs.plan.outputs.lens_names }}
         run: |
@@ -345,9 +477,20 @@ jobs:
             script=head/scripts/agent-review.sh
           fi
           echo "posting as $POSTER"
+          # Open findings carry forward: the reviewer's unresolved threads still
+          # count in this verdict. Reading them fails the check rather than
+          # dropping them.
+          open='[]'
+          if bash "$script" turns 0 >/dev/null 2>&1; then
+            open=$(gh api graphql --paginate -F owner="${REPO%%/*}" -F name="${REPO#*/}" -F number="$NUMBER" \
+                -f query="$THREADS_QUERY" --jq '.data.repository.pullRequest.reviewThreads.nodes[]' \
+              | jq -s -c --arg a "$POSTER" --arg b "$BOT" '{bots: [$a, $b], threads: .}' \
+              | bash "$script" threads)
+            echo "$(jq length <<<"$open") open finding(s) carried forward"
+          fi
           results=$(jq -s -c --arg sha "$HEAD_SHA" --argjson expected "$EXPECTED" \
-            --arg poster "$POSTER" --arg author "$AUTHOR" \
-            '{head_sha: $sha, expected: $expected, lenses: .,
+            --arg poster "$POSTER" --arg author "$AUTHOR" --argjson open "$open" \
+            '{head_sha: $sha, expected: $expected, lenses: ., open_threads: $open,
               own_pr: (($poster | ascii_downcase) == ($author | ascii_downcase))}' "$RUNNER_TEMP"/lens/*.json)
           bash "$script" review <<<"$results" > "$RUNNER_TEMP/review.json"
           jq -r '"\(.event): \(.comments | length) inline, body \(.body | length) chars"' "$RUNNER_TEMP/review.json"
@@ -357,6 +500,23 @@ jobs:
             echo "::warning::agent-review: GitHub refused an inline comment; posting the findings in the review body"
             jq -c '. + {inline: false}' <<<"$results" | bash "$script" review > "$RUNNER_TEMP/review.json"
             gh api --method POST "repos/${REPO}/pulls/${NUMBER}/reviews" --input "$RUNNER_TEMP/review.json" --silent
+          fi
+          # A reply on each thread the recheck lens judged, and the fixed ones
+          # resolved. The review above already counted them; a failure here
+          # leaves a thread open, which only keeps it counting.
+          # An older script answers 64 (no such subcommand) to this probe.
+          probe=0; printf '{}' | bash "$script" followups >/dev/null 2>&1 || probe=$?
+          if [ "$probe" -eq 2 ]; then
+            bash "$script" followups <<<"$results" | jq -c '.[]' | while IFS= read -r f; do
+              id=$(jq -r '.comment_id' <<<"$f")
+              jq -c '{body}' <<<"$f" | gh api --method POST "repos/${REPO}/pulls/${NUMBER}/comments/${id}/replies" --input - --silent \
+                || echo "::warning::agent-review: could not reply on thread ${id}"
+              if [ "$(jq -r '.resolve' <<<"$f")" = true ]; then
+                gh api graphql -F id="$(jq -r '.thread_id' <<<"$f")" \
+                    -f query='mutation($id: ID!) { resolveReviewThread(input: {threadId: $id}) { thread { id } } }' --silent \
+                  || echo "::warning::agent-review: could not resolve thread ${id}"
+              fi
+            done
           fi
 
       - name: Fail the check unless the reviewer says ship
