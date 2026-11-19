@@ -4,7 +4,7 @@ import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import EntityForm, { EntityCreateForm } from "./EntityForm";
 import { BladesContext, createBladeController, createEditSlot, type BladeEdit } from "../lib/blades";
-import { SYSTEMS_KEY, checkSystemName } from "../lib/systems";
+import { SYSTEMS_KEY, checkSystemName, createSystem } from "../lib/systems";
 import { LOCATIONS_KEY, checkLocationName } from "../lib/locations";
 import { LOCATION_TYPES_KEY } from "../lib/location_types";
 import { STANDARDS_KEY } from "../lib/standards";
@@ -40,6 +40,7 @@ vi.mock("../lib/systems", async (orig) => {
   return {
     ...real,
     checkSystemName: vi.fn(),
+    createSystem: vi.fn(async () => ({ id: "new-system-id" })),
   };
 });
 
@@ -557,6 +558,60 @@ describe("the one form, empty", () => {
     const form = await screen.findByTestId("entity-create-form");
     fireEvent.click(within(form).getByRole("button", { name: /cancel/i }));
     expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("enables Create once a name is typed, disables again when cleared (penIncomplete gate)", async () => {
+    mountCreate("system");
+    const form = await screen.findByTestId("entity-create-form");
+    const create = within(form).getByRole("button", { name: /create system/i }) as HTMLButtonElement;
+    expect(create.disabled).toBe(true); // penIncomplete: name is empty
+
+    fireEvent.input(within(form).getByPlaceholderText("exec-boardroom"), { target: { value: "my-system" } });
+    await waitFor(() => expect(create.disabled).toBe(false));
+
+    fireEvent.input(within(form).getByPlaceholderText("exec-boardroom"), { target: { value: "" } });
+    await waitFor(() => expect(create.disabled).toBe(true));
+  });
+
+  it("disables Create while the create call is in-flight (busy gate)", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let resolveCreate!: (val: any) => void;
+    vi.mocked(createSystem).mockImplementationOnce(() => new Promise(r => { resolveCreate = r; }));
+
+    mountCreate("system");
+    const form = await screen.findByTestId("entity-create-form");
+    const create = within(form).getByRole("button", { name: /create system/i }) as HTMLButtonElement;
+
+    fireEvent.input(within(form).getByPlaceholderText("exec-boardroom"), { target: { value: "my-system" } });
+    await waitFor(() => expect(create.disabled).toBe(false));
+
+    fireEvent.click(create);
+    await waitFor(() => expect(create.disabled).toBe(true)); // busy
+
+    resolveCreate({ id: "new-id" });
+  });
+
+  it("Enter in a text field submits when ready and does not submit when disabled", async () => {
+    // fireEvent.submit simulates the submit event that pressing Enter fires
+    // via the hidden type=submit button; JSDOM's keydown → implicit submission
+    // path is not reachable from synthetic events, so we test the handler
+    // directly and verify the hidden button exists in the DOM.
+    mountCreate("system");
+    const form = await screen.findByTestId("entity-create-form");
+    const nameInput = within(form).getByPlaceholderText("exec-boardroom");
+    const hiddenSubmit = form.querySelector('button[type="submit"].sr-only') as HTMLButtonElement;
+    expect(hiddenSubmit).toBeTruthy(); // the hidden button that makes Enter work
+
+    // disabled: submit handler guards the disabled check
+    fireEvent.submit(form);
+    expect(vi.mocked(createSystem)).not.toHaveBeenCalled();
+
+    // type a name so the form is ready, then submit fires create
+    fireEvent.input(nameInput, { target: { value: "my-system" } });
+    await waitFor(() => expect((within(form).getByRole("button", { name: /create system/i }) as HTMLButtonElement).disabled).toBe(false));
+
+    fireEvent.submit(form);
+    await waitFor(() => expect(vi.mocked(createSystem)).toHaveBeenCalledOnce());
   });
 });
 

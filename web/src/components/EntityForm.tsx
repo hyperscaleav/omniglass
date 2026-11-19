@@ -688,7 +688,9 @@ export function EntityCreateForm(props: {
       data-testid="entity-create-form"
       class="flex flex-col gap-5"
       onSubmit={(e) => {
-        // The rail's buttons are type=button; Enter in a field still submits the form.
+        // sr-only submit button below gives the form a default submit target so
+        // Enter in a text field fires this handler; the disabled check prevents
+        // submitting an incomplete form.
         e.preventDefault();
         if (!formActions.binding()?.disabled?.()) void create();
       }}
@@ -799,6 +801,10 @@ export function EntityCreateForm(props: {
         displayPlaceholder={placeholders().display}
       />
 
+      {/* Hidden submit button: FormActionBar's buttons are type=button, so without
+          this the browser's implicit submission algorithm finds no submit target
+          and Enter in a text field does nothing. */}
+      <button type="submit" class="sr-only" tabIndex={-1} />
       <FormActionBar actions={formActions} inline />
 
       <div class="flex flex-col gap-1 opacity-50">
