@@ -27,9 +27,10 @@ summary: "A panel's action bar is **declared, not laid out**: a blade body binds
   time of this decision. That rail was inline in a scrolling page rather than pinned to the viewport,
   so it was a different layout problem. **Converged in PR #1801 (#337):** `EntityCreateForm` now
   delegates to `FormActionBar` with the `inline` prop, and `rail-ownership.test.ts` gained a fourth
-  guard that bans the hand-rolled class signature outside `FormActionBar` and `PanelFooter`. All
-  three rails now converge through `FormActionBar` (inline for full-page create forms, `PanelFooter`
-  for Drawer and blade panels). The CRUD form primitive carve-out is closed.
+  guard that bans the hand-rolled class signature everywhere except `FormActionBar`
+  (`PanelFooter` draws a differently padded rail, so the signature does not match it). The Drawer
+  and full-page create forms now converge through `FormActionBar` (inline for full-page create
+  forms); the blade rail still draws through `PanelFooter` directly. The CRUD form primitive carve-out is closed.
 - **Deliberate convergences:** submit labels no longer change while in flight (the shell's spinner
   says it), and the new-interface blade lost its Cancel button, since a blade already dismisses two
   ways and no other blade in the stack carries one.
