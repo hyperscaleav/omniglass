@@ -238,6 +238,10 @@ func (c *DatagramConn) Retarget(ctx context.Context) (from, to string, moved boo
 	}
 	from, to = c.peer.String(), next.String()
 	c.peer = next
+	// A ghost guards against the old address's surplus, which is now foreign
+	// and dropped before routing; left in place it could swallow the new
+	// address's genuine reply to the same ask.
+	c.ghost = nil
 	return from, to, true, nil
 }
 

@@ -483,11 +483,13 @@ func collectDatagramRung(ctx context.Context, task collection.TaskSpec, req *dri
 		timeout, _ = time.ParseDuration(p.Timeout)
 	}
 	// The tick lasts the endpoint's timeout: a named target's re-resolve
-	// takes at most half, and the exchange the rest.
+	// takes at most half, and the exchange the rest. A scheduling delay after
+	// the resolve gives up never starves the exchange: it keeps at least a
+	// quarter of the timeout.
 	timeout = collection.SessionTimeout(timeout)
 	resolveStart := time.Now()
 	sessions.retargetDatagram(ctx, task.EndpointID, timeout/2)
-	timeout -= time.Since(resolveStart)
+	timeout = max(timeout-time.Since(resolveStart), timeout/4)
 	ans, err := sock.Exchange(ctx, req.Line, req.Reply, timeout, req.RetriesOr(driver.DefaultPollRetries))
 	var refused *collection.RefusedError
 	if err == nil || errors.As(err, &refused) {

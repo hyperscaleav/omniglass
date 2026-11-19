@@ -113,10 +113,8 @@ func TestDatagramRetargetKeepsTheLastAddressWhenResolveFails(t *testing.T) {
 	if got := c.LocalAddr().String(); got != bound {
 		t.Fatalf("the socket rebound: %s, was %s", got, bound)
 	}
-	select {
-	case <-c.Done():
-		t.Fatal("a failed resolve closed the socket")
-	default:
+	if err := c.Err(); err != nil {
+		t.Fatalf("a failed resolve failed the socket: %v", err)
 	}
 }
 
