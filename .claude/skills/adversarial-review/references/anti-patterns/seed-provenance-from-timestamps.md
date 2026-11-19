@@ -3,9 +3,9 @@
 - **Cue:** a boot seed that repairs or reasserts rows it judges "untouched" from `updated_at =
   created_at`, over a table operators also insert into.
 - **Failure:** an operator's own insert that was never revised carries equal timestamps too, so the
-  seed takes it for its own and rewrites it on the next boot (a role declared to accept any type
-  starts refusing components when a release ships a role of the same name).
+  seed takes it for its own and rewrites it on the next boot (a slot declared to accept any type
+  starts refusing components when a release ships a slot of the same name).
 - **Fix:** decide provenance from a fact only the seed's write lacks: every operator write is
   audited in its transaction and the seed never is, so a row no audit row names is the seed's; or
   carry an explicit provenance mark (the audit-row check `repairSeededSlot` made, ADR-0508, retired
-  with the role seed lane in #1332).
+  with the slot seed lane in #1332).
