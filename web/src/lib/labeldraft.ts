@@ -21,7 +21,7 @@ import { describeError } from "./format";
 // What makes that affordable is the same thing that makes it honest: the route
 // allocates nothing. It reads the lowest free ordinal rather than minting one,
 // takes no advisory lock and opens no write transaction, so asking on every
-// picker change costs a read, not a place in the queue every create in the
+// picker change costs a read, not a slot in the queue every create in the
 // fleet is waiting in.
 
 // DraftLabel is the answer: the name, the ordinal that name was minted from,

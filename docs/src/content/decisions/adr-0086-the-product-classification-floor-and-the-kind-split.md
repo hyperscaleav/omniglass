@@ -6,7 +6,7 @@ summary: "Every component is required to name a product (the three seeded generi
 ---
 
 - **Date:** 2026-08-07 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
-  [storage](/architecture/storage/), [Products guide](/guides/admin/products/)
+  [storage](/architecture/storage/), [Products guide](/admin/products/)
 - **Decision:** Every **component** is required to name a **product**: `component.product_id` is
   `NOT NULL`. Three seeded generics (`generic-device`, `generic-app`, `generic-service`, each pointed
   at the matching generic `component_type`) cover anything not yet modeled as a real SKU, so the floor

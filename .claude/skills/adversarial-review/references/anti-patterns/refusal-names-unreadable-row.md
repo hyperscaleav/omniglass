@@ -8,4 +8,4 @@
   A count is a leak too: probing successive inputs tallies the hidden rows.
 - **Fix:** keep the check fleet-wide (weakening it would break the invariant), carry the ids on the
   error, and redact in the API against the caller's read scope before mapping it: name a readable
-  row or none, never a count (`redactRefusalSystem`, internal/api/roles.go).
+  row or none, never a count (`redactRefusalSystem`, internal/api/slots.go).

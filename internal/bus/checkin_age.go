@@ -9,8 +9,8 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
 
-// checkinAgeEvery is how often the server writes each claimed node's
-// check-in age (#1625): half the node's default heartbeat, so a silent node's
+// checkinAgeEvery is how often the server writes each claimed outpost's
+// check-in age (#1625): half the outpost's default heartbeat, so a silent outpost's
 // series steps at least twice per missed heartbeat. checkinAgeTimeout bounds
 // one pass.
 const (
@@ -18,31 +18,31 @@ const (
 	checkinAgeTimeout = 10 * time.Second
 )
 
-// checkinAges is the check-in age of each node at now: the seconds since it
+// checkinAges is the check-in age of each outpost at now: the seconds since it
 // last spoke (its last heartbeat, else its claim), as a checkin-age row on its
-// platform component. A node whose clock reads ahead of the database's reads
+// platform component. An outpost whose clock reads ahead of the database's reads
 // zero, never a negative age. Pure.
-func checkinAges(nodes []storage.NodeCheckin, now time.Time) []storage.PlatformMetric {
-	out := make([]storage.PlatformMetric, 0, len(nodes))
-	for _, n := range nodes {
+func checkinAges(outposts []storage.OutpostCheckin, now time.Time) []storage.PlatformMetric {
+	out := make([]storage.PlatformMetric, 0, len(outposts))
+	for _, n := range outposts {
 		out = append(out, storage.PlatformMetric{ComponentID: n.ComponentID, Key: writerclass.CheckinAge,
 			Value: max(now.Sub(n.Since).Seconds(), 0), TS: now})
 	}
 	return out
 }
 
-// recordCheckinAges writes every claimed node's check-in age at now, the
-// server's word for how long each node has been silent. The age grows while
-// a node sends nothing, which is the series a node-silent rule reads.
+// recordCheckinAges writes every claimed outpost's check-in age at now, the
+// server's word for how long each outpost has been silent. The age grows while
+// an outpost sends nothing, which is the series an outpost-silent rule reads.
 func (s *Server) recordCheckinAges(ctx context.Context, now time.Time) error {
-	nodes, err := s.store.NodeCheckins(ctx)
+	outposts, err := s.store.OutpostCheckins(ctx)
 	if err != nil {
 		return err
 	}
-	if len(nodes) == 0 {
+	if len(outposts) == 0 {
 		return nil
 	}
-	return s.store.RecordPlatformMetrics(ctx, checkinAges(nodes, now))
+	return s.store.RecordPlatformMetrics(ctx, checkinAges(outposts, now))
 }
 
 // startCheckinAge writes the check-in ages every checkinAgeEvery on a
@@ -65,7 +65,7 @@ func (s *Server) startCheckinAge() {
 				err := s.recordCheckinAges(pass, now)
 				done()
 				if err != nil && ctx.Err() == nil {
-					slog.Warn("checkin age write failed", "facility", "node", "error", err.Error())
+					slog.Warn("checkin age write failed", "facility", "outpost", "error", err.Error())
 				}
 			}
 		}

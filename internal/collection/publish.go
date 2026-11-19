@@ -27,7 +27,7 @@ func NewBatchID() string {
 // PublishBatch publishes one encoded TelemetryBatch to subject under id and
 // waits, at most timeout, for the stream's ack (#453). A nil error is the
 // stream's word that it stored the batch, or already held a copy under id (the
-// ack's Duplicate). The push lane publishes through it, and the node's spool
+// ack's Duplicate). The push lane publishes through it, and the outpost's spool
 // through StartBatch, so no publisher can send a batch the stream may not
 // have stored and call it sent.
 func PublishBatch(ctx context.Context, js jetstream.JetStream, subject string, data []byte, id string, timeout time.Duration) (*jetstream.PubAck, error) {
@@ -38,7 +38,7 @@ func PublishBatch(ctx context.Context, js jetstream.JetStream, subject string, d
 
 // StartBatch begins publishing one encoded TelemetryBatch to subject under id
 // and returns without waiting: the future is the stream's ack, or its refusal
-// (#453). The node's spool keeps a window of these with the stream, so it
+// (#453). The outpost's spool keeps a window of these with the stream, so it
 // ships faster than one batch per round trip, and treats a batch as sent only
 // once its future says the stream stored it.
 func StartBatch(js jetstream.JetStream, subject string, data []byte, id string) (jetstream.PubAckFuture, error) {

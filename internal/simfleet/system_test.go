@@ -22,25 +22,25 @@ var products = []Product{
 
 func simulated(p string) bool { return p != "mic-1" }
 
-func planOf(t *testing.T, roles []Role) SystemPlan {
+func planOf(t *testing.T, slots []Slot) SystemPlan {
 	t.Helper()
-	return PlanSystem(roles, products, SystemCatalog{Simulated: simulated, Within: within})
+	return PlanSystem(slots, products, SystemCatalog{Simulated: simulated, Within: within})
 }
 
-func fillOf(p SystemPlan, role string) (RoleFill, bool) {
-	for _, f := range p.Roles {
-		if f.Role == role {
+func fillOf(p SystemPlan, slot string) (SlotFill, bool) {
+	for _, f := range p.Slots {
+		if f.Slot == slot {
 			return f, true
 		}
 	}
-	return RoleFill{}, false
+	return SlotFill{}, false
 }
 
-// Each role takes a simulated product whose type fits, as many as its quorum
-// (at least one), in role order; a role nothing simulated fits is listed
+// Each slot takes a simulated product whose type fits, as many as its quorum
+// (at least one), in slot order; a slot nothing simulated fits is listed
 // unstaffed with why.
-func TestPlanSystemStaffsEachRoleFromWhatFits(t *testing.T) {
-	p := planOf(t, []Role{
+func TestPlanSystemStaffsEachSlotFromWhatFits(t *testing.T) {
+	p := planOf(t, []Slot{
 		{Name: "video-bar", Quorum: 1, AcceptedTypes: []string{"video-bar"}},
 		{Name: "main-display", Quorum: 2, AcceptedTypes: []string{"display"}},
 		{Name: "touch-control", Quorum: 0, AcceptedTypes: []string{"touch-panel"}},
@@ -64,14 +64,14 @@ func TestPlanSystemStaffsEachRoleFromWhatFits(t *testing.T) {
 	}
 }
 
-// A pinned role takes a pinned product, in pin order, and only one that is
+// A pinned slot takes a pinned product, in pin order, and only one that is
 // simulated and fits.
 func TestPlanSystemHonorsPins(t *testing.T) {
-	p := planOf(t, []Role{{Name: "main-display", Quorum: 1, AcceptedTypes: []string{"display"}, PinnedProducts: []string{"screen-86", "screen-55"}}})
+	p := planOf(t, []Slot{{Name: "main-display", Quorum: 1, AcceptedTypes: []string{"display"}, PinnedProducts: []string{"screen-86", "screen-55"}}})
 	if f, _ := fillOf(p, "main-display"); f.Product != "screen-86" {
 		t.Errorf("pinned = %+v, want the first pin", f)
 	}
-	p = planOf(t, []Role{{Name: "main-display", Quorum: 1, AcceptedTypes: []string{"display"}, PinnedProducts: []string{"screen-99"}}})
+	p = planOf(t, []Slot{{Name: "main-display", Quorum: 1, AcceptedTypes: []string{"display"}, PinnedProducts: []string{"screen-99"}}})
 	if f, _ := fillOf(p, "main-display"); f.Product != "" || !strings.Contains(f.Reason, "screen-99") {
 		t.Errorf("unsimulated pin = %+v, want unstaffed naming the pin", f)
 	}
@@ -80,24 +80,24 @@ func TestPlanSystemHonorsPins(t *testing.T) {
 // A capacity below quorum caps the count.
 func TestPlanSystemCapsAtCapacity(t *testing.T) {
 	one := 1
-	p := planOf(t, []Role{{Name: "panel", Quorum: 3, Capacity: &one, AcceptedTypes: []string{"display"}}})
+	p := planOf(t, []Slot{{Name: "panel", Quorum: 3, Capacity: &one, AcceptedTypes: []string{"display"}}})
 	if f, _ := fillOf(p, "panel"); f.Count != 1 {
 		t.Errorf("capped = %+v, want 1", f)
 	}
 }
 
 // Of a choice's alternates, the plan takes one: the first (by name) whose
-// roles can all be staffed, else the one that staffs the most; the other
-// alternates' roles are left out, not reported short.
+// slots can all be staffed, else the one that staffs the most; the other
+// alternates' slots are left out, not reported short.
 func TestPlanSystemTakesOneAlternatePerChoice(t *testing.T) {
-	p := planOf(t, []Role{
+	p := planOf(t, []Slot{
 		{Name: "main-display", Quorum: 1, AcceptedTypes: []string{"display"}},
 		{Name: "conf-bar", Quorum: 1, AcceptedTypes: []string{"video-bar"}, Alternate: "conferencing/all-in-one"},
 		{Name: "conf-codec", Quorum: 1, AcceptedTypes: []string{"codec"}, Alternate: "conferencing/component-system"},
 		{Name: "conf-mic", Quorum: 1, AcceptedTypes: []string{"ceiling-mic"}, Alternate: "conferencing/component-system"},
 	})
 	if _, ok := fillOf(p, "conf-bar"); !ok {
-		t.Fatalf("plan %+v, want the fully staffable all-in-one alternate", p.Roles)
+		t.Fatalf("plan %+v, want the fully staffable all-in-one alternate", p.Slots)
 	}
 	for _, r := range []string{"conf-codec", "conf-mic"} {
 		if _, ok := fillOf(p, r); ok {
@@ -110,22 +110,22 @@ func TestPlanSystemTakesOneAlternatePerChoice(t *testing.T) {
 }
 
 // An empty accepted-type list takes any simulated product.
-func TestPlanSystemUntypedRoleTakesAnything(t *testing.T) {
-	p := planOf(t, []Role{{Name: "anything", Quorum: 1}})
+func TestPlanSystemUntypedSlotTakesAnything(t *testing.T) {
+	p := planOf(t, []Slot{{Name: "anything", Quorum: 1}})
 	if f, _ := fillOf(p, "anything"); f.Product == "" {
 		t.Errorf("untyped = %+v, want some simulated product", f)
 	}
 }
 
-// A short role's reason reads as English, and a pin that is simulated but
-// outside the role's types says so rather than that nothing is simulated.
+// A short slot's reason reads as English, and a pin that is simulated but
+// outside the slot's types says so rather than that nothing is simulated.
 func TestPlanSystemReasonsReadTrue(t *testing.T) {
-	p := planOf(t, []Role{{Name: "amp", Quorum: 1, AcceptedTypes: []string{"amplifier"}}})
+	p := planOf(t, []Slot{{Name: "amp", Quorum: 1, AcceptedTypes: []string{"amplifier"}}})
 	if f, _ := fillOf(p, "amp"); !strings.Contains(f.Reason, "an amplifier") {
 		t.Errorf("reason %q, want an article that fits", f.Reason)
 	}
-	p = planOf(t, []Role{{Name: "main-display", Quorum: 1, AcceptedTypes: []string{"display"}, PinnedProducts: []string{"bar-1"}}})
+	p = planOf(t, []Slot{{Name: "main-display", Quorum: 1, AcceptedTypes: []string{"display"}, PinnedProducts: []string{"bar-1"}}})
 	if f, _ := fillOf(p, "main-display"); !strings.Contains(f.Reason, "bar-1") || strings.Contains(f.Reason, "is simulated") {
-		t.Errorf("reason %q, want it to say the simulated pin does not fit the role", f.Reason)
+		t.Errorf("reason %q, want it to say the simulated pin does not fit the slot", f.Reason)
 	}
 }

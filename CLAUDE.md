@@ -1,9 +1,13 @@
 # Working in omniglass
 
 Open observability and control plane for AV/IT fleets, and a learning tool for monitoring
-itself. Single Go binary (run modes: server, node, migrate), BYO PostgreSQL. The
+itself. Single Go binary (run modes: server, outpost, migrate), BYO PostgreSQL. The
 architecture of record is the docs site under [docs/](docs/) (published at
-docs.omniglass.hyperscaleav.com); read the [architecture spine](docs/src/content/docs/architecture/index.md) before non-trivial changes.
+docs.omniglass.hyperscaleav.com), laid out by audience (#2153): Start here, Operator, Admin,
+Developer, Deployment, Architecture (badged, the architecture of record) and Reference
+(generated). The old pages sit under **Being rebuilt** and stay the reference until their
+section lands. Read [the model in one pass](docs/src/content/docs/start/the-model.md)
+before non-trivial changes.
 
 This repo is **public from the first commit** and built **one vertical slice per PR**.
 Treat every change as portfolio-quality and externally visible.
@@ -18,7 +22,7 @@ Treat every change as portfolio-quality and externally visible.
    without a test that failed before it and passes after; a bug fix starts with a
    failing regression test. Full loop: [docs/contributing/test-driven.md](docs/src/content/docs/contributing/test-driven.md).
 3. **Docs with everything.** A feature is not done until the docs that teach it ship in
-   the same PR, and **status moves with the code**: advance the page's status badge to its new floor
+   the same PR, and **status moves with the code**: advance the rebuilt page's status badge to its new floor
    (`Design`/`Partial`/`Built`), add the build-log entry, and log any divergence from a page's design in
    the [decision log](docs/src/content/docs/architecture/decisions.md). Each log entry (and each
    adversarial-review anti-pattern) is **its own file** in a fragment directory
@@ -90,8 +94,12 @@ cd .claude/worktrees/<type>+<short-name>
 
 - Branch prefix and PR title use the conventional-commit type (`feat`, `fix`, `docs`,
   `ci`, `chore`, `refactor`, `test`, `perf`). PR title is `<type>: <description>`; CI
-  enforces it and semantic-release reads it on merge.
-- Squash-merge. `feat:` = minor, `fix:`/`perf:` = patch, `BREAKING CHANGE:` = major.
+  enforces it and the release notes list it.
+- Squash-merge, through the merge queue: the architect queues a green PR and the queue reruns
+  the required checks on top of `main` before it merges
+  ([release CI](docs/src/content/docs/contributing/release-ci.md#merging-through-the-queue)).
+  Releases are cut from a `release/<major>.<minor>` branch, whose name sets the version; a fix
+  reaches a release branch by cherry-pick from `main`.
 - Validate locally: `make test-short` to iterate, `make test` before the PR.
 - No `--no-verify` without explicit approval.
 
@@ -101,7 +109,7 @@ approval contract are [docs/contributing/slice-workflow.md](docs/src/content/doc
 **Every slice runs `/ship-slice` before its PR is proposed for merge: a required gate, not
 optional.** Build to PR-ready, then run `/ship-slice`; its emitted ship-review becomes the PR
 body and runs the pre-ship checks (fresh `make test` with the output pasted, `make gen` drift,
-em-dash and attribution scan, docs-with-everything, and **live screenshots for any
+em-dash scan, docs-with-everything, and **live screenshots for any
 operator-facing surface**). A UI PR with no screenshots, or any PR whose `/ship-slice` has not
 been run, is not ready for review. Re-run it after addressing findings.
 
@@ -130,7 +138,6 @@ on close), and never set Priority or the iteration: those are the architect's al
 
 ## House style
 
-- No AI/assistant attribution in commits, PRs, code comments, or any visible artifact.
 - No em dashes in written artifacts; use commas, colons, periods, or parentheses.
 - Head-noun-last naming (`<qualifier>_<genus>`); match the architecture glossary.
 - Any change that alters an operator-facing (UI) surface ships **live screenshots** in the PR
@@ -139,13 +146,15 @@ on close), and never set Priority or the iteration: those are the architect's al
   session cookie; `gh image check-token` verifies it), or commit under `.github/screenshots/` and
   embed by immutable commit SHA. No UI surface, write "n/a".
 
-## Pre-deployment stance
+## Compatibility
 
-Omniglass has no external deployment, no installed base, and no operator data outside dev, CI and the lab. Until the first external deployment:
+Omniglass has external deployments and an installed base. Before changing a released API route, CLI command, schema element, or config key:
 
-- When the correct fix is destructive (renaming seeded keys or fixtures, reshaping schema, removing or renaming an API field, deleting a compatibility shim), make it. Do not add back-compat paths, deprecation periods, or data-migration machinery for data that does not exist.
-- Migration mechanics are unchanged: never edit an applied migration; express schema changes as new migrations.
-- Remove this section in the PR that prepares the first external deployment.
+- Use `BREAKING CHANGE:` in the PR footer (or `!` after the type in the PR title) so the release notes surface it, and note the change in the docs page that documents the surface.
+- If a smooth upgrade path exists (a deprecation period, an alias, a forward migration), prefer it over a hard cut.
+- Migrations stay forward-only: never edit an applied migration; express every schema change as a new migration.
+
+A change is released once it ships in a final release tag, not a release candidate.
 
 ## Migrations and seeding
 
@@ -161,8 +170,8 @@ Three buckets, never conflated:
   dump/squash silently drops them).
 - **Boot seed phase** (idempotent upsert on every server start): ship-with reference data as
   embedded YAML, authoritative via `ON CONFLICT DO UPDATE`; operator rows untouched. Narrow
-  carve-out: a table with no operator write path and a packed positional ordering may
-  reconcile-and-delete instead (`choice_alternate` only, today; ADR-0087); see
+  carve-out: a table with no operator write path whose leftover rows are not inert may
+  reconcile-and-delete instead (`choice_alternate`, ADR-0087, and `reserved_key`, #1447); see
   [storage](docs/src/content/docs/architecture/storage.md) before extending it to another table.
 - **One-time data backfills** (dbmate): transforming existing operator data, run once.
 
@@ -171,8 +180,11 @@ Three buckets, never conflated:
 Procedural workflows live under [.claude/skills/](.claude/skills/). Invoke with
 `/skill-name` (ported and refined as the corresponding subsystems land):
 
+- **`/contribute`** - the router for "I want to add a feature, request one, or report a bug": picks
+  the path (`/file-bug`, `/define-work`, `/scope-protocol`, `/run-feature-loop`, or a single slice) and
+  holds the gates between them (approved issue before a branch, dedupe first, never merge).
 - **`/ship-slice`** - the pre-ship validation pass (fresh `make test`, `make gen` drift check,
-  em-dash and attribution scan, a reviewer pass, docs-with-everything) and the ship-review report
+  em-dash scan, a reviewer pass, docs-with-everything) and the ship-review report
   the architect approves from. Run at PR-ready.
 - **`/autopilot`** - the unattended daily run (ADR-0138): reconcile the standing autopilot PRs,
   pick one thin slice (an in-progress loop, an approved definition, a priority bug, else a
@@ -186,7 +198,7 @@ Procedural workflows live under [.claude/skills/](.claude/skills/). Invoke with
 - **`/storage-schema-change`** (ported) - how dbmate migrations work (run-once, never edited,
   idempotent, the PG rename DO-block), the three buckets, the Gateway ripple, and the
   testcontainer round-trip RED->GREEN.
-- **`/canonical-datapoint`**, **`/add-collection-primitive`** - ported with the registry and
+- **`/canonical-datapoint`**, **`/add-collection-primitive`** - ported with the catalog and
   collection-engine slices.
 - **`/docs-diagram`** - authoring docs diagrams in D2 (build-time inline SVG via astro-d2):
   the d2-binary prerequisite, the colors-live-in-CSS theming contract that tracks Starlight's

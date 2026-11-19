@@ -18,10 +18,15 @@ import (
 // the order loadByRef's ORDER BY resolved them. Through scopedByNameInScope
 // (the path a plain GET takes) Candidates never names a row the caller could
 // not otherwise read: the id list is built AFTER the scope filter, not before.
+//
+// Addresses is each candidate's dotted address, index for index with Candidates,
+// the spelling that resolves on the same route (#1134). It is set only where the
+// resolver could render them (resolveRef); a redacted error carries neither.
 type ErrAmbiguousName struct {
 	Kind       string
 	Ref        string
 	Candidates []string
+	Addresses  []string
 }
 
 func (e *ErrAmbiguousName) Error() string {
@@ -127,21 +132,11 @@ func scopedList[T any](ctx context.Context, p *PG, cfg scopedConfig[T], read sco
 	if read.Empty() {
 		return nil, nil
 	}
-	sql := scopedListSQL(cfg.table, cfg.cols, read.All)
-	var (
-		rows pgx.Rows
-		err  error
-	)
-	if read.All {
-		rows, err = p.pool.Query(ctx, sql)
-	} else {
-		roots := uuidRoots(read.IDs)
-		selfIDs := uuidRoots(read.SelfIDs)
-		if len(roots) == 0 && len(selfIDs) == 0 {
-			return nil, nil // every scope root is malformed: nothing is in scope
-		}
-		rows, err = p.pool.Query(ctx, sql, roots, selfIDs)
+	args, ok := scopedListArgs(cfg.table, read)
+	if !ok {
+		return nil, nil // every scope root is malformed: nothing is in scope
 	}
+	rows, err := p.pool.Query(ctx, scopedListSQL(cfg.table, cfg.cols, read), args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list %s: %w", cfg.table, err)
 	}
@@ -239,7 +234,7 @@ func loadByRef[T any](ctx context.Context, q querier, cfg scopedConfig[T], ref s
 // every dotted body reference, producing a 404 that names the entity being
 // PATCHED rather than the reference that failed to resolve. With it, the
 // same thirteen existing folds (components.go, systems.go, locations.go,
-// secrets.go, variables.go, role_declarations.go, nodes.go) run unchanged
+// secrets.go, variables.go, slot_declarations.go, outposts.go) run unchanged
 // for all three reference forms: name, uuid, and address. mapRefErr's own
 // *ErrPathNotFound case (matched via errors.As on the concrete type, which
 // does not consult Unwrap) still fires first and wins for the path-PARAMETER
@@ -263,7 +258,7 @@ func (e *ErrPathNotFound) Unwrap() error { return e.notFound }
 
 // addressKindTable maps an Address's terminal plane to the tree table that
 // resolves it: the same three tables scopeTable already allow-lists, plus
-// AddressRole, which resolves to none (no scopedConfig addresses a role
+// AddressSlot, which resolves to none (no scopedConfig addresses a slot
 // today), so it always falls to the not-ok branch and reports ErrPathNotFound
 // like any other kind mismatch.
 func addressKindTable(k AddressKind) (scopeTable, bool) {
@@ -440,7 +435,7 @@ func resolveMatches[T any](cfg scopedConfig[T], ref string, matches []*T) (*T, e
 // subset satisfying member, a caller-supplied predicate over a row's id.
 // This is resolveRef's own shape (load, narrow, judge ambiguity within the
 // narrower set), generalized past scope.Set/inScopeTree: a caller here
-// narrows by membership in some OTHER relation (a role's current occupants,
+// narrows by membership in some OTHER relation (a slot's current occupants,
 // a system's current members) rather than by tree scope, so ambiguity is
 // judged within that relation instead of fleet-wide (#627 review round 3,
 // closing #645: a same-named row that never touched this relation was never
@@ -449,7 +444,7 @@ func resolveMatches[T any](cfg scopedConfig[T], ref string, matches []*T) (*T, e
 //
 // Returning both sets, not just the narrowed one, is deliberate: a caller
 // that wants to distinguish "no such row anywhere" from "a real row, just
-// not a member of this relation" (UnassignRole's ErrAssignmentMissing,
+// not a member of this relation" (UnassignSlot's ErrAssignmentMissing,
 // RemoveMember's ErrMemberNotFound, both more specific and more honest than
 // a bare not-found) checks len(all) once the narrowed set comes back empty,
 // rather than losing that distinction the moment resolveMatches folds an
@@ -562,7 +557,19 @@ func resolveRef[T any](ctx context.Context, q querier, cfg scopedConfig[T], ref,
 	if policy == refPolicyForbid && len(inScope) == 0 {
 		return nil, cfg.forbidden
 	}
-	return resolveMatches(cfg, ref, inScope)
+	got, err := resolveMatches(cfg, ref, inScope)
+	var ambig *ErrAmbiguousName
+	if errors.As(err, &ambig) && len(ambig.Candidates) > 0 {
+		addrs, aerr := addressesOf(ctx, q, cfg.table, ambig.Candidates)
+		if aerr != nil {
+			return nil, aerr
+		}
+		ambig.Addresses = make([]string, len(ambig.Candidates))
+		for i, id := range ambig.Candidates {
+			ambig.Addresses[i] = addrs[id]
+		}
+	}
+	return got, err
 }
 
 // scopedByName resolves an entity by REFERENCE, which is either its uuid or
@@ -645,7 +652,7 @@ func foldPathNotFound(err error) error {
 // advisories, which intentionally resolve scope-blind so availability matches
 // the placement bucket asked about rather than the caller's own grant (the ADR
 // the checkName routes document); the member- or occupant-scoped resolve a
-// removal makes (RemoveMember, SetPrimaryMember, UnassignRole), whose
+// removal makes (RemoveMember, SetPrimaryMember, UnassignSlot), whose
 // candidates the system's own read already names, redacted as defense in
 // depth; and ResolveTags' forSystem, a tier mismatch with no scope of the
 // referenced tier in hand. The reference is still refused as ambiguous; the
@@ -824,7 +831,7 @@ func resolveScoped[T any](ctx context.Context, q querier, cfg scopedConfig[T], n
 // resolveTargetID is resolveScoped made owner-generic: given the tier a
 // mutation's target sits on, it applies the read-then-action split and returns
 // the row's own id. It is the seam every route that acts THROUGH a tree entity
-// resolves its target with (an alarm on a component, a role or a membership on
+// resolves its target with (an alarm on a component, a slot or a membership on
 // a system, a declared property on any of the three), so all of them make the
 // split in one place rather than each carrying its own copy of the ordering
 // (#736).
@@ -834,14 +841,14 @@ func resolveScoped[T any](ctx context.Context, q querier, cfg scopedConfig[T], n
 // resolves its owner exactly once here instead of scope-checking it and then
 // re-resolving the same reference for the arc.
 //
-// node is on the arc but has no scope tree of its own (its refusals are
-// all-or-nothing, ErrNodeForbidden, decided before a resolve is reached), so it
+// outpost is on the arc but has no scope tree of its own (its refusals are
+// all-or-nothing, ErrOutpostForbidden, decided before a resolve is reached), so it
 // resolves by existence through ownerArcValue and ignores both sets, matching
 // what ownerInScope already does for it. That resolve accepts a uuid as well as
-// a name, where the pair it replaces on this path did not: ownerInScope's node
-// arm existence-checked `where name = $1` only, so a node property addressed by
+// a name, where the pair it replaces on this path did not: ownerInScope's outpost
+// arm existence-checked `where name = $1` only, so an outpost property addressed by
 // uuid was reported absent by the guard before ownerArcValue ever got to resolve
-// it. No route reaches a node property today (the three property surfaces are
+// it. No route reaches an outpost property today (the three property surfaces are
 // component, system, and location), so this fixes nothing an operator could hit
 // and is recorded because it is a behaviour change and not a refactor.
 func (p *PG) resolveTargetID(ctx context.Context, q querier, ownerKind, ref string, read, action scope.Set) (string, error) {
@@ -864,7 +871,7 @@ func (p *PG) resolveTargetID(ctx context.Context, q querier, ownerKind, ref stri
 			return "", err
 		}
 		return v.ID, nil
-	case "node":
+	case "outpost":
 		return p.ownerArcValue(ctx, q, ownerKind, ref)
 	}
 	return "", ErrUnknownOwnerKind
@@ -873,7 +880,7 @@ func (p *PG) resolveTargetID(ctx context.Context, q querier, ownerKind, ref stri
 // ResolveActionTarget is resolveTargetID on the Gateway, for the routes that
 // resolve their own target at the API layer rather than inside a gateway write:
 // the alarm verbs, which address a component and then act on a row hanging off
-// it, and the system-role declarations, whose write methods address their owner
+// it, and the system-slot declarations, whose write methods address their owner
 // by kind and id and take no scope of their own (a standard is not scope-scoped
 // at all, so the system arc has nowhere else to be checked).
 //
@@ -925,7 +932,7 @@ func scopedDelete[T any](ctx context.Context, p *PG, cfg scopedConfig[T], actorI
 		// children, and must reach the caller as a conflict rather than an opaque
 		// server error. It is a distinct sentinel from occupied: the child count
 		// above proved there are no children, so a restrict FK from anywhere else
-		// (a component staffing a system role, say) landed here, and this path
+		// (a component staffing a system slot, say) landed here, and this path
 		// cannot tell which one. Reporting "has children" would be false.
 		if isReferencedViolation(err) {
 			return ErrReferenced

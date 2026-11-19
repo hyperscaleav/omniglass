@@ -1,12 +1,12 @@
 # The system templates (kind system_template): a whole system, built to a
-# standard, a component for each role. Creating from one
+# standard, a component for each slot. Creating from one
 # (POST /systems:createFromTemplate) lands the system, its standard (the operator's
 # of that name, else created from the standard template in the same
-# transaction), a component per role filled to quorum and assigned, and the
+# transaction), a component per slot filled to quorum and assigned, and the
 # declared values, together or not at all (ADR-0827).
 #
-# Each role names a component template (product, attach preset and declared
-# values) or a bare product. A role inside a choice is filled only for the
+# Each slot names a component template (product, attach preset and declared
+# values) or a bare product. A slot inside a choice is filled only for the
 # template's alternate: a system template staffs one way of answering each
 # choice, and leaves the others unbuilt without impairing the system.
 templates:
@@ -19,7 +19,7 @@ templates:
     system:
       standard: mr55
       system_type: meeting
-      roles:
+      slots:
         video-bar: { component: kestrel-vroom }
         main-display: { component: boreal-edge-55 }
         touch-control: { component: newtron-panel-7 }
@@ -31,6 +31,6 @@ templates:
     system:
       standard: ds55
       system_type: sign
-      roles:
+      slots:
         panel: { component: boreal-edge-55 }
         player: { component: boreal-cast-m1 }

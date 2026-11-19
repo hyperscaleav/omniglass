@@ -24,18 +24,18 @@ import {
 
 // SessionNotice says why an endpoint is refused or its held session down
 // (#1059): for a refusal, the reason (the gate's: its class and the
-// component's own text, scrubbed of anything the node sent; else a rejected
+// component's own text, scrubbed of anything the outpost sent; else a rejected
 // session's own words) and the two ways out. A refusal shows whatever met it: the gate
 // holds whether or not a session is held, so an endpoint refused by its
 // reachability probe alone (a tls certificate, a udp terminal reply, an snmp
 // authorizationError, an ssh probe's credential) reads the same as a rejected
 // session (#1110). Retry moves the endpoint's retry counter (POST
-// /endpoints/{endpoint}:retry, audited), so the node tries once more; it greys with
+// /endpoints/{endpoint}:retry, audited), so the outpost tries once more; it greys with
 // its reason for a caller without endpoint:retry (a hint only, the server is
 // the authority and says why it refused). The fix path is the host's: the
 // endpoint blade begins its own edit, where the credential is one of the
 // inputs, and a list opens that blade. A down session offers no retry: the
-// node is already redialing on its own.
+// outpost is already redialing on its own.
 //
 // After a retry the notice waits on what the retry moves (lib/session's
 // retryMark): the read it renders is invalidated (and polled by the
@@ -43,14 +43,14 @@ import {
 // transition time moves (a fresh establishing, up, or rejected again) or, for
 // an endpoint holding no session, the gate's publish time does (a refusal met
 // again), or RETRY_WAIT_MS passes, so a second click cannot stack attempts
-// while the node has not picked up the first. The retry in hand lives in the
+// while the outpost has not picked up the first. The retry in hand lives in the
 // query cache under the endpoint (lib/session), so every notice for the
 // endpoint holds it, not only the one clicked.
 //
 // A refusal of a changed key (#1078) names both keys in place of the reason,
 // read off the gate as data (PinnedKeyNotice), and leads its ways out with
 // Trust this key, which declares the offered key as the new pin after a
-// confirm. The node's reason names the same two keys in prose, so it is not
+// confirm. The outpost's reason names the same two keys in prose, so it is not
 // repeated beside them.
 
 export default function SessionNotice(props: {
@@ -121,7 +121,7 @@ export default function SessionNotice(props: {
                 hint={
                   rejected()
                     ? "The component's own words, after the class the driver or the transport gave them. Whatever met the refusal (the reachability probe, a poll, a held session), nothing at or above the refused rung is tried again until something the endpoint connects with changes (the credential, the address, the port) or someone retries it."
-                    : "The node's account of the last attempt. It keeps redialing at a slow pace, so a component that returns comes back up on its own."
+                    : "The outpost's account of the last attempt. It keeps redialing at a slow pace, so a component that returns comes back up on its own."
                 }
               />
               <p data-testid="session-reason" class="break-words font-data text-[11.5px] text-base-content/80">{notice()?.reason}</p>

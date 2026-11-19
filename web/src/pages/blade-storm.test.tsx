@@ -30,12 +30,12 @@ import Vendors from "./Vendors";
 // refetch re-ran the memo, and the list was requested without end while the
 // blade was open (about 1,300 /event-rules requests in 6 seconds on Rules).
 //
-// Each case opens a registry page's blade against a stale cache and counts
+// Each case opens a catalog page's blade against a stale cache and counts
 // the page's list fetches: a storm runs into the hundreds within the window,
 // a healthy page reads the list a handful of times (the page, the title and
 // the body each mount an observer, and each stale mount may fetch once).
 
-const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
+const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
 
 type Case = {
   page: Component;
@@ -69,7 +69,7 @@ const CASES: Record<string, Case> = {
     extra: {
       selector: { component_types: [], components: [] }, sample_key: "endpoint-reachable", sample_lane: "property",
       fire_criteria: { expr: 'value == "down"' }, fire_sustain: "0s", clear_sustain: "0s",
-      fire_event_type: "condition-started", enabled: true, version: 1, open_alarms: 0, pending_streaks: 0,
+      fire_event_type: "rule-fired", enabled: true, version: 1, open_alarms: 0, pending_streaks: 0,
     },
   },
 };

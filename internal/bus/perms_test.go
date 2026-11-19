@@ -7,30 +7,30 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/collection"
 )
 
-// TestNodePermissionsScoped proves a node's grant covers only its own subjects
-// and never another node's, the core isolation contract expressed as permissions.
-func TestNodePermissionsScoped(t *testing.T) {
-	perms := nodePermissions("node-a")
+// TestOutpostPermissionsScoped proves an outpost's grant covers only its own subjects
+// and never another outpost's, the core isolation contract expressed as permissions.
+func TestOutpostPermissionsScoped(t *testing.T) {
+	perms := outpostPermissions("outpost-a")
 
 	wantPub := []string{
-		collection.WorklistSubject("node-a"),
-		collection.HeartbeatSubject("node-a"),
-		collection.TelemetrySubject("node-a"),
-		collection.CommandSubject("node-a"),
-		collection.CommandStatusSubject("node-a"),
-		collection.SimlistSubject("node-a"),
-		collection.SimHitSubject("node-a"),
+		collection.WorklistSubject("outpost-a"),
+		collection.HeartbeatSubject("outpost-a"),
+		collection.TelemetrySubject("outpost-a"),
+		collection.CommandSubject("outpost-a"),
+		collection.CommandStatusSubject("outpost-a"),
+		collection.SimlistSubject("outpost-a"),
+		collection.SimHitSubject("outpost-a"),
 	}
 	if got := perms.Publish.Allow; !equal(got, wantPub) {
 		t.Errorf("publish allow = %v, want %v", got, wantPub)
 	}
 	wantSub := []string{
-		collection.WorklistChangedSubject("node-a"),
-		collection.InboxPrefix("node-a") + ".>",
-		collection.SimopSubject("node-a"),
-		collection.RunSubject("node-a"),
-		collection.SimobsSubject("node-a"),
-		collection.RequestTallySubject("node-a"),
+		collection.WorklistChangedSubject("outpost-a"),
+		collection.InboxPrefix("outpost-a") + ".>",
+		collection.SimopSubject("outpost-a"),
+		collection.RunSubject("outpost-a"),
+		collection.SimobsSubject("outpost-a"),
+		collection.RequestTallySubject("outpost-a"),
 	}
 	if got := perms.Subscribe.Allow; !equal(got, wantSub) {
 		t.Errorf("subscribe allow = %v, want %v", got, wantSub)
@@ -46,10 +46,10 @@ func TestNodePermissionsScoped(t *testing.T) {
 		t.Errorf("response expires %v, want at least the run budget %v", perms.Response.Expires, runTimeout)
 	}
 
-	// No grant may reference another node's name.
+	// No grant may reference another outpost's name.
 	for _, s := range append(perms.Publish.Allow, perms.Subscribe.Allow...) {
-		if strings.Contains(s, "node-b") {
-			t.Errorf("node-a grant leaks node-b: %q", s)
+		if strings.Contains(s, "outpost-b") {
+			t.Errorf("outpost-a grant leaks outpost-b: %q", s)
 		}
 	}
 }

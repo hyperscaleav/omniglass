@@ -24,7 +24,7 @@ type propertyBody struct {
 	Official      bool            `json:"official"`
 	RetentionDays *int            `json:"retention_days,omitempty" required:"false" doc:"The type's own retention window in days, overriding its lane's; absent when the lane's applies (#417)"`
 	WrittenBy     *calcWriterBody `json:"written_by,omitempty" required:"false" doc:"The calc rule that writes this property, absent when none does (one enabled rule writes a key; a disabled writer is named when no rule is enabled)"`
-	WriterClass   string          `json:"writer_class" enum:"node-probe,platform,calc,collected" doc:"Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit"`
+	WriterClass   string          `json:"writer_class" enum:"outpost-probe,platform,calc,collected" doc:"Who may write this key (ADR-0161): outpost-probe (an outpost's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit"`
 }
 
 func toPropertyBody(p *storage.PropertyType) propertyBody {
@@ -72,9 +72,10 @@ type propertyNameInput struct {
 type updatePropertyInput struct {
 	Name string `path:"name" doc:"The property's name"`
 	Body struct {
-		Label       *string `json:"label,omitempty" doc:"A human label"`
-		Description *string `json:"description,omitempty" doc:"What the property means"`
-		Validation  any     `json:"validation,omitempty" doc:"A JSON Schema fragment (replaces wholesale)"`
+		UpdateMask  []string `json:"update_mask,omitempty" doc:"Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (validation back to unset); send [\"*\"] for full replacement. A field this resource does not patch is a 422 naming it"`
+		Label       *string  `json:"label,omitempty" doc:"A human label"`
+		Description *string  `json:"description,omitempty" doc:"What the property means"`
+		Validation  any      `json:"validation,omitempty" doc:"A JSON Schema fragment (replaces wholesale); omit to leave unchanged, or name validation in update_mask with no value here to CLEAR it"`
 	}
 }
 
@@ -146,17 +147,23 @@ func registerPropertyRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodPatch,
 		Path:        "/property-types/{name}",
 		Summary:     "Update a property",
-		Description: "Patches a custom property's label, description, or validation (a nil field is unchanged). Data type is fixed at creation. Official properties are read-only. Gated by property_type:update.",
+		Description: "Patches a custom property's label, description, or validation. Partial by default: the fields present in the body change and the rest are left alone. validation is a nullable object with no empty value, so it clears by being named in update_mask with no value in the body; label and description clear with an explicit empty string. A mask naming a field this resource does not patch is a 422. Data type is fixed at creation. Official properties are read-only. Gated by property_type:update.",
 	}, "property_type", "update"), func(ctx context.Context, in *updatePropertyInput) (*propertyOutput, error) {
 		validation, err := marshalValidation(in.Body.Validation)
 		if err != nil {
 			return nil, err
 		}
-		p, err := gw.UpdatePropertyType(ctx, actorID(ctx), in.Name, storage.PropertyTypePatch{
+		patch := storage.PropertyTypePatch{
 			Label:       in.Body.Label,
 			Description: in.Body.Description,
 			Validation:  validation,
-		})
+		}
+		write, err := resolveUpdateMask(in.Body.UpdateMask, storage.PropertyTypePatchFields, patch.Populated())
+		if err != nil {
+			return nil, err
+		}
+		patch.Write = write
+		p, err := gw.UpdatePropertyType(ctx, actorID(ctx), in.Name, patch)
 		if err != nil {
 			return nil, mapPropertyErr(err)
 		}
@@ -198,7 +205,9 @@ func registerPropertyRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 }
 
 // marshalValidation encodes an optional JSON Schema fragment to raw bytes; a nil
-// fragment stays nil (unchanged / unset).
+// fragment stays nil. Nil carries both "omitted" and an explicit null, which the
+// body cannot tell apart, so whether nil means unchanged or CLEAR is the PATCH's
+// update_mask, not this function's (#1189, ADR-0106).
 func marshalValidation(v any) ([]byte, error) {
 	if v == nil {
 		return nil, nil

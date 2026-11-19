@@ -4,7 +4,7 @@ date: 2026-11-10
 refs: [1647, 1639, 1644, 1662]
 ---
 
-With a simulator connected, [Platform health](/guides/operator/platform-health/#with-a-simulator) gains
+With a simulator connected, [Platform health](/operator/platform-health/#with-a-simulator) gains
 a section that sets what each simulated device saw beside what the node sent and the server collected.
 Each node with a simulator gets a card: every hop a request or a batch travels (connect, send, settle,
 return, publish, spool, and poll targets the simulator never saw) read as a loss ratio with its lost and

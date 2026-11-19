@@ -47,7 +47,7 @@ func TestObservedHTTPAnsweredRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = resp.Body.Close()
-	c := observedEventually(t, dev, "http", func(c ObservationCounters) bool { return c.OpenConnections == 0 && c.Settled() == 1 })
+	c := observedEventually(t, dev, "http", func(c ObservationCounters) bool { return c.OpenConnections == 0 && c.Settled() == 1 && c.InFlight == 0 })
 	if c.Accepted != 1 || c.Received != 1 || c.Answered != 1 || c.InFlight != 0 {
 		t.Fatalf("one answered request = %+v", c)
 	}
@@ -70,7 +70,7 @@ func TestObservedHTTPRefusedRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = resp.Body.Close()
-	c := observedEventually(t, dev, "http", func(c ObservationCounters) bool { return c.Settled() == 1 })
+	c := observedEventually(t, dev, "http", func(c ObservationCounters) bool { return c.Settled() == 1 && c.InFlight == 0 })
 	if c.Refused != 1 || c.Answered != 0 || c.Received != 1 {
 		t.Fatalf("one refused request = %+v", c)
 	}
@@ -106,7 +106,7 @@ func TestObservedHTTPClientHangUpIsDropped(t *testing.T) {
 	if _, err := oneShotClient().Do(req); err == nil {
 		t.Fatal("the cancelled request was answered")
 	}
-	c := observedEventually(t, dev, "http", func(c ObservationCounters) bool { return c.Settled() == 1 })
+	c := observedEventually(t, dev, "http", func(c ObservationCounters) bool { return c.Settled() == 1 && c.InFlight == 0 })
 	if c.Dropped != 1 || c.InFlight != 0 {
 		t.Fatalf("a client hang-up = %+v, want dropped", c)
 	}

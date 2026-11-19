@@ -73,7 +73,7 @@ func TestFileAnswersToItsFilename(t *testing.T) {
 	}
 }
 
-// groupNameFixture seeds a gateway with one human, one service account, and a
+// groupNameFixture seeds a gateway with one human, one machine user, and a
 // group.
 func groupNameFixture(t *testing.T) (context.Context, storage.Gateway, string, *storage.Group, string, string) {
 	t.Helper()
@@ -91,7 +91,7 @@ func groupNameFixture(t *testing.T) (context.Context, storage.Gateway, string, *
 	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: make([]byte, 32), Prefix: "root0000"}); err != nil {
 		t.Fatalf("bootstrap owner: %v", err)
 	}
-	alice, err := gw.CreateHumanPrincipal(ctx, "", storage.HumanSpec{Username: "alice", PasswordHash: "x"}, all)
+	alice, err := gw.CreatePerson(ctx, "", storage.PersonSpec{Username: "alice", PasswordHash: "x"}, all)
 	if err != nil {
 		t.Fatalf("create alice: %v", err)
 	}
@@ -111,21 +111,21 @@ func mustService(t *testing.T, ctx context.Context, dsn, name string) string {
 	}
 	defer conn.Close(ctx)
 	var id string
-	if err := conn.QueryRow(ctx, `insert into principal (kind) values ('service') returning id`).Scan(&id); err != nil {
-		t.Fatalf("insert principal: %v", err)
+	if err := conn.QueryRow(ctx, `insert into users (kind) values ('machine') returning id`).Scan(&id); err != nil {
+		t.Fatalf("insert user: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into service (principal_id, name) values ($1, $2)`, id, name); err != nil {
+	if _, err := conn.Exec(ctx, `insert into machine (user_id, name) values ($1, $2)`, id, name); err != nil {
 		t.Fatalf("insert service: %v", err)
 	}
 	return id
 }
 
-// TestPrincipalGroupAnswersToItsName pins #1133 on principal groups: every
+// TestUserGroupAnswersToItsName pins #1133 on user groups: every
 // group route resolves the group by name or uuid, its members by username or a
-// service account's name, and returns the uuid. The all-scope requirement runs
+// machine user's name, and returns the uuid. The all-scope requirement runs
 // first, so a scoped caller is refused the same way for a name that exists and
 // one that does not.
-func TestPrincipalGroupAnswersToItsName(t *testing.T) {
+func TestUserGroupAnswersToItsName(t *testing.T) {
 	t.Parallel()
 	ctx, gw, _, g, aliceID, svcID := groupNameFixture(t)
 
@@ -147,7 +147,7 @@ func TestPrincipalGroupAnswersToItsName(t *testing.T) {
 	}
 	got := map[string]bool{}
 	for _, m := range members {
-		got[m.PrincipalID] = true
+		got[m.UserID] = true
 	}
 	if !got[aliceID] || !got[svcID] {
 		t.Errorf("members = %v, want alice %s and ci-bot %s by uuid", got, aliceID, svcID)
@@ -181,8 +181,8 @@ func TestPrincipalGroupAnswersToItsName(t *testing.T) {
 
 	scoped := scope.Set{IDs: []string{g.ID}}
 	for _, ref := range []string{"late-shift", "no-such-group"} {
-		if _, err := gw.GetGroup(ctx, ref, scoped); !errors.Is(err, storage.ErrPrincipalForbidden) {
-			t.Errorf("scoped get %q = %v, want ErrPrincipalForbidden whether or not it exists", ref, err)
+		if _, err := gw.GetGroup(ctx, ref, scoped); !errors.Is(err, storage.ErrUserForbidden) {
+			t.Errorf("scoped get %q = %v, want ErrUserForbidden whether or not it exists", ref, err)
 		}
 	}
 	if err := gw.DeleteGroup(ctx, "", "late-shift", all); err != nil {
@@ -190,26 +190,26 @@ func TestPrincipalGroupAnswersToItsName(t *testing.T) {
 	}
 }
 
-// TestPrincipalRefAcceptsAServiceName: a principal reference is a uuid, a
-// human's username, or a service account's name; a word that is both a username
-// and a service name names no one principal and is refused.
-func TestPrincipalRefAcceptsAServiceName(t *testing.T) {
+// TestUserRefAcceptsAServiceName: a user reference is a uuid, a
+// human's username, or a machine user's name; a word that is both a username
+// and a service name names no one user and is refused.
+func TestUserRefAcceptsAServiceName(t *testing.T) {
 	t.Parallel()
 	ctx, gw, dsn, _, aliceID, svcID := groupNameFixture(t)
 	for ref, want := range map[string]string{"alice": aliceID, "ci-bot": svcID, svcID: svcID} {
-		got, err := gw.ResolvePrincipalRef(ctx, ref)
+		got, err := gw.ResolveUserRef(ctx, ref)
 		if err != nil || got != want {
 			t.Fatalf("resolve %q = %q (err %v), want %s", ref, got, err, want)
 		}
 	}
 	mustService(t, ctx, dsn, "alice")
-	_, err := gw.ResolvePrincipalRef(ctx, "alice")
+	_, err := gw.ResolveUserRef(ctx, "alice")
 	var unresolved *storage.ErrUnresolvedRef
-	if !errors.As(err, &unresolved) || !errors.Is(err, storage.ErrPrincipalNotFound) || len(unresolved.Candidates) != 2 {
+	if !errors.As(err, &unresolved) || !errors.Is(err, storage.ErrUserNotFound) || len(unresolved.Candidates) != 2 {
 		t.Fatalf("resolve a shared name = %v, want an ErrUnresolvedRef naming both", err)
 	}
-	if _, err := gw.ResolvePrincipalRef(ctx, "nobody"); !errors.Is(err, storage.ErrPrincipalNotFound) {
-		t.Errorf("resolve an unknown name = %v, want ErrPrincipalNotFound", err)
+	if _, err := gw.ResolveUserRef(ctx, "nobody"); !errors.Is(err, storage.ErrUserNotFound) {
+		t.Errorf("resolve an unknown name = %v, want ErrUserNotFound", err)
 	}
 }
 

@@ -119,32 +119,32 @@ func (o labMeasureOpts) check() error {
 func newLabMeasureCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "measure",
-		Short: "Measure a running scale lab: rows a minute, growth, WAL a sample, CPU and memory, ingest lag, redeliveries, the consumer lane's busy fraction, fleet view and system page times, the retention drain and each kind's delivery loss, once or sampled on an interval",
+		Short: "Measure a running scale lab: rows a minute, growth, WAL a sample, CPU and memory, ingest lag, redeliveries, the busiest ingest lane's busy fraction, fleet view and system page times, the retention drain and each kind's delivery loss, once or sampled on an interval",
 		Long: "Measures a scale lab (`omniglass lab run --scenario corporate --systems N`) over a stated window and prints " +
 			"one table: rows a minute per lane, table and WAL growth a day extrapolated from the window, CPU and memory " +
 			"per container, WAL bytes a sample, ingest lag from probe to row (p50, p95, p99), consumer redeliveries, the " +
-			"ingest consumer lane's busy fraction and service time a batch, the console's fleet view response " +
-			"times, the retention pass's drain rate, each telemetry kind's delivery loss across the node hop and the " +
-			"ingest hop (in, out, loss, deduplicated and the cause of any loss), the node lane and the push lane apart, " +
+			"busiest ingest lane's busy fraction and service time a batch, the console's fleet view response " +
+			"times, the retention pass's drain rate, each telemetry kind's delivery loss across the outpost hop and the " +
+			"ingest hop (in, out, loss, deduplicated and the cause of any loss), the outpost lane and the push lane apart, " +
 			"each polled protocol's loss across the sim hop (the requests the simulated endpoints settled against the " +
-			"replies that reached the node), and the node lane's end-to-end loss a kind. It writes the same figures as " +
+			"replies that reached the outpost), and the outpost lane's end-to-end loss a kind. It writes the same figures as " +
 			"JSON so two runs compare.\n\n" +
 			"With no --systems it measures the scale lab already running. With --systems it brings up a throwaway scale " +
 			"lab of that size, measures it, and removes it, so the one command is the whole run.\n\n" +
 			"When no sample probed in the window had landed by its end, the ingest lag cell reads not measured, with the " +
 			"reason and the age of the newest landed sample under the table, and every other figure still prints. The " +
-			"consumer lane row is read from the server's periodic `ingest lane` log line and needs two tallies, 30 s " +
-			"apart, inside the window; a window too short to hold them reads not measured, with the reason under the table.\n\n" +
-			"The delivery read waits, up to --settle-timeout, until every boot that minted a batch in the window (each node's, and the server's for the push lane) has " +
-			"landed one minted after it and the server's telemetry consumer has acknowledged, landed or dropped at the bound, " +
+			"consumer lane row is read from the server's periodic `ingest lane` log line, a line a lane, and needs two of a " +
+			"lane's tallies, 30 s apart, inside the window; a window too short to hold them reads not measured, with the reason under the table.\n\n" +
+			"The delivery read waits, up to --settle-timeout, until every boot that minted a batch in the window (each outpost's, and the server's for the push lane) has " +
+			"landed one minted after it and the server's ingest lanes have acknowledged, landed or dropped at the bound, " +
 			"every batch the stream held once all of those were published (its ack floor past the stream's last sequence), " +
 			"so a consumer that never empties under steady load still settles; then it reconciles each batch's " +
-			"ledger against what landed. The node hop is what each node minted against what its spool shipped: a batch " +
+			"ledger against what landed. The outpost hop is what each outpost minted against what its spool shipped: a batch " +
 			"its spool dropped (overflow, age, refused by the bus) and items it lost before any batch carried them " +
-			"(self-log overflow, encode failure) read under their cause. The ingest hop is what the node (or the server, " +
+			"(self-log overflow, encode failure) read under their cause. The ingest hop is what the outpost (or the server, " +
 			"for the push lane) shipped against what was stored. A healthy lab reads loss 0 for every kind on both hops; " +
-			"a boot that did not settle prints unsettled with its node (or as the push lane), and no ratio is read from " +
-			"it. A boot its node followed with another boot (the node restarted with batches still spooled) is read as " +
+			"a boot that did not settle prints unsettled with its outpost (or as the push lane), and no ratio is read from " +
+			"it. A boot its outpost followed with another boot (the outpost restarted with batches still spooled) is read as " +
 			"far as it landed and prints unshipped: what it held never shipped, and nothing landed says how much.\n\n" +
 			"Every database read the measure makes runs under what its run has left, and never longer than ten minutes: " +
 			"the database itself stops a read at that bound, and a run that is interrupted cancels the read in flight, so " +
@@ -217,7 +217,7 @@ func newLabMeasureCmd() *cobra.Command {
 	f.Int("fleet-reads", lab.FleetViewReads, "how many timed fleet view reads, spread over the window")
 	f.Int64("backlog", 150000, "aged property rows the retention probe plants; 0 skips the probe and its server restart (0 when sampling)")
 	f.Duration("drain-timeout", 3*time.Minute, "how long the retention probe waits for the pass to clear the backlog")
-	f.Duration("settle-timeout", 5*time.Minute, "how long the delivery read waits for every node's and the push lane's batches from the window to land before naming a boot unsettled; "+
+	f.Duration("settle-timeout", 5*time.Minute, "how long the delivery read waits for every outpost's and the push lane's batches from the window to land before naming a boot unsettled; "+
 		"at the platform's 60s report window the settle can take four of them: a batch proving the window lands within one, the server reads the stream's last sequence after it within two more, and the ack floor passes that within one more")
 	f.String("json", "lab-measure.json", "also write the figures here as JSON; empty writes none")
 	f.Int("page-clients", 0, "how many clients load the console's system page at once across the window; 0 skips the load")

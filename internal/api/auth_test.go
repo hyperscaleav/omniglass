@@ -15,7 +15,7 @@ import (
 
 // TestAuthMeAndRoles is the slice's end-to-end proof: a bootstrapped owner
 // authenticates and reads /auth/me and /roles; an unauthenticated call is 401;
-// and a principal whose role lacks role:read is 403 on /roles but still 200 on
+// and a user whose role lacks role:read is 403 on /roles but still 200 on
 // /auth/me (authn does not require a capability). Skipped under -short.
 func TestAuthMeAndRoles(t *testing.T) {
 	t.Parallel()
@@ -38,7 +38,7 @@ func TestAuthMeAndRoles(t *testing.T) {
 		t.Fatalf("bootstrap: %v", err)
 	}
 
-	limitedTok := setupLimitedPrincipal(t, ctx, dsn)
+	limitedTok := setupLimitedUser(t, ctx, dsn)
 
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
@@ -74,20 +74,20 @@ func TestAuthMeAndRoles(t *testing.T) {
 		t.Errorf("/auth/me with bad token = %d, want 401", code)
 	}
 
-	// Owner /auth/me: 200 with the human identity, the owner@all grant, and a
+	// Owner /auth/me: 200 with the person, the owner@all grant, and a
 	// non-empty permission set.
 	code, body := get("/api/v1/auth/me", ownerTok)
 	if code != http.StatusOK {
 		t.Fatalf("/auth/me as owner = %d, want 200 (body %s)", code, body)
 	}
 	var me struct {
-		Principal struct {
+		User struct {
 			ID   string `json:"id"`
 			Kind string `json:"kind"`
-		} `json:"principal"`
-		Human *struct {
+		} `json:"user"`
+		Person *struct {
 			Username string `json:"username"`
-		} `json:"human"`
+		} `json:"person"`
 		Permissions []string `json:"permissions"`
 		Grants      []struct {
 			Role      string `json:"role"`
@@ -97,8 +97,8 @@ func TestAuthMeAndRoles(t *testing.T) {
 	if err := json.Unmarshal(body, &me); err != nil {
 		t.Fatalf("decode /auth/me: %v", err)
 	}
-	if me.Principal.Kind != "human" || me.Human == nil || me.Human.Username != "root" {
-		t.Errorf("/auth/me principal = %+v, human = %+v, want human root", me.Principal, me.Human)
+	if me.User.Kind != "person" || me.Person == nil || me.Person.Username != "root" {
+		t.Errorf("/auth/me user = %+v, person = %+v, want person root", me.User, me.Person)
 	}
 	if len(me.Permissions) == 0 {
 		t.Error("/auth/me owner permissions empty")
@@ -118,7 +118,7 @@ func TestAuthMeAndRoles(t *testing.T) {
 		t.Errorf("/roles as owner = %d, want 200", code)
 	}
 
-	// The limited principal can see itself but cannot list roles.
+	// The limited user can see itself but cannot list roles.
 	if code, _ := get("/api/v1/auth/me", limitedTok); code != http.StatusOK {
 		t.Errorf("/auth/me as limited = %d, want 200", code)
 	}
@@ -127,10 +127,10 @@ func TestAuthMeAndRoles(t *testing.T) {
 	}
 }
 
-// setupLimitedPrincipal inserts a service principal whose only grant is a custom
+// setupLimitedUser inserts a service user whose only grant is a custom
 // role with alarm:ack (and so no role:read, not even via the read floor, since
 // it holds no permission on the role resource), and returns its bearer token.
-func setupLimitedPrincipal(t *testing.T, ctx context.Context, dsn string) string {
+func setupLimitedUser(t *testing.T, ctx context.Context, dsn string) string {
 	t.Helper()
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
@@ -145,11 +145,11 @@ func setupLimitedPrincipal(t *testing.T, ctx context.Context, dsn string) string
 	}
 	var pid string
 	if err := conn.QueryRow(ctx,
-		`insert into principal (kind) values ('service') returning id`).Scan(&pid); err != nil {
-		t.Fatalf("insert principal: %v", err)
+		`insert into users (kind) values ('machine') returning id`).Scan(&pid); err != nil {
+		t.Fatalf("insert user: %v", err)
 	}
 	if _, err := conn.Exec(ctx,
-		`insert into service (principal_id, name) values ($1, 'limited-svc')`, pid); err != nil {
+		`insert into machine (user_id, name) values ($1, 'limited-svc')`, pid); err != nil {
 		t.Fatalf("insert service: %v", err)
 	}
 	tok, hash, prefix, err := auth.NewBearerToken()
@@ -157,12 +157,12 @@ func setupLimitedPrincipal(t *testing.T, ctx context.Context, dsn string) string
 		t.Fatalf("mint limited token: %v", err)
 	}
 	if _, err := conn.Exec(ctx,
-		`insert into credential (principal_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`,
+		`insert into credential (user_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`,
 		pid, hash, prefix); err != nil {
 		t.Fatalf("insert credential: %v", err)
 	}
 	if _, err := conn.Exec(ctx,
-		`insert into principal_grant (principal_id, role_id, scope_kind) values ($1, (select id from role where name = 'limited'), 'all')`,
+		`insert into user_grant (user_id, role_id, scope_kind) values ($1, (select id from role where name = 'limited'), 'all')`,
 		pid); err != nil {
 		t.Fatalf("insert grant: %v", err)
 	}

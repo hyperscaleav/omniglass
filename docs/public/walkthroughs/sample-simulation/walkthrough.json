@@ -1,7 +1,7 @@
 {
   "id": "sample-simulation",
   "title": "Read a simulated component's status",
-  "description": "The Simulation page lists every component a simulator serves beside a node. Open one to see where it is served and what has reached it.",
+  "description": "The Simulation page lists every component a simulator serves beside an outpost. Open one to see where it is served and what has reached it.",
   "steps": [
     {
       "n": 1,
@@ -43,8 +43,8 @@
   "poster": "step-04.png",
   "preview": "preview.webp",
   "budget": {
-    "seconds": 19.9,
-    "bytes": 585287,
-    "previewBytes": 711988
+    "seconds": 16.6,
+    "bytes": 870134,
+    "previewBytes": 1100932
   }
 }

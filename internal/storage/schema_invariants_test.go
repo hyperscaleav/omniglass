@@ -36,19 +36,19 @@ func TestChurnDroppedConstraintsRestored(t *testing.T) {
 		{"location_type_property", "property_type_id", "a join/contract foreign key with a NULL side is meaningless"},
 		// The position floor (20260807146000_assignment_position_floor.sql,
 		// #626): every assignment carries its ordering position within its
-		// role, not just those written after the floor landed (the
+		// slot, not just those written after the floor landed (the
 		// preceding backfill fills every existing row first). Not a foreign
 		// key: an ordering integer with no NULL reading at all, since
 		// "unpositioned" is exactly the state the backfill exists to close
 		// out before the floor lands.
-		{"system_role_assignment", "position", "an assignment's ordering position has no meaning when unset"},
-		// role_choice and choice_alternate (20260807150000_role_choices_and_alternates.sql,
+		{"system_slot_assignment", "position", "an assignment's ordering position has no meaning when unset"},
+		// slot_choice and choice_alternate (20260807150000_role_choices_and_alternates.sql,
 		// #626): new tables, not churn, but the same guard is the cheapest
 		// place to pin that a fresh column recreation never drops these.
 		{"choice_alternate", "choice_id", "an alternate with no choice cannot be grouped by anything"},
 		{"choice_alternate", "position", "the tie-break internal/health.Choice.Active reads has no meaning when unset"},
-		{"role_choice", "owner_kind", "a choice with no declared owner kind cannot resolve its arc"},
-		{"role_choice", "name", "an unnamed choice cannot be addressed"},
+		{"slot_choice", "owner_kind", "a choice with no declared owner kind cannot resolve its arc"},
+		{"slot_choice", "name", "an unnamed choice cannot be addressed"},
 	}
 	for _, c := range notNull {
 		var nullable string

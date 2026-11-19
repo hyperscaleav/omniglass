@@ -18,12 +18,12 @@ import {
   deleteDriver,
 } from "../lib/drivers";
 import { useMe, can } from "../lib/auth";
-import { registryLock } from "../lib/catalog";
+import { catalogLock } from "../lib/catalog";
 import { createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
-// Drivers: the driver registry (the driver picker on the product form), on the
+// Drivers: the driver catalog (the driver picker on the product form), on the
 // flat FlatList surface. A driver is addressed by its kebab name (ADR-0062:
 // the uuid is identity, the name is what an operator reads and types);
 // official rows are read-only, same as the Types catalog's
@@ -148,7 +148,7 @@ function DriverBladeBody(p: { id: string }): JSX.Element {
       row() && !row()!.official && can(me.data, "driver", "delete")
         ? { label: "Delete", tone: "danger", onClick: removeDriver }
         : undefined,
-    locked: () => registryLock(row(), me.data, "driver"),
+    locked: () => catalogLock(row(), me.data, "driver"),
   });
 
   return (

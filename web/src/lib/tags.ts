@@ -1,14 +1,14 @@
 import { api } from "../api/client";
 
 // The tags data layer: thin typed wrappers over the generated client. A tag is a
-// governed key in the tenant-wide vocabulary. This layer covers the key registry
+// governed key in the tenant-wide vocabulary. This layer covers the key catalog
 // (mint, edit governance fields, delete); a key is addressed by its name, not an
 // id, on the write paths. Value bindings and the effective-tags cascade are a
 // separate surface.
 
-export type EntityKind = "component" | "system" | "location" | "node";
+export type EntityKind = "component" | "system" | "location" | "outpost";
 
-export const ENTITY_KINDS: EntityKind[] = ["component", "system", "location", "node"];
+export const ENTITY_KINDS: EntityKind[] = ["component", "system", "location", "outpost"];
 
 export type Tag = {
   id: string;
@@ -89,7 +89,7 @@ export async function listEntityTags(kind: EntityKind, name: string): Promise<Ta
     kind === "component" ? await api.GET("/components/{name}:listTags", p)
     : kind === "system" ? await api.GET("/systems/{name}:listTags", p)
     : kind === "location" ? await api.GET("/locations/{name}:listTags", p)
-    : await api.GET("/nodes/{name}:listTags", p);
+    : await api.GET("/outposts/{name}:listTags", p);
   if (r.error) throw r.error;
   return (r.data?.tags ?? []).map((t) => ({ key: t.key, value: t.value })) as TagBinding[];
 }
@@ -100,7 +100,7 @@ export async function setTag(kind: EntityKind, name: string, key: string, value:
     kind === "component" ? await api.POST("/components/{name}:setTag", p)
     : kind === "system" ? await api.POST("/systems/{name}:setTag", p)
     : kind === "location" ? await api.POST("/locations/{name}:setTag", p)
-    : await api.POST("/nodes/{name}:setTag", p);
+    : await api.POST("/outposts/{name}:setTag", p);
   if (r.error) throw r.error;
 }
 
@@ -123,6 +123,6 @@ export async function removeTag(kind: EntityKind, name: string, key: string): Pr
     kind === "component" ? await api.POST("/components/{name}:removeTag", p)
     : kind === "system" ? await api.POST("/systems/{name}:removeTag", p)
     : kind === "location" ? await api.POST("/locations/{name}:removeTag", p)
-    : await api.POST("/nodes/{name}:removeTag", p);
+    : await api.POST("/outposts/{name}:removeTag", p);
   if (r.error) throw r.error;
 }

@@ -18,7 +18,7 @@ const TLSModeInput = "tls-mode"
 
 // The tls verification modes.
 const (
-	// TLSModeVerify checks the certificate against the node's system roots,
+	// TLSModeVerify checks the certificate against the outpost's system roots,
 	// with the server name taken from the host input.
 	TLSModeVerify = "verify"
 	// TLSModePin trusts the first public key the component offers and
@@ -32,7 +32,7 @@ const (
 // TLSModes is every mode, in the order the docs and refusals name them.
 func TLSModes() []string { return []string{TLSModeVerify, TLSModePin, TLSModeSkip} }
 
-// ParseTLSMode reads a mode as the node does: empty is verify (a driver that
+// ParseTLSMode reads a mode as the outpost does: empty is verify (a driver that
 // declares no mode, or a bare endpoint that sets none), anything else must
 // be one of the modes.
 func ParseTLSMode(v string) (string, error) {

@@ -1,7 +1,7 @@
 import type { EntityKind, Tag } from "./tags";
 
 // tagdraft: the pure core of the TagAdder. It decides, with no I/O, which
-// registry keys the key-stage should suggest for an entity, whether a typed key
+// catalog keys the key-stage should suggest for an entity, whether a typed key
 // already exists (so the value stage can proceed) or would be a new key (the
 // coin-new-key path), and whether a value is bindable. The component is a thin
 // shell over these functions, so the picking and validation logic stays
@@ -14,7 +14,7 @@ export function keyApplies(tag: Tag, kind: EntityKind): boolean {
   return tag.applies_to.length === 0 || tag.applies_to.includes(kind);
 }
 
-// keySuggestions returns the registry keys to offer in the key stage: those that
+// keySuggestions returns the catalog keys to offer in the key stage: those that
 // apply to the entity kind, are not already bound on it, and match the query as a
 // case-insensitive substring, ordered by name. An empty query lists them all.
 export function keySuggestions(all: Tag[], kind: EntityKind, bound: string[], query: string): Tag[] {
@@ -27,7 +27,7 @@ export function keySuggestions(all: Tag[], kind: EntityKind, bound: string[], qu
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-// exactKey returns the registry key whose name equals the query exactly (case
+// exactKey returns the catalog key whose name equals the query exactly (case
 // sensitive, since keys are normalized lowercase), or undefined. A match means
 // the key exists and the value stage can proceed; no match with a non-empty
 // query is the coin-new-key candidate.

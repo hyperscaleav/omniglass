@@ -23,6 +23,11 @@ export type ChartOpts = {
   // default), a property holds its value until the next change ("step",
   // #1269).
   mode?: "line" | "step";
+  // The value already in force when the window opens (#1488), step mode only:
+  // drawn flat from the window's left edge to the first change, so a property
+  // that did not change inside the window is not a blank chart. It is no
+  // sample, so it is never a crosshair point.
+  carriedIn?: number;
 };
 
 export type BucketOpts = ChartOpts & { resolutionMs: number };
@@ -63,10 +68,13 @@ export function chartLayout(samples: ChartSample[], o: ChartOpts): ChartLayout {
     x: o.padLeft + f * (o.width - o.padLeft - o.padRight),
     ts: new Date(o.now - (1 - f) * o.windowMs).toISOString(),
   }));
-  if (rows.length === 0) return emptyLayout(xTicks);
+  const carried = o.mode === "step" && o.carriedIn !== undefined && Number.isFinite(o.carriedIn) ? o.carriedIn : undefined;
+  if (rows.length === 0 && carried === undefined) return emptyLayout(xTicks);
 
-  let lo = Math.min(...rows.map((r) => r.value));
-  let hi = Math.max(...rows.map((r) => r.value));
+  const values = rows.map((r) => r.value);
+  if (carried !== undefined) values.push(carried);
+  let lo = Math.min(...values);
+  let hi = Math.max(...values);
   // A padded domain: a flat series draws mid-frame, never on the edge.
   const span = hi - lo || Math.abs(hi) * 0.1 || 1;
   lo -= span * 0.15;
@@ -78,15 +86,17 @@ export function chartLayout(samples: ChartSample[], o: ChartOpts): ChartLayout {
   const y = (v: number) => o.padY + (1 - (v - lo) / (hi - lo)) * plotH;
 
   const points: ChartPoint[] = rows.map((r) => ({ x: x(r.t), y: y(r.value), ts: r.ts, value: r.value }));
-  const linePath = o.mode === "step" ? stepPath(points, x(o.now)) : points.map((p, i) => `${i === 0 ? "M" : "L"}${f2(p.x)},${f2(p.y)}`).join(" ");
+  const start = carried === undefined ? undefined : { x: o.padLeft, y: y(carried) };
+  const linePath = o.mode === "step" ? stepPath(points, x(o.now), start) : points.map((p, i) => `${i === 0 ? "M" : "L"}${f2(p.x)},${f2(p.y)}`).join(" ");
   const base = (o.height - o.padY).toFixed(2);
-  const areaEnd = o.mode === "step" ? x(o.now) : points[points.length - 1].x;
-  const areaPath = `${linePath} L${f2(areaEnd)},${base} L${f2(points[0].x)},${base} Z`;
+  const areaEnd = o.mode === "step" ? Math.max(x(o.now), points.length ? points[points.length - 1].x : 0) : points[points.length - 1].x;
+  const areaPath = `${linePath} L${f2(areaEnd)},${base} L${f2(start ? start.x : points[0].x)},${base} Z`;
 
   // Three ticks: bottom, middle, top of the padded domain, rounded for the
   // label without leaving the domain.
   const yTicks = [lo, (lo + hi) / 2, hi];
-  const end = points[points.length - 1];
+  // With no change in the window the held value is the newest reading, at now.
+  const end = points.length ? points[points.length - 1] : { x: x(o.now), y: (start as { y: number }).y, value: carried as number };
   const endLabel = {
     x: Math.min(Math.max(end.x, o.padLeft + 14), o.width - o.padRight),
     y: Math.max(end.y - 9, 9),
@@ -103,13 +113,17 @@ function emptyLayout(xTicks: ChartLayout["xTicks"]): ChartLayout {
 // stepPath holds each row's value until the next row's own x, then changes it
 // there with a vertical edge, and holds the last value out to the right edge:
 // an observed value is in force from its ts, never ramped toward the next.
-function stepPath(points: ChartPoint[], xEnd: number): string {
-  const cmds = [`M${f2(points[0].x)},${f2(points[0].y)}`];
-  for (let i = 1; i < points.length; i++) {
-    cmds.push(`L${f2(points[i].x)},${f2(points[i - 1].y)}`, `L${f2(points[i].x)},${f2(points[i].y)}`);
+// A carried-in start (#1488) is the value in force at the left edge: it holds
+// to the first row exactly as one row holds to the next.
+function stepPath(points: ChartPoint[], xEnd: number, start?: { x: number; y: number }): string {
+  const head = start ?? points[0];
+  const cmds = [`M${f2(head.x)},${f2(head.y)}`];
+  let prev = head;
+  for (const p of start ? points : points.slice(1)) {
+    cmds.push(`L${f2(p.x)},${f2(prev.y)}`, `L${f2(p.x)},${f2(p.y)}`);
+    prev = p;
   }
-  const last = points[points.length - 1];
-  cmds.push(`L${f2(Math.max(xEnd, last.x))},${f2(last.y)}`);
+  cmds.push(`L${f2(Math.max(xEnd, prev.x))},${f2(prev.y)}`);
   return cmds.join(" ");
 }
 

@@ -21,14 +21,16 @@ import (
 // bare-name reference that used to be unique by construction can match more
 // than one row).
 //
-// Candidates is empty for a path that resolved with no caller scope to filter
-// by at all (the three *NameTaken advisories, storage.withoutCandidates): the
-// reference is still refused as ambiguous, the message just names no uuid,
-// since nothing on that path could tell which ones the caller may read. A path
-// that resolved WITHIN the caller's own read scope lists them (#697), because
-// every candidate is then a row that caller may read, and each is a spelling of
-// the same reference that resolves: this message is the only place an operator
-// is told which rows collided.
+// storage.ErrAmbiguousName (a tree entity's bare name that more than one row
+// answers to) is the same 404 an unresolved #1133 reference gets (#1134), so the
+// answer to a repeated name does not depend on the collection. Its candidates are
+// empty for a path that resolved with no caller scope to filter by at all (the
+// three *NameTaken advisories, storage.withoutCandidates): the reference is still
+// refused, the message just names no uuid, since nothing on that path could tell
+// which ones the caller may read. A path that resolved WITHIN the caller's own
+// read scope lists them (#697), each as its dotted address with the uuid beside
+// it, because every candidate is then a row that caller may read and a spelling
+// of the same reference that resolves.
 //
 // storage.ErrPathNotFound is a dotted address that failed to resolve
 // structurally (a missing segment, or a plane mismatch): mapped to the SAME
@@ -39,12 +41,12 @@ import (
 // syntax failure caught before any query ran (an empty segment, an
 // unrecognized accessor, a segment failing the entity name rule): a 422, the
 // caller's Msg verbatim. storage.ErrAddressNotAccepted is a dotted or
-// accessor-bearing ref sent to a registry whose names stay a single global
-// token (node, tag, the four lane types): also a 422, naming the kind.
+// accessor-bearing ref sent to a catalog whose names stay a single global
+// token (outpost, tag, the four lane types): also a 422, naming the kind.
 //
 // storage.ErrUnresolvedRef is a name reference to one of the resources #1133
 // made addressable by name (an endpoint, a secret, a variable, a file, a
-// principal group, a principal) that resolves to no single row the caller may
+// user group, a user) that resolves to no single row the caller may
 // see: a 404 naming what was looked up, and, when more than one visible row
 // answers to it, every one of them in the spelling that does resolve. Those
 // candidates are built after the scope filter, so an absent row and an
@@ -56,14 +58,7 @@ func mapRefErr(err error) (error, bool) {
 	}
 	var ambig *storage.ErrAmbiguousName
 	if errors.As(err, &ambig) {
-		if len(ambig.Candidates) == 0 {
-			return huma.Error409Conflict(fmt.Sprintf(
-				"%q is ambiguous for %s: matches more than one row. Address it by uuid instead of by name.",
-				ambig.Ref, ambig.Kind)), true
-		}
-		return huma.Error409Conflict(fmt.Sprintf(
-			"%q is ambiguous for %s: matches %s. Address it by uuid instead of by name.",
-			ambig.Ref, ambig.Kind, strings.Join(ambig.Candidates, ", "))), true
+		return huma.Error404NotFound(unresolvedRefMessage(ambiguousAsUnresolved(ambig))), true
 	}
 	var notFound *storage.ErrPathNotFound
 	if errors.As(err, &notFound) {
@@ -145,7 +140,7 @@ func mapDraftedNameErr(err error) (error, bool) {
 	return nil, false
 }
 
-// mapTypeErr translates the shared type-registry storage sentinels into HTTP
+// mapTypeErr translates the shared type-catalog storage sentinels into HTTP
 // status. kind is the wire label used in the message (e.g. "location_type").
 // Shared by the location/system/component type routes.
 func mapTypeErr(err error, kind string) error {
@@ -155,8 +150,8 @@ func mapTypeErr(err error, kind string) error {
 	// A mask this resource cannot honor is a request fault that NAMES the
 	// field, never a silent no-op: the caller stated an intent the resource has
 	// no field for, and swallowing it would leave them believing a write landed
-	// (ADR-0091). Here rather than in one registry's own mapper because the
-	// mask is a wire primitive every registry adopting it reaches the same way.
+	// (ADR-0091). Here rather than in one catalog's own mapper because the
+	// mask is a wire primitive every catalog adopting it reaches the same way.
 	var maskErr *updatemask.Error
 	if errors.As(err, &maskErr) {
 		return huma.Error422UnprocessableEntity(maskErr.Error())
@@ -198,6 +193,27 @@ func mapTypeErr(err error, kind string) error {
 	default:
 		return huma.Error500InternalServerError("type operation failed")
 	}
+}
+
+// ambiguousAsUnresolved restates a tree entity's ambiguous name as the one
+// refusal every collection answers (#1134): a candidate is spelled as its dotted
+// address with its uuid beside it, so it resolves on the same route and can be
+// told from its siblings without a second lookup. A redacted error (no
+// candidates, because the path had no caller scope to filter by) says only that
+// more than one row answers to the name.
+func ambiguousAsUnresolved(a *storage.ErrAmbiguousName) *storage.ErrUnresolvedRef {
+	e := &storage.ErrUnresolvedRef{Kind: a.Kind, Ref: a.Ref}
+	if len(a.Addresses) != len(a.Candidates) {
+		e.Candidates = a.Candidates
+	} else {
+		for i, id := range a.Candidates {
+			e.Candidates = append(e.Candidates, fmt.Sprintf("%s (%s)", a.Addresses[i], id))
+		}
+	}
+	if len(e.Candidates) == 0 {
+		e.Hint = "more than one row answers to it; address it by dotted address or uuid"
+	}
+	return e
 }
 
 // maxListedCandidates caps the spellings an unresolved name's 404 lists.

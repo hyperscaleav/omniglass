@@ -20,7 +20,7 @@ type eventTypeBody struct {
 	Description   string          `json:"description,omitempty"`
 	PayloadSchema json.RawMessage `json:"payload_schema,omitempty" doc:"A JSON Schema fragment for the occurrence payload"`
 	Official      bool            `json:"official"`
-	WriterClass   string          `json:"writer_class" enum:"node-probe,platform,command-lifecycle,calc,collected" doc:"Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), command-lifecycle (a command's own issue: command-issued), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit"`
+	WriterClass   string          `json:"writer_class" enum:"outpost-probe,platform,command-lifecycle,calc,collected" doc:"Who may write this key (ADR-0161): outpost-probe (an outpost's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), command-lifecycle (a command's own issue: command-issued), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit"`
 }
 
 func toEventTypeBody(et *storage.EventType) eventTypeBody {
@@ -58,9 +58,10 @@ type createEventTypeInput struct {
 type updateEventTypeInput struct {
 	Name string `path:"name" doc:"The event type's name"`
 	Body struct {
-		Label         *string `json:"label,omitempty" doc:"A human label"`
-		Description   *string `json:"description,omitempty" doc:"What the occurrence means"`
-		PayloadSchema any     `json:"payload_schema,omitempty" doc:"A JSON Schema fragment (replaces wholesale)"`
+		UpdateMask    []string `json:"update_mask,omitempty" doc:"Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (payload_schema back to unset); send [\"*\"] for full replacement. A field this resource does not patch is a 422 naming it"`
+		Label         *string  `json:"label,omitempty" doc:"A human label"`
+		Description   *string  `json:"description,omitempty" doc:"What the occurrence means"`
+		PayloadSchema any      `json:"payload_schema,omitempty" doc:"A JSON Schema fragment (replaces wholesale); omit to leave unchanged, or name payload_schema in update_mask with no value here to CLEAR it"`
 	}
 }
 
@@ -72,6 +73,7 @@ type updateEventTypeInput struct {
 func registerEventTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-event-type",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/event-types",
 		Summary:     "List event types",
@@ -132,17 +134,23 @@ func registerEventTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Method:      http.MethodPatch,
 		Path:        "/event-types/{name}",
 		Summary:     "Update an event type",
-		Description: "Patches a custom event type's label, description, or payload schema (a nil field is unchanged). The name is fixed at creation. Official event types are read-only. Gated by event_type:update.",
+		Description: "Patches a custom event type's label, description, or payload schema. Partial by default: the fields present in the body change and the rest are left alone. payload_schema is a nullable object with no empty value, so it clears by being named in update_mask with no value in the body; label and description clear with an explicit empty string. A mask naming a field this resource does not patch is a 422. The name is fixed at creation. Official event types are read-only. Gated by event_type:update.",
 	}, "event_type", "update"), func(ctx context.Context, in *updateEventTypeInput) (*eventTypeOutput, error) {
 		schema, err := marshalValidation(in.Body.PayloadSchema)
 		if err != nil {
 			return nil, err
 		}
-		et, err := gw.UpdateEventType(ctx, actorID(ctx), in.Name, storage.EventTypePatch{
+		patch := storage.EventTypePatch{
 			Label:         in.Body.Label,
 			Description:   in.Body.Description,
 			PayloadSchema: schema,
-		})
+		}
+		write, err := resolveUpdateMask(in.Body.UpdateMask, storage.EventTypePatchFields, patch.Populated())
+		if err != nil {
+			return nil, err
+		}
+		patch.Write = write
+		et, err := gw.UpdateEventType(ctx, actorID(ctx), in.Name, patch)
 		if err != nil {
 			return nil, mapEventTypeErr(err)
 		}

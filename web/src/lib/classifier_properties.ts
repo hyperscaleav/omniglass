@@ -42,7 +42,7 @@ export const classifierPropertiesKey = (kind: ClassifierKind, id: string) => [`$
 
 // The authorization resource each classifier's contract writes are gated by,
 // matching the server routes (a location type's contract is part of the
-// location_type registry, so it is gated by location_type:*, not location:*).
+// location_type catalog, so it is gated by location_type:*, not location:*).
 export const CLASSIFIER_RESOURCE: Record<ClassifierKind, string> = {
   product: "product",
   standard: "standard",

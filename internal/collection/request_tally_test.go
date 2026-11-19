@@ -14,9 +14,9 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 )
 
-// The node's request tally is the node half of the closed loop the scale lab
+// The outpost's request tally is the outpost half of the closed loop the scale lab
 // reconciles against what each simulated endpoint observed: the same counters
-// in the same read order, counted where the bytes leave the node.
+// in the same read order, counted where the bytes leave the outpost.
 
 func TestRequestTallyEachOutcomeMovesOneCounter(t *testing.T) {
 	for _, out := range []collection.TallyOutcome{collection.TallyAnswered, collection.TallyRefused, collection.TallyError, collection.TallyTimedOut} {
@@ -80,7 +80,7 @@ func TestRequestTallyBeginEndAllocatesNothing(t *testing.T) {
 	}
 }
 
-// A node built without a tally (every unit test's fake wiring) counts
+// An outpost built without a tally (every unit test's fake wiring) counts
 // nothing and fails nothing.
 func TestRequestTallyNilIsANoOp(t *testing.T) {
 	var tally *collection.RequestTally
@@ -148,7 +148,7 @@ func newTallySimDevice(t *testing.T, auth sim.HTTPAuth) *sim.Device {
 }
 
 // A digest exchange is two requests on two connections (the challenge, then
-// the answer): the node counts both where the sim receives both.
+// the answer): the outpost counts both where the sim receives both.
 func TestTalliedDigestHTTPFetchCountsTwoSentAndTwoConnections(t *testing.T) {
 	if testing.Short() {
 		t.Skip("real-socket integration test")
@@ -172,7 +172,7 @@ func TestTalliedDigestHTTPFetchCountsTwoSentAndTwoConnections(t *testing.T) {
 	}
 	seen := simObservedEventually(t, dev, "http", func(o sim.ObservationCounters) bool { return o.Settled() == 2 && o.OpenConnections == 0 })
 	if seen.Received != c.Sent || seen.Accepted != c.Connections || seen.Refused != c.Refused || seen.Answered != c.Answered {
-		t.Fatalf("the sim observed %+v against the node's %+v", seen, c)
+		t.Fatalf("the sim observed %+v against the outpost's %+v", seen, c)
 	}
 }
 
@@ -201,9 +201,9 @@ func TestTalliedHTTPProbeCountsOneRequest(t *testing.T) {
 
 // A websocket endpoint's probe is a plain GET / (#1034), which the face's
 // listener accepts and answers without an upgrade. The probe tallies under
-// the task's transport, so the node's websocket row pairs with the sim's
+// the task's transport, so the outpost's websocket row pairs with the sim's
 // websocket row, and the face counts the request it answers off its path
-// (#1647): before, the node counted it as http while the sim counted only
+// (#1647): before, the outpost counted it as http while the sim counted only
 // the websocket accept, an artifact gap on a healthy lab.
 func TestTalliedWebSocketProbeCountsWhereTheFaceReceivesIt(t *testing.T) {
 	if testing.Short() {
@@ -231,7 +231,7 @@ func TestTalliedWebSocketProbeCountsWhereTheFaceReceivesIt(t *testing.T) {
 	}
 	seen := simObservedEventually(t, dev, "websocket", func(o sim.ObservationCounters) bool { return o.Settled() == 1 && o.OpenConnections == 0 })
 	if seen.Received != c.Sent || seen.Accepted != c.Connections || seen.Answered != c.Answered {
-		t.Fatalf("the sim observed %+v against the node's %+v", seen, c)
+		t.Fatalf("the sim observed %+v against the outpost's %+v", seen, c)
 	}
 }
 
@@ -281,7 +281,7 @@ func udpDropFirst(t *testing.T, agent net.Addr) string {
 	return front.LocalAddr().String()
 }
 
-// The node sends two datagrams, the first lost before the agent: the tally
+// The outpost sends two datagrams, the first lost before the agent: the tally
 // counts two sent, one timed out and one answered, and the sim received one.
 func TestTalliedSNMPGetPastADroppedDatagramCountsTwoSent(t *testing.T) {
 	if testing.Short() {

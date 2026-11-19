@@ -3,6 +3,7 @@ package storage
 import (
 	"encoding/json"
 	"testing"
+	"time"
 )
 
 // instanceValues builds a newest-first instance list from (instance, value) pairs.
@@ -83,5 +84,54 @@ func TestAgreeingValue(t *testing.T) {
 				t.Fatalf("got %+v, want instance %q", got, tc.instance)
 			}
 		})
+	}
+}
+
+// sameValue is the one comparison between an observed and a declared or
+// intended value (#1202): equal JSON by meaning, not by bytes.
+func TestSameValue(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, a, b string
+		same       bool
+	}{
+		{"identical string", `"a"`, `"a"`, true},
+		{"different string", `"a"`, `"b"`, false},
+		{"bool", `true`, `true`, true},
+		{"different bool", `true`, `false`, false},
+		{"integer", `3`, `3`, true},
+		{"different integer", `3`, `4`, false},
+		{"number spelling", `3.0`, `3`, true},
+		{"object key order and spacing", `{"b": 1, "a": [1, 2]}`, `{"a":[1,2],"b":1}`, true},
+		{"different object", `{"a": 1}`, `{"a": 2}`, false},
+		{"a bool is not its text", `true`, `"true"`, false},
+		{"a number is not its text", `3`, `"3"`, false},
+		{"not JSON on either side", `abc`, `abc`, true},
+		{"not JSON against JSON", `abc`, `3`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := sameValue(json.RawMessage(tc.a), json.RawMessage(tc.b)); got != tc.same {
+				t.Fatalf("sameValue(%s, %s) = %v, want %v", tc.a, tc.b, got, tc.same)
+			}
+		})
+	}
+}
+
+// Settle and the two reductions agree on the same typed value.
+func TestSettleAndReductionsCompareByMeaning(t *testing.T) {
+	t.Parallel()
+	now := time.Now()
+	intended := &CurrentValue{Value: json.RawMessage(`3`), TS: now.Add(-time.Second)}
+	if v := Settle(intended, &CurrentValue{Value: json.RawMessage(`3.0`), TS: now}, 60, now); v != SettlementSettled {
+		t.Fatalf("an observation spelling the intended value another way: %q, want settled", v)
+	}
+	if v := Settle(intended, &CurrentValue{Value: json.RawMessage(`4`), TS: now}, 0, now); v != SettlementFailed {
+		t.Fatalf("a different observation: %q, want failed", v)
+	}
+	if _, drift := worstCaseValue(json.RawMessage(`true`), instanceValues("ip", `true`)); drift {
+		t.Fatal("worstCaseValue drifted on the same bool")
+	}
+	if got := agreeingValue(&CurrentValue{Value: json.RawMessage(`true`)}, instanceValues("a", `false`, "b", `true`)); got == nil || got.Instance != "b" {
+		t.Fatalf("agreeingValue = %+v, want instance b", got)
 	}
 }

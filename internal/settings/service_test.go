@@ -7,10 +7,10 @@ import (
 
 func TestServiceResolvesFileOverDefaultAndPlatformOverFile(t *testing.T) {
 	file := Doc{"ui": {"theme": "omniglass-light"}}
-	overrides := func(ctx context.Context, scope string) (Doc, map[string][]string, error) {
+	bindings := func(ctx context.Context, scope string) (Doc, map[string][]string, error) {
 		return Doc{"ui": {"default_landing": "/alarms"}}, nil, nil
 	}
-	svc := NewService(file, overrides)
+	svc := NewService(file, bindings)
 	eff, err := svc.Effective(context.Background())
 	if err != nil {
 		t.Fatalf("effective: %v", err)
@@ -27,13 +27,13 @@ func TestServiceResolvesFileOverDefaultAndPlatformOverFile(t *testing.T) {
 // renamed levels, in broad-to-specific order. Each level contributes a key nothing
 // more specific touches, so the reported source names the level that fed it: the
 // off-axis declaration is "default", the operator file is "file", and the DB
-// override is "platform".
+// binding is "platform".
 func TestServiceNamesLevelsDefaultFilePlatform(t *testing.T) {
 	file := Doc{"ui": {"default_landing": "/alarms"}}
-	overrides := func(ctx context.Context, scope string) (Doc, map[string][]string, error) {
+	bindings := func(ctx context.Context, scope string) (Doc, map[string][]string, error) {
 		return Doc{"ui": {"theme": "omniglass-light"}}, nil, nil
 	}
-	svc := NewService(file, overrides)
+	svc := NewService(file, bindings)
 	r, err := svc.Resolve(context.Background())
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
@@ -51,11 +51,11 @@ func TestServiceNamesLevelsDefaultFilePlatform(t *testing.T) {
 	}
 }
 
-// TestServiceReadsOverridesAtPlatformScope pins the scope the engine asks the
-// Gateway for. The migration moved every override row to scope 'platform'; an
+// TestServiceReadsBindingsAtPlatformScope pins the scope the engine asks the
+// Gateway for. The migration moved every binding row to scope 'platform'; an
 // engine still asking for 'global' would silently resolve to defaults and orphan
-// every operator override.
-func TestServiceReadsOverridesAtPlatformScope(t *testing.T) {
+// every operator binding.
+func TestServiceReadsBindingsAtPlatformScope(t *testing.T) {
 	var got []string
 	svc := NewService(Doc{}, func(ctx context.Context, scope string) (Doc, map[string][]string, error) {
 		got = append(got, scope)
@@ -65,7 +65,7 @@ func TestServiceReadsOverridesAtPlatformScope(t *testing.T) {
 		t.Fatalf("resolve: %v", err)
 	}
 	if len(got) != 1 || got[0] != "platform" {
-		t.Fatalf("override scopes read = %v, want [platform]", got)
+		t.Fatalf("binding scopes read = %v, want [platform]", got)
 	}
 }
 

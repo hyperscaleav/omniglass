@@ -45,7 +45,7 @@ type problem struct {
 }
 
 // TestCalcRuleAPI drives calc rule authoring over HTTP (#995): rules read
-// like a registry for any rule:read holder and are written with rule:* on an
+// like a catalog for any rule:read holder and are written with rule:* on an
 // all-scope grant; a write returns the rule's uuid; a reduce that does not
 // compile is a 422 at its line and column, a rule closing a cycle a 422
 // naming the chain, health as an input or output and an output a driver
@@ -120,7 +120,7 @@ func TestCalcRuleAPI(t *testing.T) {
 	taken["enabled"] = false
 	c.do(ownerTok, http.MethodPost, "/calc-rules", taken, http.StatusConflict)
 
-	// The key a rule writes cannot be deleted from its registry: a 409 naming
+	// The key a rule writes cannot be deleted from its catalog: a 409 naming
 	// the rule.
 	p = problem{}
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodDelete, "/metric-types/avg-temp", nil, http.StatusConflict), &p); err != nil {
@@ -248,7 +248,7 @@ func TestCalcRuleAPI(t *testing.T) {
 	if err := json.Unmarshal(south, &loc); err != nil || loc.ID == "" {
 		t.Fatalf("created location %s (%v)", south, err)
 	}
-	placeOwner := setupScopedPrincipal(t, ctx, dsn, "calc-south-owner", grantSpec{role: "owner", scopeKind: "location", scopeID: loc.ID})
+	placeOwner := setupScopedUser(t, ctx, dsn, "calc-south-owner", grantSpec{role: "owner", scopeKind: "location", scopeID: loc.ID})
 	c.do(placeOwner, http.MethodGet, "/calc-rules/temp-mean", nil, http.StatusOK)
 	c.do(placeOwner, http.MethodPost, "/calc-rules", map[string]any{"name": "mine", "owner_kind": "component",
 		"inputs": []map[string]any{{"alias": "t", "key": "room-temperature"}}, "reduce": map[string]any{"expr": "max(t)"}, "output_key": "temp-twice"}, http.StatusForbidden)

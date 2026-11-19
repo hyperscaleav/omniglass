@@ -1,7 +1,7 @@
 import { api } from "../api/client";
 
 // The vendors data layer: thin typed wrappers over the generated client for
-// the vendor registry (the vendor picker on the product form). A vendor is
+// the vendor catalog (the vendor picker on the product form). A vendor is
 // addressed by its id (a kebab id, the create-only address); official
 // (seed-owned) rows are read-only past creation, refused server-side on
 // update/delete. Each vendor carries a kind

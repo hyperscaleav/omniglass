@@ -19,7 +19,7 @@ import (
 // console's refusal notice renders for http endpoints (#902 on #1110): a
 // credentialed request's 401 gates an http endpoint at the session rung, and
 // a changed certificate key gates an https one at the transport rung; neither
-// holds a session. Each serves its rung, class, the node's reason and the
+// holds a session. Each serves its rung, class, the outpost's reason and the
 // gate's publish time, so the notice says why and offers Retry; the https
 // gate also carries the pinned and offered keys, which is what Trust this key
 // renders and sends, and the server takes the offered key as certificate. A

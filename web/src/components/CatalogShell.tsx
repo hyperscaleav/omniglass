@@ -7,8 +7,8 @@ import { OVERVIEW_PATH, entryActive, entryCount, entryHref, visibleGroups, type 
 
 // The Catalog shell: a layout route (index.tsx wraps the catalog routes in
 // <Route component={CatalogShell}>) drawing the two-column chrome around every
-// registry page. The subrail on the left is NAVIGATION, not a filter: each
-// entry is a link to the registry's own canonical route (/products, /metrics,
+// catalog page. The subrail on the left is NAVIGATION, not a filter: each
+// entry is a link to the catalog's own canonical route (/products, /metrics,
 // ...), whose real page, with its own FilterBar, create button, and editing
 // blades, renders in the right pane; Overview leads to the /catalog landing.
 // Membership, order, labels, gates, and count sources come from the
@@ -62,7 +62,7 @@ const CatalogShell: ParentComponent = (props) => {
 
 export default CatalogShell;
 
-// One subrail entry. A live registry links to its page with its live count; a
+// One subrail entry. A live catalog links to its page with its live count; a
 // soon slot wears the rail's SOON treatment, linking when its stub page is
 // routed (Notifications) and rendering disabled when no page exists yet. A
 // filtered slot (the three Templates slots, one page) lights by its query too,
@@ -122,7 +122,7 @@ function Entry(props: { entry: CatalogEntry }) {
 }
 
 // A live entry's count: right-aligned, mono, muted; its own query on the
-// registry's shared list key (one cache with the page the link opens), absent
+// catalog's shared list key (one cache with the page the link opens), absent
 // until it resolves and quiet on failure (never an invented zero; the page
 // itself owns the error surface).
 function EntryCount(props: { entry: CatalogEntry }) {

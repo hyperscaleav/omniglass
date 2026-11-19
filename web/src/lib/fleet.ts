@@ -1,9 +1,9 @@
 import { api } from "../api/client";
 import type { FleetViewOutputBody } from "../api/api.gen";
 
-// The fleet view: the scoped projection every fleet surface reads (places,
+// The fleet view: the scoped projection every fleet surface reads (locations,
 // their systems, each system's components with its recorded verdict), and the
-// small pure walks over its place tree that the outline (lib/outline) and the
+// small pure walks over its location tree that the outline (lib/outline) and the
 // detail views (lib/detail) share. Verdicts are never computed here; the
 // server records them and this module carries them.
 //
@@ -24,7 +24,7 @@ export async function fleetView(): Promise<FleetView> {
 }
 
 // The index is memoized per view object: every path, crumb and landing rule
-// reads it, and rebuilding a Map of the whole place tree per call turns a
+// reads it, and rebuilding a Map of the whole location tree per call turns a
 // repaint into O(rows x locations) for no reason. A WeakMap keyed on the view
 // keeps the memo exactly as long as the data it derives from.
 const indexCache = new WeakMap<FleetView, Map<string, FleetLocation>>();
@@ -37,7 +37,7 @@ export function locationIndex(view: FleetView): Map<string, FleetLocation> {
   return index;
 }
 
-// childrenIndex inverts the parent pointers: whether a place has places
+// childrenIndex inverts the parent pointers: whether a location has locations
 // beneath it.
 export function childrenIndex(view: FleetView): Map<string, FleetLocation[]> {
   const out = new Map<string, FleetLocation[]>();

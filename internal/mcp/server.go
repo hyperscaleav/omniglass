@@ -27,7 +27,7 @@ import (
 
 // instructions is what the server tells an agent on connect: how the tools
 // behave, so it uses them the way the API means them to be used.
-const instructions = `Omniglass is the observability and control plane for an AV and IT fleet: places, systems, components, the edge nodes that reach them, and the endpoints and drivers that collect from them. Every tool is one API operation, run with your token: you see and change exactly what your permissions and scope allow, and every change is audited as yours. Address a resource by its name (or its dotted address); an id works too. A tool that is not read-only changes the fleet: confirm it with your user before calling it. An error is the route's own problem+json, and its detail says what to fix.`
+const instructions = `Omniglass is the observability and control plane for an AV and IT fleet: places, systems, components, the edge outposts that reach them, and the endpoints and drivers that collect from them. Every tool is one API operation, run with your token: you see and change exactly what your permissions and scope allow, and every change is audited as yours. Address a resource by its name (or its dotted address); an id works too. A tool that is not read-only changes the fleet: confirm it with your user before calling it. An error is the route's own problem+json, and its detail says what to fix.`
 
 // sessionTimeout closes an MCP session no request has touched for this long.
 const sessionTimeout = 30 * time.Minute
@@ -36,23 +36,51 @@ const sessionTimeout = 30 * time.Minute
 // every request authenticated by its bearer token against api (the server's own
 // HTTP handler, which every tool call is dispatched through). version is the
 // server's build version, reported to clients.
-func NewHandler(api http.Handler, version string) http.Handler {
+func NewHandler(api http.Handler, version string, opts ...Option) http.Handler {
+	var o options
+	for _, opt := range opts {
+		opt(&o)
+	}
 	srv := newServer(api, version)
 	h := sdk.NewStreamableHTTPHandler(func(*http.Request) *sdk.Server { return srv }, &sdk.StreamableHTTPOptions{
 		SessionTimeout: sessionTimeout,
 	})
-	return requireBearer(api, http.NewCrossOriginProtection().Handler(h))
+	return requireBearer(api, o.resourceMetadata, http.NewCrossOriginProtection().Handler(h))
 }
 
-// newServer builds the MCP server over the catalog.
+// Option configures the handler.
+type Option func(*options)
+
+type options struct {
+	resourceMetadata func(*http.Request) string
+}
+
+// WithResourceMetadata names, on every 401, the protected-resource metadata
+// (RFC 9728) a client finds the authorization server from (#2048), as the URL
+// fn returns for the request.
+func WithResourceMetadata(fn func(*http.Request) string) Option {
+	return func(o *options) { o.resourceMetadata = fn }
+}
+
+// newServer builds the MCP server over the catalog and the skills.
 func newServer(api http.Handler, version string) *sdk.Server {
 	srv := sdk.NewServer(&sdk.Implementation{Name: "omniglass", Title: "Omniglass", Version: version}, &sdk.ServerOptions{
-		Instructions: instructions,
+		Instructions: instructions + skillInstructions(),
 	})
+	addSkills(srv)
+	srv.AddReceivingMiddleware(withAgentPolicy(api))
 	for _, d := range catalog {
 		d := d
 		srv.AddTool(toolFor(d), func(ctx context.Context, req *sdk.CallToolRequest) (*sdk.CallToolResult, error) {
-			return call(ctx, api, d, req), nil
+			var raw json.RawMessage
+			if req.Params != nil {
+				raw = req.Params.Arguments
+			}
+			var authorization string
+			if req.Extra != nil && req.Extra.Header != nil {
+				authorization = req.Extra.Header.Get("Authorization")
+			}
+			return call(ctx, api, d, raw, authorization, clientName(req)), nil
 		})
 	}
 	return srv
@@ -84,7 +112,7 @@ func toolFor(d tooldef.Def) *sdk.Tool {
 // client the caller declared, so the audit row records how it arrived. The
 // response becomes the tool's result; a non-2xx status is a tool error whose
 // text is the route's problem+json.
-func call(ctx context.Context, api http.Handler, d tooldef.Def, req *sdk.CallToolRequest) (result *sdk.CallToolResult) {
+func call(ctx context.Context, api http.Handler, d tooldef.Def, raw json.RawMessage, authorization, client string) (result *sdk.CallToolResult) {
 	// A tool runs off the HTTP goroutine, where net/http's own recovery does not
 	// reach: a route that panics would take down the server (and the bus it
 	// hosts). Contain it to this call's 500, as a direct call gets.
@@ -94,22 +122,16 @@ func call(ctx context.Context, api http.Handler, d tooldef.Def, req *sdk.CallToo
 			result = toolError("500 Internal Server Error")
 		}
 	}()
-	var raw json.RawMessage
-	if req.Params != nil {
-		raw = req.Params.Arguments
-	}
 	dctx, release := detached(ctx)
 	defer release()
 	httpReq, err := buildRequest(dctx, d, raw)
 	if err != nil {
 		return toolError(err.Error())
 	}
-	if req.Extra != nil && req.Extra.Header != nil {
-		if a := req.Extra.Header.Get("Authorization"); a != "" {
-			httpReq.Header.Set("Authorization", a)
-		}
+	if authorization != "" {
+		httpReq.Header.Set("Authorization", authorization)
 	}
-	httpReq = httpReq.WithContext(storage.WithAuditChannel(httpReq.Context(), storage.AuditChannelMCP, clientName(req)))
+	httpReq = httpReq.WithContext(storage.WithAuditChannel(httpReq.Context(), storage.AuditChannelMCP, client))
 	rec := newRecorder()
 	api.ServeHTTP(rec, httpReq)
 	body := bytes.TrimSpace(rec.body.Bytes())
@@ -149,8 +171,13 @@ func clientName(req *sdk.CallToolRequest) string {
 // (expiry, revocation, impersonation) without a second path. A session cookie is
 // never consulted: the endpoint answers to tokens, so a browser's ambient
 // credentials cannot drive it.
-func requireBearer(api http.Handler, next http.Handler) http.Handler {
+func requireBearer(api http.Handler, resourceMetadata func(*http.Request) string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		challenge := `Bearer realm="omniglass"`
+		if resourceMetadata != nil {
+			challenge += `, resource_metadata="` + resourceMetadata(r) + `"`
+		}
+		unauthorized := func(w http.ResponseWriter, status int, msg string) { refuse(w, challenge, status, msg) }
 		authz := r.Header.Get("Authorization")
 		scheme, tok, ok := strings.Cut(authz, " ")
 		if !ok || !strings.EqualFold(scheme, "Bearer") || strings.TrimSpace(tok) == "" {
@@ -180,9 +207,11 @@ func requireBearer(api http.Handler, next http.Handler) http.Handler {
 	})
 }
 
-func unauthorized(w http.ResponseWriter, status int, msg string) {
+// refuse answers a request the endpoint will not serve, with the bearer
+// challenge on a 401.
+func refuse(w http.ResponseWriter, challenge string, status int, msg string) {
 	if status == http.StatusUnauthorized {
-		w.Header().Set("WWW-Authenticate", `Bearer realm="omniglass"`)
+		w.Header().Set("WWW-Authenticate", challenge)
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(status)

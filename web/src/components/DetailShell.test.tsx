@@ -4,8 +4,8 @@ import { RelatedList, type RelatedItem } from "./DetailShell";
 import { uuidFor } from "../lib/testids";
 
 const items: RelatedItem[] = [
-  { id: uuidFor("u-1"), kind: "user", name: "alice", badge: "human" },
-  { id: uuidFor("u-2"), kind: "user", name: "ingest-bot", badge: "service" },
+  { id: uuidFor("u-1"), kind: "user", name: "alice", badge: "person" },
+  { id: uuidFor("u-2"), kind: "user", name: "ingest-bot", badge: "machine" },
 ];
 
 describe("RelatedList", () => {

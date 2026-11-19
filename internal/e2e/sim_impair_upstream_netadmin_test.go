@@ -29,7 +29,7 @@ import (
 )
 
 // TestImpairingAnUpstreamHoldsItsPathDependent drives a path dependency
-// end to end (#1652): two simulated devices on one node, the panel reached
+// end to end (#1652): two simulated devices on one outpost, the panel reached
 // through the gateway. Unplugging the gateway closes its gate, and the panel's
 // gate takes the upstream reason naming the gateway in the same pass: its
 // probes are held and counted (poll-held-count climbs), so its own probe
@@ -63,17 +63,17 @@ func TestImpairingAnUpstreamHoldsItsPathDependent(t *testing.T) {
 		t.Fatal(err)
 	}
 	all := scope.Set{All: true}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-u"}, all, all); err != nil {
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-u"}, all, all); err != nil {
 		t.Fatal(err)
 	}
-	nodeTok := "upstream-e2e-token"
-	sum := sha256.Sum256([]byte(nodeTok))
+	outpostTok := "upstream-e2e-token"
+	sum := sha256.Sum256([]byte(outpostTok))
 	if _, err := gw.SetEnrollmentToken(ctx, "", "edge-u", hex.EncodeToString(sum[:]), all); err != nil {
 		t.Fatal(err)
 	}
 	// The shortest report window the setting takes, so the held count lands
 	// inside the test rather than a minute on.
-	if _, err := gw.MergePatchSettingOverride(ctx, "", "platform", "collection", map[string]any{"report_seconds": 10}); err != nil {
+	if _, err := gw.MergePatchSettingBinding(ctx, "", "platform", "collection", map[string]any{"report_seconds": 10}); err != nil {
 		t.Fatal(err)
 	}
 	upstream, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "gateway-u"}, all, all, all, all)
@@ -104,21 +104,21 @@ func TestImpairingAnUpstreamHoldsItsPathDependent(t *testing.T) {
 	}
 	ips := map[string]string{"gateway-u": "127.62.0.20", "panel-u": "127.62.0.21"}
 	for comp, ip := range ips {
-		as("endpoint", "create", "--component", comp, "--node", "edge-u", "--transport", "tcp",
+		as("endpoint", "create", "--component", comp, "--outpost", "edge-u", "--transport", "tcp",
 			"--params", fmt.Sprintf(`{"target":"%s:%d"}`, ip, port))
-		as("endpoint", "create", "--component", comp, "--node", "edge-u", "--transport", "icmp",
+		as("endpoint", "create", "--component", comp, "--outpost", "edge-u", "--transport", "icmp",
 			"--params", fmt.Sprintf(`{"target":%q}`, ip))
 	}
 	as("component", "dependency", "create", "panel-u", "--kind", "path", "--upstream", "gateway-u")
 
-	nodeEnv := append(os.Environ(), "OMNIGLASS_SERVER="+server, "OMNIGLASS_NODE_NAME=edge-u", "OMNIGLASS_NODE_TOKEN="+nodeTok)
+	outpostEnv := append(os.Environ(), "OMNIGLASS_SERVER="+server, "OMNIGLASS_OUTPOST_NAME=edge-u", "OMNIGLASS_OUTPOST_TOKEN="+outpostTok)
 	for _, args := range [][]string{
 		{"sim", "run", "--impairments", "--poll", "300ms"},
-		{"node", "run", "--server", server, "--name", "edge-u", "--token", nodeTok, "--heartbeat", "1s", "--probe-every", "1s", "--worklist-every", "1s"},
+		{"outpost", "run", "--server", server, "--name", "edge-u", "--token", outpostTok, "--heartbeat", "1s", "--probe-every", "1s", "--worklist-every", "1s"},
 	} {
 		pctx, stop := context.WithCancel(ctx)
 		p := exec.CommandContext(pctx, binPath, args...)
-		p.Env = nodeEnv
+		p.Env = outpostEnv
 		p.Stdout, p.Stderr = os.Stderr, os.Stderr
 		if err := p.Start(); err != nil {
 			t.Fatal(err)
@@ -243,7 +243,7 @@ func TestImpairingAnUpstreamHoldsItsPathDependent(t *testing.T) {
 		r := reach("panel-u")
 		return heldBy(r["tcp"]) && heldBy(r["icmp"])
 	})
-	// The node's own record of the gate reads the same reason.
+	// The outpost's own record of the gate reads the same reason.
 	var rej struct {
 		Samples []struct {
 			Value    string `json:"value"`

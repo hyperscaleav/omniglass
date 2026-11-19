@@ -54,7 +54,7 @@ func runSetPassword(ctx context.Context, username, password string, revokeTokens
 		return err
 	}
 	if !ok {
-		return fmt.Errorf("no principal with username %q (create one first: omniglass bootstrap %s)", username, username)
+		return fmt.Errorf("no user with username %q (create one first: omniglass bootstrap %s)", username, username)
 	}
 	// Break-glass is a lockout: after rotating the secret, revoke the user's live
 	// sessions so any stolen login stops at once. Tokens are their own bearer secret,

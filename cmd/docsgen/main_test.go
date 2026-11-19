@@ -67,8 +67,8 @@ func TestTheCommittedReferenceCarriesNoToken(t *testing.T) {
 }
 
 // TestARunnableGroupKeepsItsArguments renders a command that runs on its own
-// argument and also has subcommands (`omniglass node simulation <name>` beside
-// `node simulation observation`), and requires the usage line to keep the
+// argument and also has subcommands (`omniglass outpost simulation <name>` beside
+// `outpost simulation observation`), and requires the usage line to keep the
 // argument: the reference had printed such a group as taking flags only.
 func TestARunnableGroupKeepsItsArguments(t *testing.T) {
 	root := &cobra.Command{Use: "omniglass"}

@@ -63,7 +63,7 @@ func exportRefs(ids []string) []ownerRef {
 }
 
 // ExportRecomputeStaffing runs, in its own committed transaction, exactly the
-// recompute AssignRole and UnassignRole run: the component and the system it
+// recompute AssignSlot and UnassignSlot run: the component and the system it
 // staffs, named. It is what lets the scale probe time the recompute alone,
 // without the staffing write around it.
 func (p *PG) ExportRecomputeStaffing(ctx context.Context, componentID, systemID string) error {

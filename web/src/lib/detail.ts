@@ -5,95 +5,95 @@ import type { Verdict } from "./health";
 import type { SystemBody, ComponentCard } from "./system_zoom";
 
 // The detail view's model (#872). Systems are the unit Omniglass monitors;
-// places are folders and metadata about where; components are the pieces of
-// systems. So there is one detail view per system, its place shown as a card
-// of context, and a place holding exactly one system lands on that system
+// locations are folders and metadata about where; components are the pieces of
+// systems. So there is one detail view per system, its location shown as a card
+// of context, and a location holding exactly one system lands on that system
 // rather than showing a second, thinner view of the same room.
 //
 // Pure: where an address lands and what the path says are the facts an
 // operator would dispute, so they are tested here without a DOM.
 
-export type Landing = { kind: "system"; id: string } | { kind: "place" };
+export type Landing = { kind: "system"; id: string } | { kind: "location" };
 
 export type Crumb = { kind: "location" | "system"; id: string; label: string };
 
-// The systems bound at a place, by label.
-export function systemsAtPlace(view: FleetView, placeId: string): FleetSystem[] {
+// The systems bound at a location, by label.
+export function systemsAtLocation(view: FleetView, locationId: string): FleetSystem[] {
   return (view.systems ?? [])
-    .filter((s) => s.location === placeId)
+    .filter((s) => s.location === locationId)
     .sort((a, b) => entityLabel(a).localeCompare(entityLabel(b)) || a.id.localeCompare(b.id));
 }
 
-// Where a place's address lands: on its system when it holds exactly one,
-// since that system is what the operator came to see; otherwise on the place.
-export function landingFor(view: FleetView, placeId: string): Landing {
-  const here = systemsAtPlace(view, placeId);
-  return here.length === 1 ? { kind: "system", id: here[0].id } : { kind: "place" };
+// Where a location's address lands: on its system when it holds exactly one,
+// since that system is what the operator came to see; otherwise on the location.
+export function landingFor(view: FleetView, locationId: string): Landing {
+  const here = systemsAtLocation(view, locationId);
+  return here.length === 1 ? { kind: "system", id: here[0].id } : { kind: "location" };
 }
 
-const placeCrumbs = (view: FleetView, placeId: string): Crumb[] =>
-  ancestors(placeId, locationIndex(view)).map((l) => ({ kind: "location" as const, id: l.id, label: entityLabel(l) }));
+const locationCrumbs = (view: FleetView, locationId: string): Crumb[] =>
+  ancestors(locationId, locationIndex(view)).map((l) => ({ kind: "location" as const, id: l.id, label: entityLabel(l) }));
 
-// A system's path. A sole system's view is titled by its place, so the path
-// ends at the place's parent; a place shared by several systems has a view of
+// A system's path. A sole system's view is titled by its location, so the path
+// ends at the location's parent; a location shared by several systems has a view of
 // its own, so the path keeps it. An unplaced system has no path.
 export function systemCrumbs(view: FleetView, systemId: string): Crumb[] {
   const s = (view.systems ?? []).find((x) => x.id === systemId);
   if (!s?.location) return [];
-  const chain = placeCrumbs(view, s.location);
-  return systemsAtPlace(view, s.location).length === 1 ? chain.slice(0, -1) : chain;
+  const chain = locationCrumbs(view, s.location);
+  return systemsAtLocation(view, s.location).length === 1 ? chain.slice(0, -1) : chain;
 }
 
-// A component's path: the places down to where it sits. Where its primary
-// system is the only one at that place, the place and the system are one
+// A component's path: the locations down to where it sits. Where its primary
+// system is the only one at that location, the location and the system are one
 // crumb (the system, whose view is the room's), so the room is never named
-// twice. A system elsewhere is not appended: it reads as its own place, and
+// twice. A system elsewhere is not appended: it reads as its own location, and
 // "Rack Room / Auditorium" would say the auditorium is inside the rack room.
 // The systems a component serves are listed on its view.
 export function componentCrumbs(view: FleetView, locationId: string | null | undefined, primarySystemId: string | null | undefined): Crumb[] {
-  const chain = locationId ? placeCrumbs(view, locationId) : [];
+  const chain = locationId ? locationCrumbs(view, locationId) : [];
   const s = primarySystemId ? (view.systems ?? []).find((x) => x.id === primarySystemId) : undefined;
   if (!s) return chain;
   const crumb: Crumb = { kind: "system", id: s.id, label: entityLabel(s) };
-  if (s.location && s.location === locationId && systemsAtPlace(view, s.location).length === 1) return [...chain.slice(0, -1), crumb];
+  if (s.location && s.location === locationId && systemsAtLocation(view, s.location).length === 1) return [...chain.slice(0, -1), crumb];
   if (!locationId) return [crumb];
   return chain;
 }
 
-// Whether a place is the room one of these systems makes: a system that is
-// the only one at that place. There the place and the system are one thing,
-// so a view that names the system has already named the place (#872).
-export function isRoomOf(view: FleetView, placeId: string | null | undefined, systemIds: (string | null | undefined)[]): boolean {
-  if (!placeId) return false;
-  const here = systemsAtPlace(view, placeId);
+// Whether a location is the room one of these systems makes: a system that is
+// the only one at that location. There the location and the system are one thing,
+// so a view that names the system has already named the location (#872).
+export function isRoomOf(view: FleetView, locationId: string | null | undefined, systemIds: (string | null | undefined)[]): boolean {
+  if (!locationId) return false;
+  const here = systemsAtLocation(view, locationId);
   return here.length === 1 && systemIds.includes(here[0].id);
 }
 
-// The roles a component staffs in one system, by label: read from the
-// system's declared roles, since a membership says THAT a component belongs,
-// and the role says what it does there.
-export function rolesOf(componentName: string, declared: { name: string; label?: string; assigned_to?: string[] | null }[]): string[] {
+// The slots a component staffs in one system, by label: read from the
+// system's declared slots, since a membership says THAT a component belongs,
+// and the slot says what it does there.
+export function slotsOf(componentName: string, declared: { name: string; label?: string; assigned_to?: string[] | null }[]): string[] {
   return declared.filter((r) => (r.assigned_to ?? []).includes(componentName)).map((r) => entityLabel({ name: r.name, label: r.label }));
 }
 
 // A system's components as rows (#872), the outline's row idiom rather than a
-// grid of cards. A member reads its role in a column; a role earns a group
+// grid of cards. A member reads its slot in a column; a slot earns a group
 // (a header with its arithmetic, its occupants beneath, its gap as empty
 // slots) only where it says something a column cannot: a quorum beyond one,
-// a shortfall, or nobody staffing it. An unstaffed role is a commissioning
+// a shortfall, or nobody staffing it. An unstaffed slot is a commissioning
 // gap and reads incomplete; a short staffed one reads its impact.
 
 export type MemberRow = {
   id: string;
   name: string;
   label: string;
-  role: string;
+  slot: string;
   product: string;
   icon: string;
   health: Verdict | null;
   alarm?: string;
   also: string[];
-  noRole: boolean;
+  noSlot: boolean;
 };
 export type MemberGroup = {
   key: string;
@@ -112,19 +112,19 @@ export type MemberContext = {
 };
 
 export function memberModel(body: SystemBody, ctx: MemberContext): { rows: MemberRow[]; groups: MemberGroup[] } {
-  const row = (c: ComponentCard, role: string): MemberRow => ({
+  const row = (c: ComponentCard, slot: string): MemberRow => ({
     id: c.componentId,
     name: c.name,
     label: ctx.label(c.componentId, c.name),
-    role,
+    slot,
     product: ctx.product(c.componentId),
     icon: ctx.icon(c.componentId),
     health: ctx.verdict(c.componentId),
     alarm: ctx.alarm(c.componentId),
     also: c.shared,
-    noRole: c.noRole && c.roles.length === 0,
+    noSlot: c.noSlot && c.slots.length === 0,
   });
-  const rows = body.cards.map((c) => row(c, c.roles.map((r) => (r.position ? `${r.label} (${r.position})` : r.label)).join(", ")));
+  const rows = body.cards.map((c) => row(c, c.slots.map((r) => (r.position ? `${r.label} (${r.position})` : r.label)).join(", ")));
   const groups = body.groups.map((g) => {
     const tone: MemberGroup["tone"] = g.short === 0 ? null : g.members.length === 0 ? "incomplete" : g.impact === "outage" ? "outage" : "degraded";
     return {
@@ -132,12 +132,12 @@ export function memberModel(body: SystemBody, ctx: MemberContext): { rows: Membe
       label: g.label,
       arithmetic: `${g.satisfying} of ${g.quorum}${g.spare > 0 ? `, ${g.spare} spare` : ""}`,
       tone,
-      // Inside its group a member's role is the group; the column names its
+      // Inside its group a member's slot is the group; the column names its
       // position, if any (what tells it from its siblings),
-      // and the other roles it fills, since its one home is this group.
+      // and the other slots it fills, since its one home is this group.
       members: g.memberCards.map((c) => row(c, [
-        c.roles.find((r) => r.label === g.label)?.position ?? "",
-        ...c.roles.filter((r) => r.label !== g.label).map((r) => (r.position ? `${r.label} (${r.position})` : r.label)),
+        c.slots.find((r) => r.label === g.label)?.position ?? "",
+        ...c.slots.filter((r) => r.label !== g.label).map((r) => (r.position ? `${r.label} (${r.position})` : r.label)),
       ].filter(Boolean).join(", "))),
       // Seats nobody staffs: a down occupant still holds its seat, and its
       // failure is the alarms' to explain, not a gap.
@@ -147,11 +147,11 @@ export function memberModel(body: SystemBody, ctx: MemberContext): { rows: Membe
   return { rows, groups };
 }
 
-// What a place holds, in the outline's words: the places directly beneath it
-// counted by their type's registry label ("2 buildings, 1 floor"), or Empty.
-export function contentsOf(view: FleetView, placeId: string, types: { name: string; label?: string }[]): string {
+// What a location holds, in the outline's words: the locations directly beneath it
+// counted by their type's catalog label ("2 buildings, 1 floor"), or Empty.
+export function contentsOf(view: FleetView, locationId: string, types: { name: string; label?: string }[]): string {
   const counts = new Map<string, number>();
-  for (const c of childrenIndex(view).get(placeId) ?? []) counts.set(c.location_type, (counts.get(c.location_type) ?? 0) + 1);
+  for (const c of childrenIndex(view).get(locationId) ?? []) counts.set(c.location_type, (counts.get(c.location_type) ?? 0) + 1);
   const label = (t: string) => entityLabel(types.find((x) => x.name === t) ?? { name: t });
   const parts = [...counts.entries()].map(([t, n]) => countWord(label(t), n));
   return parts.length > 0 ? parts.join(", ") : "Empty";

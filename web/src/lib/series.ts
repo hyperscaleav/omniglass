@@ -70,8 +70,12 @@ export async function metricBuckets(
   return { buckets: body?.buckets ?? [], coveredFrom: body?.covered_from ?? null };
 }
 
-export type PropertyBucket = { ts: string; count: number; last: string | null };
-export type PropertyBuckets = { buckets: PropertyBucket[]; coveredFrom: string | null };
+// `last` is the bucket's own newest change; `held` is the value in force across
+// the bucket (its last, else the one carried from before), so an empty bucket
+// still says what the property was (#1488). `carriedIn` is the value in force
+// when the window opens: a step chart draws it to the first change.
+export type PropertyBucket = { ts: string; count: number; last: string | null; held: string | null };
+export type PropertyBuckets = { buckets: PropertyBucket[]; coveredFrom: string | null; carriedIn: string | null };
 
 export const propertyBucketsKey = (
   kind: "components" | "systems",
@@ -94,6 +98,6 @@ export async function propertyBuckets(
     params: { path: { name: owner, property }, query: { hours, resolution: resolutionSeconds, ...(instance === undefined ? {} : { instance }) } },
   });
   if (res.error) throw res.error;
-  const body = res.data as { buckets?: PropertyBucket[]; covered_from?: string } | undefined;
-  return { buckets: body?.buckets ?? [], coveredFrom: body?.covered_from ?? null };
+  const body = res.data as { buckets?: PropertyBucket[]; covered_from?: string; carried_in?: string } | undefined;
+  return { buckets: body?.buckets ?? [], coveredFrom: body?.covered_from ?? null, carriedIn: body?.carried_in ?? null };
 }

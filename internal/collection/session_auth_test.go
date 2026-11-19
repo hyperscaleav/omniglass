@@ -402,7 +402,7 @@ func TestSessionTerminalReplyRejects(t *testing.T) {
 	}
 }
 
-// A gate held across a node restart (#1056 ruling): a session started
+// A gate held across an outpost restart (#1056 ruling): a session started
 // already rejected dials nothing, and its transition carries the refusal.
 func TestSessionStartedRejectedDialsNothing(t *testing.T) {
 	d := &fakeSessionDialer{}

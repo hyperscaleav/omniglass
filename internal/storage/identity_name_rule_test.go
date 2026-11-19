@@ -12,7 +12,7 @@ import (
 // Before it, a caller picked the rule by hand: storage.ValidateEntityKey in ten
 // places and key.ValidateKey in three, with nothing checking that the choice matched
 // what the table actually is. Picking wrongly is silent in both directions, and
-// forgetting to pick at all is how system_role shipped with no validation.
+// forgetting to pick at all is how system_slot shipped with no validation.
 //
 // So the table decides the rule, and the table's shape is already declared in
 // identity_shape.go. These tests pin that the declaration is what selects, which is
@@ -40,7 +40,7 @@ func TestValidateNameRefusesATableThatBearsNoName(t *testing.T) {
 	for _, table := range []string{
 		"metric",      // id only
 		"tag_binding", // id only
-		"human",       // a username, its own rule
+		"person",      // a username, its own rule
 		"blob",        // content-addressed
 	} {
 		if err := storage.ValidateName(table, "anything"); !errors.Is(err, storage.ErrTableNotNameBearing) {
@@ -140,7 +140,7 @@ func TestValidateNameAcceptsRealNames(t *testing.T) {
 		"component":     "hq-boardroom-dsp",
 		"location":      "rm215a",
 		"vendor":        "crestron",
-		"node":          "node-1",
+		"outpost":       "outpost-1",
 		"property_type": "endpoint-reachable",
 		"event_type":    "call-started",
 		"command_type":  "set-input",

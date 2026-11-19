@@ -5,7 +5,7 @@ import FleetRedirect from "./FleetRedirect";
 
 // The old index addresses land on the outline (#798, #826, #861): the bare
 // /locations, /systems and /components URLs, the retired /fleet canvas, and
-// the list address main once sent every index visit to. Every place,
+// the list address main once sent every index visit to. Every location,
 // system and component is in the one outline now, so they all land there.
 afterEach(cleanup);
 

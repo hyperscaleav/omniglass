@@ -6,6 +6,9 @@
 // come from internal/labfootprint, for the page's test to hold the page to.
 // The perf gate's figure and size tables (docs/src/generated/perfgate.json)
 // come from internal/labfootprint's gate tables, for the lab guide to render.
+// The driver cost table (docs/src/generated/drivercost.json) joins the
+// committed driver sweep with the shipped plan, so a driver added since the
+// sweep ran renders as not yet measured.
 // Each has a drift test that fails when the committed file goes stale.
 package main
 
@@ -18,9 +21,10 @@ import (
 )
 
 const (
-	dst      = "docs/src/generated/lab.json"
-	readsDst = "web/src/lib/system_page_reads.gen.ts"
-	perfDst  = "docs/src/generated/perfgate.json"
+	dst       = "docs/src/generated/lab.json"
+	readsDst  = "web/src/lib/system_page_reads.gen.ts"
+	perfDst   = "docs/src/generated/perfgate.json"
+	driverDst = "docs/src/generated/drivercost.json"
 )
 
 func main() {
@@ -44,4 +48,12 @@ func main() {
 		log.Fatalf("labgen: write %s: %v", perfDst, err)
 	}
 	log.Printf("wrote the perf gate's tables to %s", perfDst)
+	drivers, err := labfootprint.DriverCostFactsJSON()
+	if err != nil {
+		log.Fatalf("labgen: %v", err)
+	}
+	if err := os.WriteFile(driverDst, drivers, 0o644); err != nil {
+		log.Fatalf("labgen: write %s: %v", driverDst, err)
+	}
+	log.Printf("wrote the driver cost table to %s", driverDst)
 }

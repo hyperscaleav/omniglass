@@ -240,7 +240,7 @@ func TestSystemCheckNameIsScopedToPlacement(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "scope-lab"}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "sub-1", "parent": "scope-av"}, http.StatusCreated)
 
-	// A deploy principal (system:update) scoped ONLY to scope-av.
+	// A deploy user (system:update) scoped ONLY to scope-av.
 	deployTok := setupScopedViewer(t, ctx, dsn, "deploy-av", "deploy", "system", av.ID)
 	// It cannot read scope-lab (out of scope -> non-disclosing 404).
 	c.do(deployTok, http.MethodGet, "/systems/scope-lab", nil, http.StatusNotFound)

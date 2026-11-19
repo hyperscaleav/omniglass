@@ -77,14 +77,14 @@ func TestScanPathsIn(t *testing.T) {
 
 // TestEnvUniverseSpansTheBinary guards the source-of-truth rule: the universe
 // must include vars read outside internal/config (the KEK source, the CLI
-// client, the node runner), or the forward lint fires on documented, real
+// client, the outpost runner), or the forward lint fires on documented, real
 // knobs.
 func TestEnvUniverseSpansTheBinary(t *testing.T) {
 	universe, err := loadEnvUniverse()
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"OMNIGLASS_ENCRYPTION_KEY", "OMNIGLASS_SERVER", "OMNIGLASS_NODE_TOKEN"} {
+	for _, name := range []string{"OMNIGLASS_ENCRYPTION_KEY", "OMNIGLASS_SERVER", "OMNIGLASS_OUTPOST_TOKEN"} {
 		if !universe[name] {
 			t.Errorf("env universe is missing %s; the scan must span the whole binary", name)
 		}

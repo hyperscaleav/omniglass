@@ -9,19 +9,19 @@ import type { ReachEndpoint } from "../lib/reachability";
 // every word wears its own glyph AND the word AND a soft hue, so the state
 // survives a colour-blind reader. Establishing takes the incomplete look (a
 // dashed ring: not yet, not broken), up the success green, recovering blue
-// (the node is working on it), down red (gone, and the node keeps redialing on
+// (the outpost is working on it), down red (gone, and the outpost keeps redialing on
 // its own), and rejected amber with a refusal glyph: it is the one state the
-// node will not leave without someone acting, so it reads apart from down.
+// outpost will not leave without someone acting, so it reads apart from down.
 //
 // It is aged (ADR-0150): beside it, how long ago the state changed, and once
 // the endpoint has delivered nothing for the staleness window the pill goes to
 // the grey neutral chip and its hint says what it last read, since a state the
-// node stopped reporting may no longer be true.
+// outpost stopped reporting may no longer be true.
 export const SESSION_LOOK: Record<SessionWord, { badge: string; icon: Component<{ size?: number }>; hint: string }> = {
   establishing: {
     badge: "badge-incomplete",
     icon: CircleDashed,
-    hint: "The node is making the first connection: dialing, then logging in, then arming its listeners.",
+    hint: "The outpost is making the first connection: dialing, then logging in, then arming its listeners.",
   },
   up: {
     badge: "badge-soft badge-success",
@@ -31,22 +31,22 @@ export const SESSION_LOOK: Record<SessionWord, { badge: string; icon: Component<
   recovering: {
     badge: "badge-soft badge-info",
     icon: RefreshCw,
-    hint: "The held connection dropped and the node is redialing on a backoff. Polls fault until it is back.",
+    hint: "The held connection dropped and the outpost is redialing on a backoff. Polls fault until it is back.",
   },
   down: {
     badge: "badge-soft badge-error",
     icon: WifiOff,
-    hint: "Five attempts in a row failed. The node keeps redialing at a slow pace, so a component that returns comes back up on its own.",
+    hint: "Five attempts in a row failed. The outpost keeps redialing at a slow pace, so a component that returns comes back up on its own.",
   },
   rejected: {
     badge: "badge-soft badge-warning",
     icon: Ban,
-    hint: "The component refused in a way retrying cannot fix, such as a wrong credential or a changed host key. The node dials no more until the endpoint changes or someone retries it.",
+    hint: "The component refused in a way retrying cannot fix, such as a wrong credential or a changed host key. The outpost dials no more until the endpoint changes or someone retries it.",
   },
   stale: {
     badge: "badge-ghost",
     icon: Clock,
-    hint: "Nothing has arrived from this endpoint for a while, so the last state the node reported may no longer be true.",
+    hint: "Nothing has arrived from this endpoint for a while, so the last state the outpost reported may no longer be true.",
   },
 };
 

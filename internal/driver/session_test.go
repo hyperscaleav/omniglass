@@ -3,6 +3,7 @@ package driver_test
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/driver"
 )
@@ -68,6 +69,9 @@ func TestValidateSessionRefusals(t *testing.T) {
 		{"a terminal rule with no match", func(s *driver.Spec) { s.Session.Terminal[0].Match = driver.Match{} }, "terminal"},
 		{"an unparseable re-probe", func(s *driver.Spec) { s.Session.Reprobe = "sometimes" }, "reprobe"},
 		{"a re-probe too fast to be slow", func(s *driver.Spec) { s.Session.Reprobe = "30s" }, "reprobe"},
+		{"an unparseable connect quiet", func(s *driver.Spec) { s.Session.ConnectQuiet = "a while" }, "connect_quiet"},
+		{"a negative connect quiet", func(s *driver.Spec) { s.Session.ConnectQuiet = "-1s" }, "connect_quiet"},
+		{"a connect quiet too long to be a banner wait", func(s *driver.Spec) { s.Session.ConnectQuiet = "1m" }, "connect_quiet"},
 		{"an ssh credential off ssh", func(s *driver.Spec) { s.Session.Credential = "login" }, "credential"},
 		// Commands derive no task, so nothing would hold the session they ride.
 		{"a session with only commands", func(s *driver.Spec) { s.Polls, s.Listeners = nil, nil }, "poll or a listener"},
@@ -210,5 +214,30 @@ func TestReprobeIntervalParses(t *testing.T) {
 	ss.Reprobe = ""
 	if got := ss.ReprobeInterval(); got != 0 {
 		t.Fatalf("no re-probe = %s, want 0 (never)", got)
+	}
+}
+
+// The connect quiet window (#1418) is the first ask's wait for a slow banner:
+// absent is the default, "0s" turns it off, and it rides a line transport.
+func TestSessionConnectQuietWindow(t *testing.T) {
+	for _, tc := range []struct {
+		declared string
+		want     time.Duration
+	}{
+		{"", driver.DefaultConnectQuiet},
+		{"500ms", 500 * time.Millisecond},
+		{"0s", driver.NoConnectQuiet},
+	} {
+		s := sessionSpec()
+		s.Session.ConnectQuiet = tc.declared
+		if err := s.Validate(catalog()); err != nil {
+			t.Fatalf("connect_quiet %q refused: %v", tc.declared, err)
+		}
+		if got := s.Session.ConnectQuietWindow(); got != tc.want {
+			t.Errorf("connect_quiet %q = %s, want %s", tc.declared, got, tc.want)
+		}
+	}
+	if got := (*driver.SessionSpec)(nil).ConnectQuietWindow(); got != driver.DefaultConnectQuiet {
+		t.Errorf("no session block = %s, want the default %s", got, driver.DefaultConnectQuiet)
 	}
 }

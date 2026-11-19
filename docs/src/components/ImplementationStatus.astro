@@ -1,22 +1,12 @@
 ---
-// Live implementation-status grid: sourced from each architecture page's status
-// badge (the single source of truth), so it never drifts from the badges.
+// Live implementation-status grid: sourced from each page's status badge (the
+// single source of truth), so it never drifts from the badges. The rebuilt
+// pages carry the badges, in whatever section they land (ADR-2087.2); a page
+// with no badge is not a row.
 import { getCollection } from 'astro:content';
 import { Badge } from '@astrojs/starlight/components';
 
-// Meta / narrative pages that are not capabilities to track.
-const META = new Set([
-  'architecture',
-  'architecture/why',
-  'architecture/glossary',
-  'architecture/status',
-  'architecture/build-log',
-  'architecture/decisions',
-  'architecture/roadmap',
-]);
-
 const rows = (await getCollection('docs'))
-  .filter((e) => e.id.startsWith('architecture/') && !META.has(e.id))
   .map((e) => {
     const raw = e.data.sidebar?.badge;
     const badge = raw
@@ -30,16 +20,20 @@ const rows = (await getCollection('docs'))
   .sort((a, b) => a.title.localeCompare(b.title));
 ---
 
-<table>
-  <thead>
-    <tr><th>Capability</th><th>Status</th></tr>
-  </thead>
-  <tbody>
-    {rows.map((r) => (
-      <tr>
-        <td><a href={`/${r.id}/`}>{r.title}</a></td>
-        <td><Badge text={r.badge.text} variant={r.badge.variant} /></td>
-      </tr>
-    ))}
-  </tbody>
-</table>
+{rows.length === 0 ? (
+  <p>No rebuilt page carries a badge yet. The first rows land with the rebuilt sections.</p>
+) : (
+  <table>
+    <thead>
+      <tr><th>Capability</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      {rows.map((r) => (
+        <tr>
+          <td><a href={`/${r.id}/`}>{r.title}</a></td>
+          <td><Badge text={r.badge.text} variant={r.badge.variant} /></td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+)}

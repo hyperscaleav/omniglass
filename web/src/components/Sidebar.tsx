@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/solid-query";
 import { navItems, filterNav, filterWhen, type NavItem } from "../lib/nav";
 import { SIMULATION_KEY, getSimulation, sidebarPollMs, simulatorConnected } from "../lib/simulation";
 import { useMe, useLogout, can, fetchMyAvatar } from "../lib/auth";
-import { principalName } from "../lib/principals";
+import { userName } from "../lib/users";
 import { PanelLeft, LogOut } from "./icons";
 import { BrandMark, Wordmark } from "./Brand";
 import Button from "./Button";
@@ -24,7 +24,7 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
   // own), falling back to initials. Reacting to has_avatar keeps it in step with an
   // upload or removal on the profile page.
   const [avatarUrl] = createResource(
-    () => me.data?.human?.has_avatar ?? false,
+    () => me.data?.person?.has_avatar ?? false,
     (has) => (has ? fetchMyAvatar() : Promise.resolve(null)),
   );
   const rel = () => {
@@ -34,18 +34,18 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
   const ident = () => {
     const m = me.data;
     if (!m) return { name: "—", role: "" };
-    // The one principal rule (lib/principals), so setting a label updates
+    // The one user rule (lib/users), so setting a label updates
     // the label here, the initials avatar below, and the admin directory alike.
-    const name = principalName({ human: m.human, service: m.service, kind: m.principal.kind });
-    return { name, role: m.grants[0]?.role ?? m.principal.kind };
+    const name = userName({ person: m.person, machine: m.machine, kind: m.user.kind });
+    return { name, role: m.grants[0]?.role ?? m.user.kind };
   };
-  // The tabs this principal may see: the ungated ones (Home, Explore, Learn, and
+  // The tabs this user may see: the ungated ones (Home, Explore, Learn, and
   // the still-stubbed sections) plus those whose required permission it holds (a
   // bare <resource>:read, or an explicit tier like audit:read:admin).
   // The Simulation door also waits on a simulator being connected (#890): the
   // rail asks every SIDEBAR_POLL_MS while one is, backing off to
   // SIDEBAR_IDLE_POLL_MS while none is, and the page, sharing the key, asks
-  // faster while it is open. A principal who cannot read simulation never asks.
+  // faster while it is open. A user who cannot read simulation never asks.
   const sim = useQuery(() => ({
     queryKey: SIMULATION_KEY,
     queryFn: getSimulation,

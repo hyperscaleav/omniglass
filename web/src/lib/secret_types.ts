@@ -1,11 +1,11 @@
 import { api } from "../api/client";
 
-// The secret_type registry data layer: a typed wrapper over /secret-types.
-// Read-only by design: the registry is authoritative seed-owned reference data
+// The secret_type catalog data layer: a typed wrapper over /secret-types.
+// Read-only by design: the catalog is authoritative seed-owned reference data
 // (the boot seed upserts it with ON CONFLICT DO UPDATE), so there are no write
 // routes and no write wrappers. It stands apart from lib/location_types.ts so a
 // caller without secret:read (a sensitive resource off the *:read viewer floor)
-// never has this fetch on its path to the location registry (#598). The Secrets
+// never has this fetch on its path to the location catalog (#598). The Secrets
 // page's type picker reads the same key, so the two never fetch twice.
 
 export type SecretTypeField = {

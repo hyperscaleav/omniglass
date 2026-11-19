@@ -71,22 +71,22 @@ func TestEveryOutcomeIsClassedExactlyOnce(t *testing.T) {
 		}
 	}
 	if !delivery.Shipped.Out() {
-		t.Error("shipped is the node hop's out")
+		t.Error("shipped is the outpost hop's out")
 	}
-	for _, hop := range []delivery.Hop{delivery.Node, delivery.Ingest} {
+	for _, hop := range []delivery.Hop{delivery.Outpost, delivery.Ingest} {
 		for _, o := range delivery.OutcomesOf(hop) {
 			if !seen[o] {
 				t.Errorf("hop %s outcome %q missing from Outcomes", hop, o)
 			}
 		}
 	}
-	if len(delivery.NodeOutcomes)+len(delivery.IngestOutcomes) != len(delivery.Outcomes) {
+	if len(delivery.OutpostOutcomes)+len(delivery.IngestOutcomes) != len(delivery.Outcomes) {
 		t.Error("an outcome belongs to more than one hop, or to none")
 	}
 }
 
 // The sim hop (#1694) counts requests, not items, so it has its own outcome
-// set: a request a simulated endpoint settled either came back to the node
+// set: a request a simulated endpoint settled either came back to the outpost
 // (returned, out) or was lost one of three ways. Each is classed exactly once,
 // none is shared with the ingest set, and a total's cause reads from it.
 func TestEverySimOutcomeIsClassedExactlyOnce(t *testing.T) {
@@ -127,7 +127,7 @@ func TestEverySimOutcomeIsClassedExactlyOnce(t *testing.T) {
 // count metrics with before metrics minted ahead of it, every one stored.
 func receipt(b string, seq uint64, m int, before, count uint64) delivery.Receipt {
 	r := delivery.Receipt{
-		Node:       "node-a",
+		Outpost:    "outpost-a",
 		Boot:       b,
 		Seq:        seq,
 		Minted:     t0.Add(time.Duration(m) * time.Minute),
@@ -261,10 +261,10 @@ func TestUnsettledNamesABootWithNothingResolvedPastTheWindow(t *testing.T) {
 	b := receipt("b1", 2, 7, 1, 1)
 	b.Resolved = 1
 	c := receipt("b2", 1, 3, 0, 1)
-	c.Node = "node-b" // nothing after the window yet
+	c.Outpost = "outpost-b" // nothing after the window yet
 	got := delivery.Unsettled(window(0, 5), []delivery.Receipt{a, b, c})
-	if len(got) != 1 || got[0].Node != "node-b" || got[0].Boot != "b2" {
-		t.Fatalf("unsettled = %+v; want node-b's b2", got)
+	if len(got) != 1 || got[0].Outpost != "outpost-b" || got[0].Boot != "b2" {
+		t.Fatalf("unsettled = %+v; want outpost-b's b2", got)
 	}
 	b.Resolved = 0 // seq 1 was still queued when seq 2 was minted
 	if got := delivery.Unsettled(window(0, 5), []delivery.Receipt{a, b}); len(got) != 1 {
@@ -284,10 +284,10 @@ func TestProvenIsTheEarliestResolvingMint(t *testing.T) {
 	d := receipt("b1", 4, 9, 3, 1)
 	d.Resolved = 3
 	e := receipt("b2", 1, 3, 0, 1)
-	e.Node = "node-b" // nothing after the window yet
+	e.Outpost = "outpost-b" // nothing after the window yet
 	got := delivery.Proven(window(0, 5), []delivery.Receipt{a, b, c, d, e})
-	want := map[delivery.Boot]time.Time{{Node: "node-a", Boot: "b1"}: t0.Add(8 * time.Minute)}
-	if len(got) != len(want) || !got[delivery.Boot{Node: "node-a", Boot: "b1"}].Equal(want[delivery.Boot{Node: "node-a", Boot: "b1"}]) {
+	want := map[delivery.Boot]time.Time{{Outpost: "outpost-a", Boot: "b1"}: t0.Add(8 * time.Minute)}
+	if len(got) != len(want) || !got[delivery.Boot{Outpost: "outpost-a", Boot: "b1"}].Equal(want[delivery.Boot{Outpost: "outpost-a", Boot: "b1"}]) {
 		t.Fatalf("proven = %+v; want b1 at minute 8 and no b2", got)
 	}
 }
@@ -399,19 +399,19 @@ func TestScheduleHopLossIsSkippedOverDue(t *testing.T) {
 	}
 }
 
-// overflowed is receipt with the node's account riding it: the runs its
+// overflowed is receipt with the outpost's account riding it: the runs its
 // spool dropped and what it lost before minting.
 func overflowed(r delivery.Receipt, runs []delivery.Drop, lost map[delivery.Outcome]map[delivery.Kind]uint64) delivery.Receipt {
-	r.Loss = delivery.NodeLoss{Dropped: runs, Lost: lost}
+	r.Loss = delivery.OutpostLoss{Dropped: runs, Lost: lost}
 	return r
 }
 
-// TestTheNodeHopReconcilesSeparatelyFromIngest: a run the spool dropped
-// reads as the node hop's loss under its cause and leaves the ingest row,
-// a gap the node shipped reads as missing at ingest and not at the node, an
-// item lost before minting is the node's alone, and end to end composes the
+// TestTheOutpostHopReconcilesSeparatelyFromIngest: a run the spool dropped
+// reads as the outpost hop's loss under its cause and leaves the ingest row,
+// a gap the outpost shipped reads as missing at ingest and not at the outpost, an
+// item lost before minting is the outpost's alone, and end to end composes the
 // two hops into the pipeline's whole loss.
-func TestTheNodeHopReconcilesSeparatelyFromIngest(t *testing.T) {
+func TestTheOutpostHopReconcilesSeparatelyFromIngest(t *testing.T) {
 	rs := []delivery.Receipt{
 		receipt("b1", 1, 1, 0, 3),
 		// seq 2 (2 items) and 3 (3 items) dropped at the spool's cap
@@ -421,44 +421,44 @@ func TestTheNodeHopReconcilesSeparatelyFromIngest(t *testing.T) {
 		// seq 5 (4 items) shipped and never landed
 		receipt("b1", 6, 3, 13, 2),
 	}
-	node := delivery.ReconcileNode(window(0, 10), rs)[delivery.Metric]
+	outpost := delivery.ReconcileOutpost(window(0, 10), rs)[delivery.Metric]
 	ingest := delivery.Reconcile(window(0, 10), rs)[delivery.Metric]
-	if node.In != 17 || node.Out != 10 || node.Outcomes[delivery.SpoolOverflow] != 5 ||
-		node.Outcomes[delivery.EncodeFailed] != 2 || node.Cause() != delivery.SpoolOverflow {
-		t.Fatalf("node = %+v cause %q; want 17 in, 10 out, 5 spool-overflow, 2 encode-failed", node, node.Cause())
+	if outpost.In != 17 || outpost.Out != 10 || outpost.Outcomes[delivery.SpoolOverflow] != 5 ||
+		outpost.Outcomes[delivery.EncodeFailed] != 2 || outpost.Cause() != delivery.SpoolOverflow {
+		t.Fatalf("outpost = %+v cause %q; want 17 in, 10 out, 5 spool-overflow, 2 encode-failed", outpost, outpost.Cause())
 	}
-	if ingest.In != node.Out || ingest.Out != 6 || ingest.Outcomes[delivery.Missing] != 4 {
-		t.Fatalf("ingest = %+v; want in %d (the node's out), 6 out, 4 missing", ingest, node.Out)
+	if ingest.In != outpost.Out || ingest.Out != 6 || ingest.Outcomes[delivery.Missing] != 4 {
+		t.Fatalf("ingest = %+v; want in %d (the outpost's out), 6 out, 4 missing", ingest, outpost.Out)
 	}
-	nl, _ := node.Loss()
+	nl, _ := outpost.Loss()
 	il, _ := ingest.Loss()
-	if got, want := delivery.EndToEnd(nl, il), float64(node.In-ingest.Out)/float64(node.In); math.Abs(got-want) > 1e-12 {
-		t.Fatalf("end to end = %v; want %v, what went in at the node and never came out of ingest", got, want)
+	if got, want := delivery.EndToEnd(nl, il), float64(outpost.In-ingest.Out)/float64(outpost.In); math.Abs(got-want) > 1e-12 {
+		t.Fatalf("end to end = %v; want %v, what went in at the outpost and never came out of ingest", got, want)
 	}
 }
 
-// TestAGapTheNodeDidNotDropIsIngestsAlone: with no run on any receipt, the
-// node shipped every item and reads 0, and the gap is missing at ingest.
-func TestAGapTheNodeDidNotDropIsIngestsAlone(t *testing.T) {
+// TestAGapTheOutpostDidNotDropIsIngestsAlone: with no run on any receipt, the
+// outpost shipped every item and reads 0, and the gap is missing at ingest.
+func TestAGapTheOutpostDidNotDropIsIngestsAlone(t *testing.T) {
 	rs := []delivery.Receipt{receipt("b1", 1, 1, 0, 3), receipt("b1", 3, 2, 7, 1)}
-	node := delivery.ReconcileNode(window(0, 10), rs)[delivery.Metric]
-	if l, ok := node.Loss(); !ok || l != 0 || node.In != 8 {
-		t.Fatalf("node = %+v; want 8 in, loss 0", node)
+	outpost := delivery.ReconcileOutpost(window(0, 10), rs)[delivery.Metric]
+	if l, ok := outpost.Loss(); !ok || l != 0 || outpost.In != 8 {
+		t.Fatalf("outpost = %+v; want 8 in, loss 0", outpost)
 	}
 	if got := delivery.Reconcile(window(0, 10), rs)[delivery.Metric]; got.Outcomes[delivery.Missing] != 4 {
 		t.Fatalf("ingest missing = %d; want 4", got.Outcomes[delivery.Missing])
 	}
 }
 
-// TestADroppedRunBelowABootsLowestReceiptIsTheNodes: the gap below the
+// TestADroppedRunBelowABootsLowestReceiptIsTheOutposts: the gap below the
 // lowest landed receipt is owned as Reconcile owns it, and a run there is
-// the node's.
-func TestADroppedRunBelowABootsLowestReceiptIsTheNodes(t *testing.T) {
+// the outpost's.
+func TestADroppedRunBelowABootsLowestReceiptIsTheOutposts(t *testing.T) {
 	rs := []delivery.Receipt{overflowed(receipt("b1", 3, 7, 5, 2),
 		[]delivery.Drop{{Cause: delivery.SpoolExpired, From: 1, To: 2, Items: map[delivery.Kind]uint64{delivery.Metric: 5}}}, nil)}
-	node := delivery.ReconcileNode(window(5, 10), rs)[delivery.Metric]
-	if node.Outcomes[delivery.SpoolExpired] != 5 || node.In != 7 {
-		t.Fatalf("node = %+v; want 5 spool-expired of 7", node)
+	outpost := delivery.ReconcileOutpost(window(5, 10), rs)[delivery.Metric]
+	if outpost.Outcomes[delivery.SpoolExpired] != 5 || outpost.In != 7 {
+		t.Fatalf("outpost = %+v; want 5 spool-expired of 7", outpost)
 	}
 	if got := delivery.Reconcile(window(5, 10), rs)[delivery.Metric]; got.Outcomes[delivery.Missing] != 0 || got.In != 2 {
 		t.Fatalf("ingest = %+v; want 2 in, none missing", got)
@@ -476,9 +476,9 @@ func TestLostBeforeMintingCountsOnceAcrossWindows(t *testing.T) {
 		overflowed(receipt("b1", 1, 2, 0, 1), nil, lost(3)),
 		overflowed(receipt("b1", 2, 7, 1, 1), nil, lost(5)),
 	}
-	w1 := delivery.ReconcileNode(window(0, 5), rs)[delivery.Log]
-	w2 := delivery.ReconcileNode(window(5, 10), rs)[delivery.Log]
-	both := delivery.ReconcileNode(window(0, 10), rs)[delivery.Log]
+	w1 := delivery.ReconcileOutpost(window(0, 5), rs)[delivery.Log]
+	w2 := delivery.ReconcileOutpost(window(5, 10), rs)[delivery.Log]
+	both := delivery.ReconcileOutpost(window(0, 10), rs)[delivery.Log]
 	if w1.Outcomes[delivery.SelfLogOverflow] != 3 || w2.Outcomes[delivery.SelfLogOverflow] != 2 || both.Outcomes[delivery.SelfLogOverflow] != 5 {
 		t.Fatalf("self-log-overflow w1 %d, w2 %d, both %d; want 3, 2, 5", w1.Outcomes[delivery.SelfLogOverflow],
 			w2.Outcomes[delivery.SelfLogOverflow], both.Outcomes[delivery.SelfLogOverflow])

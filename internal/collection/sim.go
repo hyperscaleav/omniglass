@@ -6,10 +6,10 @@ import (
 	"time"
 )
 
-// The simulator's wire. A simulator runs beside a node and authenticates
-// with that node's credential, so it rides the node's subject grant: it may
-// ask for the devices behind its own node and report hits on them, never
-// another node's.
+// The simulator's wire. A simulator runs beside an outpost and authenticates
+// with that outpost's credential, so it rides the outpost's subject grant: it may
+// ask for the devices behind its own outpost and report hits on them, never
+// another outpost's.
 const (
 	// SimlistWildcard / SimHitWildcard are the server-side subscriptions.
 	SimlistWildcard = subjectPrefix + "simlist.*"
@@ -17,20 +17,20 @@ const (
 )
 
 // SimlistSubject is where a simulator requests the devices to serve
-// (request-reply, answered into the node's inbox like the worklist).
-func SimlistSubject(node string) string { return subjectPrefix + "simlist." + node }
+// (request-reply, answered into the outpost's inbox like the worklist).
+func SimlistSubject(outpost string) string { return subjectPrefix + "simlist." + outpost }
 
 // SimHitSubject is where a simulator publishes batches of hits.
-func SimHitSubject(node string) string { return subjectPrefix + "simhit." + node }
+func SimHitSubject(outpost string) string { return subjectPrefix + "simhit." + outpost }
 
-// SimopSubject is where the server asks the simulator beside a node to run
+// SimopSubject is where the server asks the simulator beside an outpost to run
 // an operation an operator fired from the console (request-reply, the
-// server requesting). The simulator subscribes with the node's grant and
+// server requesting). The simulator subscribes with the outpost's grant and
 // answers each request once.
-func SimopSubject(node string) string { return subjectPrefix + "simop." + node }
+func SimopSubject(outpost string) string { return subjectPrefix + "simop." + outpost }
 
 // ErrNoSimulator is the answer to an operation when no simulator beside the
-// node is listening (or none answered in time).
+// outpost is listening (or none answered in time).
 var ErrNoSimulator = errors.New("no simulator answered")
 
 // SimOperation is one operation fired at a simulated device: an HTTP call
@@ -72,7 +72,7 @@ type SimlistRequest struct {
 }
 
 // SimDevice is one component the simulator may serve: a component with an
-// endpoint placed on the node, its product (whose name selects the
+// endpoint placed on the outpost, its product (whose name selects the
 // simulator profile), and the host its endpoints target.
 type SimDevice struct {
 	ComponentID string `json:"component_id"`
@@ -86,7 +86,7 @@ type SimDevice struct {
 	// simulator plays the external service, so it holds what that service
 	// would, the endpoint's path (its token) and the secret it signs with.
 	// Handed out only by a lab-marked database, only for a component in the
-	// simulated block, and only on this list; never a node's worklist.
+	// simulated block, and only on this list; never an outpost's worklist.
 	Webhook *SimWebhook `json:"webhook,omitempty"`
 }
 
@@ -126,7 +126,7 @@ type SimImpairmentStatus struct {
 	Impaired  []string `json:"impaired,omitempty"`
 }
 
-// SimlistReply is the server's answer: every candidate device on the node.
+// SimlistReply is the server's answer: every candidate device on the outpost.
 // The simulator serves those it has a profile and a local address for.
 type SimlistReply struct {
 	Devices []SimDevice `json:"devices"`
@@ -150,12 +150,12 @@ func SimProtocols() []string { return slices.Clone(simProtocols) }
 // than becoming a new key in its tally.
 func IsSimProtocol(p string) bool { return slices.Contains(simProtocols, p) }
 
-// SimProtocolOf is the simulator protocol a node's transport reaches a
-// simulated device as, so a lab can reconcile what the node dialed against
+// SimProtocolOf is the simulator protocol an outpost's transport reaches a
+// simulated device as, so a lab can reconcile what the outpost dialed against
 // what the device saw: a TLS transport reports as its plain one (the device
 // serves the bytes, the handshake included, on the plain face's counters).
 // icmp has none, since the kernel answers it, and neither has a push
-// transport, which no node dials.
+// transport, which no outpost dials.
 func SimProtocolOf(transport string) (string, bool) {
 	switch transport {
 	case "https":

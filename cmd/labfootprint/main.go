@@ -50,7 +50,7 @@ func parseArgs(args []string) (options, error) {
 		bin      = fs.String("bin", "bin/omniglass", "the omniglass binary make built")
 		scenario = fs.String("scenario", lab.MeasureScenario, "the fleet the lab seeds: a scale scenario, or a dev one with -systems 0")
 		systems  = fs.Int("systems", lab.SmokeSystems, "the size a scale scenario is resolved at (0 for a dev scenario)")
-		cadence  = fs.String("cadence", lab.CadenceLab, "the node's cadence profile ("+lab.CadenceNames()+")")
+		cadence  = fs.String("cadence", lab.CadenceLab, "the outpost's cadence profile ("+lab.CadenceNames()+")")
 		warmup   = fs.Duration("warmup", 2*time.Minute, "how long the lab runs before the first window")
 		window   = fs.Duration("window", time.Minute, "one window's length")
 		windows  = fs.Int("windows", 5, "how many windows; each figure is their median")

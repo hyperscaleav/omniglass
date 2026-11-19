@@ -108,6 +108,47 @@ describe("step mode", () => {
   });
 });
 
+// The value in force when the window opens (#1488): a step series starts on it
+// at the left edge and holds it to the first change, instead of starting blank.
+describe("step mode with a carried-in value", () => {
+  const opts = { width: 640, height: 160, padLeft: 40, padRight: 12, padY: 18, now, windowMs: 24 * 3600_000, mode: "step" as const };
+
+  it("a change inside the window is preceded by the carried-in value, held from the left edge to it", () => {
+    const l = chartLayout([at(10, 3)], { ...opts, carriedIn: 1 });
+    const b = l.points[0];
+    const yCarried = l.linePath.match(/^M([\d.]+),([\d.]+)/)!;
+    expect(Number(yCarried[1])).toBeCloseTo(40, 2);
+    // Held flat to the change's x, then the vertical edge to the new value.
+    expect(l.linePath).toContain(`L${b.x.toFixed(2)},${yCarried[2]} L${b.x.toFixed(2)},${b.y.toFixed(2)}`);
+    // The carried-in value is no sample: it is not a point the crosshair snaps to.
+    expect(l.points).toHaveLength(1);
+    // The domain holds the carried-in value too.
+    expect(l.yMin).toBeLessThan(1);
+  });
+
+  it("a window with no change draws one flat step across the whole window", () => {
+    const l = chartLayout([], { ...opts, carriedIn: 1 });
+    const cmds = l.linePath.split(" ");
+    expect(cmds).toHaveLength(2);
+    const [m, e] = cmds.map((c) => c.slice(1).split(",").map(Number));
+    expect(m[0]).toBeCloseTo(40, 2);
+    expect(e[0]).toBeCloseTo(640 - 12, 2);
+    expect(e[1]).toBe(m[1]);
+    expect(l.endValue).toBe(1);
+    expect(l.endDot.x).toBeCloseTo(640 - 12, 2);
+    expect(l.endDot.y).toBeCloseTo(m[1], 1);
+  });
+
+  it("without a carried-in value the series starts at its first change, as before", () => {
+    const l = chartLayout([at(10, 3)], opts);
+    expect(l.linePath.startsWith(`M${l.points[0].x.toFixed(2)},`)).toBe(true);
+  });
+
+  it("line mode ignores a carried-in value: a metric ramps between samples", () => {
+    expect(chartLayout([], { ...opts, mode: "line", carriedIn: 1 }).linePath).toBe("");
+  });
+});
+
 // The bucketed read's chart (#1269): the min/max band and the avg line per
 // bucket, so a one-sample spike survives any zoom.
 describe("bucketLayout", () => {

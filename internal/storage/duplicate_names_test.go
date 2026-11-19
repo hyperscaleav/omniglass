@@ -55,7 +55,7 @@ func newDuplicateNameFixture(t *testing.T) (gw storage.Gateway, conn *pgx.Conn) 
 }
 
 // twoDisplayOnes creates two components both named "display-1", in different
-// rooms, plus a system and a quorum-1 role to staff. It is the shared fixture
+// rooms, plus a system and a quorum-1 slot to staff. It is the shared fixture
 // TestDuplicateNamesDoNotBreakGatewayReads and TestBareNameAmbiguousRefuses both
 // build on.
 func twoDisplayOnes(t *testing.T, gw storage.Gateway) (compA, compB *storage.Component, sys *storage.System) {
@@ -87,17 +87,17 @@ func twoDisplayOnes(t *testing.T, gw storage.Gateway) (compA, compB *storage.Com
 	if err != nil {
 		t.Fatalf("system: %v", err)
 	}
-	if _, err := gw.SetSystemRole(ctx, "", "system", sys.Name, storage.SystemRoleSpec{
+	if _, err := gw.SetSystemSlot(ctx, "", "system", sys.Name, storage.SystemSlotSpec{
 		Name: "seat", Label: "Seat", Quorum: 1,
 	}); err != nil {
-		t.Fatalf("declare role: %v", err)
+		t.Fatalf("declare slot: %v", err)
 	}
 	return compA, compB, sys
 }
 
 // twoSameNamedSystems creates two systems both named "huddle-1", at different
 // locations, so component/location fixtures are not the only shared name in
-// play: the collection ingest path and role_declarations.go's roleOwnerExpr
+// play: the collection ingest path and slot_declarations.go's slotOwnerExpr
 // key on system, not component.
 func twoSameNamedSystems(t *testing.T, gw storage.Gateway) (sysA, sysB *storage.System) {
 	t.Helper()
@@ -244,7 +244,7 @@ func TestDuplicateNamesDoNotBreakIngestPath(t *testing.T) {
 		t.Fatalf("bootstrap owner: %v", err)
 	}
 	var actor string
-	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&actor); err != nil {
+	if err := conn.QueryRow(ctx, `select user_id from person where username = 'root'`).Scan(&actor); err != nil {
 		t.Fatalf("resolve actor: %v", err)
 	}
 	cmd, err := gw.IssueCommand(ctx, actor, "component", compA.ID, "set-volume-x", "", []byte(`42`), nil)
@@ -285,74 +285,74 @@ func anyEffectiveMetricSampled(mets []storage.EffectiveMetric, name string) bool
 	return false
 }
 
-// TestSystemOwnedRoleDeclarationSurvivesDuplicateNames covers
-// role_declarations.go's roleOwnerExpr, the system branch of the role-owner
-// arc: SetSystemRole/ListSystemRoles/DeleteSystemRole must resolve a
+// TestSystemOwnedSlotDeclarationSurvivesDuplicateNames covers
+// slot_declarations.go's slotOwnerExpr, the system branch of the slot-owner
+// arc: SetSystemSlot/ListSystemSlots/DeleteSystemSlot must resolve a
 // system-owner reference once and bind its uuid rather than re-deriving one
-// from a name a second system might now share, and roleOwnerArg's
+// from a name a second system might now share, and slotOwnerArg's
 // not-found-falls-through-to-the-CHECK-constraint behavior must stay intact
 // for an owner that genuinely does not exist.
-func TestSystemOwnedRoleDeclarationSurvivesDuplicateNames(t *testing.T) {
+func TestSystemOwnedSlotDeclarationSurvivesDuplicateNames(t *testing.T) {
 	t.Parallel()
 	gw, _ := newDuplicateNameFixture(t)
 	ctx := context.Background()
 	sysA, sysB := twoSameNamedSystems(t, gw)
 
-	if _, err := gw.SetSystemRole(ctx, "", "system", sysA.ID, storage.SystemRoleSpec{
+	if _, err := gw.SetSystemSlot(ctx, "", "system", sysA.ID, storage.SystemSlotSpec{
 		Name: "seat", Label: "Seat", Quorum: 1,
 	}); err != nil {
-		t.Fatalf("declare role on sysA by id: %v", err)
+		t.Fatalf("declare slot on sysA by id: %v", err)
 	}
 
-	rolesA, err := gw.ListSystemRoles(ctx, "system", sysA.ID)
+	slotsA, err := gw.ListSystemSlots(ctx, "system", sysA.ID)
 	if err != nil {
-		t.Fatalf("list roles on sysA by id: %v", err)
+		t.Fatalf("list slots on sysA by id: %v", err)
 	}
-	if len(rolesA) != 1 || rolesA[0].Name != "seat" {
-		t.Fatalf("sysA roles = %+v, want one role named seat", rolesA)
+	if len(slotsA) != 1 || slotsA[0].Name != "seat" {
+		t.Fatalf("sysA slots = %+v, want one slot named seat", slotsA)
 	}
-	rolesB, err := gw.ListSystemRoles(ctx, "system", sysB.ID)
+	slotsB, err := gw.ListSystemSlots(ctx, "system", sysB.ID)
 	if err != nil {
-		t.Fatalf("list roles on sysB by id: %v", err)
+		t.Fatalf("list slots on sysB by id: %v", err)
 	}
-	if len(rolesB) != 0 {
-		t.Fatalf("sysB roles = %+v, want none (cross-contaminated by the shared name)", rolesB)
+	if len(slotsB) != 0 {
+		t.Fatalf("sysB slots = %+v, want none (cross-contaminated by the shared name)", slotsB)
 	}
 
 	// Re-declaring (an upsert on owner_kind/owner_arc/name) must still land on
 	// sysA only.
-	if _, err := gw.SetSystemRole(ctx, "", "system", sysA.ID, storage.SystemRoleSpec{
+	if _, err := gw.SetSystemSlot(ctx, "", "system", sysA.ID, storage.SystemSlotSpec{
 		Name: "seat", Label: "Seat (revised)", Quorum: 1,
 	}); err != nil {
-		t.Fatalf("revise role on sysA by id: %v", err)
+		t.Fatalf("revise slot on sysA by id: %v", err)
 	}
-	rolesA, err = gw.ListSystemRoles(ctx, "system", sysA.ID)
+	slotsA, err = gw.ListSystemSlots(ctx, "system", sysA.ID)
 	if err != nil {
-		t.Fatalf("list roles on sysA by id (after revise): %v", err)
+		t.Fatalf("list slots on sysA by id (after revise): %v", err)
 	}
-	if len(rolesA) != 1 || rolesA[0].Label != "Seat (revised)" {
-		t.Fatalf("sysA roles after revise = %+v, want the revised label", rolesA)
+	if len(slotsA) != 1 || slotsA[0].Label != "Seat (revised)" {
+		t.Fatalf("sysA slots after revise = %+v, want the revised label", slotsA)
 	}
 
-	if err := gw.DeleteSystemRole(ctx, "", "system", sysA.ID, "seat"); err != nil {
-		t.Fatalf("delete role on sysA by id: %v", err)
+	if err := gw.DeleteSystemSlot(ctx, "", "system", sysA.ID, "seat"); err != nil {
+		t.Fatalf("delete slot on sysA by id: %v", err)
 	}
-	rolesA, err = gw.ListSystemRoles(ctx, "system", sysA.ID)
+	slotsA, err = gw.ListSystemSlots(ctx, "system", sysA.ID)
 	if err != nil {
-		t.Fatalf("list roles on sysA by id (after delete): %v", err)
+		t.Fatalf("list slots on sysA by id (after delete): %v", err)
 	}
-	if len(rolesA) != 0 {
-		t.Fatalf("sysA roles after delete = %+v, want none", rolesA)
+	if len(slotsA) != 0 {
+		t.Fatalf("sysA slots after delete = %+v, want none", slotsA)
 	}
 
 	// A genuinely unknown system owner still falls through to the arc CHECK
-	// constraint's ErrRoleRefNotFound, unchanged (roleOwnerArg's documented
+	// constraint's ErrSlotRefNotFound, unchanged (slotOwnerArg's documented
 	// not-found behavior).
-	_, err = gw.SetSystemRole(ctx, "", "system", "00000000-0000-0000-0000-000000000000", storage.SystemRoleSpec{
+	_, err = gw.SetSystemSlot(ctx, "", "system", "00000000-0000-0000-0000-000000000000", storage.SystemSlotSpec{
 		Name: "seat", Label: "Seat", Quorum: 1,
 	})
-	if !errors.Is(err, storage.ErrRoleRefNotFound) {
-		t.Fatalf("declare role on an unknown system = %v, want ErrRoleRefNotFound", err)
+	if !errors.Is(err, storage.ErrSlotRefNotFound) {
+		t.Fatalf("declare slot on an unknown system = %v, want ErrSlotRefNotFound", err)
 	}
 }
 
@@ -361,7 +361,7 @@ func TestSystemOwnedRoleDeclarationSurvivesDuplicateNames(t *testing.T) {
 // resolves a reference through an inline `(select id from X where name = $1)`
 // scalar subquery raises SQLSTATE 21000 ("more than one row returned by a
 // subquery used as an expression") the moment that name is ambiguous, a hard 500
-// out of alarm reads, member writes, role assignment, health recompute, and
+// out of alarm reads, member writes, slot assignment, health recompute, and
 // interface create. Addressing each duplicate by its uuid (never by the shared
 // bare name) must work cleanly and land on the right row.
 func TestDuplicateNamesDoNotBreakGatewayReads(t *testing.T) {
@@ -413,13 +413,13 @@ func TestDuplicateNamesDoNotBreakGatewayReads(t *testing.T) {
 		t.Fatalf("compB memberships = %d, want 0 (cross-contaminated by the shared name)", len(memsB))
 	}
 
-	// Role assignment, by uuid.
-	if err := gw.AssignRole(ctx, "", sys.Name, "seat", compA.ID, all, all, all, all); err != nil {
-		t.Fatalf("assign role by id: %v", err)
+	// Slot assignment, by uuid.
+	if err := gw.AssignSlot(ctx, "", sys.Name, "seat", compA.ID, all, all, all, all); err != nil {
+		t.Fatalf("assign slot by id: %v", err)
 	}
 	var assignedComponent string
 	if err := conn.QueryRow(ctx,
-		`select component_id from system_role_assignment where system_id = $1`, sys.ID,
+		`select component_id from system_slot_assignment where system_id = $1`, sys.ID,
 	).Scan(&assignedComponent); err != nil {
 		t.Fatalf("read assignment: %v", err)
 	}
@@ -428,7 +428,7 @@ func TestDuplicateNamesDoNotBreakGatewayReads(t *testing.T) {
 	}
 
 	// Health recompute: already exercised in-transaction by RaiseAlarm and
-	// AssignRole above (both call it); read the result back explicitly too.
+	// AssignSlot above (both call it); read the result back explicitly too.
 	rep, err := gw.SystemHealth(ctx, sys.Name, 0, all)
 	if err != nil {
 		t.Fatalf("system health: %v", err)
@@ -436,8 +436,8 @@ func TestDuplicateNamesDoNotBreakGatewayReads(t *testing.T) {
 	if rep.Verdict == "" {
 		t.Fatalf("system health verdict came back empty")
 	}
-	if len(rep.Roles) != 1 || len(rep.Roles[0].AssignedTo) != 1 {
-		t.Fatalf("system health roles = %+v, want one role with one assignee", rep.Roles)
+	if len(rep.Slots) != 1 || len(rep.Slots[0].AssignedTo) != 1 {
+		t.Fatalf("system health slots = %+v, want one slot with one assignee", rep.Slots)
 	}
 	crep, err := gw.RaiseAlarm(ctx, "", compB.ID, storage.AlarmSpec{Severity: "high", Message: "m2", DedupKey: "k2"})
 	if err != nil {
@@ -533,14 +533,14 @@ func TestResolveTagsSurvivesDuplicateSystemNames(t *testing.T) {
 	// Propagates: true, since a system-band binding only reaches the component's
 	// effective-tags read (band 2) when the key cascades; a non-propagating key
 	// is admitted only from a binding on the component itself (band 3, depth 0).
-	if _, err := gw.CreateTag(ctx, "", storage.TagSpec{Name: "role", Propagates: true}, all); err != nil {
+	if _, err := gw.CreateTag(ctx, "", storage.TagSpec{Name: "slot", Propagates: true}, all); err != nil {
 		t.Fatalf("create tag: %v", err)
 	}
-	if _, err := gw.SetTagBinding(ctx, "", "role", "system", strptr(sysA.ID), "primary-video", all, all); err != nil {
-		t.Fatalf("bind role on sysA by id: %v", err)
+	if _, err := gw.SetTagBinding(ctx, "", "slot", "system", strptr(sysA.ID), "primary-video", all, all); err != nil {
+		t.Fatalf("bind slot on sysA by id: %v", err)
 	}
-	if _, err := gw.SetTagBinding(ctx, "", "role", "system", strptr(sysB.ID), "backup-video", all, all); err != nil {
-		t.Fatalf("bind role on sysB by id: %v", err)
+	if _, err := gw.SetTagBinding(ctx, "", "slot", "system", strptr(sysB.ID), "backup-video", all, all); err != nil {
+		t.Fatalf("bind slot on sysB by id: %v", err)
 	}
 
 	// Addressed by uuid: a deterministic single-system answer, never sysB's
@@ -551,21 +551,21 @@ func TestResolveTagsSurvivesDuplicateSystemNames(t *testing.T) {
 	}
 	var sawPrimary, sawBackup bool
 	for _, r := range resolved {
-		if r.Key != "role" {
+		if r.Key != "slot" {
 			continue
 		}
 		switch r.Value {
 		case "primary-video":
 			sawPrimary = true
 			if !r.Winner {
-				t.Errorf("role=primary-video should be the winner, got %+v", r)
+				t.Errorf("slot=primary-video should be the winner, got %+v", r)
 			}
 		case "backup-video":
 			sawBackup = true
 		}
 	}
 	if !sawPrimary {
-		t.Fatalf("resolved tags = %+v, want role=primary-video", resolved)
+		t.Fatalf("resolved tags = %+v, want slot=primary-video", resolved)
 	}
 	if sawBackup {
 		t.Fatalf("resolved tags = %+v, leaked sysB's binding (cross-contaminated by the shared name)", resolved)
@@ -580,32 +580,32 @@ func TestResolveTagsSurvivesDuplicateSystemNames(t *testing.T) {
 	}
 }
 
-// TestStandardOwnedRoleDeclarationSurvivesDuplicateSystemNames is the
+// TestStandardOwnedSlotDeclarationSurvivesDuplicateSystemNames is the
 // regression for the #627 review's finding 3: conformingSystems selected only
 // a conforming system's NAME, even though its id was right there in the same
 // row (keyed on standard_id, an unambiguous FK), and recomputeSystems then
-// re-resolved that name through scopedByName. A standard-owned role
+// re-resolved that name through scopedByName. A standard-owned slot
 // declaration re-derived an id from a name on every recompute, so the moment
 // a conforming system shared its name with an unrelated system anywhere in
 // the fleet (the two need not even conform to the same standard),
-// SetSystemRole and DeleteSystemRole failed with an unmapped
+// SetSystemSlot and DeleteSystemSlot failed with an unmapped
 // *storage.ErrAmbiguousName on a declaration that was never actually
 // ambiguous, and the whole write (including its audit row) rolled back.
 //
 // sysB deliberately never conforms to the standard, so it is the
 // cross-contamination check: if conformingSystems' fix silently widened
-// which systems the recompute reaches, sysB would show the role too.
+// which systems the recompute reaches, sysB would show the slot too.
 //
 // The cross-contamination check asserts on rep.Transitions, the RECORDED
 // side (healthTransitions reads what recordHealth actually wrote, keyed on
-// the id the recompute was given), not rep.Roles or rep.Verdict: both of
-// those are computed LIVE from resolveHealthRoles against sysB's own id,
+// the id the recompute was given), not rep.Slots or rep.Verdict: both of
+// those are computed LIVE from resolveHealthSlots against sysB's own id,
 // entirely independent of which id conformingSystems fed the recompute, so a
 // conformingSystems that returned the WRONG system's id would still leave
-// sysB's live-computed Roles/Verdict looking correct (empty) while silently
+// sysB's live-computed Slots/Verdict looking correct (empty) while silently
 // recording a health edge onto it. Only the recorded transitions would catch
 // that.
-func TestStandardOwnedRoleDeclarationSurvivesDuplicateSystemNames(t *testing.T) {
+func TestStandardOwnedSlotDeclarationSurvivesDuplicateSystemNames(t *testing.T) {
 	t.Parallel()
 	gw, _ := newDuplicateNameFixture(t)
 	ctx := context.Background()
@@ -623,7 +623,7 @@ func TestStandardOwnedRoleDeclarationSurvivesDuplicateSystemNames(t *testing.T) 
 	// its own opening verdict from CreateSystem (recordHealth always records
 	// the first value for an owner, even Healthy). Captured here so the
 	// post-declaration read below can assert it is BYTE-FOR-BYTE unchanged,
-	// not merely "still empty of the new role" (which live-computed Roles
+	// not merely "still empty of the new slot" (which live-computed Slots
 	// already covers and cannot fail on this bug).
 	repBBefore, err := gw.SystemHealth(ctx, sysB.ID, 0, all)
 	if err != nil {
@@ -633,10 +633,10 @@ func TestStandardOwnedRoleDeclarationSurvivesDuplicateSystemNames(t *testing.T) 
 		t.Fatalf("sysB transitions before declaration = %+v, want its own opening verdict recorded at creation", repBBefore.Transitions)
 	}
 
-	if _, err := gw.SetSystemRole(ctx, "", "standard", "dup-std", storage.SystemRoleSpec{
+	if _, err := gw.SetSystemSlot(ctx, "", "standard", "dup-std", storage.SystemSlotSpec{
 		Name: "seat", Label: "Seat", Quorum: 1,
 	}); err != nil {
-		t.Fatalf("declare standard role: %v", err)
+		t.Fatalf("declare standard slot: %v", err)
 	}
 
 	repA, err := gw.SystemHealth(ctx, sysA.ID, 0, all)
@@ -646,40 +646,40 @@ func TestStandardOwnedRoleDeclarationSurvivesDuplicateSystemNames(t *testing.T) 
 	if repA.Verdict == "" {
 		t.Fatalf("sysA health verdict came back empty")
 	}
-	if len(repA.Roles) != 1 || repA.Roles[0].Name != "seat" {
-		t.Fatalf("sysA roles = %+v, want one role named seat", repA.Roles)
+	if len(repA.Slots) != 1 || repA.Slots[0].Name != "seat" {
+		t.Fatalf("sysA slots = %+v, want one slot named seat", repA.Slots)
 	}
 	// The RECORDED side: sysA must show a NEW transition to incomplete (an
-	// unstaffed quorum-1 role is a commissioning gap, #631), proving
-	// recordHealth actually wrote for sysA's own id. rep.Roles above says
+	// unstaffed quorum-1 slot is a commissioning gap, #631), proving
+	// recordHealth actually wrote for sysA's own id. rep.Slots above says
 	// nothing about which id the write landed on; this does.
 	if n := len(repA.Transitions); n == 0 {
 		t.Fatalf("sysA transitions = %+v, want at least one recorded edge", repA.Transitions)
 	} else if last := repA.Transitions[n-1]; last.Value != "incomplete" {
-		t.Fatalf("sysA latest transition = %+v, want incomplete (an unstaffed quorum-1 role)", last)
+		t.Fatalf("sysA latest transition = %+v, want incomplete (an unstaffed quorum-1 slot)", last)
 	}
 
 	repB, err := gw.SystemHealth(ctx, sysB.ID, 0, all)
 	if err != nil {
 		t.Fatalf("system health sysB by id: %v", err)
 	}
-	if len(repB.Roles) != 0 {
-		t.Fatalf("sysB roles = %+v, want none (cross-contaminated by the shared name)", repB.Roles)
+	if len(repB.Slots) != 0 {
+		t.Fatalf("sysB slots = %+v, want none (cross-contaminated by the shared name)", repB.Slots)
 	}
 	if len(repB.Transitions) != len(repBBefore.Transitions) {
 		t.Fatalf("sysB transitions = %+v, want unchanged from before the declaration %+v (cross-contaminated by the shared name: the recompute wrote to sysB's id)",
 			repB.Transitions, repBBefore.Transitions)
 	}
 
-	if err := gw.DeleteSystemRole(ctx, "", "standard", "dup-std", "seat"); err != nil {
-		t.Fatalf("withdraw standard role: %v", err)
+	if err := gw.DeleteSystemSlot(ctx, "", "standard", "dup-std", "seat"); err != nil {
+		t.Fatalf("withdraw standard slot: %v", err)
 	}
 	repA2, err := gw.SystemHealth(ctx, sysA.ID, 0, all)
 	if err != nil {
 		t.Fatalf("system health sysA after withdraw: %v", err)
 	}
-	if len(repA2.Roles) != 0 {
-		t.Fatalf("sysA roles after withdraw = %+v, want none", repA2.Roles)
+	if len(repA2.Slots) != 0 {
+		t.Fatalf("sysA slots after withdraw = %+v, want none", repA2.Slots)
 	}
 	if n := len(repA2.Transitions); n == 0 {
 		t.Fatalf("sysA transitions after withdraw = %+v, want at least one recorded edge", repA2.Transitions)

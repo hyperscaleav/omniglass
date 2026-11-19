@@ -182,10 +182,10 @@ func TestSystemEventsAndLogsOnTheWire(t *testing.T) {
 		t.Fatalf("system logs = %+v, want the member's line named", lg.Logs)
 	}
 
-	// A principal holding no grant at all dies at the permission gate (403,
+	// A user holding no grant at all dies at the permission gate (403,
 	// both routes share the stamp); the scoped-away non-disclosing 404 is the
 	// GetSystem pattern every system read already proves.
-	noneTok := principalWithGrants(t, ctx, dsn, "no-scope-viewer", nil)
+	noneTok := userWithGrants(t, ctx, dsn, "no-scope-viewer", nil)
 	c.do(noneTok, http.MethodGet, "/systems/"+sys.ID+"/events", nil, http.StatusForbidden)
 	c.do(noneTok, http.MethodGet, "/systems/"+sys.ID+"/logs", nil, http.StatusForbidden)
 }

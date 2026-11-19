@@ -91,6 +91,23 @@ func TestFallsBackToIndexForClientRoute(t *testing.T) {
 	}
 }
 
+// TestTheConsoleRefusesToBeFramed: no other site may frame a console page,
+// so none can overlay its own content on a button like the OAuth consent
+// page's Approve (#2048).
+func TestTheConsoleRefusesToBeFramed(t *testing.T) {
+	h := SPAHandler(fakeConsole())
+	for _, p := range []string{"/", "/oauth/authorize"} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, p, nil))
+		if csp := rec.Header().Get("Content-Security-Policy"); csp != "frame-ancestors 'none'" {
+			t.Errorf("%s Content-Security-Policy = %q, want frame-ancestors 'none'", p, csp)
+		}
+		if xfo := rec.Header().Get("X-Frame-Options"); xfo != "DENY" {
+			t.Errorf("%s X-Frame-Options = %q, want DENY", p, xfo)
+		}
+	}
+}
+
 func TestMissingAssetIs404NotTheSPA(t *testing.T) {
 	// #778: the fallback answered every miss with index.html and 200, so a
 	// partial deploy looked healthy. A miss under a directory the build owns is
@@ -159,7 +176,7 @@ func TestDeepLinkStillRendersTheConsole(t *testing.T) {
 	// TestNoConsoleRouteCarriesADot), which is what lets one that does read as a
 	// file.
 	h := SPAHandler(fakeConsole())
-	for _, p := range []string{"/locations/hq", "/nodes/edge-1/endpoints", "/products/samsung-qm55"} {
+	for _, p := range []string{"/locations/hq", "/outposts/edge-1/endpoints", "/products/samsung-qm55"} {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, p, nil))
 		if rec.Code != http.StatusOK {

@@ -23,9 +23,9 @@ import (
 // The push-ingest write BFF: a first-party route that accepts telemetry in OUR
 // schema (a webhook, by contrast, is the case where we do not control the payload
 // and something has to normalize it, which is driver work). It is the second ingest
-// lane beside the node's, and the two differ in exactly one respect: where the owner
-// comes from. A node cannot be trusted to name its own owner, so the server derives
-// it from the task's interface; a scoped principal can be, because the scope check
+// lane beside the outpost's, and the two differ in exactly one respect: where the owner
+// comes from. An outpost cannot be trusted to name its own owner, so the server derives
+// it from the task's interface; a scoped user can be, because the scope check
 // is the fence.
 //
 // The route authorizes, resolves and validates, then publishes onto the data lane
@@ -35,7 +35,7 @@ import (
 // regardless of how a record arrived.
 
 // pushBatchLimit bounds how many items one batch may carry, so a single request
-// cannot pin the registry snapshot or the publish path for an unbounded time.
+// cannot pin the catalog snapshot or the publish path for an unbounded time.
 //
 // The encoded SIZE needs no guard of its own: Huma already caps the request body at
 // 1 MiB (a larger body is a 413 before this handler runs), and protobuf encodes more
@@ -92,7 +92,7 @@ type pushInput struct {
 		Metrics    []pushMetric   `json:"metrics,omitempty" doc:"Numeric observations, validated against metric_type"`
 		Properties []pushProperty `json:"properties,omitempty" doc:"Categorical observations, validated against property_type and each type's validation schema"`
 		Events     []pushEvent    `json:"events,omitempty" doc:"Natively caught occurrences, validated against event_type"`
-		Logs       []pushLog      `json:"logs,omitempty" doc:"Raw untyped log lines. No registry gate. Component owners only: a system batch carrying one is refused with a 422"`
+		Logs       []pushLog      `json:"logs,omitempty" doc:"Raw untyped log lines. No catalog gate. Component owners only: a system batch carrying one is refused with a 422"`
 	}
 }
 
@@ -126,8 +126,8 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 			"publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is " +
 			"rejected and reported in the response rather than silently dropped, and a property or event payload " +
 			"violating its type's schema refuses the batch with a 422. Every key has one writer class, and a push " +
-			"writes only a collected key: a built-in key a node writes (a reachability verdict or rung, a probe metric " +
-			"or timing, a held session's state, collection-failed, an endpoint's collection telemetry) is a node's own " +
+			"writes only a collected key: a built-in key an outpost writes (a reachability verdict or rung, a probe metric " +
+			"or timing, a held session's state, collection-failed, an endpoint's collection telemetry) is an outpost's own " +
 			"observation and a platform key (health, the webhook receiver's counts) is the platform's, each rejected " +
 			"by name on every lane; a key a calc rule outputs is rejected " +
 			"naming the rule. The owner is a component or a system; a system batch carries no log lines (a log line is " +
@@ -164,7 +164,7 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		// system owner by ADR-0422): the owner is a component or a system
 		// target, resolved the way every route that acts on one is (#736,
 		// ADR-0116), each on its own tier. The ACTION scope is the one that
-		// confers telemetry:push, never a read: a principal routinely holds a
+		// confers telemetry:push, never a read: a user routinely holds a
 		// wide read and a narrow write (viewer over the fleet plus operator on
 		// one component), so fencing with the read scope would let it push to
 		// anything it can see. Push is the stronger grant, so its own scope is
@@ -188,20 +188,20 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		// Reject-not-project, applied HERE so rejection is synchronous. Publishing is
 		// asynchronous, so a route that validated nothing would have to answer "202,
 		// and good luck", which is useless to a human who mistyped a property name.
-		// The registry is an in-memory snapshot, so this costs a map lookup per name.
+		// The catalog is an in-memory snapshot, so this costs a map lookup per name.
 		metricTypes, err := gw.ListMetricTypes(ctx)
 		if err != nil {
-			return nil, huma.Error500InternalServerError("read registry")
+			return nil, huma.Error500InternalServerError("read catalog")
 		}
 		properties, err := gw.ListPropertyTypes(ctx)
 		if err != nil {
-			return nil, huma.Error500InternalServerError("read registry")
+			return nil, huma.Error500InternalServerError("read catalog")
 		}
 		eventTypes, err := gw.ListEventTypes(ctx)
 		if err != nil {
-			return nil, huma.Error500InternalServerError("read registry")
+			return nil, huma.Error500InternalServerError("read catalog")
 		}
-		reg := collection.NewRegistry(metricTypes, properties, eventTypes)
+		reg := collection.NewCatalog(metricTypes, properties, eventTypes)
 
 		out := &pushOutput{Status: http.StatusAccepted}
 		batch := &ogv1.TelemetryBatch{
@@ -231,7 +231,7 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		// the caller guessing which rows exist.
 		//
 		// A reserved key is refused first, by name and on every lane (#1080,
-		// ADR-0161): a native probe key is a node's own observation and a
+		// ADR-0161): a native probe key is an outpost's own observation and a
 		// platform key the platform's, so its reason names that, not a lane the
 		// caller could switch to. A registered key is then held to its writer
 		// class, which refuses a calc rule's output naming the rule. The
@@ -395,7 +395,7 @@ func resolvePushOwner(ctx context.Context, a *authenticator, gw storage.Gateway,
 // reservedRejection refuses a key of the reserved family on every lane, by
 // name (#1080, ADR-0161): a native probe key (read from probekeys, the one
 // declaration the probes emit from, collection-failed among them) is the
-// node's own observation, which the console reads as the node's, and a
+// outpost's own observation, which the console reads as the outpost's, and a
 // platform key is the platform's (health, the rollup's verdict, and the
 // webhook receiver's counts, #1369). The match is
 // case-insensitive and ignores surrounding space, failing closed. The reason
@@ -502,7 +502,7 @@ func endpointListing(names []string) string {
 // registered nowhere, or the name is held on another lane by an operator's row
 // that shadows an official one of the same name on this install (#1307), which
 // is not "unregistered": the official catalog does hold it.
-func unregisteredReason(reg collection.Registry, name, kind string) string {
+func unregisteredReason(reg collection.Catalog, name, kind string) string {
 	if reg.IsShadowed(name) {
 		return "name is shadowed on this install: an operator's row of the same name in another catalog takes it over the official " + kind + " type"
 	}

@@ -5,9 +5,11 @@ description: "The dated history of architectural calls: reversals, settled open 
 # docs/src/content/decisions/, spliced in where ::decision-index and ::decision-log sit
 # by docs/src/plugins/remark-fragments.mjs. Record one with /record-decision; internal/docslint
 # fails an entry or an index row written here.
+sidebar:
+  order: 3
 ---
 
-The architecture pages are written in the present tense as the **target design**, and each carries a
+The pages are written in the present tense as the **target design**, and each rebuilt page carries a
 status badge that says how much of it is built ([implementation status](/architecture/status/)). Neither
 axis carries **history**: why a call was made, when it was reversed, or why the shipped code differs from
 the page that describes it. That is what this log is for.

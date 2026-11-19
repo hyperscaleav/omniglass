@@ -212,7 +212,7 @@ describe("the identity words are written in exactly one place", () => {
       `\nThese label a field or fact with an identity word by hand:\n  ${offenders.join("\n  ")}\n\n` +
         `Say which fact it is bound to instead: bind="name" or bind="label".\n` +
         `The label then comes from IDENTITY_LABELS in lib/entities, which is the only\n` +
-        `place either word is written, so the two cannot be swapped again.\n`,
+        `location either word is written, so the two cannot be swapped again.\n`,
     ).toEqual([]);
   });
 
@@ -328,7 +328,7 @@ describe("a blade heading renders through the primitive", () => {
   // so the heading renders it in the data face and BladeTitle would render the
   // same thing. Remove the entry when the entity gains a label.
   const NO_DISPLAY_NAME = ["SecretBladeTitle", "VariableBladeTitle", "TagBladeTitle", "InterfaceBladeTitle"];
-  // Principals and roles label through their own helpers (principalName,
+  // Users and roles label through their own helpers (userName,
   // groupName), which resolve a username or a group name rather than the fleet
   // entity triad, so they are not BladeTitle's shape.
   const OWN_LABEL_RULE = ["UserTitle", "GroupTitle", "RoleTitle"];

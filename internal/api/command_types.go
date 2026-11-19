@@ -26,8 +26,8 @@ type commandTypeBody struct {
 	SettleWindowSeconds int             `json:"settle_window_seconds" doc:"How long the device is given to actuate before a mismatch is a failed command"`
 	TargetPropertyType  string          `json:"target_property_type,omitempty" doc:"The property this command sets (one arm of the exclusive target arc; empty for fire-and-forget or a metric target)"`
 	TargetMetricType    string          `json:"target_metric_type,omitempty" doc:"The metric this command sets (the other arm of the arc; never set together with target_property_type)"`
-	Disruptive          bool            `json:"disruptive" doc:"The command takes its device down (reboot): its delivery closes the gates of the hold set on the delivering node until each reads up again. The hold set is the target and what it hosts (host dependencies, followed down), less any out-of-band endpoint of the target"`
-	QuietSeconds        int             `json:"quiet_seconds" doc:"A disruptive type's quiet period: how long the node runs no poll, probe or session dial against the held endpoints after delivery. 0 on a type that is not disruptive"`
+	Disruptive          bool            `json:"disruptive" doc:"The command takes its device down (reboot): its delivery closes the gates of the hold set on the delivering outpost until each reads up again. The hold set is the target and what it hosts (host dependencies, followed down), less any out-of-band endpoint of the target"`
+	QuietSeconds        int             `json:"quiet_seconds" doc:"A disruptive type's quiet period: how long the outpost runs no poll, probe or session dial against the held endpoints after delivery. 0 on a type that is not disruptive"`
 	HoldSeconds         int             `json:"hold_seconds" doc:"A disruptive type's backstop: an endpoint with no up verdict this long after delivery reopens anyway, counted as hold-expiry-count. Not the settle window. 0 on a type that is not disruptive"`
 	PowerOutletParam    string          `json:"power_outlet_param,omitempty" doc:"Marks a power command: the name of the param that carries the outlet. Its hold set is the components that outlet feeds (their power dependencies) and what they host, not the target itself. Only on a disruptive type"`
 	Official            bool            `json:"official"`
@@ -68,7 +68,7 @@ type createCommandTypeInput struct {
 		SettleWindowSeconds int    `json:"settle_window_seconds,omitempty" minimum:"0" doc:"The actuation window in seconds: how long the device is given to actuate before a mismatch is a failed command. 0 means settle immediately (a fire-and-forget command, or a settleable one judged at the moment of issue). A duration has no negative, so the schema floors it at 0 rather than accepting a value that behaves as 0 with no refusal to say so."`
 		TargetPropertyType  string `json:"target_property_type,omitempty" doc:"The property this command sets, for settlement (at most one target arm)"`
 		TargetMetricType    string `json:"target_metric_type,omitempty" doc:"The metric this command sets, for settlement (at most one target arm)"`
-		Disruptive          bool   `json:"disruptive,omitempty" doc:"The command takes its device down (reboot): its delivery closes the gates of the hold set (the target and what it hosts) on the delivering node until each reads up again"`
+		Disruptive          bool   `json:"disruptive,omitempty" doc:"The command takes its device down (reboot): its delivery closes the gates of the hold set (the target and what it hosts) on the delivering outpost until each reads up again"`
 		QuietSeconds        int    `json:"quiet_seconds,omitempty" minimum:"0" doc:"A disruptive type's quiet period in seconds: no poll, probe or session dial runs against the held endpoints. Only on a disruptive type"`
 		HoldSeconds         int    `json:"hold_seconds,omitempty" minimum:"0" doc:"A disruptive type's backstop in seconds, greater than quiet_seconds: an endpoint with no up verdict by then reopens anyway, counted. Not the settle window. Only on a disruptive type"`
 		PowerOutletParam    string `json:"power_outlet_param,omitempty" maxLength:"64" doc:"Marks a power command: the name of the param that carries the outlet, so its hold set is what that outlet feeds. Only on a disruptive type"`
@@ -78,21 +78,22 @@ type createCommandTypeInput struct {
 type updateCommandTypeInput struct {
 	Name string `path:"name" doc:"The command type's name"`
 	Body struct {
-		Label               *string `json:"label,omitempty" doc:"A human label"`
-		Description         *string `json:"description,omitempty" doc:"What the command does"`
-		ParamsSchema        any     `json:"params_schema,omitempty" doc:"A JSON Schema fragment (replaces wholesale)"`
-		SettleWindowSeconds *int    `json:"settle_window_seconds,omitempty" minimum:"0" doc:"The actuation window in seconds, floored at 0 (a duration has no negative; 0 means settle immediately)"`
-		TargetPropertyType  *string `json:"target_property_type,omitempty" doc:"The property this command sets (empty clears it; a non-empty arm clears the other)"`
-		TargetMetricType    *string `json:"target_metric_type,omitempty" doc:"The metric this command sets (empty clears it; a non-empty arm clears the other)"`
-		Disruptive          *bool   `json:"disruptive,omitempty" doc:"Whether the command takes its device down; checked with quiet_seconds and hold_seconds on the merged row"`
-		QuietSeconds        *int    `json:"quiet_seconds,omitempty" minimum:"0" doc:"A disruptive type's quiet period in seconds"`
-		HoldSeconds         *int    `json:"hold_seconds,omitempty" minimum:"0" doc:"A disruptive type's backstop in seconds, greater than quiet_seconds; not the settle window"`
-		PowerOutletParam    *string `json:"power_outlet_param,omitempty" maxLength:"64" doc:"The param that carries a power command's outlet (empty clears it); only on a disruptive type, checked on the merged row"`
+		UpdateMask          []string `json:"update_mask,omitempty" doc:"Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (params_schema back to unset); send [\"*\"] for full replacement. A field this resource does not patch is a 422 naming it"`
+		Label               *string  `json:"label,omitempty" doc:"A human label"`
+		Description         *string  `json:"description,omitempty" doc:"What the command does"`
+		ParamsSchema        any      `json:"params_schema,omitempty" doc:"A JSON Schema fragment (replaces wholesale); omit to leave unchanged, or name params_schema in update_mask with no value here to CLEAR it"`
+		SettleWindowSeconds *int     `json:"settle_window_seconds,omitempty" minimum:"0" doc:"The actuation window in seconds, floored at 0 (a duration has no negative; 0 means settle immediately)"`
+		TargetPropertyType  *string  `json:"target_property_type,omitempty" doc:"The property this command sets (empty clears it; a non-empty arm clears the other)"`
+		TargetMetricType    *string  `json:"target_metric_type,omitempty" doc:"The metric this command sets (empty clears it; a non-empty arm clears the other)"`
+		Disruptive          *bool    `json:"disruptive,omitempty" doc:"Whether the command takes its device down; checked with quiet_seconds and hold_seconds on the merged row"`
+		QuietSeconds        *int     `json:"quiet_seconds,omitempty" minimum:"0" doc:"A disruptive type's quiet period in seconds"`
+		HoldSeconds         *int     `json:"hold_seconds,omitempty" minimum:"0" doc:"A disruptive type's backstop in seconds, greater than quiet_seconds; not the settle window"`
+		PowerOutletParam    *string  `json:"power_outlet_param,omitempty" maxLength:"64" doc:"The param that carries a power command's outlet (empty clears it); only on a disruptive type, checked on the merged row"`
 	}
 }
 
 // registerCommandTypeRoutes wires the command_type catalog: the fleet-wide "do"
-// registry (no scope injection, reference data) and its custom-type CRUD, gated by
+// catalog (no scope injection, reference data) and its custom-type CRUD, gated by
 // command_type:read / :create / :update / :delete. Official types are read-only.
 // Mirrors the property_type and event_type catalogs.
 func registerCommandTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
@@ -165,13 +166,13 @@ func registerCommandTypeRoutes(api huma.API, a *authenticator, gw storage.Gatewa
 		Method:      http.MethodPatch,
 		Path:        "/command-types/{name}",
 		Summary:     "Update a command type",
-		Description: "Patches a custom command type's label, description, params schema, settle window, disruption (disruptive, quiet_seconds, hold_seconds, power_outlet_param, checked together on the merged row), or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.",
+		Description: "Patches a custom command type's label, description, params schema, settle window, disruption (disruptive, quiet_seconds, hold_seconds, power_outlet_param, checked together on the merged row), or target on either arm. Partial by default: the fields present in the body change and the rest are left alone (an empty target clears it; a non-empty arm clears the other). params_schema is a nullable object with no empty value, so it clears by being named in update_mask with no value in the body; a mask naming a field this resource does not patch is a 422. The name is fixed at creation. Official types are read-only. Gated by command_type:update.",
 	}, "command_type", "update"), func(ctx context.Context, in *updateCommandTypeInput) (*commandTypeOutput, error) {
 		schema, err := marshalValidation(in.Body.ParamsSchema)
 		if err != nil {
 			return nil, err
 		}
-		ct, err := gw.UpdateCommandType(ctx, actorID(ctx), in.Name, storage.CommandTypePatch{
+		patch := storage.CommandTypePatch{
 			Label:               in.Body.Label,
 			Description:         in.Body.Description,
 			ParamsSchema:        schema,
@@ -182,7 +183,13 @@ func registerCommandTypeRoutes(api huma.API, a *authenticator, gw storage.Gatewa
 			QuietSeconds:        in.Body.QuietSeconds,
 			HoldSeconds:         in.Body.HoldSeconds,
 			PowerOutletParam:    in.Body.PowerOutletParam,
-		})
+		}
+		write, err := resolveUpdateMask(in.Body.UpdateMask, storage.CommandTypePatchFields, patch.Populated())
+		if err != nil {
+			return nil, err
+		}
+		patch.Write = write
+		ct, err := gw.UpdateCommandType(ctx, actorID(ctx), in.Name, patch)
 		if err != nil {
 			return nil, mapCommandTypeErr(err)
 		}

@@ -19,7 +19,7 @@ import (
 // answer carries is captured through the one extraction primitive and rides
 // every later request under the declared headers (${session.<capture>}),
 // beside the cookies the component set, kept in a jar per endpoint in the
-// node's memory alone. Expiry reads how long the session lasts, so a token
+// outpost's memory alone. Expiry reads how long the session lasts, so a token
 // is renewed before it lapses: the shape an OAuth2 client-credentials grant
 // takes too (#1119), a request step, a captured token, an expiry.
 
@@ -38,7 +38,7 @@ var captureName = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 var loginHeaderReserved = []string{"cookie", "host", "content-length", "content-type", "transfer-encoding", "connection",
 	"proxy-authorization", "user-agent", "expect", "te", "upgrade"}
 
-// validateHTTPLogin refuses an http login no node could run.
+// validateHTTPLogin refuses an http login no outpost could run.
 func (s *Spec) validateHTTPLogin() error {
 	l := s.Session.Login
 	if len(l.Steps) == 0 {

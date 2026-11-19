@@ -59,7 +59,7 @@ func labelFleet(t *testing.T, roomCount int) (storage.Gateway, *querycount.Count
 // one room and one product would hold both memo tables at size one and a
 // per-row loop would look exactly as flat as a batch. Distinct products stay
 // FIXED between the two measurements while row count grows, which is the honest
-// shape of the claim: cost is bounded by the registry, not by the fleet.
+// shape of the claim: cost is bounded by the catalog, not by the fleet.
 func TestTheBulkRecomputeCostIsFlatInFleetSize(t *testing.T) {
 	t.Parallel()
 	gw, counter, rooms := labelFleet(t, 4)

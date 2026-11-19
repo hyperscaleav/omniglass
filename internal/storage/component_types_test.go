@@ -612,11 +612,11 @@ func fourLevelChain(t *testing.T) (gw storage.Gateway, counter *querycount.Count
 	return gw, counter, root, mid, leaf
 }
 
-// TestAForkedMiddleNodeOverridesOnlyTheFactsItRestates: a four-level chain
-// where the forked node sits in the middle. The fork restates its icon and
-// nothing else, so the leaf below it takes the fork's icon, the middle node's
+// TestAForkedMiddleOutpostOverridesOnlyTheFactsItRestates: a four-level chain
+// where the forked outpost sits in the middle. The fork restates its icon and
+// nothing else, so the leaf below it takes the fork's icon, the middle outpost's
 // own shipped abbrev, and the stem and tags of the root two hops further up.
-func TestAForkedMiddleNodeOverridesOnlyTheFactsItRestates(t *testing.T) {
+func TestAForkedMiddleOutpostOverridesOnlyTheFactsItRestates(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	gw, _, root, mid, leaf := fourLevelChain(t)
@@ -629,7 +629,7 @@ func TestAForkedMiddleNodeOverridesOnlyTheFactsItRestates(t *testing.T) {
 	if _, err := gw.UpdateComponentType(ctx, "", mid.Name, storage.ComponentTypePatch{
 		Icon: strp("tv-house"),
 	}); err != nil {
-		t.Fatalf("fork the middle node's icon: %v", err)
+		t.Fatalf("fork the middle outpost's icon: %v", err)
 	}
 
 	stem, icon, abbrev, tags, err := gw.ResolveTypeFacts(ctx, leaf.ID)
@@ -637,13 +637,13 @@ func TestAForkedMiddleNodeOverridesOnlyTheFactsItRestates(t *testing.T) {
 		t.Fatalf("resolve: %v", err)
 	}
 	if icon != "tv-house" {
-		t.Errorf("icon = %q, want the forked middle node's %q", icon, "tv-house")
+		t.Errorf("icon = %q, want the forked middle outpost's %q", icon, "tv-house")
 	}
 	if abbrev != *mid.Abbrev {
-		t.Errorf("abbrev = %q, want the middle node's shipped %q (the fork did not restate it)", abbrev, *mid.Abbrev)
+		t.Errorf("abbrev = %q, want the middle outpost's shipped %q (the fork did not restate it)", abbrev, *mid.Abbrev)
 	}
 	if stem != *mid.Stem {
-		t.Errorf("stem = %q, want the middle node's shipped %q", stem, *mid.Stem)
+		t.Errorf("stem = %q, want the middle outpost's shipped %q", stem, *mid.Stem)
 	}
 	if len(tags) != 2 || tags[0] != "av" || tags[1] != "screen" {
 		t.Errorf("tags = %v, want the root's forked [av screen]", tags)
