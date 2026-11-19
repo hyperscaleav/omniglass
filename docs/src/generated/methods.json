@@ -5,6 +5,7 @@
       "kind": "driver",
       "transport": "webhook",
       "component": "ucc-service",
+      "placeKey": "hq",
       "place": "Headquarters",
       "label": "Meeting webhooks"
     },
@@ -13,6 +14,7 @@
       "kind": "driver",
       "transport": "webhook",
       "component": "ucc-platform",
+      "placeKey": "hq",
       "place": "Headquarters",
       "label": "Room webhooks"
     },
@@ -21,6 +23,7 @@
       "kind": "driver",
       "transport": "telnet",
       "component": "huddle-touch",
+      "placeKey": "huddle",
       "place": "Huddle Room",
       "label": "Panel console",
       "planted": true
@@ -30,6 +33,7 @@
       "kind": "driver",
       "transport": "tls",
       "component": "huddle-touch",
+      "placeKey": "huddle",
       "place": "Huddle Room",
       "label": "Panel over TLS"
     },
@@ -38,6 +42,7 @@
       "kind": "driver",
       "transport": "udp",
       "component": "huddle-touch",
+      "placeKey": "huddle",
       "place": "Huddle Room",
       "label": "Panel over UDP"
     },
@@ -46,6 +51,7 @@
       "kind": "driver",
       "transport": "ssh",
       "component": "briefing-touch",
+      "placeKey": "briefing",
       "place": "Briefing Room",
       "label": "Panel SSH",
       "planted": true
@@ -55,7 +61,8 @@
       "kind": "driver",
       "transport": "snmp",
       "component": "auditorium-touch",
-      "place": "auditorium",
+      "placeKey": "auditorium",
+      "place": "Auditorium",
       "label": "Panel SNMP",
       "planted": true
     },
@@ -64,7 +71,8 @@
       "kind": "driver",
       "transport": "wss",
       "component": "bar-a",
-      "place": "boardroom-a",
+      "placeKey": "boardroom-a",
+      "place": "Boardroom A",
       "label": "Bar control socket"
     },
     {
@@ -72,7 +80,8 @@
       "kind": "driver",
       "transport": "http",
       "component": "panel-a",
-      "place": "boardroom-a",
+      "placeKey": "boardroom-a",
+      "place": "Boardroom A",
       "label": "Display web admin"
     },
     {
@@ -80,7 +89,8 @@
       "kind": "driver",
       "transport": "https",
       "component": "touch-a",
-      "place": "boardroom-a",
+      "placeKey": "boardroom-a",
+      "place": "Boardroom A",
       "label": "Panel web"
     },
     {
@@ -88,7 +98,8 @@
       "kind": "driver",
       "transport": "ssh",
       "component": "touch-a",
-      "place": "boardroom-a",
+      "placeKey": "boardroom-a",
+      "place": "Boardroom A",
       "label": "Panel shell"
     },
     {
@@ -96,7 +107,8 @@
       "kind": "driver",
       "transport": "telnet",
       "component": "touch-a",
-      "place": "boardroom-a",
+      "placeKey": "boardroom-a",
+      "place": "Boardroom A",
       "label": "Panel Telnet"
     },
     {
@@ -104,14 +116,16 @@
       "kind": "driver",
       "transport": "http",
       "component": "power",
-      "place": "boardroom-a",
+      "placeKey": "boardroom-a",
+      "place": "Boardroom A",
       "label": "PDU control"
     },
     {
       "method": "icmp",
       "kind": "transport",
       "component": "touch-a",
-      "place": "boardroom-a",
+      "placeKey": "boardroom-a",
+      "place": "Boardroom A",
       "label": "Panel ping"
     }
   ],

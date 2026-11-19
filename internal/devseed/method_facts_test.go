@@ -53,8 +53,11 @@ func TestMethodFactsListEveryAttachedMethod(t *testing.T) {
 		if row.Kind != kind {
 			t.Errorf("%s on %s: kind = %q, want %q", name, se.Component, row.Kind, kind)
 		}
+		if row.PlaceKey == "" {
+			t.Errorf("%s on %s has no place key", name, se.Component)
+		}
 		if row.Place == "" {
-			t.Errorf("%s on %s has no place", name, se.Component)
+			t.Errorf("%s on %s has no place display name", name, se.Component)
 		}
 		if row.Planted != (se.PlantedFault != "") {
 			t.Errorf("%s on %s: planted = %v, fixture says %q", name, se.Component, row.Planted, se.PlantedFault)

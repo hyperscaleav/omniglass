@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/hyperscaleav/omniglass/internal/seed"
 )
@@ -52,7 +53,10 @@ type MethodRow struct {
 	// Transport is the wire a driver rides; empty on a transport row.
 	Transport string `json:"transport,omitempty"`
 	Component string `json:"component"`
-	// Place is the label of the location the component sits in.
+	// PlaceKey is the raw location key from the fixture (stable; use for filtering).
+	PlaceKey string `json:"placeKey"`
+	// Place is the display name of the location: its label if one is set, else
+	// the name in title case (e.g. "boardroom-a" → "Boardroom A").
 	Place string `json:"place"`
 	Label string `json:"label"`
 	// Planted marks an endpoint broken on purpose: it does not count as the
@@ -75,21 +79,25 @@ func BuildMethodFacts() (MethodFacts, error) {
 	if err != nil {
 		return MethodFacts{}, err
 	}
-	places := map[string]string{}
-	for _, l := range doc.Locations {
-		places[l.Key] = firstNonEmpty(l.Label, l.Name, l.Key)
+	type locationEntry struct {
+		key     string
+		display string
 	}
-	siteOf := map[string]string{}
+	placeByKey := map[string]locationEntry{}
+	for _, l := range doc.Locations {
+		placeByKey[l.Key] = locationEntry{key: l.Key, display: locationDisplay(l.Label, l.Name, l.Key)}
+	}
+	siteOf := map[string]locationEntry{}
 	for _, c := range append(append([]Component{}, doc.Components...), doc.SimComponents...) {
-		siteOf[c.Key] = places[c.Location]
+		siteOf[c.Key] = placeByKey[c.Location]
 	}
 	facts := MethodFacts{Methods: []MethodRow{}, Gaps: []GapRow{}}
 	for _, se := range doc.SimEndpoints {
-		place, ok := siteOf[se.Component]
-		if !ok || place == "" {
+		loc, ok := siteOf[se.Component]
+		if !ok || loc.key == "" {
 			return MethodFacts{}, fmt.Errorf("devseed: sim endpoint %q is on component %q, which has no place in the fixture", se.Label, se.Component)
 		}
-		row := MethodRow{Component: se.Component, Place: place, Label: se.Label, Planted: se.PlantedFault != ""}
+		row := MethodRow{Component: se.Component, PlaceKey: loc.key, Place: loc.display, Label: se.Label, Planted: se.PlantedFault != ""}
 		if se.Driver != "" {
 			spec, err := seed.ShippedDriverSpec(se.Driver)
 			if err != nil {
@@ -119,6 +127,23 @@ func MethodFactsJSON() ([]byte, error) {
 		return nil, fmt.Errorf("devseed: method facts: %w", err)
 	}
 	return append(out, '\n'), nil
+}
+
+// locationDisplay returns the display name for a location: its label if set,
+// else the name in title case (hyphens become spaces: "boardroom-a" → "Boardroom A").
+func locationDisplay(label, name, key string) string {
+	if label != "" {
+		return label
+	}
+	s := firstNonEmpty(name, key)
+	s = strings.ReplaceAll(s, "-", " ")
+	words := strings.Fields(s)
+	for i, w := range words {
+		if len(w) > 0 {
+			words[i] = strings.ToUpper(w[:1]) + w[1:]
+		}
+	}
+	return strings.Join(words, " ")
 }
 
 func firstNonEmpty(ss ...string) string {

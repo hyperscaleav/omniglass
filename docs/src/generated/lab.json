@@ -70,9 +70,23 @@
       ]
     },
     {
+      "id": "declare-a-first-slot",
+      "title": "Declare a first slot",
+      "description": "Give a one-off system its first slot from the console, name it, say what it accepts, and see the slot it opens.",
+      "setup": [
+        "omniglass system create --label \"Lectern cart\" --location media-lab --name lectern-cart"
+      ]
+    },
+    {
       "id": "derive-a-value-with-a-calc-rule",
       "title": "Derive a value with a calc rule",
       "description": "Author a calc rule and the metric it writes in one drawer, write the expression that takes each component's slowest TCP connect time, preview and save it, and find the derived value on a component, linked to its rule.",
+      "setup": []
+    },
+    {
+      "id": "find-and-fix-a-location",
+      "title": "Find a location and fix its label",
+      "description": "Drill Explore down to a location, open the system it holds, and rename the location from Configure. The new label follows everywhere the location is read.",
       "setup": []
     },
     {
@@ -129,6 +143,24 @@
       "id": "keep-node-logs-for-a-day",
       "title": "Keep a node's own logs for a day",
       "description": "Give a node's own debug log lines a window of their own, one day, on the Settings page, while a component's debug lines keep the shared three days.",
+      "setup": []
+    },
+    {
+      "id": "keep-outpost-logs-for-a-day",
+      "title": "Keep an outpost's own logs for a day",
+      "description": "Give an outpost's own debug log lines a window of their own, one day, on the Settings page, while a component's debug lines keep the shared three days.",
+      "setup": []
+    },
+    {
+      "id": "omnibot-panel",
+      "title": "Ask omnibot from the console",
+      "description": "Open omnibot from the top bar, ask it to tag a video bar, watch its reads arrive as cards, and confirm the write it asks about.",
+      "setup": []
+    },
+    {
+      "id": "omnibot-reads-the-page",
+      "title": "Omnibot reads the page",
+      "description": "Open omnibot on a system page, see the page it will be handed, and ask about it without pointing at anything.",
       "setup": []
     },
     {
@@ -198,6 +230,14 @@
       "description": "Write a personal alarm subscription and test it against your own recent alarms before saving it.",
       "setup": [
         "omniglass component alarm create panel-2 --dedup-key walkthrough-subscribe --message \"Touch input lost\" --severity high"
+      ]
+    },
+    {
+      "id": "troubleshoot-an-alarm",
+      "title": "Troubleshoot an alarm",
+      "description": "Hand an alarm to omnibot from its row and read where it says the fault is.",
+      "setup": [
+        "omniglass component alarm create hq.west.level-4.meeting-405.$comp.videobar-1 --dedup-key walkthrough-troubleshoot --message \"Video feed lost\" --severity high"
       ]
     },
     {
