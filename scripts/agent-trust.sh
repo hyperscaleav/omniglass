@@ -149,7 +149,7 @@ case "$mode" in
           | select((.user // "" | ascii_downcase) == $bot and .commit_id == $root.head_sha)
           | select(.state == "CHANGES_REQUESTED" or .state == "COMMENTED" or .state == "APPROVED")]
       | last as $r
-      | ([($r.body // "") | capture("^agent-review: (?<n>[0-9]+) blocking") | .n | tonumber] | first // 0) as $held
+      | ([($r.body // "") | capture("^(?:agent-review: |❌ Changes requested · )(?<n>[0-9]+) blocking") | .n | tonumber] | first // 0) as $held
       | if $bot == "" then "block: the event names no reviewer"
         elif $r == null then "block: the reviewer posted no review on this head"
         elif $r.state == "CHANGES_REQUESTED" then "block: the reviewer requests changes"
