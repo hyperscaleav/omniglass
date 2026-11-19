@@ -79,7 +79,7 @@ func sameLineage(a, b string) string {
 }
 
 // blockInsert is the column list a block is written by.
-const blockInsert = `insert into metric_block (series_id, span_start, span, source_rule, source_rule_version, source_rule_id, n, offset_ms, value)`
+const blockInsert = `insert into metric_block (series_id, span_start, span, source_rule, source_rule_version, source_rule_id, n, offset_ms, value, arrival_id)`
 
 // blockConflict is the block key a write lands on: its series, span and
 // lineage (the metric_block_lineage migration).
@@ -88,13 +88,14 @@ const blockConflict = `on conflict on constraint metric_block_key`
 // blockUpsert replaces a refolded block whole: a fold writes every sample
 // its span holds, never an increment.
 const blockUpsert = blockConflict + ` do update set n = excluded.n,
-	offset_ms = excluded.offset_ms, value = excluded.value`
+	offset_ms = excluded.offset_ms, value = excluded.value, arrival_id = excluded.arrival_id`
 
-// blockSamplesOf unnests block b's samples in landing order, as ts, value and
-// ord (its place in the block).
+// blockSamplesOf unnests block b's samples in landing order, as ts, value,
+// ord (its place in the block) and arrival_id (the original raw row id, nil
+// for blocks written before the arrival_id column was added).
 func blockSamplesOf(b string) string {
-	return `lateral (select ` + b + `.span_start + u.o * interval '1 millisecond' as ts, u.v as value, u.ord
-		from unnest(` + b + `.offset_ms, ` + b + `.value) with ordinality as u(o, v, ord))`
+	return `lateral (select ` + b + `.span_start + u.o * interval '1 millisecond' as ts, u.v as value, u.ord, u.a as arrival_id
+		from unnest(` + b + `.offset_ms, ` + b + `.value, coalesce(` + b + `.arrival_id, array_fill(null::bigint, array[` + b + `.n]))) with ordinality as u(o, v, a, ord))`
 }
 
 // blockIntact is the condition that a series' day (t its metric type, day the
@@ -138,7 +139,7 @@ func blockDaysSQL(pairs, bound, lane string) string {
 		from d where d.n >= %[9]d)
 	%[10]s
 	select m.series_id, m.span_start, m.span, %[11]s, count(*), array_agg(%[12]s order by m.ts, m.id),
-		array_agg(m.value order by m.ts, m.id)
+		array_agg(m.value order by m.ts, m.id), array_agg(m.id order by m.ts, m.id)
 	from b m group by m.series_id, m.span_start, m.span, %[11]s
 	%[13]s`, pairs, blockLineage("m"), blockSeries, bound, blockIntact("sd.day", lane), blockLineage("d"),
 		BlockHourMin, trendEpoch, BlockDayMin, blockInsert, blockLineage("m"), blockOffset("m.span_start"), blockUpsert)
@@ -164,7 +165,7 @@ func blockWeekSQL(pairs, bound, lane string) string {
 				and b.span <> 'week' and b.span_start >= g.day and b.span_start < g.day + interval '24 hours')))
 	%[4]s
 	select sd.series_id, sd.week, 'week', %[5]s, count(*), array_agg(%[6]s order by m.ts, m.id),
-		array_agg(m.value order by m.ts, m.id)
+		array_agg(m.value order by m.ts, m.id), array_agg(m.id order by m.ts, m.id)
 	from sd join metric m on m.series_id = sd.series_id and m.ts >= sd.day and m.ts < sd.day + interval '24 hours'%[7]s
 	where not sd.calc or not exists (select 1 from metric_block b where b.series_id = sd.series_id and b.span <> 'week'
 		and b.span_start >= sd.day and b.span_start < sd.day + interval '24 hours' and %[8]s)
@@ -586,15 +587,20 @@ var mergeBlocksSQL = fmt.Sprintf(`with l as (
 		returning 1)
 	%[7]s
 	select m.series_id, m.span_start, m.span, $6::text, $7::bigint, $8::uuid, count(*), array_agg(%[4]s order by m.ts, m.id),
-		array_agg(m.value order by m.ts, m.id)
+		array_agg(m.value order by m.ts, m.id), array_agg(m.id order by m.ts, m.id)
 	from m group by m.series_id, m.span_start, m.span
 	order by m.series_id, m.span_start, m.span
-	%[8]s do update set (n, offset_ms, value) = (
-		select count(*), array_agg(x.o order by x.o, x.src, x.ord), array_agg(x.v order by x.o, x.src, x.ord)
+	%[8]s do update set (n, offset_ms, value, arrival_id) = (
+		select count(*), array_agg(x.o order by x.o, x.src, x.ord), array_agg(x.v order by x.o, x.src, x.ord),
+			array_agg(x.a order by x.o, x.src, x.ord)
 		from (
-			select u.o, u.v, 0 as src, u.ord from unnest(metric_block.offset_ms, metric_block.value) with ordinality as u(o, v, ord)
+			select u.o, u.v, u.a, 0 as src, u.ord from unnest(metric_block.offset_ms, metric_block.value,
+				coalesce(metric_block.arrival_id, array_fill(null::bigint, array[metric_block.n])))
+				with ordinality as u(o, v, a, ord)
 			union all
-			select u.o, u.v, 1, u.ord from unnest(excluded.offset_ms, excluded.value) with ordinality as u(o, v, ord)) x)`,
+			select u.o, u.v, u.a, 1, u.ord from unnest(excluded.offset_ms, excluded.value,
+				coalesce(excluded.arrival_id, array_fill(null::bigint, array[excluded.n])))
+				with ordinality as u(o, v, a, ord)) x)`,
 	trendEpoch, blockWeekEpoch, blockIntact("l.day", "$5"), blockOffset("m.span_start"), sameLineage("b", "x"), blockSeries,
 	blockInsert, blockConflict)
 

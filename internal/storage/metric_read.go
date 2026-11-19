@@ -83,7 +83,7 @@ func metricReadFromSQL(series, from, to, lane, blocks string) string {
 				and rc.version = coalesce(rm.source_rule_version, 0)
 				and rc.rule_id = coalesce(rm.source_rule_id, '00000000-0000-0000-0000-000000000000'))
 		union all
-		select ru.ts, ru.value, ` + blockLineage("rb") + `, ru.ord, true
+		select ru.ts, ru.value, ` + blockLineage("rb") + `, coalesce(ru.arrival_id, -(ru.ord::bigint)), true
 		from metric_block rb cross join ` + blockSamplesOf("rb") + ` ru
 		where ` + blocks + ` and ` + inRange + ` and ru.ts >= ` + from + ` and ru.ts < ` + to + `
 			and date_bin('1 day', ru.ts, ` + trendEpoch + `) >= ` + metricIntactFromSQL(series, lane)

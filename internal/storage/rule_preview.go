@@ -80,9 +80,10 @@ type RulePreview struct {
 // previewCandidate is a component the candidate selects, in scope.
 type previewCandidate struct{ id, name, typeName string }
 
-// previewSample is one sample a preview judges: id its arrival order, unless
-// folded, a sample a block gave the metric lane's series read, whose arrival
-// order its block did not keep (ADR-1530).
+// previewSample is one sample a preview judges: id is the arrival order when
+// id >= 0 (a raw row's id, or a folded sample whose block stored the original
+// row ids, ADR-1530). A folded sample with id < 0 came from an older block
+// that did not store row ids; its arrival order is unknown.
 type previewSample struct {
 	id     int64
 	ts     time.Time
@@ -250,10 +251,11 @@ func (p *PG) PreviewEventRule(ctx context.Context, spec RulePreviewSpec, visible
 // order it judged them: a sample is history (decides nothing) when one that
 // arrived before it (a lower id) is newer (a later ts), which is the ingest's
 // stale check. The rest arrive in time order, so they are returned by time.
-// A folded sample (a block's, ADR-1530) has no arrival order to compare: it
-// is taken as arriving in time order, so it is never history and makes no
-// other sample history, and one instant's folded samples keep the order the
-// window, newest first, read them in.
+// A folded sample with id < 0 (an older block that did not store row ids,
+// ADR-1530) has no arrival order to compare: it is taken as arriving in time
+// order, never history, never making another sample history. A folded sample
+// with id >= 0 carries the original row's id and participates in the stale
+// check the same as a raw sample.
 func judgedInArrival(window []previewSample) []previewSample {
 	sorted := slices.Clone(window)
 	slices.Reverse(sorted)
@@ -262,19 +264,25 @@ func judgedInArrival(window []previewSample) []previewSample {
 		if !a.ts.Equal(b.ts) {
 			return a.ts.Before(b.ts)
 		}
-		if a.folded != b.folded {
-			return a.folded
+		aNoArrival := a.folded && a.id < 0
+		bNoArrival := b.folded && b.id < 0
+		if aNoArrival != bNoArrival {
+			return aNoArrival
 		}
-		return !a.folded && a.id < b.id
+		if aNoArrival { // both no-arrival: stable
+			return false
+		}
+		return a.id < b.id
 	})
 	keep := make([]bool, len(sorted))
-	minAbove := int64(math.MaxInt64) // the lowest id among strictly newer raw samples
+	minAbove := int64(math.MaxInt64) // the lowest id among strictly newer samples with known arrival order
 	for i := len(sorted) - 1; i >= 0; {
 		j := i
 		groupMin := int64(math.MaxInt64)
 		for j >= 0 && sorted[j].ts.Equal(sorted[i].ts) {
-			keep[j] = sorted[j].folded || sorted[j].id < minAbove
-			if !sorted[j].folded {
+			foldedNoArrival := sorted[j].folded && sorted[j].id < 0
+			keep[j] = foldedNoArrival || sorted[j].id < minAbove
+			if !foldedNoArrival {
 				groupMin = min(groupMin, sorted[j].id)
 			}
 			j--
