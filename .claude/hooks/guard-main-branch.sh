@@ -53,9 +53,9 @@ case "$command" in
     command_clean=$(printf '%s' "$command" | tr -d "\"'")
     # Block force pushes targeting main from any branch.  main must be a whole
     # refspec side so feature/main-nav or main-rewrite are not mistaken for it.
-    # Form 1: explicit force flag (-f, --force, --force-with-lease) with main as
-    #          a refspec destination.
-    if echo "$command_clean" | grep -qE '(--force|--force-with-lease|-f($|[[:space:]]))' && \
+    # Form 1: explicit force flag (-f, a combined short flag such as -fu,
+    #          --force, --force-with-lease) with main as a refspec destination.
+    if echo "$command_clean" | grep -qE '(--force|--force-with-lease|(^|[[:space:]])-[[:alpha:]]*f[[:alpha:]]*($|[[:space:]]))' && \
        echo "$command_clean" | grep -qE '(^|[[:space:]+:])(refs/heads/)?main($|[[:space:]])'; then
       printf 'Blocked: force push to main is not allowed (see CLAUDE.md).\n' >&2
       exit 2

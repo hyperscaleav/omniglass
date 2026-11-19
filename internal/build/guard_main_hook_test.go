@@ -82,6 +82,24 @@ func TestGuardMainBranchHook(t *testing.T) {
 			blocked: true,
 		},
 		{
+			name:    "combined short flag -fu to main is blocked",
+			branch:  "feat/my-feature",
+			command: "git push -fu origin main",
+			blocked: true,
+		},
+		{
+			name:    "combined short flag -uf to main is blocked",
+			branch:  "feat/my-feature",
+			command: "git push -uf origin main",
+			blocked: true,
+		},
+		{
+			name:    "a plain -u push to a feature branch passes",
+			branch:  "feat/my-feature",
+			command: "git push -u origin feat/my-feature",
+			blocked: false,
+		},
+		{
 			name:    "force-with-lease to main is blocked",
 			branch:  "feat/my-feature",
 			command: "git push --force-with-lease origin main",
