@@ -8,27 +8,32 @@ import "context"
 // the Gateway.
 type BindingsFunc func(ctx context.Context, scope string) (Doc, map[string][]string, error)
 
-// Service resolves effective settings from the three slice-0 levels: the type's own
-// declared defaults, the operator file (captured at boot), and the platform DB
-// binding (read live per call). It holds no per-request state.
+// Service resolves effective settings from the four base levels: the type's own
+// declared defaults, the operator file (captured at boot), the environment
+// (captured at boot), and the platform DB binding (read live per call). It
+// holds no per-request state.
 type Service struct {
 	defaults Doc
 	file     Doc
+	env      Doc
 	bindings BindingsFunc
 }
 
-// NewService captures the parsed operator file and the binding reader. Defaults
-// come from the embedded asset.
-func NewService(file Doc, bindings BindingsFunc) *Service {
+// NewService captures the parsed operator file, the parsed environment layer,
+// and the binding reader. Defaults come from the embedded asset.
+func NewService(file, env Doc, bindings BindingsFunc) *Service {
 	if file == nil {
 		file = Doc{}
 	}
-	return &Service{defaults: Defaults(), file: file, bindings: bindings}
+	if env == nil {
+		env = Doc{}
+	}
+	return &Service{defaults: Defaults(), file: file, env: env, bindings: bindings}
 }
 
-// Resolve builds the level stack (default, file, platform) and resolves it. The
-// scope passed to the binding reader is the value the rows carry, so a rename of
-// the tier is a rename here and in the schema together.
+// Resolve builds the level stack (default, file, env, platform) and resolves
+// it. The scope passed to the binding reader is the value the rows carry, so
+// a rename of the tier is a rename here and in the schema together.
 func (s *Service) Resolve(ctx context.Context) (Resolved, error) {
 	platformDoc, platformLocks, err := s.bindings(ctx, "platform")
 	if err != nil {
@@ -50,6 +55,7 @@ func (s *Service) ResolveBinding(platformDoc Doc, platformLocks map[string][]str
 	return Resolve(
 		Level{Name: "default", Doc: s.defaults},
 		Level{Name: "file", Doc: s.file},
+		Level{Name: "env", Doc: s.env},
 		Level{Name: "platform", Doc: platformDoc, Locks: platformLocks},
 	)
 }

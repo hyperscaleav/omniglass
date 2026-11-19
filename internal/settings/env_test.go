@@ -1,0 +1,220 @@
+package settings
+
+import (
+	"errors"
+	"reflect"
+	"testing"
+)
+
+// TestLoadEnvReadsScalarKey covers the simple case: a variable naming a
+// platform namespace and a scalar key lands as that key's value.
+func TestLoadEnvReadsScalarKey(t *testing.T) {
+	doc, err := LoadEnv([]string{
+		"OMNIGLASS_SETTING__ASSISTANT__PROVIDER=openai",
+		"OMNIGLASS_SETTING__ASSISTANT__MODEL=openai.gpt-oss-20b-1:0",
+	})
+	if err != nil {
+		t.Fatalf("LoadEnv: %v", err)
+	}
+	if doc["assistant"]["provider"] != "openai" {
+		t.Errorf("provider = %v, want openai", doc["assistant"]["provider"])
+	}
+	if doc["assistant"]["model"] != "openai.gpt-oss-20b-1:0" {
+		t.Errorf("model = %v, want openai.gpt-oss-20b-1:0", doc["assistant"]["model"])
+	}
+}
+
+// TestLoadEnvKeepsUnderscoreKeysUnambiguous shows the double-underscore
+// separator: the single underscore in key_secret stays part of the key name.
+func TestLoadEnvKeepsUnderscoreKeysUnambiguous(t *testing.T) {
+	doc, err := LoadEnv([]string{"OMNIGLASS_SETTING__ASSISTANT__KEY_SECRET=bedrock-key"})
+	if err != nil {
+		t.Fatalf("LoadEnv: %v", err)
+	}
+	if got := doc["assistant"]["key_secret"]; got != "bedrock-key" {
+		t.Errorf("assistant.key_secret = %v, want bedrock-key", got)
+	}
+}
+
+// TestLoadEnvParsesScalarTypes proves the env value reaches the typed struct
+// as the field's Go kind, not as a string: an int is an int, a bool is a
+// bool.
+func TestLoadEnvParsesScalarTypes(t *testing.T) {
+	doc, err := LoadEnv([]string{
+		"OMNIGLASS_SETTING__DATABASE__SLOW_QUERY_MS=750",
+		"OMNIGLASS_SETTING__HEARTBEAT__INTERVAL_SECONDS=120",
+	})
+	if err != nil {
+		t.Fatalf("LoadEnv: %v", err)
+	}
+	if got := doc["database"]["slow_query_ms"]; got != 750 {
+		t.Errorf("database.slow_query_ms = %T(%v), want int(750)", got, got)
+	}
+	if got := doc["heartbeat"]["interval_seconds"]; got != 120 {
+		t.Errorf("heartbeat.interval_seconds = %T(%v), want int(120)", got, got)
+	}
+}
+
+// TestLoadEnvParsesListOnCommas mirrors the default-tag convention: a list
+// value splits on commas and coerces each element.
+func TestLoadEnvParsesListOnCommas(t *testing.T) {
+	doc, err := LoadEnv([]string{"OMNIGLASS_SETTING__LABEL__ACRONYMS=AV,DSP,HDMI"})
+	if err != nil {
+		t.Fatalf("LoadEnv: %v", err)
+	}
+	got, ok := doc["label"]["acronyms"].([]string)
+	if !ok {
+		t.Fatalf("acronyms = %T, want []string", doc["label"]["acronyms"])
+	}
+	want := []string{"AV", "DSP", "HDMI"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("acronyms = %v, want %v", got, want)
+	}
+}
+
+// TestLoadEnvRejectsUnknownNamespace fails the boot on a variable naming a
+// namespace the Settings struct does not declare.
+func TestLoadEnvRejectsUnknownNamespace(t *testing.T) {
+	_, err := LoadEnv([]string{"OMNIGLASS_SETTING__NOPE__THEME=omniglass-light"})
+	if err == nil {
+		t.Fatal("LoadEnv accepted an unknown namespace")
+	}
+	if !errors.Is(err, ErrEnvUnknownKey) {
+		t.Errorf("err = %v, want wraps ErrEnvUnknownKey", err)
+	}
+	if !contains(err.Error(), "OMNIGLASS_SETTING__NOPE__THEME") {
+		t.Errorf("err %q does not name the variable", err)
+	}
+}
+
+// TestLoadEnvRejectsUnknownKey fails the boot on a namespace's missing key.
+func TestLoadEnvRejectsUnknownKey(t *testing.T) {
+	_, err := LoadEnv([]string{"OMNIGLASS_SETTING__ASSISTANT__TURTLES=yes"})
+	if err == nil {
+		t.Fatal("LoadEnv accepted an unknown key")
+	}
+	if !errors.Is(err, ErrEnvUnknownKey) {
+		t.Errorf("err = %v, want wraps ErrEnvUnknownKey", err)
+	}
+	if !contains(err.Error(), "OMNIGLASS_SETTING__ASSISTANT__TURTLES") {
+		t.Errorf("err %q does not name the variable", err)
+	}
+}
+
+// TestLoadEnvRefusesProfileNamespace fails the boot when a variable names a
+// profile-domain namespace (ui, keybindings): a profile key is per-person
+// and has no meaning as a process-wide default.
+func TestLoadEnvRefusesProfileNamespace(t *testing.T) {
+	_, err := LoadEnv([]string{"OMNIGLASS_SETTING__UI__THEME=omniglass-light"})
+	if err == nil {
+		t.Fatal("LoadEnv accepted a profile-domain namespace")
+	}
+	if !errors.Is(err, ErrEnvProfileNamespace) {
+		t.Errorf("err = %v, want wraps ErrEnvProfileNamespace", err)
+	}
+	if !contains(err.Error(), "OMNIGLASS_SETTING__UI__THEME") {
+		t.Errorf("err %q does not name the variable", err)
+	}
+}
+
+// TestLoadEnvRejectsBadValue surfaces a value that will not coerce: here an
+// int field set to a non-numeric value.
+func TestLoadEnvRejectsBadValue(t *testing.T) {
+	_, err := LoadEnv([]string{"OMNIGLASS_SETTING__DATABASE__SLOW_QUERY_MS=soon"})
+	if err == nil {
+		t.Fatal("LoadEnv accepted a non-numeric int")
+	}
+	if !errors.Is(err, ErrEnvBadValue) {
+		t.Errorf("err = %v, want wraps ErrEnvBadValue", err)
+	}
+	if !contains(err.Error(), "OMNIGLASS_SETTING__DATABASE__SLOW_QUERY_MS") {
+		t.Errorf("err %q does not name the variable", err)
+	}
+	// The value must not appear in the error: it may be a bare secret name.
+	if contains(err.Error(), "soon") {
+		t.Errorf("err %q leaks the value; it must only name the variable", err)
+	}
+}
+
+// TestLoadEnvValueNotQuotedForSecretVariable protects the spec invariant:
+// the error names the variable, never its value.
+func TestLoadEnvValueNotQuotedForSecretVariable(t *testing.T) {
+	// base_url is a string, which never fails to coerce, so to exercise the
+	// value-hiding rule we drive an int field with a bare secret-shaped
+	// string.
+	_, err := LoadEnv([]string{"OMNIGLASS_SETTING__ASSISTANT__CONVERSATION_DAYS=my-api-key-leak"})
+	if err == nil {
+		t.Fatal("LoadEnv accepted a non-numeric int")
+	}
+	if contains(err.Error(), "my-api-key-leak") {
+		t.Errorf("err %q leaks the bare value", err)
+	}
+}
+
+// TestLoadEnvIgnoresOtherVariables ignores anything without the prefix,
+// including secret variables (handled separately).
+func TestLoadEnvIgnoresOtherVariables(t *testing.T) {
+	doc, err := LoadEnv([]string{
+		"OMNIGLASS_DSN=postgres://x",
+		"OMNIGLASS_SECRET__BEDROCK_KEY={}",
+		"PATH=/usr/bin",
+	})
+	if err != nil {
+		t.Fatalf("LoadEnv: %v", err)
+	}
+	if len(doc) != 0 {
+		t.Errorf("doc = %v, want empty", doc)
+	}
+}
+
+// TestLoadEnvRejectsMalformedVariable names a shape that does not parse:
+// the prefix with no separator, or a trailing separator.
+func TestLoadEnvRejectsMalformedVariable(t *testing.T) {
+	for _, name := range []string{
+		"OMNIGLASS_SETTING__ASSISTANT",            // no key
+		"OMNIGLASS_SETTING____MODEL",              // empty namespace
+		"OMNIGLASS_SETTING__ASSISTANT__",          // empty key
+		"OMNIGLASS_SETTING__ASSISTANT__MODEL__X",  // too many segments
+	} {
+		_, err := LoadEnv([]string{name + "=x"})
+		if err == nil {
+			t.Errorf("%s: LoadEnv accepted", name)
+			continue
+		}
+		if !contains(err.Error(), name) {
+			t.Errorf("%s: err %q does not name the variable", name, err)
+		}
+	}
+}
+
+// TestLoadEnvIsLayerSource proves the parsed doc is a plain Doc, suitable to
+// pass through Resolve as a Level: the resolver treats it like any other
+// layer and reports its source as whatever name the caller gives it.
+func TestLoadEnvIsLayerSource(t *testing.T) {
+	envDoc, err := LoadEnv([]string{"OMNIGLASS_SETTING__ASSISTANT__MODEL=bedrock/foo"})
+	if err != nil {
+		t.Fatalf("LoadEnv: %v", err)
+	}
+	r := Resolve(
+		Level{Name: "default", Doc: Doc{"assistant": {"model": "default"}}},
+		Level{Name: "file", Doc: Doc{}},
+		Level{Name: "env", Doc: envDoc},
+	)
+	if got := r.Values["assistant"]["model"]; got != "bedrock/foo" {
+		t.Errorf("assistant.model = %v, want bedrock/foo", got)
+	}
+	if got := r.Sources["assistant.model"]; got != "env" {
+		t.Errorf("source = %v, want env", got)
+	}
+}
+
+func contains(s, sub string) bool { return len(sub) == 0 || indexOfSub(s, sub) >= 0 }
+
+func indexOfSub(s, sub string) int {
+	for i := 0; i+len(sub) <= len(s); i++ {
+		if s[i:i+len(sub)] == sub {
+			return i
+		}
+	}
+	return -1
+}

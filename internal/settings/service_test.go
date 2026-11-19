@@ -10,7 +10,7 @@ func TestServiceResolvesFileOverDefaultAndPlatformOverFile(t *testing.T) {
 	bindings := func(ctx context.Context, scope string) (Doc, map[string][]string, error) {
 		return Doc{"ui": {"default_landing": "/alarms"}}, nil, nil
 	}
-	svc := NewService(file, bindings)
+	svc := NewService(file, nil, bindings)
 	eff, err := svc.Effective(context.Background())
 	if err != nil {
 		t.Fatalf("effective: %v", err)
@@ -33,7 +33,7 @@ func TestServiceNamesLevelsDefaultFilePlatform(t *testing.T) {
 	bindings := func(ctx context.Context, scope string) (Doc, map[string][]string, error) {
 		return Doc{"ui": {"theme": "omniglass-light"}}, nil, nil
 	}
-	svc := NewService(file, bindings)
+	svc := NewService(file, nil, bindings)
 	r, err := svc.Resolve(context.Background())
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
@@ -57,7 +57,7 @@ func TestServiceNamesLevelsDefaultFilePlatform(t *testing.T) {
 // every operator binding.
 func TestServiceReadsBindingsAtPlatformScope(t *testing.T) {
 	var got []string
-	svc := NewService(Doc{}, func(ctx context.Context, scope string) (Doc, map[string][]string, error) {
+	svc := NewService(Doc{}, nil, func(ctx context.Context, scope string) (Doc, map[string][]string, error) {
 		got = append(got, scope)
 		return Doc{}, nil, nil
 	})
@@ -71,7 +71,7 @@ func TestServiceReadsBindingsAtPlatformScope(t *testing.T) {
 
 func TestClientEffectiveKeepsOnlyVisibleNamespaces(t *testing.T) {
 	// keybindings and ui are both client-visible in slice-0; assert they survive.
-	svc := NewService(Doc{}, func(ctx context.Context, scope string) (Doc, map[string][]string, error) {
+	svc := NewService(Doc{}, nil, func(ctx context.Context, scope string) (Doc, map[string][]string, error) {
 		return Doc{}, nil, nil
 	})
 	eff, err := svc.ClientEffective(context.Background())

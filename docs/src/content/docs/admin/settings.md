@@ -13,8 +13,17 @@ sidebar:
 `collection`, `notification`, `agent`, and the rest). Reading them takes `settings:read`; changing one
 takes `settings:update` plus `platform:update`, since a platform setting moves every location at
 once. Each value shows which level it comes from (the declared default, the server's settings file,
-or an override set here), and restoring one drops the override. The model underneath, including how a setting is declared once in Go
-and validated from that one definition, is [settings](/architecture/settings/).
+an **environment variable**, or an override set here), and restoring one drops the override. The
+model underneath, including how a setting is declared once in Go and validated from that one
+definition, is [settings](/architecture/settings/).
+
+A single setting may also be fed from the server's environment. Set
+`OMNIGLASS_SETTING__<NAMESPACE>__<KEY>` to override one key, double-underscore between the parts
+(`OMNIGLASS_SETTING__RETENTION__METRIC_DAYS=30`). The level sits between the settings file and the
+console binding, so the console still wins. A per-user namespace (the `profile` domain, `ui` and
+`keybindings`) is refused at boot, naming the variable: those levels are per-user, not per-process.
+The generated [server variables reference](/guides/container-image/#configuration) lists every
+settable key, one `OMNIGLASS_SETTING__*` row per key.
 
 From the CLI, `omniglass setting list` reads every namespace, and `omniglass setting update` applies a
 merge patch to one, where a `null` restores a key:

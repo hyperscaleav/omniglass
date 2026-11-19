@@ -203,6 +203,230 @@
    "key": "OMNIGLASS_TEST_ADMIN_DSN",
    "scope": "test",
    "doc": "points the storage test harness at an existing admin database instead of a testcontainer"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__LABEL__ACRONYMS",
+   "default": "AV,BYOD,DSP,EDID,HDBaseT,HDCP,HDMI,IP,IR,KVM,LAN,LCD,LED,MTR,NDI,NVR,OLED,PC,PoE,PTZ,RF,SDI,SIP,TV,UC,USB,VC,VLAN,4K,8K",
+   "scope": "server",
+   "doc": "Words a generated label title-cases to a fixed form, whole-word and case-insensitive",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__RETENTION__METRIC_DAYS",
+   "default": "14",
+   "scope": "server",
+   "doc": "Days a metric sample is kept, unless its type keeps its own (a metric type's retention_days); a sample on the lane's window leaves with its UTC day, up to a day later",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__RETENTION__PROPERTY_DAYS",
+   "default": "90",
+   "scope": "server",
+   "doc": "Days a property transition is kept, unless its type keeps its own (a property type's retention_days)",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__RETENTION__TREND_DAYS",
+   "default": "730",
+   "scope": "server",
+   "doc": "Days an hourly metric trend is kept (#1276)",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__RETENTION__LOG_DEBUG_DAYS",
+   "default": "3",
+   "scope": "server",
+   "doc": "Days a debug log line is kept",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__RETENTION__LOG_INFO_DAYS",
+   "default": "14",
+   "scope": "server",
+   "doc": "Days an info or notice log line, or one with no severity, is kept",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__RETENTION__LOG_WARNING_DAYS",
+   "default": "30",
+   "scope": "server",
+   "doc": "Days a warning log line is kept",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__RETENTION__LOG_ERROR_DAYS",
+   "default": "90",
+   "scope": "server",
+   "doc": "Days an error, critical, alert or emergency log line is kept",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__RETENTION__OUTPOST_LOG_DEBUG_DAYS",
+   "scope": "server",
+   "doc": "Days an outpost's own debug log line is kept; unset follows log_debug_days",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__RETENTION__OUTPOST_LOG_INFO_DAYS",
+   "scope": "server",
+   "doc": "Days an outpost's own info or notice log line, or one with no severity, is kept; unset follows log_info_days",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__RETENTION__OUTPOST_LOG_WARNING_DAYS",
+   "scope": "server",
+   "doc": "Days an outpost's own warning log line is kept; unset follows log_warning_days",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__RETENTION__OUTPOST_LOG_ERROR_DAYS",
+   "scope": "server",
+   "doc": "Days an outpost's own error, critical, alert or emergency log line is kept; unset follows log_error_days",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__COLLECTION__REPORT_SECONDS",
+   "default": "60",
+   "scope": "server",
+   "doc": "Seconds each endpoint's collection telemetry covers: its polls' mean duration and failures, and the pushes its listeners claimed or did not, reported once a window",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__NOTIFICATION__CONSOLE_URL",
+   "scope": "server",
+   "doc": "The console's base URL as a receiver of a notification reaches it (https://omniglass.example.com); the prefix of the Link a notification's subject and text read. Empty leaves Link empty",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__NOTIFICATION__EGRESS_ALLOW",
+   "scope": "server",
+   "doc": "The internal destinations a notification may reach, each a CIDR (10.20.0.0/16), an address, or a host name (chat.corp.example). Everything private, loopback or link-local is refused unless named here; a cloud metadata address is refused even when it is; plain http is admitted only to a destination named here",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__NOTIFICATION__MAIL_RELAY",
+   "scope": "server",
+   "doc": "The SMTP relay email notifications go through, host:port (smtp.example.com:587). Empty turns email off. An internal relay is reached only when egress_allow names it",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__NOTIFICATION__MAIL_SECURITY",
+   "default": "starttls",
+   "scope": "server",
+   "doc": "How the session to the relay is protected: starttls (the relay must offer it), tls (implicit TLS, port 465), or none, admitted only for a relay egress_allow names (a lab's mail sim)",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__NOTIFICATION__MAIL_FROM",
+   "scope": "server",
+   "doc": "The From address of an email notification (Omniglass \u003calerts@example.com\u003e)",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__NOTIFICATION__MAIL_SECRET",
+   "scope": "server",
+   "doc": "A platform basic-auth secret, by name, the relay session authenticates with; empty sends without authenticating. Setting it, or moving mail_relay while one is set, takes secret:bind on that secret",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__DATABASE__SLOW_QUERY_MS",
+   "default": "500",
+   "scope": "server",
+   "doc": "Milliseconds a query may run before the server logs it as slow (its statement's shape and duration, never its values) and counts it; 0 turns the log off",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__AGENT__READ",
+   "default": "always",
+   "scope": "server",
+   "doc": "Policy for an agent's reads (a GET, or a POST gated on a read permission)",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__AGENT__WRITE",
+   "default": "ask",
+   "scope": "server",
+   "doc": "Policy for an agent's writes that create or act (a POST that is not a read)",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__AGENT__DESTRUCTIVE",
+   "default": "ask",
+   "scope": "server",
+   "doc": "Policy for an agent's writes that overwrite or delete (a PATCH, PUT or DELETE)",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__AGENT__CREDENTIAL_DESTINATION",
+   "default": "ask",
+   "scope": "server",
+   "doc": "Policy for an agent's calls that may point a stored credential somewhere (any operation gated on secret:bind)",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__AGENT__ROLES",
+   "scope": "server",
+   "doc": "Per-role overrides, keyed by role name: a class set here applies to the agents of anyone granted the role, when it is stricter",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__AGENT__TOOLS",
+   "scope": "server",
+   "doc": "Per-tool overrides, keyed by operation ID (an MCP tool's name): always, ask or never, applied on top of the tool's class when stricter",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__ASSISTANT__CONVERSATION_DAYS",
+   "default": "30",
+   "scope": "server",
+   "doc": "Days a stored omnibot conversation is kept after it last changed",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__ASSISTANT__PROVIDER",
+   "default": "none",
+   "scope": "server",
+   "doc": "The model omnibot runs on: openai (any OpenAI-compatible chat completions server, OpenRouter by default) or none, which leaves the server's recording, if any",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__ASSISTANT__MODEL",
+   "default": "openai/gpt-4.1-mini",
+   "scope": "server",
+   "doc": "The model's name on that server (openai/gpt-4.1-mini on OpenRouter, llama3.1 on Ollama)",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__ASSISTANT__BASE_URL",
+   "default": "https://openrouter.ai/api/v1",
+   "scope": "server",
+   "doc": "The server's base URL, /chat/completions appended. An internal server is reached only when the notification settings' egress_allow names it. Moving it while a key_secret is bound takes secret:bind on that secret",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__ASSISTANT__KEY_SECRET",
+   "scope": "server",
+   "doc": "A platform api-key secret, by name, sent as the bearer on every model call; empty calls without a key (a local server). Setting it takes secret:bind on it. The key never leaves the server",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__HEARTBEAT__TARGET",
+   "scope": "server",
+   "doc": "The webhook notification target the server sends its heartbeat to, by name; empty turns the heartbeat off. The request is signed by the target's bound hmac-key secret and subject to the egress allow list",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__HEARTBEAT__INTERVAL_SECONDS",
+   "default": "60",
+   "scope": "server",
+   "doc": "Seconds between heartbeats",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SECRET__\u003cNAME\u003e",
+   "scope": "server",
+   "doc": "declares one platform secret from the environment (OMNIGLASS_SECRET__\u003cNAME\u003e=\u003cJSON {type,fields}\u003e), resolved like any stored one by name; env-backed secrets refuse an update or delete and are never written to Postgres",
+   "family": "OMNIGLASS_SECRET__"
   }
  ]
 }

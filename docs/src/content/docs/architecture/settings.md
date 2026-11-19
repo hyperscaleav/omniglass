@@ -31,23 +31,31 @@ document is complete, except for an [optional setting](#the-single-source-struct
 none and is absent until a level sets it. It is the **fall-through**, not the bottom rung
 ([cascade](/architecture/cascade/#bindings-cascade-declarations-do-not)).
 
-**The base layer** is recomputed into memory on every boot and never stored in the binding table:
+**The base layers** are recomputed into memory on every boot and never stored in the binding table:
 
 1. **`file`**: an operator settings file (`settings.json` or YAML) at a bootstrap-configured path,
    optional. The GitOps / Kubernetes ConfigMap layer; a change lands on pod restart.
+2. **`env`**: variables of the form `OMNIGLASS_SETTING__<NAMESPACE>__<KEY>=value` (double-underscore
+   separators), parsed at boot and feeding one key each. Values are coerced to the key's Go kind
+   (ints, bools, scalars, and comma-separated lists) through the same declaration the file validates
+   against, so the single-source struct is still the only shape. A `profile`-domain namespace is
+   refused at boot (naming the variable), since per-user values do not live in the process
+   environment. The twelve-factor rung between the committed file and the DB admin override: a
+   container's secret, a CI's temporary nudge, a per-environment flip without an edit to the file
+   image (#2223).
 
 **Binding levels** are rows in Postgres, the identity cascade: a value set at a level is that level's **binding**, and a more-specific binding **shadows** a broader one.
 
-2. **`platform`**: the install-wide admin binding. **Slice-0.**
+3. **`platform`**: the install-wide admin binding. **Slice-0.**
 
 :::design[The group and user binding rungs, tracked in #270]
-3. **`group`**: per user-group binding. **Fast-follow.**
-4. **`user`**: per-user binding. **Fast-follow.**
+4. **`group`**: per user-group binding. **Fast-follow.**
+5. **`user`**: per-user binding. **Fast-follow.**
 :::
 
 ### Most-specific wins
 
-Absent any lock, a more-specific level wins: `user > group > platform > file`. Where no level set
+Absent any lock, a more-specific level wins: `user > group > platform > env > file`. Where no level set
 the key, the value is the setting's `default`, which provenance reports as a **declaration**, not a
 level. Merge is a **deep merge in JSON map-space**, so key **presence** decides a binding, not a
 Go zero-value: a key set to `false` shadows, an absent key inherits. A write is an RFC 7386 JSON
