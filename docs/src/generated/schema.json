@@ -5508,11 +5508,6 @@
       "name": "source_rule_version",
       "type": "bigint",
       "nullable": true
-     },
-     {
-      "name": "arrival_id",
-      "type": "ARRAY",
-      "nullable": true
      }
     ],
     "checks": [

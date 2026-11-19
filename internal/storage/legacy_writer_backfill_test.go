@@ -60,10 +60,6 @@ const metricBlockFile = "20261107004352_metric_block.sql"
 // metric_block.
 const metricBlockLineageFile = "20261107202741_metric_block_lineage.sql"
 
-// metricBlockArrivalIDFile is the blocks' arrival ids (#1573), which alters
-// metric_block.
-const metricBlockArrivalIDFile = "20261119000000_metric_block_arrival_id.sql"
-
 // metricTrendDirtyRawOnlyFile alters the trend's dirty marks (#1560), which
 // the trend migration creates and the wide lane does not have.
 const metricTrendDirtyRawOnlyFile = "20261115064629_metric_trend_dirty_raw_only.sql"
@@ -81,10 +77,10 @@ const metricTrendDirtyRawOnlyFile = "20261115064629_metric_trend_dirty_raw_only.
 // itself (the hourly trend, #1276, references metric_series; the millisecond
 // default, #1526, alters metric_declared; the day partitions, #1527, rebuild
 // its sample table; the blocks, #1528, reference metric_series, and their
-// lineage, #1534, and arrival ids, #1573, alter them) cannot stand beside the
-// wide table and is left to that forward migrate: metricTrendFile,
-// metricMillisFile, metricDayMigration, metricBlockFile, metricBlockLineageFile,
-// metricBlockArrivalIDFile and metricTrendDirtyRawOnlyFile.
+// lineage, #1534, alters them) cannot stand beside the wide table and is left
+// to that forward migrate: metricTrendFile, metricMillisFile,
+// metricDayMigration, metricBlockFile, metricBlockLineageFile and
+// metricTrendDirtyRawOnlyFile.
 func belowNarrowMetric(t *testing.T, dsn string) {
 	t.Helper()
 	if err := migrate.RollbackBelow(dsn, metricNarrowVersion); err != nil {
@@ -110,7 +106,7 @@ func belowNarrowMetric(t *testing.T, dsn string) {
 		}
 		up, _, _ := strings.Cut(string(raw), "-- migrate:down")
 		if e.Name() == metricTrendFile || e.Name() == metricMillisFile || e.Name() == metricDayMigration || e.Name() == metricBlockFile ||
-			e.Name() == metricBlockLineageFile || e.Name() == metricBlockArrivalIDFile || e.Name() == metricTrendDirtyRawOnlyFile {
+			e.Name() == metricBlockLineageFile || e.Name() == metricTrendDirtyRawOnlyFile {
 			continue
 		}
 		if _, err := conn.Exec(context.Background(), strings.TrimPrefix(up, "-- migrate:up")); err != nil {
