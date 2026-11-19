@@ -89,10 +89,22 @@ type StandardMap struct {
 }
 
 type StandardMapPosition struct {
-	Slot     string  `json:"slot"`
+	// Role is the slot name. The field was formerly "slot"; both keys are
+	// accepted on read so existing stored blobs remain valid.
+	Role     string  `json:"role,omitempty"`
+	Slot     string  `json:"slot,omitempty"`
 	Position int     `json:"position"`
 	X        float64 `json:"x"`
 	Y        float64 `json:"y"`
+}
+
+// positionName returns the slot identifier from a map position, accepting
+// either the canonical "role" key or the legacy "slot" key.
+func (p StandardMapPosition) positionName() string {
+	if p.Role != "" {
+		return p.Role
+	}
+	return p.Slot
 }
 
 // ErrStandardMapInvalid is a map declaration that fails validation: a
@@ -119,10 +131,11 @@ func validateStandardMap(raw json.RawMessage) error {
 	}
 	seen := map[string]bool{}
 	for _, pos := range m.Positions {
-		if pos.Slot == "" || pos.Position < 1 || pos.X < 0 || pos.X > 1 || pos.Y < 0 || pos.Y > 1 {
-			return fmt.Errorf("%w: position %s/%d out of bounds", ErrStandardMapInvalid, pos.Slot, pos.Position)
+		name := pos.positionName()
+		if name == "" || pos.Position < 1 || pos.X < 0 || pos.X > 1 || pos.Y < 0 || pos.Y > 1 {
+			return fmt.Errorf("%w: position %s/%d out of bounds", ErrStandardMapInvalid, name, pos.Position)
 		}
-		key := fmt.Sprintf("%s/%d", pos.Slot, pos.Position)
+		key := fmt.Sprintf("%s/%d", name, pos.Position)
 		if seen[key] {
 			return fmt.Errorf("%w: duplicate position %s", ErrStandardMapInvalid, key)
 		}
