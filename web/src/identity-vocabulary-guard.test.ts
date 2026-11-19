@@ -370,8 +370,8 @@ describe("a blade heading renders through the primitive", () => {
 // drifting back into operator-visible .tsx source the way "intended datapoint"
 // survived a vocabulary migration in a seeded description that nothing scanned.
 //
-// Patterns and allow lists mirror internal/vocab/terms.yaml so both lints apply
-// the same rules: the Go gate catches docs and seed files; this one catches
+// Patterns and the English-adjective allow arm mirror internal/vocab/terms.yaml
+// (the yaml's backtick code-span arms are markdown-only and left out here): the Go gate catches docs and seed files; this one catches
 // every tsx source file in a single Vitest run, without listing files explicitly.
 interface IAMTerm {
   word: string;
@@ -393,6 +393,8 @@ const IAM_RETIRED: IAMTerm[] = [
   },
   {
     word: "principal group",
+    // No allow arm: terms.yaml allows only the backtick code-span arm here, a
+    // markdown concept that does not apply in tsx.
     pattern: /\bprincipal[- ]groups?\b/i,
     replacement: "user group",
   },

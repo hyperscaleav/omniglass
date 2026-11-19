@@ -487,7 +487,7 @@ export default function Profile() {
 
 type Note = { tone: "success" | "error"; text: string } | null;
 
-// Note renders a soft success/error notification, or nothing.
+// Note renders a soft success/error banner, or nothing.
 function Note(props: { note: Note }) {
   return (
     <Show when={props.note}>
