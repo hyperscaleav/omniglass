@@ -152,7 +152,10 @@ var ErrViewBusy = errors.New("storage: view snapshot busy")
 // mark (ADR-1830). The connection is acquired before the mark so ingest
 // writers that already hold a pooled connection never wait on the mark.
 // The mark itself uses an optimistic seq check: if commits raced the
-// snapshot, it retries; ErrViewBusy surfaces as a 503.
+// snapshot, it retries; a fresh REPEATABLE READ tx is opened on each
+// attempt so the snapshot re-pins after the racing commit completes and no
+// commit falls between the snapshot and the cursor. ErrViewBusy surfaces as
+// a 503.
 func (p *PG) ReadViews(ctx context.Context, bindings []ViewBinding) (ViewSnapshot, error) {
 	var out ViewSnapshot
 	conn, err := p.pool.Acquire(ctx)
@@ -160,16 +163,25 @@ func (p *PG) ReadViews(ctx context.Context, bindings []ViewBinding) (ViewSnapsho
 		return out, fmt.Errorf("storage: acquire view read: %w", err)
 	}
 	defer conn.Release()
-	tx, err := conn.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return out, fmt.Errorf("storage: begin view read: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	var tx pgx.Tx
+	defer func() {
+		if tx != nil {
+			_ = tx.Rollback(ctx)
+		}
+	}()
 	cursor, err := p.tail.Mark(func() error {
-		// REPEATABLE READ pins its snapshot at the first statement. The
-		// optimistic seq check in Mark ensures the cursor covers exactly
-		// the commits visible here: if any commit races this statement,
-		// Mark retries the whole attempt with a fresh transaction snapshot.
+		if tx != nil {
+			_ = tx.Rollback(ctx)
+			tx = nil
+		}
+		var txErr error
+		tx, txErr = conn.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+		if txErr != nil {
+			return fmt.Errorf("storage: begin view read: %w", txErr)
+		}
+		// REPEATABLE READ pins its snapshot at the first statement. Opening a
+		// fresh tx per attempt ensures a commit that raced the previous
+		// snapshot is visible when Mark retries after observing the seq advance.
 		if err := tx.QueryRow(ctx, `select now()`).Scan(&out.Now); err != nil {
 			return fmt.Errorf("storage: view read snapshot: %w", err)
 		}

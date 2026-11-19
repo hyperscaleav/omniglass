@@ -112,6 +112,8 @@ func TestReadExpiresWhatTheRingNoLongerHolds(t *testing.T) {
 func TestMarkDoesNotFenceCommits(t *testing.T) {
 	t.Parallel()
 	h := tail.New(64, 0)
+	// initial is the cursor before any commits; all ring history is readable from it.
+	initial, _ := h.Mark(func() error { return nil })
 	// signal is closed once the first open() call begins; release unblocks it.
 	signal := make(chan struct{})
 	release := make(chan struct{})
@@ -161,6 +163,24 @@ func TestMarkDoesNotFenceCommits(t *testing.T) {
 		t.Fatalf("cursor seq %d ahead of latest seq %d", cursorSeq, latestSeq)
 	}
 	t.Logf("cursor=%s (seq %d), latest=%s (seq %d)", cursor, cursorSeq, latest, latestSeq)
+	// The ring must hold every commit from initial through cursor: the racing
+	// commit is readable from before the race started, confirming no row is
+	// dropped at the history/tail seam.
+	all, _, err := h.Read(initial, 0)
+	if err != nil {
+		t.Fatalf("read from before the race: %v", err)
+	}
+	found := false
+	for _, c := range all {
+		for _, r := range c.Rows {
+			if r.Key == "during" {
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("racing commit not found in ring history from initial cursor (cursorSeq=%d, latestSeq=%d)", cursorSeq, latestSeq)
+	}
 }
 
 // Mark returns ErrMarkBusy after markMaxRetries when commits keep racing it.

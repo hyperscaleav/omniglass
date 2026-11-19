@@ -565,10 +565,11 @@ needing an all-scoped grant), a task to an endpoint, so both inherit the compone
 [scope](/architecture/identity-access/): an out-of-read-scope component's endpoint or task is a
 non-disclosing **404**.
 
-**Three per-component reads stand in until the `ViewResult` framework lands**, each a hand-written
-typed `GET`, gated `component:read` and scope-injected through the same `GetComponent` gate, so an
-out-of-scope component is a non-disclosing 404 (a deliberate early exception to
-[reads beyond one resource are views](#reads-beyond-one-resource-are-views)):
+**Three per-component reads stand in until the views framework (#2051) lands** (coded console pages
+keep their typed routes per ADR-1830), each a hand-written typed `GET`, gated `component:read` and
+scope-injected through the same `GetComponent` gate, so an out-of-scope component is a
+non-disclosing 404 (a deliberate early exception to
+[reads no route was written for are views](#reads-no-route-was-written-for-are-views)):
 
 - `GET /components/{name}/reachability` composes, per endpoint, the latest verdict state
   (`endpoint-reachable`), the probe-layer signals that compose it (the raw `icmp`/`tcp` metrics,

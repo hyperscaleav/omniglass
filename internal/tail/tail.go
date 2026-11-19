@@ -16,7 +16,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 	"unsafe"
 )
@@ -92,9 +91,6 @@ type Hub struct {
 	oldest   uint64
 	maxBytes int
 	wake     chan struct{}
-	// marking counts how many Mark calls are currently inside their open
-	// function; Commit reads it to decide whether to record a seam hint.
-	marking atomic.Int32
 }
 
 // New returns a hub whose ring holds the last commits commits, and of those
@@ -178,13 +174,11 @@ func (h *Hub) Mark(open func() error) (string, error) {
 		before := h.seq
 		h.mu.Unlock()
 
-		h.marking.Add(1)
 		err := open()
 		h.mu.Lock()
 		after := h.seq
 		cur := h.cursor(after)
 		h.mu.Unlock()
-		h.marking.Add(-1)
 
 		if err != nil {
 			return "", err
