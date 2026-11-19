@@ -506,7 +506,7 @@ func (p *PG) platformKeys(ctx context.Context, names []string) ([]PlatformKey, e
 func (p *PG) platformSystem(ctx context.Context) (*PlatformSystem, error) {
 	var s PlatformSystem
 	err := p.pool.QueryRow(ctx, `
-		select system.id::text, system.name, `+latestVerdict("system_id", "system")+`
+		select system.id::text, system.name, `+latestHealth("system_id", "system")+`
 		from system join system_type st on st.id = system.system_type_id
 		where st.namespace = 'og' and st.name = $1`, platformTypeName).Scan(&s.ID, &s.Name, &s.Verdict)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -534,7 +534,7 @@ func (p *PG) platformServers(ctx context.Context) ([]PlatformServer, error) {
 		select component.id::text, component.name,
 		       `+latestIdentity(writerclass.ServerVersion)+`,
 		       `+latestIdentity(writerclass.ServerStartedAt)+`,
-		       `+latestVerdict("component_id", "component")+`
+		       `+latestHealth("component_id", "component")+`
 		from platform_server ps join component on component.id = ps.platform_component_id
 		order by component.name`)
 	if err != nil {
@@ -568,7 +568,7 @@ func (p *PG) componentVerdicts(ctx context.Context, ids []string) (map[string]st
 		return out, nil
 	}
 	rows, err := p.pool.Query(ctx, `
-		select component.id::text, `+latestVerdict("component_id", "component")+`
+		select component.id::text, `+latestHealth("component_id", "component")+`
 		from component where component.id = any($1::uuid[])`, ids)
 	if err != nil {
 		return nil, fmt.Errorf("storage: platform view verdicts: %w", err)

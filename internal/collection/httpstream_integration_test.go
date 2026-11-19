@@ -187,7 +187,7 @@ func (h *heard) waitFor(t *testing.T, n int) []driver.Message {
 type transitions struct {
 	mu   sync.Mutex
 	seen []collection.SessionTransition
-	auth []collection.AuthVerdict
+	auth []collection.AuthReachability
 }
 
 func (tr *transitions) on(t collection.SessionTransition) {
@@ -196,7 +196,7 @@ func (tr *transitions) on(t collection.SessionTransition) {
 	tr.mu.Unlock()
 }
 
-func (tr *transitions) onAuth(v collection.AuthVerdict) {
+func (tr *transitions) onAuth(v collection.AuthReachability) {
 	tr.mu.Lock()
 	tr.auth = append(tr.auth, v)
 	tr.mu.Unlock()
@@ -298,7 +298,7 @@ func TestHTTPStreamLandsEventsAndResumesWithNoGapOrDuplicate(t *testing.T) {
 		t.Fatalf("the connections sent Last-Event-ID %q, want none then 3", resumed)
 	}
 	tr.mu.Lock()
-	auth := append([]collection.AuthVerdict(nil), tr.auth...)
+	auth := append([]collection.AuthReachability(nil), tr.auth...)
 	tr.mu.Unlock()
 	if len(auth) != 1 || !auth[0].Authenticated {
 		t.Fatalf("auth verdicts = %+v, want one yes", auth)
@@ -333,7 +333,7 @@ func TestHTTPStreamRefusedCredentialIsOneAttempt(t *testing.T) {
 		t.Fatalf("the stream was attempted %d times, want one", attempts.Load())
 	}
 	tr.mu.Lock()
-	auth := append([]collection.AuthVerdict(nil), tr.auth...)
+	auth := append([]collection.AuthReachability(nil), tr.auth...)
 	tr.mu.Unlock()
 	if len(auth) != 1 || auth[0].Authenticated {
 		t.Fatalf("auth verdicts = %+v, want one no", auth)

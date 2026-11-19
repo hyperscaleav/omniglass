@@ -107,19 +107,19 @@ func pollTaskWithLogin(id, endpointID, password string, revision int64) collecti
 
 type authLog struct {
 	mu  sync.Mutex
-	got []collection.AuthVerdict
+	got []collection.AuthReachability
 }
 
-func (l *authLog) record(_, _ string, v collection.AuthVerdict) {
+func (l *authLog) record(_, _ string, v collection.AuthReachability) {
 	l.mu.Lock()
 	l.got = append(l.got, v)
 	l.mu.Unlock()
 }
 
-func (l *authLog) all() []collection.AuthVerdict {
+func (l *authLog) all() []collection.AuthReachability {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return append([]collection.AuthVerdict(nil), l.got...)
+	return append([]collection.AuthReachability(nil), l.got...)
 }
 
 // A driver that declares a session block holds its session for a poll, with
@@ -312,7 +312,7 @@ func TestSessionSamplesCarryTheReason(t *testing.T) {
 func TestAuthSample(t *testing.T) {
 	t.Parallel()
 	at := time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC)
-	ev := groupFor("p1", []collection.Sample{authSample(collection.AuthVerdict{Authenticated: false, Reason: "auth: auth rejected", At: at})})
+	ev := groupFor("p1", []collection.Sample{authSample(collection.AuthReachability{Authenticated: false, Reason: "auth: auth rejected", At: at})})
 	if len(ev.Properties) != 1 || ev.Properties[0].Name != "endpoint-authenticated" || ev.Properties[0].ValueJson != `"no"` {
 		t.Fatalf("properties = %+v", ev.Properties)
 	}

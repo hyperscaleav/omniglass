@@ -166,7 +166,7 @@ func (f *healthFixture) assertMatchesFullRecompute(t *testing.T, ctx context.Con
 	}
 
 	// Each system from its slots, live.
-	located := map[string][]health.Verdict{}
+	located := map[string][]health.Value{}
 	rows, err = f.conn.Query(ctx, `select id, name, location_id from system`)
 	if err != nil {
 		t.Fatalf("read systems: %v", err)
@@ -195,7 +195,7 @@ func (f *healthFixture) assertMatchesFullRecompute(t *testing.T, ctx context.Con
 			t.Errorf("after %s: system %s recorded %q, a full recompute says %q", after, s.name, got, rep.Verdict)
 		}
 		if placed[i] != nil {
-			located[*placed[i]] = append(located[*placed[i]], health.ParseVerdict(rep.Verdict))
+			located[*placed[i]] = append(located[*placed[i]], health.ParseValue(rep.Verdict))
 		}
 	}
 
@@ -221,9 +221,9 @@ func (f *healthFixture) assertMatchesFullRecompute(t *testing.T, ctx context.Con
 	if err := rows.Err(); err != nil {
 		t.Fatalf("read locations: %v", err)
 	}
-	var subtree func(id string) []health.Verdict
-	subtree = func(id string) []health.Verdict {
-		out := append([]health.Verdict(nil), located[id]...)
+	var subtree func(id string) []health.Value
+	subtree = func(id string) []health.Value {
+		out := append([]health.Value(nil), located[id]...)
 		for _, c := range children[id] {
 			out = append(out, subtree(c)...)
 		}

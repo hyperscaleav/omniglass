@@ -8,7 +8,7 @@ import (
 
 // healthy is a component with no active alarms.
 func healthy(name string) health.Component {
-	return health.Component{Name: name, Verdict: health.Healthy}
+	return health.Component{Name: name, Value: health.Healthy}
 }
 
 // down is a component an alarm has taken to the given verdict (Degraded or
@@ -16,8 +16,8 @@ func healthy(name string) health.Component {
 // every slot it fills, which is the whole mechanism by which a high-severity
 // alarm reaches a system now. Degraded still occupies; it exists as a
 // verdict a component can carry without costing it any slot.
-func down(name string, v health.Verdict) health.Component {
-	return health.Component{Name: name, Verdict: v}
+func down(name string, v health.Value) health.Component {
+	return health.Component{Name: name, Value: v}
 }
 
 func TestOccupies(t *testing.T) {
@@ -115,7 +115,7 @@ func TestImpactMapping(t *testing.T) {
 	// Impaired by a DOWN occupant, not by an empty slot: since #631 impact
 	// describes what a failure means, and an uninstalled box has not failed
 	// (it reads incomplete instead, tested separately).
-	impaired := func(impact string) health.Verdict {
+	impaired := func(impact string) health.Value {
 		return health.Slot{Name: "r", Quorum: 1, Impact: impact,
 			Assigned: []health.Component{down("a", health.Outage)}}.Contributes()
 	}
@@ -142,7 +142,7 @@ func TestImpactMapping(t *testing.T) {
 	}
 }
 
-func TestSystemVerdictWorstWins(t *testing.T) {
+func TestSystemValueWorstWins(t *testing.T) {
 	fine := health.Slot{Name: "ok", Quorum: 1, Impact: "outage", Assigned: []health.Component{healthy("a")}}
 	// deg and out are staffed and DOWN, so they contribute their declared
 	// impact. An unstaffed slot would contribute incomplete instead (#631),
@@ -151,45 +151,45 @@ func TestSystemVerdictWorstWins(t *testing.T) {
 	out := health.Slot{Name: "out", Quorum: 1, Impact: "outage", Assigned: []health.Component{down("o", health.Outage)}}
 	harmless := health.Slot{Name: "meh", Quorum: 1, Impact: "none"}
 
-	if got := health.SystemVerdict(nil); got != health.Healthy {
+	if got := health.SystemValue(nil); got != health.Healthy {
 		t.Fatalf("a system with no slots = %v, want healthy (nothing has been claimed about it)", got)
 	}
-	if got := health.SystemVerdict([]health.Slot{fine}); got != health.Healthy {
+	if got := health.SystemValue([]health.Slot{fine}); got != health.Healthy {
 		t.Fatalf("all slots satisfied = %v, want healthy", got)
 	}
-	if got := health.SystemVerdict([]health.Slot{fine, harmless}); got != health.Healthy {
+	if got := health.SystemValue([]health.Slot{fine, harmless}); got != health.Healthy {
 		t.Fatalf("an impaired none-impact slot = %v, want healthy", got)
 	}
-	if got := health.SystemVerdict([]health.Slot{fine, deg}); got != health.Degraded {
+	if got := health.SystemValue([]health.Slot{fine, deg}); got != health.Degraded {
 		t.Fatalf("one impaired degraded slot = %v, want degraded", got)
 	}
 	// Worst wins: an outage is not softened by everything else being fine.
-	if got := health.SystemVerdict([]health.Slot{fine, deg, out, harmless}); got != health.Outage {
+	if got := health.SystemValue([]health.Slot{fine, deg, out, harmless}); got != health.Outage {
 		t.Fatalf("one impaired outage slot among many = %v, want outage", got)
 	}
 }
 
-func TestRollUpAndComponentVerdict(t *testing.T) {
+func TestRollUpAndComponentValue(t *testing.T) {
 	if got := health.RollUp(nil); got != health.Healthy {
 		t.Fatalf("no children = %v, want healthy", got)
 	}
-	if got := health.RollUp([]health.Verdict{health.Healthy, health.Degraded, health.Healthy}); got != health.Degraded {
+	if got := health.RollUp([]health.Value{health.Healthy, health.Degraded, health.Healthy}); got != health.Degraded {
 		t.Fatalf("rollup = %v, want degraded", got)
 	}
-	if got := health.RollUp([]health.Verdict{health.Degraded, health.Outage}); got != health.Outage {
+	if got := health.RollUp([]health.Value{health.Degraded, health.Outage}); got != health.Outage {
 		t.Fatalf("rollup = %v, want outage", got)
 	}
 
-	if got := health.ComponentVerdict(nil); got != health.Healthy {
+	if got := health.ComponentValue(nil); got != health.Healthy {
 		t.Fatalf("no alarms = %v, want healthy", got)
 	}
-	if got := health.ComponentVerdict([]int{20}); got != health.Degraded {
+	if got := health.ComponentValue([]int{20}); got != health.Degraded {
 		t.Fatalf("a warning (rank 20) = %v, want degraded", got)
 	}
-	if got := health.ComponentVerdict([]int{health.OutageRank - 1}); got != health.Degraded {
+	if got := health.ComponentValue([]int{health.OutageRank - 1}); got != health.Degraded {
 		t.Fatalf("just below the outage floor = %v, want degraded", got)
 	}
-	if got := health.ComponentVerdict([]int{20, health.OutageRank}); got != health.Outage {
+	if got := health.ComponentValue([]int{20, health.OutageRank}); got != health.Outage {
 		t.Fatalf("an alarm at the outage floor among others = %v, want outage", got)
 	}
 }
@@ -287,12 +287,12 @@ func TestChoiceContributesActiveAlternateOwnImpact(t *testing.T) {
 	}
 }
 
-// TestSystemVerdictWithChoices is the integration point: an unbuilt
+// TestSystemValueWithChoices is the integration point: an unbuilt
 // alternate of a satisfied choice must not impair the system (the defect
-// #626 exists to close), and SystemVerdict is confirmed to still be exactly
-// SystemVerdictWith(slots, nil) so every pre-existing caller keeps compiling
+// #626 exists to close), and SystemValue is confirmed to still be exactly
+// SystemValueWith(slots, nil) so every pre-existing caller keeps compiling
 // and behaving the same.
-func TestSystemVerdictWithChoices(t *testing.T) {
+func TestSystemValueWithChoices(t *testing.T) {
 	allInOne := health.Alternate{Name: "all-in-one", Slots: []health.Slot{
 		{Name: "bar", Quorum: 1, Impact: "outage", Assigned: []health.Component{healthy("bar-1")}},
 	}}
@@ -305,7 +305,7 @@ func TestSystemVerdictWithChoices(t *testing.T) {
 	}}
 	choice := health.Choice{Name: "conferencing", Alternates: []health.Alternate{allInOne, componentSystem}}
 
-	if got := health.SystemVerdictWith(nil, []health.Choice{choice}); got != health.Healthy {
+	if got := health.SystemValueWith(nil, []health.Choice{choice}); got != health.Healthy {
 		t.Fatalf("a satisfied all-in-one beside five unbuilt component-system slots = %v, want healthy", got)
 	}
 
@@ -315,7 +315,7 @@ func TestSystemVerdictWithChoices(t *testing.T) {
 	// (#631). The claim under test is unchanged, that the choice grouping does
 	// not swallow an unconditional slot beside it.
 	mandatory := health.Slot{Name: "screen", Quorum: 1, Impact: "degraded"}
-	if got := health.SystemVerdictWith([]health.Slot{mandatory}, []health.Choice{choice}); got != health.Incomplete {
+	if got := health.SystemValueWith([]health.Slot{mandatory}, []health.Choice{choice}); got != health.Incomplete {
 		t.Fatalf("an unstaffed mandatory slot beside a satisfied choice = %v, want incomplete", got)
 	}
 
@@ -323,20 +323,20 @@ func TestSystemVerdictWithChoices(t *testing.T) {
 		{Name: "ok", Quorum: 1, Impact: "outage", Assigned: []health.Component{healthy("a")}},
 		{Name: "deg", Quorum: 1, Impact: "degraded"},
 	}
-	if got, want := health.SystemVerdict(slots), health.SystemVerdictWith(slots, nil); got != want {
-		t.Fatalf("SystemVerdict(slots) = %v, want it to equal SystemVerdictWith(slots, nil) = %v", got, want)
+	if got, want := health.SystemValue(slots), health.SystemValueWith(slots, nil); got != want {
+		t.Fatalf("SystemValue(slots) = %v, want it to equal SystemValueWith(slots, nil) = %v", got, want)
 	}
 }
 
 // The recorded string round-trips, since the transition log stores it as text and
 // a misread would silently change a fleet's history.
-func TestVerdictRoundTrip(t *testing.T) {
-	for _, v := range []health.Verdict{health.Healthy, health.Degraded, health.Outage} {
-		if got := health.ParseVerdict(v.String()); got != v {
+func TestValueRoundTrip(t *testing.T) {
+	for _, v := range []health.Value{health.Healthy, health.Degraded, health.Outage} {
+		if got := health.ParseValue(v.String()); got != v {
 			t.Fatalf("round trip %v -> %q -> %v", v, v.String(), got)
 		}
 	}
-	if got := health.ParseVerdict("garbage"); got != health.Healthy {
+	if got := health.ParseValue("garbage"); got != health.Healthy {
 		t.Fatalf("unrecognized recorded value = %v, want healthy (a stray row cannot break a fleet)", got)
 	}
 }
@@ -403,7 +403,7 @@ func TestIncompleteIsACommissioningGapNotAFailure(t *testing.T) {
 	})
 
 	// A bad impact value must not become a way to hide a gap, the same reason
-	// ImpactVerdict refuses to read one as harmless.
+	// ImpactValue refuses to read one as harmless.
 	t.Run("an unstaffed slot with an unrecognized impact still reads incomplete", func(t *testing.T) {
 		if got := unstaffed(1, "nonsense").Contributes(); got != health.Incomplete {
 			t.Fatalf("contributes = %v, want incomplete: only an explicit none opts out", got)
@@ -424,10 +424,10 @@ func TestIncompleteRanksBetweenHealthyAndDegraded(t *testing.T) {
 	if health.Worse(health.Incomplete, health.Outage) != health.Outage {
 		t.Fatal("outage must outrank incomplete")
 	}
-	if got := health.RollUp([]health.Verdict{health.Incomplete, health.Degraded}); got != health.Degraded {
+	if got := health.RollUp([]health.Value{health.Incomplete, health.Degraded}); got != health.Degraded {
 		t.Fatalf("rollup = %v, want degraded: a location holding one incomplete and one degraded system reads degraded", got)
 	}
-	if got := health.RollUp([]health.Verdict{health.Healthy, health.Incomplete}); got != health.Incomplete {
+	if got := health.RollUp([]health.Value{health.Healthy, health.Incomplete}); got != health.Incomplete {
 		t.Fatalf("rollup = %v, want incomplete", got)
 	}
 }
@@ -448,14 +448,14 @@ func TestLosingAlternateContributesNoIncomplete(t *testing.T) {
 	if got := c.Contributes(); got != health.Healthy {
 		t.Fatalf("choice contributes = %v, want healthy: the room is built all-in-one, so the slots it never filled are not a gap", got)
 	}
-	if got := health.SystemVerdictWith(nil, []health.Choice{c}); got != health.Healthy {
+	if got := health.SystemValueWith(nil, []health.Choice{c}); got != health.Healthy {
 		t.Fatalf("system verdict = %v, want healthy", got)
 	}
 }
 
 // The verdict a system reads when its only shortfall is uninstalled hardware.
-func TestSystemVerdictIncomplete(t *testing.T) {
-	got := health.SystemVerdict([]health.Slot{
+func TestSystemValueIncomplete(t *testing.T) {
+	got := health.SystemValue([]health.Slot{
 		{Name: "display", Quorum: 1, Impact: "outage", Assigned: []health.Component{healthy("d")}},
 		unstaffed(2, "outage"),
 	})

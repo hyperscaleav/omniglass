@@ -20,7 +20,7 @@ func TestSettle(t *testing.T) {
 		name               string
 		intended, observed *storage.CurrentValue
 		window             int
-		want               storage.SettlementVerdict
+		want               storage.Settlement
 	}{
 		{"no intended is none", nil, cv(`"HDMI1"`, now), 30, storage.SettlementNone},
 		{"within window is pending", cv(`"HDMI1"`, now.Add(-10*time.Second)), cv(`"HDMI2"`, now), 30, storage.SettlementPending},

@@ -403,7 +403,7 @@ func (UnimplementedGateway) DeleteCommandType(context.Context, string, string) e
 func (UnimplementedGateway) IssueCommand(context.Context, string, string, string, string, string, json.RawMessage, json.RawMessage) (*Command, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) CommandSettlement(context.Context, string, string, string, string) (SettlementVerdict, error) {
+func (UnimplementedGateway) CommandSettlement(context.Context, string, string, string, string) (Settlement, error) {
 	return "", nil
 }
 func (UnimplementedGateway) GetComponentCommand(context.Context, string, int64) (*CommandRecord, error) {
@@ -466,7 +466,7 @@ func (UnimplementedGateway) PropertyTransitions(context.Context, string, string,
 func (UnimplementedGateway) StampEndpointsSeen(context.Context, []string) error {
 	return nil
 }
-func (UnimplementedGateway) ComponentVerdict(context.Context, string) (string, error) {
+func (UnimplementedGateway) ComponentHealth(context.Context, string) (string, error) {
 	return "", nil
 }
 func (UnimplementedGateway) InsertEvents(context.Context, KeyWriter, []EventWrite) error {
@@ -1029,7 +1029,7 @@ func (UnimplementedGateway) ListAlarms(context.Context, string, AlarmFilter) ([]
 func (UnimplementedGateway) SystemHealth(context.Context, string, time.Duration, scope.Set) (*HealthReport, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) SystemVerdicts(context.Context, scope.Set) ([]SystemVerdict, error) {
+func (UnimplementedGateway) SystemHealths(context.Context, scope.Set) ([]SystemHealthEntry, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) LocationHealth(context.Context, string, time.Duration, scope.Set) (*HealthReport, error) {

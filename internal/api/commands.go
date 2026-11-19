@@ -333,7 +333,7 @@ func parseCommandTime(name, v string) (*time.Time, error) {
 // deadline has passed it judges it then and there (the settle-check a read
 // runs), so a wait answers timed out at the window rather than at the next
 // sweep. A caller that goes away ends the wait.
-func waitForOutcome(ctx context.Context, gw storage.Gateway, compID string, rec *storage.CommandRecord, verdict storage.SettlementVerdict, timeout time.Duration) (*storage.CommandRecord, storage.SettlementVerdict, error) {
+func waitForOutcome(ctx context.Context, gw storage.Gateway, compID string, rec *storage.CommandRecord, verdict storage.Settlement, timeout time.Duration) (*storage.CommandRecord, storage.Settlement, error) {
 	deadline := time.Now().Add(timeout)
 	poll := commandWaitFirstPoll
 	for rec.Status == "issued" {

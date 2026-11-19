@@ -25,7 +25,7 @@ type systemMemberBody struct {
 }
 
 func toSystemMemberBody(m storage.Member) systemMemberBody {
-	return systemMemberBody{System: m.SystemID, SystemID: m.SystemUUID, Component: m.ComponentID, ComponentID: m.ComponentUUID, Primary: m.IsPrimary, SystemCount: m.SystemCount, ComponentVerdict: m.ComponentVerdict}
+	return systemMemberBody{System: m.SystemID, SystemID: m.SystemUUID, Component: m.ComponentID, ComponentID: m.ComponentUUID, Primary: m.IsPrimary, SystemCount: m.SystemCount, ComponentVerdict: m.ComponentHealth}
 }
 
 func toSystemMemberBodies(ms []storage.Member) []systemMemberBody {

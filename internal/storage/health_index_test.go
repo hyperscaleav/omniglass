@@ -54,8 +54,8 @@ func TestHealthReadsReachTheSystemOwnerIndex(t *testing.T) {
 	// rollup runs inside the recompute chain an alarm triggers, so raising one
 	// is how a caller reaches it.
 	counter.Reset()
-	if _, err := gw.SystemVerdicts(ctx, all); err != nil {
-		t.Fatalf("SystemVerdicts: %v", err)
+	if _, err := gw.SystemHealths(ctx, all); err != nil {
+		t.Fatalf("SystemHealths: %v", err)
 	}
 	if _, err := gw.RaiseAlarm(ctx, "", "bar-0", storage.AlarmSpec{
 		Severity: "high", Message: "index guard", DedupKey: "index-guard",
@@ -77,9 +77,9 @@ func TestHealthReadsReachTheSystemOwnerIndex(t *testing.T) {
 		name, marker string
 		reach        map[string]string // property's alias in the statement -> the index it must reach
 	}{
-		{"SystemVerdicts, the bulk read a system list paints its column from", "distinct on (v.system_id)",
+		{"SystemHealths, the bulk read a system list paints its column from", "distinct on (v.system_id)",
 			map[string]string{"": "property_system_owner_idx"}},
-		{"locationVerdict, the rollup every recompute pays per location", "ld.location_id = c.id",
+		{"locationHealth, the rollup every recompute pays per location", "ld.location_id = c.id",
 			map[string]string{"sd": "property_system_owner_idx", "ld": "property_location_owner_idx"}},
 	} {
 		t.Run(read.name, func(t *testing.T) {

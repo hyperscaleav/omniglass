@@ -245,7 +245,7 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		if err != nil {
 			return nil, mapAlarmErr(err)
 		}
-		verdict, err := gw.ComponentVerdict(ctx, compID)
+		verdict, err := gw.ComponentHealth(ctx, compID)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("read component verdict")
 		}
