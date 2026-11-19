@@ -10,11 +10,13 @@ server:
   # chart deployment is TLS-fronted at the edge. Set false only for a
   # plaintext-http deployment.
   secureCookies: true
-  # Additional environment variables passed to the server container and both
-  # init containers (migrate, bootstrap), after all chart-managed variables.
+  # Additional environment variables passed to the server container and every
+  # init container (migrate, and bootstrap when bootstrap.enabled is true),
+  # after all chart-managed variables.
   extraEnv: []
   # Additional environment sources (ConfigMap or Secret refs) passed to the
-  # server container and both init containers (migrate, bootstrap).
+  # server container and every init container (migrate, and bootstrap when
+  # bootstrap.enabled is true).
   envFrom: []
   resources:
     requests:
