@@ -558,6 +558,11 @@ func TestADR2035RegistryAsTheCatalogFires(t *testing.T) {
 		"[forks](/architecture/decisions/#adr-0095-an-operator-forks-a-shipped-registry-row)",
 		"the capability registry was retired by #626",
 		"<BladeStack registry={fleetRegistry} />",
+		// TypeScript object-property form: `registry: <identifier>Registry`.
+		// A page's blades config names its blade registry this way, and the
+		// property key is a code identifier, not an operator-facing catalog noun.
+		"blades: { registry: identityRegistry, rootKind: \"user\" }",
+		"blades: { registry: fleetRegistry, rootKind: \"component\" }",
 	} {
 		if fires(line) {
 			t.Errorf("registry in a kept sense fired: %q", line)

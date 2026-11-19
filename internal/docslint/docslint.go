@@ -479,6 +479,21 @@ var operatorStrings = []string{
 	filepath.Join("..", "..", "web", "src", "components", "NotificationStatusPill.tsx"),
 	filepath.Join("..", "..", "web", "src", "lib", "alarms.ts"),
 	filepath.Join("..", "..", "web", "src", "lib", "system_history.ts"),
+	// The identity admin surfaces: user directory, user-group directory, and their
+	// blade bodies. These pages carry the IAM vocabulary the console teaches
+	// (user, person, machine, user group), so a drift back to "principal" appears
+	// on a live admin page. Added once #2075 landed and left no identifier saying
+	// principal, so the scan carries no pendingRename carve-out.
+	filepath.Join("..", "..", "web", "src", "pages", "Users.tsx"),
+	filepath.Join("..", "..", "web", "src", "pages", "UserDetail.tsx"),
+	filepath.Join("..", "..", "web", "src", "pages", "Groups.tsx"),
+	filepath.Join("..", "..", "web", "src", "pages", "GroupDetail.tsx"),
+	filepath.Join("..", "..", "web", "src", "pages", "Roles.tsx"),
+	filepath.Join("..", "..", "web", "src", "pages", "RoleDetail.tsx"),
+	filepath.Join("..", "..", "web", "src", "pages", "Profile.tsx"),
+	filepath.Join("..", "..", "web", "src", "components", "IdentitiesPanel.tsx"),
+	filepath.Join("..", "..", "web", "src", "lib", "users.ts"),
+	filepath.Join("..", "..", "web", "src", "lib", "groups.ts"),
 	filepath.Join("..", "..", "README.md"),
 	// The generated OpenAPI document carries every Huma operation and field
 	// description (#451): the doc: tags flow to the spec, the CLI reference,
