@@ -74,14 +74,6 @@
       ]
     },
     {
-      "id": "declare-a-first-slot",
-      "title": "Declare a first slot",
-      "description": "Give a one-off system its first slot from the console, name it, say what it accepts, and see the slot it opens.",
-      "setup": [
-        "omniglass system create --label \"Lectern cart\" --location media-lab --name lectern-cart"
-      ]
-    },
-    {
       "id": "derive-a-value-with-a-calc-rule",
       "title": "Derive a value with a calc rule",
       "description": "Author a calc rule and the metric it writes in one drawer, write the expression that takes each component's slowest TCP connect time, preview and save it, and find the derived value on a component, linked to its rule.",
@@ -135,24 +127,6 @@
       "id": "keep-data-for-a-week",
       "title": "Keep data for a week",
       "description": "Shorten how long metric samples are kept, from the default 14 days to 7, on the Settings page, and see the new window take the place of the default.",
-      "setup": []
-    },
-    {
-      "id": "keep-outpost-logs-for-a-day",
-      "title": "Keep an outpost's own logs for a day",
-      "description": "Give an outpost's own debug log lines a window of their own, one day, on the Settings page, while a component's debug lines keep the shared three days.",
-      "setup": []
-    },
-    {
-      "id": "omnibot-panel",
-      "title": "Ask omnibot from the console",
-      "description": "Open omnibot from the top bar, ask it to tag a video bar, watch its reads arrive as cards, and confirm the write it asks about.",
-      "setup": []
-    },
-    {
-      "id": "omnibot-reads-the-page",
-      "title": "Omnibot reads the page",
-      "description": "Open omnibot on a system page, see the page it will be handed, and ask about it without pointing at anything.",
       "setup": []
     },
     {
@@ -248,14 +222,6 @@
       "description": "Hand an alarm to omnibot from its row and read where it says the fault is.",
       "setup": [
         "omniglass component alarm create 'hq.west.level-4.meeting-405.$comp.videobar-1' --dedup-key walkthrough-troubleshoot --message 'Video feed lost' --severity high"
-      ]
-    },
-    {
-      "id": "troubleshoot-an-alarm",
-      "title": "Troubleshoot an alarm",
-      "description": "Hand an alarm to omnibot from its row and read where it says the fault is.",
-      "setup": [
-        "omniglass component alarm create hq.west.level-4.meeting-405.$comp.videobar-1 --dedup-key walkthrough-troubleshoot --message \"Video feed lost\" --severity high"
       ]
     },
     {

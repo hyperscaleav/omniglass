@@ -7,25 +7,25 @@
 // moved endpoint or a closed gap changes the page.
 //
 // Usage: <CollectionMethods /> for every attached method and every gap, or
-// <CollectionMethods place="boardroom-a" /> for one place's methods alone
-// (a gap belongs to no place, so a place-scoped table has none). The place
-// prop is the location key from the fixture (stable), not the display name.
+// <CollectionMethods location="boardroom-a" /> for one location's methods alone
+// (a gap belongs to no location, so a location-scoped table has none). The
+// location prop is the location key from the fixture (stable), not the display name.
 import facts from '../generated/methods.json';
 
 interface Props {
-  place?: string;
+  location?: string;
 }
 
-const { place } = Astro.props;
-const rows = place ? facts.methods.filter((m) => m.placeKey === place) : facts.methods;
-if (place && rows.length === 0) {
-  throw new Error(`CollectionMethods: no method is attached at location key "${place}" (see docs/src/generated/methods.json)`);
+const { location } = Astro.props;
+const rows = location ? facts.methods.filter((m) => m.placeKey === location) : facts.methods;
+if (location && rows.length === 0) {
+  throw new Error(`CollectionMethods: no method is attached at location key "${location}" (see docs/src/generated/methods.json)`);
 }
-const gaps = place ? [] : facts.gaps;
+const gaps = location ? [] : facts.gaps;
 ---
 
 <table class="collection-methods">
-  <thead><tr><th>Method</th><th>Kind</th><th>Rides</th><th>Component</th><th>Place</th><th>Endpoint</th><th>Health</th></tr></thead>
+  <thead><tr><th>Method</th><th>Kind</th><th>Rides</th><th>Component</th><th>Location</th><th>Endpoint</th><th>Health</th></tr></thead>
   <tbody>
     {rows.map((m) => (
       <tr>

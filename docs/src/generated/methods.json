@@ -4,15 +4,6 @@
       "method": "ucc-webhook",
       "kind": "driver",
       "transport": "webhook",
-      "component": "ucc-service",
-      "placeKey": "hq",
-      "place": "Headquarters",
-      "label": "Meeting webhooks"
-    },
-    {
-      "method": "ucc-webhook",
-      "kind": "driver",
-      "transport": "webhook",
       "component": "ucc-platform",
       "placeKey": "hq",
       "place": "Headquarters",
