@@ -13,11 +13,13 @@ import (
 )
 
 // A bare dialed endpoint's params must carry the one key the node dials
-// (#1187): host and port are not keys, and params without a target would be
-// skipped by the node forever, so they are refused at write, on create and on
-// an edit, naming target. udp binds a local port and a push transport is
-// dialed by no one, so neither needs one; tls-mode and listen-port stay
-// checked as they were. Skipped under -short.
+// (#1187): host and port are not keys (the address goes under target as
+// host[:port]), and params without a target would be skipped by the node
+// forever, so they are refused at write, on create and on an edit, naming
+// target. Port is optional: a bare host is valid for all transports (the
+// outpost handles default or missing ports at probe time). udp binds a local
+// port and a push transport is dialed by no one, so neither needs one;
+// tls-mode and listen-port stay checked as they were. Skipped under -short.
 func TestABareDialedEndpointsParamsNameATarget(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
@@ -43,7 +45,8 @@ func TestABareDialedEndpointsParamsNameATarget(t *testing.T) {
 		{"tcp empty target", "tcp", `{"target":"  "}`, "target"},
 		{"tcp target not a string", "tcp", `{"target":8080}`, "target"},
 		{"tcp not an object", "tcp", `"127.0.0.1:8080"`, "target"},
-		{"tcp target missing port", "tcp", `{"target":"10.0.0.1"}`, "target"},
+		{"tcp bare host", "tcp", `{"target":"10.0.0.1"}`, ""},
+		{"ssh bare host", "ssh", `{"target":"10.0.0.9"}`, ""},
 		{"icmp empty object", "icmp", `{}`, "target"},
 		{"icmp host", "icmp", `{"target":"10.0.0.1","count":3,"timeout":"2s"}`, ""},
 		{"ssh no target", "ssh", `{"timeout":"2s"}`, "target"},
