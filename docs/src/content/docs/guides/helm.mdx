@@ -181,22 +181,23 @@ environment registry (`make gen`). The chart already sets `OMNIGLASS_SECURE_COOK
 Both values are passed to the server container and to the init containers (migrate and
 bootstrap), so all three containers reach the same configuration.
 
-Set a plain variable with `extraEnv`, or pull from a Secret with a `secretKeyRef`:
+Set a plain variable with `extraEnv`, or pull all keys from a Secret or ConfigMap with `envFrom`:
 
 ```yaml
 server:
   extraEnv:
     - name: OMNIGLASS_TRUSTED_PROXIES
       value: "10.0.0.0/8"
-    - name: OMNIGLASS_ENCRYPTION_KEY
-      valueFrom:
-        secretKeyRef:
-          name: my-key-secret
-          key: encryption-key
   envFrom:
+    - secretRef:
+        name: omniglass-extra-env
     - configMapRef:
         name: omniglass-config
 ```
+
+To supply a custom encryption key, use `encryptionKey.existingSecret` rather than `server.extraEnv`. The chart
+sets `OMNIGLASS_ENCRYPTION_KEY` from its own Secret; placing it in `server.extraEnv` creates a duplicate entry
+that may cause decryption failures if the duplicate is later removed (see [The encryption key](#the-encryption-key)).
 
 Upgrading a deployment that sets the old names (`OMNIGLASS_SECRET_KEY` or
 `OMNIGLASS_SECRET_KEY_FILE`): it keeps working, because the server still reads them while neither
