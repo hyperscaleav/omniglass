@@ -9,9 +9,11 @@ name: agent-review
 # comments where a finding has a diff line, and never approves. That job ends
 # red while its latest review on the head requests changes, so its check is
 # the reviewer's verdict: green means ship (scripts/agent-trust.sh verdict).
-# Making it required is a ruleset change for the architect. A Changes-requested
-# review from it starts agent-fix, up to five rounds per PR, then the PR parks
-# with needs-fred.
+# Making it required is a ruleset change for the architect. The review posts as
+# the reviewer App, hyperscale-reviewer, when one is set up, since GitHub lets
+# no App request changes on a PR it wrote; otherwise as the agents' App. A
+# Changes-requested review from it starts agent-fix, up to five rounds per PR,
+# then the PR parks with needs-fred.
 #
 # In the merge queue the check reports too, without a new review: it reads the
 # verdict already given on the queued PR's head, so a required agent-review
@@ -195,9 +197,10 @@ jobs:
           # Pushes by the agents' own App (agent-build, agent-fix) are reviewed
           # too; no other bot is admitted.
           allowed_bots: ${{ steps.app.outputs.app-slug }}
+          # 80 turns: 40 ran out on large PRs (#2056); a small PR stops well short.
           claude_args: >-
             --model ${{ needs.plan.outputs.model }}
-            --max-turns 40
+            --max-turns 80
             --allowedTools "Read,Glob,Grep,Skill,StructuredOutput,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*)"
             --json-schema '{"type":"object","properties":{"summary":{"type":"string","description":"One line on what this lens swept and what survived"},"findings":{"type":"array","items":{"type":"object","properties":{"severity":{"type":"string","enum":["blocking","advisory"]},"path":{"type":"string","description":"Repo-relative path of the file"},"line":{"type":"integer","minimum":0,"description":"A line of the PR version of the file that the diff adds or changes, or 0 when there is none"},"rule":{"type":"string","description":"The catalog id or the invariant"},"failure":{"type":"string","description":"Inputs and state, then the wrong outcome, concretely"},"fix":{"type":"string","description":"The pattern, with an exemplar path"}},"required":["severity","path","line","rule","failure","fix"]}}},"required":["summary","findings"]}'
           prompt: |
@@ -259,7 +262,6 @@ jobs:
       MODE: ${{ needs.plan.outputs.mode }}
       NUMBER: ${{ needs.plan.outputs.number }}
       HEAD_SHA: ${{ needs.plan.outputs.head_sha }}
-      BOT: ${{ needs.plan.outputs.bot_name }}
     steps:
       - name: Stop unless the plan decided
         env:
@@ -276,6 +278,23 @@ jobs:
         with:
           client-id: ${{ vars.AGENT_APP_CLIENT_ID }}
           private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: read
+          permission-pull-requests: write
+
+      # The review posts as a second App, hyperscale-reviewer, when one is set
+      # up (repo variable REVIEWER_APP_CLIENT_ID, secret REVIEWER_APP_PRIVATE_KEY).
+      # GitHub refuses Request changes from the App that wrote the PR, and the
+      # agents' App writes most of them, so without it a blocking review on
+      # one of those can only comment and agent-fix does not start.
+      - name: Mint the reviewer App token
+        id: reviewer
+        if: needs.plan.outputs.mode != 'skip' && vars.REVIEWER_APP_CLIENT_ID != ''
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.REVIEWER_APP_CLIENT_ID }}
+          private-key: ${{ secrets.REVIEWER_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: ${{ github.event.repository.name }}
           permission-contents: read
@@ -308,7 +327,9 @@ jobs:
       - name: Post one review with every lens's findings
         if: needs.plan.outputs.mode == 'review'
         env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
+          GH_TOKEN: ${{ steps.reviewer.outputs.token || steps.app.outputs.token }}
+          POSTER: ${{ steps.reviewer.outputs.app-slug && format('{0}[bot]', steps.reviewer.outputs.app-slug) || needs.plan.outputs.bot_name }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
           LENSES: ${{ needs.lens.result }}
           EXPECTED: ${{ needs.plan.outputs.lens_names }}
         run: |
@@ -323,8 +344,11 @@ jobs:
             echo "::warning::the default branch has no scripts/agent-review.sh; using the PR's copy"
             script=head/scripts/agent-review.sh
           fi
+          echo "posting as $POSTER"
           results=$(jq -s -c --arg sha "$HEAD_SHA" --argjson expected "$EXPECTED" \
-            '{head_sha: $sha, expected: $expected, lenses: .}' "$RUNNER_TEMP"/lens/*.json)
+            --arg poster "$POSTER" --arg author "$AUTHOR" \
+            '{head_sha: $sha, expected: $expected, lenses: .,
+              own_pr: (($poster | ascii_downcase) == ($author | ascii_downcase))}' "$RUNNER_TEMP"/lens/*.json)
           bash "$script" review <<<"$results" > "$RUNNER_TEMP/review.json"
           jq -r '"\(.event): \(.comments | length) inline, body \(.body | length) chars"' "$RUNNER_TEMP/review.json"
           if ! gh api --method POST "repos/${REPO}/pulls/${NUMBER}/reviews" --input "$RUNNER_TEMP/review.json" --silent; then
@@ -338,12 +362,13 @@ jobs:
       - name: Fail the check unless the reviewer says ship
         if: needs.plan.outputs.mode != 'skip'
         env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
+          GH_TOKEN: ${{ steps.reviewer.outputs.token || steps.app.outputs.token }}
+          POSTER: ${{ steps.reviewer.outputs.app-slug && format('{0}[bot]', steps.reviewer.outputs.app-slug) || needs.plan.outputs.bot_name }}
         run: |
           set -euo pipefail
           reviews=$(gh api "repos/${REPO}/pulls/${NUMBER}/reviews" --paginate \
-            --jq '.[] | {user: .user.login, state, commit_id}' | jq -s -c .)
-          verdict=$(jq -cn --arg bot "$BOT" --arg sha "$HEAD_SHA" --argjson r "$reviews" \
+            --jq '.[] | {user: .user.login, state, commit_id, body: (.body // "" | .[:200])}' | jq -s -c .)
+          verdict=$(jq -cn --arg bot "$POSTER" --arg sha "$HEAD_SHA" --argjson r "$reviews" \
             '{app_bot: $bot, head_sha: $sha, reviews: $r}' | trusted/scripts/agent-trust.sh verdict)
           echo "verdict: $verdict"
           [ "$verdict" = ship ] || { echo "::error::agent-review: ${verdict#block: }"; exit 1; }

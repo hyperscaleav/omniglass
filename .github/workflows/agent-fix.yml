@@ -4,7 +4,8 @@ name: agent-fix
 # - an @hyperscale-agent or @claude comment on a PR, or a review comment with
 #   either, from a member of the maintainers or contributors team;
 # - a review from either team that requests changes or mentions either name;
-# - a Changes-requested review from agent-review, up to five rounds per PR;
+# - a Changes-requested review from agent-review (the reviewer App,
+#   hyperscale-reviewer, when one is set up), up to five rounds per PR;
 #   after that the PR parks with needs-fred until a person steps in.
 # Everyone else's mention does nothing, and fork PRs are skipped. Every decision is
 # scripts/agent-trust.sh fix (tested in go test ./scripts/). The agent reads only
@@ -60,6 +61,19 @@ jobs:
           owner: ${{ github.repository_owner }}
           repositories: ${{ github.event.repository.name }}
 
+      # Only to learn the reviewer App's login, when one is set up: its
+      # Changes-requested review is agent-review's (see agent-review.yml).
+      - name: Mint the reviewer App token
+        id: reviewer
+        if: github.event_name == 'pull_request_review' && vars.REVIEWER_APP_CLIENT_ID != ''
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.REVIEWER_APP_CLIENT_ID }}
+          private-key: ${{ secrets.REVIEWER_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-pull-requests: read
+
       # The default branch first, so the gate runs the trusted script, never
       # the PR's copy of it.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -77,20 +91,25 @@ jobs:
           STATE: ${{ github.event.review.state }}
           BODY: ${{ github.event.comment.body || github.event.review.body }}
           SLUG: ${{ steps.app.outputs.app-slug }}
+          REVIEWER_SLUG: ${{ steps.reviewer.outputs.app-slug }}
         run: |
           set -euo pipefail
           trust=trusted/scripts/agent-trust.sh
           teams=$("$trust" teams "$ORG")
           pr=$(gh pr view "$NUMBER" --repo "$REPO" --json headRefName,isCrossRepository,state,closingIssuesReferences)
           bot="${SLUG}[bot]"
+          reviewer=""; [ -n "$REVIEWER_SLUG" ] && reviewer="${REVIEWER_SLUG}[bot]"
           rounds=$(gh api "repos/${REPO}/pulls/${NUMBER}/reviews" --paginate --jq '.[] | {user: .user.login, state}' \
-            | jq -s --arg bot "$bot" '[.[] | select(.user == $bot and .state == "CHANGES_REQUESTED")] | length')
+            | jq -s --arg bot "$bot" --arg reviewer "$reviewer" \
+              '[.[] | select((.user == $bot or .user == $reviewer) and .state == "CHANGES_REQUESTED")] | length')
           case "$EVENT" in pull_request_review) kind=review ;; *) kind=comment ;; esac
           mentions=false; case "$BODY" in *@hyperscale-agent* | *@claude*) mentions=true ;; esac
           facts=$(jq -cn --argjson t "$teams" --argjson p "$pr" --arg event "$kind" --arg sender "$SENDER" \
-            --arg state "$STATE" --argjson mentions "$mentions" --arg bot "$bot" --argjson rounds "$rounds" \
+            --arg state "$STATE" --argjson mentions "$mentions" --arg bot "$bot" --arg reviewer "$reviewer" \
+            --argjson rounds "$rounds" \
             '$t + {event: $event, sender: $sender, review_state: $state, mentions: $mentions,
-                   head_ref: $p.headRefName, fork: $p.isCrossRepository, app_bot: $bot, auto_rounds: $rounds}')
+                   head_ref: $p.headRefName, fork: $p.isCrossRepository, app_bot: $bot,
+                   reviewer_bot: $reviewer, auto_rounds: $rounds}')
           decision=$(printf '%s' "$facts" | "$trust" fix)
           echo "decision: $decision"
           if [ "$(printf '%s' "$pr" | jq -r .state)" != OPEN ]; then decision="skip: the PR is not open"; fi
@@ -99,7 +118,7 @@ jobs:
             echo "decision=${decision%%:*}"
             echo "reason=${decision#*: }"
             echo "head=$(printf '%s' "$pr" | jq -r .headRefName)"
-            echo "from_app=$([ "$SENDER" = "$bot" ] && echo true || echo false)"
+            echo "from_app=$([ "$SENDER" = "$bot" ] || { [ -n "$reviewer" ] && [ "$SENDER" = "$reviewer" ]; } && echo true || echo false)"
             echo "bot_name=$bot"
             echo "bot_id=$(gh api "users/${SLUG}%5Bbot%5D" --jq .id)"
             if [ "$tier" = "tier:sr" ]; then echo "model=opus"; else echo "model=sonnet"; fi
@@ -174,7 +193,7 @@ jobs:
           github_token: ${{ steps.app.outputs.token }}
           bot_id: ${{ steps.gate.outputs.bot_id }}
           bot_name: ${{ steps.gate.outputs.bot_name }}
-          allowed_bots: ${{ steps.app.outputs.app-slug }}
+          allowed_bots: ${{ steps.app.outputs.app-slug }}${{ steps.reviewer.outputs.app-slug && format(',{0}', steps.reviewer.outputs.app-slug) || '' }}
           claude_args: >-
             --model ${{ steps.gate.outputs.model }}
             --max-turns 200

@@ -70,7 +70,7 @@ draft saying what is left.
 Every same-repo PR that is not a draft or from dependabot gets one adversarial review: inline findings, each with
 its failure scenario, and one summary review that requests changes or comments. It never
 approves. Its check, `agent-review`, is the verdict: red while its latest review on the PR's
-head requests changes, green when it says ship. The review is composed and the verdict read
+head requests changes or opens with a blocking count, green when it says ship. The review is composed and the verdict read
 with the default branch's `scripts/agent-review.sh` and `scripts/agent-trust.sh`, so a PR
 cannot rewrite its own check. The one exception was the PR that added `agent-review.sh`
 (#2211): main had no copy yet, so its own review used the PR's. The check is not in either main ruleset yet; making it required
@@ -90,9 +90,15 @@ and a read-only token:
 A lens posts nothing. It returns its surviving findings as JSON, and the `agent-review` job,
 which waits for every lens, posts them as one review: a finding on a diff line becomes an inline
 comment, any other goes in the review's body. One blocking finding from any lens makes it
-request changes, so agent-fix still sees one review per round and the five-round cap still
-counts rounds, not lenses. A lens that fails or times out fails the check rather than passing
+request changes (on a PR its own App wrote, GitHub allows only a comment, so the review
+comments and opens with the blocking count), so agent-fix still sees one review per round and the five-round cap still
+counts rounds, not lenses. A lens that fails, times out or runs out of its 80 turns fails the check rather than passing
 without its part; rerunning the failed jobs retries it.
+
+The review posts as a second GitHub App, `hyperscale-reviewer`, when one is set up. GitHub lets
+no App request changes on a PR it wrote, and the agents' App writes most PRs here, so without
+the second App a blocking review on one of those can only comment. The check still fails, since
+the verdict reads the blocking count at the top of the comment, but agent-fix does not start.
 
 In the merge queue the check reports without reviewing again: it reads the verdict already
 given on the queued PR's head, so `agent-review` can be made required without holding the queue.
@@ -162,7 +168,8 @@ enforced in the workflow rather than asked of the model:
    and only the two teams' comments. The fix reads only the feedback that started it.
 2. **The conversation is locked** to collaborators while a build runs.
 3. **No outside code runs next to a token.** The workflows use `pull_request`, never
-   `pull_request_target`, and skip forks. No bot is admitted but the agents' own App.
+   `pull_request_target`, and skip forks. No bot is admitted but the agents' own App and the
+   reviewer App.
 4. **The token is narrow.** The agents' App has no Workflows permission, so an agent cannot edit
    these files, and both main rulesets still need the architect's approval to merge. The
    reviewer's lenses hold read-only tokens; only the `agent-review` job, which runs no model,
@@ -182,6 +189,9 @@ org owner:
   GitHub App, which needs Contents, Pull requests and Issues write, Checks write (for the
   `agent-fix` check), Projects write (for the board), org Members read (for the team checks),
   and no Workflows permission;
+- adds the variable `REVIEWER_APP_CLIENT_ID` and the secret `REVIEWER_APP_PRIVATE_KEY` for the
+  reviewer App, `hyperscale-reviewer`, which needs only Contents read and Pull requests write;
+  without them agent-review posts as the agents' App, as above;
 - creates the `contributors` team (`maintainers` exists), and creates the `run:dev-gha` label.
 
 Every run draws on the subscription the token belongs to, and parallel runs share its limits. A
