@@ -148,3 +148,54 @@ func TestAgentStopReasonSaysNothingWithoutAnError(t *testing.T) {
 		t.Fatalf("object: exit %d, want 2", code)
 	}
 }
+
+const pushedSHA = "abc1234aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+// agent-fix answers each point of the feedback on one line, with its reasons
+// collapsed under them (#2224). A point counts as fixed only when its sha is a
+// commit the run pushed.
+func TestAgentStatusListsEachPointOnOneLine(t *testing.T) {
+	got, _ := agentStatus(t, "body", `{"workflow":"agent-fix","state":"done","run_url":"`+runURL+`","pushed":"abc1234",
+		"commits":["`+pushedSHA+`"],
+		"points":[
+			{"point":"Retry\nbacks off","status":"fixed","sha":"abc1234","reason":"added backoff and a test","comment_id":5},
+			{"point":"Rename the flag","status":"unchanged","reason":"the name is public config"},
+			{"point":"Claimed","status":"fixed","sha":"deadbee"}]}`)
+	for _, want := range []string{
+		"**agent-fix** pushed abc1234",
+		"> ✅ Retry backs off · Fixed in abc1234\n> ↩️ Rename the flag · Not changed\n> ↩️ Claimed · Not changed",
+		"> <details>\n> <summary>Why</summary>",
+		"> - Retry backs off: added backoff and a test\n> - Rename the flag: the name is public config",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in:\n%s", want, got)
+		}
+	}
+}
+
+// Without points the comment is what it was: the agent's summary, quoted.
+func TestAgentStatusKeepsTheSummaryWithoutPoints(t *testing.T) {
+	got, _ := agentStatus(t, "body", `{"workflow":"agent-fix","state":"done","pushed":"abc1234","summary":"did a thing"}`)
+	if !strings.HasSuffix(got, "\n\n> did a thing") || strings.Contains(got, "<details>") {
+		t.Fatalf("got %q", got)
+	}
+}
+
+// agent-fix replies on each review thread it fixed, and only those: a point
+// that was not changed, came from no thread, or names a commit the run did not
+// push gets no reply.
+func TestAgentStatusRepliesOnTheThreadsItFixed(t *testing.T) {
+	got, code := agentStatus(t, "replies", `{"commits":["`+pushedSHA+`"],"points":[
+		{"point":"a","status":"fixed","sha":"abc1234","comment_id":5},
+		{"point":"a again","status":"fixed","sha":"abc1234aa","comment_id":5},
+		{"point":"b","status":"unchanged","comment_id":6},
+		{"point":"c","status":"fixed","sha":"abc1234"},
+		{"point":"d","status":"fixed","sha":"deadbee","comment_id":7},
+		{"point":"e","status":"fixed","sha":"abc1234","comment_id":"8; rm -rf"}]}`)
+	if code != 0 || got != `[{"comment_id":5,"body":"✅ Fixed in abc1234"}]` {
+		t.Fatalf("exit %d: %s", code, got)
+	}
+	if got, _ := agentStatus(t, "replies", `{}`); got != "[]" {
+		t.Fatalf("no points: %s", got)
+	}
+}

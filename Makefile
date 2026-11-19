@@ -3,7 +3,7 @@
 # #1193). Production deploy is BYO Postgres; tests use ephemeral testcontainer
 # Postgres.
 
-.PHONY: all lab test-lab test-lab-image scale-lab scale-measure perf-check perf-baseline footprint lab-footprint compress-bench build build-web web image gen gen-twice gen-proto gen-web adr-renumber migration migration-check test test-web test-short test-go test-go-storage test-go-devseed test-go-rest test-go-shards-check test-e2e bench clean-testcontainers tidy dev release-plan release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs bench-sim test-netadmin walkthroughs test-walkthroughs demo test-demos probe
+.PHONY: preflight all lab test-lab test-lab-image scale-lab scale-measure perf-check perf-baseline footprint lab-footprint compress-bench build build-web web image gen gen-twice gen-proto gen-web adr-renumber migration migration-check test test-web test-short test-go test-go-storage test-go-devseed test-go-rest test-go-shards-check test-e2e bench clean-testcontainers tidy dev release-plan release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs bench-sim test-netadmin walkthroughs test-walkthroughs demo test-demos probe
 
 # The bare `make` (#1196) needs only Docker. From one Dockerfile and one tree
 # it builds the image and exports this machine's own binary to
@@ -211,6 +211,33 @@ migration:
 BASE ?= origin/main
 migration-check:
 	go run ./cmd/migrationcheck -base $(BASE)
+
+# The one pre-push gate (#2231): what the PR's required checks run, run here
+# first, in the order that fails fastest on what agents miss most. On Nov 19
+# four agent pushes went red on exactly these: gen drift, the storage and rest
+# test shards, a docslint test and the docs build.
+#   1. make gen, then the tree must be as it was (gen-drift.yml)
+#   2. make test (test.yml's shards, web and netadmin)
+#   3. the docs site builds (docs-build.yml)
+#   4. added migrations are newer than BASE (migrations.yml)
+#   5. an agent's branch leaves main's agent config alone (scripts/agent-sync.sh;
+#      a gate only when AGENT_RUN=1)
+# e2e and the image smokes stay CI-only: they build the lab and take minutes.
+# scripts/preflight_test.go fails if a step here and its check drift apart.
+# Needs Docker (make test and gen's erdgen use testcontainers) and BASE fetched:
+# git fetch origin main.
+preflight:
+	@$(TREE_SNAPSHOT) > $(GEN_SNAPSHOT).before
+	$(MAKE) gen
+	@$(TREE_SNAPSHOT) > $(GEN_SNAPSHOT).after
+	@cmp -s $(GEN_SNAPSHOT).before $(GEN_SNAPSHOT).after; status=$$?; \
+	if [ $$status -ne 0 ]; then diff $(GEN_SNAPSHOT).before $(GEN_SNAPSHOT).after | head -40; fi; \
+	rm -f $(GEN_SNAPSHOT).before $(GEN_SNAPSHOT).after; \
+	if [ $$status -ne 0 ]; then echo 'preflight: make gen changed the tree (above); commit the regenerated files' >&2; exit 1; fi
+	$(MAKE) test
+	cd docs && pnpm install --frozen-lockfile && pnpm build
+	$(MAKE) migration-check BASE=$(BASE)
+	bash scripts/agent-sync.sh guard $(BASE)
 
 # Full gate: every test, including the testcontainer-backed integration and
 # end-to-end tests (real Postgres) plus the SPA (vitest). Green before commit and
