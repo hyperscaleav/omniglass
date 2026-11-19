@@ -272,7 +272,7 @@ func slotChoiceImage(ctx context.Context, q txQuerier, choiceID string) (map[str
 	img["owner_kind"], img["owner_id"], img["name"], img["label"] = ownerKind, ownerRef, name, labelText
 	rows, err := q.Query(ctx, `
 		select name, coalesce(label, ''), position from choice_alternate
-		 where choice_id = $1 order by position`, choiceID)
+		 where choice_id = $1 order by position for update`, choiceID)
 	if err != nil {
 		return nil, fmt.Errorf("storage: read choice alternates %s: %w", choiceID, err)
 	}
