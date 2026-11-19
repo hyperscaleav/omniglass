@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/hyperscaleav/omniglass/internal/collection/rejection"
-	"github.com/hyperscaleav/omniglass/internal/driver"
+	"net"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/hyperscaleav/omniglass/internal/collection/rejection"
+	"github.com/hyperscaleav/omniglass/internal/driver"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/transport"
@@ -45,8 +47,9 @@ var (
 // endpoint over the tls handshake (tls #1035, https #902), which a
 // driver-attached one has checked as an input instead.
 func checkBareParams(transportName string, params []byte) error {
+	// TODO(#2228): a create with no params at all is not yet held to this check.
 	if transport.IsDialed(transportName) && len(params) > 0 {
-		if err := checkTarget(params); err != nil {
+		if err := checkTarget(transportName, params); err != nil {
 			return err
 		}
 	}
@@ -76,8 +79,9 @@ func checkBareParams(transportName string, params []byte) error {
 // and skips a task whose target is empty, forever, so the endpoint's
 // reachability would never read. Params left out are not this check's (an
 // unchanged edit carries none); a host or port key is the likely mistake, and
-// the message names the key to use instead.
-func checkTarget(params []byte) error {
+// the message names the key to use instead. For non-icmp transports the target
+// must be a valid host:port pair; icmp takes a bare host.
+func checkTarget(transportName string, params []byte) error {
 	var p map[string]any
 	if err := json.Unmarshal(params, &p); err != nil {
 		return fmt.Errorf("params must be a JSON object holding a %s", targetParam)
@@ -87,8 +91,14 @@ func checkTarget(params []byte) error {
 			return fmt.Errorf("params.%s is not a key: set params.%s as host[:port], the address the outpost dials", k, targetParam)
 		}
 	}
-	if target, _ := p[targetParam].(string); strings.TrimSpace(target) == "" {
+	target, _ := p[targetParam].(string)
+	if strings.TrimSpace(target) == "" {
 		return fmt.Errorf("params.%s is required: the address the outpost dials, as host[:port]", targetParam)
+	}
+	if transportName != "icmp" {
+		if _, _, err := net.SplitHostPort(target); err != nil {
+			return fmt.Errorf("params.%s must be host:port, and %q is not (did you omit the port?)", targetParam, target)
+		}
 	}
 	return nil
 }

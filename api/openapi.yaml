@@ -2683,7 +2683,7 @@ components:
           description: Outpost placement, by name or id
           type: string
         params:
-          description: "Address/target settings (jsonb): target as host[:port] (required on every transport an outpost dials, so host and port keys are refused), count and timeout (icmp), tls-mode (tls, https, wss); an attach derives them from the inputs instead"
+          description: "Address/target settings (jsonb): set target as host[:port] (host and port keys are refused); timeout, count (icmp), tls-mode (tls, https, wss); an attach derives them from the inputs instead"
         transport:
           description: A transport name from the built-in transports (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set
           type: string
@@ -4430,7 +4430,7 @@ components:
           description: The placed outpost's id; the stable form of outpost
           type: string
         params:
-          description: "The address/target settings (jsonb): target as host[:port] (required on every transport an outpost dials, so host and port keys are refused), count and timeout (icmp), tls-mode (tls, https, wss)"
+          description: "The address/target settings (jsonb): set target as host[:port] (host and port keys are refused); timeout, count (icmp), tls-mode (tls, https, wss)"
         transport:
           description: The transport name (the wire this endpoint speaks over), from the built-in transports
           type: string
@@ -13667,7 +13667,7 @@ components:
           description: Reassign the outpost placement, by name or id
           type: string
         params:
-          description: "Replace the address/target settings (jsonb): target as host[:port] (required on every transport an outpost dials, so host and port keys are refused), count and timeout (icmp), tls-mode (tls, https, wss). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs"
+          description: "Replace the address/target settings (jsonb): set target as host[:port] (host and port keys are refused); timeout, count (icmp), tls-mode (tls, https, wss). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs"
         transport:
           description: "The transport: a driver-attached endpoint takes only one its driver speaks"
           type: string

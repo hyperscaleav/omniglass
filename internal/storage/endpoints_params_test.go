@@ -43,6 +43,7 @@ func TestABareDialedEndpointsParamsNameATarget(t *testing.T) {
 		{"tcp empty target", "tcp", `{"target":"  "}`, "target"},
 		{"tcp target not a string", "tcp", `{"target":8080}`, "target"},
 		{"tcp not an object", "tcp", `"127.0.0.1:8080"`, "target"},
+		{"tcp target missing port", "tcp", `{"target":"10.0.0.1"}`, "target"},
 		{"icmp empty object", "icmp", `{}`, "target"},
 		{"icmp host", "icmp", `{"target":"10.0.0.1","count":3,"timeout":"2s"}`, ""},
 		{"ssh no target", "ssh", `{"timeout":"2s"}`, "target"},

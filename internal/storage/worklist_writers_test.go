@@ -213,7 +213,7 @@ func TestWorklistWritersPathEdges(t *testing.T) {
 	// in-band endpoint on the task's outpost, so amp-b gains one on edge-a.
 	comp, outpost := "amp-b", "edge-a"
 	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-		Transport: "tcp", Component: &comp, Outpost: &outpost, Params: []byte(`{"host":"10.20.4.9","port":23}`),
+		Transport: "tcp", Component: &comp, Outpost: &outpost, Params: []byte(`{"target":"10.20.4.9:23"}`),
 	}, all); err != nil {
 		t.Fatal(err)
 	}

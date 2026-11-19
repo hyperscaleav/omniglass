@@ -3541,7 +3541,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fLabel, "label", "", "What an operator reads in lists (Control processor). Settable here because the name is derived from the transport, so it says how the device is reached and never what the connection is for")
 				cmd.Flags().BoolVar(&fOutOfBand, "out-of-band", false, "Mark the endpoint a management path (a BMC, a management port) that answers through a reboot of its device, so a reboot's hold leaves its gate open")
 				cmd.Flags().StringVar(&fOutpost, "outpost", "", "Outpost placement, by name or id")
-				cmd.Flags().StringVar(&fParams, "params", "", "Address/target settings (jsonb): target as host[:port] (required on every transport an outpost dials, so host and port keys are refused), count and timeout (icmp), tls-mode (tls, https, wss); an attach derives them from the inputs instead")
+				cmd.Flags().StringVar(&fParams, "params", "", "Address/target settings (jsonb): set target as host[:port] (host and port keys are refused); timeout, count (icmp), tls-mode (tls, https, wss); an attach derives them from the inputs instead")
 				cmd.Flags().StringVar(&fTransport, "transport", "", "A transport name from the built-in transports (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set")
 				return cmd
 			}()
@@ -3718,7 +3718,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fLabel, "label", "", "A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone")
 				cmd.Flags().BoolVar(&fOutOfBand, "out-of-band", false, "Mark the endpoint a management path that answers through a reboot of its device (true), or an ordinary one (false). Omit to leave it alone")
 				cmd.Flags().StringVar(&fOutpost, "outpost", "", "Reassign the outpost placement, by name or id")
-				cmd.Flags().StringVar(&fParams, "params", "", "Replace the address/target settings (jsonb): target as host[:port] (required on every transport an outpost dials, so host and port keys are refused), count and timeout (icmp), tls-mode (tls, https, wss). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs")
+				cmd.Flags().StringVar(&fParams, "params", "", "Replace the address/target settings (jsonb): set target as host[:port] (host and port keys are refused); timeout, count (icmp), tls-mode (tls, https, wss). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs")
 				cmd.Flags().StringVar(&fTransport, "transport", "", "The transport: a driver-attached endpoint takes only one its driver speaks")
 				return cmd
 			}()
