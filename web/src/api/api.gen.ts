@@ -7849,7 +7849,7 @@ export type SettingsMeOutputBody = {
 export type SettingsReadOutputBodyLocks = {[key: string]: string};
 
 /**
- * key 'namespace.key' to the winning level (default|file|platform)
+ * key 'namespace.key' to the winning level (default|file|env|platform)
  */
 export type SettingsReadOutputBodySources = {[key: string]: string};
 
@@ -7858,7 +7858,7 @@ export type SettingsReadOutputBody = {
   readonly $schema?: string;
   /** key 'namespace.key' to the locking level, when locked */
   locks: SettingsReadOutputBodyLocks;
-  /** key 'namespace.key' to the winning level (default|file|platform) */
+  /** key 'namespace.key' to the winning level (default|file|env|platform) */
   sources: SettingsReadOutputBodySources;
   values: Settings;
 };
@@ -20429,7 +20429,7 @@ export const getRestoreSettingsDefaultsUrl = () => {
 }
 
 /**
- * Removes every platform binding (a factory reset). Gated by settings:update and platform:update.
+ * Removes every platform binding (a factory reset), restoring the env layer, the file layer and the declared defaults. Gated by settings:update and platform:update.
  * @summary Restore all settings to defaults
  */
 export const restoreSettingsDefaults = async ( options?: Parameters<typeof ogFetch>[1]): Promise<restoreSettingsDefaultsResponse> => {

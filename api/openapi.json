@@ -15336,7 +15336,7 @@
             "additionalProperties": {
               "type": "string"
             },
-            "description": "key 'namespace.key' to the winning level (default|file|platform)",
+            "description": "key 'namespace.key' to the winning level (default|file|env|platform)",
             "type": "object"
           },
           "values": {
@@ -30733,7 +30733,7 @@
     },
     "/settings:restoreDefaults": {
       "post": {
-        "description": "Removes every platform binding (a factory reset). Gated by settings:update and platform:update.",
+        "description": "Removes every platform binding (a factory reset), restoring the env layer, the file layer and the declared defaults. Gated by settings:update and platform:update.",
         "operationId": "restore-settings-defaults",
         "responses": {
           "204": {

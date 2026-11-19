@@ -7075,7 +7075,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "restoreDefaults",
 					Short:   "Restore all settings to defaults",
-					Long:    "Removes every platform binding (a factory reset). Gated by settings:update and platform:update.",
+					Long:    "Removes every platform binding (a factory reset), restoring the env layer, the file layer and the declared defaults. Gated by settings:update and platform:update.",
 					Example: "  omniglass setting restoreDefaults",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {

@@ -217,6 +217,26 @@ func TestCoerceRefusesANonFiniteNumber(t *testing.T) {
 	}
 }
 
+// An env value meets the declared constraints a console patch meets: an
+// enum value outside its list fails the boot naming the variable and never
+// the value, and an in-list value still loads.
+func TestLoadEnvHoldsTheDeclaredEnum(t *testing.T) {
+	_, err := LoadEnv([]string{"OMNIGLASS_SETTING__NOTIFICATION__MAIL_SECURITY=sometimes"})
+	if !errors.Is(err, ErrEnvBadValue) {
+		t.Fatalf("err = %v, want ErrEnvBadValue", err)
+	}
+	if !contains(err.Error(), "OMNIGLASS_SETTING__NOTIFICATION__MAIL_SECURITY") || contains(err.Error(), "sometimes") {
+		t.Errorf("err = %q, want the variable named and the value left out", err)
+	}
+	doc, err := LoadEnv([]string{"OMNIGLASS_SETTING__NOTIFICATION__MAIL_SECURITY=tls"})
+	if err != nil {
+		t.Fatalf("an in-list value: %v", err)
+	}
+	if got := doc["notification"]["mail_security"]; got != "tls" {
+		t.Errorf("mail_security = %v, want tls", got)
+	}
+}
+
 // The console still wins (#2223): the service's own level stack puts env under
 // the platform binding, so a key set at both resolves to the binding, sourced
 // "platform", and a key set only by env still reads from env.

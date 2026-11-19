@@ -5558,7 +5558,7 @@ Restore all settings to defaults
 omniglass setting restoreDefaults
 ```
 
-Removes every platform binding (a factory reset). Gated by settings:update and platform:update.
+Removes every platform binding (a factory reset), restoring the env layer, the file layer and the declared defaults. Gated by settings:update and platform:update.
 
 Example:
 

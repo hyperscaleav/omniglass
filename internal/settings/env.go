@@ -1,6 +1,7 @@
 package settings
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -83,12 +84,41 @@ func LoadEnv(env []string) (Doc, error) {
 		if err != nil {
 			return nil, fmt.Errorf("settings: %s: %w (%s)", name, ErrEnvBadValue, err)
 		}
+		if err := validateEnvValue(ns, key, coerced, value); err != nil {
+			return nil, fmt.Errorf("settings: %s: %w (%s)", name, ErrEnvBadValue, err)
+		}
 		if out[ns] == nil {
 			out[ns] = map[string]any{}
 		}
 		out[ns][key] = coerced
 	}
 	return out, nil
+}
+
+// validateEnvValue holds an env value to the same declared constraints a
+// console patch meets (enum, range, the per-key value checks), through
+// Validate, so a value the console would refuse cannot enter the cascade from
+// the environment. The value goes through JSON first, the shape a patch has.
+// The message never carries the raw value: a check that would quote it gets a
+// generic message instead.
+func validateEnvValue(ns, key string, coerced any, raw string) error {
+	b, err := json.Marshal(coerced)
+	if err != nil {
+		return errors.New("the value does not encode")
+	}
+	var v any
+	if err := json.Unmarshal(b, &v); err != nil {
+		return errors.New("the value does not encode")
+	}
+	err = Validate(ns, map[string]any{key: v})
+	if err == nil {
+		return nil
+	}
+	var fe *FieldError
+	if errors.As(err, &fe) && (raw == "" || !strings.Contains(fe.Message, raw)) {
+		return errors.New(fe.Message)
+	}
+	return errors.New("the value is not one this setting accepts")
 }
 
 // splitEnv is os.LookupEnv's split applied to an Environ entry: the KEY=VALUE
@@ -213,7 +243,11 @@ func coerceEnvValue(s string, t reflect.Type) (any, error) {
 	}
 	v, err := coerceDefault(s, t.Kind())
 	if err != nil {
-		return nil, fmt.Errorf("expected a %s", t.Kind())
+		article := "a"
+		if strings.ContainsRune("aeiou", rune(t.Kind().String()[0])) {
+			article = "an"
+		}
+		return nil, fmt.Errorf("expected %s %s", article, t.Kind())
 	}
 	return v, nil
 }
