@@ -55,6 +55,9 @@ func exchangeOK(t *testing.T, c *collection.DatagramConn) {
 }
 
 func TestDatagramRetargetFollowsTheNameToItsNewAddress(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real-socket integration test")
+	}
 	x := newUDPPeer(t, answerOK)
 	y := newUDPPeerAt(t, net.IPv4(127, 0, 0, 2), answerOK)
 	res := &stubResolver{}
@@ -85,6 +88,9 @@ func TestDatagramRetargetFollowsTheNameToItsNewAddress(t *testing.T) {
 }
 
 func TestDatagramRetargetKeepsTheLastAddressWhenResolveFails(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real-socket integration test")
+	}
 	x := newUDPPeer(t, answerOK)
 	res := &stubResolver{}
 	res.set(x.addr(), nil)
@@ -115,6 +121,9 @@ func TestDatagramRetargetKeepsTheLastAddressWhenResolveFails(t *testing.T) {
 }
 
 func TestDatagramLiteralIPTargetNeverResolves(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real-socket integration test")
+	}
 	x := newUDPPeer(t, answerOK)
 	res := &stubResolver{}
 	res.set(x.addr(), nil)
@@ -129,6 +138,9 @@ func TestDatagramLiteralIPTargetNeverResolves(t *testing.T) {
 }
 
 func TestDatagramRetargetAcceptsOnlyTheNewAddressAsTheComponent(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real-socket integration test")
+	}
 	// The component is told by its address alone (#1103), so the name moves
 	// to another loopback address.
 	x := newUDPPeer(t, answerOK)
