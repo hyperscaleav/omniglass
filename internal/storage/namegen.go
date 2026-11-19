@@ -81,8 +81,8 @@ var ErrSystemTypeRequiredForName = errors.New("storage: a system with no system_
 // bareFirst: suppressing the ordinal there would leave no name at all.
 type nameMint struct {
 	stem string
-	// bareFirst suppresses the ordinal on ordinal 1, so the only boardroom in a
-	// room is "boardroom" and the second is "boardroom-2" (epic #657's D3,
+	// bareFirst suppresses the ordinal on ordinal 1, so the only board-meeting in a
+	// room is "board-meeting" and the second is "board-meeting-2" (epic #657's D3,
 	// ruled in ADR-0101). It is a field on the mint rather than a branch inside
 	// name() because "does this kind of thing carry a number when there is only
 	// one of it" is a property of the thing being named, not of the naming
@@ -253,8 +253,8 @@ func systemMint(stem string) nameMint { return nameMint{stem: stem, bareFirst: t
 // A stem-less type allocates at all (the mint's "1", "2", where a "-" prefix
 // matched nothing and returned 1 forever). A name shape that is not
 // "<stem>-<n>" needs no second parser written to match it, only a different
-// mint, which is exactly what a suppressed first ordinal is (#686): "boardroom"
-// and "boardroom-2" are allocated by the same loop, because the loop never
+// mint, which is exactly what a suppressed first ordinal is (#686): "board-meeting"
+// and "board-meeting-2" are allocated by the same loop, because the loop never
 // knows the shape, it only asks for it. And an operator-typed name occupying
 // the shape the generator would mint still blocks it, which is not a nicety:
 // the scoped-name unique index is on the NAME, so an allocator that consulted

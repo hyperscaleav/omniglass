@@ -10,9 +10,9 @@
 # Litmus test for a type: an operator would say "this system is for <type>",
 # and would expect every one of them to be named and labelled the same way.
 # That is what stem and abbrev are for. stem is the prefix a generated system
-# name is built from ("boardroom-2"); abbrev is the compact form a label render
-# uses ("br"). Both inherit down the tree and are overridden at the type that
-# needs its own, so `board` states both while leaving icon to come from
+# name is built from ("board-meeting-2"); abbrev is the compact form a label
+# render uses ("bm"). Both inherit down the tree and are overridden at the type
+# that needs its own, so `board` states both while leaving icon to come from
 # `collaboration`.
 #
 # Order matters: a child's parent_id must name an id that appears earlier in
@@ -32,13 +32,13 @@ system_types:
   - id: board
     label: Board Meeting
     parent_id: collaboration
-    stem: boardroom
-    abbrev: br
+    stem: board-meeting
+    abbrev: bm
   - id: class
     label: Teaching
     parent_id: collaboration
-    stem: classroom
-    abbrev: cls
+    stem: teaching
+    abbrev: tch
   - id: meeting
     label: Meeting
     parent_id: collaboration

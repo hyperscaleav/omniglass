@@ -163,7 +163,7 @@ type System struct {
 	// invariant test pins.
 	//
 	// A SUPPRESSED first name stores 1 while carrying no digits (ADR-0101):
-	// "boardroom" is ordinal 1 and "boardroom-2" is ordinal 2. That the two can
+	// "board-meeting" is ordinal 1 and "board-meeting-2" is ordinal 2. That the two can
 	// differ is exactly why the number is a column of its own rather than
 	// something a reader picks back out of the name.
 	//
@@ -936,8 +936,8 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 		}
 	}
 	// A reclassify that leaves the system still platform-named (#686) may no
-	// longer fit its old stem: a "boardroom" reclassified as a classroom needs
-	// the classroom stem, not the one it was minted from. before.NameGenerated
+	// longer fit its old stem: a "board-meeting" reclassified as a teaching room needs
+	// the teaching stem, not the one it was minted from. before.NameGenerated
 	// is the read of record; an operator-typed name (RenameSystem clears the
 	// flag forever) is never touched by a reclassify. Computed before the write
 	// so the name, the ordinal and the classification all land in one UPDATE
@@ -959,7 +959,7 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 	// types that inherit ONE stem from a shared ancestor, which the mint cannot
 	// tell apart because it never reads the id (#706). With a lower ordinal
 	// freed in the meantime by a rename, either re-mint MOVES THE NAME:
-	// "boardroom-2" becomes "boardroom" under system:update, with no rename
+	// "board-meeting-2" becomes "board-meeting" under system:update, with no rename
 	// asked for and possibly no system:rename grant held. The mint reads the
 	// stem and the bucket, and neither of those patches changes either, which is
 	// the derivation ADR-0101 records. systemTypeStemMoved is the system-tier
