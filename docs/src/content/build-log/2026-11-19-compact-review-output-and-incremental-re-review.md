@@ -20,8 +20,8 @@ be where a lens starts, not a fence. So the lenses read any code, pull up the wh
 `go build`, `go vet` and `go test` (setup-go in the lens job), and raise a finding wherever the new
 changes cause or expose a problem. A force push, an unreadable earlier review, or
 one that left a blocking finding in its body falls back to a full review. The diff picks the
-lenses (`lenses` runs `neighbor` alone when it touches no code) and the turn limit (`turns`, 40
-to 120 by size).
+lenses (with no code touched, `lenses` runs only `neighbor`, plus `recheck` when findings are
+open) and the turn limit (`turns`, 40 to 120 by size).
 
 Open findings carry forward, and this is where the first cut had a hole: it dropped a new finding
 that matched an open thread, so a re-run that found an unfixed blocker again posted a clean review
@@ -36,7 +36,8 @@ resolves the fixed ones as the reviewer.
 Code here means Go, web, shell, SQL and the workflows, wider than the ticket's "Go or web": the
 invariants lens found this PR's one real problem in a bash script.
 
-agent-fix answers each point on one line (`✅ Fixed in <sha>` or `↩️ Not changed`) with the
-reasons collapsed, from a points file the agent writes, and replies `✅ Fixed in <sha>` on each
-thread it fixed. `agent-status.sh` counts a point as fixed only when its commit is one the run
-pushed. `agent-trust.sh verdict` reads the blocking count in both the old and the new body.
+agent-fix answers each point on one line (`✅ <point> · Fixed in <sha>` or
+`↩️ <point> · Not changed`) with the reasons collapsed, from a points file the agent writes, and
+replies `✅ Fixed in <sha>` on each thread it fixed. `agent-status.sh` counts a point as fixed only
+when its commit is one the run pushed. `agent-trust.sh verdict` reads the blocking count in both
+the old and the new body.

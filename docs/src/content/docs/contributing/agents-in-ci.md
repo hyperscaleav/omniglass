@@ -106,9 +106,10 @@ out. That diff is where the lenses look first, not a fence: they read any code, 
 PR diff, and run `go build`, `go vet` and `go test` when a finding turns on what the code does, and
 they raise a finding wherever the new changes cause or expose a problem. A force push that
 rewrites that history, or a last review that left a blocking finding in its body rather than on a
-line, gets a full review instead. The diff under review also picks the lenses and their turns. A diff that touches no code (Go, web, shell, SQL or the workflows) runs the
-`neighbor` lens alone, and the turn limit grows with the diff, from 40 for up to 100 changed lines
-to 120 past 2,000.
+line, gets a full review instead. The diff under review also picks the lenses and their turns. A
+diff that touches no code (Go, web, shell, SQL or the workflows) runs only the `neighbor` lens,
+plus the `recheck` lens when earlier findings are still open, and the turn limit grows with the
+diff, from 40 for up to 100 changed lines to 120 past 2,000.
 
 Open findings carry forward, and each one is rechecked. Every unresolved thread the reviewer
 opened, outdated ones included, still counts in the next verdict. When any are open, the re-review
@@ -139,10 +140,11 @@ too. The agent reads only the comment or review that started it. Write the ask t
 @hyperscale-agent the retry in poller.go never backs off; add the backoff and a test for it
 ```
 
-agent-fix answers each point on one line in its status comment, `✅ Fixed in <sha>` or
-`↩️ Not changed`, with its reasons collapsed under them, and replies `✅ Fixed in <sha>` on each
-review thread a commit it pushed fixed. A point counts as fixed only when its commit is one the run
-pushed. It never resolves a thread: the reviewer's recheck does that once it has seen the fix.
+agent-fix answers each point on one line in its status comment, `✅ <point> · Fixed in <sha>`
+or `↩️ <point> · Not changed`, with its reasons collapsed under them, and replies
+`✅ Fixed in <sha>` on each review thread a commit it pushed fixed. A point counts as fixed only
+when its commit is one the run pushed. It never resolves a thread: the reviewer's recheck does
+that once it has seen the fix.
 
 When agent-review requests changes, agent-fix answers it automatically, up to five rounds per
 PR. After the fifth the PR parks: it gets the `needs-fred` label and a comment, and waits for a
