@@ -22,10 +22,14 @@ summary: "A panel's action bar is **declared, not laid out**: a blade body binds
   it unwriteable: there is no exported helper to forget, and a body that wants a button has exactly
   one way to ask for one. The enforcement is the deleted export, and `rail-ownership.test.ts` is the
   belt to that braces.
-- **Scope, honestly:** This converges **two** of the three rails. Full-page create forms
-  (Locations, Systems, Components) still draw an inline `border-t ... pt-4` row of their own. That
-  rail is inline in a scrolling page rather than pinned to the viewport, so it is a different layout
-  problem, and it converges when the CRUD form primitive lands and owns both form factors.
+- **Scope, honestly:** This converges **two** of the three rails initially. Full-page create forms
+  (Locations, Systems, Components) still drew an inline `border-t ... pt-4` row of their own at the
+  time of this decision. That rail was inline in a scrolling page rather than pinned to the viewport,
+  so it was a different layout problem. **Converged in PR #1801 (#337):** `EntityCreateForm` now
+  delegates to `FormActionBar` with the `inline` prop, and `rail-ownership.test.ts` gained a fourth
+  guard that bans the hand-rolled class signature outside `FormActionBar` and `PanelFooter`. All
+  three rails now converge through `FormActionBar` (inline for full-page create forms, `PanelFooter`
+  for Drawer and blade panels). The CRUD form primitive carve-out is closed.
 - **Deliberate convergences:** submit labels no longer change while in flight (the shell's spinner
   says it), and the new-interface blade lost its Cancel button, since a blade already dismisses two
   ways and no other blade in the stack carries one.

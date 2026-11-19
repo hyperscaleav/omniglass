@@ -104,7 +104,7 @@ function mountHost(kind: "system" | "location", id: string, host: "page" | "blad
   return { slot: () => slot, qc };
 }
 
-afterEach(() => { cleanup(); calls.length = 0; });
+afterEach(() => { cleanup(); calls.length = 0; vi.clearAllMocks(); });
 
 describe("the one form, read", () => {
   it("renders the sections from the row in order: identity, classification, placement, tags", async () => {
