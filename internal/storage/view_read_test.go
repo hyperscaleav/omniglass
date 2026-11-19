@@ -562,3 +562,48 @@ func TestReadViewsMetricTrendTierCoversOlderHistory(t *testing.T) {
 		t.Fatalf("covered_from %v reaches past the raw floor %v for a series with no trend rows", r2.CoveredFrom, rawFloor)
 	}
 }
+
+// A batch of events lands on the tail with each row carrying the id its own
+// event row took: every tail row's id reads back from the table with that
+// row's message, so the live feed and the history agree on which is which.
+func TestInsertEventsPairsEachTailRowWithItsOwnID(t *testing.T) {
+	t.Parallel()
+	ctx, gw, _, _ := viewGateway(t)
+	start := gw.ViewTail().Cursor()
+	at := time.Now().UTC().Add(-time.Minute).Truncate(time.Second)
+	var evs []storage.EventWrite
+	for i, m := range []string{"first", "second", "third", "fourth", "fifth"} {
+		evs = append(evs, storage.EventWrite{OwnerKind: "component", OwnerID: "view-a", Key: "call-started", Origin: "caught",
+			Message: m, Source: "t", TS: at.Add(time.Duration(i) * time.Second)})
+	}
+	if err := insertEvents(ctx, gw, evs); err != nil {
+		t.Fatalf("insert events: %v", err)
+	}
+	commits, _, err := gw.ViewTail().Read(start, 0)
+	if err != nil {
+		t.Fatalf("read tail: %v", err)
+	}
+	stored, err := gw.ListComponentEvents(ctx, "view-a", 0, 100)
+	if err != nil {
+		t.Fatalf("list events: %v", err)
+	}
+	byID := map[int64]string{}
+	for _, e := range stored {
+		byID[e.ID] = e.Message
+	}
+	seen := 0
+	for _, c := range commits {
+		for _, r := range c.Rows {
+			if r.Lane != tail.LaneEvent {
+				continue
+			}
+			seen++
+			if got, ok := byID[r.ID]; !ok || got != r.Message {
+				t.Errorf("tail row %d carries %q, but event %d is %q (found %v)", seen, r.Message, r.ID, got, ok)
+			}
+		}
+	}
+	if seen != len(evs) {
+		t.Fatalf("the tail carried %d event rows, want %d", seen, len(evs))
+	}
+}

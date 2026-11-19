@@ -45,7 +45,7 @@ is the property a live chart needs to stay correct without a reload. Up to 32 bi
 - a `mark` event advances an idle stream's position every 15 seconds;
 - a reconnect that sends the last id back (`Last-Event-ID`) resumes every binding with nothing repeated;
 - a `reset` names a binding whose cursor the tail no longer holds (too old, or from before a restart),
-  and its reader re-runs the history.
+  and the stream ends: its reader re-runs the history and reconnects.
 
 A binding's cursor only moves forward: a stream starts at its slowest binding, so the client keeps each
 binding at the later of its own cursor and the stream's position, and a reconnect resends nothing a
@@ -70,8 +70,8 @@ So that a resolved scope never goes stale, a stream is bounded: it ends at its 1
 session no longer resolves (a revoked token, a deleted user) or the caller's grants changed. The client
 reconnects from its cursor at once, and the reconnect authenticates and resolves its selectors again, so a
 revoked caller gets the 401 or 403 and a narrowed one the narrower scope. One user holds at most 16
-watches open (1,024 across the server); past it the open is a 429, and the console binds every binding on
-a page over one watch, so a page needs one.
+watches open (1,024 across the server); past it the open is a 429, and the console binds a
+page's bindings over as few watches as hold them, 32 bindings to a watch, so most pages need one.
 
 ### From the CLI and an agent
 

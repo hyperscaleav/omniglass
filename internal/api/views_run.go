@@ -30,10 +30,9 @@ import (
 // viewMaxRange bounds a binding's range: two years, the longest trend
 // retention a platform setting admits.
 const (
-	viewMaxRange     = 2 * 365 * 24 * time.Hour
-	viewMaxBindings  = 32
-	viewTailBatch    = 256
-	viewWatchMaxBody = 32 << 10
+	viewMaxRange    = 2 * 365 * 24 * time.Hour
+	viewMaxBindings = 32
+	viewTailBatch   = 256
 )
 
 // The watch's bounds. A watch runs at most viewWatchLifetime, then the
