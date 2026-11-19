@@ -528,8 +528,11 @@ its claim, before its first). It keeps growing while an outpost is silent, which
 seeded `outpost-silent` rule reads: an age past 90 s, three missed heartbeats, opens a `high` alarm on
 the outpost's platform component, and the next heartbeat clears it. The webhook counts are the receiver's
 ([above](#collection-telemetry-every-endpoints-account-of-itself)), and the `retention-*`,
-`metric-*`, `table-bytes` and `database-bytes` figures are the retention pass's
-([storage](/architecture/storage/#what-a-retention-pass-reports)).
+`metric-*` and `table-bytes` figures are the retention pass's
+([storage](/architecture/storage/#what-a-retention-pass-reports)). The database's whole size,
+`db-size`, is not: the server reads `pg_database_size` every report window beside its pool and
+outbox figures, so a trend rule reads its growth at the window's grain rather than the pass's hour
+(#1985), and the seeded `db-size-growing` rule, shipped disabled, watches it once an operator runs it.
 
 **How an outpost samples.** Two shapes, as collection telemetry has. The each-tick figures (the
 dispatcher's longest pass, the worst lateness and gap excess of the runs it dispatched, the spool's
@@ -601,11 +604,20 @@ window (`collection.report_seconds`, the same window collection telemetry uses):
   `max_connections` less `superuser_reserved_connections`, the connections left idle inside an open
   transaction against those held (0 healthy), and the age in seconds of the oldest open
   transaction. A read the database cannot answer writes nothing for that window.
+- **`db-size`**: the whole database's on-disk bytes, as `pg_database_size(current_database())`
+  reads it at the window's close (#1985). A healthy database grows while retention fills its window
+  and then holds level, a day's partition dropped as the next one fills; the seeded
+  `db-size-growing` rule (shipped disabled, since a fleet onboarded in the first week grows it as bloat
+  would) raises an `average` alarm when it keeps growing across a day past that
+  ([alarms and actions](/architecture/alarms-actions/#a-trend-rule-reads-a-window-not-a-sample)). A
+  window whose read fails carries no value.
 - **The `process-*` figures**: the goroutines, heap, garbage-collection pause, CPU time and open
   files of the server process, read by the one runtime sampler an outpost reports its own through. The
   server's `process-cpu-seconds` is the CPU time since the previous window, as the Go runtime
   estimates it rather than the kernel's account, so over the window's length it is the cores the
-  server kept busy.
+  server kept busy. The seeded `process-heap-growing` and `process-goroutines-growing` rules raise an
+  `average` alarm on a heap or goroutine count that climbs steadily for six hours, the shape of a
+  leak.
 - **The pipeline**: ingest lag and throughput, the telemetry consumer's backlog, the server hop's
   `delivery-in-count`, `delivery-out-count` and `delivery-loss-ratio` per item kind, the bus
   request-reply paths' failures ([messaging](/architecture/messaging/#measuring-the-pipeline)), and
@@ -1150,6 +1162,19 @@ component is counted, self-logged once per tick (`foreign datagrams dropped`, wi
 last source), and dropped, never published; the component's address on any port is the component,
 so gear that answers from a separate send socket or an ephemeral port still reads responsive.
 
+A target that is a DNS name **follows the name**, as the tcp-family transports resolve on every
+dial (#1104): the request rung re-resolves the target once per tick (not per datagram) and, when
+the address changed, moves the socket's peer in place and self-logs the move once (`udp target
+moved`, with the old and new address). The socket stays bound, since it is unconnected, so a moved
+name needs no rebind and the connection key is still the target string. A reply from the new address
+is the component's and one from the old address is foreign. The re-resolve is bound by half the
+endpoint's timeout, and the request takes what remains, so a hung resolver never stretches the tick
+past the endpoint's timeout. A failed or timed-out resolve keeps the last address (self-logged once
+per distinct error, never every tick); the name is resolved within the
+socket's address family, so a name that moves to the other family reads as a failed resolve until
+the endpoint rebinds. A literal IP target never resolves. DNS TTLs are not honoured: per tick is
+the cadence.
+
 An open udp port cannot be detected, so the **transport rung is the driver's named request
 answered** (`ladder.transport.request`, which a udp driver must name): an answer reads responsive, a
 silent component reads not responsive (`timeout`), and a port the host reports unreachable reads
@@ -1184,7 +1209,8 @@ Listeners ride the socket as they ride a held session: their instantiation comma
 each (a subscribe that adds a destination must not add one per retry) when the socket opens and
 again whenever the request rung recovers (a component that rebooted forgot its subscriber), and
 never beneath a gate. Text payloads only, unicast only. Proven over real sockets
-(`internal/collection/udp_integration_test.go`, `internal/outpost/datagram_test.go`) and end to end against the
+(`internal/collection/udp_integration_test.go`, `internal/collection/udp_test.go`,
+`internal/outpost/datagram_test.go`) and end to end against the
 simulated panel's `nvp-udp` face dropping 30% of datagrams each way (`run_udp_test.go`: the rung up
 through the loss and its timing, the poll through its retries, a command actuated, a push with no
 poll, a stranger's datagram dropped, a silent face and a refused port down, no `tcp-open` and no
@@ -1232,7 +1258,7 @@ a line protocol like any other ([ADR-0153](/architecture/decisions/#adr-0153-the
 
 The `raw-tcp` endpoint type an earlier design tabled here is the built `tcp` transport: a line protocol held as a session, driven by its driver's polls and emits rather than per-task `command` and `extract` params ([ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)).
 
-`icmp`/`tcp` are inline probes (config on `endpoint.params`); `snmp` is built as its own stateless transport, configured by its driver's inputs ([snmp](#snmp)), and `http` and `https` as request transports configured by their driver's spec, a declared stream held as a session ([http and https](#http-and-https)); the rest, in the design model, are held connections: the connection lives on the endpoint, the task names what to read. The ship-with transport registry seeds the probe built-ins above, the endpoint verdicts, and `session-state` (`internal/seed/metric_types.yaml`, `internal/seed/property_types.yaml`; the [metrics](/guides/admin/metrics/) and [properties](/guides/admin/properties/) guides render each set from the seed); the wider per-transport set (`<proto>-reachable`/`<proto>-response-time` for the remaining text family; an http answer's status is a poll fault's reason, never a sample of its own; `telnet-response-time`, `udp-response-time` and `snmp-response-time` are seeded, and there is no `udp-open`, since an open udp port cannot be detected) is Design, and unregistered names would be reject-not-project dropped at ingest.
+`icmp`/`tcp` are inline probes (config on `endpoint.params`); `snmp` is built as its own stateless transport, configured by its driver's inputs ([snmp](#snmp)), and `http` and `https` as request transports configured by their driver's spec, a declared stream held as a session ([http and https](#http-and-https)); the rest, in the design model, are held connections: the connection lives on the endpoint, the task names what to read. The ship-with transport registry seeds the probe built-ins above, the endpoint verdicts, and `session-state` (`internal/seed/metric_types.yaml`, `internal/seed/property_types.yaml`; the [metrics](/admin/metrics/) and [properties](/admin/properties/) guides render each set from the seed); the wider per-transport set (`<proto>-reachable`/`<proto>-response-time` for the remaining text family; an http answer's status is a poll fault's reason, never a sample of its own; `telnet-response-time`, `udp-response-time` and `snmp-response-time` are seeded, and there is no `udp-open`, since an open udp port cannot be detected) is Design, and unregistered names would be reject-not-project dropped at ingest.
 
 Built for every transport above: a driver's spec, not the task, declares what to read; the lane is
 decided by catalog membership, baked into each emit at attach, never by the value's type (an snmp

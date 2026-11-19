@@ -28,6 +28,7 @@ const sessionDescription = "omnibot session"
 // it and, on Close, to revoke it.
 type Session struct {
 	cs     *sdk.ClientSession
+	root   *url.URL
 	api    *url.URL
 	person string
 	prefix string
@@ -38,17 +39,9 @@ type Session struct {
 // root) and connects to its MCP endpoint with it. Neither token appears in an
 // error it returns.
 func Connect(ctx context.Context, server, personToken, version string) (*Session, error) {
-	u, err := redact.ParseBaseURL(server, "the server URL")
+	s, err := Dial(server, personToken)
 	if err != nil {
-		return nil, fmt.Errorf("omnibot: %w", err)
-	}
-	if personToken == "" {
-		return nil, errors.New("omnibot: no token: set OMNIGLASS_TOKEN (or pass --token)")
-	}
-	s := &Session{
-		api:    u.JoinPath("api", "v1"),
-		person: personToken,
-		hc:     &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }},
+		return nil, err
 	}
 	var minted struct {
 		Token  string `json:"token"`
@@ -60,7 +53,7 @@ func Connect(ctx context.Context, server, personToken, version string) (*Session
 		return nil, fmt.Errorf("omnibot: mint its token: %w", err)
 	}
 	s.prefix = minted.Prefix
-	endpoint := strings.TrimRight(u.String(), "/") + "/mcp"
+	endpoint := strings.TrimRight(s.root.String(), "/") + "/mcp"
 	cs, err := mcp.Dial(ctx, endpoint, minted.Token, &sdk.Implementation{Name: "omniglass-omnibot", Version: version})
 	if err != nil {
 		_ = s.revokeOnTheWayOut(ctx)
@@ -68,6 +61,25 @@ func Connect(ctx context.Context, server, personToken, version string) (*Session
 	}
 	s.cs = cs
 	return s, nil
+}
+
+// Dial is a session on the server's REST API alone, with the person's own
+// token: no agent token and no MCP connection. A run on the server (Stream)
+// needs no more, since the server runs the loop with an agent token of its own.
+func Dial(server, personToken string) (*Session, error) {
+	u, err := redact.ParseBaseURL(server, "the server URL")
+	if err != nil {
+		return nil, fmt.Errorf("omnibot: %w", err)
+	}
+	if personToken == "" {
+		return nil, errors.New("omnibot: no token: set OMNIGLASS_TOKEN (or pass --token)")
+	}
+	return &Session{
+		root:   u,
+		api:    u.JoinPath("api", "v1"),
+		person: personToken,
+		hc:     &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }},
+	}, nil
 }
 
 // List is the tools the server offers omnibot's token.

@@ -185,3 +185,85 @@ func TestAgentTrustRefusesUnreadableInputAndBadUsage(t *testing.T) {
 		t.Fatalf("bad usage: exit %d, want 64", code)
 	}
 }
+
+// open: agent-open-pr opens a PR as the agents' App, so the architect can
+// approve it. Only a maintainer may dispatch it, only from a claude/ branch,
+// and never twice for one branch.
+
+func openFacts(sender, ref, openPRs string) string {
+	return `{"sender":"` + sender + `","head_ref":"` + ref + `","open_prs":` + openPRs + `,` + teams + `}`
+}
+
+func TestAgentTrustOpenRunsForAMaintainersClaudeBranch(t *testing.T) {
+	for _, ref := range []string{"claude/agent-open-pr", "claude/fix-2189", "claude/a/b.c_d-e"} {
+		if got, _ := agentTrust(t, "open", openFacts("fred", ref, "0")); got != "run" {
+			t.Fatalf("%s: got %q, want run", ref, got)
+		}
+	}
+}
+
+func TestAgentTrustOpenRefusesAnyoneButAMaintainer(t *testing.T) {
+	for _, sender := range []string{"casey", "stranger", ""} {
+		got, _ := agentTrust(t, "open", openFacts(sender, "claude/x", "0"))
+		if !strings.HasPrefix(got, "refuse:") {
+			t.Fatalf("sender %q: got %q, want refuse", sender, got)
+		}
+	}
+}
+
+func TestAgentTrustOpenRefusesABranchThatIsNotASessions(t *testing.T) {
+	for _, ref := range []string{"main", "fix/x", "claude", "claude/", "claude/../main", "claude/a b", "claude//x", "release/0.1", "xclaude/x"} {
+		got, _ := agentTrust(t, "open", openFacts("fred", ref, "0"))
+		if !strings.Contains(got, "is not a claude/ branch") {
+			t.Fatalf("%q: got %q, want refuse", ref, got)
+		}
+	}
+}
+
+func TestAgentTrustOpenRefusesABranchThatAlreadyHasAPR(t *testing.T) {
+	if got, _ := agentTrust(t, "open", openFacts("fred", "claude/x", "1")); got != "refuse: claude/x already has an open PR" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+// agent-review posts as a second App, hyperscale-reviewer, because GitHub
+// refuses Request changes from the App that wrote the PR. Its review starts
+// the automatic fix the same way, under the same round cap.
+func TestAgentTrustFixTakesTheReviewerAppsChangesRequested(t *testing.T) {
+	facts := func(sender, state, rounds string) string {
+		return fixFacts(`"event":"review","sender":"` + sender + `","review_state":"` + state + `","auto_rounds":` + rounds + `,"reviewer_bot":"hyperscale-reviewer[bot]","head_ref":"fix/x","fork":false`)
+	}
+	cases := map[string]string{
+		facts("hyperscale-reviewer[bot]", "CHANGES_REQUESTED", "1"): "run",
+		facts("Hyperscale-Reviewer[bot]", "CHANGES_REQUESTED", "5"): "run",
+		facts("hyperscale-reviewer[bot]", "CHANGES_REQUESTED", "6"): "park",
+		facts("hyperscale-reviewer[bot]", "COMMENTED", "1"):         "skip",
+	}
+	for f, want := range cases {
+		if got, _ := agentTrust(t, "fix", f); !strings.HasPrefix(got, want) {
+			t.Fatalf("%s: got %q, want %s", f, got, want)
+		}
+	}
+	// With no reviewer App set up, an event with no sender matches nothing.
+	got, _ := agentTrust(t, "fix", fixFacts(`"event":"review","sender":"","review_state":"CHANGES_REQUESTED","reviewer_bot":"","head_ref":"fix/x","fork":false`))
+	if !strings.HasPrefix(got, "skip:") {
+		t.Fatalf("empty sender: got %q, want a skip", got)
+	}
+}
+
+// On a PR its own App wrote, the reviewer can only comment, so a comment
+// whose body opens with a blocking count still blocks.
+func TestAgentTrustVerdictBlocksOnACommentThatCarriesBlockingFindings(t *testing.T) {
+	cases := map[string]string{
+		`"body":"agent-review: 2 blocking, 1 advisory (lenses: a)"`:  "block: the reviewer found 2 blocking issue(s) and could only comment, since its App wrote this PR",
+		`"body":"agent-review: 0 blocking, 3 advisory (lenses: a)"`:  "ship",
+		`"body":"agent-review: swept, nothing survived (lenses: a)"`: "ship",
+		`"body":"looks fine; agent-review: 2 blocking"`:              "ship",
+	}
+	for body, want := range cases {
+		reviews := `{"user":"hyperscale-agent[bot]","state":"COMMENTED","commit_id":"h2",` + body + `}`
+		if got, _ := agentTrust(t, "verdict", verdictFacts(reviews)); got != want {
+			t.Fatalf("%s: got %q, want %q", body, got, want)
+		}
+	}
+}

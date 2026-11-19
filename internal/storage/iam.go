@@ -592,7 +592,9 @@ func (p *PG) SetPassword(ctx context.Context, username, encoded string) (bool, e
 		return false, fmt.Errorf("storage: clear must-change: %w", err)
 	}
 	// Audit the credential change (never the secret) so a password change leaves a
-	// trail and an impersonated change records the real actor.
+	// trail and an impersonated change records the real actor. The row carries no
+	// field images, on purpose (ADR-1442): the only field that moved is the
+	// credential hash, and a hash is never imaged.
 	if err := writeAuditRes(ctx, tx, pid, "change_password", "credential", pid, nil, nil); err != nil {
 		return false, err
 	}
@@ -657,6 +659,7 @@ func (p *PG) SetUserPassword(ctx context.Context, actorID, userID, encoded strin
 		userID); err != nil {
 		return fmt.Errorf("storage: flag must-change on reset: %w", err)
 	}
+	// No field images, on purpose (ADR-1442): the only moved field is the credential hash.
 	if err := writeAuditRes(ctx, tx, actorID, "reset_password", "credential", userID, nil, nil); err != nil {
 		return err
 	}
@@ -675,13 +678,21 @@ func setAvatarTx(ctx context.Context, tx pgx.Tx, actorID, userID, b64 string) er
 	if b64 != "" {
 		val, verb = b64, "set_avatar"
 	}
+	var hadAvatar bool
+	if err := tx.QueryRow(ctx,
+		`select avatar is not null from person where user_id = $1 for update`, userID).Scan(&hadAvatar); err != nil {
+		return fmt.Errorf("storage: avatar before-image: %w", err)
+	}
 	if _, err := tx.Exec(ctx,
 		`update person set avatar = $2, avatar_updated_at = case when $3 then now() else null end
 		 where user_id = $1`,
 		userID, val, b64 != ""); err != nil {
 		return fmt.Errorf("storage: write avatar: %w", err)
 	}
-	return writeAuditRes(ctx, tx, actorID, verb, "user", userID, nil, nil)
+	hasAvatar := b64 != ""
+	return writeAuditRes(ctx, tx, actorID, verb, "user", userID,
+		map[string]any{"has_avatar": hadAvatar},
+		map[string]any{"has_avatar": hasAvatar})
 }
 
 // SetOwnAvatar sets the caller's own profile picture (a normalized base64 JPEG),
@@ -801,6 +812,12 @@ func (p *PG) UpdatePersonProfile(ctx context.Context, userID string, patch Perso
 		return fmt.Errorf("storage: begin update person profile: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	var beforeUsername, beforeLabel, beforeEmail string
+	if err := tx.QueryRow(ctx,
+		`select username, coalesce(label, ''), coalesce(email, '') from person where user_id = $1 for update`,
+		userID).Scan(&beforeUsername, &beforeLabel, &beforeEmail); err != nil {
+		return fmt.Errorf("storage: profile before-image: %w", err)
+	}
 	if _, err := tx.Exec(ctx, `
 		update person set
 			label = case when $2 then $3 else label end,
@@ -809,16 +826,17 @@ func (p *PG) UpdatePersonProfile(ctx context.Context, userID string, patch Perso
 		userID, setDisplay, display, setEmail, email); err != nil {
 		return fmt.Errorf("storage: update person profile: %w", err)
 	}
-	// Audit the self-profile change so an impersonated (act-as) edit records the
-	// real actor, and every profile edit leaves a trail. Log the changed fields.
-	summary := map[string]any{}
+	afterLabel := beforeLabel
 	if patch.Label != nil {
-		summary["label"] = *patch.Label
+		afterLabel = *patch.Label
 	}
+	afterEmail := beforeEmail
 	if patch.Email != nil {
-		summary["email"] = *patch.Email
+		afterEmail = *patch.Email
 	}
-	if err := writeAuditRes(ctx, tx, userID, "update", "user", userID, nil, summary); err != nil {
+	beforeImage := map[string]any{"username": beforeUsername, "label": beforeLabel, "email": beforeEmail}
+	afterImage := map[string]any{"username": beforeUsername, "label": afterLabel, "email": afterEmail}
+	if err := writeAuditRes(ctx, tx, userID, "update", "user", userID, beforeImage, afterImage); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -1476,7 +1494,10 @@ func (p *PG) setArchived(ctx context.Context, actorID, userID string, archive bo
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	var pgErr *pgconn.PgError
-	if err := tx.QueryRow(ctx, `select 1 from users where id = $1`, userID).Scan(new(int)); err != nil {
+	var wasArchived, wasActive bool
+	if err := tx.QueryRow(ctx,
+		`select archived_at is not null, active from users where id = $1 for update`, userID).
+		Scan(&wasArchived, &wasActive); err != nil {
 		switch {
 		case errors.Is(err, pgx.ErrNoRows):
 			return ErrUserNotFound
@@ -1506,7 +1527,9 @@ func (p *PG) setArchived(ctx context.Context, actorID, userID string, archive bo
 	if archive {
 		verb = "archive"
 	}
-	if err := writeAuditRes(ctx, tx, actorID, verb, "user", userID, nil, map[string]any{"archived": archive}); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, verb, "user", userID,
+		map[string]any{"archived": wasArchived, "active": wasActive},
+		map[string]any{"archived": archive, "active": !archive}); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -1532,9 +1555,12 @@ func (p *PG) PurgeUser(ctx context.Context, actorID, userID string, action scope
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	var archivedAt *time.Time
 	var pgErr *pgconn.PgError
-	if err := tx.QueryRow(ctx, `select archived_at from users where id = $1`, userID).Scan(&archivedAt); err != nil {
+	var archivedAt *time.Time
+	var userKind string
+	if err := tx.QueryRow(ctx,
+		`select archived_at, kind from users where id = $1 for update`, userID).
+		Scan(&archivedAt, &userKind); err != nil {
 		switch {
 		case errors.Is(err, pgx.ErrNoRows):
 			return ErrUserNotFound
@@ -1547,13 +1573,45 @@ func (p *PG) PurgeUser(ctx context.Context, actorID, userID string, action scope
 	if archivedAt == nil {
 		return ErrNotArchived
 	}
+	// Build the before-image: include person-profile fields for people, the
+	// archived flag, and kind. The audit row is the only record after the delete.
+	before := map[string]any{"kind": userKind, "archived": archivedAt != nil}
+	var username, email, label string
+	err = tx.QueryRow(ctx,
+		`select username, coalesce(email, ''), coalesce(label, '') from person where user_id = $1 for update`,
+		userID).Scan(&username, &email, &label)
+	switch {
+	case err == nil:
+		before["username"] = username
+		if email != "" {
+			before["email"] = email
+		}
+		if label != "" {
+			before["label"] = label
+		}
+	case errors.Is(err, pgx.ErrNoRows):
+		// A machine user or an outpost has no person row; its name is on its
+		// machine or outpost row, which the delete cascades away too.
+		name, outpost, err := machineImageName(ctx, tx, userID)
+		if err != nil {
+			return err
+		}
+		if name != "" {
+			before["name"] = name
+		}
+		if outpost {
+			before["outpost"] = true
+		}
+	default:
+		return fmt.Errorf("storage: purge person image: %w", err)
+	}
 	// A notification target that notifies this person holds them (#1341).
 	if err := boundTarget(ctx, tx, "user_id", userID, "user"); err != nil {
 		return err
 	}
 	// Audit the purge before the row is gone; the actor is the purger (unaffected by
 	// the delete), and the resource id is a plain text value, not a foreign key.
-	if err := writeAuditRes(ctx, tx, actorID, "purge", "user", userID, nil, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "purge", "user", userID, before, nil); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `delete from users where id = $1`, userID); err != nil {
@@ -1607,6 +1665,29 @@ func mapUserWriteErr(err error) error {
 		return ErrUsernameTaken
 	}
 	return fmt.Errorf("storage: create person: %w", err)
+}
+
+// machineImageName reads, under its row's lock, the name a non-person user is
+// known by: its machine row's, or its outpost row's when the machine is an
+// outpost's (outpost true). Empty when it has neither.
+func machineImageName(ctx context.Context, tx pgx.Tx, userID string) (string, bool, error) {
+	var name string
+	err := tx.QueryRow(ctx, `select name from machine where user_id = $1 for update`, userID).Scan(&name)
+	if err == nil {
+		return name, false, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return "", false, fmt.Errorf("storage: purge machine image: %w", err)
+	}
+	err = tx.QueryRow(ctx, `select name from outpost where user_id = $1 for update`, userID).Scan(&name)
+	switch {
+	case err == nil:
+		return name, true, nil
+	case errors.Is(err, pgx.ErrNoRows):
+		return "", false, nil
+	default:
+		return "", false, fmt.Errorf("storage: purge outpost image: %w", err)
+	}
 }
 
 // loadUser fills a user's kind profile and its grants, given its id and kind

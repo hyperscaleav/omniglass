@@ -144,7 +144,7 @@ screen is the whole fleet in a handful of lines. You open what you want to look 
 
 **A location wears its system.** An operator thinks of a location that holds one system as that
 system, so a location where one system sits shows that system on its own row: the **Standard** column names the
-[standard](/guides/admin/standards/) it conforms to, and **Health** its verdict. Open it and
+[standard](/admin/standards/) it conforms to, and **Health** its verdict. Open it and
 the system's components are directly beneath, each with its product and health, and a
 component's active alarm reads in the **Detail** column. A location holding two systems lists a
 row per system, with its components under each. A component two systems share appears under
@@ -166,7 +166,7 @@ as adding a child under the inner one.
 
 None of this knows the shipped type names. The shipped location types are defaults,
 and a fleet of plots, sectors and coordinates, or any hierarchy your
-[location types](/guides/admin/location-types/) allow, nests, folds and counts by the same
+[location types](/admin/location-types/) allow, nests, folds and counts by the same
 rules and is described in its own words.
 
 **Placed nowhere you can see** collects what has no location on the page: a system at a

@@ -17,14 +17,15 @@ refs: [2175]
      starts, so applying it again is the retry. The board shows status only.
   3. **Teams gate the triggers.** A build starts only from a `maintainers` member's label on an
      issue the `maintainers` or `contributors` team wrote. A fix starts only from those teams'
-     `@claude` or review, or from agent-review's Changes requested, five rounds per PR at most,
+     `@hyperscale-agent` (or `@claude`) or review, or from agent-review's Changes requested, five rounds per PR at most,
      after which the PR parks with `needs-fred`. A build also waits until every issue it is
      blocked by (GitHub's issue dependencies) is closed. The decisions are one tested script,
      `scripts/agent-trust.sh`.
   4. **Outside text stays out of the model.** The build reads the ticket from a file holding the
      body and the two teams' comments; the fix reads only the feedback that started it; the
      conversation is locked while a build runs; no `pull_request_target`, no forks, no bot but
-     the agents' own.
+     the agents' own App and, when one is set up, the reviewer App that posts agent-review's
+     reviews (GitHub lets no App request changes on a PR it wrote).
   5. **The architect gates start, merge and release.** Builds open draft PRs and mark them ready
      when done; the `agent-review` check is red until the reviewer says ship on the head. Merges
      go to `main` (no staging branch; unfinished features ship behind a flag), and releases

@@ -290,7 +290,7 @@ Run omnibot on one of your conversations
 omniglass assistant conversation run <name> [flags]
 ```
 
-Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {"stopped": "step_limit", "steps": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. A server with no model is a 503. Gated by assistant:use.
+Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {"stopped": "step_limit", "steps": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. The run talks to the model the assistant settings configure, read as it starts; with none, the server's recording, if it has one. A server with no model, or a configured model whose key no longer resolves, is a 503. Gated by assistant:use.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -2718,7 +2718,7 @@ Create an event rule
 omniglass event-rule create [flags]
 ```
 
-Authors a rule that fires on each component it watches when its sample key meets the fire criteria for the fire sustain, and clears when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when it fires (required) and, optionally, when it clears; with a severity it also raises an alarm while it is firing, and without one it is informational. Criteria are expressions over the sample (value, key, instance, component.name, component.type) yielding true or false; a body may give {expr} or the short form {op, value}, and the answer is always {expr}. The key must be a registered property or metric, the criteria must compile against its lane (an unknown name or a result that is not a bool is a 422 naming the criteria, line and column), the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
+Authors a rule that fires on each component it watches when its sample key meets the fire criteria for the fire sustain, and clears when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when it fires (required) and, optionally, when it clears; with a severity it also raises an alarm while it is firing, and without one it is informational. Criteria are expressions over the sample (value, key, instance, component.name, component.type) yielding true or false; a metric rule with a sample_window also reads window, the series' points over that span, oldest first, so slope, growth and span can fire it on a sustained trend (criteria that read window need a sample_window, and a sample_window needs criteria that read it), and any metric rule may read age, how long the series has run in seconds (a process's own key, since the process started), to hold a trend until a fill or a restart's refill is past; a body may give {expr} or the short form {op, value}, and the answer is always {expr}. The key must be a registered property or metric, the criteria must compile against its lane (an unknown name or a result that is not a bool is a 422 naming the criteria, line and column), the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -2734,6 +2734,7 @@ Authors a rule that fires on each component it watches when its sample key meets
 | `--message` | string | (none) | The alarm message; empty uses the label or the name |
 | `--name` | string | (none) | The rule's name (lowercase kebab) |
 | `--sample-key` | string | (none) | The property or metric the rule reads |
+| `--sample-window` | string | (none) | A metric rule's trend window, a Go duration up to 168h: the criteria read window, the series' points over it, oldest first; empty is 0s, no window |
 | `--selector` | string | (none) | The components the rule watches (component types and components); absent is every component |
 | `--severity` | string | (none) | The severity level the alarm is raised at, by name; absent or empty, the rule is informational and raises no alarm |
 
@@ -2799,7 +2800,7 @@ Preview an event rule
 omniglass event-rule preview [flags]
 ```
 
-Judges a candidate rule (sample key, selector, criteria) without writing anything, as the ingest would have with no sustains (the answer says they are ignored): over each series it selects on components the caller may read, from the state its newest deciding sample in the 7 days before the window set (state_unknown when there is none), through every sample in the last 24 hours that the ingest would have judged (a late sample older than one before it decides nothing). Answers the edges it would have written and the series it would hold in force now. Its reads are index probes per series, capped at row_cap window samples taken a whole series at a time: series_judged of series_total, and truncated when the cap stopped it. A selector naming a component the caller cannot read is the same 422 as one that does not exist. Criteria take {expr} or {op, value}; one that does not compile is a 422 naming the criteria, line and column. Gated by rule:read.
+Judges a candidate rule (sample key, selector, criteria) without writing anything, as the ingest would have with no sustains (the answer says they are ignored): over each series it selects on components the caller may read, from the state its newest deciding sample in the 7 days before the window set (state_unknown when there is none), through every sample in the last 24 hours that the ingest would have judged (a late sample older than one before it decides nothing). Answers the edges it would have written and the series it would hold in force now. Its reads are index probes per series, capped at row_cap window samples taken a whole series at a time: series_judged of series_total, and truncated when the cap stopped it. A selector naming a component the caller cannot read is the same 422 as one that does not exist. Criteria take {expr} or {op, value}; one that does not compile is a 422 naming the criteria, line and column, and criteria that read window or age (a trend rule's) are a 422, since each sample is judged alone. Gated by rule:read.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -2880,6 +2881,7 @@ Patches a rule (an absent field is unchanged), bumping its version; disabling it
 | `--label` | string | (none) | A human label; also the alarm message when message is empty |
 | `--message` | string | (none) | The alarm message; empty uses the label or the name |
 | `--sample-key` | string | (none) | The property or metric the rule reads |
+| `--sample-window` | string | (none) | How far back the criteria's window reads the metric's series, a Go duration up to 168h; empty is 0s, no window |
 | `--selector` | string | (none) | Replace the components the rule watches; absent leaves them unchanged, and an empty selector watches every component |
 | `--severity` | string | (none) | The severity level the alarm is raised at, by name; empty makes the rule informational (no alarm) |
 
@@ -3265,6 +3267,7 @@ Docker is the only requirement. Only the console is published, on 127.0.0.1 (--l
 | `--image` | string | (none) | run this omniglass image instead of the one this binary was built with (env OMNIGLASS_LAB_IMAGE); one that is not this binary's own build is warned about |
 | `--keep` | bool | `false` | a scale lab: keep its data when it stops, so the next run with the same scenario, size and --keep picks up where it left off (--fresh starts over) |
 | `--listen` | string | `127.0.0.1` | the address the console is published on; anything but loopback exposes the lab, and its well-known login, to your network |
+| `--omnibot-key-env` | string | (none) | run omnibot on a live model (OpenRouter by default) with the key in this environment variable, e.g. OPENROUTER_API_KEY; without it omnibot plays a recording |
 | `--plan` | bool | `false` | print the scale lab scenario's resolved plan (sites, systems per standard, components per product) and exit, starting nothing |
 | `--port` | int | `8080` | the console's port on this machine; 0 lets Docker pick a free one, printed when the lab is ready |
 | `--scenario` | string | `dev` | the fleet the lab seeds on its first run (the seed-dev command lists them), or a scale lab scenario (corporate) sized by --systems |
@@ -4514,20 +4517,21 @@ Run omnibot, the built-in assistant, on a prompt or in a chat
 omniglass omnibot [prompt...] [flags]
 ```
 
-Runs omnibot, the built-in assistant, against the server's MCP tools as the person whose token it is given. It mints a one-day agent token of its own for the omnibot channel, so the audit log shows its actions as omnibot's acting for that person, and revokes the token when it finishes. A tool whose agent policy is always runs, one whose policy is ask is put to you on the terminal first (without a terminal it is declined), and one whose policy is never is not offered. With no prompt it opens a chat, each line continuing the conversation; in the chat, /secret <name> <type> [location:<name>|component:<name>] asks for a credential without echo, stores it as a secret with your own token, and tells omnibot only its name, so the value never reaches the model. --resume <name> keeps the conversation on the server under that name, for you alone, and picks it up where it was left; a call a paused run left waiting is put to you first. The model is a recording (--replay) until a live provider lands.
+Runs omnibot, the built-in assistant, as the person whose token it is given. The conversation runs on the server, on the model the install is configured with (the assistant settings), so the model's key never reaches this terminal; the server is told it acts for you and the audit log shows its actions as omnibot's. A tool whose agent policy is always runs, one whose policy is ask is put to you on the terminal first (without a terminal it is declined), and one whose policy is never is not offered. With no prompt it opens a chat, each line continuing the conversation; in the chat, /secret <name> <type> [location:<name>|component:<name>] asks for a credential without echo, stores it as a secret with your own token, and tells omnibot only its name, so the value never reaches the model. Each conversation is kept on the server for you alone; --resume <name> names it, picking it up where it was left if it exists, and a call a paused run left waiting is put to you first. --replay <file> runs the loop on this machine instead, on a recorded model, with a one-day agent token of its own that it revokes when it finishes; --max-steps bounds that loop.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--max-steps` | int | `10` | the most model turns the run takes before it stops |
-| `--replay` | string | (none) | a recorded model to drive the run (YAML turns) |
+| `--max-steps` | int | `10` | with --replay, the most model turns the run takes before it stops |
+| `--replay` | string | (none) | run the loop here on a recorded model (YAML turns) instead of on the server's |
 | `--resume` | string | (none) | keep the conversation on the server under this name, picking it up if it exists |
 
 Example:
 
 ```sh
-omniglass omnibot --replay lobby.yaml "add a display to the lobby"
-  omniglass omnibot --replay lobby.yaml
-  omniglass omnibot --replay lobby.yaml --resume lobby-refit
+omniglass omnibot "add a display to the lobby"
+  omniglass omnibot
+  omniglass omnibot --resume omnibot-3f2a
+  omniglass omnibot --replay lobby.yaml "add a display to the lobby"
 ```
 
 ## `omniglass outpost`

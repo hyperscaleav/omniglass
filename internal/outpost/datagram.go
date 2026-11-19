@@ -169,6 +169,9 @@ type heldDatagram struct {
 	// that recovers (down, then up) re-arms, since a component that
 	// rebooted forgot its subscriber.
 	up *bool
+	// resolveErr is the last failed re-resolve of a named target, so a
+	// name that stays unresolvable logs once, not every tick.
+	resolveErr string
 }
 
 func (h *heldDatagram) publishTo() (string, string) {
@@ -233,6 +236,7 @@ func (m *sessionManager) openDatagram(id string, w datagramWant) error {
 		LocalPort: w.conn.listenPort,
 		Inbound:   router,
 		Terminal:  collection.TerminalClassifier(w.session),
+		Resolve:   m.datagramResolve,
 	})
 	if err != nil {
 		return err
@@ -340,6 +344,41 @@ func (m *sessionManager) datagramOf(endpointID string) collection.DatagramExchan
 	return nil
 }
 
+// retargetDatagram follows a named udp target to the address it has now,
+// once per tick (the request rung's, not each datagram's): a move updates
+// the socket's peer in place and logs once; a failed resolve keeps the last
+// address and logs once per distinct error. The resolve is bound by budget,
+// so a hung resolver cannot stall the tick.
+func (m *sessionManager) retargetDatagram(ctx context.Context, endpointID string, budget time.Duration) {
+	if m == nil {
+		return
+	}
+	m.mapsMu.RLock()
+	h, ok := m.datagrams[endpointID]
+	m.mapsMu.RUnlock()
+	if !ok {
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, budget)
+	defer cancel()
+	from, to, moved, err := h.sock.Retarget(ctx)
+	taskID, endpoint := h.publishTo()
+	h.mu.Lock()
+	failed := ""
+	if err != nil {
+		failed = err.Error()
+	}
+	fresh := failed != "" && failed != h.resolveErr
+	h.resolveErr = failed
+	h.mu.Unlock()
+	switch {
+	case fresh:
+		slog.Warn("udp target did not resolve, keeping the last address", "facility", "session", "task", taskID, "endpoint", endpoint, "target", h.conn.target, "error", failed)
+	case moved:
+		slog.Info("udp target moved", "facility", "session", "task", taskID, "endpoint", endpoint, "target", h.conn.target, "from", from, "to", to)
+	}
+}
+
 // datagramTimeout is the endpoint's timeout (zero: the default), which a
 // command's exchange shares out among its attempts.
 func (m *sessionManager) datagramTimeout(endpointID string) time.Duration {
@@ -443,6 +482,14 @@ func collectDatagramRung(ctx context.Context, task collection.TaskSpec, req *dri
 	if p.Timeout != "" {
 		timeout, _ = time.ParseDuration(p.Timeout)
 	}
+	// The tick lasts the endpoint's timeout: a named target's re-resolve
+	// takes at most half, and the exchange the rest. A scheduling delay after
+	// the resolve gives up never starves the exchange: it keeps at least a
+	// quarter of the timeout.
+	timeout = collection.SessionTimeout(timeout)
+	resolveStart := time.Now()
+	sessions.retargetDatagram(ctx, task.EndpointID, timeout/2)
+	timeout = max(timeout-time.Since(resolveStart), timeout/4)
 	ans, err := sock.Exchange(ctx, req.Line, req.Reply, timeout, req.RetriesOr(driver.DefaultPollRetries))
 	var refused *collection.RefusedError
 	if err == nil || errors.As(err, &refused) {

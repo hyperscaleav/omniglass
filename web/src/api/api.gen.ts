@@ -692,13 +692,32 @@ export type AssistantConversationOutputBody = {
   usage: AssistantUsage;
 };
 
+/**
+ * The model omnibot runs on: openai (any OpenAI-compatible chat completions server, OpenRouter by default) or none, which leaves the server's recording, if any
+ */
+export type AssistantSettingsProvider = typeof AssistantSettingsProvider[keyof typeof AssistantSettingsProvider];
+
+
+export const AssistantSettingsProvider = {
+  none: 'none',
+  openai: 'openai',
+} as const;
+
 export type AssistantSettings = {
+  /** The server's base URL, /chat/completions appended. An internal server is reached only when the notification settings' egress_allow names it. Moving it while a key_secret is bound takes secret:bind on that secret */
+  base_url: string;
   /**
      * Days a stored omnibot conversation is kept after it last changed
      * @minimum 1
      * @maximum 36500
      */
   conversation_days: number;
+  /** A platform api-key secret, by name, sent as the bearer on every model call; empty calls without a key (a local server). Setting it takes secret:bind on it. The key never leaves the server */
+  key_secret: string;
+  /** The model's name on that server (openai/gpt-4.1-mini on OpenRouter, llama3.1 on Ollama) */
+  model: string;
+  /** The model omnibot runs on: openai (any OpenAI-compatible chat completions server, OpenRouter by default) or none, which leaves the server's recording, if any */
+  provider: AssistantSettingsProvider;
 };
 
 /**
@@ -2208,6 +2227,8 @@ export type CreateEventRuleInputBody = {
      * @minLength 1
      */
   sample_key: string;
+  /** A metric rule's trend window, a Go duration up to 168h: the criteria read window, the series' points over it, oldest first; empty is 0s, no window */
+  sample_window?: string;
   /** The components the rule watches (component types and components); absent is every component */
   selector?: SelectorBody;
   /** The severity level the alarm is raised at, by name; absent or empty, the rule is informational and raises no alarm */
@@ -3687,6 +3708,8 @@ export type EventRuleBody = {
   sample_key: string;
   /** Which lane the key reads, derived from the catalogs */
   sample_lane: EventRuleBodySampleLane;
+  /** How far back the criteria's window reads the metric's series, a Go duration; 0s binds no window */
+  sample_window: string;
   /** The components the rule watches; both lists empty is every component */
   selector: SelectorBody;
   /** The severity level the alarm is raised at, by name; absent, the rule is informational and raises no alarm */
@@ -8411,6 +8434,8 @@ export type UpdateEventRuleInputBody = {
   message?: string;
   /** The property or metric the rule reads */
   sample_key?: string;
+  /** How far back the criteria's window reads the metric's series, a Go duration up to 168h; empty is 0s, no window */
+  sample_window?: string;
   /** Replace the components the rule watches; absent leaves them unchanged, and an empty selector watches every component */
   selector?: SelectorBody;
   /** The severity level the alarm is raised at, by name; empty makes the rule informational (no alarm) */
@@ -9820,7 +9845,7 @@ export const getRunAssistantConversationUrl = (name: string,) => {
 }
 
 /**
- * Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {"stopped": "step_limit", "steps": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. A server with no model is a 503. Gated by assistant:use.
+ * Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {"stopped": "step_limit", "steps": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. The run talks to the model the assistant settings configure, read as it starts; with none, the server's recording, if it has one. A server with no model, or a configured model whose key no longer resolves, is a 503. Gated by assistant:use.
  * @summary Run omnibot on one of your conversations
  */
 export const runAssistantConversation = async (name: string,
@@ -15055,7 +15080,7 @@ export const getCreateEventRuleUrl = () => {
 }
 
 /**
- * Authors a rule that fires on each component it watches when its sample key meets the fire criteria for the fire sustain, and clears when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when it fires (required) and, optionally, when it clears; with a severity it also raises an alarm while it is firing, and without one it is informational. Criteria are expressions over the sample (value, key, instance, component.name, component.type) yielding true or false; a body may give {expr} or the short form {op, value}, and the answer is always {expr}. The key must be a registered property or metric, the criteria must compile against its lane (an unknown name or a result that is not a bool is a 422 naming the criteria, line and column), the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
+ * Authors a rule that fires on each component it watches when its sample key meets the fire criteria for the fire sustain, and clears when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when it fires (required) and, optionally, when it clears; with a severity it also raises an alarm while it is firing, and without one it is informational. Criteria are expressions over the sample (value, key, instance, component.name, component.type) yielding true or false; a metric rule with a sample_window also reads window, the series' points over that span, oldest first, so slope, growth and span can fire it on a sustained trend (criteria that read window need a sample_window, and a sample_window needs criteria that read it), and any metric rule may read age, how long the series has run in seconds (a process's own key, since the process started), to hold a trend until a fill or a restart's refill is past; a body may give {expr} or the short form {op, value}, and the answer is always {expr}. The key must be a registered property or metric, the criteria must compile against its lane (an unknown name or a result that is not a bool is a 422 naming the criteria, line and column), the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
  * @summary Create an event rule
  */
 export const createEventRule = async (createEventRuleInputBody: NonReadonly<CreateEventRuleInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createEventRuleResponse> => {
@@ -15321,7 +15346,7 @@ export const getPreviewEventRuleUrl = () => {
 }
 
 /**
- * Judges a candidate rule (sample key, selector, criteria) without writing anything, as the ingest would have with no sustains (the answer says they are ignored): over each series it selects on components the caller may read, from the state its newest deciding sample in the 7 days before the window set (state_unknown when there is none), through every sample in the last 24 hours that the ingest would have judged (a late sample older than one before it decides nothing). Answers the edges it would have written and the series it would hold in force now. Its reads are index probes per series, capped at row_cap window samples taken a whole series at a time: series_judged of series_total, and truncated when the cap stopped it. A selector naming a component the caller cannot read is the same 422 as one that does not exist. Criteria take {expr} or {op, value}; one that does not compile is a 422 naming the criteria, line and column. Gated by rule:read.
+ * Judges a candidate rule (sample key, selector, criteria) without writing anything, as the ingest would have with no sustains (the answer says they are ignored): over each series it selects on components the caller may read, from the state its newest deciding sample in the 7 days before the window set (state_unknown when there is none), through every sample in the last 24 hours that the ingest would have judged (a late sample older than one before it decides nothing). Answers the edges it would have written and the series it would hold in force now. Its reads are index probes per series, capped at row_cap window samples taken a whole series at a time: series_judged of series_total, and truncated when the cap stopped it. A selector naming a component the caller cannot read is the same 422 as one that does not exist. Criteria take {expr} or {op, value}; one that does not compile is a 422 naming the criteria, line and column, and criteria that read window or age (a trend rule's) are a 422, since each sample is judged alone. Gated by rule:read.
  * @summary Preview an event rule
  */
 export const previewEventRule = async (previewEventRuleInputBody: NonReadonly<PreviewEventRuleInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<previewEventRuleResponse> => {

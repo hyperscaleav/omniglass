@@ -6,8 +6,8 @@ description: "The Drivers catalog: each driver's declarative spec (the menu one 
 **Catalog, under Components: Drivers** (`/drivers`, with `driver:read`, covered by every viewer's `*:read` floor)
 is the directory of **drivers**: the normalized menu that turns a device family's API into
 what to fetch, how to parse it, and what actuates,
-on the same flat-catalog pattern as [Location Types](/guides/admin/location-types/) and [Tags](/guides/admin/tags/).
-Where a [vendor](/guides/admin/vendors/) names who a device comes from, a driver names how it is
+on the same flat-catalog pattern as [Location Types](/admin/location-types/) and [Tags](/admin/tags/).
+Where a [vendor](/admin/products/#vendors) names who a device comes from, a driver names how it is
 talked to (for example `Generic SNMP` or `Newtron NVP`). Each row shows the **name** (the
 operator-facing name, for example `snmp-generic`), the **label**, an optional
 **version**, and its **origin** (**official** or **custom**). A driver also carries
@@ -188,8 +188,11 @@ arrive on (unset, the outpost picks one, which suits a component that answers to
 A datagram counts as the component's when it comes from the component's address, from any port, so gear
 that answers from a separate send socket works; one from any other address is dropped and logged.
 Every udp request declares its reply's shape (`reply`), since a datagram's answer is told from a
-late reply to another ask only by it. A request may declare `retries` (udp only, 0 to 5), how many
-times a lost datagram is re-sent within
+late reply to another ask only by it. An endpoint whose `host` is a DNS name follows the name when it
+moves: the outpost re-resolves it once per tick, bounded by half the endpoint's timeout, and keeps the
+socket, so a component that changes address is found again without a restart (a literal IP is never
+resolved). A request may declare `retries` (udp only, 0 to 5), how many times a lost datagram is
+re-sent within
 the endpoint's timeout: a poll and the request rung default to 2, and a **command to none**, so
 declare them only on a command that is safe to send twice (one that names its value, never a
 relative step):
@@ -467,7 +470,7 @@ reveal it with `omniglass secret reveal <component id>/webhook-token` (audited) 
 `/api/v1/webhooks/<token>` on the server's address and the signing key. `omniglass endpoint
 rotateToken <component>/webhook` mints another, and the old URL answers 404 at once.
 
-A driver is consumed by the [product](/guides/admin/products/) catalog: a `product` references
+A driver is consumed by the [product](/admin/products/) catalog: a `product` references
 its driver through an optional `driver_id` to say which driver reads it, chosen from a driver
 picker on the product's create and edit forms, and three of the shipped official products bind a
 driver this way. It is a leaf catalog beside the vendor catalog. See
@@ -492,12 +495,12 @@ driver this way. It is a leaf catalog beside the vendor catalog. See
   shared set cannot drift install to install; add a custom driver for anything else.
 - **Delete** refuses while an **endpoint is attached** through the driver (422): an attach
   derives real collection work from the spec, so the driver cannot vanish out from under it.
-  The [product](/guides/admin/products/) link stays soft: `product.driver_id` is
+  The [product](/admin/products/) link stays soft: `product.driver_id` is
   `on delete set null`, so deleting an unattached driver detaches it from those products
   (their driver clears) rather than blocking. Official rows stay refused outright (422).
 
 Minting a driver is admin-gated; the picker that consumes it lives on the
-[product](/guides/admin/products/) create and edit forms. The same operations are `omniglass driver
+[product](/admin/products/) create and edit forms. The same operations are `omniglass driver
 list/get/create/update/delete` from the CLI (see the [CLI reference](/reference/cli/)).
 
 ## Records and identity: one answer about many owners
