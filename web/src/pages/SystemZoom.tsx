@@ -12,7 +12,7 @@ import TemplateNotice from "../components/TemplateNotice";
 import MemberRows from "../components/MemberRows";
 import OutlineWorkspace from "../components/OutlineWorkspace";
 import { FLEET_VIEW_KEY, fleetView, childrenIndex } from "../lib/fleet";
-import { systemHealth, systemHealthKey, verdictOf } from "../lib/health";
+import { systemHealth, systemHealthKey, healthOf } from "../lib/health";
 import { systemSlots, systemSlotsKey } from "../lib/system_slots";
 import { systemMetrics, systemMetricsKey } from "../lib/system_metrics";
 import { STANDARDS_KEY, listStandards } from "../lib/standards";
@@ -56,7 +56,7 @@ import { CLOCK_TICK_MS, createClock } from "../lib/clock";
 // The system's detail view (#636, reoriented in #872). Systems are the unit
 // Omniglass monitors; locations are folders and metadata; components are the
 // pieces of systems. So this one view is what an operator lands on from a
-// room: the location as a card of context, then the system itself (verdict,
+// room: the location as a card of context, then the system itself (health,
 // since-when, standard, slots only while something is missing) with its
 // three tabs. Overview reads top-down: why (cause before arithmetic), the
 // components as rows, the standard's map, the data. Activity is the history,
@@ -69,8 +69,8 @@ import { CLOCK_TICK_MS, createClock } from "../lib/clock";
 //
 // It refreshes on its own while open (#940), the way a component's view does
 // (#934): the system's own reads (its health report, which carries the
-// verdict, Why and the slots' staffing; its declared slots; its members, each
-// with its own verdict; its data) poll at the leaf's cadence. The fleet view
+// health, Why and the slots' staffing; its declared slots; its members, each
+// with its own health; its data) poll at the leaf's cadence. The fleet view
 // is read once, for the location, the path and who the members are; nothing
 // polled grows with the fleet. TanStack holds every poll while the tab is
 // hidden.
@@ -104,7 +104,7 @@ export default function SystemZoom() {
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
   const health = useQuery(() => ({ queryKey: systemHealthKey(id()), queryFn: () => systemHealth(id()), refetchInterval: LEAF_POLL_MS }));
   const declared = useQuery(() => ({ queryKey: systemSlotsKey(id()), queryFn: () => systemSlots(id()), refetchInterval: LEAF_POLL_MS }));
-  // Each member's own verdict, polled off the system's members read: the
+  // Each member's own health, polled off the system's members read: the
   // fleet view's dots (read once) stand in until it answers.
   const membersQ = useQuery(() => ({ queryKey: systemMembersKey(id()), queryFn: () => systemMembers(id()), refetchInterval: LEAF_POLL_MS }));
 
@@ -176,7 +176,7 @@ export default function SystemZoom() {
     return "overview";
   };
   // Every member's alarm history, cleared ones included: the causes beside
-  // the verdict spans. One read for the whole system (#940), so the poll is
+  // the health spans. One read for the whole system (#940), so the poll is
   // one request however many members the room has.
   const memberIds = createMemo(() => {
     const b = bodyOf();
@@ -224,11 +224,11 @@ export default function SystemZoom() {
     const t = health.data?.transitions ?? [];
     return Math.max(coarse(), t.length ? Date.parse(t[t.length - 1].ts) : 0);
   });
-  const verdictSpans = createMemo(() =>
+  const healthSpans = createMemo(() =>
     timelineSpans((health.data?.transitions ?? []).map((t) => ({ ts: t.ts, value: t.health })), health.data?.health ?? null, historyNow()),
   );
-  const uptime = createMemo(() => uptimePct(verdictSpans()));
-  const stretches = createMemo(() => stretchesOf(verdictSpans(), historyNow()));
+  const uptime = createMemo(() => uptimePct(healthSpans()));
+  const stretches = createMemo(() => stretchesOf(healthSpans(), historyNow()));
   // A good uptime wears the muted healthy green (#1067); one that should
   // worry someone wears the trouble hue.
   const uptimeTone = () => {
@@ -256,15 +256,15 @@ export default function SystemZoom() {
   const prods = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts }));
   const ctypes = useQuery(() => ({ queryKey: COMPONENT_TYPES_KEY, queryFn: listComponentTypes }));
 
-  // Each member's own verdict, one lookup shared by the component rows and the
+  // Each member's own health, one lookup shared by the component rows and the
   // map, so the two never disagree: the polled members read first, the fleet
   // view's dot as the fallback before the first poll lands.
-  const componentVerdict = createMemo(() => {
+  const componentHealth = createMemo(() => {
     const dots = new Map((system()?.dots ?? []).map((d) => [d.component, d] as const));
     const polled = new Map((membersQ.data ?? []).map((m) => [m.component_id, m.component_health] as const));
-    return (cid: string) => verdictOf(polled.get(cid) ?? dots.get(cid)?.health);
+    return (cid: string) => healthOf(polled.get(cid) ?? dots.get(cid)?.health);
   });
-  // Each member's label, icon, product, alarm and verdict: one context shared
+  // Each member's label, icon, product, alarm and health: one context shared
   // by the component rows and the map (#1074), so a marker reads exactly like
   // its row.
   const memberCtx = createMemo((): MemberContext => {
@@ -273,7 +273,7 @@ export default function SystemZoom() {
     const types = new Map((ctypes.data ?? []).map((t) => [t.name, t] as const));
     const alarmOf = new Map(alarms().filter((a) => a.componentId).map((a) => [a.componentId!, a.message] as const));
     return {
-      verdict: componentVerdict(),
+      health: componentHealth(),
       alarm: (cid) => alarmOf.get(cid),
       product: (cid) => {
         const h = comp.get(cid)?.product;
@@ -335,8 +335,8 @@ export default function SystemZoom() {
           </Show>
           <section data-testid="system-card" class="card overflow-hidden border border-base-300 bg-base-200 p-0">
             <div data-testid="system-header" class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-base-300 px-4 py-3 text-sm">
-              <Eyebrow label="System" hint="The logical group of components that makes this location work, and the thing Omniglass monitors: its verdict is what the components filling its slots add up to." />
-              <HealthBadge verdict={health.data?.health} size="sm" />
+              <Eyebrow label="System" hint="The logical group of components that makes this location work, and the thing Omniglass monitors: its health is what the components filling its slots add up to." />
+              <HealthBadge health={health.data?.health} size="sm" />
               <Show when={health.data && sinceOf(health.data, now())}>
                 {(sc) => <span data-testid="since-line" class="tabular-nums text-base-content/70">since {fmtTime(sc().ts)} · {durationText(sc().ms)}</span>}
               </Show>
@@ -395,7 +395,7 @@ export default function SystemZoom() {
                 <span class="text-[10px] text-base-content/45">of the last 30 days</span>
               </div>
               <div class="flex min-w-60 flex-1 flex-col justify-center rounded-box border border-base-300 bg-base-100 p-3.5" data-testid="health-history-full">
-                <HealthHistory compact transitions={health.data?.transitions ?? []} verdict={health.data?.health} />
+                <HealthHistory compact transitions={health.data?.transitions ?? []} health={health.data?.health} />
                 <div class="relative mt-1 h-2">
                   <For each={windowAlarms()}>
                     {(inc) => (
@@ -413,7 +413,7 @@ export default function SystemZoom() {
             </div>
 
             <div>
-              <Eyebrow label="Health history" hint="One entry per contiguous stretch away from healthy, however many verdict changes it contained, ongoing first. Expand an entry for the transitions inside it and the alarms that explain them." />
+              <Eyebrow label="Health history" hint="One entry per contiguous stretch away from healthy, however many health changes it contained, ongoing first. Expand an entry for the transitions inside it and the alarms that explain them." />
               <Show when={stretches().length > 0} fallback={<p class="mt-2 text-sm text-base-content/50">Nothing in this window. The system held healthy the whole way.</p>}>
                 <ul data-testid="stretch-list" class="mt-2 flex flex-col gap-2">
                   <For each={stretches()}>
@@ -432,7 +432,7 @@ export default function SystemZoom() {
                           }}
                         >
                           <button type="button" class="flex w-full cursor-pointer flex-wrap items-baseline gap-x-3 gap-y-1 px-3 py-2 text-left text-sm" onClick={() => setOpenStretch(open() ? null : idx())}>
-                            <HealthBadge verdict={inc.worst} size="xs" />
+                            <HealthBadge health={inc.worst} size="xs" />
                             <span class="font-medium">
                               {inc.worst === "incomplete" ? "Commissioning" : inc.worst === "outage" ? "Outage" : "Degraded"}
                               {inc.ongoing ? " · ongoing" : ""}
@@ -455,7 +455,7 @@ export default function SystemZoom() {
                                 <For each={[...inc.spans].reverse()}>
                                   {(sp) => (
                                     <li class="flex flex-wrap items-baseline gap-2">
-                                      <HealthBadge verdict={sp.value} size="xs" />
+                                      <HealthBadge health={sp.value} size="xs" />
                                       <span class="tabular-nums">{fmtTime(new Date(sp.from).toISOString())}</span>
                                       <span class="text-base-content/45">held {durationText(sp.to - sp.from)}</span>
                                     </li>

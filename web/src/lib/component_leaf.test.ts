@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { collectionState, dotVerdict, identityRows, instanceName, leafAlarmSince, membershipRows, spreadSummary, vitalRows, vitalValueText } from "./component_leaf";
+import { collectionState, dotHealth, identityRows, instanceName, leafAlarmSince, membershipRows, spreadSummary, vitalRows, vitalValueText } from "./component_leaf";
 import type { FleetView } from "./fleet";
 import type { Outpost } from "./outposts";
 import type { ReachEndpoint } from "./reachability";
@@ -30,7 +30,7 @@ describe("collectionState", () => {
     expect(collectionState({ ...hook, last_seen: undefined }, undefined, now).kind).toBe("listening");
   });
 
-  it("a fresh up verdict under a live outpost is collecting", () => {
+  it("a fresh up health under a live outpost is collecting", () => {
     expect(collectionState(iface({ value: "up", ts: iso(10) }, "edge-1"), outpost(5), now).kind).toBe("collecting");
   });
 
@@ -44,7 +44,7 @@ describe("collectionState", () => {
     expect(s.kind).toBe("outpost-offline");
   });
 
-  it("a fresh down verdict is the component answering badly, not a collection fault", () => {
+  it("a fresh down health is the component answering badly, not a collection fault", () => {
     expect(collectionState(iface({ value: "down", ts: iso(10) }, "edge-1"), outpost(5), now).kind).toBe("down");
   });
 
@@ -56,9 +56,9 @@ describe("collectionState", () => {
     expect(collectionState(e, outpost(5), now).kind).toBe("collecting");
   });
 
-  // A driver endpoint never gets a reachability verdict; the batches its
+  // A driver endpoint never gets a reachability health; the batches its
   // task delivers (uptime, say) are what say it is collecting (#933).
-  it("a driver endpoint with a fresh sample and no verdict is collecting", () => {
+  it("a driver endpoint with a fresh sample and no health is collecting", () => {
     const e = { ...iface(null, "edge-1"), last_seen: iso(5) } as ReachEndpoint;
     expect(collectionState(e, outpost(5), now).kind).toBe("collecting");
   });
@@ -68,7 +68,7 @@ describe("collectionState", () => {
     expect(collectionState(e, outpost(5), now).kind).toBe("component-or-path");
   });
 
-  it("no verdict yet is unknown", () => {
+  it("no health yet is unknown", () => {
     expect(collectionState(iface(null, "edge-1"), outpost(5), now).kind).toBe("unknown");
   });
 
@@ -104,7 +104,7 @@ describe("collectionState", () => {
   // transport rung, an snmp one at the session rung, since every get carries
   // the community), so the card says polls stopped, not that the component
   // reported down. A login refused on a transport whose polls carry no
-  // credential holds no poll, and the card keeps reading the verdict.
+  // credential holds no poll, and the card keeps reading the health.
   const gated = (transport: string, rung: "responsive" | "authenticated") =>
     ({ ...iface({ value: "down", ts: iso(10) }, "edge-1"), transport, last_seen: iso(3), rejection: { rung, class: "auth", ts: iso(30) } }) as ReachEndpoint;
   // An http or https poll carries its driver's credential (#902), so a
@@ -120,7 +120,7 @@ describe("collectionState", () => {
   ] as const)("a %s probe's gate at the %s rung stops collection", (transport, rung) => {
     expect(collectionState(gated(transport, rung), outpost(5), now).kind).toBe("rejected");
   });
-  it("an ssh probe's refused credential holds no poll: the verdict still reads", () => {
+  it("an ssh probe's refused credential holds no poll: the health still reads", () => {
     expect(collectionState(gated("ssh", "authenticated"), outpost(5), now).kind).toBe("down");
   });
   // The outpost holds a stateless poll only where no session is held: a held
@@ -309,14 +309,14 @@ describe("the leaf's dispatch facts (#786)", () => {
     expect(leafAlarmSince([{ id: "a3", severity: "high", message: "x", raised_at: "2026-08-01T00:00:00Z", active: false }] as never, now)).toBeNull();
   });
 
-  it("dotVerdict reads the component's verdict off any system's dots", () => {
+  it("dotHealth reads the component's health off any system's dots", () => {
     const v = {
       locations: [],
       systems: [
         { id: uuidFor("cl-dv-s1"), name: "a", label: "A", location: null, health: "degraded", dots: [{ component: uuidFor("cl-dv-c9"), name: "mic-1", health: "outage", primary: true, shared: false }] },
       ],
     } as never;
-    expect(dotVerdict(v, uuidFor("cl-dv-c9"))).toBe("outage");
-    expect(dotVerdict(v, "cX")).toBeNull();
+    expect(dotHealth(v, uuidFor("cl-dv-c9"))).toBe("outage");
+    expect(dotHealth(v, "cX")).toBeNull();
   });
 });

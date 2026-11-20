@@ -1,7 +1,7 @@
 import { ancestors, childrenIndex, locationIndex, type FleetSystem, type FleetView } from "./fleet";
 import { countWord } from "./outline";
 import { entityLabel } from "./entities";
-import type { Verdict } from "./health";
+import type { HealthState } from "./health";
 import type { SystemBody, ComponentCard } from "./system_zoom";
 
 // The detail view's model (#872). Systems are the unit Omniglass monitors;
@@ -90,7 +90,7 @@ export type MemberRow = {
   slot: string;
   product: string;
   icon: string;
-  health: Verdict | null;
+  health: HealthState | null;
   alarm?: string;
   also: string[];
   noSlot: boolean;
@@ -104,7 +104,7 @@ export type MemberGroup = {
   empty: number;
 };
 export type MemberContext = {
-  verdict: (id: string) => Verdict | null;
+  health: (id: string) => HealthState | null;
   alarm: (id: string) => string | undefined;
   product: (id: string) => string;
   label: (id: string, name: string) => string;
@@ -119,7 +119,7 @@ export function memberModel(body: SystemBody, ctx: MemberContext): { rows: Membe
     slot,
     product: ctx.product(c.componentId),
     icon: ctx.icon(c.componentId),
-    health: ctx.verdict(c.componentId),
+    health: ctx.health(c.componentId),
     alarm: ctx.alarm(c.componentId),
     also: c.shared,
     noSlot: c.noSlot && c.slots.length === 0,

@@ -10,7 +10,7 @@ import { ME_KEY, type Me } from "../lib/auth";
 import { pendingTriage, requestTriage } from "../lib/handover";
 
 // The alarms panel is where fleet health starts: an alarm on this component
-// that impairs its own verdict wholesale (#626). Rows are seeded into the query
+// that impairs its own health wholesale (#626). Rows are seeded into the query
 // cache so no server is needed; the raise / clear writes are faked where a test
 // drives one.
 const ago = (ms: number) => new Date(Date.now() - ms).toISOString();

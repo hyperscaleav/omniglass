@@ -28,9 +28,9 @@ const viewer: Me = { user: { id: "u-view", kind: "person" }, person: { username:
 const loc = (h: string, label: string, type: string, parent = "") => ({
   id: uuidFor(h), name: h, label, location_type: type, location_type_id: uuidFor(`t-${type}`), parent: parent ? uuidFor(parent) : undefined, health: "healthy",
 });
-const dot = (h: string, verdict = "healthy", shared = false) => ({ component: uuidFor(h), name: h, health: verdict, primary: true, shared });
-const sys = (h: string, label: string, at: string, verdict: string, dots: ReturnType<typeof dot>[] = []) => ({
-  id: uuidFor(h), name: h, label, location: at ? uuidFor(at) : undefined, health: verdict, dots,
+const dot = (h: string, health = "healthy", shared = false) => ({ component: uuidFor(h), name: h, health: health, primary: true, shared });
+const sys = (h: string, label: string, at: string, health: string, dots: ReturnType<typeof dot>[] = []) => ({
+  id: uuidFor(h), name: h, label, location: at ? uuidFor(at) : undefined, health: health, dots,
 });
 
 const view = {
@@ -323,6 +323,15 @@ describe("finding things", () => {
     expect(texts.some((t) => t.includes("Headquarters / East Building / ") && t.includes("Auditorium"))).toBe(true);
     expect(texts.some((t) => t.includes("dsp-1"))).toBe(true);
     expect(texts.some((t) => t.includes("Huddle Room"))).toBe(false);
+  });
+
+  it("filters on the health key, typed or read from a saved chip", async () => {
+    mount();
+    await screen.findByRole("tree");
+    fireEvent.input(filterInput(), { target: { value: "health:outage" } });
+    fireEvent.keyDown(filterInput(), { key: "Enter" });
+    await waitFor(() => expect(results().some((r) => (r.textContent ?? "").includes("dsp-1"))).toBe(true));
+    expect(results().some((r) => (r.textContent ?? "").includes("Huddle Room"))).toBe(false);
   });
 
   it("matches a standard, a product and a tag", async () => {

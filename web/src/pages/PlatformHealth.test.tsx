@@ -11,7 +11,7 @@ import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 
 // The Platform health page (#1644): a header (the build running, its uptime,
-// the platform verdict linking to its system, a lab badge) over an outpost table
+// the platform health linking to its system, a lab badge) over an outpost table
 // whose columns are the groups the view returns. The view is seeded into the
 // query cache, so no server is needed; every clock is the body's read_at.
 const readAt = "2026-11-09T12:00:00Z";
@@ -155,14 +155,14 @@ describe("PlatformHealth page", () => {
     for (const c of ["min-w-0", "overflow-hidden", "whitespace-nowrap", "text-ellipsis"]) expect(tile).toHaveClass(c);
   });
 
-  it("heads the page with the build, its uptime at read_at, the verdict linking to its system, and the lab badge", () => {
+  it("heads the page with the build, its uptime at read_at, the health linking to its system, and the lab badge", () => {
     mount(full);
     const header = screen.getByTestId("platform-header");
     expect(within(header).getByText("v9.9.9")).toBeInTheDocument();
     expect(within(header).getByText("2h 5m")).toBeInTheDocument();
-    const verdict = within(header).getByTestId("platform-verdict");
-    expect(verdict.closest("a")).toHaveAttribute("href", `/web/systems/${uuidFor("platform")}`);
-    expect(verdict).toHaveTextContent("degraded");
+    const health = within(header).getByTestId("platform-health");
+    expect(health.closest("a")).toHaveAttribute("href", `/web/systems/${uuidFor("platform")}`);
+    expect(health).toHaveTextContent("degraded");
     expect(screen.getByTestId("platform-lab")).toBeInTheDocument();
   });
 
@@ -181,7 +181,7 @@ describe("PlatformHealth page", () => {
     expect(await screen.findByText("Seconds since the outpost last checked in.")).toBeInTheDocument();
   });
 
-  it("gives each outpost a row: the pill at read_at, its figures, not reported for a missing one, and its verdict as the row's tone", () => {
+  it("gives each outpost a row: the pill at read_at, its figures, not reported for a missing one, and its health as the row's tone", () => {
     mount(full);
     const alpha = screen.getByTestId("platform-outpost-edge-alpha");
     expect(within(alpha).getByText("up")).toBeInTheDocument();
@@ -190,7 +190,7 @@ describe("PlatformHealth page", () => {
     const bravo = screen.getByTestId("platform-outpost-edge-bravo");
     expect(within(bravo).getByText("down")).toBeInTheDocument();
     expect(within(bravo).getByText("0")).toBeInTheDocument();
-    expect(bravo).toHaveAttribute("data-verdict", "outage");
+    expect(bravo).toHaveAttribute("data-health", "outage");
     expect(bravo.className).toContain("bg-error/5");
   });
 
@@ -240,7 +240,7 @@ describe("PlatformHealth page", () => {
     expect(screen.getByTestId("platform-outpost-edge-new")).toBeInTheDocument();
     expect(screen.getByTestId("platform-reach")).toHaveTextContent(/fleet-wide read/);
     expect(screen.queryByTestId("platform-lab")).toBeNull();
-    expect(screen.queryByTestId("platform-verdict")).toBeNull();
+    expect(screen.queryByTestId("platform-health")).toBeNull();
     // No pipeline without platform reach, and the reach line is said once.
     expect(screen.queryByTestId("pipeline")).toBeNull();
     expect(screen.getAllByRole("note")).toHaveLength(1);

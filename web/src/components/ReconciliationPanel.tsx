@@ -16,7 +16,7 @@ import InfoTip from "./InfoTip";
 // never disagree: a key only observed or told appears here, a calculated one
 // (no reconciliation) does not. Read-only and pedagogical: it teaches the
 // provenance pivot against the owner's real values. Drift is the server's
-// verdict (only it holds the cascade), rendered here, not re-derived.
+// health (only it holds the cascade), rendered here, not re-derived.
 
 type Reconciled = EffectiveProperty & { reconciliation: NonNullable<EffectiveProperty["reconciliation"]> };
 
