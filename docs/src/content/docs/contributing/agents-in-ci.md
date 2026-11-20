@@ -65,6 +65,13 @@ moves the ticket to In Review. The model follows the ticket's tier: Sonnet 5.5 (
 stops early comments on the issue with its link; one that runs out of room leaves the PR a
 draft saying what is left.
 
+The App's token lasts an hour, and a build can run longer. When the agent's push or `gh` call
+fails for that, it leaves the branch name, and the PR's title and body if none is open yet, in
+files under the runner's temp folder and keeps working. After it stops, the workflow mints a
+fresh token, pushes that branch (never with force, and only a branch named for this issue), opens
+or readies the PR as the agent asked, and does its own closing steps with the new token. agent-fix
+does the same for the PR's own branch.
+
 ## Review on every PR
 
 Every same-repo PR that is not a draft or from dependabot gets one adversarial review: inline findings, each with
