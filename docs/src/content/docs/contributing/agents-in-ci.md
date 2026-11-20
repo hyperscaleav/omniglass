@@ -12,7 +12,7 @@ ruleset, and none can merge ([ADR-2175](/architecture/decisions/#adr-2175-agent-
 | Workflow | Starts on | Does |
 | --- | --- | --- |
 | `agent-build.yml` | `run:dev-gha` on an issue | builds the ticket into a draft PR that closes it, and marks it ready when done |
-| `agent-review.yml` | every same-repo PR that is opened, pushed, reopened or marked ready, and every merge-queue entry | runs the [adversarial review](https://github.com/hyperscaleav/omniglass/tree/main/.claude/skills/adversarial-review) read-only as parallel lenses, posts their findings as one review, and passes its check only when it says ship |
+| `agent-review.yml` | every same-repo PR that is opened, pushed, reopened, marked ready or labeled, every merge-queue entry, and a manual run | runs the [adversarial review](https://github.com/hyperscaleav/omniglass/tree/main/.claude/skills/adversarial-review) read-only, as one call or as parallel lenses, posts its findings as one review, and passes its check only when it says ship |
 | `agent-fix.yml` | `@hyperscale-agent` (or `@claude`) on a PR, a review that requests changes, or agent-review's own Changes requested | pushes a fix to the PR's branch |
 
 A fourth, `agent-open-pr.yml`, runs no agent: it opens a PR as the agents' App from a branch a
@@ -65,6 +65,13 @@ moves the ticket to In Review. The model follows the ticket's tier: Sonnet 5.5 (
 stops early comments on the issue with its link; one that runs out of room leaves the PR a
 draft saying what is left.
 
+The App's token lasts an hour, and a build can run longer. When the agent's push or `gh` call
+fails for that, it leaves the branch name, and the PR's title and body if none is open yet, in
+files under the runner's temp folder and keeps working. After it stops, the workflow mints a
+fresh token, pushes that branch (never with force, and only a branch named for this issue), opens
+or readies the PR as the agent asked, and does its own closing steps with the new token. agent-fix
+does the same for the PR's own branch.
+
 ## Review on every PR
 
 Every same-repo PR that is not a draft or from dependabot gets one adversarial review: inline findings, each with
@@ -74,10 +81,11 @@ head requests changes or opens with a blocking count, green when it says ship. T
 with the default branch's `scripts/agent-review.sh` and `scripts/agent-trust.sh`, so a PR
 cannot rewrite its own check. The one exception was the PR that added `agent-review.sh`
 (#2211): main had no copy yet, so its own review used the PR's. The check is not in either main ruleset yet; making it required
-is the architect's call. Opus reviews PRs that close a `risk:high` ticket, sonnet the rest. The
+is the architect's call. The lens review uses Opus on PRs that close a `risk:high` ticket and
+sonnet on the rest; the [one-shot review](#the-one-shot-review) uses Sonnet 5.5 on every PR. The
 reviewer reads the diff and the code, never the PR's conversation.
 
-The review runs as lenses side by side, so a large PR takes minutes, not the twenty one agent
+The lens review runs as lenses side by side, so a large PR takes minutes, not the twenty one agent
 took sweeping it alone (#2211). Each lens is its own job, `lens (<name>)`, with its own context
 and a read-only token:
 
@@ -128,8 +136,45 @@ the verdict reads the blocking count at the top of the comment, but agent-fix do
 
 In the merge queue the check reports without reviewing again: it reads the verdict already
 given on the queued PR's head, so `agent-review` can be made required without holding the queue.
+A label other than `review:deep` does the same on the PR, so adding one never turns the check
+green.
 A draft, a fork PR and a dependabot PR are not reviewed, and their check passes with the reason
 in its log, as a skipped check would.
+
+### The one-shot review
+
+The lens review costs about $8 a PR, mostly in agent turns that re-read the same skill and
+catalog (#2250). The one-shot review does the same sweep in one model call. The repo variable
+`AGENT_REVIEW_MODE` picks the reviewer: `lens` (the default) or `oneshot`.
+
+- **One call.** `scripts/agent-review.sh context` lays the whole review into one prompt: the
+  skill, every catalog entry and, for a diff under `web/src`, the `solidjs` skill first (the same
+  on every run, so it is cached), then the issue the PR closes, the diff, each changed file with
+  line numbers (the lines around each hunk for a file past 800 lines), the docs lines that name
+  what the diff changes, and each open thread with its lines as they are now. One Claude Code
+  call on the plan's token, with no tools, returns the findings and a recheck of every open
+  thread in the lenses' format. It runs as the `oneshot` job, outside the checkout, so nothing
+  in the PR's own settings loads.
+- **Verify only when unsure.** A blocking finding the call could not trace to the end from the
+  code it was shown is marked `verify`. Only then does a short read-only agent session (15 turns)
+  read the code and run `go build`, `go vet` and `go test` to settle it. A finding it refutes is
+  dropped. One it gives no word on still counts.
+- **Same verdict.** Its findings go through the same review, carry-forward, verdict and
+  five-round cap as the lenses'. A finding it raises on a thread it judged fixed in the same
+  call is dropped, so it never blocks on what it just called fixed.
+- **A deep review on request.** A maintainer adds the label `review:deep` to run the lens
+  review on that PR, in either mode.
+- **Shadow mode.** Run agent-review by hand (Actions, agent-review, Run workflow) with a PR
+  number, and a past head of it if you like. It runs the one-shot review on that head, writes
+  its findings and cost to the run's summary and an artifact, and posts nothing. That is how
+  the replay on past PRs is run before `oneshot` becomes the default.
+
+### Red or conflicted PRs wait
+
+A push to a PR that conflicts with its base, or whose other checks already failed, gets no new
+review. The `plan` job waits for the PR's other checks, 15 minutes at most, then reviews, or
+holds: the check goes red and says why. Push a fix that turns the PR green, and that push is
+reviewed. A `review:deep` label is never held.
 
 ## Asking for a fix
 
@@ -154,7 +199,7 @@ are skipped.
 
 ## Green before it pushes
 
-Both agents run `make preflight` before every push and push only when it passes. It runs what
+Both agents run `make preflight` before their last push, and before an agent-build PR is marked ready, and push the finished work only when it passes (agent-build's earlier pushes, [below](#work-survives-an-early-stop), need the step's own tests). It runs what
 the PR's required checks run: `make gen` with a drift check, `make test`, the docs build and
 the migration check against `origin/main`. The e2e tier and the image smoke stay CI-only.
 `scripts/preflight_test.go` fails if the target and the workflows it mirrors drift apart.
@@ -167,6 +212,34 @@ claude-code-action puts main's copies of the agents' own config (`CLAUDE.md`, `.
 preflight` fails an agent's run that does, and after the run agent-fix puts main's copies
 back in one commit if any slipped through. A ticket labeled `area:ci` may change that config;
 a PR a person opens is never held to it.
+
+## Work survives an early stop
+
+The agent runs as `claude -p`, which exits the moment the model ends its turn, and the runner
+is thrown away with whatever was not pushed. Run 44743523903 on #2223 ended at turn 142 of 200
+with a commit and a worktree of edits, nothing pushed, and a green job. So the work is kept two
+ways:
+
+- **The agent commits as it goes.** After each completed step (code with its tests green, docs,
+  screenshots) it commits, each commit ending `Refs #<issue>`, never `Fixes` or `Closes`.
+  agent-build also pushes after each step: there is no PR yet, so no review starts. agent-fix
+  pushes once, at the end, after its last commit and a green `make preflight`, because its PR
+  exists and every push to it starts an agent-review. agent-build opens its draft PR once, after
+  the last push. Neither ends its turn with work outstanding: they wait in the foreground, and
+  `Monitor` is disallowed.
+- **The workflow saves what is left.** After the agent, `scripts/agent-rescue.sh` reads the
+  checkout in a step with no token (no git in the agent's tree beyond `ls-files`, with a scrubbed
+  environment) and builds a bare repo holding the branch: its commits, plus any uncommitted files
+  as one `wip: agent stopped before finishing, Refs #<issue>` commit. main's agent config is taken
+  from the branch, never from the checkout. The next step pushes it with the fresh token, never
+  with force, and refuses a branch that touches `.github/workflows`. agent-build also opens a draft
+  PR that closes the issue when none exists, its body saying the agent stopped early and quoting
+  its last message. agent-fix only pushes, once: the PR exists, that push is the only extra review, and a run whose
+  only unpushed commit is the merge of `main` pushes nothing.
+
+A rescued branch has not passed `make preflight`. Continue it with `@hyperscale-agent` on the PR.
+A push to a branch with no PR starts no workflow: agent-review runs on `pull_request` only, and the
+others run on pushes to `main` and `release/**` only (`scripts/agent_rescue_test.go` holds that).
 
 ## Seeing an agent at work
 
