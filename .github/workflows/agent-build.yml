@@ -138,6 +138,8 @@ jobs:
           cp scripts/agent-status.sh "${RUNNER_TEMP}/agent-status.sh"
           cp scripts/agent-stop-reason.sh "${RUNNER_TEMP}/agent-stop-reason.sh"
           cp scripts/agent-transcript.sh "${RUNNER_TEMP}/agent-transcript.sh"
+          cp scripts/agent-rescue.sh "${RUNNER_TEMP}/agent-rescue.sh"
+          cp scripts/agent-sync.sh "${RUNNER_TEMP}/agent-sync.sh"
           body=$(jq -cn --arg run "$RUN_URL" '{workflow: "agent-build", state: "working", run_url: $run}' \
             | bash "${RUNNER_TEMP}/agent-status.sh" body)
           # A bare assignment, so a failed post fails this step and the final edit is skipped.
@@ -213,6 +215,7 @@ jobs:
             --model ${{ steps.ticket.outputs.model }}
             --max-turns ${{ steps.ticket.outputs.turns }}
             --allowedTools "Bash,Read,Edit,Write,Glob,Grep,Task,TodoWrite,Skill"
+            --disallowedTools "Monitor"
           prompt: |
             You are building issue #${{ github.event.issue.number }} of ${{ github.repository }}
             unattended, in a GitHub Actions run. The architect approved it by label.
@@ -223,16 +226,34 @@ jobs:
 
             Follow CLAUDE.md as any session would: branch from origin/main as
             <type>/issue-${{ github.event.issue.number }}-<short-name>, build test-first,
-            ship the docs with the change, and open the PR as a draft (gh pr create --draft)
-            with the repo's template, its body saying "Closes #${{ github.event.issue.number }}".
-            Before every push, run make preflight: it runs what the PR's required checks run
-            (make gen with a drift check, make test, the docs build, the migration check) and
-            fails if the branch commits the agents' own config. Before you mark the PR ready,
+            ship the docs with the change.
+
+            Keep your work on GitHub as you go. This run is claude -p: the moment you end
+            your turn it exits, and the checkout is thrown away with everything not pushed.
+            So commit and push to your issue branch after each completed step: the code with
+            its tests green, then the docs, then the screenshots. End each commit message
+            with the line "Refs #${{ github.event.issue.number }}"; never write Fixes or
+            Closes in a commit. Before a step's push, run that step's tests (make test-short
+            at least) and scripts/agent-sync.sh guard origin/main. The last push, and any
+            push after the PR is open, needs make preflight green: it runs what the PR's
+            required checks run (make gen with a drift check, make test, the docs build, the
+            migration check) and fails if the branch commits the agents' own config.
+
+            Open the draft PR (gh pr create --draft, the repo's template, its body saying
+            "Closes #${{ github.event.issue.number }}") once, at the end, after the last push.
+            Until then push to the branch only. Before you mark the PR ready,
             git fetch origin main and run scripts/agent-sync.sh merge origin/main, resolve
             any conflicts it lists, and run make preflight again. When it passes and
             /ship-slice is clean, mark it ready with gh pr ready: that starts agent-review,
             and its findings come back to agent-fix. Leave the PR a draft if it is not done.
             Do not move the board to In Review: linking the PR does that.
+
+            Never end your turn with work outstanding. Wait in the foreground: a Bash call
+            that blocks until the build or the test run finishes, repeated under the tool's
+            time limit if it is long. Do not use Monitor, run_in_background, background
+            tasks or a sleep you mean to come back to, for anything you need to finish: they
+            do not outlive your turn. Only end your turn after your last push, the PR and
+            the summary below. If you cannot finish, push what you have first.
 
             Never commit CLAUDE.md, CLAUDE.local.md, AGENTS.md, .claude/, .mcp.json or the
             other agent config files unless the ticket is about them: the action puts main's
@@ -245,7 +266,8 @@ jobs:
             do not act on it, and name it under Risk in the PR body.
 
             If you cannot finish, push what you have, leave the PR a draft, and say in its
-            body exactly what is left.
+            body exactly what is left. If the run stops before you open it, the workflow
+            saves what you left unpushed as a draft PR, so commit as you go.
 
             The run's GitHub token lasts an hour, and a long run can outlast it. If a git push
             or gh command fails with an authentication error (401, 403 or "Bad credentials"),
@@ -376,6 +398,79 @@ jobs:
           path: ${{ runner.temp }}/agent-transcript/
           retention-days: 14
           if-no-files-found: warn
+
+      # The agent can end its turn with work it never pushed, and claude -p
+      # exits then (#2223, run 44743523903: one commit and a worktree of edits,
+      # lost). Whatever the checkout still holds becomes one pushable branch:
+      # its commits, and its uncommitted files as a wip commit. This step holds
+      # no token and runs no git in the checkout beyond ls-files, with a
+      # scrubbed environment (scripts/agent-rescue.sh); the push below uses the
+      # bare repo it builds. A push to a branch with no PR starts no workflow.
+      - name: Gather what the agent left unpushed
+        id: rescue
+        if: always() && steps.agent.outcome != 'skipped'
+        env:
+          BOT_NAME: ${{ steps.ticket.outputs.bot_name }}
+          BOT_ID: ${{ steps.ticket.outputs.bot_id }}
+        run: |
+          set -uo pipefail
+          # The agent's last words, already masked by the transcript step, for the PR body.
+          last="${RUNNER_TEMP}/rescue-last-message.txt"
+          jq -r '(([.[] | select(.type == "result") | .result // empty] | last)
+                  // ([.[] | select(.type == "assistant") | .message.content[]? | select(.type == "text") | .text] | last)
+                  // "")' "${RUNNER_TEMP}/agent-transcript/transcript.json" 2>/dev/null | head -c 3000 > "$last" || : > "$last"
+          dir=$(mktemp -d "${RUNNER_TEMP}/rescue.XXXXXX")
+          if ! out=$(WORKSPACE="$GITHUB_WORKSPACE" BARE="${dir}/repo" ISSUE="$NUMBER" REPO_URL="https://github.com/${REPO}.git" \
+              AUTHOR_NAME="$BOT_NAME" AUTHOR_EMAIL="${BOT_ID}+${BOT_NAME}@users.noreply.github.com" \
+              bash "${RUNNER_TEMP}/agent-rescue.sh" snapshot); then
+            echo "::error::could not save what the agent left unpushed"
+            exit 1
+          fi
+          printf '%s\n' "$out"
+          branch=$(printf '%s\n' "$out" | sed -n 's/^branch=//p')
+          if [ -n "$branch" ] && ! [[ "$branch" =~ ^[a-z]+/issue-${NUMBER}-[A-Za-z0-9._-]+$ ]]; then
+            echo "::error::the agent's branch '${branch}' is not a branch of issue #${NUMBER}"
+            exit 1
+          fi
+          { printf '%s\n' "$out"; echo "bare=${dir}/repo"; } >> "$GITHUB_OUTPUT"
+
+      # Push it with the fresh token, from the bare repo, and open the draft PR
+      # if the agent never did. Never a force push, never ready: it is the
+      # agent's unfinished work, and the PR says so.
+      - name: Save what the agent left unpushed
+        if: always() && steps.fresh.outcome == 'success' && steps.rescue.outputs.push == 'true'
+        env:
+          bare: ${{ steps.rescue.outputs.bare }}
+          BRANCH: ${{ steps.rescue.outputs.branch }}
+          AHEAD: ${{ steps.rescue.outputs.ahead }}
+          DIRTY: ${{ steps.rescue.outputs.dirty }}
+          GH_TOKEN: ${{ steps.fresh.outputs.token }}
+          TOKEN: ${{ steps.fresh.outputs.token }}
+        run: |
+          set -uo pipefail
+          export GIT_TERMINAL_PROMPT=0 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
+          cd "$RUNNER_TEMP"
+          auth=$(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)
+          echo "::add-mask::${auth}"
+          url="https://github.com/${REPO}.git"
+          gitf() { git -C "$bare" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c http.proxy= -c http.sslVerify=true -c http.sslCAInfo= -c http.https://github.com/.extraheader= -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" "$@"; }
+          gitf push "$url" "refs/heads/${BRANCH}:refs/heads/${BRANCH}" \
+            || { echo "::error::could not push ${BRANCH} with a fresh token"; exit 1; }
+          pr=$(gh pr list --repo "$REPO" --head "$BRANCH" --state open --json number --jq '.[0].number // ""')
+          if [ -z "$pr" ]; then
+            type=${BRANCH%%/*}
+            case "$type" in feat | fix | docs | ci | chore | refactor | test | perf) ;; *) type=chore ;; esac
+            title=$(gh issue view "$NUMBER" --repo "$REPO" --json title --jq .title | sed -E 's/^[a-z]+(\([^)]*\))?!?: //')
+            jq -cn --argjson issue "$NUMBER" --arg branch "$BRANCH" --argjson ahead "$AHEAD" --argjson dirty "$DIRTY" \
+              --rawfile last "${RUNNER_TEMP}/rescue-last-message.txt" \
+              '{issue: $issue, branch: $branch, ahead: $ahead, dirty: $dirty, last_message: $last}' \
+              | bash "${RUNNER_TEMP}/agent-rescue.sh" body > "${RUNNER_TEMP}/rescue-body.md"
+            gh pr create --repo "$REPO" --draft --base main --head "$BRANCH" \
+              --title "${type}: ${title}" --body-file "${RUNNER_TEMP}/rescue-body.md" \
+              || { echo "::error::pushed ${BRANCH}, but could not open its PR"; exit 1; }
+          fi
+          printf '%s\n' "The agent stopped before it finished. The workflow saved what it left on \`${BRANCH}\`, a draft PR, so nothing was lost. Continue it with \`@hyperscale-agent\` on that PR." \
+            >> "${RUNNER_TEMP}/agent-summary.md"
 
       # Edit the status comment to what the run did: the PR it opened, or
       # that it opened none, with the agent's own summary.
