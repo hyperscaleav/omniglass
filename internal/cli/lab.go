@@ -110,8 +110,8 @@ func newLabRunCmd(version, imageDigest string) *cobra.Command {
 	cmd.Flags().BoolVar(&plan, "plan", false, "print the scale lab scenario's resolved plan (sites, systems per standard, components per product) and exit, starting nothing")
 	cmd.Flags().StringVar(&image, "image", "", "run this omniglass image instead of the one this binary was built with (env OMNIGLASS_LAB_IMAGE); one that is not this binary's own build is warned about")
 	// A live omnibot (#2109): the key stays in the host's env, named here,
-	// and only the seed is handed it, to seal as a secret.
-	cmd.Flags().StringVar(&keyEnv, "omnibot-key-env", "", "run omnibot on a live model (OpenRouter by default) with the key in this environment variable, e.g. OPENROUTER_API_KEY, handed to the server as its env secret lab-omnibot-key; without it, or the shell's own OMNIGLASS_SETTING__ASSISTANT__ and OMNIGLASS_SECRET__ variables, omnibot plays a recording")
+	// and reaches the server as an env secret (#2223), seeded or scale lab (#2298).
+	cmd.Flags().StringVar(&keyEnv, "omnibot-key-env", "", "run omnibot on a live model (OpenRouter by default) with the key in this environment variable, e.g. OPENROUTER_API_KEY, handed to the server as its env secret lab-omnibot-key; without it, or the shell's own OMNIGLASS_SETTING__ASSISTANT__ and OMNIGLASS_SECRET__ variables, a seeded lab's omnibot plays a recording and a scale lab's answers only on a model you configure")
 	cmd.Flags().StringVar(&project, "project", lab.DefaultProject, "the Docker compose project name")
 	_ = cmd.Flags().MarkHidden("project")
 	// For scripts, not learners (the demo pipeline's recorders and the
