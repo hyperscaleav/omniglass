@@ -208,7 +208,7 @@ func runLabScenario(ctx context.Context, out io.Writer, m *labscenario.Manifest,
 	if cadence == "" {
 		cadence = lab.CadenceLab
 	}
-	settingsEnv, err := labSettingsEnv(config.Environ(settings.EnvPrefix))
+	settingsEnv, err := labServerEnv(append(config.Environ(settings.EnvPrefix), config.Environ(secret.EnvPrefix)...))
 	if err != nil {
 		return err
 	}
@@ -218,8 +218,8 @@ func runLabScenario(ctx context.Context, out io.Writer, m *labscenario.Manifest,
 	}
 	fmt.Fprintf(out, "Starting a scale lab: scenario %s at %d systems, %d sites (an outpost each), %d simulated components.\n",
 		m.Name, plan.Totals.Systems, len(plan.Sites), plan.Simulated())
-	if names := labSettingsEnvNames(settingsEnv); len(names) > 0 {
-		fmt.Fprintf(out, "Your server takes %d setting(s) from this shell: %s.\n", len(names), strings.Join(names, ", "))
+	if names := labServerEnvNames(settingsEnv); len(names) > 0 {
+		fmt.Fprintf(out, "Your server takes %d setting and secret variable(s) from this shell: %s.\n", len(names), strings.Join(names, ", "))
 	}
 	fmt.Fprintln(out)
 	start := f.start
@@ -234,7 +234,7 @@ func runLabScenario(ctx context.Context, out io.Writer, m *labscenario.Manifest,
 			Systems: plan.Totals.Systems, SiteOutposts: outposts, Pushers: pushers,
 			Owner: lab.CurrentOwner(host), WorkDir: wd,
 			Ephemeral: !f.keep, Cadence: cadence, InduceUnregistered: f.scale.induce,
-			ServerSettingsEnv: settingsEnv,
+			ServerEnv: settingsEnv,
 		},
 		Image: choice, Fresh: f.fresh, Hold: true, ReadyFile: f.script.readyFile, WhilePID: f.script.whilePID,
 		ScaleRun: scale,
@@ -391,7 +391,7 @@ func runLab(ctx context.Context, out io.Writer, version string, f labFlags) erro
 	if err != nil {
 		return err
 	}
-	settingsEnv, err := labSettingsEnv(config.Environ(settings.EnvPrefix))
+	settingsEnv, err := labServerEnv(append(config.Environ(settings.EnvPrefix), config.Environ(secret.EnvPrefix)...))
 	if err != nil {
 		return err
 	}
@@ -404,8 +404,8 @@ func runLab(ctx context.Context, out io.Writer, version string, f labFlags) erro
 		return err
 	}
 	fmt.Fprintln(out, "Starting your omniglass lab. The first run takes a few minutes; later ones, under one.")
-	if names := labSettingsEnvNames(settingsEnv); len(names) > 0 {
-		fmt.Fprintf(out, "Your server takes %d setting(s) from this shell: %s.\n", len(names), strings.Join(names, ", "))
+	if names := labServerEnvNames(settingsEnv); len(names) > 0 {
+		fmt.Fprintf(out, "Your server takes %d setting and secret variable(s) from this shell: %s.\n", len(names), strings.Join(names, ", "))
 	}
 	fmt.Fprintln(out)
 
@@ -437,7 +437,7 @@ func runLab(ctx context.Context, out io.Writer, version string, f labFlags) erro
 			Owner:   lab.CurrentOwner(host), WorkDir: wd,
 			Ephemeral: f.script.ephemeral, NoOutpost: f.script.noOutpost, Cadence: f.script.cadence,
 			PlatformHistory: f.script.platformHistory, OmnibotKey: omnibotKey,
-			ServerSettingsEnv: settingsEnv,
+			ServerEnv: settingsEnv,
 		},
 		Image: choice, Fresh: f.fresh, PlantedFaults: plantedLabels(faults), Hold: true,
 		ReadyFile: f.script.readyFile, WhilePID: f.script.whilePID,
@@ -533,7 +533,7 @@ func newLabSeedCmd() *cobra.Command {
 				return errors.New("--induce-unregistered is a scale lab's: it needs --systems")
 			}
 			return runLabSeed(cmd.Context(), cmd.OutOrStdout(), scenario, outpost, user, password, config.Get("OMNIGLASS_LAB_OUTPOST_TOKEN_HASH"), noOutpost,
-				pushers, reportSeconds, platformHistory, config.Get(lab.OmnibotKeyEnv))
+				pushers, reportSeconds, platformHistory)
 		},
 	}
 	cmd.Flags().StringVar(&scenario, "scenario", lab.DefaultScenario, "the fleet to seed on the first run")
@@ -568,7 +568,7 @@ func newLabSeedCmd() *cobra.Command {
 // the server's platform component (#1790), so a capture of platform health
 // draws full lines. Only a capture asks for it: a learner's lab reads what
 // its own server measured.
-func runLabSeed(ctx context.Context, out io.Writer, scenario, outpost, user, password, outpostTokenHash string, noOutpost bool, pushers map[string]lab.PusherToken, reportSeconds int, platformHistory bool, omnibotKey string) error {
+func runLabSeed(ctx context.Context, out io.Writer, scenario, outpost, user, password, outpostTokenHash string, noOutpost bool, pushers map[string]lab.PusherToken, reportSeconds int, platformHistory bool) error {
 	sc, err := devseed.LookupScenario(scenario)
 	if err != nil {
 		return err
@@ -634,35 +634,45 @@ func runLabSeed(ctx context.Context, out io.Writer, scenario, outpost, user, pas
 	if err := lab.WriteOmnibotReplay(cfg().DataDir); err != nil {
 		return err
 	}
-	if err := seedLabOmnibotModel(ctx, gw, omnibotKey); err != nil {
+	if err := dropStoredLabOmnibotKey(ctx, gw); err != nil {
 		return err
 	}
 	fmt.Fprintln(out, lab.FormatSeedResult(lab.SeedResult{Outpost: present, Summary: summary}))
 	return nil
 }
 
-// labSettingsEnv is the host's OMNIGLASS_SETTING__ variables (#2223), in
-// name order, for the lab's server: the env settings layer the server reads
-// at boot. They are judged here as the server will judge them, so a typo or a
-// value that does not parse stops the run before anything is created, naming
-// the variable and never its value.
-func labSettingsEnv(environ []string) ([]string, error) {
-	var out []string
+// labServerEnv is the host's OMNIGLASS_SETTING__ and OMNIGLASS_SECRET__
+// variables (#2223), in name order, for the lab's server: the env settings
+// layer and the env secrets the server reads at boot. They are judged here as
+// the server will judge them (the secrets' JSON; their fields meet the type
+// catalog at the server's boot), so a typo or a value that does not parse
+// stops the run before anything is created, naming the variable and never
+// its value.
+func labServerEnv(environ []string) ([]string, error) {
+	var out, sets []string
 	for _, e := range environ {
-		if strings.HasPrefix(e, settings.EnvPrefix) {
+		switch {
+		case strings.HasPrefix(e, settings.EnvPrefix):
+			sets = append(sets, e)
+			out = append(out, e)
+		case strings.HasPrefix(e, secret.EnvPrefix):
 			out = append(out, e)
 		}
 	}
-	if _, err := settings.LoadEnv(out); err != nil {
+	if _, err := settings.LoadEnv(sets); err != nil {
+		return nil, fmt.Errorf("lab: your shell's %w", err)
+	}
+	if _, err := secret.ParseEnv(out); err != nil {
 		return nil, fmt.Errorf("lab: your shell's %w", err)
 	}
 	sort.Strings(out)
 	return out, nil
 }
 
-// labSettingsEnvNames is the variables' names alone, for the start line:
-// a value may be a URL or a secret's name, so the line names only the keys.
-func labSettingsEnvNames(env []string) []string {
+// labServerEnvNames is the variables' names alone, for the start line: a
+// value may be a URL, a secret's name or the secret itself, so the line names
+// only the keys.
+func labServerEnvNames(env []string) []string {
 	names := make([]string, 0, len(env))
 	for _, e := range env {
 		name, _, _ := strings.Cut(e, "=")
@@ -685,41 +695,30 @@ func labOmnibotKey(name string, getenv func(string) string) (string, error) {
 	return key, nil
 }
 
-// seedLabOmnibotModel points the lab's omnibot at a live model when given a
-// key (#2109): the key is sealed as the platform api-key secret
-// lab.OmnibotKeySecret (rotated when it already exists) and the assistant
-// settings name it, on the default model and base URL. With no key it undoes
-// that, so the recording plays again; an assistant setting an operator made
-// with a key of their own is left alone.
-func seedLabOmnibotModel(ctx context.Context, gw *storage.PG, key string) error {
+// dropStoredLabOmnibotKey undoes what a lab seeded before #2223 left: the
+// model key sealed as the platform secret lab.OmnibotKeySecret and the
+// assistant settings naming it. --omnibot-key-env now declares that name as
+// the server's env secret, which a stored one of the same name would fail at
+// boot, and the binding would shadow the env layer the alias sets. An
+// assistant setting an operator made with a key of their own is left alone.
+func dropStoredLabOmnibotKey(ctx context.Context, gw *storage.PG) error {
 	all := scope.Set{All: true}
-	if key == "" {
-		a, err := gw.AssistantSettings(ctx)
-		if err != nil {
-			return err
-		}
-		if a.KeySecret == lab.OmnibotKeySecret {
-			if _, err := gw.MergePatchSettingBinding(ctx, "", "platform", "assistant", map[string]any{"provider": "none", "key_secret": ""}); err != nil {
-				return err
-			}
-		}
-		if err := gw.DeleteSecret(ctx, "", lab.OmnibotKeySecret, all, all, true, true); err != nil && !errors.Is(err, storage.ErrSecretNotFound) {
-			return err
-		}
-		return nil
-	}
-	fields := map[string]string{"key": key}
-	_, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
-		Name: lab.OmnibotKeySecret, SecretType: "api-key", OwnerKind: "platform", Fields: fields,
-	}, all, true)
-	if errors.Is(err, storage.ErrSecretExists) {
-		_, err = gw.UpdateSecret(ctx, "", lab.OmnibotKeySecret, storage.SecretPatch{Fields: fields}, all, all, true, true)
-	}
+	bindings, err := gw.GetSettingBindings(ctx, "platform")
 	if err != nil {
 		return err
 	}
-	_, err = gw.MergePatchSettingBinding(ctx, "", "platform", "assistant", map[string]any{"provider": "openai", "key_secret": lab.OmnibotKeySecret})
-	return err
+	for _, b := range bindings {
+		if b.Namespace != "assistant" || b.Doc["key_secret"] != lab.OmnibotKeySecret {
+			continue
+		}
+		if _, err := gw.MergePatchSettingBinding(ctx, "", "platform", "assistant", map[string]any{"provider": nil, "key_secret": nil}); err != nil {
+			return err
+		}
+	}
+	if err := gw.DeleteSecret(ctx, "", lab.OmnibotKeySecret, all, all, true, true); err != nil && !errors.Is(err, storage.ErrSecretNotFound) {
+		return err
+	}
+	return nil
 }
 
 // openLabDB is the lab seed's way into its database: it refuses one that

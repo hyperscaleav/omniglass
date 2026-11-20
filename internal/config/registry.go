@@ -143,8 +143,6 @@ var Registry = []Var{
 		Doc: "set by omniglass lab run for a scale lab's seed one-off: each site outpost's name and the hash of the token it minted for it this run (outpost=hash, comma-separated), never set by hand"},
 	{Key: "OMNIGLASS_LAB_PUSHER_TOKENS", Scope: "cli",
 		Doc: "set by omniglass lab run for its seed one-off: each declared pusher's name and the hash and non-secret prefix of the token it minted for it this run (name=hash:prefix, comma-separated), never set by hand"},
-	{Key: "OMNIGLASS_LAB_OMNIBOT_KEY", Scope: "cli",
-		Doc: "set by omniglass lab run --omnibot-key-env for its seed one-off: the model key the seed seals as the lab's omnibot key secret, never set by hand and never printed"},
 	{Key: "OMNIGLASS_SIM_PUSHERS", Scope: "cli",
 		Doc: "the outside actors omniglass outpost run --simulate runs as emulator devices with a push face: each pusher's name, profile and token (name=profile:token, comma-separated); set by omniglass lab run, read when the command runs and never printed by help"},
 	{Key: "OMNIGLASS_TEST_ADMIN_DSN", Scope: "test",

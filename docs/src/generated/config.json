@@ -190,11 +190,6 @@
    "doc": "set by omniglass lab run for its seed one-off: each declared pusher's name and the hash and non-secret prefix of the token it minted for it this run (name=hash:prefix, comma-separated), never set by hand"
   },
   {
-   "key": "OMNIGLASS_LAB_OMNIBOT_KEY",
-   "scope": "cli",
-   "doc": "set by omniglass lab run --omnibot-key-env for its seed one-off: the model key the seed seals as the lab's omnibot key secret, never set by hand and never printed"
-  },
-  {
    "key": "OMNIGLASS_SIM_PUSHERS",
    "scope": "cli",
    "doc": "the outside actors omniglass outpost run --simulate runs as emulator devices with a push face: each pusher's name, profile and token (name=profile:token, comma-separated); set by omniglass lab run, read when the command runs and never printed by help"

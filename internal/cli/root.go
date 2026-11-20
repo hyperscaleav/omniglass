@@ -97,6 +97,13 @@ func Root(version string) *cobra.Command { return newRoot(version, "") }
 // imageDigest is the release image's digest, injected beside it (empty for
 // any other build), which `lab run` pulls by.
 func Execute(version, imageDigest string) {
+	// .env, then .env.local, from the working directory (#2223), under what
+	// the shell already set: a lab's Bedrock five live in .env.local and
+	// reach the server with nothing exported.
+	if _, err := config.LoadDotEnvFromWorkingDir(); err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		os.Exit(1)
+	}
 	if err := newRoot(version, imageDigest).Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
