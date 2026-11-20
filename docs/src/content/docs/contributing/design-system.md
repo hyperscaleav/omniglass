@@ -384,7 +384,7 @@ its first option is the placeholder the fallback would land on anyway.
 `bindSelectValue`. It derives the selected option from its `value` and its options together, so a
 value set before the options load selects once they arrive. The closed trigger shows the bare label
 (the indent and the `└` glyph are drawn by CSS on the open list, never typed into the text), with the
-ancestor path as muted context beside it. A node marked `disabled` is drawn in its place, muted, and
+ancestor path as muted context beside it. An option marked `disabled` is drawn in its place, muted, and
 cannot be chosen, so a caller that narrows the choices keeps the nesting of what sits beneath them.
 
 **A location is always picked with `LocationSelect`** (#2301). It wraps `TreeSelect`, reads the

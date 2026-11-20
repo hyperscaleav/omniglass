@@ -10,9 +10,9 @@ face's parent was a flat list filtered by the type's allowed parents, and the fo
 tree each built its location items by hand, so they disagreed on sibling order.
 
 `LocationSelect` is now the one location field. It reads the locations and their types itself and
-builds the nodes through `locationTreeNodes`, so every field nests by parent and orders siblings by
+builds the options through `locationTreeNodes`, so every field nests by parent and orders siblings by
 type rank then label. Each caller keeps the address it already committed (uuid, name, or dotted
-path), so no request changes. `TreeSelect` gained disabled nodes: the parent picker shows a location
+path), so no request changes. `TreeSelect` gained disabled options: the parent picker shows a location
 its type may not sit under, muted and unpickable, instead of dropping it and orphaning its children
 to the top of the list. The outpost blade drops `bindSelectValue`, since the tree selects from value
 and options together, and the outpost create form moves onto `FieldRow`, which labels the tree's
