@@ -26,6 +26,7 @@ const types: SecretType[] = [
 const seed: Secret[] = [
   { id: uuidFor("s-tier"), name: "poll_community", secret_type: "snmp-community", owner_kind: "platform", fields: [{ name: "community", value: "••••••", secret: true }] },
   { id: uuidFor("s-below"), name: "room_community", secret_type: "snmp-community", owner_kind: "location", owner_name: "room", fields: [{ name: "community", value: "••••••", secret: true }] },
+  { id: uuidFor("env-bedrock-key"), name: "bedrock-key", secret_type: "api-key", owner_kind: "platform", fields: [], source: "env", source_var: "OMNIGLASS_SECRET__BEDROCK_KEY" },
 ];
 
 const owner: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
@@ -130,6 +131,22 @@ describe("Secrets page platform-tier authority", () => {
     const blade = await openBlade("poll_community");
     expect(within(blade).getByLabelText("Edit")).toBeInTheDocument();
     expect(within(blade).queryByText(/platform:update/)).not.toBeInTheDocument();
+  });
+});
+
+// An env secret (#2223) is the server's environment's: the directory reads
+// "From environment" where a stored one shows its fields, and its blade names
+// the variable to change and offers no Edit, Delete or reveal, even to an owner.
+describe("Secrets page env secrets (#2223)", () => {
+  it("reads From environment and offers no write", async () => {
+    mount(owner);
+    expect(await screen.findByText("bedrock-key")).toBeInTheDocument();
+    expect(screen.getAllByText("From environment").length).toBeGreaterThan(0);
+    const blade = await openBlade("bedrock-key");
+    expect(within(blade).getByText("OMNIGLASS_SECRET__BEDROCK_KEY")).toBeInTheDocument();
+    expect(within(blade).queryByLabelText("Edit")).not.toBeInTheDocument();
+    expect(within(blade).queryByRole("button", { name: /delete/i })).not.toBeInTheDocument();
+    expect(within(blade).queryByRole("button", { name: /reveal/i })).not.toBeInTheDocument();
   });
 });
 

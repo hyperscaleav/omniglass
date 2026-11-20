@@ -27,7 +27,19 @@ export type Secret = {
 
   owner_name?: string;
   fields: SecretField[];
+  // Where the secret comes from (#2223): stored (sealed in the database), or
+  // env (declared by the server's OMNIGLASS_SECRET__ variable, source_var,
+  // with no fields and no API write). Optional so a row that carries none
+  // reads as stored.
+  source?: "stored" | "env";
+  source_var?: string;
 };
+
+// isEnvSecret is a secret the server's environment declares: changed by its
+// variable and a restart, never by the console.
+export function isEnvSecret(s: Secret): boolean {
+  return s.source === "env";
+}
 
 export const SECRETS_KEY = ["secrets"] as const;
 

@@ -287,8 +287,8 @@ func TestLabRunScaleForwardsSettingsEnv(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Contains(got.ServerSettingsEnv, "OMNIGLASS_SETTING__ASSISTANT__MODEL=openai.gpt-oss-20b-1:0") {
-		t.Errorf("scale run ServerSettingsEnv = %q, want the shell's settings variable", got.ServerSettingsEnv)
+	if !slices.Contains(got.ServerEnv, "OMNIGLASS_SETTING__ASSISTANT__MODEL=openai.gpt-oss-20b-1:0") {
+		t.Errorf("scale run ServerEnv = %q, want the shell's settings variable", got.ServerEnv)
 	}
 	if !strings.Contains(out.String(), "OMNIGLASS_SETTING__ASSISTANT__MODEL") || strings.Contains(out.String(), "gpt-oss") {
 		t.Errorf("start line should name the variable and not its value:\n%s", out.String())
@@ -327,7 +327,7 @@ func TestLabRunReleasePullsByStampedDigest(t *testing.T) {
 // OMNIGLASS_SETTING__ ones, in name order, and a variable the server would
 // refuse at boot stops the run here, naming it and never its value.
 func TestLabSettingsEnvForwardsOnlySettings(t *testing.T) {
-	got, err := labSettingsEnv([]string{
+	got, err := labServerEnv([]string{
 		"PATH=/usr/bin",
 		"OMNIGLASS_SETTING__ASSISTANT__MODEL=openai.gpt-oss-20b-1:0",
 		"OMNIGLASS_TEST_MODEL_KEY=sk-test",
@@ -343,20 +343,69 @@ func TestLabSettingsEnvForwardsOnlySettings(t *testing.T) {
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("forwarded %q, want %q", got, want)
 	}
-	if names := labSettingsEnvNames(got); strings.Join(names, ",") != "OMNIGLASS_SETTING__ASSISTANT__BASE_URL,OMNIGLASS_SETTING__ASSISTANT__MODEL" {
+	if names := labServerEnvNames(got); strings.Join(names, ",") != "OMNIGLASS_SETTING__ASSISTANT__BASE_URL,OMNIGLASS_SETTING__ASSISTANT__MODEL" {
 		t.Fatalf("names %q", names)
 	}
-	_, err = labSettingsEnv([]string{"OMNIGLASS_SETTING__RETENTION__METRIC_DAYS=soon-secret"})
+	_, err = labServerEnv([]string{"OMNIGLASS_SETTING__RETENTION__METRIC_DAYS=soon-secret"})
 	if err == nil || !strings.Contains(err.Error(), "OMNIGLASS_SETTING__RETENTION__METRIC_DAYS") {
 		t.Fatalf("a value that does not parse: err = %v, want one naming the variable", err)
 	}
 	if strings.Contains(err.Error(), "soon-secret") {
 		t.Fatalf("the refusal quotes the value: %v", err)
 	}
-	if _, err := labSettingsEnv([]string{"OMNIGLASS_SETTING__ASSISTANT__NOPE=x"}); err == nil {
+	if _, err := labServerEnv([]string{"OMNIGLASS_SETTING__ASSISTANT__NOPE=x"}); err == nil {
 		t.Fatal("a variable naming no setting is forwarded")
 	}
-	if got, err := labSettingsEnv(nil); err != nil || len(got) != 0 {
+	if got, err := labServerEnv(nil); err != nil || len(got) != 0 {
 		t.Fatalf("no settings variables: %q, %v", got, err)
+	}
+}
+
+// A lab's server takes the host's env secrets too (#2223), so the Bedrock
+// five exported in the shell are the whole setup; a secret whose JSON does
+// not parse stops the run naming the variable, never its value.
+func TestLabServerEnvForwardsSecrets(t *testing.T) {
+	key := `OMNIGLASS_SECRET__BEDROCK_KEY={"type":"api-key","fields":{"key":"sk-b"}}`
+	got, err := labServerEnv([]string{
+		"OMNIGLASS_SETTING__ASSISTANT__KEY_SECRET=bedrock-key",
+		key,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(got, key) || len(got) != 2 {
+		t.Fatalf("forwarded %q, want the secret and the setting", got)
+	}
+	_, err = labServerEnv([]string{"OMNIGLASS_SECRET__BEDROCK_KEY=sk-bare"})
+	if err == nil || !strings.Contains(err.Error(), "OMNIGLASS_SECRET__BEDROCK_KEY") || strings.Contains(err.Error(), "sk-bare") {
+		t.Fatalf("a bare key: err = %v, want a refusal naming the variable alone", err)
+	}
+}
+
+// A seeded lab run with the Bedrock five exported hands them to its server
+// and names them, never their values, on the start line.
+func TestLabRunForwardsTheBedrockFive(t *testing.T) {
+	for k, v := range map[string]string{
+		"OMNIGLASS_SETTING__ASSISTANT__PROVIDER":   "openai",
+		"OMNIGLASS_SETTING__ASSISTANT__BASE_URL":   "https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1",
+		"OMNIGLASS_SETTING__ASSISTANT__MODEL":      "openai.gpt-oss-20b-1:0",
+		"OMNIGLASS_SETTING__ASSISTANT__KEY_SECRET": "bedrock-key",
+		"OMNIGLASS_SECRET__BEDROCK_KEY":            `{"type":"api-key","fields":{"key":"sk-bedrock"}}`,
+	} {
+		t.Setenv(k, v)
+	}
+	var got lab.Config
+	var out strings.Builder
+	err := runLab(context.Background(), &out, "test", labFlags{scenario: "corporate", systems: 20,
+		project: lab.DefaultProject, listen: lab.DefaultListen, port: lab.DefaultPort,
+		start: func(_ context.Context, _ io.Writer, cfg lab.Config) error { got = cfg; return nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.ServerEnv) != 5 {
+		t.Fatalf("ServerEnv = %q, want the five", got.ServerEnv)
+	}
+	if !strings.Contains(out.String(), "OMNIGLASS_SECRET__BEDROCK_KEY") || strings.Contains(out.String(), "sk-bedrock") {
+		t.Errorf("start line should name the secret variable and not its value:\n%s", out.String())
 	}
 }

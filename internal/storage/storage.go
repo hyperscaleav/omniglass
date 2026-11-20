@@ -1313,6 +1313,10 @@ type PG struct {
 	settingsEnv  settings.Doc
 	settings     *settings.Service
 	labelEngines label.EngineCache
+	// envSecrets is the env-backed platform secrets the server declared at
+	// boot (InstallEnvSecrets, #2223), by name; memory only, never sealed or
+	// written. Installed before the server serves and never changed after.
+	envSecrets map[string]*envSecret
 	// judges is each event rule's compiled criteria, per rule version.
 	judges ruleJudges
 	// calcs is each calc rule's reduce compile result, per rule version and

@@ -14,7 +14,9 @@ refs: [2109, 2121, 1166]
   2. **The key is a secret by name.** `assistant.key_secret` names a `$platform` api-key secret, as
      `mail_secret` names the mail relay's. The server unseals it at the start of each run and sends it
      only as the model call's bearer; a provider error that echoes it is redacted before it reaches
-     an event or a log line.
+     an event or a log line. **Amended (#2223):** the secret may also be one the server's
+     environment declares (`OMNIGLASS_SECRET__<NAME>`, [ADR-2223.2](/architecture/decisions/#adr-22232-a-platform-secret-may-be-declared-by-the-servers-environment));
+     it is still a `$platform` secret by name, behind the same `secret:bind`.
   3. **Chosen per run.** A configured provider whose key resolves; else `OMNIGLASS_OMNIBOT_REPLAY`;
      else 503. A provider configured with a key that no longer resolves is a 503 naming the secret,
      not a silent fall back to a recording.

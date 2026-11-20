@@ -299,13 +299,28 @@ the notification settings' `egress_allow` names it. A run whose provider fails (
 server down) ends on an error that names the cause; a configured key secret that is gone refuses the
 run, naming it, rather than playing the recording. `{"provider":"none"}` turns the model off.
 
-A lab runs omnibot on a live model with one flag: `omniglass lab run --omnibot-key-env OPENROUTER_API_KEY`
-stores that variable's value as the lab's key and points `assistant` at OpenRouter. Without the
-flag the lab plays its recording, and a lab started without it again forgets the key. The assistant's
-`base_url` and `model` may also come from the server's environment, as
-`OMNIGLASS_SETTING__ASSISTANT__BASE_URL` and `OMNIGLASS_SETTING__ASSISTANT__MODEL`; a lab forwards
-both from your shell, so the same flag runs omnibot on Bedrock or any other OpenAI-compatible
-server ([the lab guide](/guides/lab/)).
+The same model may be set entirely from the server's environment, with no secret to create and no
+setting to update: each `assistant` key as an `OMNIGLASS_SETTING__ASSISTANT__<KEY>` variable, and
+the key as an env-backed platform secret the `key_secret` names. Amazon Bedrock's OpenAI-compatible
+endpoint, for example, is five variables:
+
+```bash
+OMNIGLASS_SETTING__ASSISTANT__PROVIDER=openai
+OMNIGLASS_SETTING__ASSISTANT__BASE_URL=https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1
+OMNIGLASS_SETTING__ASSISTANT__MODEL=openai.gpt-oss-20b-1:0
+OMNIGLASS_SETTING__ASSISTANT__KEY_SECRET=bedrock-key
+OMNIGLASS_SECRET__BEDROCK_KEY='{"type":"api-key","fields":{"key":"<a Bedrock API key>"}}'
+```
+
+The settings page shows each as **From environment**, and the Secrets directory lists `bedrock-key`
+the same way, with no field to reveal. A console edit still wins over the environment's settings.
+
+A lab forwards every such variable from your shell, or from `.env` and `.env.local` in the
+directory you run it from, so a lab with those five runs omnibot on Bedrock with no further command
+([the lab guide](/guides/lab/)). `omniglass lab run --omnibot-key-env OPENROUTER_API_KEY` is the
+shortcut for OpenRouter: it declares that variable's value as the lab server's env secret
+`lab-omnibot-key` and sets `provider` and `key_secret` to it, under any you set yourself. Without
+either the lab plays its recording.
 
 ### Giving omnibot a credential
 

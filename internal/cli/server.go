@@ -122,6 +122,10 @@ func runServer(ctx context.Context, version string, lab bool) error {
 	if err != nil {
 		return fmt.Errorf("server: load settings env: %w", err)
 	}
+	envSecrets, err := secret.ParseEnv(config.Environ(secret.EnvPrefix))
+	if err != nil {
+		return fmt.Errorf("server: load env secrets: %w", err)
+	}
 
 	// The server's measure of itself (#1627): its slow-query tracer is
 	// installed on the pool the gateway opens, so it is built first.
@@ -147,6 +151,19 @@ func runServer(ctx context.Context, version string, lab bool) error {
 		return err
 	}
 	log.Info("boot seed applied")
+	// Env-backed platform secrets (#2223) are checked against the seeded
+	// type catalog, so they install after the seed; their JSON was judged
+	// before the gateway opened. Memory only: nothing is sealed or written.
+	if err := gw.InstallEnvSecrets(ctx, envSecrets); err != nil {
+		return fmt.Errorf("server: load env secrets: %w", err)
+	}
+	if len(envSecrets) > 0 {
+		names := make([]string, len(envSecrets))
+		for i, e := range envSecrets {
+			names[i] = e.Name
+		}
+		log.Info("env secrets declared", "names", names)
+	}
 	auditWriterRuling(ctx, log, gw)
 	self.applySlowQuery(ctx, gw)
 
