@@ -362,8 +362,8 @@ type labFlags struct {
 	// readHost, when set, stands in for this machine's Docker host in a
 	// plan's preflight.
 	readHost hostReader
-	// start, when set, stands in for bringing a scale lab's config up on
-	// Docker.
+	// start, when set, stands in for bringing a lab's config up on Docker,
+	// a scale lab's or a seeded fleet's.
 	start func(ctx context.Context, out io.Writer, cfg lab.Config) error
 }
 
@@ -409,10 +409,6 @@ func runLab(ctx context.Context, out io.Writer, version string, f labFlags) erro
 	}
 	fmt.Fprintln(out)
 
-	eng, daemon, err := labEngine(ctx, out)
-	if err != nil {
-		return err
-	}
 	token, hash, _, err := auth.NewBearerToken()
 	if err != nil {
 		return err
@@ -428,8 +424,7 @@ func runLab(ctx context.Context, out io.Writer, version string, f labFlags) erro
 	}
 	host, _ := os.Hostname()
 	wd, _ := os.Getwd()
-	r := labRunner(eng, daemon, out)
-	_, err = r.Run(ctx, lab.Config{
+	cfg := lab.Config{
 		Options: lab.Options{
 			Project: f.project, Listen: f.listen, Port: f.port, Image: choice.Ref, Scenario: sc.Name,
 			OutpostToken: token, OutpostTokenHash: hex.EncodeToString(hash),
@@ -441,7 +436,15 @@ func runLab(ctx context.Context, out io.Writer, version string, f labFlags) erro
 		},
 		Image: choice, Fresh: f.fresh, PlantedFaults: plantedLabels(faults), Hold: true,
 		ReadyFile: f.script.readyFile, WhilePID: f.script.whilePID,
-	})
+	}
+	if f.start != nil {
+		return f.start(ctx, out, cfg)
+	}
+	eng, daemon, err := labEngine(ctx, out)
+	if err != nil {
+		return err
+	}
+	_, err = labRunner(eng, daemon, out).Run(ctx, cfg)
 	return err
 }
 

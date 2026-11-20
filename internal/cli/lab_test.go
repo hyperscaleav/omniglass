@@ -295,6 +295,31 @@ func TestLabRunScaleForwardsSettingsEnv(t *testing.T) {
 	}
 }
 
+// A seeded-fleet lab forwards the shell's settings variables to its server the
+// same way a scale lab does (#2225 review): the config reaching Docker carries
+// them, and the start line names them without their values.
+func TestLabRunSeededForwardsSettingsEnv(t *testing.T) {
+	t.Setenv("OMNIGLASS_SETTING__ASSISTANT__MODEL", "openai.gpt-oss-20b-1:0")
+	var got lab.Config
+	started := false
+	var out strings.Builder
+	err := runLab(context.Background(), &out, "test", labFlags{scenario: "dev", image: "omniglass:dev",
+		project: lab.DefaultProject, listen: lab.DefaultListen, port: lab.DefaultPort,
+		start: func(_ context.Context, _ io.Writer, cfg lab.Config) error { got, started = cfg, true; return nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !started {
+		t.Fatal("the seeded lab never reached its start")
+	}
+	if !slices.Contains(got.ServerSettingsEnv, "OMNIGLASS_SETTING__ASSISTANT__MODEL=openai.gpt-oss-20b-1:0") {
+		t.Errorf("seeded run ServerSettingsEnv = %q, want the shell's settings variable", got.ServerSettingsEnv)
+	}
+	if !strings.Contains(out.String(), "OMNIGLASS_SETTING__ASSISTANT__MODEL") || strings.Contains(out.String(), "gpt-oss") {
+		t.Errorf("start line should name the variable and not its value:\n%s", out.String())
+	}
+}
+
 // A release binary's lab runs the image its release was built with, pulled by
 // the digest stamped into the binary (#1257); one with no digest is refused
 // before anything starts, naming --image. The run is captured, so no Docker
