@@ -348,7 +348,7 @@ jobs:
           auth=$(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)
           echo "::add-mask::${auth}"
           url="https://github.com/${REPO}.git"
-          gitf() { git -C "$bare" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c http.proxy= -c http.sslVerify=true -c http.sslCAInfo= -c http.https://github.com/.extraheader= -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" "$@"; }
+          gitf() { git -C "$bare" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c http.proxy= -c http.sslVerify=true -c http.https://github.com/.extraheader= -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" "$@"; }
           branch=$(head -n 1 "$left/branch" | tr -d '[:space:]')
           gitf push "$url" "refs/heads/${branch}:refs/heads/${branch}" \
             || { echo "::error::could not push ${branch} with a fresh token"; exit 1; }
@@ -448,7 +448,7 @@ jobs:
           auth=$(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)
           echo "::add-mask::${auth}"
           url="https://github.com/${REPO}.git"
-          gitf() { git -C "$bare" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c http.proxy= -c http.sslVerify=true -c http.sslCAInfo= -c http.https://github.com/.extraheader= -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" "$@"; }
+          gitf() { git -C "$bare" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c http.proxy= -c http.sslVerify=true -c http.https://github.com/.extraheader= -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" "$@"; }
           gitf push "$url" "refs/heads/${BRANCH}:refs/heads/${BRANCH}" \
             || { echo "::error::could not push ${BRANCH} with a fresh token"; exit 1; }
           printf '%s\n' "The agent stopped before it finished. The workflow pushed what it left to \`${BRANCH}\`." \
