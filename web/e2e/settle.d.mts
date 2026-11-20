@@ -5,3 +5,4 @@ export function isStreamRequest(url: string, accept: string | undefined): boolea
 export function trackRequests(page: Page): { inflight: Set<unknown> };
 export function settle(page: Page, opts?: SettleOptions): Promise<void>;
 export function gotoSettled(page: Page, url: string, opts?: SettleOptions): Promise<void>;
+export function settleLayout(page: Page, opts?: { frames?: number; timeout?: number }): Promise<void>;

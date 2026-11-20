@@ -16,7 +16,7 @@ import { mkdir, readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { assertFontsRendered, watchFontRequests } from './fontguard.mjs';
 import { describeMask, planMasks, planStandingMasks, shootBaseline, withCaptureRetry } from './shotmasklib.mjs';
-import { gotoSettled } from './settle.mjs';
+import { gotoSettled, settleLayout } from './settle.mjs';
 
 const BASE = process.env.OG_E2E_BASE ?? 'http://localhost:8080';
 const TOKEN = process.env.OG_TOKEN ?? '';
@@ -119,6 +119,9 @@ for (const spec of specs) {
     await page.waitForTimeout(400);
   }
   await page.waitForTimeout(800);
+  // Hold until the geometry stops moving: a hover still scrolling a table or a
+  // tooltip still being placed is a different raster a frame later (#2168).
+  await settleLayout(page);
   // A shot rendered in the wrong typeface is not a shot of the console, and the
   // gate that compares it at zero tolerance cannot tell that apart from UI drift.
   // Refuse to write it (#775): this is what silently shipped two fallback-font
