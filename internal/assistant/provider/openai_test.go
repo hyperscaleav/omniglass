@@ -156,3 +156,65 @@ func TestOpenAIUnreachable(t *testing.T) {
 		t.Errorf("err = %v", err)
 	}
 }
+
+// Bedrock's gpt-oss inlines its chain of thought in content; the adapter keeps
+// it apart from the answer (#2259).
+func TestOpenAISplitsInlineReasoning(t *testing.T) {
+	t.Parallel()
+	srv, got, _ := chatServer(t, 200, `{"choices":[{"message":{"role":"assistant","content":"<reasoning>User asks 2+2. Simple.</reasoning>The sum is **4**."}}]}`)
+	p := &OpenAI{BaseURL: srv.URL, Model: "m", Key: testKey}
+	turn, err := p.Next(context.Background(), []Message{{Role: RoleUser, Text: "2+2?"}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if turn.Text != "The sum is **4**." || turn.Reasoning != "User asks 2+2. Simple." {
+		t.Fatalf("turn = %+v", turn)
+	}
+	// A follow-up built from that turn never carries the reasoning back.
+	_, err = p.Next(context.Background(), []Message{
+		{Role: RoleUser, Text: "2+2?"},
+		{Role: RoleAssistant, Text: turn.Text, Reasoning: turn.Reasoning},
+		{Role: RoleUser, Text: "and 3+3?"},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := json.Marshal(*got)
+	if strings.Contains(string(b), "Simple.") || strings.Contains(string(b), "reasoning") {
+		t.Errorf("the request carries the reasoning: %s", b)
+	}
+}
+
+// Providers that send reasoning in its own field have it kept, not dropped.
+func TestOpenAIReadsReasoningFields(t *testing.T) {
+	t.Parallel()
+	for field, reply := range map[string]string{
+		"reasoning_content": `{"choices":[{"message":{"role":"assistant","content":"Four.","reasoning_content":"add them"}}]}`,
+		"reasoning":         `{"choices":[{"message":{"role":"assistant","content":"Four.","reasoning":"add them"}}]}`,
+	} {
+		srv, _, _ := chatServer(t, 200, reply)
+		turn, err := (&OpenAI{BaseURL: srv.URL, Model: "m", Key: testKey}).Next(context.Background(), []Message{{Role: RoleUser, Text: "x"}}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if turn.Text != "Four." || turn.Reasoning != "add them" {
+			t.Errorf("%s: turn = %+v", field, turn)
+		}
+	}
+}
+
+func TestSplitReasoning(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct{ in, reasoning, answer string }{
+		{"plain", "", "plain"},
+		{"<reasoning>a</reasoning>b", "a", "b"},
+		{"  <reasoning>a</reasoning>\n<reasoning>c</reasoning> b ", "a\n\nc", "b"},
+		{"<reasoning>never closed", "never closed", ""},
+		{"answer <reasoning>not leading</reasoning>", "", "answer <reasoning>not leading</reasoning>"},
+	} {
+		r, a := splitReasoning(c.in)
+		if r != c.reasoning || a != c.answer {
+			t.Errorf("splitReasoning(%q) = %q, %q; want %q, %q", c.in, r, a, c.reasoning, c.answer)
+		}
+	}
+}

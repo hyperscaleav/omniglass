@@ -22,6 +22,9 @@ const (
 	typeTextMessageStart   = "TEXT_MESSAGE_START"
 	typeTextMessageContent = "TEXT_MESSAGE_CONTENT"
 	typeTextMessageEnd     = "TEXT_MESSAGE_END"
+	typeReasoningStart     = "REASONING_MESSAGE_START"
+	typeReasoningContent   = "REASONING_MESSAGE_CONTENT"
+	typeReasoningEnd       = "REASONING_MESSAGE_END"
 	typeToolCallStart      = "TOOL_CALL_START"
 	typeToolCallArgs       = "TOOL_CALL_ARGS"
 	typeToolCallEnd        = "TOOL_CALL_END"
@@ -145,6 +148,14 @@ func (r *Run) Hear(e assistant.Event) {
 		r.emit(textEvent{Type: typeTextMessageStart, MessageID: id, Role: "assistant"})
 		r.emit(textEvent{Type: typeTextMessageContent, MessageID: id, Delta: e.Text})
 		r.emit(textEvent{Type: typeTextMessageEnd, MessageID: id})
+	case assistant.EventReasoning:
+		if e.Text == "" {
+			return
+		}
+		id := r.messageID()
+		r.emit(textEvent{Type: typeReasoningStart, MessageID: id, Role: "reasoning"})
+		r.emit(textEvent{Type: typeReasoningContent, MessageID: id, Delta: e.Text})
+		r.emit(textEvent{Type: typeReasoningEnd, MessageID: id})
 	case assistant.EventProposed:
 		args := []byte("{}")
 		if e.Arguments != nil {
