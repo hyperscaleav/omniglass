@@ -282,23 +282,25 @@ jobs:
             Follow CLAUDE.md: a failing test first where the feedback is about behavior, the
             fix, the docs it touches, and green tests for what you changed.
 
-            Keep your work on GitHub as you go. This run is claude -p: the moment you end
+            Keep your work in commits as you go. This run is claude -p: the moment you end
             your turn it exits, and the checkout is thrown away with everything not pushed.
-            So commit and push to ${{ steps.gate.outputs.head }} after each point of the
-            feedback you complete. End each commit message with the line
-            "Refs #${{ steps.gate.outputs.issue }}"; never write Fixes or Closes in a commit.
-            Before a point's push, run its tests (make test-short at least) and
-            scripts/agent-sync.sh guard origin/main. The last push needs make preflight green:
-            it runs what the PR's required checks run (make gen with a drift check, make test,
-            the docs build, the migration check) and fails if this branch commits the agents'
-            own config. If you cannot make it pass, name the step that stays red in your
-            summary: the workflow pushes whatever you leave unpushed as it stands.
+            So commit after each point of the feedback you complete, and end each commit
+            message with the line "Refs #${{ steps.gate.outputs.issue }}"; never write Fixes
+            or Closes in a commit. Do NOT push mid-run: every push to this PR starts a full
+            agent-review, so push once, to ${{ steps.gate.outputs.head }}, at the very end,
+            after your last commit and a green make preflight. Before each commit, run that
+            point's tests (make test-short at least) and scripts/agent-sync.sh guard
+            origin/main. make preflight runs what the PR's required checks run (make gen
+            with a drift check, make test, the docs build, the migration check) and fails if
+            this branch commits the agents' own config. If you cannot make it pass, name the
+            step that stays red in your summary: the workflow pushes whatever you leave
+            unpushed, committed or not, as it stands.
 
             Never end your turn with work outstanding. Wait in the foreground: a Bash call
             that blocks until the build or the test run finishes, repeated under the tool's
             time limit if it is long. Do not use Monitor, run_in_background, background
             tasks or a sleep you mean to come back to, for anything you need to finish: they
-            do not outlive your turn. Only end your turn after your last push and the
+            do not outlive your turn. Only end your turn after your one push and the
             answers below.
 
             Never commit CLAUDE.md, CLAUDE.local.md, AGENTS.md, .claude/, .mcp.json or the

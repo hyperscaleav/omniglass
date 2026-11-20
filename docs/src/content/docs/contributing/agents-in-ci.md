@@ -199,7 +199,7 @@ are skipped.
 
 ## Green before it pushes
 
-Both agents run `make preflight` before their last push, and before an agent-build PR is marked ready, and push the finished work only when it passes (earlier pushes, [below](#work-survives-an-early-stop), need the step's own tests). It runs what
+Both agents run `make preflight` before their last push, and before an agent-build PR is marked ready, and push the finished work only when it passes (agent-build's earlier pushes, [below](#work-survives-an-early-stop), need the step's own tests). It runs what
 the PR's required checks run: `make gen` with a drift check, `make test`, the docs build and
 the migration check against `origin/main`. The e2e tier and the image smoke stay CI-only.
 `scripts/preflight_test.go` fails if the target and the workflows it mirrors drift apart.
@@ -220,10 +220,13 @@ is thrown away with whatever was not pushed. Run 44743523903 on #2223 ended at t
 with a commit and a worktree of edits, nothing pushed, and a green job. So the work is kept two
 ways:
 
-- **The agent pushes as it goes.** After each completed step (code with its tests green, docs,
-  screenshots) it commits and pushes to the issue branch, each commit ending `Refs #<issue>`,
-  never `Fixes` or `Closes`. It opens the draft PR once, after the last push. It never ends its
-  turn with work outstanding: it waits in the foreground, and `Monitor` is disallowed.
+- **The agent commits as it goes.** After each completed step (code with its tests green, docs,
+  screenshots) it commits, each commit ending `Refs #<issue>`, never `Fixes` or `Closes`.
+  agent-build also pushes after each step: there is no PR yet, so no review starts. agent-fix
+  pushes once, at the end, after its last commit and a green `make preflight`, because its PR
+  exists and every push to it starts an agent-review. agent-build opens its draft PR once, after
+  the last push. Neither ends its turn with work outstanding: they wait in the foreground, and
+  `Monitor` is disallowed.
 - **The workflow saves what is left.** After the agent, `scripts/agent-rescue.sh` reads the
   checkout in a step with no token (no git in the agent's tree beyond `ls-files`, with a scrubbed
   environment) and builds a bare repo holding the branch: its commits, plus any uncommitted files
@@ -231,8 +234,8 @@ ways:
   from the branch, never from the checkout. The next step pushes it with the fresh token, never
   with force, and refuses a branch that touches `.github/workflows`. agent-build also opens a draft
   PR that closes the issue when none exists, its body saying the agent stopped early and quoting
-  its last message. agent-fix only pushes: the PR exists, and a run whose only unpushed commit is
-  the merge of `main` pushes nothing.
+  its last message. agent-fix only pushes, once: the PR exists, that push is the only extra review, and a run whose
+  only unpushed commit is the merge of `main` pushes nothing.
 
 A rescued branch has not passed `make preflight`. Continue it with `@hyperscale-agent` on the PR.
 A push to a branch with no PR starts no workflow: agent-review runs on `pull_request` only, and the
