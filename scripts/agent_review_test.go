@@ -886,3 +886,296 @@ func TestAgentReviewFollowups(t *testing.T) {
 		t.Fatalf("no thread id: %s", out2)
 	}
 }
+
+// The one-shot reviewer (#2250): a script builds its whole prompt, one model
+// call reviews it, and only a blocking finding it is unsure of goes to a
+// short verify session.
+
+// prRepo builds a checkout of a PR head that carries the skill, its catalog,
+// the solidjs skill and a docs page, with a PR commit on top of main. It
+// returns the repo, the full diff, and the main commit.
+func prRepo(t *testing.T, prFiles map[string]string) (string, string, string) {
+	t.Helper()
+	dir := t.TempDir()
+	write := func(name, body string) {
+		p := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	git(t, dir, "init", "-q", "-b", "main")
+	write(".claude/skills/adversarial-review/SKILL.md", "# Adversarial review\nREFUTE-BOTH-WAYS\n")
+	write(".claude/skills/adversarial-review/references/anti-patterns/README.md", "the catalog's readme\n")
+	write(".claude/skills/adversarial-review/references/anti-patterns/alpha-cue.md", "## alpha-cue (live)\nALPHA-ENTRY\n")
+	write(".claude/skills/adversarial-review/references/anti-patterns/beta-cue.md", "## beta-cue (live)\nBETA-ENTRY\n")
+	write(".claude/skills/solidjs/SKILL.md", "SOLID-SKILL\n")
+	write("docs/guide.md", "Call `OldRetryLimit` to cap retries.\nNothing else.\n")
+	write("internal/x.go", "package x\n\nconst OldRetryLimit = 3\n")
+	git(t, dir, "add", "-A")
+	git(t, dir, "commit", "-q", "-m", "base")
+	base := git(t, dir, "rev-parse", "HEAD")
+	git(t, dir, "checkout", "-q", "-b", "pr")
+	for name, body := range prFiles {
+		write(name, body)
+	}
+	git(t, dir, "add", "-A")
+	git(t, dir, "commit", "-q", "-m", "pr")
+	diff := filepath.Join(t.TempDir(), "review.diff")
+	if err := os.WriteFile(diff, []byte(git(t, dir, "diff", base+"...HEAD")+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir, diff, base
+}
+
+func buildContext(t *testing.T, dir string, args ...string) (string, string) {
+	t.Helper()
+	requireTools(t)
+	out := t.TempDir()
+	script, _ := filepath.Abs("agent-review.sh")
+	cmd := exec.Command("bash", append([]string{script, "context", out}, args...)...)
+	cmd.Dir = dir
+	said, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("context %v: %v: %s", args, err, said)
+	}
+	static, _ := os.ReadFile(filepath.Join(out, "static.md"))
+	pr, _ := os.ReadFile(filepath.Join(out, "pr.md"))
+	return string(static), string(pr)
+}
+
+func TestAgentReviewContextFirstReview(t *testing.T) {
+	dir, diff, _ := prRepo(t, map[string]string{"internal/x.go": "package x\n\nconst NewRetryLimit = 5\n"})
+	issue := filepath.Join(t.TempDir(), "issue.md")
+	if err := os.WriteFile(issue, []byte("SCOPE-CONTRACT text"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	static, pr := buildContext(t, dir, diff, "", issue)
+	for _, want := range []string{"one-shot adversarial reviewer", "REFUTE-BOTH-WAYS", `<catalog-entry file="alpha-cue.md">`, "ALPHA-ENTRY", "BETA-ENTRY"} {
+		if !strings.Contains(static, want) {
+			t.Fatalf("static part lacks %q:\n%s", want, static)
+		}
+	}
+	if strings.Contains(static, "the catalog's readme") || strings.Contains(static, "SOLID-SKILL") {
+		t.Fatalf("static part has the readme or the solidjs skill for a Go-only diff:\n%s", static)
+	}
+	if strings.Index(static, "alpha-cue") > strings.Index(static, "beta-cue") {
+		t.Fatal("catalog entries are not in a stable order")
+	}
+	for _, want := range []string{
+		"SCOPE-CONTRACT text",
+		"This is the whole diff",
+		"+const NewRetryLimit = 5",
+		`<file path="internal/x.go" lines="1-3">`,
+		"     3  const NewRetryLimit = 5",
+		// The neighbor check: the docs line naming what the diff removed.
+		"docs/guide.md:1:Call `OldRetryLimit` to cap retries.",
+	} {
+		if !strings.Contains(pr, want) {
+			t.Fatalf("PR part lacks %q:\n%s", want, pr)
+		}
+	}
+	if strings.Contains(pr, "Open findings") {
+		t.Fatalf("a first review lists open findings:\n%s", pr)
+	}
+	// The static part is the same for another PR, so it caches.
+	dir2, diff2, _ := prRepo(t, map[string]string{"internal/y.go": "package x\n"})
+	static2, _ := buildContext(t, dir2, diff2)
+	if static2 != static {
+		t.Fatal("the static part changed with the PR")
+	}
+}
+
+func TestAgentReviewContextReReviewWithOpenThreads(t *testing.T) {
+	body := "package x\n\n" + strings.Repeat("// filler\n", 20) + "const NewRetryLimit = 5\n"
+	dir, diff, _ := prRepo(t, map[string]string{"internal/x.go": body})
+	open := filepath.Join(t.TempDir(), "open.json")
+	if err := os.WriteFile(open, []byte(`[{"comment_id":41,"path":"internal/x.go","line":23,"severity":"blocking","rule":"magic-number","title":"Bare limit","detail":"A bare 5."},
+		{"comment_id":42,"path":"gone.go","line":3,"severity":"advisory","rule":"r","title":"Old","outdated":true}]`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	last := git(t, dir, "rev-parse", "HEAD~1")
+	_, pr := buildContext(t, dir, diff, open, "", last)
+	for _, want := range []string{
+		"This is a re-review",
+		last,
+		"Open findings from earlier reviews (recheck each)",
+		"comment_id 41: blocking magic-number at internal/x.go:23",
+		"It said: Bare limit A bare 5.",
+		`<file path="internal/x.go" lines="15-31">`,
+		"    23  const NewRetryLimit = 5",
+		"comment_id 42: advisory r at gone.go:3 (that line is from the version it was raised on",
+		"The file is gone from the PR.",
+	} {
+		if !strings.Contains(pr, want) {
+			t.Fatalf("PR part lacks %q:\n%s", want, pr)
+		}
+	}
+	// A last head that is not a commit id is refused.
+	out := t.TempDir()
+	script, _ := filepath.Abs("agent-review.sh")
+	cmd := exec.Command("bash", script, "context", out, diff, open, "", "not-a-sha")
+	cmd.Dir = dir
+	if err := cmd.Run(); err == nil {
+		t.Fatal("context took a last head that is no commit id")
+	}
+}
+
+func TestAgentReviewContextWebDiffAddsSolid(t *testing.T) {
+	dir, diff, _ := prRepo(t, map[string]string{"web/src/pages/A.tsx": "export const A = () => <div />;\n"})
+	static, pr := buildContext(t, dir, diff)
+	if !strings.Contains(static, "SOLID-SKILL") {
+		t.Fatalf("a diff under web/src lacks the solidjs skill:\n%s", static)
+	}
+	if !strings.Contains(pr, `<file path="web/src/pages/A.tsx" lines="1-1">`) {
+		t.Fatalf("PR part lacks the web file:\n%s", pr)
+	}
+}
+
+func TestAgentReviewContextLargeFileGoesInByHunk(t *testing.T) {
+	var b strings.Builder
+	for i := 1; i <= 1000; i++ {
+		b.WriteString("line " + strconv.Itoa(i) + "\n")
+	}
+	dir, _, base := prRepo(t, map[string]string{"big.txt": b.String()})
+	changed := strings.Replace(b.String(), "line 500\n", "line FIVE HUNDRED\n", 1)
+	if err := os.WriteFile(filepath.Join(dir, "big.txt"), []byte(changed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, dir, "commit", "-q", "-am", "change one line")
+	diff := filepath.Join(t.TempDir(), "review.diff")
+	if err := os.WriteFile(diff, []byte(git(t, dir, "diff", base+"...HEAD")+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, pr := buildContext(t, dir, diff)
+	// A new file of 1000 lines is one hunk of all of it; check the edit commit alone.
+	diff2 := filepath.Join(t.TempDir(), "review2.diff")
+	if err := os.WriteFile(diff2, []byte(git(t, dir, "diff", "HEAD~1", "HEAD")+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, pr2 := buildContext(t, dir, diff2)
+	if !strings.Contains(pr2, `<file path="big.txt" lines="457-544" of="1000">`) || strings.Contains(pr2, "  line 1\n") {
+		t.Fatalf("a large file did not go in by hunk:\n%s", pr2)
+	}
+	if !strings.Contains(pr, `of="1000"`) {
+		t.Fatalf("the whole-PR context lost the large file:\n%.2000s", pr)
+	}
+}
+
+func TestAgentReviewToVerify(t *testing.T) {
+	out, code := agentReview(t, `{"summary":"s","findings":[
+		{"severity":"blocking","path":"a.go","line":1,"rule":"r","title":"sure","failure":"f","fix":"x","verify":false},
+		{"severity":"blocking","path":"b.go","line":2,"rule":"r","title":"unsure","failure":"f","fix":"x","verify":true},
+		{"severity":"advisory","path":"c.go","line":3,"rule":"r","title":"advisory","failure":"f","fix":"x","verify":true}]}`, "to-verify")
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, out)
+	}
+	if out != `[{"severity":"blocking","path":"b.go","line":2,"rule":"r","title":"unsure","failure":"f","fix":"x","index":1}]` {
+		t.Fatalf("to-verify = %s", out)
+	}
+	if out, _ := agentReview(t, `{"findings":[]}`, "to-verify"); out != "[]" {
+		t.Fatalf("nothing to verify = %s", out)
+	}
+	if _, code := agentReview(t, `[]`, "to-verify"); code != 2 {
+		t.Fatalf("bad input: exit %d, want 2", code)
+	}
+}
+
+func TestAgentReviewOneshotResult(t *testing.T) {
+	oneshot := `{"summary":"swept","findings":[
+		{"severity":"blocking","path":"a.go","line":1,"rule":"r","title":"sure","failure":"f","fix":"x","verify":false},
+		{"severity":"blocking","path":"b.go","line":2,"rule":"r","title":"refuted","failure":"f","fix":"x","verify":true},
+		{"severity":"blocking","path":"c.go","line":3,"rule":"r","title":"no word","failure":"f","fix":"x","verify":true},
+		{"severity":"blocking","path":"d.go","line":4,"rule":"r","title":"confirmed","failure":"f","fix":"x","verify":true}],
+		"rechecks":[{"comment_id":7,"status":"fixed","note":"n"}]}`
+	out, code := agentReview(t, `{"oneshot":`+oneshot+`,"verify":{"results":[{"index":1,"status":"refuted"},{"index":3,"status":"confirmed"}]}}`, "oneshot-result")
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, out)
+	}
+	var got struct {
+		Name     string `json:"name"`
+		Summary  string `json:"summary"`
+		Findings []map[string]any
+		Rechecks []map[string]any
+	}
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	var titles []string
+	for _, f := range got.Findings {
+		titles = append(titles, f["title"].(string))
+		if _, ok := f["verify"]; ok {
+			t.Fatalf("verify left on a finding: %s", out)
+		}
+	}
+	if got.Name != "oneshot" || strings.Join(titles, ",") != "sure,no word,confirmed" || len(got.Rechecks) != 1 {
+		t.Fatalf("oneshot-result = %s", out)
+	}
+	if got.Summary != "swept (verify dropped 1)" {
+		t.Fatalf("summary = %q", got.Summary)
+	}
+	// With no verify session, nothing is dropped.
+	out2, _ := agentReview(t, `{"oneshot":`+oneshot+`,"verify":null}`, "oneshot-result")
+	if strings.Count(out2, `"title"`) != 4 {
+		t.Fatalf("no verify: %s", out2)
+	}
+	if _, code := agentReview(t, `{"verify":{}}`, "oneshot-result"); code != 2 {
+		t.Fatalf("bad input: exit %d, want 2", code)
+	}
+}
+
+// The one-shot reviewer's own recheck counts, like the recheck lens's, and a
+// finding it raised that matches a thread it judged fixed never blocks (PR
+// #2225, review 5985358926).
+func TestAgentReviewOneshotRecheckNeverReraisesWhatItFixed(t *testing.T) {
+	r := reviewOf(t, `{"head_sha":"h","expected":["oneshot"],
+		"open_threads":[{"comment_id":11,"path":"x.go","line":5,"rule":"mocked-sut","severity":"blocking","title":"Mocks the store"}],
+		"lenses":[{"name":"oneshot","summary":"s",
+			"findings":[{"severity":"blocking","path":"x.go","line":5,"rule":"mocked-sut","title":"Mocks the store","failure":"f","fix":"x"}],
+			"rechecks":[{"comment_id":11,"status":"fixed","note":"Uses the test db now."}]}]}`)
+	if r.Event != "COMMENT" || !strings.HasPrefix(r.Body, "✅ Ship · nothing found") {
+		t.Fatalf("%s %q: the finding it judged fixed still blocks", r.Event, r.Body)
+	}
+	if !strings.Contains(r.Body, "Fixed since the last review:\n✅ `x.go:5` Mocks the store") {
+		t.Fatalf("body = %q", r.Body)
+	}
+	// Another lens raising it again still keeps the thread open.
+	again := reviewOf(t, `{"head_sha":"h","expected":["oneshot","neighbor"],
+		"open_threads":[{"comment_id":11,"path":"x.go","line":5,"rule":"mocked-sut","severity":"blocking","title":"Mocks the store"}],
+		"lenses":[{"name":"oneshot","findings":[],"rechecks":[{"comment_id":11,"status":"fixed","note":"n"}]},
+			{"name":"neighbor","findings":[{"severity":"blocking","path":"x.go","line":5,"rule":"mocked-sut","failure":"f","fix":"x"}]}]}`)
+	if again.Event != "REQUEST_CHANGES" {
+		t.Fatalf("another lens's finding was dropped: %q", again.Body)
+	}
+	// An open recheck from the one-shot reviewer keeps the blocker.
+	open := reviewOf(t, `{"head_sha":"h","expected":["oneshot"],
+		"open_threads":[{"comment_id":11,"path":"x.go","line":5,"rule":"mocked-sut","severity":"blocking","title":"Mocks the store"}],
+		"lenses":[{"name":"oneshot","findings":[],"rechecks":[{"comment_id":11,"status":"open","note":"n"}]}]}`)
+	if open.Event != "REQUEST_CHANGES" || !strings.Contains(open.Body, "↪ ❌ `x.go:5` Mocks the store") {
+		t.Fatalf("%s %q", open.Event, open.Body)
+	}
+}
+
+func TestAgentReviewGate(t *testing.T) {
+	ignore := `^(plan|agent-review|oneshot|lens \\(.*\\))$`
+	for _, c := range []struct {
+		name, in, want string
+	}{
+		{"green", `{"mergeable":"MERGEABLE","checks":[{"name":"test","status":"completed","conclusion":"success"},{"name":"lint","status":"completed","conclusion":"skipped"}]}`, "review"},
+		{"conflict", `{"mergeable":"CONFLICTING","checks":[]}`, "hold: the PR conflicts with its base"},
+		{"red", `{"mergeable":"MERGEABLE","checks":[{"name":"test","status":"completed","conclusion":"failure"},{"name":"e2e","status":"in_progress"},{"name":"test","status":"completed","conclusion":"failure"}]}`, "hold: test failed"},
+		{"running", `{"mergeable":"UNKNOWN","checks":[{"name":"test","status":"in_progress"},{"name":"lint","status":"completed","conclusion":"success"}]}`, "wait"},
+		{"own checks ignored", `{"mergeable":"MERGEABLE","checks":[{"name":"agent-review","status":"completed","conclusion":"failure"},{"name":"lens (invariants)","status":"completed","conclusion":"failure"},{"name":"plan","status":"in_progress"}]}`, "review"},
+	} {
+		in := strings.Replace(c.in, `{"mergeable"`, `{"ignore":"`+ignore+`","mergeable"`, 1)
+		out, code := agentReview(t, in, "gate")
+		if code != 0 || out != c.want {
+			t.Errorf("%s: %q (exit %d), want %q", c.name, out, code, c.want)
+		}
+	}
+	if _, code := agentReview(t, `{}`, "gate"); code != 2 {
+		t.Fatalf("bad input: exit %d, want 2", code)
+	}
+}

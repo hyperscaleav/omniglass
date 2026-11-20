@@ -12,7 +12,7 @@ ruleset, and none can merge ([ADR-2175](/architecture/decisions/#adr-2175-agent-
 | Workflow | Starts on | Does |
 | --- | --- | --- |
 | `agent-build.yml` | `run:dev-gha` on an issue | builds the ticket into a draft PR that closes it, and marks it ready when done |
-| `agent-review.yml` | every same-repo PR that is opened, pushed, reopened or marked ready, and every merge-queue entry | runs the [adversarial review](https://github.com/hyperscaleav/omniglass/tree/main/.claude/skills/adversarial-review) read-only as parallel lenses, posts their findings as one review, and passes its check only when it says ship |
+| `agent-review.yml` | every same-repo PR that is opened, pushed, reopened, marked ready or labeled, every merge-queue entry, and a manual run | runs the [adversarial review](https://github.com/hyperscaleav/omniglass/tree/main/.claude/skills/adversarial-review) read-only, as one call or as parallel lenses, posts its findings as one review, and passes its check only when it says ship |
 | `agent-fix.yml` | `@hyperscale-agent` (or `@claude`) on a PR, a review that requests changes, or agent-review's own Changes requested | pushes a fix to the PR's branch |
 
 A fourth, `agent-open-pr.yml`, runs no agent: it opens a PR as the agents' App from a branch a
@@ -81,10 +81,11 @@ head requests changes or opens with a blocking count, green when it says ship. T
 with the default branch's `scripts/agent-review.sh` and `scripts/agent-trust.sh`, so a PR
 cannot rewrite its own check. The one exception was the PR that added `agent-review.sh`
 (#2211): main had no copy yet, so its own review used the PR's. The check is not in either main ruleset yet; making it required
-is the architect's call. Opus reviews PRs that close a `risk:high` ticket, sonnet the rest. The
+is the architect's call. The lens review uses Opus on PRs that close a `risk:high` ticket and
+sonnet on the rest; the [one-shot review](#the-one-shot-review) uses Sonnet 5.5 on every PR. The
 reviewer reads the diff and the code, never the PR's conversation.
 
-The review runs as lenses side by side, so a large PR takes minutes, not the twenty one agent
+The lens review runs as lenses side by side, so a large PR takes minutes, not the twenty one agent
 took sweeping it alone (#2211). Each lens is its own job, `lens (<name>)`, with its own context
 and a read-only token:
 
@@ -135,8 +136,45 @@ the verdict reads the blocking count at the top of the comment, but agent-fix do
 
 In the merge queue the check reports without reviewing again: it reads the verdict already
 given on the queued PR's head, so `agent-review` can be made required without holding the queue.
+A label other than `review:deep` does the same on the PR, so adding one never turns the check
+green.
 A draft, a fork PR and a dependabot PR are not reviewed, and their check passes with the reason
 in its log, as a skipped check would.
+
+### The one-shot review
+
+The lens review costs about $8 a PR, mostly in agent turns that re-read the same skill and
+catalog (#2250). The one-shot review does the same sweep in one model call. The repo variable
+`AGENT_REVIEW_MODE` picks the reviewer: `lens` (the default) or `oneshot`.
+
+- **One call.** `scripts/agent-review.sh context` lays the whole review into one prompt: the
+  skill, every catalog entry and, for a diff under `web/src`, the `solidjs` skill first (the same
+  on every run, so it is cached), then the issue the PR closes, the diff, each changed file with
+  line numbers (the lines around each hunk for a file past 800 lines), the docs lines that name
+  what the diff changes, and each open thread with its lines as they are now. One Claude Code
+  call on the plan's token, with no tools, returns the findings and a recheck of every open
+  thread in the lenses' format. It runs as the `oneshot` job, outside the checkout, so nothing
+  in the PR's own settings loads.
+- **Verify only when unsure.** A blocking finding the call could not trace to the end from the
+  code it was shown is marked `verify`. Only then does a short read-only agent session (15 turns)
+  read the code and run `go build`, `go vet` and `go test` to settle it. A finding it refutes is
+  dropped. One it gives no word on still counts.
+- **Same verdict.** Its findings go through the same review, carry-forward, verdict and
+  five-round cap as the lenses'. A finding it raises on a thread it judged fixed in the same
+  call is dropped, so it never blocks on what it just called fixed.
+- **A deep review on request.** A maintainer adds the label `review:deep` to run the lens
+  review on that PR, in either mode.
+- **Shadow mode.** Run agent-review by hand (Actions, agent-review, Run workflow) with a PR
+  number, and a past head of it if you like. It runs the one-shot review on that head, writes
+  its findings and cost to the run's summary and an artifact, and posts nothing. That is how
+  the replay on past PRs is run before `oneshot` becomes the default.
+
+### Red or conflicted PRs wait
+
+A push to a PR that conflicts with its base, or whose other checks already failed, gets no new
+review. The `plan` job waits for the PR's other checks, 15 minutes at most, then reviews, or
+holds: the check goes red and says why. Push a fix that turns the PR green, and that push is
+reviewed. A `review:deep` label is never held.
 
 ## Asking for a fix
 
