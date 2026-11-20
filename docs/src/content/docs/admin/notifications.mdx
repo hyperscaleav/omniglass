@@ -1,6 +1,11 @@
 ---
 title: Notifications
 description: "Send an alarm to a chat channel, a group's inbox or email: the targets, the action rule that sends to them, the message it carries, and how a delivery reads on the alarm's timeline."
+sidebar:
+  order: 22
+  badge:
+    text: Built
+    variant: success
 screenshots:
   - id: notification-target-new
     path: /web/notification-targets
@@ -16,7 +21,7 @@ screenshots:
     alt: "A new action rule: the transitions it sends on, its when written in the expression editor with the alarm facts it may name, the targets it sends to, and the message it sends."
 ---
 
-import SeededSet from '../../../../components/SeededSet.astro';
+import SeededSet from '../../../components/SeededSet.astro';
 
 A **notification** is the message Omniglass sends somebody when an alarm opens or clears, to the
 chat or paging tool they already watch. This page walks the one task end to end: **send an alarm

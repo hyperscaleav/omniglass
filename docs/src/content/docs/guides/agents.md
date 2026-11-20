@@ -294,7 +294,7 @@ That runs `openai/gpt-4.1-mini` on OpenRouter; `model` names another, and `base_
 server (`http://ollama.internal:11434/v1`, say). The server reads these at the start of each run, so a
 change is the next run's, with no restart. It unseals the key for each run and sends it only to the
 model; no setting, route, event or log line shows it, and omnibot never sees it. A server on an
-internal address is one the [egress guard](/guides/admin/notifications/) refuses until
+internal address is one the [egress guard](/admin/notifications/) refuses until
 the notification settings' `egress_allow` names it. A run whose provider fails (a refused key, a rate limit, the
 server down) ends on an error that names the cause; a configured key secret that is gone refuses the
 run, naming it, rather than playing the recording. `{"provider":"none"}` turns the model off.
