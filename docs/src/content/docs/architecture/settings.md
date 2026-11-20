@@ -42,7 +42,10 @@ none and is absent until a level sets it. It is the **fall-through**, not the bo
    refused at boot (naming the variable), since per-user values do not live in the process
    environment. The twelve-factor rung between the committed file and the DB admin override: a
    container's secret, a CI's temporary nudge, a per-environment flip without an edit to the file
-   image (#2223).
+   image (#2223). A setting that names a secret (the assistant's `key_secret`, the notification settings' `mail_secret`)
+   may name one the environment declares too, as `OMNIGLASS_SECRET__<NAME>`
+   ([env-backed secrets](/architecture/variables/)), so a deployment configures a credential and the
+   setting naming it from the environment alone.
 
 **Binding levels** are rows in Postgres, the identity cascade: a value set at a level is that level's **binding**, and a more-specific binding **shadows** a broader one.
 

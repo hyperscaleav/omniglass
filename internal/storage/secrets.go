@@ -75,6 +75,12 @@ type Secret struct {
 	AdminSensitive bool
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+	// Source is where the secret comes from: SecretSourceStored (empty reads
+	// the same) for a sealed row, SecretSourceEnv for one the server's
+	// environment declares (#2223), which carries no fields and SourceVar,
+	// the variable that declares it.
+	Source    string
+	SourceVar string
 	// version is the digest of the sealed value (secretVersion), set on the
 	// rows the audit writers read; unexported, so no projection can leak it.
 	version string
@@ -213,6 +219,11 @@ func (p *PG) CreateSecret(ctx context.Context, actorID string, spec SecretSpec, 
 	if p.secret == nil {
 		return nil, ErrNoSecretProvider
 	}
+	// The environment holds this platform name: a stored one beside it would
+	// make every bare-name reference ambiguous (#2223).
+	if e := p.envSecretNamed(spec.Name); e != nil && spec.OwnerKind == "platform" {
+		return nil, &SecretFromEnvError{Name: e.Name, Var: e.Var}
+	}
 	st, err := p.GetSecretType(ctx, spec.SecretType)
 	if err != nil {
 		return nil, err // ErrUnknownSecretType -> 422
@@ -338,7 +349,17 @@ func (p *PG) ListSecrets(ctx context.Context, read scope.Set, canAdmin bool) ([]
 		s.OwnerName = name
 		out = append(out, *s)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// The env-backed platform secrets follow the stored ones, under the same
+	// scope and admin filter a stored platform secret meets (#2223).
+	for _, name := range p.envSecretNames() {
+		if e := p.envSecrets[name]; envSecretVisible(e, read, canAdmin) {
+			out = append(out, e.asSecret())
+		}
+	}
+	return out, nil
 }
 
 // DeleteSecret removes a secret by id, audited. The owner must be within the
@@ -353,6 +374,11 @@ func (p *PG) DeleteSecret(ctx context.Context, actorID, ref string, read, action
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	before, err := p.secretForAction(ctx, tx, ref, read, action, canAdmin, canPlatform)
+	if errors.Is(err, ErrSecretNotFound) {
+		if envErr := p.refuseEnvSecret(ref, read, canAdmin); envErr != nil {
+			return envErr
+		}
+	}
 	if err != nil {
 		return err
 	}
@@ -398,6 +424,11 @@ func (p *PG) UpdateSecret(ctx context.Context, actorID, ref string, patch Secret
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	row, shape, err := p.secretRowForAction(ctx, tx, ref, read, action, canAdmin, canPlatform)
+	if errors.Is(err, ErrSecretNotFound) {
+		if envErr := p.refuseEnvSecret(ref, read, canAdmin); envErr != nil {
+			return nil, envErr
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -497,6 +528,13 @@ func (p *PG) decryptSecret(ctx context.Context, actorID, ref, verb string, read,
 	// permission does not apply here: the read/action scopes and the admin tier are
 	// the whole gate. Passing true keeps the shared fetch from re-gating a read.
 	row, shape, err := p.secretRowForAction(ctx, tx, ref, read, action, canAdmin, true)
+	if errors.Is(err, ErrSecretNotFound) {
+		// An env secret's value is the server's environment: it is never
+		// handed back over the API (#2223).
+		if envErr := p.refuseEnvSecret(ref, read, canAdmin); envErr != nil {
+			return nil, envErr
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -597,7 +635,36 @@ func (p *PG) ResolveSecrets(ctx context.Context, componentID string, read scope.
 		r.Fields = maskValue(shapes[r.SecretType], value)
 		out = append(out, r)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return p.withEnvCandidates(out, canAdmin), nil
+}
+
+// withEnvCandidates adds the env-backed platform secrets to a component's
+// cascade (#2223): each sits at the platform band, wins when nothing nearer
+// carries its name, and shows its masked fields as a stored one does. The
+// component is already in the caller's read scope, as for a stored platform
+// secret.
+func (p *PG) withEnvCandidates(out []ResolvedSecret, canAdmin bool) []ResolvedSecret {
+	if len(p.envSecrets) == 0 {
+		return out
+	}
+	seen := map[string]bool{}
+	for _, r := range out {
+		seen[r.Name] = true
+	}
+	for _, name := range p.envSecretNames() {
+		e := p.envSecrets[name]
+		if e.typ.DefaultAdminSensitive && !canAdmin {
+			continue
+		}
+		out = append(out, ResolvedSecret{
+			ID: envSecretIDPrefix + e.Name, Name: e.Name, SecretType: e.typ.Name, SecretTypeID: e.typ.ID,
+			OwnerKind: "platform", Band: 0, Winner: !seen[e.Name], Fields: e.maskedFields(),
+		})
+	}
+	return out
 }
 
 // resolveSecretsSQL walks the three owner trees up from a component, tags each
@@ -1105,6 +1172,13 @@ func (p *PG) outpostSecrets(ctx context.Context, refs []outpostSecretRef) ([]out
 	for i, cs := range found {
 		switch {
 		case len(cs) == 0:
+			// Nothing stored covers the reference: the environment's platform
+			// secret of that name does, as a stored platform one would (#2223).
+			if e := p.envSecretNamed(refs[i].name); e != nil {
+				row := secretRow{id: envSecretIDPrefix + e.Name, name: e.Name, secretType: e.typ.Name, version: e.version, ownerKind: "platform"}
+				out[i] = outpostSecret{fields: e.Fields, version: e.version, row: &row, shape: e.shape}
+				continue
+			}
 			out[i].err = ErrSecretNotFound
 			continue
 		case len(cs) > 1:

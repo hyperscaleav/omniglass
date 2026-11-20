@@ -356,6 +356,13 @@ func (p *PG) resolveInputs(ctx context.Context, q querier, d *Driver, sp *driver
 		if err := rows.Err(); err != nil {
 			return nil, fmt.Errorf("storage: resolve secret reference %q: %w", ref, err)
 		}
+		// An env-backed platform secret is a candidate as a stored platform
+		// one is (#2223): seen with the all read scope (and the admin tier
+		// for an admin-sensitive type), bindable with the all bind scope.
+		if e := p.envSecretNamed(ref); e != nil && envSecretVisible(e, es.Read, es.CanAdmin) {
+			visibleTypes = append(visibleTypes, e.typ.Name)
+			bindable = es.Bind.All
+		}
 		switch {
 		case len(visibleTypes) == 0:
 			return nil, fmt.Errorf("%w: input %q references a secret that does not exist or is not yours to use", ErrAttachInvalid, in.Name)

@@ -145,20 +145,23 @@ command itself; here is when you would reach for each:
 - `--image` runs an omniglass image of your choosing (env `OMNIGLASS_LAB_IMAGE`), with a warning: a lab
   whose server and binary disagree is yours to debug. A build-keyed `make` image needs no flag; reach
   for it for an image that is not the one this binary's `make` built, such as a private build.
-- `--omnibot-key-env <VAR>` runs omnibot on a live model: the lab stores that variable's value as its
-  model key and points omnibot at OpenRouter (`--omnibot-key-env OPENROUTER_API_KEY`), so the panel and
+- `--omnibot-key-env <VAR>` runs omnibot on a live model: the lab hands its server that variable's
+  value as the [env-backed platform secret](/admin/secrets/#secrets-from-the-environment)
+  `lab-omnibot-key` and sets the assistant's `provider` and `key_secret` to it from the environment
+  (`--omnibot-key-env OPENROUTER_API_KEY` runs OpenRouter's default model), so the panel and
   `omniglass omnibot` answer for real ([pointing omnibot at a model](/guides/agents/#pointing-omnibot-at-a-model)).
-  The key travels to the lab's seed in its environment, visible to `docker inspect` on this machine
-  while the seed runs, as the outpost's token is. Without the flag omnibot plays the lab's recording,
-  and the key a run before stored is removed. A scale lab runs no omnibot, so it refuses the flag.
-- Every `OMNIGLASS_SETTING__<NAMESPACE>__<KEY>` variable in your shell reaches the lab's server as
-  its [environment settings](/admin/settings/), and the start line names them (never their
-  values). One the server would refuse (a key it has no setting for, a value that does not parse)
-  stops the run before anything is created, naming the variable. With the key flag, the assistant's
-  base URL and model point the lab at another model: Amazon Bedrock's gpt-oss is
-  `OMNIGLASS_SETTING__ASSISTANT__BASE_URL=https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1`
-  and `OMNIGLASS_SETTING__ASSISTANT__MODEL=openai.gpt-oss-20b-1:0` with a Bedrock API key
-  (`.env.example` carries them).
+  Nothing is sealed: the key lives in the server container's environment, visible to `docker inspect`
+  on this machine, as the outpost's token is. Without the flag omnibot plays the lab's recording; a key
+  an older lab sealed is removed. A scale lab runs no omnibot, so it refuses the flag.
+- Every `OMNIGLASS_SETTING__<NAMESPACE>__<KEY>` and `OMNIGLASS_SECRET__<NAME>` variable in your shell
+  reaches the lab's server as its [environment settings](/admin/settings/) and
+  [environment secrets](/admin/secrets/#secrets-from-the-environment), and the start line names them
+  (never their values). One the server would refuse (a key it has no setting for, a value or a
+  secret's JSON that does not parse) stops the run before anything is created, naming the variable.
+  Amazon Bedrock's gpt-oss is five of them, which `.env.example` carries: put them in `.env.local`
+  and `omniglass lab run` runs omnibot on Bedrock with nothing exported.
+- The `omniglass` binary loads `.env`, then `.env.local` over it, from the directory it runs in, under
+  whatever your shell already set, so a variable you export wins over the same one in either file.
 
 - `--systems` and `--plan` size a [scale lab scenario](#scale-lab-scenarios) instead of a seeded
   fleet, and preview it with its preflight.
