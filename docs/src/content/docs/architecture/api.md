@@ -575,7 +575,7 @@ non-disclosing 404 (a deliberate early exception to
   `endpoint-reachable` reading (`up`/`down`, or null with `pending` saying why), the probe-layer signals that compose it (the raw `icmp`/`tcp` metrics,
   and for a `udp` endpoint a `request` layer: its request answered, off `endpoint-responsive`, timed
   by `udp-response-time` only while answered, #1037),
-  the recent health transitions the availability strip reads, and `last_seen`, when ingest last
+  the recent reachability transitions the availability strip reads, and `last_seen`, when ingest last
   landed a batch the endpoint's task delivered, by the server's clock and to within a few seconds,
   whatever the batch carried. A reachability reading is stored only on a transition, so its `ts` is when it last
   changed, and a driver endpoint has no reachability at all; `last_seen` is the one freshness every
@@ -598,7 +598,7 @@ non-disclosing 404 (a deliberate early exception to
   mode, the key it pins (pin mode alone), the latest handshake time, and the certificate's expiry and
   days left, withheld while a certificate gate holds (#1035). Teardown publishes no state, which is
   why a session is served only while one is held. Every key this read composes is a native probe
-  key, the outpost's own observation: the health and its rungs, the probe metrics and timings, a
+  key, the outpost's own observation: the reachability and its rungs, the probe metrics and timings, a
   session's state and reason, the gate, a tls endpoint's pin and certificate facts. `POST
   /telemetry:push` refuses each by name on every lane, whatever instance it names (#1080, [ADR-0158](/architecture/decisions/#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares)
   point 5), and the read serves each key's observed series only, so no other writer or provenance can

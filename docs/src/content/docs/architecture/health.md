@@ -271,7 +271,7 @@ total by construction, since two owners can share a name but never an id.
 
 A location's **recorded** health is the worst of its **direct children's recorded health values**: the
 systems placed in it and the locations under it, one latest row each, read by the owner indexes
-([ADR-1562](/architecture/decisions/#adr-1562-a-location-rolls-up-from-its-childrens-recorded-health values)).
+([ADR-1562: recorded health values](/architecture/decisions/#adr-1562-a-location-rolls-up-from-its-childrens-recorded-verdicts)).
 It is the same answer as the worst over every system in its subtree, because the rollup is worst-wins
 and a child location's health is already the worst of its own subtree. What changes is the cost: a
 write pays for the chain it touches (one system, and one row per location above it), not for the
@@ -343,9 +343,9 @@ clears it the same way, through the same guarded write and the same health recom
 alarm uses. A rule-opened alarm impairs its owner's own health exactly as a hand-raised one does
 (#626: it names nothing it takes away; the component is impaired wholesale), and the
 acknowledgement-independence above holds for it identically. The official `reachability-lost` rule is
-what closes the monitoring loop with no operator in between: an endpoint whose health reads `down` for
+what closes the monitoring loop with no operator in between: an endpoint whose reachability reads `down` for
 its sustain opens a `high` alarm, the component goes to outage and stops filling its slots, and the
-system reads whatever those slots' impact says; reading `up` clears it and the health recovers.
+system reads whatever those slots' impact says; reading `up` clears it and the component's health recovers.
 
 ::::design[Target design (ADR-0050)]
 
