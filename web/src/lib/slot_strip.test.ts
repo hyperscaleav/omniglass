@@ -7,7 +7,7 @@ import type { FleetHealth } from "./health";
 // carrying the occupant's state and the empty ones outlined. Plus the gap
 // line under it, in the design's own words. Pure over the health read.
 
-const h = (slots: object[]): FleetHealth => ({ verdict: "degraded", slots, systems: [], transitions: [] }) as unknown as FleetHealth;
+const h = (slots: object[]): FleetHealth => ({ health: "degraded", slots, systems: [], transitions: [] }) as unknown as FleetHealth;
 
 describe("slotStrip", () => {
   it("draws quorum squares per active slot, filled first with the occupant state, then empty ones", () => {

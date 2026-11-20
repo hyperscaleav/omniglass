@@ -55,7 +55,7 @@ Show
 Type "# Each logs in, and collects (reach: an endpoint's reachability rungs, and why it is refused)"
 Enter
 Wait
-Type `reach() { omniglass component reachability list "$1" | jq -c --arg e "$2" '.endpoints[] | select(.endpoint == $e) | {endpoint, verdict: .verdict.value, authenticated: .authenticated.value, rejection: .rejection.reason}'; }`
+Type `reach() { omniglass component reachability list "$1" | jq -c --arg e "$2" '.endpoints[] | select(.endpoint == $e) | {endpoint, reachability: .reachability.value, authenticated: .authenticated.value, rejection: .rejection.reason}'; }`
 Enter
 Wait
 Type `reach "$panel" https; reach "$display" http`

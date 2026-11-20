@@ -56,7 +56,7 @@ export default function HealthHistory(props: {
   const now = Date.now();
   const edges = () => props.transitions ?? [];
   const list = createMemo<Span<string>[]>(() =>
-    spans(edges().map((t) => ({ ts: t.ts, value: t.verdict })), props.verdict ?? null, now),
+    spans(edges().map((t) => ({ ts: t.ts, value: t.health })), props.verdict ?? null, now),
   );
   // Newest first for the reading order: what it is now, then what it was before.
   const rows = createMemo(() => [...list()].reverse());

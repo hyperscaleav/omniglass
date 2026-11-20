@@ -63,7 +63,7 @@ export default function HealthBadge(props: {
     retry: false,
     refetchOnWindowFocus: false,
   }));
-  const verdict = () => verdictOf(props.verdict ?? q.data?.verdict);
+  const verdict = () => verdictOf(props.verdict ?? q.data?.health);
   const size = () => `badge-${props.size ?? "sm"}`;
 
   return (

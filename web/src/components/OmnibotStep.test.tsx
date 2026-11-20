@@ -91,7 +91,7 @@ describe("the tool renderers", () => {
       step("get-component-reachability", { name: "amp-9" }, {
         component: "amp-9",
         endpoints: [
-          { endpoint: "ctl", transport: "tcp", address: "10.0.0.9", verdict: { value: "up", ts: "2026-11-17T00:00:00Z" }, layers: [], history: [] },
+          { endpoint: "ctl", transport: "tcp", address: "10.0.0.9", reachability: { value: "up", ts: "2026-11-17T00:00:00Z" }, layers: [], history: [] },
         ],
       }),
     );

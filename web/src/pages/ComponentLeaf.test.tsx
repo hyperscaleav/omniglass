@@ -40,12 +40,12 @@ const me: Me = { user: { id: "u-root", kind: "person" }, person: { username: "ro
 
 const view: FleetView = {
   locations: [
-    { id: uuidFor("cf-hq"), name: "hq", label: "Headquarters", location_type: "campus", location_type_id: uuidFor("cft-campus"), parent: "", verdict: "healthy" },
-    { id: uuidFor("cf-room"), name: "boardroom-a", label: "Boardroom A", location_type: "room", location_type_id: uuidFor("cft-room"), parent: uuidFor("cf-hq"), verdict: "healthy" },
+    { id: uuidFor("cf-hq"), name: "hq", label: "Headquarters", location_type: "campus", location_type_id: uuidFor("cft-campus"), parent: "", health: "healthy" },
+    { id: uuidFor("cf-room"), name: "boardroom-a", label: "Boardroom A", location_type: "room", location_type_id: uuidFor("cft-room"), parent: uuidFor("cf-hq"), health: "healthy" },
   ],
   systems: [
-    { id: uuidFor("cf-s-a"), name: "boardroom", label: "Boardroom System", location: uuidFor("cf-room"), verdict: "degraded", dots: [{ component: uuidFor("cf-c-bar"), name: "videobar-1", verdict: "outage", primary: true, shared: false }] },
-    { id: uuidFor("cf-s-b"), name: "overflow", label: "Overflow", location: null, verdict: "healthy", dots: [] },
+    { id: uuidFor("cf-s-a"), name: "boardroom", label: "Boardroom System", location: uuidFor("cf-room"), health: "degraded", dots: [{ component: uuidFor("cf-c-bar"), name: "videobar-1", health: "outage", primary: true, shared: false }] },
+    { id: uuidFor("cf-s-b"), name: "overflow", label: "Overflow", location: null, health: "healthy", dots: [] },
   ],
 } as unknown as FleetView;
 
@@ -65,7 +65,7 @@ const reach: Reachability = {
   component: "videobar-1",
   endpoints: [
     // A stale sample: last verdict long ago, but the outpost below is alive.
-    { endpoint: "ssh", transport: "ssh", outpost: "edge-1", verdict: { value: "up", ts: iso(600) }, layers: [
+    { endpoint: "ssh", transport: "ssh", outpost: "edge-1", reachability: { value: "up", ts: iso(600) }, layers: [
       { layer: "ping", check: "icmp-reachable", value: "up", ts: iso(600) },
       { layer: "port", check: "tcp-open", value: "open", ts: iso(600) },
     ], history: [] },
@@ -96,7 +96,7 @@ function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: un
     { component: "videobar-1", system: "overflow", primary: false, system_count: 2 },
   ]);
   qc.setQueryData([...REACHABILITY_KEY(uuidFor("cf-c-bar"))], seed?.reach ?? reach);
-  qc.setQueryData([...componentAlarmsReadKey(uuidFor("cf-c-bar"))], { ...(seed?.alarmsVerdict ? { verdict: seed.alarmsVerdict } : {}), alarms: alarms ?? [
+  qc.setQueryData([...componentAlarmsReadKey(uuidFor("cf-c-bar"))], { ...(seed?.alarmsVerdict ? { health: seed.alarmsVerdict } : {}), alarms: alarms ?? [
     { id: "al-1", component: "videobar-1", component_id: uuidFor("cf-c-bar"), severity: "high", message: "No route to host", raised_at: iso(9600), active: true, acknowledged: false },
     { id: "al-0", component: "videobar-1", component_id: uuidFor("cf-c-bar"), severity: "warning", message: "Cleared last week", raised_at: iso(600000), active: false, acknowledged: true },
   ] });
@@ -253,7 +253,7 @@ describe("a device nothing has collected from (#1454)", () => {
   const looseView = { ...view, systems: [] } as unknown as FleetView;
   const neverProbed = {
     component: "videobar-1",
-    endpoints: [{ endpoint: "icmp", transport: "icmp", verdict: null, layers: [], history: [] }],
+    endpoints: [{ endpoint: "icmp", transport: "icmp", reachability: null, layers: [], history: [] }],
   } as unknown as Reachability;
   const mountNever = () => mount(undefined, [], bar, me, [], { reach: neverProbed, outposts: [], view: looseView, alarmsVerdict: "unknown" });
 
@@ -280,7 +280,7 @@ describe("a device nothing has collected from (#1454)", () => {
 
   it("shows the rung once a probe has answered", () => {
     mount(undefined, [], bar, me, [], {
-      reach: { ...neverProbed, endpoints: [{ endpoint: "icmp", transport: "icmp", verdict: { value: "up", ts: iso(5) }, last_seen: iso(5), layers: [{ layer: "ping", check: "icmp-reachable", value: "up", ts: iso(5) }], history: [] }] } as unknown as Reachability,
+      reach: { ...neverProbed, endpoints: [{ endpoint: "icmp", transport: "icmp", reachability: { value: "up", ts: iso(5) }, last_seen: iso(5), layers: [{ layer: "ping", check: "icmp-reachable", value: "up", ts: iso(5) }], history: [] }] } as unknown as Reachability,
       outposts: [], view: looseView, alarmsVerdict: "healthy",
     });
     expect(within(screen.getByTestId("leaf-collection")).getByText("reachable")).toBeTruthy();
@@ -440,7 +440,7 @@ describe("the leaf's dispatch facts (#786)", () => {
     component: "videobar-1",
     endpoints: [{
       id: uuidFor("cf-ep-telnet"), endpoint: "telnet", transport: "telnet", outpost: "edge-1", last_seen: iso(2),
-      verdict: { value: "up", ts: iso(60) }, responsive: { value: "up", ts: iso(60) }, authenticated: { value: "no", ts: iso(30) },
+      reachability: { value: "up", ts: iso(60) }, responsive: { value: "up", ts: iso(60) }, authenticated: { value: "no", ts: iso(30) },
       session: { state: "rejected", ts: iso(30), reason: "auth: auth rejected" }, rejection: { rung: "authenticated", class: "auth", ts: "2026-10-23T11:58:00.000Z" },
       layers: [{ layer: "ping", check: "icmp-reachable", value: "up", ts: iso(2) }], history: [],
     }],
@@ -461,7 +461,7 @@ describe("the leaf's dispatch facts (#786)", () => {
     component: "videobar-1",
     endpoints: [{
       id: uuidFor("cf-ep-snmp"), endpoint: "snmp", transport: "snmp", outpost: "edge-1", last_seen: iso(2),
-      verdict: { value: "down", ts: iso(60) }, responsive: { value: "down", ts: iso(60) }, authenticated: { value: "no", ts: iso(60) },
+      reachability: { value: "down", ts: iso(60) }, responsive: { value: "down", ts: iso(60) }, authenticated: { value: "no", ts: iso(60) },
       rejection: { rung: "authenticated", class: "auth", ts: iso(60), reason: "auth: the agent answered authorizationError for the community" },
       layers: [{ layer: "ping", check: "icmp-reachable", value: "up", ts: iso(2) }], history: [],
     }],
@@ -629,13 +629,13 @@ describe("the component leaf refreshes (#934)", () => {
       const url = (input as Request).url;
       gets.push(new URL(url).pathname);
       if (url.includes("/reachability")) {
-        return json({ component: "videobar-1", endpoints: [{ endpoint: "ssh", transport: "ssh", outpost: "edge-1", verdict: { value: "up", ts: iso(600) }, last_seen: later, layers: [], history: [] }] });
+        return json({ component: "videobar-1", endpoints: [{ endpoint: "ssh", transport: "ssh", outpost: "edge-1", reachability: { value: "up", ts: iso(600) }, last_seen: later, layers: [], history: [] }] });
       }
       if (url.includes("/metrics")) {
         return json({ metrics: [{ metric_type_name: "uptime", label: "Uptime", data_type: "float", value: 77, is_sampled: true, from_contract: false, required: false }] });
       }
       if (url.includes("/alarms")) {
-        return json({ verdict: "degraded", alarms: [{ id: "al-2", component: "videobar-1", component_id: uuidFor("cf-c-bar"), severity: "warning", message: "Reachability lost", raised_at: later, active: true, acknowledged: false }] });
+        return json({ health: "degraded", alarms: [{ id: "al-2", component: "videobar-1", component_id: uuidFor("cf-c-bar"), severity: "warning", message: "Reachability lost", raised_at: later, active: true, acknowledged: false }] });
       }
       if (url.endsWith("/views/fleet")) return json(view);
       if (url.endsWith("/outposts")) return json({ outposts: [{ name: "edge-1", enrolled: true, last_heartbeat_at: later }] });
@@ -688,7 +688,7 @@ describe("the component leaf refreshes (#934)", () => {
   it("ages the card with the clock when the polled data stays the same", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"] });
     const t0 = new Date().toISOString();
-    const frozen = { component: "videobar-1", endpoints: [{ endpoint: "ssh", transport: "ssh", outpost: "edge-1", verdict: { value: "up", ts: t0 }, last_seen: t0, layers: [], history: [] }] };
+    const frozen = { component: "videobar-1", endpoints: [{ endpoint: "ssh", transport: "ssh", outpost: "edge-1", reachability: { value: "up", ts: t0 }, last_seen: t0, layers: [], history: [] }] };
     // Every read stays in flight: nothing the queries hold ever changes, so
     // only a clock can move the card.
     vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise<Response>(() => {}));

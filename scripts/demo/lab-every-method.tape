@@ -19,7 +19,7 @@ Wait
 Type "# Each reads up: built in, whatever its driver"
 Enter
 Wait
-Type `omniglass component reachability list "$panel" | jq -c '.endpoints[] | select(.label != null) | {label, transport, verdict: .verdict.value}'`
+Type `omniglass component reachability list "$panel" | jq -c '.endpoints[] | select(.label != null) | {label, transport, reachability: .reachability.value}'`
 Enter
 Wait
 Type "# And each driver's own values land, under the endpoint they came through"

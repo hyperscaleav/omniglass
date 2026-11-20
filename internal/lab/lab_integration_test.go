@@ -391,7 +391,7 @@ func verdicts(t *testing.T, c *http.Client, base, id string) string {
 		Endpoints []struct {
 			Verdict *struct {
 				Value string `json:"value"`
-			} `json:"verdict"`
+			} `json:"reachability"`
 		} `json:"endpoints"`
 	}
 	if err := getJSON(context.Background(), c, base+"/api/v1/components/"+id+"/reachability", &r); err != nil {

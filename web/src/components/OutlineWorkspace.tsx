@@ -144,7 +144,7 @@ export default function OutlineWorkspace(props: { rootId?: string }) {
     degraded: a.degraded + n.lights.degraded, outage: a.outage + n.lights.outage,
   }), { healthy: 0, incomplete: 0, degraded: 0, outage: 0 });
   const needing = () => {
-    if (!props.rootId) return (view.data?.systems ?? []).filter((s) => ATTENTION.includes(s.verdict)).length;
+    if (!props.rootId) return (view.data?.systems ?? []).filter((s) => ATTENTION.includes(s.health)).length;
     const l = rootedLights();
     return l.incomplete + l.degraded + l.outage;
   };

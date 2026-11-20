@@ -167,7 +167,7 @@ func TestPlatformHealthExitsNonzeroOnAnOpenAlarm(t *testing.T) {
 		t.Errorf("error = %q, want it to name the open alarm", err)
 	}
 	if !strings.Contains(got, "ALARMS") || !strings.Contains(got, "not healthy") {
-		t.Errorf("table does not show the alarm and the verdict:\n%s", got)
+		t.Errorf("table does not show the alarm and the health:\n%s", got)
 	}
 }
 

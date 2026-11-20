@@ -233,7 +233,7 @@ describe("endpoint blade, held session", () => {
     component: "panel-2",
     endpoints: [{
       id: row.id, endpoint: "telnet", transport: "telnet", outpost: "edge-hq", last_seen: now,
-      verdict: { value: "up", ts: now }, responsive: { value: "up", ts: now }, authenticated: { value: "no", ts: now },
+      reachability: { value: "up", ts: now }, responsive: { value: "up", ts: now }, authenticated: { value: "no", ts: now },
       session: { state: "rejected", ts: now, reason: "auth: auth rejected" },
       rejection: { rung: "authenticated", class: "auth", ts: "2026-10-23T11:58:00.000Z" },
       layers: [{ layer: "ping", check: "icmp-reachable", value: "up", ts: now }], history: [],
@@ -310,7 +310,7 @@ describe("endpoint blade, a probe's gate with no held session", () => {
     component: "panel-3",
     endpoints: [{
       id: row.id, endpoint: "snmp", transport: "snmp", outpost: "edge-hq", last_seen: now,
-      verdict: { value: "down", ts: now }, responsive: { value: "down", ts: now }, authenticated: { value: "no", ts: now },
+      reachability: { value: "down", ts: now }, responsive: { value: "down", ts: now }, authenticated: { value: "no", ts: now },
       rejection: { rung: "authenticated", class: "auth", ts: now, reason: "auth: the agent answered authorizationError for the community" },
       layers: [{ layer: "ping", check: "icmp-reachable", value: "up", ts: now }], history: [],
     }],

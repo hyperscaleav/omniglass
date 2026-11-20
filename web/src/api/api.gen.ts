@@ -3970,14 +3970,14 @@ export type FireSimInputBody = {
 export type FleetDotBody = {
   /** The component's uuid: what a renderer navigates to when a dot is clicked */
   component: string;
+  /** healthy, incomplete, degraded, or outage: the component's own verdict, which is the only thing that colours the dot */
+  health: string;
   /** The component's name, for the dot's hover title */
   name: string;
   /** True in the component's primary system, the one cluster that draws it solid. A shared component is a ghost outline everywhere else, so the fleet never counts one physical device twice */
   primary: boolean;
   /** True when the component belongs to more than one system, which is what earns it a ring */
   shared: boolean;
-  /** healthy, incomplete, degraded, or outage: the component's own verdict, which is the only thing that colours the dot */
-  verdict: string;
 };
 
 export type HealthAlarmBody = {
@@ -4032,18 +4032,20 @@ export type HealthSlotBody = {
 };
 
 export type HealthSystemBody = {
+  health: string;
   name: string;
-  verdict: string;
 };
 
 export type HealthTransitionBody = {
+  health: string;
   ts: string;
-  verdict: string;
 };
 
 export type FleetHealthOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
+  /** healthy, incomplete, degraded, or outage: the rollup of the slots or systems served beside it. incomplete is a commissioning gap, a slot short because the hardware was never installed rather than because installed hardware is failing, and it ranks between healthy and degraded */
+  health: string;
   owner: string;
   owner_kind: string;
   /**
@@ -4061,11 +4063,11 @@ export type FleetHealthOutputBody = {
      * @nullable
      */
   transitions: HealthTransitionBody[] | null;
-  /** healthy, incomplete, degraded, or outage: the rollup of the slots or systems served beside it. incomplete is a commissioning gap, a slot short because the hardware was never installed rather than because installed hardware is failing, and it ranks between healthy and degraded */
-  verdict: string;
 };
 
 export type FleetLocationBody = {
+  /** The location's recorded verdict, worst-wins over the systems beneath it */
+  health: string;
   /** The location's uuid, the address a renderer navigates by */
   id: string;
   label: string;
@@ -4076,8 +4078,6 @@ export type FleetLocationBody = {
   name: string;
   /** The uuid of this location's parent; absent on a root. The tree is flat here and assembled by the client */
   parent?: string;
-  /** The location's recorded verdict, worst-wins over the systems beneath it */
-  verdict: string;
 };
 
 export type FleetSystemBody = {
@@ -4086,14 +4086,14 @@ export type FleetSystemBody = {
      * @nullable
      */
   dots: FleetDotBody[] | null;
+  /** The system's recorded verdict, the same one its health read serves */
+  health: string;
   /** The system's uuid, the address a renderer navigates by */
   id: string;
   label: string;
   /** The uuid of the location this system is placed at; absent when it is placed nowhere */
   location?: string;
   name: string;
-  /** The system's recorded verdict, the same one its health read serves */
-  verdict: string;
 };
 
 export type FleetViewOutputBody = {
@@ -4315,7 +4315,7 @@ export type ListAlarmsOutputBody = {
   alarms: AlarmBody[] | null;
   component: string;
   /** The component's own verdict, the one its active alarms make (healthy, degraded, or outage), whatever the filter: a component's view reads it here rather than off the whole fleet view. unknown when nothing has ever observed the component (no alarm raised, no endpoint delivered): there is nothing to call healthy on */
-  verdict: string;
+  health: string;
 };
 
 export type ListAssistantConversationsOutputBody = {
@@ -4376,10 +4376,10 @@ export type ListComponentDependenciesOutputBody = {
 export type SystemMemberBody = {
   /** Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
   component: string;
+  /** The component's own recorded verdict (healthy, degraded, or outage), the one its active alarms make; never the system's */
+  component_health: string;
   /** The component's uuid */
   component_id: string;
-  /** The component's own recorded verdict (healthy, degraded, or outage), the one its active alarms make; never the system's */
-  component_verdict: string;
   /** Whether this membership is the component's default when no system is given */
   primary: boolean;
   /** Name of the system, or a dotted address (e.g. boi.17c.$sys.av) */
@@ -6269,14 +6269,14 @@ export type PlatformOutpostBody = {
   enrolled: boolean;
   /** The current figure per key, by key name: a gauge's latest sample, a window count only while its window is the newest. A key the outpost has never reported, or whose last window has passed, is absent, never zero; the whole map is absent without a fleet-wide component read */
   figures?: PlatformOutpostBodyFigures;
+  /** The outpost's platform component verdict, which tones the row; absent without a fleet-wide component read */
+  health?: string;
   label: string;
   /** The outpost's last heartbeat; absent when it has never sent one */
   last_heartbeat_at?: string;
   /** The share of what the outpost's own hops (loss_hops) took in over the last hour that they lost, every kind summed per hop and composed across them as the pipeline's end to end is; 0 is healthy. Absent when nothing went in on any of them, or without a fleet-wide component read */
   loss?: number;
   name: string;
-  /** The outpost's platform component verdict, which tones the row; absent without a fleet-wide component read */
-  verdict?: string;
 };
 
 export type PlatformPanelKeyBody = {
@@ -6487,12 +6487,12 @@ export type PlatformServerBody = {
      * @nullable
      */
   groups: PlatformPanelBody[] | null;
+  /** The server component's recorded verdict */
+  health: string;
   /** The server's platform component name */
   name: string;
   /** When the server's current boot started (server-started-at); uptime is read_at minus this */
   started_at?: string;
-  /** The server component's recorded verdict */
-  verdict: string;
   /** The build the server runs, as its boot wrote it (server-version); absent before a boot has written it */
   version?: string;
 };
@@ -6656,11 +6656,11 @@ export type PlatformSimulationViewOutputBody = {
 };
 
 export type PlatformSystemBody = {
+  /** The platform system's recorded verdict, the same one its health read serves */
+  health: string;
   /** The platform system's uuid: the page's verdict links to its system detail, where the verdict is explained */
   id: string;
   name: string;
-  /** The platform system's recorded verdict, the same one its health read serves */
-  verdict: string;
 };
 
 export type PlatformViewOutputBody = {
@@ -7142,7 +7142,7 @@ export type RaiseAlarmInputBody = {
 };
 
 /**
- * Why verdict is null, present only while it is: no-outpost, the endpoint has no outpost assigned so nothing probes it (create and enroll an outpost, run it, then assign the endpoint to it); awaiting-probe, an outpost is assigned and its first probe has not landed. Absent once a verdict exists, and on a push endpoint, which has no verdict to wait for. Derived at read time, not stored
+ * Why reachability is null, present only while it is: no-outpost, the endpoint has no outpost assigned so nothing probes it (create and enroll an outpost, run it, then assign the endpoint to it); awaiting-probe, an outpost is assigned and its first probe has not landed. Absent once a verdict exists, and on a push endpoint, which has no verdict to wait for. Derived at read time, not stored
  */
 export type ReachEndpointBodyPending = typeof ReachEndpointBodyPending[keyof typeof ReachEndpointBodyPending];
 
@@ -7152,7 +7152,7 @@ export const ReachEndpointBodyPending = {
   'awaiting-probe': 'awaiting-probe',
 } as const;
 
-export type ReachVerdictBody = {
+export type ReachReadingBody = {
   /** When the verdict last changed: one is stored only on a transition, so an endpoint's freshness is last_seen, not this */
   ts: string;
   /** The latest stored verdict value (up/down) */
@@ -7255,7 +7255,7 @@ export type ReachEndpointBody = {
   /** The probed address (target[:port]) from the endpoint params */
   address?: string;
   /** The auth rung (the probe's credential was accepted, or a held session's login passed), present only when a credential was tried */
-  authenticated?: ReachVerdictBody;
+  authenticated?: ReachReadingBody;
   /** The endpoint's derived name (its transport) */
   endpoint: string;
   /**
@@ -7281,20 +7281,20 @@ export type ReachEndpointBody = {
   layers: ReachLayerBody[] | null;
   /** The outpost that probes this endpoint */
   outpost?: string;
-  /** Why verdict is null, present only while it is: no-outpost, the endpoint has no outpost assigned so nothing probes it (create and enroll an outpost, run it, then assign the endpoint to it); awaiting-probe, an outpost is assigned and its first probe has not landed. Absent once a verdict exists, and on a push endpoint, which has no verdict to wait for. Derived at read time, not stored */
+  /** Why reachability is null, present only while it is: no-outpost, the endpoint has no outpost assigned so nothing probes it (create and enroll an outpost, run it, then assign the endpoint to it); awaiting-probe, an outpost is assigned and its first probe has not landed. Absent once a verdict exists, and on a push endpoint, which has no verdict to wait for. Derived at read time, not stored */
   pending?: ReachEndpointBodyPending;
+  /** The latest reachability reading (up or down), or null if none yet (pending says why) */
+  reachability: ReachReadingBody;
   /** The gate a terminal refusal holds on the endpoint, its rung, class and reason, whether or not the endpoint holds a session (a reachability probe's refusal gates it too); absent when none holds */
   rejection?: ReachRejectionBody;
   /** The layer-7 responds rung (the protocol itself answered), when a probe has climbed it */
-  responsive?: ReachVerdictBody;
+  responsive?: ReachReadingBody;
   /** The endpoint's held session, while it is configured to hold one (a standing listen task, or a driver declaring a session): its latest state, when it changed, and why */
   session?: ReachSessionBody;
   /** A tls or https endpoint's handshake and certificate: its verification mode, pinned key, handshake time, expiry and days left; absent on every other transport */
   tls?: ReachTLSBody;
   /** The transport (icmp, tcp, ...) */
   transport: string;
-  /** The latest reachability verdict, or null if none yet (pending says why) */
-  verdict: ReachVerdictBody;
   /** A webhook endpoint's block (#1024): a push endpoint has no ladder and reads last_seen (last heard) in place of a verdict, never down for silence; its scheme, whether it is signed, its token's secret and what its scheme refused. Absent on every dialed transport */
   webhook?: EndpointWebhookBody;
 };
@@ -8362,6 +8362,23 @@ export type SystemEventsOutputBody = {
   system: string;
 };
 
+export type SystemHealthEntryBody = {
+  /** healthy, degraded, or outage */
+  health: string;
+  /** The system's uuid */
+  system: string;
+};
+
+export type SystemHealthListOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * One entry per system in the caller's read scope, in no particular order.
+     * @nullable
+     */
+  systems: SystemHealthEntryBody[] | null;
+};
+
 export type SystemLogBody = {
   /** Structured fields parsed from the line, when present */
   attributes?: unknown;
@@ -8427,23 +8444,6 @@ export type SystemPropertyBody = {
   value: unknown;
   /** The stored value's id */
   value_id: string;
-};
-
-export type SystemVerdictBody = {
-  /** The system's uuid */
-  system: string;
-  /** healthy, degraded, or outage */
-  verdict: string;
-};
-
-export type SystemVerdictsOutputBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  /**
-     * One entry per system in the caller's read scope, in no particular order.
-     * @nullable
-     */
-  verdicts: SystemVerdictBody[] | null;
 };
 
 export type TagValuesOutputBody = {
@@ -14017,7 +14017,7 @@ export const getGetComponentReachabilityUrl = (name: string,) => {
 }
 
 /**
- * Composes, per endpoint, the latest reachability verdict, the probe-layer signals that compose it, and the recent verdict transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+ * Composes, per endpoint, the latest reachability, the probe-layer signals that compose it, and the recent reachability transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.
  * @summary Read a component's per-endpoint reachability
  */
 export const getComponentReachability = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getComponentReachabilityResponse> => {
@@ -23576,26 +23576,26 @@ export const createSystemFromTemplate = async (createSystemFromTemplateInputBody
 
 
 
-export type listSystemVerdictsResponse200 = {
-  data: SystemVerdictsOutputBody
+export type listSystemHealthResponse200 = {
+  data: SystemHealthListOutputBody
   status: 200
 }
 
-export type listSystemVerdictsResponseDefault = {
+export type listSystemHealthResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 200>
 }
 
-export type listSystemVerdictsResponseSuccess = (listSystemVerdictsResponse200) & {
+export type listSystemHealthResponseSuccess = (listSystemHealthResponse200) & {
   headers: Headers;
 };
-export type listSystemVerdictsResponseError = (listSystemVerdictsResponseDefault) & {
+export type listSystemHealthResponseError = (listSystemHealthResponseDefault) & {
   headers: Headers;
 };
 
-export type listSystemVerdictsResponse = (listSystemVerdictsResponseSuccess | listSystemVerdictsResponseError)
+export type listSystemHealthResponse = (listSystemHealthResponseSuccess | listSystemHealthResponseError)
 
-export const getListSystemVerdictsUrl = () => {
+export const getListSystemHealthUrl = () => {
 
 
 
@@ -23604,12 +23604,12 @@ export const getListSystemVerdictsUrl = () => {
 }
 
 /**
- * The current verdict for every system in the caller's read scope, in one call: the bulk counterpart of the per-system health read, carrying the one fact a list's health column renders and none of the explanation. A console painting a page of systems reads this once instead of resolving every slot, occupant, alarm and transition per row. A system that has never been recomputed reads healthy. Gated by system:read; an empty scope is an empty list, not a 403.
- * @summary Read every system's health verdict
+ * The current health for every system in the caller's read scope, in one call: the bulk counterpart of the per-system health read, carrying the one fact a list's health column renders and none of the explanation. A console painting a page of systems reads this once instead of resolving every slot, occupant, alarm and transition per row. A system that has never been recomputed reads healthy. Gated by system:read; an empty scope is an empty list, not a 403.
+ * @summary Read every system's health
  */
-export const listSystemVerdicts = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listSystemVerdictsResponse> => {
+export const listSystemHealth = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listSystemHealthResponse> => {
 
-  return ogFetch<listSystemVerdictsResponse>(getListSystemVerdictsUrl(),
+  return ogFetch<listSystemHealthResponse>(getListSystemHealthUrl(),
   {
     ...options,
     method: 'GET'

@@ -2022,7 +2022,7 @@ Read a component's per-endpoint reachability
 omniglass component reachability list <name>
 ```
 
-Composes, per endpoint, the latest reachability verdict, the probe-layer signals that compose it, and the recent verdict transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+Composes, per endpoint, the latest reachability, the probe-layer signals that compose it, and the recent reachability transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.
 
 Arguments:
   <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
@@ -4831,10 +4831,10 @@ omniglass platform health [flags]
 ```
 
 Reads the platform view (the read behind the console's Platform health page) and reduces it to
-whether Omniglass is keeping up: the system and server verdicts, open alarms, each pipeline
+whether Omniglass is keeping up: the system and server health, open alarms, each pipeline
 hop's in, out and loss with the end to end, the outposts with loss or not healthy, ingest lag,
 the queues, the database and retention, and every failure figure above zero. It exits nonzero
-when a verdict is not healthy, an alarm is open, or the newest windows lost work end to end.
+when any health is not healthy, an alarm is open, or the newest windows lost work end to end.
 
 It reads through the API alone with --server and --token, so it works against any deployment.
 The view is gated by outpost:read; a part the token cannot read prints as not visible to you,
@@ -6304,13 +6304,13 @@ omniglass system get <name>
 
 ### `omniglass system health`
 
-Read every system's health verdict
+Read every system's health
 
 ```
 omniglass system health
 ```
 
-The current verdict for every system in the caller's read scope, in one call: the bulk counterpart of the per-system health read, carrying the one fact a list's health column renders and none of the explanation. A console painting a page of systems reads this once instead of resolving every slot, occupant, alarm and transition per row. A system that has never been recomputed reads healthy. Gated by system:read; an empty scope is an empty list, not a 403.
+The current health for every system in the caller's read scope, in one call: the bulk counterpart of the per-system health read, carrying the one fact a list's health column renders and none of the explanation. A console painting a page of systems reads this once instead of resolving every slot, occupant, alarm and transition per row. A system that has never been recomputed reads healthy. Gated by system:read; an empty scope is an empty list, not a 403.
 
 Example:
 

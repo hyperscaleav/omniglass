@@ -61,7 +61,7 @@ export const SYSTEM_VERDICTS_KEY = ["system-verdicts"] as const;
 export async function systemVerdicts(): Promise<Map<string, string>> {
   const { data, error } = await api.GET("/systems:health");
   if (error) throw error;
-  return new Map((data?.verdicts ?? []).map((v) => [v.system, v.verdict] as const));
+  return new Map((data?.systems ?? []).map((v) => [v.system, v.health] as const));
 }
 
 export async function locationHealth(name: string): Promise<FleetHealth> {

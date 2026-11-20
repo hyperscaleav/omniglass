@@ -17,7 +17,7 @@ function hook(over: Partial<NonNullable<Reachability["endpoints"][number]["webho
     component: "ucc-1",
     endpoints: [{
       id: "ep-1", endpoint: "webhook", transport: "webhook", label: "Meeting webhooks",
-      last_seen: ago(90_000), verdict: null, layers: [], history: [],
+      last_seen: ago(90_000), reachability: null, layers: [], history: [],
       webhook: { path: "/webhooks/••••••••", scheme: "hmac", signed: true, secret: "c-1/webhook-token", ...over },
     }],
   };

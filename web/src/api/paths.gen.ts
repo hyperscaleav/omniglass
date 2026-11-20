@@ -2922,8 +2922,8 @@ export interface paths {
       query: never;
       body: never;
       bodyRequired: false;
-      data: og.listSystemVerdictsResponseSuccess["data"];
-      error: og.listSystemVerdictsResponseError["data"];
+      data: og.listSystemHealthResponseSuccess["data"];
+      error: og.listSystemHealthResponseError["data"];
     };
   };
   "/systems:previewLabels": {

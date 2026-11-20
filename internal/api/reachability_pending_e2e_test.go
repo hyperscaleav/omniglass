@@ -99,8 +99,8 @@ func TestReachabilityNamesWhyAVerdictIsPending(t *testing.T) {
 		case want.pending != "" && got != want.pending:
 			t.Errorf("%s: pending = %v, want %s", want.name, got, want.pending)
 		}
-		if want.pending != "" && row["verdict"] != nil {
-			t.Errorf("%s: pending beside a verdict %v", want.name, row["verdict"])
+		if want.pending != "" && row["reachability"] != nil {
+			t.Errorf("%s: pending beside a verdict %v", want.name, row["reachability"])
 		}
 	}
 }

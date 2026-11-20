@@ -79,20 +79,20 @@ type healthSlotBody struct {
 }
 
 type healthSystemBody struct {
-	Name    string `json:"name"`
-	Verdict string `json:"verdict"`
+	Name   string `json:"name"`
+	Health string `json:"health"`
 }
 
 type healthTransitionBody struct {
-	TS      time.Time `json:"ts"`
-	Verdict string    `json:"verdict"`
+	TS     time.Time `json:"ts"`
+	Health string    `json:"health"`
 }
 
 type fleetHealthOutput struct {
 	Body struct {
 		OwnerKind   string                 `json:"owner_kind"`
 		Owner       string                 `json:"owner"`
-		Verdict     string                 `json:"verdict" doc:"healthy, incomplete, degraded, or outage: the rollup of the slots or systems served beside it. incomplete is a commissioning gap, a slot short because the hardware was never installed rather than because installed hardware is failing, and it ranks between healthy and degraded"`
+		Health      string                 `json:"health" doc:"healthy, incomplete, degraded, or outage: the rollup of the slots or systems served beside it. incomplete is a commissioning gap, a slot short because the hardware was never installed rather than because installed hardware is failing, and it ranks between healthy and degraded"`
 		Slots       []healthSlotBody       `json:"slots" doc:"The contributing slots; empty for a location"`
 		Systems     []healthSystemBody     `json:"systems" doc:"The systems beneath a location with their verdicts; empty for a system"`
 		Transitions []healthTransitionBody `json:"transitions" doc:"The recorded edges over the window, oldest first: one entry per change, never a sample"`
@@ -103,18 +103,18 @@ func toHealthOutput(rep *storage.HealthReport) *fleetHealthOutput {
 	out := &fleetHealthOutput{}
 	out.Body.OwnerKind = rep.OwnerKind
 	out.Body.Owner = rep.OwnerID
-	out.Body.Verdict = rep.Verdict
+	out.Body.Health = rep.Verdict
 	out.Body.Slots = make([]healthSlotBody, 0, len(rep.Slots))
 	for i := range rep.Slots {
 		out.Body.Slots = append(out.Body.Slots, toHealthSlotBody(&rep.Slots[i]))
 	}
 	out.Body.Systems = make([]healthSystemBody, 0, len(rep.Systems))
 	for _, s := range rep.Systems {
-		out.Body.Systems = append(out.Body.Systems, healthSystemBody{Name: s.Name, Verdict: s.Verdict})
+		out.Body.Systems = append(out.Body.Systems, healthSystemBody{Name: s.Name, Health: s.Verdict})
 	}
 	out.Body.Transitions = make([]healthTransitionBody, 0, len(rep.Transitions))
 	for _, t := range rep.Transitions {
-		out.Body.Transitions = append(out.Body.Transitions, healthTransitionBody{TS: t.TS, Verdict: t.Value})
+		out.Body.Transitions = append(out.Body.Transitions, healthTransitionBody{TS: t.TS, Health: t.Value})
 	}
 	return out
 }
@@ -163,22 +163,22 @@ func nonNil(s []string) []string {
 	return s
 }
 
-// systemVerdictsOutput is the BULK health read's body: one verdict per system the
+// systemHealthListOutput is the BULK health read's body: one verdict per system the
 // caller can see, keyed by uuid because that is what a list row holds and because
 // a system name is scoped to its placement rather than unique fleet-wide.
 //
 // Deliberately not a list of health REPORTS. The report is the read a system's
 // panel opens; this is the read a list paints a column from, and the whole point
 // is that it carries the one fact the column renders and nothing else (#653).
-type systemVerdictsOutput struct {
+type systemHealthListOutput struct {
 	Body struct {
-		Verdicts []systemVerdictBody `json:"verdicts" doc:"One entry per system in the caller's read scope, in no particular order."`
+		Systems []systemHealthEntryBody `json:"systems" doc:"One entry per system in the caller's read scope, in no particular order."`
 	}
 }
 
-type systemVerdictBody struct {
-	System  string `json:"system" doc:"The system's uuid"`
-	Verdict string `json:"verdict" doc:"healthy, degraded, or outage"`
+type systemHealthEntryBody struct {
+	System string `json:"system" doc:"The system's uuid"`
+	Health string `json:"health" doc:"healthy, degraded, or outage"`
 }
 
 // registerHealthRoutes wires the system and location health reads.
@@ -199,20 +199,20 @@ func registerHealthRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	})
 
 	huma.Register(api, a.gated(huma.Operation{
-		OperationID: "list-system-verdicts",
+		OperationID: "list-system-health",
 		Method:      http.MethodGet,
 		Path:        "/systems:health",
-		Summary:     "Read every system's health verdict",
-		Description: "The current verdict for every system in the caller's read scope, in one call: the bulk counterpart of the per-system health read, carrying the one fact a list's health column renders and none of the explanation. A console painting a page of systems reads this once instead of resolving every slot, occupant, alarm and transition per row. A system that has never been recomputed reads healthy. Gated by system:read; an empty scope is an empty list, not a 403.",
-	}, "system", "read"), func(ctx context.Context, _ *struct{}) (*systemVerdictsOutput, error) {
+		Summary:     "Read every system's health",
+		Description: "The current health for every system in the caller's read scope, in one call: the bulk counterpart of the per-system health read, carrying the one fact a list's health column renders and none of the explanation. A console painting a page of systems reads this once instead of resolving every slot, occupant, alarm and transition per row. A system that has never been recomputed reads healthy. Gated by system:read; an empty scope is an empty list, not a 403.",
+	}, "system", "read"), func(ctx context.Context, _ *struct{}) (*systemHealthListOutput, error) {
 		vs, err := gw.SystemHealths(ctx, a.scopeFor(ctx, "system", "read"))
 		if err != nil {
 			return nil, mapSystemErr(err)
 		}
-		out := &systemVerdictsOutput{}
-		out.Body.Verdicts = make([]systemVerdictBody, 0, len(vs))
+		out := &systemHealthListOutput{}
+		out.Body.Systems = make([]systemHealthEntryBody, 0, len(vs))
 		for _, v := range vs {
-			out.Body.Verdicts = append(out.Body.Verdicts, systemVerdictBody{System: v.SystemID, Verdict: v.Verdict})
+			out.Body.Systems = append(out.Body.Systems, systemHealthEntryBody{System: v.SystemID, Health: v.Verdict})
 		}
 		return out, nil
 	})

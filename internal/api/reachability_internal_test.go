@@ -132,11 +132,11 @@ func TestParseGateReasonsServesEveryReasonBesideTheRefusal(t *testing.T) {
 // row with a verdict is waiting on nothing, so the field is absent.
 func TestPendingReason(t *testing.T) {
 	t.Parallel()
-	verdict := &reachVerdictBody{Value: "up"}
+	verdict := &reachReadingBody{Value: "up"}
 	cases := []struct {
 		name    string
 		outpost string
-		verdict *reachVerdictBody
+		verdict *reachReadingBody
 		want    string
 	}{
 		{"no outpost, no verdict", "", nil, pendingNoOutpost},

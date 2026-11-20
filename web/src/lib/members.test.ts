@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { planMembershipChanges, type Member } from "./members";
 
-const m = (system_id: string, primary: boolean): Member => ({ component: "mic", component_id: "c", component_verdict: "healthy", primary, system: system_id, system_id, system_count: 1 });
+const m = (system_id: string, primary: boolean): Member => ({ component: "mic", component_id: "c", component_health: "healthy", primary, system: system_id, system_id, system_count: 1 });
 
 describe("planMembershipChanges", () => {
   it("is empty when nothing was touched", () => {

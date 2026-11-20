@@ -30,7 +30,7 @@ import (
 type fleetDotBody struct {
 	Component string `json:"component" doc:"The component's uuid: what a renderer navigates to when a dot is clicked"`
 	Name      string `json:"name" doc:"The component's name, for the dot's hover title"`
-	Verdict   string `json:"verdict" doc:"healthy, incomplete, degraded, or outage: the component's own verdict, which is the only thing that colours the dot"`
+	Health    string `json:"health" doc:"healthy, incomplete, degraded, or outage: the component's own verdict, which is the only thing that colours the dot"`
 	Primary   bool   `json:"primary" doc:"True in the component's primary system, the one cluster that draws it solid. A shared component is a ghost outline everywhere else, so the fleet never counts one physical device twice"`
 	Shared    bool   `json:"shared" doc:"True when the component belongs to more than one system, which is what earns it a ring"`
 }
@@ -40,7 +40,7 @@ type fleetSystemBody struct {
 	Name     string         `json:"name"`
 	Label    string         `json:"label"`
 	Location string         `json:"location,omitempty" doc:"The uuid of the location this system is placed at; absent when it is placed nowhere"`
-	Verdict  string         `json:"verdict" doc:"The system's recorded verdict, the same one its health read serves"`
+	Health   string         `json:"health" doc:"The system's recorded verdict, the same one its health read serves"`
 	Dots     []fleetDotBody `json:"dots" doc:"One entry per component in this system; empty when the caller may read the system but not its components"`
 }
 
@@ -51,7 +51,7 @@ type fleetLocationBody struct {
 	LocationType   string `json:"location_type" doc:"The type's name, which the band renders as its type chip"`
 	LocationTypeID string `json:"location_type_id" doc:"The type's uuid, the stable handle beside its renameable name"`
 	Parent         string `json:"parent,omitempty" doc:"The uuid of this location's parent; absent on a root. The tree is flat here and assembled by the client"`
-	Verdict        string `json:"verdict" doc:"The location's recorded verdict, worst-wins over the systems beneath it"`
+	Health         string `json:"health" doc:"The location's recorded verdict, worst-wins over the systems beneath it"`
 }
 
 type fleetViewOutput struct {
@@ -70,7 +70,7 @@ func toFleetViewOutput(v *storage.FleetView) *fleetViewOutput {
 		l := &v.Locations[i]
 		body := fleetLocationBody{
 			ID: l.ID, Name: l.Name, Label: l.Label,
-			LocationType: l.LocationType, LocationTypeID: l.LocationTypeID, Verdict: l.Verdict,
+			LocationType: l.LocationType, LocationTypeID: l.LocationTypeID, Health: l.Verdict,
 		}
 		if l.ParentID != nil {
 			body.Parent = *l.ParentID
@@ -82,14 +82,14 @@ func toFleetViewOutput(v *storage.FleetView) *fleetViewOutput {
 		s := &v.Systems[i]
 		body := fleetSystemBody{
 			ID: s.ID, Name: s.Name, Label: s.Label,
-			Verdict: s.Verdict, Dots: make([]fleetDotBody, 0, len(s.Dots)),
+			Health: s.Verdict, Dots: make([]fleetDotBody, 0, len(s.Dots)),
 		}
 		if s.LocationID != nil {
 			body.Location = *s.LocationID
 		}
 		for _, d := range s.Dots {
 			body.Dots = append(body.Dots, fleetDotBody{
-				Component: d.ComponentID, Name: d.Name, Verdict: d.Verdict,
+				Component: d.ComponentID, Name: d.Name, Health: d.Verdict,
 				Primary: d.Primary, Shared: d.Shared,
 			})
 		}
@@ -99,9 +99,9 @@ func toFleetViewOutput(v *storage.FleetView) *fleetViewOutput {
 }
 
 type platformSystemBody struct {
-	ID      string `json:"id" doc:"The platform system's uuid: the page's verdict links to its system detail, where the verdict is explained"`
-	Name    string `json:"name"`
-	Verdict string `json:"verdict" doc:"The platform system's recorded verdict, the same one its health read serves"`
+	ID     string `json:"id" doc:"The platform system's uuid: the page's verdict links to its system detail, where the verdict is explained"`
+	Name   string `json:"name"`
+	Health string `json:"health" doc:"The platform system's recorded verdict, the same one its health read serves"`
 }
 
 type platformServerBody struct {
@@ -109,7 +109,7 @@ type platformServerBody struct {
 	Name      string              `json:"name" doc:"The server's platform component name"`
 	Version   string              `json:"version,omitempty" doc:"The build the server runs, as its boot wrote it (server-version); absent before a boot has written it"`
 	StartedAt *time.Time          `json:"started_at,omitempty" doc:"When the server's current boot started (server-started-at); uptime is read_at minus this"`
-	Verdict   string              `json:"verdict" doc:"The server component's recorded verdict"`
+	Health    string              `json:"health" doc:"The server component's recorded verdict"`
 	Groups    []platformPanelBody `json:"groups" doc:"The server's panels (Requests, Ingest, Queues, Retention), in order: the page renders these and has no key list of its own"`
 	Alarms    []platformAlarmBody `json:"alarms" doc:"The open alarms on the server's platform component, newest first; a panel is flagged when one names a key it carries"`
 }
@@ -169,7 +169,7 @@ type platformOutpostBody struct {
 	Enrolled        bool                          `json:"enrolled"`
 	LastHeartbeatAt *time.Time                    `json:"last_heartbeat_at,omitempty" doc:"The outpost's last heartbeat; absent when it has never sent one"`
 	Component       string                        `json:"component,omitempty" doc:"The outpost's platform component uuid, where every figure has its history; absent for an outpost the boot has not yet adopted"`
-	Verdict         string                        `json:"verdict,omitempty" doc:"The outpost's platform component verdict, which tones the row; absent without a fleet-wide component read"`
+	Health          string                        `json:"health,omitempty" doc:"The outpost's platform component verdict, which tones the row; absent without a fleet-wide component read"`
 	Figures         map[string]platformFigureBody `json:"figures,omitempty" doc:"The current figure per key, by key name: a gauge's latest sample, a window count only while its window is the newest. A key the outpost has never reported, or whose last window has passed, is absent, never zero; the whole map is absent without a fleet-wide component read"`
 	Loss            *float64                      `json:"loss,omitempty" doc:"The share of what the outpost's own hops (loss_hops) took in over the last hour that they lost, every kind summed per hop and composed across them as the pipeline's end to end is; 0 is healthy. Absent when nothing went in on any of them, or without a fleet-wide component read"`
 }
@@ -296,11 +296,11 @@ func toPlatformViewOutput(v *storage.PlatformView, readAt time.Time, lab bool) *
 	out.Body.Lab = lab
 	out.Body.FiguresRead = v.FiguresRead
 	if v.System != nil {
-		out.Body.System = &platformSystemBody{ID: v.System.ID, Name: v.System.Name, Verdict: v.System.Verdict}
+		out.Body.System = &platformSystemBody{ID: v.System.ID, Name: v.System.Name, Health: v.System.Verdict}
 	}
 	out.Body.Servers = make([]platformServerBody, 0, len(v.Servers))
 	for _, s := range v.Servers {
-		body := platformServerBody{Component: s.ComponentID, Name: s.Name, StartedAt: s.StartedAt, Verdict: s.Verdict}
+		body := platformServerBody{Component: s.ComponentID, Name: s.Name, StartedAt: s.StartedAt, Health: s.Verdict}
 		if s.Version != nil {
 			body.Version = *s.Version
 		}
@@ -356,7 +356,7 @@ func toPlatformViewOutput(v *storage.PlatformView, readAt time.Time, lab bool) *
 			body.Component = *n.ComponentID
 		}
 		if n.Verdict != nil {
-			body.Verdict = *n.Verdict
+			body.Health = *n.Verdict
 		}
 		body.Loss = n.Loss
 		if n.Figures != nil {

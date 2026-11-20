@@ -72,8 +72,8 @@ function segClass(value: string): string {
 // shared StateStrip primitive, the same one the health history draws.
 function AvailabilityStrip(p: { iface: ReachEndpoint }) {
   const now = createClock(CLOCK_TICK_MS);
-  const segs = createMemo(() => segments(p.iface.history, p.iface.verdict, now()));
-  const up = createMemo(() => uptime(p.iface.history, p.iface.verdict, now()));
+  const segs = createMemo(() => segments(p.iface.history, p.iface.reachability, now()));
+  const up = createMemo(() => uptime(p.iface.history, p.iface.reachability, now()));
   return (
     <StateStrip segments={segs()} tone={segClass} title="Availability over the recent window">
       <Show when={up() !== null} fallback={<span class="text-[11px] text-base-content/40">no data</span>}>
@@ -154,7 +154,7 @@ function TlsRows(p: { tls: ReachTLS; responsive?: boolean; refused: boolean }) {
 function GateBreakdown(p: { iface: ReachEndpoint }) {
   const now = createClock(CLOCK_TICK_MS);
   const why = createMemo(() => reason(p.iface, now()));
-  const verdictOk = createMemo(() => p.iface.verdict?.value === "up");
+  const verdictOk = createMemo(() => p.iface.reachability?.value === "up");
   // A request rung a refusal holds: the component answered with a refusal
   // retrying cannot fix, so beneath the gate nothing is sent (#1037, #821).
   const requestGated = () => requestHeld(p.iface);

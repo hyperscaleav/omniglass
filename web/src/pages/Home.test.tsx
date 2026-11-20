@@ -20,7 +20,7 @@ const view: PlatformView = {
   read_at: readAt,
   lab: false,
   figures_read: true,
-  system: { id: uuidFor("platform"), name: "omniglass-platform", verdict: "degraded" },
+  system: { id: uuidFor("platform"), name: "omniglass-platform", health: "degraded" },
   servers: [],
   groups: [],
   loss_hops: ["outpost"],
@@ -34,7 +34,7 @@ const meWith = (permissions: string[]): Me => ({ user: { id: "p", kind: "person"
 
 const fleet = (openAlarms?: number): FleetView => ({
   locations: [],
-  systems: ["hq-huddle", "depot-huddle", "lab-rack"].map((name) => ({ id: uuidFor(name), name, label: "", verdict: "healthy", dots: [] })),
+  systems: ["hq-huddle", "depot-huddle", "lab-rack"].map((name) => ({ id: uuidFor(name), name, label: "", health: "healthy", dots: [] })),
   ...(openAlarms === undefined ? {} : { open_alarms: openAlarms }),
 });
 const outpostRows: Outpost[] = ["edge-a", "edge-b"].map((name) => ({ name, enrolled: true, tags: {} }));

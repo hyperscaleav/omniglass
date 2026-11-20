@@ -162,7 +162,7 @@ func TestImpairingAnUpstreamHoldsItsPathDependent(t *testing.T) {
 	type endpointRow struct {
 		Verdict *struct {
 			Value string `json:"value"`
-		} `json:"verdict"`
+		} `json:"reachability"`
 		GateReasons []gateReason `json:"gate_reasons"`
 	}
 	reach := func(comp string) map[string]endpointRow {

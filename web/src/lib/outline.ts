@@ -110,7 +110,7 @@ export function buildOutline(input: OutlineInput): Outline {
 
   const systemRef = (s: (typeof fleetSystems)[number]): SystemRef => {
     const std = standardOf.get(s.id);
-    return { id: s.id, name: s.name, label: entityLabel(s), standard: std ? input.standardLabel(std) : "", health: verdictOf(s.verdict) };
+    return { id: s.id, name: s.name, label: entityLabel(s), standard: std ? input.standardLabel(std) : "", health: verdictOf(s.health) };
   };
 
   // Which systems each component serves, so a shared one can name the others.
@@ -132,7 +132,7 @@ export function buildOutline(input: OutlineInput): Outline {
           label,
           product: c?.product ? input.productLabel(c.product) : "",
           icon: iconFor(c?.product),
-          health: verdictOf(d.verdict),
+          health: verdictOf(d.health),
           also: (servedBy.get(d.component) ?? []).filter((l) => l !== entityLabel(s)),
         };
       })

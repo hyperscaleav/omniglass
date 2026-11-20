@@ -386,7 +386,7 @@ describe("outpostLossText", () => {
 const server = (over: Partial<PlatformServer> = {}): PlatformServer => ({
   component: "c0ffee00-0000-4000-8000-000000000001",
   name: "lab-server",
-  verdict: "healthy",
+  health: "healthy",
   alarms: [],
   groups: [
     {

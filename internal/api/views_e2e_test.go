@@ -31,17 +31,17 @@ type fleetViewWire struct {
 		Name         string `json:"name"`
 		LocationType string `json:"location_type"`
 		Parent       string `json:"parent"`
-		Verdict      string `json:"verdict"`
+		Verdict      string `json:"health"`
 	} `json:"locations"`
 	Systems []struct {
 		ID       string `json:"id"`
 		Name     string `json:"name"`
 		Location string `json:"location"`
-		Verdict  string `json:"verdict"`
+		Verdict  string `json:"health"`
 		Dots     []struct {
 			Component string `json:"component"`
 			Name      string `json:"name"`
-			Verdict   string `json:"verdict"`
+			Verdict   string `json:"health"`
 			Primary   bool   `json:"primary"`
 			Shared    bool   `json:"shared"`
 		} `json:"dots"`
@@ -213,14 +213,14 @@ type platformViewWire struct {
 	System      *struct {
 		ID      string `json:"id"`
 		Name    string `json:"name"`
-		Verdict string `json:"verdict"`
+		Verdict string `json:"health"`
 	} `json:"system"`
 	Servers []struct {
 		Component string     `json:"component"`
 		Name      string     `json:"name"`
 		Version   string     `json:"version"`
 		StartedAt *time.Time `json:"started_at"`
-		Verdict   string     `json:"verdict"`
+		Verdict   string     `json:"health"`
 		Groups    []struct {
 			Name  string `json:"name"`
 			Label string `json:"label"`
@@ -257,7 +257,7 @@ type platformViewWire struct {
 	Outposts []struct {
 		Name      string `json:"name"`
 		Component string `json:"component"`
-		Verdict   string `json:"verdict"`
+		Verdict   string `json:"health"`
 		Figures   map[string]struct {
 			Value      float64   `json:"value"`
 			ObservedAt time.Time `json:"observed_at"`

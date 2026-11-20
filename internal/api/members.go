@@ -21,11 +21,11 @@ type systemMemberBody struct {
 	SystemCount int    `json:"system_count" doc:"How many systems this component belongs to in total; more than one means it is shared"`
 	// The component's verdict, not the system's: a system's view polls its
 	// members' health here (#940), one request for the system.
-	ComponentVerdict string `json:"component_verdict" doc:"The component's own recorded verdict (healthy, degraded, or outage), the one its active alarms make; never the system's"`
+	ComponentHealth string `json:"component_health" doc:"The component's own recorded verdict (healthy, degraded, or outage), the one its active alarms make; never the system's"`
 }
 
 func toSystemMemberBody(m storage.Member) systemMemberBody {
-	return systemMemberBody{System: m.SystemID, SystemID: m.SystemUUID, Component: m.ComponentID, ComponentID: m.ComponentUUID, Primary: m.IsPrimary, SystemCount: m.SystemCount, ComponentVerdict: m.ComponentHealth}
+	return systemMemberBody{System: m.SystemID, SystemID: m.SystemUUID, Component: m.ComponentID, ComponentID: m.ComponentUUID, Primary: m.IsPrimary, SystemCount: m.SystemCount, ComponentHealth: m.ComponentHealth}
 }
 
 func toSystemMemberBodies(ms []storage.Member) []systemMemberBody {

@@ -30,7 +30,7 @@ const loc = (handle: string, name: string, label: string, type: string, parent: 
   location_type: type,
   location_type_id: uuidFor(`lzt-${type}`),
   parent: parent ? uuidFor(parent) : "",
-  verdict,
+  health: verdict,
 });
 
 const view: FleetView = {
@@ -49,8 +49,8 @@ const view: FleetView = {
       name: "lobby-av",
       label: "Lobby AV",
       location: uuidFor("lz-hq"),
-      verdict: "incomplete",
-      dots: [{ component: uuidFor("lz-c-sign"), name: "display-1", verdict: "incomplete", primary: true, shared: false }],
+      health: "incomplete",
+      dots: [{ component: uuidFor("lz-c-sign"), name: "display-1", health: "incomplete", primary: true, shared: false }],
     },
     // A second system at hq, so hq is a location shared by two and keeps its
     // own view.
@@ -59,7 +59,7 @@ const view: FleetView = {
       name: "lobby-signage",
       label: "Lobby Signage",
       location: uuidFor("lz-hq"),
-      verdict: "healthy",
+      health: "healthy",
       dots: [],
     },
     // Deep under west, alone in its room: that room lands on it.
@@ -68,8 +68,8 @@ const view: FleetView = {
       name: "boardroom",
       label: "Boardroom",
       location: uuidFor("lz-room"),
-      verdict: "degraded",
-      dots: [{ component: uuidFor("lz-c-bar"), name: "videobar-1", verdict: "degraded", primary: true, shared: false }],
+      health: "degraded",
+      dots: [{ component: uuidFor("lz-c-bar"), name: "videobar-1", health: "degraded", primary: true, shared: false }],
     },
     // At the yard, an AREA type: a child band regardless of type.
     {
@@ -77,8 +77,8 @@ const view: FleetView = {
       name: "yard-av",
       label: "Yard AV",
       location: uuidFor("lz-yard"),
-      verdict: "healthy",
-      dots: [{ component: uuidFor("lz-c-horn"), name: "speaker-1", verdict: "healthy", primary: true, shared: false }],
+      health: "healthy",
+      dots: [{ component: uuidFor("lz-c-horn"), name: "speaker-1", health: "healthy", primary: true, shared: false }],
     },
   ],
 } as unknown as FleetView;
@@ -86,7 +86,7 @@ const view: FleetView = {
 // The lobby system's health: an unstaffed slot, which must read incomplete on
 // the card, in the server's own words, never outage.
 const lobbyHealth: FleetHealth = {
-  verdict: "incomplete",
+  health: "incomplete",
   slots: [
     {
       name: "signage",
@@ -140,15 +140,15 @@ function mount(path = `/web/locations/${uuidFor("lz-hq")}`, lateTypes = false) {
   qc.setQueryData([...STANDARDS_KEY], []);
   qc.setQueryData([...PRODUCTS_KEY], []);
   qc.setQueryData([...COMPONENT_TYPES_KEY], []);
-  qc.setQueryData([...systemHealthKey(uuidFor("lz-s-sign"))], { verdict: "healthy", slots: [], systems: [], transitions: [] } as unknown as FleetHealth);
+  qc.setQueryData([...systemHealthKey(uuidFor("lz-s-sign"))], { health: "healthy", slots: [], systems: [], transitions: [] } as unknown as FleetHealth);
   qc.setQueryData([...systemHealthKey(uuidFor("lz-s-lobby"))], lobbyHealth);
   qc.setQueryData([...locationHealthKey(uuidFor("lz-hq"))], {
-    verdict: "degraded",
+    health: "degraded",
     slots: [],
     systems: [],
     transitions: [
-      { ts: "2026-08-01T09:00:00Z", verdict: "healthy" },
-      { ts: "2026-08-15T14:20:00Z", verdict: "degraded" },
+      { ts: "2026-08-01T09:00:00Z", health: "healthy" },
+      { ts: "2026-08-15T14:20:00Z", health: "degraded" },
     ],
   } as unknown as FleetHealth);
   window.history.pushState({}, "", path);
@@ -240,7 +240,7 @@ describe("a folder location (#872)", () => {
     const r = mount();
     const before = screen.getByTestId(`system-summary-${uuidFor("lz-s-lobby")}`);
     const next = structuredClone(view);
-    next.systems!.find((x) => x.id === uuidFor("lz-s-lobby"))!.verdict = "degraded";
+    next.systems!.find((x) => x.id === uuidFor("lz-s-lobby"))!.health = "degraded";
     r.qc.setQueryData([...FLEET_VIEW_KEY], next);
     await waitFor(() => expect(within(screen.getByTestId(`system-summary-${uuidFor("lz-s-lobby")}`)).getByText("degraded")).toBeTruthy());
     expect(screen.getByTestId(`system-summary-${uuidFor("lz-s-lobby")}`)).toBe(before);

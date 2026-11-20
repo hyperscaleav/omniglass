@@ -11,7 +11,7 @@ import type { HealthTransition } from "../lib/health";
 const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
 
 const at = (ts: string, verdict: string): HealthTransition =>
-  ({ ts, verdict }) as HealthTransition;
+  ({ ts, health: verdict }) as HealthTransition;
 
 describe("HealthHistory", () => {
   // #631 made incomplete a recordable verdict, so this component started

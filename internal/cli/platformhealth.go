@@ -44,15 +44,15 @@ type platformView struct {
 }
 
 type platformViewSystem struct {
-	Name    string `json:"name"`
-	Verdict string `json:"verdict"`
+	Name   string `json:"name"`
+	Health string `json:"health"`
 }
 
 type platformViewServer struct {
 	Name      string              `json:"name"`
 	Version   string              `json:"version,omitempty"`
 	StartedAt *time.Time          `json:"started_at,omitempty"`
-	Verdict   string              `json:"verdict"`
+	Health    string              `json:"health"`
 	Groups    []platformViewPanel `json:"groups"`
 	Alarms    []platformViewAlarm `json:"alarms"`
 }
@@ -84,7 +84,7 @@ type platformViewAlarm struct {
 
 type platformViewOutpost struct {
 	Name    string                               `json:"name"`
-	Verdict string                               `json:"verdict,omitempty"`
+	Health  string                               `json:"health,omitempty"`
 	Figures map[string]platformViewOutpostFigure `json:"figures,omitempty"`
 	Loss    *float64                             `json:"loss,omitempty"`
 }
@@ -160,7 +160,7 @@ type platformReading struct {
 
 type platformServerReading struct {
 	Name          string              `json:"name"`
-	Verdict       string              `json:"verdict"`
+	Health        string              `json:"health"`
 	Version       string              `json:"version,omitempty"`
 	StartedAt     *time.Time          `json:"started_at,omitempty"`
 	UptimeSeconds *float64            `json:"uptime_seconds,omitempty"`
@@ -189,9 +189,9 @@ type platformFailure struct {
 }
 
 type platformOutpostReading struct {
-	Count      int                      `json:"count"`
-	Lossy      []platformOutpostLoss    `json:"lossy"`
-	NotHealthy []platformOutpostVerdict `json:"not_healthy"`
+	Count      int                     `json:"count"`
+	Lossy      []platformOutpostLoss   `json:"lossy"`
+	NotHealthy []platformOutpostHealth `json:"not_healthy"`
 }
 
 type platformOutpostLoss struct {
@@ -199,9 +199,9 @@ type platformOutpostLoss struct {
 	Loss float64 `json:"loss"`
 }
 
-type platformOutpostVerdict struct {
-	Name    string `json:"name"`
-	Verdict string `json:"verdict"`
+type platformOutpostHealth struct {
+	Name   string `json:"name"`
+	Health string `json:"health"`
 }
 
 type platformPipelineReading struct {
@@ -217,7 +217,7 @@ type platformHopReading struct {
 }
 
 // readPlatformHealth reduces a platform view to its reading. The platform is
-// healthy when every verdict it can see reads healthy, no alarm is open, and
+// healthy when every health it can see reads healthy, no alarm is open, and
 // the newest windows lost nothing end to end; a part the caller cannot see is
 // named, never read as zero, and a health it cannot see is not healthy.
 func readPlatformHealth(v platformView) platformReading {
@@ -228,13 +228,13 @@ func readPlatformHealth(v platformView) platformReading {
 		System:     v.System,
 		Servers:    []platformServerReading{},
 		Failures:   []platformFailure{},
-		Outposts:   platformOutpostReading{Count: len(v.Outposts), Lossy: []platformOutpostLoss{}, NotHealthy: []platformOutpostVerdict{}},
+		Outposts:   platformOutpostReading{Count: len(v.Outposts), Lossy: []platformOutpostLoss{}, NotHealthy: []platformOutpostHealth{}},
 	}
 	if v.System == nil {
-		r.NotVisible = append(r.NotVisible, "system verdict")
-		r.Reasons = append(r.Reasons, "the platform system's verdict is not visible to you")
-	} else if v.System.Verdict != "healthy" {
-		r.Reasons = append(r.Reasons, fmt.Sprintf("the platform system reads %s", v.System.Verdict))
+		r.NotVisible = append(r.NotVisible, "system health")
+		r.Reasons = append(r.Reasons, "the platform system's health is not visible to you")
+	} else if v.System.Health != "healthy" {
+		r.Reasons = append(r.Reasons, fmt.Sprintf("the platform system reads %s", v.System.Health))
 	}
 	if !v.FiguresRead {
 		if len(v.Servers) == 0 {
@@ -248,8 +248,8 @@ func readPlatformHealth(v platformView) platformReading {
 	}
 	for _, s := range v.Servers {
 		r.Servers = append(r.Servers, readPlatformServer(s, v.ReadAt))
-		if s.Verdict != "healthy" {
-			r.Reasons = append(r.Reasons, fmt.Sprintf("server %s reads %s", s.Name, s.Verdict))
+		if s.Health != "healthy" {
+			r.Reasons = append(r.Reasons, fmt.Sprintf("server %s reads %s", s.Name, s.Health))
 		}
 		for _, a := range s.Alarms {
 			what := a.Rule
@@ -270,9 +270,9 @@ func readPlatformHealth(v platformView) platformReading {
 		if n.Loss != nil && *n.Loss > 0 {
 			r.Outposts.Lossy = append(r.Outposts.Lossy, platformOutpostLoss{Name: n.Name, Loss: *n.Loss})
 		}
-		if n.Verdict != "" && n.Verdict != "healthy" {
-			r.Outposts.NotHealthy = append(r.Outposts.NotHealthy, platformOutpostVerdict{Name: n.Name, Verdict: n.Verdict})
-			r.Reasons = append(r.Reasons, fmt.Sprintf("outpost %s reads %s", n.Name, n.Verdict))
+		if n.Health != "" && n.Health != "healthy" {
+			r.Outposts.NotHealthy = append(r.Outposts.NotHealthy, platformOutpostHealth{Name: n.Name, Health: n.Health})
+			r.Reasons = append(r.Reasons, fmt.Sprintf("outpost %s reads %s", n.Name, n.Health))
 		}
 		keys := make([]string, 0, len(n.Figures))
 		for k := range n.Figures {
@@ -304,7 +304,7 @@ func readPlatformHealth(v platformView) platformReading {
 // alarms, its headline figures at every instance, and its telemetry backlog.
 func readPlatformServer(s platformViewServer, readAt time.Time) platformServerReading {
 	out := platformServerReading{
-		Name: s.Name, Verdict: s.Verdict, Version: s.Version, StartedAt: s.StartedAt,
+		Name: s.Name, Health: s.Health, Version: s.Version, StartedAt: s.StartedAt,
 		Alarms: s.Alarms, Figures: []platformFigureValue{},
 	}
 	if out.Alarms == nil {
@@ -500,10 +500,10 @@ func newPlatformCmd() *cobra.Command {
 		Use:   "health",
 		Short: "Read whether the platform is keeping up, and exit nonzero when it is not",
 		Long: "Reads the platform view (the read behind the console's Platform health page) and reduces it to\n" +
-			"whether Omniglass is keeping up: the system and server verdicts, open alarms, each pipeline\n" +
+			"whether Omniglass is keeping up: the system and server health, open alarms, each pipeline\n" +
 			"hop's in, out and loss with the end to end, the outposts with loss or not healthy, ingest lag,\n" +
 			"the queues, the database and retention, and every failure figure above zero. It exits nonzero\n" +
-			"when a verdict is not healthy, an alarm is open, or the newest windows lost work end to end.\n\n" +
+			"when any health is not healthy, an alarm is open, or the newest windows lost work end to end.\n\n" +
 			"It reads through the API alone with --server and --token, so it works against any deployment.\n" +
 			"The view is gated by outpost:read; a part the token cannot read prints as not visible to you,\n" +
 			"never as zero. --window reads twice and adds the database's and the telemetry stream's growth\n" +
@@ -754,12 +754,12 @@ func (r platformReading) table(w io.Writer) {
 	defer tw.Flush()
 	system := platformNotVisible
 	if r.System != nil {
-		system = r.System.Name + "  " + r.System.Verdict
+		system = r.System.Name + "  " + r.System.Health
 	}
 	fmt.Fprintf(tw, "platform\t%s\n", system)
 	fmt.Fprintf(tw, "read at\t%s\n", r.ReadAt.UTC().Format(time.RFC3339))
 
-	fmt.Fprintln(tw, "\nSERVER\tVERDICT\tVERSION\tUP")
+	fmt.Fprintln(tw, "\nSERVER\tHEALTH\tVERSION\tUP")
 	if len(r.Servers) == 0 {
 		fmt.Fprintf(tw, "%s\n", r.hidden("servers", "none"))
 	}
@@ -768,7 +768,7 @@ func (r platformReading) table(w io.Writer) {
 		if s.UptimeSeconds != nil {
 			up = (time.Duration(*s.UptimeSeconds) * time.Second).String()
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", s.Name, s.Verdict, orDash(s.Version), up)
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", s.Name, s.Health, orDash(s.Version), up)
 	}
 	for _, s := range r.Servers {
 		fmt.Fprintf(tw, "\n%s\n", s.Name)
@@ -821,7 +821,7 @@ func (r platformReading) table(w io.Writer) {
 			fmt.Fprintf(tw, "  and %d more not healthy\n", len(r.Outposts.NotHealthy)-i)
 			break
 		}
-		fmt.Fprintf(tw, "  %s\t%s\n", n.Name, n.Verdict)
+		fmt.Fprintf(tw, "  %s\t%s\n", n.Name, n.Health)
 	}
 
 	fmt.Fprintln(tw, "\nFAILURES")

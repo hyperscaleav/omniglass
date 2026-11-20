@@ -1,7 +1,7 @@
 # omniglass platform health reads the platform from the CLI
 #
 # omniglass platform health reads the platform view through the API with a token alone and reduces it
-# to whether Omniglass is keeping up: the system and server verdicts, open alarms, each pipeline hop's
+# to whether Omniglass is keeping up: the system and server health, open alarms, each pipeline hop's
 # loss with the end to end, the outposts with loss or not healthy, and every failure figure above zero.
 # Its exit status is the verdict. --window adds the growth between two reads, --page-clients times the
 # console's system page, and --every samples on an interval, one JSON line a sample (#2055).
@@ -32,10 +32,10 @@ Wait
 Type `omniglass platform health --json | jq -c '{healthy, reasons, not_visible}' || true`
 Enter
 Wait
-Type "# Each server's verdict and build, and the outposts the reading counts"
+Type "# Each server's health and build, and the outposts the reading counts"
 Enter
 Wait
-Type `omniglass platform health --json | jq -c '.servers[] | {name, verdict, version, alarms: (.alarms | length)}' || true`
+Type `omniglass platform health --json | jq -c '.servers[] | {name, health, version, alarms: (.alarms | length)}' || true`
 Enter
 Wait
 Type `omniglass platform health --json | jq -c '.outposts | {count, with_loss: (.lossy | length), not_healthy: (.not_healthy | length)}' || true`
@@ -61,6 +61,6 @@ Wait
 Type `omniglass platform health --every 10s --samples 3 --append health.jsonl`
 Enter
 Wait
-Type `jq -c '{seq, healthy, servers: [.servers[].verdict]}' health.jsonl`
+Type `jq -c '{seq, healthy, servers: [.servers[].health]}' health.jsonl`
 Enter
 Wait

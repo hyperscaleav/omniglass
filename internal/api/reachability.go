@@ -67,7 +67,7 @@ var reachLayers = []reachLayer{
 	{Layer: "port", SignalKey: probekeys.TCPOpen, TimingKey: probekeys.TCPConnectTime},
 }
 
-type reachVerdictBody struct {
+type reachReadingBody struct {
 	Value string    `json:"value" doc:"The latest stored verdict value (up/down)"`
 	TS    time.Time `json:"ts" doc:"When the verdict last changed: one is stored only on a transition, so an endpoint's freshness is last_seen, not this"`
 }
@@ -134,10 +134,10 @@ type reachEndpointBody struct {
 	Address       string                `json:"address,omitempty" doc:"The probed address (target[:port]) from the endpoint params"`
 	Outpost       string                `json:"outpost,omitempty" doc:"The outpost that probes this endpoint"`
 	LastSeen      *time.Time            `json:"last_seen,omitempty" doc:"When the endpoint last delivered a batch, by the server's clock and to within a few seconds, whatever it carried (any lane, any series, an unchanged value); absent until one lands"`
-	Verdict       *reachVerdictBody     `json:"verdict" doc:"The latest reachability verdict, or null if none yet (pending says why)"`
-	Pending       string                `json:"pending,omitempty" enum:"no-outpost,awaiting-probe" doc:"Why verdict is null, present only while it is: no-outpost, the endpoint has no outpost assigned so nothing probes it (create and enroll an outpost, run it, then assign the endpoint to it); awaiting-probe, an outpost is assigned and its first probe has not landed. Absent once a verdict exists, and on a push endpoint, which has no verdict to wait for. Derived at read time, not stored"`
-	Responsive    *reachVerdictBody     `json:"responsive,omitempty" doc:"The layer-7 responds rung (the protocol itself answered), when a probe has climbed it"`
-	Authenticated *reachVerdictBody     `json:"authenticated,omitempty" doc:"The auth rung (the probe's credential was accepted, or a held session's login passed), present only when a credential was tried"`
+	Reachability  *reachReadingBody     `json:"reachability" doc:"The latest reachability reading (up or down), or null if none yet (pending says why)"`
+	Pending       string                `json:"pending,omitempty" enum:"no-outpost,awaiting-probe" doc:"Why reachability is null, present only while it is: no-outpost, the endpoint has no outpost assigned so nothing probes it (create and enroll an outpost, run it, then assign the endpoint to it); awaiting-probe, an outpost is assigned and its first probe has not landed. Absent once a verdict exists, and on a push endpoint, which has no verdict to wait for. Derived at read time, not stored"`
+	Responsive    *reachReadingBody     `json:"responsive,omitempty" doc:"The layer-7 responds rung (the protocol itself answered), when a probe has climbed it"`
+	Authenticated *reachReadingBody     `json:"authenticated,omitempty" doc:"The auth rung (the probe's credential was accepted, or a held session's login passed), present only when a credential was tried"`
 	Session       *reachSessionBody     `json:"session,omitempty" doc:"The endpoint's held session, while it is configured to hold one (a standing listen task, or a driver declaring a session): its latest state, when it changed, and why"`
 	Rejection     *reachRejectionBody   `json:"rejection,omitempty" doc:"The gate a terminal refusal holds on the endpoint, its rung, class and reason, whether or not the endpoint holds a session (a reachability probe's refusal gates it too); absent when none holds"`
 	GateReasons   []reachGateReasonBody `json:"gate_reasons,omitempty" doc:"Every reason other than a refusal the endpoint's gate holds (the gate is a reason set, #1650), most causal first as the outpost published them: while any holds, due polls are held (poll-held-count), and a command or run now answers at once with the reason. Absent when none holds; a refusal is rejection"`
@@ -163,7 +163,7 @@ func registerReachabilityRoutes(api huma.API, a *authenticator, gw storage.Gatew
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/reachability",
 		Summary:     "Read a component's per-endpoint reachability",
-		Description: "Composes, per endpoint, the latest reachability verdict, the probe-layer signals that compose it, and the recent verdict transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+		Description: "Composes, per endpoint, the latest reachability, the probe-layer signals that compose it, and the recent reachability transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
 	}, "component", "read"), func(ctx context.Context, in *componentPathInput) (*reachabilityOutput, error) {
 		comp, err := gw.GetComponent(ctx, in.Name, a.scopeFor(ctx, "component", "read"))
 		if err != nil {
@@ -268,22 +268,22 @@ func composeEndpoint(ctx context.Context, gw storage.Gateway, comp string, it st
 		return row, err
 	}
 	if verdict != nil {
-		row.Verdict = &reachVerdictBody{Value: verdict.Value, TS: verdict.TS}
+		row.Reachability = &reachReadingBody{Value: verdict.Value, TS: verdict.TS}
 	}
-	row.Pending = pendingReason(row.Outpost, row.Verdict)
+	row.Pending = pendingReason(row.Outpost, row.Reachability)
 	responsive, err := gw.LatestProperty(ctx, comp, responsiveKey, it.Name)
 	if err != nil {
 		return row, err
 	}
 	if responsive != nil {
-		row.Responsive = &reachVerdictBody{Value: responsive.Value, TS: responsive.TS}
+		row.Responsive = &reachReadingBody{Value: responsive.Value, TS: responsive.TS}
 	}
 	authed, err := gw.LatestProperty(ctx, comp, authKey, it.Name)
 	if err != nil {
 		return row, err
 	}
 	if authed != nil {
-		row.Authenticated = &reachVerdictBody{Value: authed.Value, TS: authed.TS}
+		row.Authenticated = &reachReadingBody{Value: authed.Value, TS: authed.TS}
 	}
 	// A session is served only while the endpoint is configured to hold one:
 	// teardown publishes no state (ADR-0150), so a session nobody holds keeps
@@ -374,7 +374,7 @@ func composeEndpoint(ctx context.Context, gw storage.Gateway, comp string, it st
 // pendingReason says why an endpoint has no verdict yet: no outpost assigned
 // means nothing will ever probe it, an assigned outpost just has not landed its
 // first probe. A row with a verdict is waiting on nothing (#981).
-func pendingReason(outpost string, verdict *reachVerdictBody) string {
+func pendingReason(outpost string, verdict *reachReadingBody) string {
 	switch {
 	case verdict != nil:
 		return ""
@@ -402,7 +402,7 @@ var requestTimingKey = map[string]string{"udp": udpResponseKey, "snmp": snmpResp
 // is timed by the latest timing only while answered: an unanswered probe
 // lands no time, so the last one belongs to an earlier answer and is not
 // served as this probe's.
-func composeRequestLayer(ctx context.Context, gw storage.Gateway, comp, instance string, responsive *reachVerdictBody, timingKey string) (reachLayerBody, error) {
+func composeRequestLayer(ctx context.Context, gw storage.Gateway, comp, instance string, responsive *reachReadingBody, timingKey string) (reachLayerBody, error) {
 	lb := reachLayerBody{Layer: "request", Check: responsiveKey, TS: responsive.TS}
 	lb.Value = collection.PingDown
 	if responsive.Value != collection.VerdictUp {

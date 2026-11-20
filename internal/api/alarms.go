@@ -120,7 +120,7 @@ type listAlarmsOutput struct {
 	Body struct {
 		Component string      `json:"component"`
 		Alarms    []alarmBody `json:"alarms"`
-		Verdict   string      `json:"verdict" doc:"The component's own verdict, the one its active alarms make (healthy, degraded, or outage), whatever the filter: a component's view reads it here rather than off the whole fleet view. unknown when nothing has ever observed the component (no alarm raised, no endpoint delivered): there is nothing to call healthy on"`
+		Health    string      `json:"health" doc:"The component's own verdict, the one its active alarms make (healthy, degraded, or outage), whatever the filter: a component's view reads it here rather than off the whole fleet view. unknown when nothing has ever observed the component (no alarm raised, no endpoint delivered): there is nothing to call healthy on"`
 	}
 }
 
@@ -251,7 +251,7 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		}
 		out := &listAlarmsOutput{}
 		out.Body.Component = in.Name
-		out.Body.Verdict = verdict
+		out.Body.Health = verdict
 		out.Body.Alarms = make([]alarmBody, 0, len(alarms))
 		for i := range alarms {
 			out.Body.Alarms = append(out.Body.Alarms, toAlarmBody(&alarms[i]))

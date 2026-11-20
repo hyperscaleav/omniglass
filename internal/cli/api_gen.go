@@ -2793,7 +2793,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "Read a component's per-endpoint reachability",
-						Long:    "Composes, per endpoint, the latest reachability verdict, the probe-layer signals that compose it, and the recent verdict transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "Composes, per endpoint, the latest reachability, the probe-layer signals that compose it, and the recent reachability transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component reachability list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -8046,8 +8046,8 @@ func generatedCommands() []*cobra.Command {
 			cmd := func() *cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "health",
-					Short:   "Read every system's health verdict",
-					Long:    "The current verdict for every system in the caller's read scope, in one call: the bulk counterpart of the per-system health read, carrying the one fact a list's health column renders and none of the explanation. A console painting a page of systems reads this once instead of resolving every slot, occupant, alarm and transition per row. A system that has never been recomputed reads healthy. Gated by system:read; an empty scope is an empty list, not a 403.",
+					Short:   "Read every system's health",
+					Long:    "The current health for every system in the caller's read scope, in one call: the bulk counterpart of the per-system health read, carrying the one fact a list's health column renders and none of the explanation. A console painting a page of systems reads this once instead of resolving every slot, occupant, alarm and transition per row. A system that has never been recomputed reads healthy. Gated by system:read; an empty scope is an empty list, not a 403.",
 					Example: "  omniglass system health",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {

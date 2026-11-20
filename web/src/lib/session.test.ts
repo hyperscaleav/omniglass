@@ -22,7 +22,7 @@ const now = Date.parse("2026-10-23T12:00:00Z");
 const ago = (ms: number) => new Date(now - ms).toISOString();
 
 const ep = (over: Partial<ReachEndpoint>): ReachEndpoint =>
-  ({ id: uuidFor("ep-1"), endpoint: "telnet", transport: "telnet", verdict: null, layers: [], history: [], ...over }) as ReachEndpoint;
+  ({ id: uuidFor("ep-1"), endpoint: "telnet", transport: "telnet", reachability: null, layers: [], history: [], ...over }) as ReachEndpoint;
 const ping = (up: boolean) => ({ layer: "ping", check: "icmp-reachable", value: up ? "up" : "down", ts: ago(5_000) });
 const port = (open: boolean) => ({ layer: "port", check: "tcp-open", value: open ? "open" : "closed", ts: ago(5_000) });
 

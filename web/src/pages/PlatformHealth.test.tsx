@@ -23,8 +23,8 @@ const full: PlatformView = {
   read_at: readAt,
   lab: true,
   figures_read: true,
-  system: { id: uuidFor("platform"), name: "omniglass-platform", verdict: "degraded" },
-  servers: [{ component: uuidFor("server"), name: "lab-server", version: "v9.9.9", started_at: ago((2 * 3600 + 5 * 60) * 1000), verdict: "healthy", groups: [], alarms: [] }],
+  system: { id: uuidFor("platform"), name: "omniglass-platform", health: "degraded" },
+  servers: [{ component: uuidFor("server"), name: "lab-server", version: "v9.9.9", started_at: ago((2 * 3600 + 5 * 60) * 1000), health: "healthy", groups: [], alarms: [] }],
   groups: [
     { name: "checkin", label: "Checkin", keys: [{ name: "checkin-age", label: "Check-in Age", unit: "s", description: "Seconds since the outpost last checked in." }] },
     { name: "commands", label: "Commands", keys: [{ name: "command-pending-count", label: "Pending Commands", unit: "", description: "Commands waiting on the outpost." }] },
@@ -32,12 +32,12 @@ const full: PlatformView = {
   outposts: [
     {
       name: "edge-alpha", label: "Edge Alpha", enrolled: true, last_heartbeat_at: ago(3000),
-      component: uuidFor("alpha"), verdict: "healthy", loss: 0.03,
+      component: uuidFor("alpha"), health: "healthy", loss: 0.03,
       figures: { "checkin-age": { value: 3, observed_at: ago(3000) } },
     },
     {
       name: "edge-bravo", label: "", enrolled: true, last_heartbeat_at: ago(OUTPOST_DOWN_AFTER_MS + 1),
-      component: uuidFor("bravo"), verdict: "outage",
+      component: uuidFor("bravo"), health: "outage",
       figures: { "checkin-age": { value: 400, observed_at: ago(1000) }, "command-pending-count": { value: 0, observed_at: ago(1000) } },
     },
   ],
@@ -84,8 +84,8 @@ function panels(figures: boolean): PlatformServer["groups"] {
 const twoServers = (): PlatformView => ({
   ...full,
   servers: [
-    { component: uuidFor("server"), name: "lab-server", version: "v9.9.9", started_at: ago(1000), verdict: "healthy", groups: panels(true), alarms: [] },
-    { component: uuidFor("server-b"), name: "lab-server-b", version: "v9.9.9", started_at: ago(1000), verdict: "healthy", groups: panels(true), alarms: [] },
+    { component: uuidFor("server"), name: "lab-server", version: "v9.9.9", started_at: ago(1000), health: "healthy", groups: panels(true), alarms: [] },
+    { component: uuidFor("server-b"), name: "lab-server-b", version: "v9.9.9", started_at: ago(1000), health: "healthy", groups: panels(true), alarms: [] },
   ],
 });
 
@@ -304,7 +304,7 @@ describe("PlatformHealth page", () => {
         ],
       },
     ];
-    mount({ ...full, servers: [{ component: uuidFor("server"), name: "lab-server", started_at: at, verdict: "healthy", groups, alarms: [] }] });
+    mount({ ...full, servers: [{ component: uuidFor("server"), name: "lab-server", started_at: at, health: "healthy", groups, alarms: [] }] });
     const requests = screen.getByTestId("server-panel-requests");
     const rows = within(requests).getAllByTestId("panel-row-bus-request-failure-count");
     const byPath = Object.fromEntries(rows.map((r) => [r.getAttribute("data-instance"), r.textContent ?? ""]));
@@ -329,7 +329,7 @@ describe("PlatformHealth page", () => {
   it("renders a server with no samples yet as not reported on every panel, with no series read and no console error", () => {
     const errors = vi.spyOn(console, "error");
     const fetchSpy = emptySeries();
-    mount({ ...full, servers: [{ component: uuidFor("server"), name: "lab-server", started_at: ago(1000), verdict: "unknown", groups: panels(false), alarms: [] }] });
+    mount({ ...full, servers: [{ component: uuidFor("server"), name: "lab-server", started_at: ago(1000), health: "unknown", groups: panels(false), alarms: [] }] });
     const set = screen.getByTestId("server-panels-lab-server");
     for (const name of ["requests", "ingest", "queues", "retention"]) {
       const panel = within(set).getByTestId(`server-panel-${name}`);
@@ -420,7 +420,7 @@ describe("PlatformHealth page", () => {
     expect(first.open).toBe(true);
     const next = twoServers();
     next.servers = [
-      { component: uuidFor("server-a"), name: "aa-server", version: "v9.9.9", started_at: ago(1000), verdict: "healthy", groups: panels(true), alarms: [] },
+      { component: uuidFor("server-a"), name: "aa-server", version: "v9.9.9", started_at: ago(1000), health: "healthy", groups: panels(true), alarms: [] },
       ...next.servers!,
     ];
     qc.setQueryData([...PLATFORM_VIEW_KEY], next);

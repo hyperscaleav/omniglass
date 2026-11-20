@@ -30,7 +30,7 @@ const hostKeyRejected = (over: Partial<ReachEndpoint> = {}): ReachEndpoint => ({
   transport: "ssh",
   outpost: "edge-hq",
   last_seen: ago(2_000),
-  verdict: { value: "up", ts: ago(60_000) },
+  reachability: { value: "up", ts: ago(60_000) },
   responsive: { value: "up", ts: ago(60_000) },
   // The reason names other keys: a notice that parsed the prose would show them.
   session: { state: "rejected", ts: ago(30_000), reason: `host-key: the host key changed: pinned SHA256:${"x".repeat(43)}, offered SHA256:${"y".repeat(43)}` },
