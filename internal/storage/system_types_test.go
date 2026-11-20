@@ -202,7 +202,7 @@ func TestSystemTypeFactsInheritOverrideMidChain(t *testing.T) {
 // against the SHIPPED tree rather than a fixture, because the seed is what
 // #657's name and label rules will read. `board` sets its own stem and abbrev
 // but no icon, and its parent `room` overrides the root `av`'s icon, so a
-// boardroom's resolved icon must be collaboration's and never av's. It fails if the seed
+// board-meeting's resolved icon must be collaboration's and never av's. It fails if the seed
 // stops setting an icon mid-chain, or if the walk takes the root's value.
 func TestSeededSystemTypeInheritsMidChain(t *testing.T) {
 	t.Parallel()
@@ -252,11 +252,11 @@ func TestSeededSystemTypeInheritsMidChain(t *testing.T) {
 	if icon != *collab.Icon {
 		t.Errorf("board icon = %q, want collaboration's %q (the nearest ancestor that sets one), not av's %q", icon, *collab.Icon, *av.Icon)
 	}
-	if stem != "boardroom" {
-		t.Errorf("board stem = %q, want its own %q: this is what #657's name rule mints from", stem, "boardroom")
+	if stem != "board-meeting" {
+		t.Errorf("board stem = %q, want its own %q: this is what #657's name rule mints from", stem, "board-meeting")
 	}
-	if abbrev != "br" {
-		t.Errorf("board abbrev = %q, want its own %q: this is what #657's label rule renders", abbrev, "br")
+	if abbrev != "bm" {
+		t.Errorf("board abbrev = %q, want its own %q: this is what #657's label rule renders", abbrev, "bm")
 	}
 }
 

@@ -95,7 +95,7 @@ A detail view accepts a name-shaped address as an operator convenience, resolved
 
 ```
 /components/mic-1
-/systems/boardroom
+/systems/board-meeting
 /locations/hq
 ```
 
