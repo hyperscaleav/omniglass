@@ -28,6 +28,21 @@ var omnibotRecordings embed.FS
 // another.
 const DefaultOmnibotReplay = "default"
 
+// scenarioOmnibotReplay is the recording written for a scenario's own fleet,
+// which a lab of that scenario plays unless the run names another, so its
+// calls resolve against components the fleet has. A scenario not listed plays
+// DefaultOmnibotReplay, written for the dev fleet.
+var scenarioOmnibotReplay = map[string]string{"corporate": "corporate-outage"}
+
+// OmnibotReplayFor is the recording a lab of scenario plays when the run
+// names none.
+func OmnibotReplayFor(scenario string) string {
+	if name, ok := scenarioOmnibotReplay[scenario]; ok {
+		return name
+	}
+	return DefaultOmnibotReplay
+}
+
 // OmnibotReplayPath is where the lab's server reads its omnibot recording.
 const OmnibotReplayPath = dataDir + "/omnibot-replay.yaml"
 

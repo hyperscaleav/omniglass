@@ -565,7 +565,7 @@ func TestPlanScaleLabSeedEnrollsEverySiteOutpost(t *testing.T) {
 		t.Fatal(err)
 	}
 	cmd := strings.Join(s.Seed.Cmd, " ")
-	if cmd != "lab seed --scenario corporate --systems 100 --user dev --password dev --omnibot-replay default" {
+	if cmd != "lab seed --scenario corporate --systems 100 --user dev --password dev --omnibot-replay corporate-outage" {
 		t.Fatalf("seed command %q", cmd)
 	}
 	var hashes string
@@ -597,8 +597,8 @@ func TestPlanScaleLabSeedCarriesKeepOnlyWhenKept(t *testing.T) {
 		ephemeral bool
 		want      string
 	}{
-		{true, "lab seed --scenario corporate --systems 100 --user dev --password dev --omnibot-replay default"},
-		{false, "lab seed --scenario corporate --systems 100 --user dev --password dev --omnibot-replay default --keep"},
+		{true, "lab seed --scenario corporate --systems 100 --user dev --password dev --omnibot-replay corporate-outage"},
+		{false, "lab seed --scenario corporate --systems 100 --user dev --password dev --omnibot-replay corporate-outage --keep"},
 	} {
 		o := scaleOptions()
 		o.Ephemeral = tc.ephemeral

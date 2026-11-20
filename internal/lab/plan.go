@@ -288,7 +288,7 @@ type Options struct {
 	// measurement.
 	PlatformHistory bool
 	// OmnibotReplay names the recording the lab's omnibot plays when no live
-	// model is configured (#2298); empty is DefaultOmnibotReplay.
+	// model is configured (#2298); empty is the scenario's own (OmnibotReplayFor).
 	OmnibotReplay string
 	// OmnibotKey is a live model's key (#2109), read from the host's env:
 	// the server alone is handed it, as the env-backed platform secret
@@ -643,7 +643,7 @@ func Plan(o Options) (Spec, error) {
 	}
 	replay := o.OmnibotReplay
 	if replay == "" {
-		replay = DefaultOmnibotReplay
+		replay = OmnibotReplayFor(o.Scenario)
 	}
 	seedCmd = append(seedCmd, "--omnibot-replay", replay)
 	pusherTokens := PusherTokensEnv + "=" + FormatPusherTokens(o.Pushers)

@@ -321,7 +321,8 @@ directory you run it from, so a lab with those five runs omnibot on Bedrock with
 shortcut for OpenRouter: it declares that variable's value as the lab server's env secret
 `lab-omnibot-key` and sets `provider` and `key_secret` to it, under any you set yourself; a scale lab
 (`--scenario corporate`) takes it too. Without either, the lab plays a recording, the one
-`--omnibot-replay` names (`default` unless you pick another).
+`--omnibot-replay` names, or else the one written for the lab's scenario (`corporate-outage` on a
+corporate lab, `default` on the seeded fleets).
 
 ### Giving omnibot a credential
 

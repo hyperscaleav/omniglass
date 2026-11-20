@@ -42,13 +42,21 @@ func TestLabServerPlaysTheOmnibotRecording(t *testing.T) {
 // run names (#2298), on a seeded and a scale lab alike.
 func TestLabSeedWritesTheNamedRecording(t *testing.T) {
 	t.Parallel()
+	// With none named, a lab plays the recording written for its scenario's
+	// fleet, so its calls resolve: the dev fleets default, corporate its
+	// outage (#2312's review).
+	want := map[string]string{"seeded": DefaultOmnibotReplay, "scale": "corporate-outage"}
 	for name, o := range map[string]Options{"seeded": testOptions(), "scale": scaleOptions()} {
 		s, err := Plan(o)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !slices.Contains(s.Seed.Cmd, "--omnibot-replay") || s.Seed.Cmd[slices.Index(s.Seed.Cmd, "--omnibot-replay")+1] != DefaultOmnibotReplay {
-			t.Errorf("%s seed %v, want --omnibot-replay %s", name, s.Seed.Cmd, DefaultOmnibotReplay)
+		if !slices.Contains(s.Seed.Cmd, "--omnibot-replay") || s.Seed.Cmd[slices.Index(s.Seed.Cmd, "--omnibot-replay")+1] != want[name] {
+			t.Errorf("%s seed %v, want --omnibot-replay %s", name, s.Seed.Cmd, want[name])
+		}
+		o.OmnibotReplay = DefaultOmnibotReplay
+		if s, err = Plan(o); err != nil || s.Seed.Cmd[slices.Index(s.Seed.Cmd, "--omnibot-replay")+1] != DefaultOmnibotReplay {
+			t.Errorf("%s seed %v (%v), want a named recording to win over the scenario's", name, s.Seed.Cmd, err)
 		}
 		o.OmnibotReplay = "corporate-outage"
 		if s, err = Plan(o); err != nil {
@@ -84,6 +92,11 @@ func TestWriteOmnibotReplayWritesAPlayableRecording(t *testing.T) {
 		}
 		if _, err := provider.LoadReplay(filepath.Join(dir, filepath.Base(OmnibotReplayPath))); err != nil {
 			t.Fatalf("the server would refuse recording %s: %v", name, err)
+		}
+	}
+	for scenario, name := range scenarioOmnibotReplay {
+		if err := CheckOmnibotReplay(name); err != nil {
+			t.Errorf("scenario %s defaults to a recording the lab lacks: %v", scenario, err)
 		}
 	}
 	if err := WriteOmnibotReplay(t.TempDir(), "no-such-recording"); err == nil || !strings.Contains(err.Error(), "corporate-outage, default") {
