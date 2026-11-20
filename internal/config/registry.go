@@ -53,11 +53,13 @@ type Family struct {
 
 // Families declares the prefix variables omniglass reads (#2223). The env
 // settings layer (OMNIGLASS_SETTING__*) is expanded per-key in the generated
-// reference. Env-backed platform secrets are the ticket's other half and
-// join this list when the server reads them.
+// reference; the env-backed platform secrets (OMNIGLASS_SECRET__*) render as
+// one family row, since their names are the operator's.
 var Families = []Family{
 	{Prefix: "OMNIGLASS_SETTING__", Scope: "server",
 		Doc: "sets one platform setting from the environment (OMNIGLASS_SETTING__<NAMESPACE>__<KEY>=value); the env layer sits between the settings file and the platform binding, so a console edit still wins. See the generated per-key rows"},
+	{Prefix: "OMNIGLASS_SECRET__", Scope: "server",
+		Doc: `declares a platform secret from the environment, named <NAME> lowercased with each underscore a hyphen (OMNIGLASS_SECRET__BEDROCK_KEY is bedrock-key); the value is a JSON object {"type": "<secret type>", "fields": {...}} checked against the type at boot. Held in memory, never sealed or written; listed with source env and changed only by its variable and a restart, and a stored platform secret of the same name fails the boot`},
 }
 
 // Registry declares every environment variable the binary reads, in the order
@@ -141,8 +143,6 @@ var Registry = []Var{
 		Doc: "set by omniglass lab run for a scale lab's seed one-off: each site outpost's name and the hash of the token it minted for it this run (outpost=hash, comma-separated), never set by hand"},
 	{Key: "OMNIGLASS_LAB_PUSHER_TOKENS", Scope: "cli",
 		Doc: "set by omniglass lab run for its seed one-off: each declared pusher's name and the hash and non-secret prefix of the token it minted for it this run (name=hash:prefix, comma-separated), never set by hand"},
-	{Key: "OMNIGLASS_LAB_OMNIBOT_KEY", Scope: "cli",
-		Doc: "set by omniglass lab run --omnibot-key-env for its seed one-off: the model key the seed seals as the lab's omnibot key secret, never set by hand and never printed"},
 	{Key: "OMNIGLASS_SIM_PUSHERS", Scope: "cli",
 		Doc: "the outside actors omniglass outpost run --simulate runs as emulator devices with a push face: each pusher's name, profile and token (name=profile:token, comma-separated); set by omniglass lab run, read when the command runs and never printed by help"},
 	{Key: "OMNIGLASS_TEST_ADMIN_DSN", Scope: "test",

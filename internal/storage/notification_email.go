@@ -204,6 +204,13 @@ func (p *PG) mailRelay(ctx context.Context, q querier) (*MailRelay, string, erro
 	if n.MailSecret == "" {
 		return r, "", nil
 	}
+	if fields, ok := p.envPlatformFields(n.MailSecret, "basic-auth"); ok {
+		if fields["username"] == "" {
+			return nil, "the mail relay's secret has an empty username", nil
+		}
+		r.Username, r.Password = fields["username"], fields["password"]
+		return r, "", nil
+	}
 	id, err := platformBasicAuthSecret(ctx, q, n.MailSecret)
 	if errors.Is(err, ErrSecretNotFound) {
 		return nil, "the mail relay's secret is not a platform basic-auth secret", nil
@@ -260,6 +267,15 @@ func (p *PG) checkMailSecret(ctx context.Context, q querier, ref string, use Sec
 	}
 	if isUUID(ref) || strings.Contains(ref, "/") {
 		return fmt.Errorf("%w: mail_secret names a platform secret by its bare name", ErrMailSecretInvalid)
+	}
+	if e, found, err := p.checkEnvBind(ref, use); found {
+		if err != nil {
+			return err
+		}
+		if e.typ.Name != "basic-auth" {
+			return fmt.Errorf("%w: secret %q is not a basic-auth secret", ErrMailSecretInvalid, ref)
+		}
+		return nil
 	}
 	row, _, err := p.secretRowForAction(ctx, q, ref, use.Read, use.Bind, use.CanAdmin, true)
 	if err != nil {

@@ -46,7 +46,9 @@ type secretBody struct {
 	OwnerID        *string           `json:"owner_id,omitempty" doc:"The owning entity's id, the canonical handle; absent for a global owner"`
 	OwnerName      string            `json:"owner_name,omitempty"`
 	AdminSensitive bool              `json:"admin_sensitive" doc:"When true, only the admin tier may see or reveal this secret, regardless of placement"`
-	Fields         []secretFieldBody `json:"fields"`
+	Fields         []secretFieldBody `json:"fields" doc:"The masked fields; empty for an env secret, whose value never leaves the server"`
+	Source         string            `json:"source" enum:"stored,env" doc:"Where the secret comes from: stored (sealed in the database) or env (declared by the server's OMNIGLASS_SECRET__ environment, read at boot and never written); an env secret is changed by its variable, not the API"`
+	SourceVar      string            `json:"source_var,omitempty" doc:"The environment variable that declares an env secret; absent for a stored one"`
 }
 
 func toSecretFieldBodies(fs []storage.ResolvedField) []secretFieldBody {
@@ -63,7 +65,17 @@ func toSecretBody(s *storage.Secret) secretBody {
 		OwnerKind: s.OwnerKind, OwnerID: s.OwnerID, OwnerName: s.OwnerName,
 		AdminSensitive: s.AdminSensitive,
 		Fields:         toSecretFieldBodies(s.Fields),
+		Source:         secretSource(s.Source),
+		SourceVar:      s.SourceVar,
 	}
+}
+
+// secretSource is the wire source: a stored secret's is empty in storage.
+func secretSource(src string) string {
+	if src == "" {
+		return storage.SecretSourceStored
+	}
+	return src
 }
 
 type listSecretTypesOutput struct {
@@ -364,6 +376,8 @@ func mapSecretErr(err error) error {
 		return huma.Error404NotFound("component not found")
 	case errors.Is(err, storage.ErrSecretForbidden):
 		return huma.Error403Forbidden("forbidden")
+	case errors.Is(err, storage.ErrSecretFromEnv):
+		return huma.Error409Conflict(err.Error())
 	case errors.Is(err, storage.ErrSecretInUse):
 		return huma.Error409Conflict("a notification target signs with this secret; unbind it from the target first")
 	case errors.Is(err, storage.ErrSecretExists):

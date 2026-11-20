@@ -16,7 +16,7 @@ import { mkdir, readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { assertFontsRendered, watchFontRequests } from './fontguard.mjs';
 import { describeMask, planMasks, planStandingMasks, shootBaseline, withCaptureRetry } from './shotmasklib.mjs';
-import { gotoSettled } from './settle.mjs';
+import { gotoSettled, settleLayout } from './settle.mjs';
 
 const BASE = process.env.OG_E2E_BASE ?? 'http://localhost:8080';
 const TOKEN = process.env.OG_TOKEN ?? '';
@@ -111,7 +111,15 @@ for (const spec of specs) {
   for (const step of spec.steps ?? []) {
     // wait holds the shot until the selector shows (a figure the lab writes a
     // while after it comes up), for up to its timeout in ms, else two minutes.
-    if (step.action === 'wait') await page.locator(step.selector).first().waitFor({ state: 'visible', timeout: step.timeout ?? 120_000 });
+    if (step.action === 'wait') {
+      try {
+        await page.locator(step.selector).first().waitFor({ state: 'visible', timeout: step.timeout ?? 120_000 });
+      } catch (e) {
+        // A wait may name what never showed, so the failure reads as its cause.
+        if (step.message) throw new Error(`${spec.id}: ${step.message} (waited for ${step.selector})`);
+        throw e;
+      }
+    }
     else if (step.action === 'click') await page.click(step.selector, { modifiers: step.modifiers });
     else if (step.action === 'hover') await page.hover(step.selector);
     else if (step.action === 'press') await page.keyboard.press(step.value);
@@ -119,6 +127,9 @@ for (const spec of specs) {
     await page.waitForTimeout(400);
   }
   await page.waitForTimeout(800);
+  // Hold until the geometry stops moving: a hover still scrolling a table or a
+  // tooltip still being placed is a different raster a frame later (#2168).
+  await settleLayout(page);
   // A shot rendered in the wrong typeface is not a shot of the console, and the
   // gate that compares it at zero tolerance cannot tell that apart from UI drift.
   // Refuse to write it (#775): this is what silently shipped two fallback-font
