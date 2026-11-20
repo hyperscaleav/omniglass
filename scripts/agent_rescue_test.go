@@ -237,6 +237,10 @@ func TestRescueLeavesABranchThatIsAlreadyPushed(t *testing.T) {
 	if code != 0 || got["push"] != "false" || !strings.Contains(got["reason"], "already pushed") {
 		t.Fatalf("exit %d, got %v", code, got)
 	}
+	// Nothing to push, but the branch and its count still come out: the PR step needs them.
+	if got["branch"] != "feat/issue-2223-done" || got["ahead"] != "1" || got["dirty"] != "false" {
+		t.Fatalf("a branch found with nothing to push must still be named: %v", got)
+	}
 }
 
 // The agent pushed some commits, then stopped with more local: a fast-forward.
@@ -417,5 +421,114 @@ func TestAPushToABranchWithNoPRStartsNoReviewAndNoCI(t *testing.T) {
 				t.Errorf("%s runs on a push to any branch", name)
 			}
 		}
+	}
+}
+
+// The agent pushes per step and opens its PR last. A run that stops after a
+// push with a clean tree has nothing to push, so the PR step must not hang on
+// the push step. These run the real step script from agent-build.yml with a
+// fake gh that answers from FAKE_* variables and logs what it was asked.
+
+type prStep struct {
+	t   *testing.T
+	run string
+	dir string
+}
+
+func loadPRStep(t *testing.T) *prStep {
+	t.Helper()
+	requireTools(t)
+	b, err := os.ReadFile(filepath.Join("..", ".github", "workflows", "agent-build.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wf struct {
+		Jobs map[string]struct {
+			Steps []struct {
+				Name string `yaml:"name"`
+				If   string `yaml:"if"`
+				Run  string `yaml:"run"`
+			} `yaml:"steps"`
+		} `yaml:"jobs"`
+	}
+	if err := yaml.Unmarshal(b, &wf); err != nil {
+		t.Fatal(err)
+	}
+	for _, st := range wf.Jobs["build"].Steps {
+		if st.Name != "Open the draft PR the agent never opened" {
+			continue
+		}
+		if strings.Contains(st.If, "outputs.push") {
+			t.Errorf("the PR step is gated on the push step (%q): a branch pushed earlier would get no PR", st.If)
+		}
+		if !strings.Contains(st.If, "outputs.branch != ''") {
+			t.Errorf("the PR step must run whenever a branch was found: %q", st.If)
+		}
+		dir := t.TempDir()
+		script, _ := filepath.Abs("agent-rescue.sh")
+		if err := os.Symlink(script, filepath.Join(dir, "agent-rescue.sh")); err != nil {
+			t.Fatal(err)
+		}
+		writeFile(t, dir, "rescue-last-message.txt", "Still to do: the docs\n")
+		writeFile(t, dir, "bin/gh", `#!/usr/bin/env bash
+echo "gh $*" >> "$RUNNER_TEMP/gh.log"
+case "$1 $2" in
+  "pr list") printf '%s' "${FAKE_PR:-}" ;;
+  "api repos/o/r/compare/main...feat/issue-7-x") [ -n "${FAKE_AHEAD:-}" ] || exit 1; printf '%s' "$FAKE_AHEAD" ;;
+  "issue view") echo "feat: the ticket" ;;
+  "pr create") echo "https://github.com/o/r/pull/99" ;;
+esac
+`)
+		if err := os.Chmod(filepath.Join(dir, "bin", "gh"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		return &prStep{t: t, run: st.Run, dir: dir}
+	}
+	t.Fatal("agent-build.yml has no step 'Open the draft PR the agent never opened'")
+	return nil
+}
+
+func (p *prStep) exec(env ...string) (string, int) {
+	p.t.Helper()
+	cmd := exec.Command("bash", "-c", p.run)
+	cmd.Env = append(os.Environ(), "PATH="+filepath.Join(p.dir, "bin")+":"+os.Getenv("PATH"),
+		"RUNNER_TEMP="+p.dir, "REPO=o/r", "NUMBER=7", "BRANCH=feat/issue-7-x", "DIRTY=false", "GH_TOKEN=x")
+	cmd.Env = append(cmd.Env, env...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		exit, ok := err.(*exec.ExitError)
+		if !ok {
+			p.t.Fatal(err)
+		}
+		return string(out), exit.ExitCode()
+	}
+	log, _ := os.ReadFile(filepath.Join(p.dir, "gh.log"))
+	return string(log), 0
+}
+
+func TestPRStepOpensADraftForABranchPushedEarlierWithNoPR(t *testing.T) {
+	log, code := loadPRStep(t).exec("FAKE_AHEAD=3")
+	if code != 0 || !strings.Contains(log, "pr create --repo o/r --draft --base main --head feat/issue-7-x --title feat: the ticket") {
+		t.Fatalf("exit %d, gh calls:\n%s", code, log)
+	}
+}
+
+func TestPRStepOpensNothingWhenAPRIsAlreadyOpen(t *testing.T) {
+	log, code := loadPRStep(t).exec("FAKE_PR=41", "FAKE_AHEAD=3")
+	if code != 0 || strings.Contains(log, "pr create") {
+		t.Fatalf("exit %d, gh calls:\n%s", code, log)
+	}
+}
+
+func TestPRStepOpensNothingWhenTheBranchIsNotAheadOfMain(t *testing.T) {
+	log, code := loadPRStep(t).exec("FAKE_AHEAD=0")
+	if code != 0 || strings.Contains(log, "pr create") {
+		t.Fatalf("exit %d, gh calls:\n%s", code, log)
+	}
+}
+
+func TestPRStepOpensNothingWhenTheBranchIsNotOnGitHub(t *testing.T) {
+	log, code := loadPRStep(t).exec()
+	if code != 0 || strings.Contains(log, "pr create") {
+		t.Fatalf("exit %d, gh calls:\n%s", code, log)
 	}
 }

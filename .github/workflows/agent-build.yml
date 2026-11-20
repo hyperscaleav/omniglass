@@ -434,17 +434,12 @@ jobs:
           fi
           { printf '%s\n' "$out"; echo "bare=${dir}/repo"; } >> "$GITHUB_OUTPUT"
 
-      # Push it with the fresh token, from the bare repo, and open the draft PR
-      # if the agent never did. Never a force push, never ready: it is the
-      # agent's unfinished work, and the PR says so.
+      # Push it with the fresh token, from the bare repo. Never a force push.
       - name: Save what the agent left unpushed
         if: always() && steps.fresh.outcome == 'success' && steps.rescue.outputs.push == 'true'
         env:
           bare: ${{ steps.rescue.outputs.bare }}
           BRANCH: ${{ steps.rescue.outputs.branch }}
-          AHEAD: ${{ steps.rescue.outputs.ahead }}
-          DIRTY: ${{ steps.rescue.outputs.dirty }}
-          GH_TOKEN: ${{ steps.fresh.outputs.token }}
           TOKEN: ${{ steps.fresh.outputs.token }}
         run: |
           set -uo pipefail
@@ -456,20 +451,41 @@ jobs:
           gitf() { git -C "$bare" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c http.proxy= -c http.sslVerify=true -c http.sslCAInfo= -c http.https://github.com/.extraheader= -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" "$@"; }
           gitf push "$url" "refs/heads/${BRANCH}:refs/heads/${BRANCH}" \
             || { echo "::error::could not push ${BRANCH} with a fresh token"; exit 1; }
+          printf '%s\n' "The agent stopped before it finished. The workflow pushed what it left to \`${BRANCH}\`." \
+            >> "${RUNNER_TEMP}/agent-summary.md"
+
+      # The agent pushes its branch per step and opens the PR last, so a run
+      # that stops after a push has a branch and no PR, and nothing to push.
+      # Whenever the agent's branch was found, pushed just now or earlier, open
+      # the draft PR if it has none. No git here: gh and the GitHub API only.
+      - name: Open the draft PR the agent never opened
+        if: >-
+          always() && steps.fresh.outcome == 'success'
+          && steps.rescue.outputs.branch != '' && steps.rescue.outputs.ahead != '' && steps.rescue.outputs.ahead != '0'
+        env:
+          BRANCH: ${{ steps.rescue.outputs.branch }}
+          DIRTY: ${{ steps.rescue.outputs.dirty }}
+          GH_TOKEN: ${{ steps.fresh.outputs.token }}
+        run: |
+          set -uo pipefail
+          cd "$RUNNER_TEMP"
           pr=$(gh pr list --repo "$REPO" --head "$BRANCH" --state open --json number --jq '.[0].number // ""')
-          if [ -z "$pr" ]; then
-            type=${BRANCH%%/*}
-            case "$type" in feat | fix | docs | ci | chore | refactor | test | perf) ;; *) type=chore ;; esac
-            title=$(gh issue view "$NUMBER" --repo "$REPO" --json title --jq .title | sed -E 's/^[a-z]+(\([^)]*\))?!?: //')
-            jq -cn --argjson issue "$NUMBER" --arg branch "$BRANCH" --argjson ahead "$AHEAD" --argjson dirty "$DIRTY" \
-              --rawfile last "${RUNNER_TEMP}/rescue-last-message.txt" \
-              '{issue: $issue, branch: $branch, ahead: $ahead, dirty: $dirty, last_message: $last}' \
-              | bash "${RUNNER_TEMP}/agent-rescue.sh" body > "${RUNNER_TEMP}/rescue-body.md"
-            gh pr create --repo "$REPO" --draft --base main --head "$BRANCH" \
-              --title "${type}: ${title}" --body-file "${RUNNER_TEMP}/rescue-body.md" \
-              || { echo "::error::pushed ${BRANCH}, but could not open its PR"; exit 1; }
-          fi
-          printf '%s\n' "The agent stopped before it finished. The workflow saved what it left on \`${BRANCH}\`, a draft PR, so nothing was lost. Continue it with \`@hyperscale-agent\` on that PR." \
+          [ -z "$pr" ] || { echo "PR #${pr} is already open for ${BRANCH}"; exit 0; }
+          # The branch must be on GitHub and ahead of main: read there, not from the checkout.
+          ahead=$(gh api "repos/${REPO}/compare/main...${BRANCH}" --jq .ahead_by 2>/dev/null) \
+            || { echo "::warning::${BRANCH} is not on GitHub, so no PR is opened for it"; exit 0; }
+          [ "${ahead:-0}" -gt 0 ] || { echo "${BRANCH} is not ahead of main: no PR"; exit 0; }
+          type=${BRANCH%%/*}
+          case "$type" in feat | fix | docs | ci | chore | refactor | test | perf) ;; *) type=chore ;; esac
+          title=$(gh issue view "$NUMBER" --repo "$REPO" --json title --jq .title | sed -E 's/^[a-z]+(\([^)]*\))?!?: //')
+          jq -cn --argjson issue "$NUMBER" --arg branch "$BRANCH" --argjson ahead "$ahead" --argjson dirty "${DIRTY:-false}" \
+            --rawfile last "${RUNNER_TEMP}/rescue-last-message.txt" \
+            '{issue: $issue, branch: $branch, ahead: $ahead, dirty: $dirty, last_message: $last}' \
+            | bash "${RUNNER_TEMP}/agent-rescue.sh" body > "${RUNNER_TEMP}/rescue-body.md"
+          gh pr create --repo "$REPO" --draft --base main --head "$BRANCH" \
+            --title "${type}: ${title}" --body-file "${RUNNER_TEMP}/rescue-body.md" \
+            || { echo "::error::${BRANCH} is on GitHub, but its PR could not be opened"; exit 1; }
+          printf '%s\n' "The agent stopped before opening its PR, so the workflow opened it as a draft from \`${BRANCH}\`. Continue it with \`@hyperscale-agent\` on that PR." \
             >> "${RUNNER_TEMP}/agent-summary.md"
 
       # Edit the status comment to what the run did: the PR it opened, or
