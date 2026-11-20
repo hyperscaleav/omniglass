@@ -320,8 +320,8 @@ directory you run it from, so a lab with those five runs omnibot on Bedrock with
 ([the lab guide](/guides/lab/)). `omniglass lab run --omnibot-key-env OPENROUTER_API_KEY` is the
 shortcut for OpenRouter: it declares that variable's value as the lab server's env secret
 `lab-omnibot-key` and sets `provider` and `key_secret` to it, under any you set yourself; a scale lab
-(`--scenario corporate`) takes it too. Without either, a seeded lab plays its recording, and a scale
-lab has none, so its omnibot refuses a run (503) until a model is configured.
+(`--scenario corporate`) takes it too. Without either, the lab plays a recording, the one
+`--omnibot-replay` names (`default` unless you pick another).
 
 ### Giving omnibot a credential
 

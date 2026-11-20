@@ -16,7 +16,7 @@
     {
       "name": "seed",
       "image": "omniglass",
-      "command": "lab seed --scenario dev --outpost edge-hq --user dev --password dev",
+      "command": "lab seed --scenario dev --outpost edge-hq --user dev --password dev --omnibot-replay default",
       "user": "the image's (nonroot)",
       "caps": [],
       "sysctls": [],

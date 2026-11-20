@@ -58,6 +58,7 @@ func newLabRunCmd(version, imageDigest string) *cobra.Command {
 		systems  int
 		plan     bool
 		keyEnv   string
+		replay   string
 		script   labScript
 		scale    labScale
 	)
@@ -93,7 +94,7 @@ func newLabRunCmd(version, imageDigest string) *cobra.Command {
 			go func() { <-ctx.Done(); stop() }()
 			return runLab(ctx, cmd.OutOrStdout(), version, labFlags{
 				imageDigest: imageDigest, port: port, listen: listen, fresh: fresh, keep: keep, scenario: scenario, image: image, project: project,
-				systems: systems, plan: plan, script: script, scale: scale, omnibotKeyEnv: keyEnv,
+				systems: systems, plan: plan, script: script, scale: scale, omnibotKeyEnv: keyEnv, omnibotReplay: replay,
 			})
 		},
 	}
@@ -111,7 +112,8 @@ func newLabRunCmd(version, imageDigest string) *cobra.Command {
 	cmd.Flags().StringVar(&image, "image", "", "run this omniglass image instead of the one this binary was built with (env OMNIGLASS_LAB_IMAGE); one that is not this binary's own build is warned about")
 	// A live omnibot (#2109): the key stays in the host's env, named here,
 	// and reaches the server as an env secret (#2223), seeded or scale lab (#2298).
-	cmd.Flags().StringVar(&keyEnv, "omnibot-key-env", "", "run omnibot on a live model (OpenRouter by default) with the key in this environment variable, e.g. OPENROUTER_API_KEY, handed to the server as its env secret lab-omnibot-key; without it, or the shell's own OMNIGLASS_SETTING__ASSISTANT__ and OMNIGLASS_SECRET__ variables, a seeded lab's omnibot plays a recording and a scale lab's answers only on a model you configure")
+	cmd.Flags().StringVar(&keyEnv, "omnibot-key-env", "", "run omnibot on a live model (OpenRouter by default) with the key in this environment variable, e.g. OPENROUTER_API_KEY, handed to the server as its env secret lab-omnibot-key; without it, or the shell's own OMNIGLASS_SETTING__ASSISTANT__ and OMNIGLASS_SECRET__ variables, omnibot plays the recording --omnibot-replay names")
+	cmd.Flags().StringVar(&replay, "omnibot-replay", lab.DefaultOmnibotReplay, "the recording omnibot plays when no live model is configured, by name: "+strings.Join(lab.OmnibotReplays(), ", "))
 	cmd.Flags().StringVar(&project, "project", lab.DefaultProject, "the Docker compose project name")
 	_ = cmd.Flags().MarkHidden("project")
 	// For scripts, not learners (the demo pipeline's recorders and the
@@ -205,6 +207,11 @@ func runLabScenario(ctx context.Context, out io.Writer, m *labscenario.Manifest,
 	if cadence == "" {
 		cadence = lab.CadenceLab
 	}
+	if f.omnibotReplay != "" {
+		if err := lab.CheckOmnibotReplay(f.omnibotReplay); err != nil {
+			return err
+		}
+	}
 	omnibotKey, err := labOmnibotKey(f.omnibotKeyEnv, config.Named)
 	if err != nil {
 		return err
@@ -235,7 +242,7 @@ func runLabScenario(ctx context.Context, out io.Writer, m *labscenario.Manifest,
 			Systems: plan.Totals.Systems, SiteOutposts: outposts, Pushers: pushers,
 			Owner: lab.CurrentOwner(host), WorkDir: wd,
 			Ephemeral: !f.keep, Cadence: cadence, InduceUnregistered: f.scale.induce,
-			ServerEnv: settingsEnv, OmnibotKey: omnibotKey,
+			ServerEnv: settingsEnv, OmnibotKey: omnibotKey, OmnibotReplay: f.omnibotReplay,
 		},
 		Image: choice, Fresh: f.fresh, Hold: true, ReadyFile: f.script.readyFile, WhilePID: f.script.whilePID,
 		ScaleRun: scale,
@@ -355,6 +362,8 @@ type labFlags struct {
 	plan                             bool
 	// omnibotKeyEnv names the host env var holding a live model's key.
 	omnibotKeyEnv string
+	// omnibotReplay names the recording omnibot plays with no live model.
+	omnibotReplay string
 	script        labScript
 	scale         labScale
 	version       string
@@ -387,6 +396,11 @@ func runLab(ctx context.Context, out io.Writer, version string, f labFlags) erro
 	if f.keep {
 		return fmt.Errorf("--keep keeps a scale lab scenario's data (%s); %q is a seeded fleet, whose lab keeps its data already",
 			strings.Join(labscenario.Names(), ", "), f.scenario)
+	}
+	if f.omnibotReplay != "" {
+		if err := lab.CheckOmnibotReplay(f.omnibotReplay); err != nil {
+			return err
+		}
 	}
 	omnibotKey, err := labOmnibotKey(f.omnibotKeyEnv, config.Named)
 	if err != nil {
@@ -437,7 +451,7 @@ func runLab(ctx context.Context, out io.Writer, version string, f labFlags) erro
 			Pushers: pushers,
 			Owner:   lab.CurrentOwner(host), WorkDir: wd,
 			Ephemeral: f.script.ephemeral, NoOutpost: f.script.noOutpost, Cadence: f.script.cadence,
-			PlatformHistory: f.script.platformHistory, OmnibotKey: omnibotKey,
+			PlatformHistory: f.script.platformHistory, OmnibotKey: omnibotKey, OmnibotReplay: f.omnibotReplay,
 			ServerEnv: settingsEnv,
 		},
 		Image: choice, Fresh: f.fresh, PlantedFaults: plantedLabels(faults), Hold: true,
@@ -514,7 +528,7 @@ func dialDaemon(host string) error {
 }
 
 func newLabSeedCmd() *cobra.Command {
-	var scenario, outpost, user, password string
+	var scenario, outpost, user, password, replay string
 	var noOutpost, induce, keep, platformHistory bool
 	var systems, reportSeconds int
 	cmd := &cobra.Command{
@@ -527,14 +541,24 @@ func newLabSeedCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if err := lab.CheckOmnibotReplay(replay); err != nil {
+				return err
+			}
 			if systems > 0 {
-				return runLabScaleSeed(cmd.Context(), cmd.OutOrStdout(), scenario, systems, user, password, config.Get(lab.SiteOutpostTokenHashesEnv), pushers, induce, keep)
-			}
-			if induce {
+				err = runLabScaleSeed(cmd.Context(), cmd.OutOrStdout(), scenario, systems, user, password, config.Get(lab.SiteOutpostTokenHashesEnv), pushers, induce, keep)
+			} else if induce {
 				return errors.New("--induce-unregistered is a scale lab's: it needs --systems")
+			} else {
+				err = runLabSeed(cmd.Context(), cmd.OutOrStdout(), scenario, outpost, user, password, config.Get("OMNIGLASS_LAB_OUTPOST_TOKEN_HASH"), noOutpost,
+					pushers, reportSeconds, platformHistory)
 			}
-			return runLabSeed(cmd.Context(), cmd.OutOrStdout(), scenario, outpost, user, password, config.Get("OMNIGLASS_LAB_OUTPOST_TOKEN_HASH"), noOutpost,
-				pushers, reportSeconds, platformHistory)
+			if err != nil {
+				return err
+			}
+			// The server reads the lab's omnibot recording as it starts (#2121),
+			// a seeded lab's or a scale lab's (#2298), and plays it whenever no
+			// live model is configured.
+			return lab.WriteOmnibotReplay(cfg().DataDir, replay)
 		},
 	}
 	cmd.Flags().StringVar(&scenario, "scenario", lab.DefaultScenario, "the fleet to seed on the first run")
@@ -547,6 +571,7 @@ func newLabSeedCmd() *cobra.Command {
 	cmd.Flags().IntVar(&systems, "systems", 0, "seed the scale lab scenario --scenario resolved at this many systems, with an outpost per site")
 	cmd.Flags().BoolVar(&induce, "induce-unregistered", false, "with --systems: make one simulated device answer a property key no driver registers, so its samples are refused (refused-unregistered)")
 	cmd.Flags().BoolVar(&keep, "keep", false, "a kept scale lab: keep the fleet a database already holds and re-enroll its site outposts")
+	cmd.Flags().StringVar(&replay, "omnibot-replay", lab.DefaultOmnibotReplay, "the omnibot recording to write for the server to play")
 	return cmd
 }
 
@@ -629,11 +654,6 @@ func runLabSeed(ctx context.Context, out io.Writer, scenario, outpost, user, pas
 		if err := setPusherTokens(ctx, out, gw, pushers); err != nil {
 			return err
 		}
-	}
-	// The server reads the lab's omnibot recording as it starts (#2121), and
-	// plays it whenever no live model is configured.
-	if err := lab.WriteOmnibotReplay(cfg().DataDir); err != nil {
-		return err
 	}
 	if err := dropStoredLabOmnibotKey(ctx, gw); err != nil {
 		return err
