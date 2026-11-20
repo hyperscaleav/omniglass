@@ -1,6 +1,6 @@
 ---
 title: Primitive first
-description: Build the reusable primitive, then consume it. The shared engines (expression, ViewResult, gateway, cascade, timer) the rest of the system is written against.
+description: Build the reusable primitive, then consume it. The shared engines (expression, view binding, gateway, cascade, timer) the rest of the system is written against.
 ---
 
 Build the **reusable primitive first, then consume it.** A behavior that more than one feature
@@ -24,7 +24,7 @@ already exists.
 | Primitive | One model for | Doc |
 |---|---|---|
 | **Expression engine** | list `filter`, rule `scope`, dynamic-group membership, `fire_criteria`, calc `reduce` | [expressions](/architecture/expressions/) |
-| **`ViewResult` renderer contract** | every read beyond one resource (`{columns, rows}`, one renderer) | [views](/architecture/views/), [UI](/architecture/ui/) |
+| **view binding** | reads no typed route was written for (typed series or rows per primitive, `POST /views:run`) | [views](/architecture/views/), [UI](/architecture/ui/) |
 | **Storage Gateway** | the only DB door: scope and in-transaction audit by construction | [storage](/architecture/storage/), [identity and access](/architecture/identity-access/) |
 | **Cascade** | resolving config, credentials, and variables down one tree | [cascade](/architecture/cascade/) |
 | **Admission consumer and the two lanes** | the one owner fence and the one data / record split on the bus | [messaging](/architecture/messaging/) |

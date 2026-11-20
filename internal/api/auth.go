@@ -42,7 +42,18 @@ const (
 	// the route's bound middleware under the configured trust, so the handler
 	// records the sender the limits counted.
 	webhookSourceCtxKey
+	// credentialCtxKey carries the token that authenticated the request and
+	// which lane resolved it, so a long-lived stream can ask whether its
+	// caller still stands (#1830).
+	credentialCtxKey
 )
+
+// requestCredential is the token hash authn resolved the request with, and
+// whether it resolved as an impersonation session rather than a bearer.
+type requestCredential struct {
+	hash          []byte
+	impersonation bool
+}
 
 // sessionHashFrom returns the sha256 of the request's bearer token, if one resolved.
 func sessionHashFrom(ctx context.Context) ([]byte, bool) {
@@ -101,6 +112,43 @@ func userFrom(ctx context.Context) (*storage.User, bool) {
 func permsFrom(ctx context.Context) (rbac.Set, bool) {
 	s, ok := ctx.Value(permsCtxKey).(rbac.Set)
 	return s, ok
+}
+
+// callerStands reports whether the request's caller still holds what authn
+// admitted it with: the credential still resolves, to the same user, with
+// the same grants and the same agent bounds. A stream that outlives its
+// request asks this on its heartbeat; a lookup that fails reads as no, which
+// costs the client only a reconnect.
+func (a *authenticator) callerStands(ctx context.Context) bool {
+	pr, ok := userFrom(ctx)
+	cred, credOK := ctx.Value(credentialCtxKey).(requestCredential)
+	if !ok || !credOK {
+		return false
+	}
+	var now *storage.User
+	var err error
+	if cred.impersonation {
+		now, _, _, _, err = a.gw.AuthenticateImpersonation(ctx, cred.hash)
+	} else {
+		now, err = a.gw.AuthenticateBearer(ctx, cred.hash)
+	}
+	return err == nil && now.ID == pr.ID && accessKey(now) == accessKey(pr)
+}
+
+// accessKey renders what a user's access is made of, its grants and its agent
+// bounds, in an order-free form two resolutions of one user compare by.
+func accessKey(u *storage.User) string {
+	grants := make([]string, 0, len(u.Grants))
+	for _, g := range u.Grants {
+		grants = append(grants, fmt.Sprintf("%s|%s|%s|%s|%s", g.Role, g.ScopeKind, derefOr(g.ScopeID), g.ScopeOp, derefOr(g.GroupID)))
+	}
+	sort.Strings(grants)
+	key := strings.Join(grants, ";")
+	if u.Agent != nil {
+		roles, channels := slices.Sorted(slices.Values(u.Agent.Roles)), slices.Sorted(slices.Values(u.Agent.Channels))
+		key += fmt.Sprintf("#agent %s %v %v", u.Agent.CredentialID, roles, channels)
+	}
+	return key
 }
 
 // impersonationMode returns the impersonation mode ("view_as"/"act_as") for the
@@ -180,12 +228,14 @@ func (a *authenticator) authn(ctx huma.Context, next func(huma.Context)) {
 	var pr *storage.User
 	var realActorID, impMode, impSession string
 	var sessHash []byte
+	var cred requestCredential
 	for _, tok := range candidates {
 		h := auth.HashToken(tok)
 		p, err := a.gw.AuthenticateBearer(ctx.Context(), h)
 		if err == nil {
 			pr = p
 			sessHash = h
+			cred = requestCredential{hash: h}
 			break
 		}
 		if !errors.Is(err, storage.ErrCredentialNotFound) {
@@ -197,6 +247,7 @@ func (a *authenticator) authn(ctx huma.Context, next func(huma.Context)) {
 		ip, ra, mode, sid, ierr := a.gw.AuthenticateImpersonation(ctx.Context(), h)
 		if ierr == nil {
 			pr, realActorID, impMode, impSession = ip, ra, mode, sid
+			cred = requestCredential{hash: h, impersonation: true}
 			break
 		}
 		if !errors.Is(ierr, storage.ErrCredentialNotFound) {
@@ -248,6 +299,7 @@ func (a *authenticator) authn(ctx huma.Context, next func(huma.Context)) {
 	}
 	c = huma.WithValue(c, permsCtxKey, constrainPerms(idx.Flatten(roleIDs), idx, pr.Agent, agentCeiling(pr, channel)))
 	c = huma.WithValue(c, sessionHashCtxKey, sessHash)
+	c = huma.WithValue(c, credentialCtxKey, cred)
 	if impMode != "" {
 		// Impersonated request: mark the mode and session, and set the real actor so
 		// every audited mutation records who is really acting, never just the

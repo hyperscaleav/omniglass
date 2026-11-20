@@ -30,6 +30,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/settings"
 	"github.com/hyperscaleav/omniglass/internal/sim/impair"
+	"github.com/hyperscaleav/omniglass/internal/tail"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -1138,6 +1139,17 @@ type Gateway interface {
 	// system:read for the platform verdict, component:read for the figures,
 	// verdicts and server identity; short of all-scope, each is omitted.
 	PlatformView(ctx context.Context, outpostRead, sysRead, compRead scope.Set) (*PlatformView, error)
+	// ReadViews reads view bindings (#1830, ADR-1830) inside one snapshot
+	// taken under the tail's mark: each binding's selector resolved in its
+	// Read scope (a literal ref outside it is ErrViewEntityNotFound), its
+	// history typed by primitive, and the tail cursor the snapshot was taken
+	// at.
+	ReadViews(ctx context.Context, bindings []ViewBinding) (ViewSnapshot, error)
+	// ResolveViewEntities resolves one binding's selector alone, in scope.
+	ResolveViewEntities(ctx context.Context, b ViewBinding) ([]ViewEntity, error)
+	// ViewTail is the published tail of landed rows a views watch follows;
+	// nil when the store keeps none.
+	ViewTail() *tail.Hub
 	// RecordServerIdentity writes the server's version and boot start time on
 	// its platform component (#1644).
 	RecordServerIdentity(ctx context.Context, componentID, version string, startedAt time.Time) error
@@ -1312,6 +1324,10 @@ type PG struct {
 	// strippedEmits remembers each (task, key) emit the worklist dropped for
 	// the writer ruling, so the drop is logged once, not on every pull.
 	strippedEmits sync.Map
+	// tail is the rows each sample-write commit landed, the live edge a view
+	// binding reads after its history (ADR-1830); nil in a PG built without
+	// NewPG, which publishes nothing.
+	tail *tail.Hub
 }
 
 // Option configures a PG at construction. The secret provider is optional so
@@ -1387,7 +1403,7 @@ func WithQueryTracer(tracer pgx.QueryTracer) Option {
 // the pool-derived default (the pgblobs store) is filled in afterwards only
 // where WithBlobStore left none.
 func NewPG(ctx context.Context, dsn string, opts ...Option) (*PG, error) {
-	p := &PG{}
+	p := &PG{tail: tail.New(tailCommits, tailBytes)}
 	for _, opt := range opts {
 		opt(p)
 	}
@@ -1526,3 +1542,12 @@ func pgParseReason(err error) string {
 	}
 	return "the parse error is withheld, since it can quote the DSN"
 }
+
+// tailCommits is how many sample-write commits the tail keeps for a view
+// watch to resume through, and tailBytes the most their rows may hold (a
+// burst of long log lines fills it before the commit count does); a cursor
+// older than the ring re-reads history.
+const (
+	tailCommits = 4096
+	tailBytes   = 64 << 20
+)

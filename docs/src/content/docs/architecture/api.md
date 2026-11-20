@@ -565,10 +565,11 @@ needing an all-scoped grant), a task to an endpoint, so both inherit the compone
 [scope](/architecture/identity-access/): an out-of-read-scope component's endpoint or task is a
 non-disclosing **404**.
 
-**Three per-component reads stand in until the `ViewResult` framework lands**, each a hand-written
-typed `GET`, gated `component:read` and scope-injected through the same `GetComponent` gate, so an
-out-of-scope component is a non-disclosing 404 (a deliberate early exception to
-[reads beyond one resource are views](#reads-beyond-one-resource-are-views)):
+**Three per-component reads stand in until the views framework (#2051) lands** (coded console pages
+keep their typed routes per ADR-1830), each a hand-written typed `GET`, gated `component:read` and
+scope-injected through the same `GetComponent` gate, so an out-of-scope component is a
+non-disclosing 404 (a deliberate early exception to
+[reads no route was written for are views](#reads-no-route-was-written-for-are-views)):
 
 - `GET /components/{name}/reachability` composes, per endpoint, the latest verdict state
   (`endpoint-reachable`), the probe-layer signals that compose it (the raw `icmp`/`tcp` metrics,
@@ -1251,14 +1252,15 @@ visible file carries it); `GET /files/{file}:download` returns
 body is `{id, name, content_type, size, sha256, sensitive, created_at}`; the `sha256` is the content
 address.
 
-:::design[Views and the SSE live relay, tracked in #523]
-## Reads beyond one resource are views
+:::design[Named views and the SSE live relay, tracked in #2051]
+## Reads no route was written for are views
 
-A single resource reads through its typed `GET`. Anything richer (a dashboard, an explorer, the cascade
-"why did this value win" view) goes through a **[view](/architecture/views/)**: a named query returning a
-uniform `ViewResult` (`{columns, rows}`), bound by declared params at `/views/{id}:run`, executed through
-the same scoped gateway; an operator never gets raw SQL. A **live** read may upgrade from polling `:run`
-to a **server-relayed [SSE](/architecture/messaging/) stream** over the same seam: the subscribe is
+A coded page reads through its typed routes. A read nobody can write a route for ahead of time (a
+dashboard widget, an agent's query) goes through a **[view binding](/architecture/views/)** at
+`POST /views:run`, its live tail on `GET /views:watch` (both built, ADR-1830); a named, saved view bound by
+declared params at `/views/{id}:run` is the unbuilt half, executed through the same scoped gateway, and an
+operator never gets raw SQL. A live read beyond the sample tail upgrades to a **server-relayed
+[SSE](/architecture/messaging/) stream** over the same seam: the subscribe is
 **capability fast-rejected** at open (not authorized there), then the server holds the internal
 subscription, re-runs the gateway scope per message against each message's owner, and pushes only
 visible deltas. The operator never connects to the bus, so the live path adds no second authorization
@@ -1332,8 +1334,9 @@ one; the permissions it needs are read from its tools' gates. They are listed in
 [MCP skills reference](/reference/mcp/skills/)
 ([ADR-2026](/architecture/decisions/#adr-2026-the-mcp-server-serves-embedded-skills-as-prompts)).
 
-:::design[Views as MCP tools, tracked in #523]
-The [views](/architecture/views/) exposed as search and query tools arrive with the views contract.
+:::design[The fleet query tool over the binding, tracked in #2050]
+An agent's fleet query tool and the analytics skill over it call the [view binding](/architecture/views/)
+route, with no read path of their own; today `run-views` is the binding's generated tool.
 :::
 
 :::design[The full outpost NATS contract, per ADR-0036]

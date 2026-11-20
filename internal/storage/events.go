@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/hyperscaleav/omniglass/internal/tail"
 )
 
 // EventWrite is one occurrence to persist. It shares the owner-arc shape of a
@@ -159,23 +161,52 @@ func (p *PG) writeEventSets(ctx context.Context, tx pgx.Tx, sets []eventSet) err
 		}
 		kinds[i], keys[i], instances[i], messages[i], sources[i] = ev.OwnerKind, ev.Key, ev.Instance, ev.Message, ev.Source
 	}
-	if _, err := tx.Exec(ctx, `insert into event (ts, owner_kind, component_id, system_id, location_id, outpost_id, event_type_id, instance, origin, message, attributes, provenance, source, source_conduit_id)
-		select u.ts, u.kind,
-			case when u.kind = 'component' then u.owner::uuid end,
-			case when u.kind = 'system' then u.owner::uuid end,
-			case when u.kind = 'location' then u.owner::uuid end,
-			case when u.kind = 'outpost' then u.owner::uuid end,
-			et.id, u.instance, u.origin, u.message, u.attrs::jsonb, 'observed', u.source, $10::uuid
-		from unnest($1::timestamptz[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[])
-			with ordinality as u(ts, kind, owner, key, instance, origin, message, attrs, source, ord)
-		left join event_type_in_effect() et on et.name = u.key
-		order by u.ord`,
-		ts, kinds, arcs, keys, instances, origins, messages, attrs, sources, w.sourceConduit()); err != nil {
+	// Each row's id is drawn in its own CTE row beside its ordinal and the
+	// insert writes that id, so the ids come back paired with the batch's
+	// order by construction, not by trusting the sequence to follow the
+	// insert's row order.
+	rows, err := tx.Query(ctx, `with u as (
+			select * from unnest($1::timestamptz[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[])
+				with ordinality as u(ts, kind, owner, key, instance, origin, message, attrs, source, ord)
+		), a as (
+			select u.ord, nextval(pg_get_serial_sequence('event', 'id')) as id from u
+		), ins as (
+			insert into event (id, ts, owner_kind, component_id, system_id, location_id, outpost_id, event_type_id, instance, origin, message, attributes, provenance, source, source_conduit_id)
+			overriding system value
+			select a.id, u.ts, u.kind,
+				case when u.kind = 'component' then u.owner::uuid end,
+				case when u.kind = 'system' then u.owner::uuid end,
+				case when u.kind = 'location' then u.owner::uuid end,
+				case when u.kind = 'outpost' then u.owner::uuid end,
+				et.id, u.instance, u.origin, u.message, u.attrs::jsonb, 'observed', u.source, $10::uuid
+			from u
+			join a on a.ord = u.ord
+			left join event_type_in_effect() et on et.name = u.key
+			returning id
+		)
+		select a.id from a join ins on ins.id = a.id order by a.ord`,
+		ts, kinds, arcs, keys, instances, origins, messages, attrs, sources, w.sourceConduit())
+	var ids []int64
+	if err == nil {
+		ids, err = pgx.CollectRows(rows, pgx.RowTo[int64])
+	}
+	if err != nil {
 		named := make([]string, 0, len(evs))
 		for _, ev := range evs {
 			named = append(named, ev.OwnerID+"/"+ev.Key)
 		}
 		return fmt.Errorf("storage: insert events %s: %w", strings.Join(named, ", "), err)
+	}
+	if len(ids) != len(evs) {
+		return fmt.Errorf("storage: insert events: %d rows landed for a batch of %d", len(ids), len(evs))
+	}
+	for i, id := range ids {
+		var attributes []byte
+		if attrs[i] != nil {
+			attributes = []byte(*attrs[i])
+		}
+		landedRows(ctx, tail.Row{Lane: tail.LaneEvent, OwnerKind: kinds[i], OwnerID: arcs[i], Key: keys[i], Instance: instances[i],
+			TS: ts[i], ID: id, Origin: origins[i], Message: messages[i], Attributes: attributes})
 	}
 	return nil
 }

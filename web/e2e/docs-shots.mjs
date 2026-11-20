@@ -16,6 +16,7 @@ import { mkdir, readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { assertFontsRendered, watchFontRequests } from './fontguard.mjs';
 import { describeMask, planMasks, planStandingMasks, shootBaseline, withCaptureRetry } from './shotmasklib.mjs';
+import { gotoSettled } from './settle.mjs';
 
 const BASE = process.env.OG_E2E_BASE ?? 'http://localhost:8080';
 const TOKEN = process.env.OG_TOKEN ?? '';
@@ -100,7 +101,8 @@ for (const spec of specs) {
   if ((spec.auth ?? true) && TOKEN) {
     await page.addInitScript((t) => localStorage.setItem('og-token', t), TOKEN);
   }
-  await page.goto(BASE + spec.path, { waitUntil: 'networkidle' });
+  // Not networkidle: a page bound to live data holds its views stream open.
+  await gotoSettled(page, BASE + spec.path);
   // The capture runs on a throwaway lab (#1267), whose console says so on
   // every screen. That banner is a fact about the lab, not the product the docs
   // teach, so the shots show the console an operator runs: the rule hides the

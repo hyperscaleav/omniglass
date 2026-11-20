@@ -3,6 +3,7 @@ import { appendFileSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { ROUTE_MANIFEST } from "../src/lib/routemanifest";
 import { locate, parseWalkthrough, runSetup } from "./walkthroughlib.mjs";
+import { settle as quiet, trackRequests } from "./settle.mjs";
 
 // The probe (#965): drive every console route and replay every walkthrough at
 // machine speed against a running stack, recording what each surface did as
@@ -77,7 +78,8 @@ function watch(page: Page, surface: string, miss = false) {
 
 // The surface's vitals and its accessibility violations, once it settled.
 async function settle(page: Page, surface: string) {
-  await page.waitForLoadState("networkidle", { timeout: STEP_TIMEOUT }).catch(() =>
+  // Not networkidle: a page bound to live data holds its views stream open.
+  await quiet(page, { timeout: STEP_TIMEOUT }).catch(() =>
     emit({ kind: "console", surface, text: `never settled: the network was still busy after ${STEP_TIMEOUT / 1000}s` }),
   );
   const vitals = await page.evaluate(() => (window as unknown as { __ogVitals?: { lcp: number; cls: number } }).__ogVitals ?? null).catch(() => null);
@@ -104,6 +106,7 @@ test.describe("probe", () => {
   test.beforeAll(async ({ browser }) => {
     ctx = await browser.newContext();
     const page = await ctx.newPage();
+    trackRequests(page);
     await page.goto("/web/login");
     await page.locator("#login-username").fill(USER as string);
     await page.locator("#login-password").fill(PASSWORD as string);
@@ -124,6 +127,7 @@ test.describe("probe", () => {
     test(`route ${r.smoke}`, async () => {
       const surface = `route:${r.path}`;
       const page = await ctx.newPage();
+      trackRequests(page);
       watch(page, surface, r.path.includes(":"));
       emit({ kind: "visit", surface });
       try {
@@ -146,6 +150,7 @@ test.describe("probe", () => {
       // recorded failure rather than the test runner's timeout.
       test.setTimeout(30_000 + (w.ready?.timeout ?? 0) + w.steps.reduce((t: number, s: { timeout?: number }) => t + (s.timeout ?? STEP_TIMEOUT), 0));
       const page = await ctx.newPage();
+      trackRequests(page);
       watch(page, surface);
       emit({ kind: "visit", surface });
       let failed: { step: number; reason: string; still: string } | null = null;

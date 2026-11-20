@@ -5,6 +5,7 @@
 //     [--hover SEL]... [--viewport WxH] [--wait MS] [--full]
 import { chromium } from '@playwright/test';
 import { HOUSE_VIEWPORT, parseViewport } from './shotviewport.mjs';
+import { gotoSettled } from './settle.mjs';
 const a = process.argv.slice(2);
 const url = a[0], out = a[1];
 let token = process.env.OG_TOKEN || '', wait = 450, full = false, viewport = HOUSE_VIEWPORT;
@@ -30,7 +31,8 @@ const b = await chromium.launch();
 const ctx = await b.newContext({ viewport, deviceScaleFactor: 2 });
 const page = await ctx.newPage();
 if (token) await page.addInitScript(t => localStorage.setItem('og-token', t), token);
-await page.goto(url, { waitUntil: 'networkidle' });
+// Not networkidle: a page bound to live data holds its views stream open.
+await gotoSettled(page, url);
 for (const [kind, arg] of steps) {
   if (kind === 'click') await page.click(arg);
   else if (kind === 'hover') await page.hover(arg);

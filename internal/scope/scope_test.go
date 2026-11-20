@@ -453,7 +453,7 @@ func TestResolveDedupRoots(t *testing.T) {
 // a tree table, and Resolve stamps every set with the resource it was resolved
 // for so the gateway can ask exactly that.
 func TestRegisteredSeparatesADecisionFromAnOmission(t *testing.T) {
-	for _, r := range []string{"component", "command", "telemetry", "secret", "outpost", "platform", "assistant"} {
+	for _, r := range []string{"component", "command", "telemetry", "secret", "outpost", "platform", "assistant", "view"} {
 		if !scope.Registered(r) {
 			t.Errorf("Registered(%q) = false, want true", r)
 		}
@@ -467,6 +467,12 @@ func TestRegisteredSeparatesADecisionFromAnOmission(t *testing.T) {
 		}
 		if scope.Covers("assistant", tier) {
 			t.Errorf("Covers(assistant, %s) = true, want false: a conversation is fenced by its owner, not a tier", tier)
+		}
+		// view:read is a door, never a fence (ADR-1830): what a binding reads
+		// is scoped by its own kind's read, so no tier table is checked
+		// against a view scope.
+		if scope.Covers("view", tier) {
+			t.Errorf("Covers(view, %s) = true, want false: the view door scopes nothing", tier)
 		}
 	}
 	g := []scope.Grant{{Role: "operator", ScopeKind: "component", ScopeID: "C"}}

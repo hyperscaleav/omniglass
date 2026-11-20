@@ -27,7 +27,7 @@ stored credential to a destination, the most sensitive class, whatever else it d
 `tools/list`, each tool's `_meta` carries `omniglass/agent_policy`, its class and the policy the install resolves
 for it: the strictest of the class, the caller's roles and an override on the tool itself.
 
-99 tools.
+100 tools.
 
 | Tool | What it does | Gate | Assume |
 |---|---|---|---|
@@ -130,6 +130,7 @@ for it: the strictest of the class, the caller's roles and an override on the to
 | [`list-transports`](#list-transports) | List the transports the platform speaks | `endpoint:read` | read-only, idempotent |
 | [`list-unclaimed-sources`](#list-unclaimed-sources) | List the sources no endpoint claims | `outpost:read` | read-only, idempotent |
 | [`list-vendors`](#list-vendors) | List vendors | `vendor:read` | read-only, idempotent |
+| [`run-views`](#run-views) | Read the history of one or more view bindings | `view:read` | read-only, idempotent |
 
 ## `list-alarms`
 
@@ -1709,3 +1710,18 @@ Lists the vendor catalog, ordered alphabetically by label. Populates the vendor 
 - Assume: read-only, idempotent
 - Agent class: read
 - Arguments: none
+
+## `run-views`
+
+Read the history of one or more view bindings
+
+Reads each binding's history from one snapshot and answers the tail cursor it was taken at (ADR-1830). A binding names a primitive (metric, property, event or log), an entity selector (literal refs, or a kind and a filter), the keys, and a range (from and to, or window_seconds back from now). A metric or property binding answers one series per resolved entity, key and instance: its raw points, or with step_seconds every bucket of an epoch-aligned grid (metric buckets carry count, min, max, avg and last; property buckets count, last and held), the older hours from the hourly trends when an hour-multiple step reaches past the raw retention. An event or log binding answers a page of rows, newest first, and a next_page. /views:watch from the cursor carries exactly the rows the history does not. Gated by view:read; each binding also needs <kind>:read (component:read or system:read) and resolves only inside that read's scope: a filter selector resolves to the visible entities, and a literal ref out of scope is the same 404 as one that does not exist. A selector past 200 entities, a raw read past 20000 points or a grid past 5000 buckets is a 422, never a truncated answer.
+
+- Route: `POST /api/v1/views:run`
+- Gate: `view:read`
+- Assume: read-only, idempotent
+- Agent class: read
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `bindings` | array | yes | The bindings read, all from one snapshot |
