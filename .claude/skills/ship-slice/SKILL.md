@@ -77,12 +77,9 @@ that commits the agents' own config. Then work through the list for what it cann
    any diff wanting the anti-pattern sweep; `code-review` or `cavecrew-reviewer` otherwise),
    findings addressed. Add a `security-review` lens if the slice touches authz, secrets, the
    edge, or an invariant. Verify behavior to the outcome line, not just call sites.
-   Those judge quality; the contract review is the dispatcher's own reviewer, run locally once
-   the PR is pushed: `hah review <owner/repo#pr>` from a checkout of the PR head (agent-harness
-   `docs/hah.md`). It judges the diff against the ticket the PR closes, with the review lane's
-   prompt, role and model, prints the verdict and posts nothing; a `request-changes` verdict's
-   findings are addressed like any other, so a session-built PR meets the review a
-   dispatcher-built one would.
+   Once the PR is ready, the `agent-review` check
+   ([agents in CI](../../../docs/src/content/docs/contributing/agents-in-ci.md#review-on-every-pr))
+   is its verdict; its findings are addressed like any other.
 8. **Scope honesty.** Every thin cut is documented; every deferral is a filed issue.
 9. **Evidence in the PR.** Paste the *actual* fresh test output (the tail of `make test`, plus
    web tests if touched) into the PR body, not a "they pass" claim. For any operator-facing
@@ -228,7 +225,7 @@ Docs:      <what shipped; arch-of-record consistent | divergence note; lint: gre
             neighbor-check hits and how resolved | none>
 Status:    <pages advanced (page: Design->Partial); build-log entry file; ADR-#### file if diverged;
             fences swept: <pages | n/a>>
-Review:    <reviewer findings + how addressed; hah review: approve | findings addressed; security: n/a | note>
+Review:    <reviewer findings + how addressed; agent-review: ship | findings addressed; security: n/a | note>
 
 Decisions I made (your veto window): <judgment calls that bound the design>
 Decisions I need from you:           <open forks | none>

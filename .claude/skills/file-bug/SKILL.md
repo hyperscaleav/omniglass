@@ -43,9 +43,8 @@ issue ("harden input handling on X") if tracking is needed.
    repos/hyperscaleav/omniglass/issues -f type=Bug -f title=... -F body=@body.md -f
    'labels[]=area:ui' -f 'labels[]=tier:mid' -f 'labels[]=risk:low'` (the REST create takes
    the Type directly). Never set the Priority field, which is the architect's alone; state the
-   suggested priority in the body instead. Check the body before creating when the
-   dispatcher's lint is at hand: `gh issue view <n> --json body,labels | bin/ticket-lint`
-   from the agent-harness checkout, or read the five headings and the checkbox list by eye.
+   suggested priority in the body instead. Check the body before creating: the five
+   headings and the checkbox list, by eye.
 3. **Put it on the board** in Backlog: `scripts/board.sh add <n>`. Where the script cannot
    run (no `gh`, or a token without the `project` scope; it says which), name the missed
    move in your report ([the board](../../../docs/src/content/docs/contributing/labels.md#the-board)).
