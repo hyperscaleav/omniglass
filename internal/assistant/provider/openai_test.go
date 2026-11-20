@@ -210,11 +210,31 @@ func TestSplitReasoning(t *testing.T) {
 		{"<reasoning>a</reasoning>b", "a", "b"},
 		{"  <reasoning>a</reasoning>\n<reasoning>c</reasoning> b ", "a\n\nc", "b"},
 		{"<reasoning>never closed", "never closed", ""},
-		{"answer <reasoning>not leading</reasoning>", "", "answer <reasoning>not leading</reasoning>"},
+		{"answer <reasoning>not leading</reasoning>", "not leading", "answer"},
+		{"one <reasoning>a</reasoning> two <reasoning>never closed", "a\n\nnever closed", "one\n\ntwo"},
 	} {
 		r, a := splitReasoning(c.in)
 		if r != c.reasoning || a != c.answer {
 			t.Errorf("splitReasoning(%q) = %q, %q; want %q, %q", c.in, r, a, c.reasoning, c.answer)
 		}
+	}
+}
+
+// After a tool call the reasoning may not lead the content; the answer is
+// still alone (#2303).
+func TestOpenAIPostToolTurnReasoningApart(t *testing.T) {
+	t.Parallel()
+	srv, _, _ := chatServer(t, 200, `{"choices":[{"message":{"role":"assistant","content":"The device is up.<reasoning>Tool said online.</reasoning>"}}]}`)
+	p := &OpenAI{BaseURL: srv.URL, Model: "m", Key: testKey}
+	turn, err := p.Next(context.Background(), []Message{
+		{Role: RoleUser, Text: "is it up?"},
+		{Role: RoleAssistant, ToolCalls: []ToolCall{{ID: "c1", Name: "get"}}},
+		{Role: RoleTool, ToolCallID: "c1", Text: "online"},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if turn.Text != "The device is up." || turn.Reasoning != "Tool said online." {
+		t.Fatalf("turn = %+v", turn)
 	}
 }
