@@ -4,6 +4,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/closedloop"
 	"github.com/hyperscaleav/omniglass/internal/config"
 	"github.com/hyperscaleav/omniglass/internal/outpost"
+	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/simoutpost"
 
 	"fmt"
@@ -960,37 +961,55 @@ func TestSpecWithImageRepointsOnlyTheOmniglassServices(t *testing.T) {
 	}
 }
 
-// A lab given a model key (#2109) hands it to the seed alone, which seals it
-// as a secret; no other service sees it and no config hash carries it. A lab
-// given none hands the seed none, so the seed puts the recording back. A
-// scale lab's omnibot is not its measurement, so it refuses one.
-func TestPlanOmnibotKeyGoesToTheSeedAlone(t *testing.T) {
+// A lab given a model key (#2109) hands it to its server as an env-backed
+// platform secret (#2223), with the assistant settings naming it: the seed
+// seals nothing, and no other service sees the key. A setting the shell set
+// itself wins over the alias's. A scale lab's omnibot is not its measurement,
+// so it refuses one.
+func TestPlanOmnibotKeyBecomesTheServersEnvSecret(t *testing.T) {
 	o := testOptions()
-	o.OmnibotKey = "ghp-lab-key"
+	o.OmnibotKey = `ghp-"lab"-key`
 	s, err := Plan(o)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := OmnibotKeyEnv + "=ghp-lab-key"; !slices.Contains(s.Seed.Env, want) {
-		t.Fatalf("seed env %v, want %s", s.Seed.Env, want)
+	for _, want := range []string{
+		OmnibotKeySecretEnv + `={"type":"api-key","fields":{"key":"ghp-\"lab\"-key"}}`,
+		"OMNIGLASS_SETTING__ASSISTANT__PROVIDER=openai",
+		"OMNIGLASS_SETTING__ASSISTANT__KEY_SECRET=" + OmnibotKeySecret,
+	} {
+		if !slices.Contains(s.Server.Env, want) {
+			t.Fatalf("server env %v, want %s", s.Server.Env, want)
+		}
 	}
-	for _, svc := range []Service{s.DB, s.Server, s.Outpost} {
+	for _, svc := range []Service{s.DB, s.Seed, s.Outpost} {
 		for _, e := range svc.Env {
-			if strings.Contains(e, "ghp-lab-key") {
+			if strings.Contains(e, "lab") && strings.Contains(e, "ghp-") {
 				t.Fatalf("%s sees the model key: %s", svc.Name, e)
 			}
 		}
 	}
-	if h := configHash(s.Seed); strings.Contains(h, "ghp-lab-key") {
-		t.Fatal("the seed's config hash carries the key")
+	decl, err := secret.ParseEnv(s.Server.Env)
+	if err != nil || len(decl) != 1 || decl[0].Name != OmnibotKeySecret || decl[0].Fields["key"] != `ghp-"lab"-key` {
+		t.Fatalf("the server reads the alias as %+v, %v", decl, err)
 	}
+
+	o.ServerEnv = []string{"OMNIGLASS_SETTING__ASSISTANT__PROVIDER=anthropic"}
+	s, err = Plan(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(s.Server.Env, "OMNIGLASS_SETTING__ASSISTANT__PROVIDER=openai") {
+		t.Fatalf("the alias overrode the shell's provider: %v", s.Server.Env)
+	}
+
 	s, err = Plan(testOptions())
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, e := range s.Seed.Env {
-		if strings.HasPrefix(e, OmnibotKeyEnv+"=") {
-			t.Fatalf("a lab with no key hands the seed %s", e)
+	for _, e := range s.Server.Env {
+		if strings.HasPrefix(e, secret.EnvPrefix) || strings.HasPrefix(e, "OMNIGLASS_SETTING__ASSISTANT__") {
+			t.Fatalf("a lab with no key hands the server %s", e)
 		}
 	}
 	sc := scaleOptions()
@@ -1020,7 +1039,7 @@ func TestPlanHandsOnlyDeclaredVariables(t *testing.T) {
 	}
 	o := testOptions()
 	o.OmnibotKey = "ghp-lab-key"
-	o.ServerSettingsEnv = []string{"OMNIGLASS_SETTING__ASSISTANT__MODEL=openai.gpt-oss-20b-1:0"}
+	o.ServerEnv = []string{"OMNIGLASS_SETTING__ASSISTANT__MODEL=openai.gpt-oss-20b-1:0"}
 	for _, opts := range []Options{o, scaleOptions()} {
 		s, err := Plan(opts)
 		if err != nil {
@@ -1043,7 +1062,7 @@ func TestPlanHandsOnlyDeclaredVariables(t *testing.T) {
 func TestPlanSettingsEnvGoesToTheServerAlone(t *testing.T) {
 	o := testOptions()
 	model := "OMNIGLASS_SETTING__ASSISTANT__MODEL=openai.gpt-oss-20b-1:0"
-	o.ServerSettingsEnv = []string{model}
+	o.ServerEnv = []string{model}
 	s, err := Plan(o)
 	if err != nil {
 		t.Fatal(err)
@@ -1052,7 +1071,7 @@ func TestPlanSettingsEnvGoesToTheServerAlone(t *testing.T) {
 		t.Fatalf("server env %v, want %s", s.Server.Env, model)
 	}
 	sc := scaleOptions()
-	sc.ServerSettingsEnv = []string{model}
+	sc.ServerEnv = []string{model}
 	scale, err := Plan(sc)
 	if err != nil {
 		t.Fatal(err)
@@ -1064,8 +1083,28 @@ func TestPlanSettingsEnvGoesToTheServerAlone(t *testing.T) {
 			}
 		}
 	}
-	o.ServerSettingsEnv = []string{"OMNIGLASS_DSN=postgres://elsewhere"}
+	o.ServerEnv = []string{"OMNIGLASS_DSN=postgres://elsewhere"}
 	if _, err := Plan(o); err == nil || !strings.Contains(err.Error(), "OMNIGLASS_DSN") {
 		t.Fatalf("a non-settings entry: err = %v, want a refusal naming it", err)
+	}
+}
+
+// The host's env secrets (#2223) reach the lab's server alone, as its
+// settings variables do.
+func TestPlanEnvSecretsGoToTheServerAlone(t *testing.T) {
+	o := testOptions()
+	key := `OMNIGLASS_SECRET__BEDROCK_KEY={"type":"api-key","fields":{"key":"sk-b"}}`
+	o.ServerEnv = []string{key}
+	s, err := Plan(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(s.Server.Env, key) {
+		t.Fatalf("server env %v, want %s", s.Server.Env, key)
+	}
+	for _, svc := range s.Services() {
+		if svc.Name != s.Server.Name && slices.Contains(svc.Env, key) {
+			t.Fatalf("%s is handed the server's secret", svc.Name)
+		}
 	}
 }

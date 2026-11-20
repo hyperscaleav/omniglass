@@ -203,6 +203,23 @@ consecutive auth failures consumers report, both through the ordinary sample-to-
 **Shared versus per-device is just scope**: a fleet-wide SNMP community sits high in the cascade, a
 unique-per-device secret at component scope. Nothing else to model.
 
+**A platform secret may come from the environment** ([ADR-2223.2](/architecture/decisions/#adr-22232-a-platform-secret-may-be-declared-by-the-servers-environment), #2223). A
+variable `OMNIGLASS_SECRET__<NAME>` declares a `$platform` secret named `<name>` (lowercased, each
+`_` a `-`, so `OMNIGLASS_SECRET__BEDROCK_KEY` is `bedrock-key`), its value one JSON object
+`{"type": "<secret type>", "fields": {...}}`. The boot checks it against the `secret_type` catalog
+as a create is checked (a known type, no unknown or lifecycle field, every operator field present)
+and fails naming the variable, never quoting the value, when it does not fit; a stored platform
+secret of the same name also fails the boot, naming both. It is held in the server's memory only:
+nothing is sealed, written to Postgres or audited, and changing it is a restart. Every consumer
+resolves it as it resolves a stored platform secret, so omnibot's `key_secret`, the mail relay's
+`mail_secret` and an endpoint's secret input take one unchanged, and naming it in any of them still
+takes `secret:bind` (the all scope, as for any platform secret; the admin tier too when its type is
+admin-sensitive). The directory lists it with `source: env`, its name, type and `source_var`, and
+**no fields**; an update, delete, reveal or copy of it, or a stored platform secret created under its
+name, is a **409** naming the variable to change instead. A notification target binds a stored
+secret by its row, so an env secret does not sign a webhook; only `$platform` secrets are declared
+this way.
+
 ## variable: free interpolated values (macros)
 
 :::note[Built: slice 1, plaintext cell + cascade]

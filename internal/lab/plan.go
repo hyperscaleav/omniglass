@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/hyperscaleav/omniglass/internal/outpost"
+	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/settings"
 	"github.com/hyperscaleav/omniglass/internal/simoutpost"
 )
@@ -287,15 +288,17 @@ type Options struct {
 	// measurement.
 	PlatformHistory bool
 	// OmnibotKey is a live model's key (#2109), read from the host's env:
-	// the seed alone is handed it, seals it as a platform secret and points
-	// omnibot at it. Empty plays the recording.
+	// the server alone is handed it, as the env-backed platform secret
+	// OmnibotKeySecret with the assistant settings naming it (#2223), so
+	// nothing seals it. Empty plays the recording.
 	OmnibotKey string
-	// ServerSettingsEnv is the host's OMNIGLASS_SETTING__<NS>__<KEY>=value
-	// entries (#2223), forwarded to the server alone so the server's env
-	// settings layer takes them: a lab exported with the assistant's base_url
-	// and model runs omnibot on that model with no setting update. Each entry
-	// is checked to carry the prefix; the server judges the rest at boot.
-	ServerSettingsEnv []string
+	// ServerEnv is the host's OMNIGLASS_SETTING__<NS>__<KEY>=value and
+	// OMNIGLASS_SECRET__<NAME>=<json> entries (#2223), forwarded to the server
+	// alone so its env settings layer and its env secrets take them: a lab
+	// exported with the Bedrock five runs omnibot on Bedrock with no further
+	// command. Each entry is checked to carry one of the two prefixes; the
+	// server judges the rest at boot.
+	ServerEnv []string
 	// Cadence names the outpost's cadence profile (CadenceProfiles); empty is
 	// the lab's own.
 	Cadence string
@@ -548,9 +551,9 @@ func Plan(o Options) (Spec, error) {
 	if o.OmnibotKey != "" && o.Scale() {
 		return Spec{}, fmt.Errorf("a scale lab runs no omnibot of its own, so it cannot take --omnibot-key-env")
 	}
-	for _, e := range o.ServerSettingsEnv {
-		if name, _, _ := strings.Cut(e, "="); !strings.HasPrefix(name, settings.EnvPrefix) {
-			return Spec{}, fmt.Errorf("lab: %s is not a server setting variable (%s<NAMESPACE>__<KEY>)", name, settings.EnvPrefix)
+	for _, e := range o.ServerEnv {
+		if name, _, _ := strings.Cut(e, "="); !strings.HasPrefix(name, settings.EnvPrefix) && !strings.HasPrefix(name, secret.EnvPrefix) {
+			return Spec{}, fmt.Errorf("lab: %s is not a server setting or secret variable (%s<NAMESPACE>__<KEY> or %s<NAME>)", name, settings.EnvPrefix, secret.EnvPrefix)
 		}
 	}
 	if o.PlatformHistory && !o.Ephemeral {
@@ -635,9 +638,6 @@ func Plan(o Options) (Spec, error) {
 	}
 	pusherTokens := PusherTokensEnv + "=" + FormatPusherTokens(o.Pushers)
 	seedEnv := append(append([]string{}, appEnv...), "OMNIGLASS_LAB_OUTPOST_TOKEN_HASH="+o.OutpostTokenHash, pusherTokens)
-	if o.OmnibotKey != "" {
-		seedEnv = append(seedEnv, OmnibotKeyEnv+"="+o.OmnibotKey)
-	}
 	if o.Scale() {
 		seedCmd = []string{"lab", "seed", "--scenario", o.Scenario, "--systems", strconv.Itoa(o.Systems),
 			"--user", LoginUser, "--password", LoginPassword}
@@ -690,9 +690,13 @@ func Plan(o Options) (Spec, error) {
 		// lab's seed writes none, so its server is not pointed at one.
 		spec.Server.Env = append(spec.Server.Env, "OMNIGLASS_OMNIBOT_REPLAY="+OmnibotReplayPath)
 	}
-	// The host's settings variables (#2223) reach the server alone, after
-	// the lab's own, so the server's env layer resolves them.
-	spec.Server.Env = append(spec.Server.Env, o.ServerSettingsEnv...)
+	// The host's settings and secret variables (#2223) reach the server
+	// alone, after the lab's own, so the server's env layer and env secrets
+	// resolve them; --omnibot-key-env adds its own beneath the shell's.
+	spec.Server.Env = append(spec.Server.Env, o.ServerEnv...)
+	if o.OmnibotKey != "" {
+		spec.Server.Env = append(spec.Server.Env, OmnibotKeyServerEnv(o.OmnibotKey, o.ServerEnv)...)
+	}
 	outpostCmd := []string{"outpost", "run", "--simulate", "--impairments", "--heartbeat", cadence.Heartbeat,
 		"--probe-every", cadence.ProbeEvery, "--worklist-every", cadence.WorklistEvery, "--poll", cadence.SimPoll}
 	outpostService := func(service, name, token string, components int, role string) Service {

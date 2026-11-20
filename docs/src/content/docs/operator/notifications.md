@@ -11,6 +11,11 @@ screenshots:
   - id: notifications-inbox
     path: /web/inbox
     alt: "The inbox, empty: what reaches it (a group notification an admin points at you, or your own subscription) and the way to subscribe."
+    # The lab's outpost-silent alarm raises partway through a capture, so the inbox
+    # holds its entry in some captures and not in others. The masked twin covers
+    # the whole content region, the same size either way (#2168).
+    mask:
+      - "#scroll-main"
   - id: notifications-subscribe
     path: /web/profile/subscriptions
     steps:

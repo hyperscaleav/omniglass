@@ -11024,6 +11024,7 @@ components:
           description: When true, only the admin tier may see or reveal this secret, regardless of placement
           type: boolean
         fields:
+          description: The masked fields; empty for an env secret, whose value never leaves the server
           items:
             $ref: "#/components/schemas/SecretFieldBody"
           type:
@@ -11049,6 +11050,15 @@ components:
         secret_type_id:
           description: The secret_type's uuid, the stable form of secret_type
           type: string
+        source:
+          description: "Where the secret comes from: stored (sealed in the database) or env (declared by the server's OMNIGLASS_SECRET__ environment, read at boot and never written); an env secret is changed by its variable, not the API"
+          enum:
+            - stored
+            - env
+          type: string
+        source_var:
+          description: The environment variable that declares an env secret; absent for a stored one
+          type: string
       required:
         - id
         - name
@@ -11057,6 +11067,7 @@ components:
         - owner_kind
         - admin_sensitive
         - fields
+        - source
       type: object
     SecretFieldBody:
       additionalProperties: false

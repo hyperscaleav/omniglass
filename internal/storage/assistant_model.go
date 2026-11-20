@@ -41,6 +41,15 @@ func (p *PG) OmnibotModel(ctx context.Context) (*OmnibotModelConfig, error) {
 	if a.KeySecret == "" {
 		return m, nil
 	}
+	// An env-backed platform secret is resolved from memory (#2223); the
+	// boot refused a stored one beside it, so the two never both answer.
+	if fields, ok := p.envPlatformFields(a.KeySecret, "api-key"); ok {
+		if fields["key"] == "" {
+			return nil, fmt.Errorf("%w: key_secret %q has an empty key", ErrModelKeyInvalid, a.KeySecret)
+		}
+		m.Key = fields["key"]
+		return m, nil
+	}
 	id, err := platformSecretOfType(ctx, p.pool, a.KeySecret, "api-key")
 	if errors.Is(err, ErrSecretNotFound) {
 		return nil, fmt.Errorf("%w: key_secret %q is not a platform api-key secret", ErrModelKeyInvalid, a.KeySecret)
@@ -80,6 +89,15 @@ func (p *PG) MergePatchAssistantSettings(ctx context.Context, actorID string, pa
 func (p *PG) checkModelKey(ctx context.Context, q querier, ref string, use SecretUse) error {
 	if isUUID(ref) || strings.Contains(ref, "/") {
 		return fmt.Errorf("%w: key_secret names a platform secret by its bare name", ErrModelKeyInvalid)
+	}
+	if e, found, err := p.checkEnvBind(ref, use); found {
+		if err != nil {
+			return err
+		}
+		if e.typ.Name != "api-key" {
+			return fmt.Errorf("%w: secret %q is not an api-key secret", ErrModelKeyInvalid, ref)
+		}
+		return nil
 	}
 	row, _, err := p.secretRowForAction(ctx, q, ref, use.Read, use.Bind, use.CanAdmin, true)
 	if err != nil {

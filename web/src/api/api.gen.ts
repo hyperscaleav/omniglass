@@ -5183,6 +5183,17 @@ export type ListSecretTypesOutputBody = {
 };
 
 /**
+ * Where the secret comes from: stored (sealed in the database) or env (declared by the server's OMNIGLASS_SECRET__ environment, read at boot and never written); an env secret is changed by its variable, not the API
+ */
+export type SecretBodySource = typeof SecretBodySource[keyof typeof SecretBodySource];
+
+
+export const SecretBodySource = {
+  stored: 'stored',
+  env: 'env',
+} as const;
+
+/**
  * An encrypted credential set at one level of the fleet and inherited below it.
  */
 export type SecretBody = {
@@ -5190,7 +5201,10 @@ export type SecretBody = {
   readonly $schema?: string;
   /** When true, only the admin tier may see or reveal this secret, regardless of placement */
   admin_sensitive: boolean;
-  /** @nullable */
+  /**
+     * The masked fields; empty for an env secret, whose value never leaves the server
+     * @nullable
+     */
   fields: SecretFieldBody[] | null;
   id: string;
   /** The friendly string an operator reads; absent when unset, and a surface with none renders the name verbatim */
@@ -5204,6 +5218,10 @@ export type SecretBody = {
   secret_type: string;
   /** The secret_type's uuid, the stable form of secret_type */
   secret_type_id: string;
+  /** Where the secret comes from: stored (sealed in the database) or env (declared by the server's OMNIGLASS_SECRET__ environment, read at boot and never written); an env secret is changed by its variable, not the API */
+  source: SecretBodySource;
+  /** The environment variable that declares an env secret; absent for a stored one */
+  source_var?: string;
 };
 
 export type ListSecretsOutputBody = {
