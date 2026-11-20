@@ -38,3 +38,13 @@ export async function selectedTree(trigger: HTMLElement): Promise<number[]> {
   fireEvent.keyDown(trigger, { key: "Escape" });
   return at;
 }
+
+// The labels a person can actually choose, in list order: a disabled node is
+// drawn in the tree (it carries the nesting) but is not a choice. Closes the
+// list after reading it.
+export async function treeChoices(trigger: HTMLElement): Promise<string[]> {
+  const options = await openTree(trigger);
+  const out = options.filter((o) => o.getAttribute("aria-disabled") !== "true").map((o) => o.textContent ?? "");
+  fireEvent.keyDown(trigger, { key: "Escape" });
+  return out;
+}

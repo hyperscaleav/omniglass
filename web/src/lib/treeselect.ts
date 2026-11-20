@@ -11,6 +11,9 @@ export interface TreeNode {
   parentId?: string | null;
   // Optional sibling sort key; lower sorts first. Absent ranks sort as 0.
   rank?: number;
+  // Shown in its place in the tree but not choosable: a node a caller may not
+  // pick still carries the nesting of the nodes beneath it.
+  disabled?: boolean;
 }
 
 export interface FlatOption {
@@ -21,6 +24,7 @@ export interface FlatOption {
   // placement a picker shows beside a closed selection, where the depth the
   // open list draws is not on screen.
   ancestors: string[];
+  disabled?: boolean;
 }
 
 // pathTo returns the labels from the root down to and including the given node,
@@ -65,7 +69,7 @@ export function flattenTree(nodes: TreeNode[], excludeSubtreeOf?: string): FlatO
   const walk = (key: string | null, depth: number, ancestors: string[]) => {
     for (const n of children.get(key) ?? []) {
       if (n.id === excludeSubtreeOf) continue;
-      out.push({ value: n.value, label: n.label, depth, ancestors });
+      out.push({ value: n.value, label: n.label, depth, ancestors, ...(n.disabled ? { disabled: true } : {}) });
       walk(n.id, depth + 1, [...ancestors, n.label]);
     }
   };

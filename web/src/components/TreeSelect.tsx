@@ -12,7 +12,8 @@ import { flattenTree, type FlatOption, type TreeNode } from "../lib/treeselect";
 // text, so any indent typed into the option leaked into the value. The reusable
 // parent picker for every tree entity (locations, systems, components, and the
 // type catalogs). value is the chosen node's value; the optional root option
-// carries the empty value.
+// carries the empty value. A node marked disabled is drawn in its place, muted,
+// and cannot be chosen, so a caller that narrows the choices keeps the nesting.
 //
 // It does not use bindSelectValue (lib/selectvalue.ts, #772): that fixes a native
 // select that forgets a value it has no <option> for. This control derives the
@@ -74,7 +75,7 @@ export default function TreeSelect(props: TreeSelectProps) {
       itemComponent={(p) => (
         <Select.Item
           item={p.item}
-          class="flex cursor-pointer items-center rounded-field py-1.5 pr-3 text-sm outline-none data-[highlighted]:bg-base-200 data-[selected]:font-semibold"
+          class="flex cursor-pointer items-center rounded-field py-1.5 pr-3 text-sm outline-none data-[highlighted]:bg-base-200 data-[selected]:font-semibold data-[disabled]:cursor-default data-[disabled]:text-base-content/40"
           style={{ "padding-left": padFor(p.item.rawValue.depth) }}
         >
           <Select.ItemLabel classList={{ "tree-glyph": p.item.rawValue.depth > 0 }}>

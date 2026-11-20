@@ -8,7 +8,7 @@ import { ROOT_PLACEMENT } from "./location_types";
 // says where each type may sit (allowed_parent_types), and that is the only
 // fact these read. Pure, so the answers are testable without a server.
 
-type TypeShape = { name: string; allowed_parent_types: string[] };
+export type TypeShape = { name: string; allowed_parent_types: string[] };
 
 // An empty allowed_parent_types is unconstrained: the type may sit anywhere,
 // the top included.

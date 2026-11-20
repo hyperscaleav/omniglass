@@ -9,6 +9,7 @@ import SimulationSection from "../components/SimulationSection";
 import { ME_KEY, type Me } from "../lib/auth";
 import { COMPONENTS_KEY, type Component } from "../lib/components";
 import { LOCATIONS_KEY } from "../lib/locations";
+import { pickTree } from "../components/TreeSelect.testkit";
 import { STANDARDS_KEY, type Standard } from "../lib/standards";
 import { SYSTEM_TYPES_KEY, type SystemType } from "../lib/system_types";
 import {
@@ -769,7 +770,7 @@ describe("adding a simulated system", () => {
     const { qc } = await openAddSystem();
     qc.setQueryData([...LOCATIONS_KEY], [{ id: uuidFor("loc-a"), name: "boardroom-a", label: "Boardroom A", path: "hq.boardroom-a" }]);
     await fill();
-    fireEvent.change(await screen.findByLabelText("Location"), { target: { value: "hq.boardroom-a" } });
+    await pickTree(await screen.findByLabelText("Location"), "Boardroom A");
     fireEvent.input(screen.getByLabelText("Name"), { target: { value: "lab-room" } });
     const add = screen.getByRole("button", { name: "Add system" }) as HTMLButtonElement;
     await waitFor(() => expect(add.disabled).toBe(false));

@@ -7,6 +7,8 @@ import { OUTPOSTS_KEY, type Outpost } from "../lib/outposts";
 import { TASKS_KEY, type Task } from "../lib/tasks";
 import { ENDPOINTS_KEY, type Endpoint } from "../lib/endpoints";
 import { LOCATIONS_KEY, type Location } from "../lib/locations";
+import { LOCATION_TYPES_KEY } from "../lib/location_types";
+import { treeValue } from "../components/TreeSelect.testkit";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 import { toasts } from "../lib/toast";
@@ -44,6 +46,7 @@ function mount(me: Me, lateLocations = false) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...OUTPOSTS_KEY], seed);
   qc.setQueryData([...LOCATIONS_KEY], lateLocations ? [] : locSeed);
+  qc.setQueryData([...LOCATION_TYPES_KEY], []);
   qc.setQueryData([...TASKS_KEY], taskSeed);
   qc.setQueryData([...ENDPOINTS_KEY], ifaceSeed);
   qc.setQueryData([...ME_KEY], me);
@@ -128,22 +131,21 @@ describe("Outposts page", () => {
 
   it("shows the outpost's own placement when the location directory answers after edit opened", async () => {
     // The blade opens on the outpost, which is already in the list query; the
-    // location directory is a separate query that can answer later. A <select>
-    // keeps no value it has no option for, so the placement picker used to read
-    // "(unplaced)" on a placed outpost until something else made the value change
-    // (#772). Delivered by hand, so the gap is deterministic, never a sleep.
+    // location directory is a separate query that can answer later. A native
+    // <select> kept no value it had no option for, so the picker used to read
+    // "(unplaced)" on a placed outpost (#772); the location tree derives its
+    // selection from value and options together. Delivered by hand, so the gap
+    // is deterministic, never a sleep.
     const { qc } = mount(owner, true);
     fireEvent.click(screen.getByText("HQ Edge Outpost"));
     const blade = await screen.findByRole("dialog");
     fireEvent.click(within(blade).getByLabelText("Edit"));
-    const picker = () => within(blade).getByLabelText("Location") as HTMLSelectElement;
-    await waitFor(() => expect(picker()).toBeTruthy());
-    expect(picker().options.length).toBe(1); // "(unplaced)" alone
+    const picker = () => within(blade).getByLabelText("Location");
+    await waitFor(() => expect(treeValue(picker())).toBe("(unplaced)"));
 
     qc.setQueryData([...LOCATIONS_KEY], locSeed);
 
-    await waitFor(() => expect(picker().options.length).toBeGreaterThan(1));
-    expect(picker().value).toBe("hq");
+    await waitFor(() => expect(treeValue(picker())).toBe("HQ"));
   });
 
   it("hides Edit and Re-enroll for a reader (no outpost:update / outpost:enroll)", async () => {
