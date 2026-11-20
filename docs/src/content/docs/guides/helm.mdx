@@ -8,7 +8,7 @@ import ConfigVars from '../../../components/ConfigVars.astro';
 The chart at `deploy/chart/` is the deploy primitive: one chart serves both
 disposable per-PR previews and production. It runs the
 [container image](/guides/container-image/); the live
-[per-PR preview environments](/guides/pr-previews/) are its first consumer, and
+[per-PR preview environments](/developer/pr-previews/) are its first consumer, and
 production reuses it unchanged by setting three values.
 
 ## Two modes
@@ -159,7 +159,7 @@ renders a fresh key each time; there, supply the key with `encryptionKey.existin
 
 The server's data directory is `/var/lib/omniglass` (`OMNIGLASS_DATA_DIR`), and the embedded
 JetStream store sits under it at `/var/lib/omniglass/nats` (`OMNIGLASS_NATS_STORE_DIR`), the same
-layout as the [lab](/guides/lab/). With `persistence.enabled` (the default) the chart mounts a
+layout as the [lab](/developer/lab/). With `persistence.enabled` (the default) the chart mounts a
 `ReadWriteOnce` PersistentVolumeClaim there, `<release>-data`, also marked
 `helm.sh/resource-policy: keep`. The Deployment uses the `Recreate` strategy: one server owns one
 bus and one volume, so the old pod stops before the new one starts.

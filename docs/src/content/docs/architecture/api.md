@@ -1300,12 +1300,12 @@ problem+json. Each tool also carries an **agent class** (read, write, destructiv
 destination), and the listing stamps the caller's resolved policy for it into the tool's `_meta`
 (`omniglass/agent_policy`); the server refuses a class the install sets to `never` for any agent
 request, MCP or REST, before the route runs, and `GET /auth/me/agent-policy` answers the caller's
-policy ([what an agent may do](/guides/agents/#what-an-agent-may-do)). The server runs as the **authenticated person's or machine user's** token, so its
+policy ([what an agent may do](/developer/agents/#what-an-agent-may-do)). The server runs as the **authenticated person's or machine user's** token, so its
 reach is exactly that user's grants ([AI](/architecture/ai/)). A client with no token meets a `401`
 that points it at the server's OAuth 2.1 metadata, and signs its person in for an agent token of its
 own ([MCP clients sign in with OAuth 2.1](/architecture/identity-access/#mcp-clients-sign-in-with-oauth-21));
 those protocol routes sit outside the OpenAPI document, their shapes fixed by the RFCs. Connecting one:
-[connect an agent](/guides/agents/).
+[connect an agent](/developer/agents/).
 
 omnibot's conversations are a person's own resource under `/assistant/conversations` (list, get,
 create, `{name}:append`, delete), gated by `assistant:use` and owner-only: anyone else's is a 404, and

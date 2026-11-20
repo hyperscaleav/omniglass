@@ -6,7 +6,7 @@ summary: "Omniglass is its own OAuth 2.1 authorization server for MCP clients: d
 refs: [2048, 1179, 2047, 2073, 2074]
 ---
 
-- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/#mcp-clients-sign-in-with-oauth-21), [connect an agent](/guides/agents/#sign-in-from-the-client)
+- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/#mcp-clients-sign-in-with-oauth-21), [connect an agent](/developer/agents/#sign-in-from-the-client)
 - **Decision:** (#2048, ruled 2026-11-16, completing the OAuth item of
   [ADR-1179](#adr-1179-an-agent-token-is-a-token-type-on-its-persons-credential-and-never-reveals).)
   1. **The server is its own authorization server.** `/mcp` answers a missing or bad token with a

@@ -11,7 +11,7 @@ client lists them beside the tools, and `omniglass mcp skill <name>` prints one 
 that reads skill files instead. A skill runs nothing itself: it tells the agent which tools to call,
 and each call is gated, scoped and audited as any other. The tools and permissions below are read
 from the tool catalog, so a skill can never claim less than its tools need. To use one, see
-[connect an agent](/guides/agents/#skills).
+[connect an agent](/developer/agents/#skills).
 
 2 skills.
 

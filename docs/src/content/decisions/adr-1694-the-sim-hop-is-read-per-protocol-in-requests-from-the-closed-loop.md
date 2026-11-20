@@ -6,7 +6,7 @@ summary: "Accepted: `lab measure` reads the delivery table's sim hop from the cl
 refs: [1694, 1641, 1639, 1623, 1692, 1693, 1738]
 ---
 
-- **Date:** 2026-11-10 | **Status:** Accepted | **Pages:** [lab guide](/guides/lab/#reading-the-delivery-table), [messaging](/architecture/messaging/#accounting-every-item-the-loss-ratio)
+- **Date:** 2026-11-10 | **Status:** Accepted | **Pages:** [lab guide](/developer/lab/#reading-the-delivery-table), [messaging](/architecture/messaging/#accounting-every-item-the-loss-ratio)
 - **Decision:** (#1694, under #1623.)
   1. **Per protocol, in requests.** The issue asked for a sim row per kind, items the endpoints
      answered against items the node collected. A simulator answers requests and cannot know which

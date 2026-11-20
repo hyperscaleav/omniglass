@@ -27,7 +27,7 @@ make
 ```
 
 `make` builds two things from one Dockerfile, with nothing but Docker: the image, tagged `omniglass:dev-<build id>`
-(and `omniglass:dev`, see [which image runs](/guides/lab/#flags)), and this machine's own binary,
+(and `omniglass:dev`, see [which image runs](/developer/lab/#flags)), and this machine's own binary,
 `bin/omniglass`, both stamped with one build id. It builds and runs nothing else. `make lab` is the short form of the last two commands (`make`, then
 `./bin/omniglass lab run`; `LAB_ARGS` passes flags, as in `make lab LAB_ARGS=--fresh`).
 

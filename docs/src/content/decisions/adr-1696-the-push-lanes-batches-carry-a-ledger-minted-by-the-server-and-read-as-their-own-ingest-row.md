@@ -6,7 +6,7 @@ summary: "Accepted: the bus server stamps every batch it publishes on the push s
 refs: [1696, 1641, 1623, 1659, 1691, 1024]
 ---
 
-- **Date:** 2026-11-10 | **Status:** Accepted | **Pages:** [messaging](/architecture/messaging/#accounting-every-item-the-loss-ratio), [lab](/guides/lab/#reading-the-delivery-table)
+- **Date:** 2026-11-10 | **Status:** Accepted | **Pages:** [messaging](/architecture/messaging/#accounting-every-item-the-loss-ratio), [lab](/developer/lab/#reading-the-delivery-table)
 - **Decision:** (#1696, under #1623, extending [ADR-1641](#adr-1641-every-telemetry-item-is-accounted-on-its-batchs-receipt-and-read-as-a-loss-ratio).)
   1. **The server mints the push lane's ledger as it publishes.** The stamp is taken in the bus
      server's `PublishTelemetry`, the one path the push route and the webhook listener share, not in

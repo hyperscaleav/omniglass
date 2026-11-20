@@ -6,7 +6,7 @@ summary: "An MCP client may use an https URL serving its metadata as its client_
 refs: [2074, 2048, 1179]
 ---
 
-- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/#mcp-clients-sign-in-with-oauth-21), [connect an agent](/guides/agents/#sign-in-from-the-client)
+- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/#mcp-clients-sign-in-with-oauth-21), [connect an agent](/developer/agents/#sign-in-from-the-client)
 - **Decision:** (#2074, extending
   [ADR-2048](#adr-2048-an-mcp-client-signs-in-with-oauth-21-for-an-agent-token-linked-to-it).)
   1. **A URL client id is a document to fetch.** An https `client_id` with a path is fetched at

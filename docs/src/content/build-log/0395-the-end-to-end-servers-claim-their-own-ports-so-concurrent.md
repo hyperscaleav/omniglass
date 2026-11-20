@@ -26,7 +26,7 @@ first, no ready file). Beside a squatter that holds and churns ephemeral ports, 
 host, main's healthz test failed four runs in four (one on the API's port, three on the bus's) and the
 fixed one passed four in four; the end-to-end package run twice side by side, three pairs, passed every
 run. The
-[CLI guide](/guides/cli/#a-server-on-ports-it-picks) teaches the ready file, and the deployment guides'
+[CLI guide](/developer/cli/#a-server-on-ports-it-picks) teaches the ready file, and the deployment guides'
 configuration tables render the new variable from the registry.
 
 The review's fixes, each with a test that failed first: the harness observes the server's exit by

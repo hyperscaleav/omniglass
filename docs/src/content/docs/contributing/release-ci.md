@@ -54,7 +54,7 @@ on GitHub-hosted runners and have a page of their own, [Agents in CI](/contribut
 
 Three more PR workflows: **`image.yml`** builds the multi-arch container image (see
 [Container image](/guides/container-image/)), **`preview-comment.yml`** reacts to the
-`run:preview` label (see [PR previews](/guides/pr-previews/)), and **`demo.yml`**
+`run:preview` label (see [PR previews](/developer/pr-previews/)), and **`demo.yml`**
 reacts to the `run:demo` label, recording the [demos](/contributing/demos/) the PR body tags
 (each on a runner of its own) to the PR's evidence ref, keeping one comment listing every demo and
 writing each demo's clip into the PR body (see [Labels](/contributing/labels/)); nightly, the same
@@ -177,7 +177,7 @@ automated. The steps, between a candidate and its final release:
 
 1. Cut the candidate ([above](#cutting-a-release-manual)), which publishes its image and binary
    from one commit, and start the soak on the test host with that `v<version>-rc.<n>` build, as
-   the [soak run](/guides/lab/#a-soak-run) describes. Note the time it starts.
+   the [soak run](/developer/lab/#a-soak-run) describes. Note the time it starts.
 2. Leave it for 7 days.
 3. Judge it, from any machine that reaches the soak's server, with a token that reads outposts,
    systems and components over everything:

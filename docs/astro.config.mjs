@@ -45,6 +45,11 @@ export default defineConfig({
   // The monolithic "the console" guide was split into per-flow operator pages.
   // Keep its old URL alive for external links and bookmarks.
   redirects: {
+    // The Developer section replaced the CLI, agent, lab and PR preview guides (#2159).
+    '/guides/cli/': '/developer/cli/',
+    '/guides/agents/': '/developer/agents/',
+    '/guides/lab/': '/developer/lab/',
+    '/guides/pr-previews/': '/developer/pr-previews/',
     '/guides/console/': '/operator/',
     '/architecture/datapoints/': '/architecture/properties/',
     // The joint Types guide split into one page per catalog (#598); the old
@@ -178,7 +183,6 @@ export default defineConfig({
           // section deletes it and its entry here (ADR-2087.2). The group leaves with the last one.
           label: 'Being rebuilt',
           items: [
-            { label: 'The lab', slug: 'guides/lab' },
             {
               label: 'Architecture',
               collapsed: true,
@@ -250,14 +254,6 @@ export default defineConfig({
               ],
             },
             {
-              label: 'CLI and agents',
-              collapsed: true,
-              items: [
-                { label: 'The CLI', slug: 'guides/cli' },
-                { label: 'Connect an agent', slug: 'guides/agents' },
-              ],
-            },
-            {
               label: 'Admin guide',
               collapsed: true,
               items: [
@@ -275,7 +271,6 @@ export default defineConfig({
                 { label: 'Install', slug: 'guides/install' },
                 { label: 'Container image', slug: 'guides/container-image' },
                 { label: 'Deploying with Helm', slug: 'guides/helm' },
-                { label: 'PR preview environments', slug: 'guides/pr-previews' },
               ],
             },
           ],

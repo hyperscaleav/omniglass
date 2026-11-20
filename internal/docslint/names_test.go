@@ -69,7 +69,7 @@ func TestScanNamesInFence(t *testing.T) {
 // correct and must never be "fixed". Prose is therefore out of scope entirely,
 // and a comment inside a fence is prose that happens to sit in a code block. The
 // first draft of this lint scanned them and reported `--name flag.` from the
-// sentence "there is no --name flag" in guides/cli.md, which is the same defect
+// sentence "there is no --name flag" in developer/cli.md, which is the same defect
 // in miniature.
 func TestFenceCommentsAreProse(t *testing.T) {
 	for _, line := range []string{

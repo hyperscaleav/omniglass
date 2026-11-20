@@ -6,7 +6,7 @@ summary: "Accepted: every simulated endpoint counts what reached it and how it a
 refs: [1639, 1640, 1661, 1662, 1663, 1664, 1632]
 ---
 
-- **Date:** 2026-11-09 | **Status:** Accepted | **Pages:** [simulation](/architecture/simulation/#what-an-endpoint-observed), [the lab](/guides/lab/#every-request-reached-its-endpoint-and-was-answered), [test-driven](/contributing/test-driven/#measuring-a-running-lab)
+- **Date:** 2026-11-09 | **Status:** Accepted | **Pages:** [simulation](/architecture/simulation/#what-an-endpoint-observed), [the lab](/developer/lab/#every-request-reached-its-endpoint-and-was-answered), [test-driven](/contributing/test-driven/#measuring-a-running-lab)
 - **Decision:**
   1. **Pull-only, bracketed snapshots.** The simulator and the node each keep cumulative counters
      that never reset on read, and the lab pulls them over the bus through

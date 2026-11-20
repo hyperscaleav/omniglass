@@ -55,7 +55,7 @@ description: "Every omniglass CLI command, generated from the live command tree 
 Every ` + "`omniglass`" + ` command, generated from the binary's own command tree. The data commands
 are generated from the [API](/reference/api/) (` + "`make gen`" + `), so this reference is a faithful mirror of
 what the server exposes. For the narrative, connecting, authenticating, and the generated-versus-
-hand-written split, see [the CLI guide](/guides/cli/).
+hand-written split, see [the CLI guide](/developer/cli/).
 
 `)
 }

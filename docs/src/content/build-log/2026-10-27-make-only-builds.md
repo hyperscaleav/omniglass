@@ -11,4 +11,4 @@ BuildKit cache mounts. `make dev` builds that and runs `npm install` in `web/`, 
 `seed-dev --sim-port-offset` defaults to 0, the lab's real ports. The Vite dev server proxies `/api`
 to `http://127.0.0.1:8080`, moved by `OMNIGLASS_LAB_URL`, so the console's fast loop is a lab in one
 terminal and `npm run dev` in another. The docs that named the retired targets point at the
-[lab](/guides/lab/#the-console-fast-loop).
+[lab](/developer/lab/#the-console-fast-loop).

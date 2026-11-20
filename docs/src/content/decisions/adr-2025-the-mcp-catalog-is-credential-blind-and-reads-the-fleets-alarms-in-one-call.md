@@ -6,7 +6,7 @@ summary: "Extends ADR-1162. An operation that takes or returns a credential in p
 refs: [2025, 1162, 2026]
 ---
 
-- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [API](/architecture/api/#also-an-mcp-surface), [connect an agent](/guides/agents/)
+- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [API](/architecture/api/#also-an-mcp-surface), [connect an agent](/developer/agents/)
 - **Decision:** (#2025, extending
   [ADR-1162](#adr-1162-the-mcp-server-is-a-generated-client-of-the-operations-stamped-for-it-run-as-the-callers-token).)
   1. **Credential-blind.** An operation whose request or 2xx response carries a credential in plaintext

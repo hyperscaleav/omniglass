@@ -5,7 +5,7 @@ status: "Accepted"
 summary: "`cmd/cligen` derives each body flag's TYPE from the OpenAPI property: an `integer` field is an `int` flag, a `boolean` a `bool` flag, a `number` a `float64` flag, so a value the schema refuses is refused at the shell rather than by the server's 422. Every other shape keeps ONE string flag parsed as JSON (an object, an array, an untyped `any`, and a nullable number or boolean), because a nested value has no shell-native flag type and `null` has to stay sendable: it is what clears a field named in `update_mask` (ADR-0106). A nullable STRING is the exception and stays a plain string flag, since this API clears a string with the empty string. `--propagates=false` becomes the spelling for a bool flag, and the docs flag check fails on a bool flag handed a space-separated value"
 ---
 
-- **Date:** 2026-08-13 | **Status:** Accepted | **Pages:** [the CLI](/guides/cli/), [API first](/contributing/api-first/)
+- **Date:** 2026-08-13 | **Status:** Accepted | **Pages:** [the CLI](/developer/cli/), [API first](/contributing/api-first/)
 - **Decision:** `cmd/cligen` derives each body flag's **type** from the OpenAPI property it comes
   from. A scalar the shell can type takes that flag type (`integer` is an `int` flag, `boolean` a
   `bool` flag, `number` a `float64` flag, `string` a string flag), so a value the schema refuses is

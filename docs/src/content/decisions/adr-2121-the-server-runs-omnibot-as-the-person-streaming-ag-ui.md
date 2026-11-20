@@ -6,7 +6,7 @@ summary: "POST /assistant/conversations/{name}:run runs omnibot on the server ov
 refs: [2121, 2113, 2120, 1166, 1167, 2126]
 ---
 
-- **Date:** 2026-11-17 | **Status:** Accepted | **Pages:** [AI](/architecture/ai/), [API](/architecture/api/), [connect an agent](/guides/agents/#running-omnibot-on-the-server)
+- **Date:** 2026-11-17 | **Status:** Accepted | **Pages:** [AI](/architecture/ai/), [API](/architecture/api/), [connect an agent](/developer/agents/#running-omnibot-on-the-server)
 - **Decision:** (#2121, on the loop's pause, #2120, and the conversations of [ADR-2113](/architecture/decisions/#adr-2113-a-persons-omnibot-conversations-are-theirs-alone).)
   1. **The wire is AG-UI.** `{name}:run` takes an AG-UI run input and answers `text/event-stream`,
      the run narrated as AG-UI events. The conversation is the thread, and the stored transcript is

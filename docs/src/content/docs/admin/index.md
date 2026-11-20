@@ -28,7 +28,7 @@ change.
 - **The console.** Its **Admin** group holds Users, Roles, User groups, Settings and Audit; Secrets,
   Variables and Files sit under **Values**, and the catalog has a **Catalog** group of its own. A page you have no read grant for is hidden and its route
   refused, so the console never paints a page you cannot use.
-- **The CLI.** The same surfaces are generated commands on the [`omniglass` CLI](/guides/cli/)
+- **The CLI.** The same surfaces are generated commands on the [`omniglass` CLI](/developer/cli/)
   (`user`, `user-group`, `secret`, `variable`, `setting` and the rest, all in the
   [CLI reference](/reference/cli/)), plus the trusted direct-database lane (`bootstrap`, `token`,
   `set-password`) that mints the very first owner before any server is running.

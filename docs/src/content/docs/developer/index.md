@@ -10,9 +10,17 @@ sidebar:
 someone connecting an AI agent over MCP, and a contributor building a slice.
 
 **In this section:** the API and the clients generated from it, the CLI for scripting, agents and
-MCP, the lab and PR preview environments, and how the project is built (the five doctrines, the
-slice workflow, the design system, release and CI).
+MCP, the lab and PR preview environments, and how the project is built.
 
-Until this section is written (#2159), the current pages are **Contributing** and the CLI, agent,
-lab and preview guides under **Being rebuilt** in the sidebar; the generated
-[CLI](/reference/cli/), [MCP](/reference/mcp/) and API references are under **Reference**.
+## The pages
+
+- [The API](/developer/api/): the one contract every client calls, and where its reference lives.
+- [The CLI](/developer/cli/): the generated client for scripts, how it connects and signs in.
+- [Agents and MCP](/developer/agents/): connect Claude Code or any MCP client, what an agent may do,
+  and omnibot.
+- [The lab](/developer/lab/): a working Omniglass with a simulated fleet, on Docker.
+- [PR previews](/developer/pr-previews/): a live copy of a pull request.
+- [Contributing](/developer/contributing/): the doctrines and the slice workflow.
+
+The generated [CLI](/reference/cli/), [MCP](/reference/mcp/) and [API](/reference/api/) references are
+under **Reference**.

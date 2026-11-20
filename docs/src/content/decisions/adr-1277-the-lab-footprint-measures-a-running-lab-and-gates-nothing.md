@@ -6,7 +6,7 @@ summary: "A fifth performance instrument, diagnostic only: make lab-footprint br
 refs: [1277, 1272, 1265]
 ---
 
-- **Date:** 2026-10-29 | **Status:** Accepted | **Pages:** [test-driven](/contributing/test-driven/), [lab](/guides/lab/)
+- **Date:** 2026-10-29 | **Status:** Accepted | **Pages:** [test-driven](/contributing/test-driven/), [lab](/developer/lab/)
 - **Decision:** (#1277, the half of #1272 that needs Docker; extends
   [ADR-1272](#adr-1272-the-ingest-footprint-is-counted-and-a-stored-rows-heap-bytes-are-a-count)
   and [ADR-0094](#adr-0094-benchmarks-are-the-second-performance-instrument-and-they-gate-nothing).)

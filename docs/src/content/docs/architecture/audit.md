@@ -125,7 +125,7 @@ they emit through a standalone non-transactional seam under `resource = 'auth'`,
 with the verbs `login`, `logout`, `login_failed` (a wrong password on a real account),
 `login_denied` (a correct password on a disabled account), `login_locked` (an attempt inside the
 lockout window), `revoke_session` (an admin ending another user's session), and
-`agent_refused` (an agent's call the install's [agent policy](/guides/agents/#what-an-agent-may-do)
+`agent_refused` (an agent's call the install's [agent policy](/developer/agents/#what-an-agent-may-do)
 sets to never, with `resource = 'operation'` and `resource_id` the operation's id, written as the
 agent's with its channel). Self-service
 logout keeps `resource = 'auth'` with no target; admin revoke carries `resource = 'user'` and

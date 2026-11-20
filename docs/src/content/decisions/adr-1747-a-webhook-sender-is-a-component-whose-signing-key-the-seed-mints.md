@@ -6,7 +6,7 @@ summary: "A scenario declares a webhook sender (a profile with a webhook face) i
 refs: [1747, 1743, 1370, 1282, 1623]
 ---
 
-- **Date:** 2026-11-10 | **Status:** Accepted | **Pages:** [simulation](/architecture/simulation/#a-pusher-pushes-on-its-own-cadence), [lab](/guides/lab/#scale-lab-scenarios)
+- **Date:** 2026-11-10 | **Status:** Accepted | **Pages:** [simulation](/architecture/simulation/#a-pusher-pushes-on-its-own-cadence), [lab](/developer/lab/#scale-lab-scenarios)
 - **Decision:** (#1747.)
   1. **A sender is declared as a pusher is.** A scale manifest's `pushers` entry whose profile has a webhook face is a sender; its `systems` may be omitted, which scopes it to every system of its site (a meeting platform account holds all of a site's rooms). The validator still refuses a profile with neither face.
   2. **The seed provisions it from the profile and the driver spec.** A profile's webhook face names its `driver` (a shipped webhook driver) and a `provision` route. The seed reads the driver's session credential, its secret type and its one listener identity key, and seeds the sender as a component with a platform-owned secret of that type (each field minted at random), a server-hosted endpoint of the driver taking that secret, and a binding per system on the identity key valued with the system's name. No seed code names a platform.

@@ -6,7 +6,7 @@ summary: "Accepted: lab measure gains a sampling mode (--every, --samples, --app
 refs: [1632, 1623, 1625, 1626]
 ---
 
-- **Date:** 2026-11-09 | **Status:** Accepted | **Pages:** [the lab guide](/guides/lab/#sampling-a-scale-lab-over-time), [CLI reference](/reference/cli/#omniglass-lab-measure)
+- **Date:** 2026-11-09 | **Status:** Accepted | **Pages:** [the lab guide](/developer/lab/#sampling-a-scale-lab-over-time), [CLI reference](/reference/cli/#omniglass-lab-measure)
 - **Decision:**
   1. **One window a sample, the lab found once.** `--every` finds the lab, signs in and warms up
      once, then measures one `--window` per interval with the same code the one-shot run uses
