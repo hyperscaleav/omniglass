@@ -946,7 +946,7 @@ calculates), the default, `is_set` (the override marker), `from_contract`, `requ
 declares it), the **told** (the newest `intended` value a command set, on any instance), and the
 **is** (the `observed` value, resolved across every live instance worst-case, a deleted endpoint's
 frozen reading left out, and named by `is_instance`), all
-[latest-series-row reads](/architecture/properties/#current-value-is-the-latest-series-row), with
+[latest-series-row reads](/architecture/properties/#current-value-is-the-latest-series-sample), with
 **drift** (any observed instance disagreeing with want, so `false` with nothing declared) computed on
 read ([how an instance resolves](/architecture/properties/#the-instance-dimension-many-values-of-one-name-on-one-owner)).
 A location owns no observed sample, so a location's rows never carry `is`. An instance with **no
