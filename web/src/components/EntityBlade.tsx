@@ -180,7 +180,7 @@ function SystemBody(props: { id: string }) {
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
       </Show>
       <div class="flex flex-wrap items-center gap-2">
-        <HealthBadge verdict={cluster()?.verdict ?? undefined} size="sm" />
+        <HealthBadge verdict={cluster()?.health ?? undefined} size="sm" />
         <SinceLine since={health.data ? sinceOf(health.data, now) : undefined} />
       </div>
       <Why
@@ -339,7 +339,7 @@ function LocationBody(props: { id: string }) {
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
       </Show>
       <div class="flex flex-wrap items-center gap-2">
-        <HealthBadge verdict={anchor()?.verdict ?? undefined} size="sm" />
+        <HealthBadge verdict={anchor()?.health ?? undefined} size="sm" />
         <SinceLine since={health.data ? sinceOf(health.data, now) : undefined} />
       </div>
       {/* The locations beneath it; a room holding systems and no locations says
@@ -357,7 +357,7 @@ function LocationBody(props: { id: string }) {
             {(s) => (
               <button type="button" class="flex cursor-pointer items-center gap-2 text-left hover:underline" onClick={() => blades.push({ kind: "system", id: s.id })}>
                 <span>{entityLabel(s)}</span>
-                <HealthBadge verdict={s.verdict ?? undefined} size="xs" />
+                <HealthBadge verdict={s.health ?? undefined} size="xs" />
               </button>
             )}
           </For>

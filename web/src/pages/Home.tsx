@@ -27,7 +27,7 @@ export default function Home() {
   // itself opens, an outpost read. An outpost read held for only some locations is
   // refused by the view, and the tile says so rather than reading forever.
   const platform = useQuery(() => ({ queryKey: PLATFORM_VIEW_KEY, queryFn: platformView, retry: retryPlatformView, enabled: readsOutposts() }));
-  const platformVerdict = () => verdictOf(platform.data?.system?.verdict);
+  const platformVerdict = () => verdictOf(platform.data?.system?.health);
   const platformUnit = () => {
     const v = platform.data;
     if (!v) {

@@ -34,8 +34,8 @@ const me: Me = { user: { id: "u-root", kind: "person" }, person: { username: "ro
 
 const view: FleetView = {
   locations: [
-    { id: uuidFor("eb-floor"), name: "level-2", label: "Level 2", location_type: "floor", location_type_id: uuidFor("ebt-floor"), parent: "", verdict: "degraded" },
-    { id: uuidFor("eb-room"), name: "boardroom-a", label: "Boardroom A", location_type: "room", location_type_id: uuidFor("ebt-room"), parent: uuidFor("eb-floor"), verdict: "degraded" },
+    { id: uuidFor("eb-floor"), name: "level-2", label: "Level 2", location_type: "floor", location_type_id: uuidFor("ebt-floor"), parent: "", health: "degraded" },
+    { id: uuidFor("eb-room"), name: "boardroom-a", label: "Boardroom A", location_type: "room", location_type_id: uuidFor("ebt-room"), parent: uuidFor("eb-floor"), health: "degraded" },
   ],
   systems: [
     {
@@ -43,17 +43,17 @@ const view: FleetView = {
       name: "boardroom",
       label: "Boardroom",
       location: uuidFor("eb-room"),
-      verdict: "degraded",
+      health: "degraded",
       dots: [
-        { component: uuidFor("eb-c-bar"), name: "videobar-1", verdict: "healthy", primary: true, shared: false },
-        { component: uuidFor("eb-c-mic"), name: "mic-1", verdict: "outage", primary: true, shared: false },
+        { component: uuidFor("eb-c-bar"), name: "videobar-1", health: "healthy", primary: true, shared: false },
+        { component: uuidFor("eb-c-mic"), name: "mic-1", health: "outage", primary: true, shared: false },
       ],
     },
   ],
 } as unknown as FleetView;
 
 const health: FleetHealth = {
-  verdict: "degraded",
+  health: "degraded",
   slots: [
     {
       name: "room-mic", label: "Room Microphone", impact: "degraded", quorum: 1, satisfying: 0, short: 1, spare: 0,
@@ -63,8 +63,8 @@ const health: FleetHealth = {
   ],
   systems: [],
   transitions: [
-    { ts: "2026-08-01T09:00:00Z", verdict: "healthy" },
-    { ts: "2026-08-15T14:20:00Z", verdict: "degraded" },
+    { ts: "2026-08-01T09:00:00Z", health: "healthy" },
+    { ts: "2026-08-15T14:20:00Z", health: "degraded" },
   ],
 } as unknown as FleetHealth;
 
@@ -252,8 +252,8 @@ describe("the component blade's location, by its primary system", () => {
     r.qc.setQueryData([...COMPONENTS_KEY], [{ id: uuidFor("eb-c-mic"), name: "mic-1", label: "", actions: [] }]);
     r.qc.setQueryData([...FLEET_VIEW_KEY], {
       ...view,
-      locations: [...(view.locations ?? []), { id: uuidFor("eb-other"), name: "annex", label: "Annex", location_type: "room", parent: "", verdict: "healthy" }],
-      systems: [...(view.systems ?? []), { id: uuidFor("eb-a-sys"), name: "aaa", label: "Annex", location: uuidFor("eb-other"), verdict: "healthy", dots: [] }],
+      locations: [...(view.locations ?? []), { id: uuidFor("eb-other"), name: "annex", label: "Annex", location_type: "room", parent: "", health: "healthy" }],
+      systems: [...(view.systems ?? []), { id: uuidFor("eb-a-sys"), name: "aaa", label: "Annex", location: uuidFor("eb-other"), health: "healthy", dots: [] }],
     });
     r.qc.setQueryData([...componentSystemsKey(uuidFor("eb-c-mic"))], [
       { system_id: uuidFor("eb-a-sys"), system: "aaa", primary: false },

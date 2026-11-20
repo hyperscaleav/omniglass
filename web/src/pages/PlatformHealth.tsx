@@ -134,7 +134,7 @@ function Header(props: { view: PlatformView }) {
           {(s) => (
             <A href={`/systems/${s().id}`} class="inline-flex items-center gap-1 hover:underline">
               <span data-testid="platform-verdict">
-                <HealthBadge verdict={s().verdict} size="md" />
+                <HealthBadge verdict={s().health} size="md" />
               </span>
               <ArrowUpRight size={14} />
             </A>
@@ -231,7 +231,7 @@ function OutpostTable(props: { view: PlatformView }) {
 function OutpostRow(props: { outpost: PlatformOutpost; view: PlatformView }) {
   const navigate = useNavigate();
   const pill = () => outpostPill(props.outpost, props.view.read_at);
-  const verdict = () => verdictOf(props.outpost.verdict);
+  const verdict = () => verdictOf(props.outpost.health);
   const title = () => entityLabel(props.outpost);
   const open = () => props.outpost.component && navigate(`/components/${props.outpost.component}`);
   return (
@@ -303,7 +303,7 @@ function ServerPanels(props: { server: PlatformServer; view: PlatformView; open:
         <span data-disclosure class="text-base-content/60 transition-transform" classList={{ "rotate-90": open() }}><ChevronRight size={14} /></span>
         <span class="eyebrow">Server</span>
         <A href={`/components/${props.server.component}`} class="font-medium hover:underline" onClick={(e) => e.stopPropagation()}>{props.server.name}</A>
-        <HealthBadge verdict={props.server.verdict} size="xs" />
+        <HealthBadge verdict={props.server.health} size="xs" />
         <Show when={(props.server.alarms ?? []).length > 0}>
           <span class="badge badge-soft badge-warning badge-sm">{(props.server.alarms ?? []).length} open</span>
         </Show>

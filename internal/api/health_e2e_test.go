@@ -28,7 +28,7 @@ type alarmWire struct {
 type healthWire struct {
 	OwnerKind string `json:"owner_kind"`
 	Owner     string `json:"owner"`
-	Verdict   string `json:"verdict"`
+	Verdict   string `json:"health"`
 	Slots     []struct {
 		Name       string      `json:"name"`
 		Impact     string      `json:"impact"`
@@ -40,10 +40,10 @@ type healthWire struct {
 	} `json:"slots"`
 	Systems []struct {
 		Name    string `json:"name"`
-		Verdict string `json:"verdict"`
+		Verdict string `json:"health"`
 	} `json:"systems"`
 	Transitions []struct {
-		Verdict string `json:"verdict"`
+		Verdict string `json:"health"`
 	} `json:"transitions"`
 }
 
@@ -167,8 +167,8 @@ func TestHealthAPI(t *testing.T) {
 		t.Helper()
 		var ms struct {
 			Members []struct {
-				Component        string `json:"component"`
-				ComponentVerdict string `json:"component_verdict"`
+				Component       string `json:"component"`
+				ComponentHealth string `json:"component_health"`
 			} `json:"members"`
 		}
 		if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/systems/hq-1/members", nil, http.StatusOK), &ms); err != nil {
@@ -177,7 +177,7 @@ func TestHealthAPI(t *testing.T) {
 		if len(ms.Members) != 1 || ms.Members[0].Component != "bar-1" {
 			t.Fatalf("members = %+v, want bar-1 alone", ms.Members)
 		}
-		return ms.Members[0].ComponentVerdict
+		return ms.Members[0].ComponentHealth
 	}
 	if v := memberVerdict(); v != "outage" {
 		t.Fatalf("member verdict = %q, want outage (the high alarm took bar-1 down)", v)
@@ -200,6 +200,30 @@ func TestHealthAPI(t *testing.T) {
 		t.Fatalf("system alarms = %+v, want bar-1's active alarm", got)
 	}
 
+	// The bulk read names each system's health under systems, keyed by uuid
+	// (ADR-2086): a list's health column reads health, never verdict.
+	var bulk struct {
+		Systems []struct {
+			System string `json:"system"`
+			Health string `json:"health"`
+		} `json:"systems"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/systems:health", nil, http.StatusOK), &bulk); err != nil {
+		t.Fatalf("decode bulk health: %v", err)
+	}
+	outages := 0
+	for _, s := range bulk.Systems {
+		if s.System == "" || s.Health == "" {
+			t.Fatalf("bulk health entry %+v, want a uuid and a health", s)
+		}
+		if s.Health == "outage" {
+			outages++
+		}
+	}
+	if outages != 1 {
+		t.Fatalf("bulk health = %+v, want hq-1 the one system in outage", bulk.Systems)
+	}
+
 	// The location rolls up and names the system to drill into.
 	loc := health(ownerTok, "/locations/hq/health")
 	if loc.Verdict != "outage" {
@@ -212,7 +236,7 @@ func TestHealthAPI(t *testing.T) {
 	// The alarm list is the active set by default and the history with the flag.
 	var listed struct {
 		Alarms  []alarmWire `json:"alarms"`
-		Verdict string      `json:"verdict"`
+		Verdict string      `json:"health"`
 	}
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/bar-1/alarms", nil, http.StatusOK), &listed); err != nil {
 		t.Fatalf("decode alarms: %v", err)

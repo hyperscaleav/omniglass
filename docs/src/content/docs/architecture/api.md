@@ -30,7 +30,7 @@ name, every key held to its writer class, answering `202` only once the stream h
 [ADR-0453](/architecture/decisions/#adr-0453-telemetry-is-published-through-jetstream-with-an-ack-a-minted-nats-msg-id-and-a-bounded-spool)), the per-component reachability read, the type catalogs, the
 `/products` and `/standards` catalogs, the classifier-contract and instance-value property routes, the
 slot declaration, resolution, and staffing routes, and the component alarm plus system and location
-[health](#health-the-verdict-and-why) reads, and the [MCP surface](#also-an-mcp-surface) generated from
+[health](#health-and-why) reads, and the [MCP surface](#also-an-mcp-surface) generated from
 the same document. The outpost `:enroll` and `:claim` custom methods are the
 first `:verb` routes in the wild. See [implementation status](/architecture/status/).
 :::
@@ -571,14 +571,14 @@ scope-injected through the same `GetComponent` gate, so an out-of-scope componen
 non-disclosing 404 (a deliberate early exception to
 [reads no route was written for are views](#reads-no-route-was-written-for-are-views)):
 
-- `GET /components/{name}/reachability` composes, per endpoint, the latest verdict state
-  (`endpoint-reachable`), the probe-layer signals that compose it (the raw `icmp`/`tcp` metrics,
+- `GET /components/{name}/reachability` composes, per endpoint, its `reachability`, the latest
+  `endpoint-reachable` reading (`up`/`down`, or null with `pending` saying why), the probe-layer signals that compose it (the raw `icmp`/`tcp` metrics,
   and for a `udp` endpoint a `request` layer: its request answered, off `endpoint-responsive`, timed
   by `udp-response-time` only while answered, #1037),
-  the recent verdict transitions the availability strip reads, and `last_seen`, when ingest last
+  the recent reachability transitions the availability strip reads, and `last_seen`, when ingest last
   landed a batch the endpoint's task delivered, by the server's clock and to within a few seconds,
-  whatever the batch carried. A verdict is stored only on a transition, so its `ts` is when it last
-  changed, and a driver endpoint has no verdict at all; `last_seen` is the one freshness every
+  whatever the batch carried. A reachability reading is stored only on a transition, so its `ts` is when it last
+  changed, and a driver endpoint has no reachability at all; `last_seen` is the one freshness every
   endpoint has. Each row also carries the endpoint's `id` (the address `:retry` takes), its held
   `session` while it is configured to hold one (a standing listen task, or a driver declaring a
   session: the latest `session-state`, when it changed, and the `session-reason` beside it, cut to
@@ -598,7 +598,7 @@ non-disclosing 404 (a deliberate early exception to
   mode, the key it pins (pin mode alone), the latest handshake time, and the certificate's expiry and
   days left, withheld while a certificate gate holds (#1035). Teardown publishes no state, which is
   why a session is served only while one is held. Every key this read composes is a native probe
-  key, the outpost's own observation: the verdict and its rungs, the probe metrics and timings, a
+  key, the outpost's own observation: the reachability and its rungs, the probe metrics and timings, a
   session's state and reason, the gate, a tls endpoint's pin and certificate facts. `POST
   /telemetry:push` refuses each by name on every lane, whatever instance it names (#1080, [ADR-0158](/architecture/decisions/#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares)
   point 5), and the read serves each key's observed series only, so no other writer or provenance can
@@ -993,7 +993,7 @@ not a populated field, so on its own it means unchanged). `capacity` is the most
 will accept (at least `quorum`), unbounded on first declare, and naming `capacity` in `update_mask`
 with no value is what clears it back to unbounded. `impact` is `outage` / `degraded` / `none`
 (`degraded` on first declare), what an impaired slot does to its system's
-[health](#health-the-verdict-and-why); an unknown impact is a 422. `alternate` is the
+[health](#health-and-why); an unknown impact is a 422. `alternate` is the
 `choice-name/alternate-name` this slot joins, an empty string detaching it; every slot read returns it
 in the same form. Gating follows the owner:
 
@@ -1064,15 +1064,15 @@ the **semantic**-refusal case in the [status table](#errors-one-problemjson-enve
 authorization one: the message tells the operator the next move. Around it: an unknown slot is a
 **404**, and an unknown (or out-of-scope) system or component the same non-disclosing **404**. The
 guard runs once, at assignment; afterward an occupant keeps its slot unless its own
-[health](#health-the-verdict-and-why) verdict goes to outage (a lesser alarm degrades it but does not
+[health](#health-and-why) goes to outage (a lesser alarm degrades it but does not
 cost it the slot).
 
-## Health: the verdict, and why
+## Health, and why
 
 **[Health](/architecture/health/)** is two shapes on this surface: the **alarm** (what is wrong with one
 component) and the **report** (what that means for a system or a location); an alarm is
-component-local, reaching a room only through the component's own verdict. Only an alarm at or above `high`
-takes that verdict to outage and impairs every slot the component occupies while it is active; an
+component-local, reaching a room only through the component's own health. Only an alarm at or above `high`
+takes that health to outage and impairs every slot the component occupies while it is active; an
 `info` or `warning` alarm degrades the component but leaves it occupying its slots.
 
 An alarm hangs off its component and rides that component's gating:
@@ -1083,13 +1083,13 @@ An alarm hangs off its component and rides that component's gating:
   alarms that came and went unattended).
 - `POST /components/{name}/alarms` raises one from `{severity, message?, dedup_key?}` (201,
   `component:update`). `severity` names a [severity level](/architecture/alarms-actions/#severity-a-catalog-of-named-levels) (`GET /severity-levels`, an unknown one a 422), driving the component's own
-  verdict (any active alarm degrades it, one at or above `high` is an outage); `dedup_key` is the alarm's
+  health (any active alarm degrades it, one at or above `high` is an outage); `dedup_key` is the alarm's
   identity, defaulting to the message. A bad severity is a **422**.
 - `DELETE /components/{name}/alarms/{id}` clears it (204, `component:update`). The row is **kept**, so
   the record of what was wrong outlives the fix; clearing one already cleared, or another
   component's, is a **404**.
 
-Raising and clearing both **recompute health in the same transaction**, so an alarm and the verdict it
+Raising and clearing both **recompute health in the same transaction**, so an alarm and the health it
 caused are never separately visible, and the recorded edge carries the time the fleet changed.
 
 **Acknowledgement is the one alarm write that does not**, and it is the one that does not ride
@@ -1148,29 +1148,32 @@ user directory's readers.
 
 The reports are one shape over two owners:
 
-- `GET /systems/{name}/health` (`system:read`) returns the verdict (`healthy` / `incomplete` /
+- `GET /systems/{name}/health` (`system:read`) returns its `health` (`healthy` / `incomplete` /
   `degraded` / `outage`, in rank order, where `incomplete` is a slot short because its hardware was
   never installed rather than because installed hardware is failing)
   plus `slots`: every slot the system needs filled, where `satisfying` counts the assigned
-  components currently occupying it (their own verdict is not outage; a degraded one still counts),
-  `down` names the **assigned** components whose own verdict is outage, and `alarms` the active
+  components currently occupying it (their own health is not outage; a degraded one still counts),
+  `down` names the **assigned** components whose own health is outage, and `alarms` the active
   alarms on those. An impaired slot with an **empty** `down` is **short-staffed**, not broken, a
   different job for the operator.
 - `GET /locations/{name}/health` (`location:read`) returns the same envelope with `systems` filled
-  instead: every system placed **anywhere** beneath the location, with its verdict, as the drill-down.
-- `transitions` is the **recorded edges** over the last 30 days, oldest first, each `{ts, verdict}`: one
+  instead: every system placed **anywhere** beneath the location, with its health, as the drill-down.
+- `transitions` is the **recorded edges** over the last 30 days, oldest first, each `{ts, health}`: one
   entry per change, never a sample.
-- `GET /systems/{name}/members` (`system:read`) carries each member's own `component_verdict`, the
+- `GET /systems/{name}/members` (`system:read`) carries each member's own `component_health`, the
   same recorded value a fleet view dot reads. It is the per-system read of the members' health, so a
   system's view polls it with the system's health report rather than the whole fleet view
   ([#940](https://github.com/hyperscaleav/omniglass/issues/940)).
+- `GET /systems:health` (`list-system-health`, `system:read`) is the bulk counterpart: one
+  `{system, health}` entry under `systems` per system in the caller's read scope, keyed by uuid, carrying
+  the one word a list's health column paints and none of the explanation.
 - `GET /systems/{name}/alarms` (`system:read`) is every member's alarms in one read, newest first, each
   naming its component: the active ones whatever their age and those cleared in the last 30 days, capped
   at 500. A system's health history explains its unhealthy stretches with it, one request however many members the
   system has.
 
 Both resolve their owner **within the caller's scope first** (an out-of-scope system or location is a
-**non-disclosing 404**), and **neither read writes anything**: the verdict served is computed from the
+**non-disclosing 404**), and **neither read writes anything**: the health served is computed from the
 very rows served beside it, so a report can never disagree with its own evidence
 ([ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain)).
 
@@ -1180,8 +1183,8 @@ Every read above answers "what is this row". A **view** answers "what does this 
 earns its own tier only when composing the entity reads in the browser would be the wrong shape.
 
 - `GET /views/fleet` (`location:read`) is the read behind Explore: every location flat
-  with its `parent` and `verdict`, every system with its `location` and `verdict`, and one **dot**
-  per component in each system. A dot is `{component, name, verdict, primary, shared}` and nothing
+  with its `parent` and `health`, every system with its `location` and `health`, and one **dot**
+  per component in each system. A dot is `{component, name, health, primary, shared}` and nothing
   else. A renderer draws a mark per component across the whole fleet, so a component **row** per
   mark is a fleet-sized payload on every draw; the projection is the shape that avoids it, and
   the wire is pinned by test against being widened back into a component list.
@@ -1189,14 +1192,14 @@ earns its own tier only when composing the entity reads in the browser would be 
   components the caller may read, which is the Home Open alarms tile. It is absent, never zero,
   for a caller with no component read.
 - `GET /views/platform` (`outpost:read`) is the read behind
-  [Platform health](/operator/platform-health/): the platform system's verdict, each
-  server's build and start time with its panel groups (each key's current figure, a key written
+  [Platform health](/operator/platform-health/): the platform system's `health`, each
+  server's `health`, build and start time with its panel groups (each key's current figure, a key written
   only for a window that saw something only while that window is current, a ranked key's
   instances as the server cut its newest window, and the alarms open on the server's keys, #1645),
   the outpost table's column groups with each key's catalog facts, and one row per outpost with its current figure per key (a gauge's latest sample, a
   window count only while its window is the newest), in a fixed number of statements however
   many outposts there are. Its rows are `/outposts`', so an outpost read short of all-scope is a **403**, as
-  `/outposts` answers, never an empty table. The figures, the verdicts and the servers need an
+  `/outposts` answers, never an empty table. The figures, the health values and the servers need an
   all-scope `component:read` and the system an all-scope `system:read`; short of either they are
   omitted, never zeroed, and `figures_read` says which. With the figures come `pipeline`, each
   hop's delivery in, out and loss per kind and per component (newest window and last hour) and the
@@ -1225,7 +1228,7 @@ Two properties are worth stating because they are easy to lose:
   fleet scope at all gets an **empty fleet rather than a refusal**: there is simply nothing of
   theirs to draw.
 
-A view is a read and only a read. It adds no write path and no judgement of its own: the verdicts it
+A view is a read and only a read. It adds no write path and no judgement of its own: the health values it
 serves are the ones the health rollup already recorded, so Explore and the detail page cannot land
 on different answers about the same room.
 

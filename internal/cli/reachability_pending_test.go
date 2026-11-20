@@ -66,7 +66,7 @@ func TestReachabilityListSaysWhyTheVerdictIsNull(t *testing.T) {
 		t.Fatalf("printed %q, want one endpoint (%v)", got, err)
 	}
 	row := body.Endpoints[0]
-	if v, present := row["verdict"]; !present || v != nil {
+	if v, present := row["reachability"]; !present || v != nil {
 		t.Errorf("verdict = %v (present %v), want an explicit null", v, present)
 	}
 	if row["pending"] != "no-outpost" {

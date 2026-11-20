@@ -15,15 +15,15 @@ import (
 )
 
 // healthyPlatformView is a platform view read from a healthy server: every
-// verdict healthy, no alarm, nothing lost end to end.
+// health healthy, no alarm, nothing lost end to end.
 const healthyPlatformView = `{
   "read_at": "2026-11-17T12:00:00Z",
   "lab": true,
   "figures_read": true,
-  "system": {"id": "s1", "name": "omniglass", "verdict": "healthy"},
+  "system": {"id": "s1", "name": "omniglass", "health": "healthy"},
   "servers": [{
     "component": "c1", "name": "lab-server", "version": "v9.9.9",
-    "started_at": "2026-11-17T10:00:00Z", "verdict": "healthy",
+    "started_at": "2026-11-17T10:00:00Z", "health": "healthy",
     "groups": [
       {"name": "requests", "label": "Requests",
        "keys": [{"name": "db-pool-wait-count", "label": "Pool Waits"},
@@ -56,8 +56,8 @@ const healthyPlatformView = `{
   }],
   "groups": [],
   "outposts": [
-    {"name": "outpost-a", "label": "Outpost A", "enrolled": true, "verdict": "healthy", "loss": 0},
-    {"name": "outpost-b", "label": "Outpost B", "enrolled": true, "verdict": "healthy"}
+    {"name": "outpost-a", "label": "Outpost A", "enrolled": true, "health": "healthy", "loss": 0},
+    {"name": "outpost-b", "label": "Outpost B", "enrolled": true, "health": "healthy"}
   ],
   "loss_hops": ["outpost"],
   "pipeline": {
@@ -133,7 +133,7 @@ func TestPlatformHealthReadsAHealthyPlatform(t *testing.T) {
 	if len(r.NotVisible) != 0 {
 		t.Fatalf("not visible = %v, want none", r.NotVisible)
 	}
-	if r.System == nil || r.System.Name != "omniglass" || r.System.Verdict != "healthy" {
+	if r.System == nil || r.System.Name != "omniglass" || r.System.Health != "healthy" {
 		t.Fatalf("system = %+v", r.System)
 	}
 	if len(r.Servers) != 1 {
@@ -208,8 +208,8 @@ func TestPlatformHealthRollsUpOutposts(t *testing.T) {
 	v := platformFixture(t)
 	loss := 0.02
 	v.Outposts[0].Loss = &loss
-	v.Outposts[1].Verdict = "degraded"
-	v.Outposts = append(v.Outposts, platformViewOutpost{Name: "outpost-c"}) // never reported: no verdict
+	v.Outposts[1].Health = "degraded"
+	v.Outposts = append(v.Outposts, platformViewOutpost{Name: "outpost-c"}) // never reported: no health
 	r := readPlatformHealth(v)
 	if r.Outposts.Count != 3 {
 		t.Fatalf("count = %d, want 3", r.Outposts.Count)
@@ -217,7 +217,7 @@ func TestPlatformHealthRollsUpOutposts(t *testing.T) {
 	if len(r.Outposts.Lossy) != 1 || r.Outposts.Lossy[0].Name != "outpost-a" || r.Outposts.Lossy[0].Loss != 0.02 {
 		t.Fatalf("lossy = %+v", r.Outposts.Lossy)
 	}
-	if len(r.Outposts.NotHealthy) != 1 || r.Outposts.NotHealthy[0].Name != "outpost-b" || r.Outposts.NotHealthy[0].Verdict != "degraded" {
+	if len(r.Outposts.NotHealthy) != 1 || r.Outposts.NotHealthy[0].Name != "outpost-b" || r.Outposts.NotHealthy[0].Health != "degraded" {
 		t.Fatalf("not healthy = %+v", r.Outposts.NotHealthy)
 	}
 }
@@ -229,9 +229,9 @@ func TestPlatformHealthReasons(t *testing.T) {
 		change func(*platformView)
 		reason string
 	}{
-		{"system verdict", func(v *platformView) { v.System.Verdict = "outage" }, "the platform system reads outage"},
-		{"server verdict", func(v *platformView) { v.Servers[0].Verdict = "degraded" }, "server lab-server reads degraded"},
-		{"outpost verdict", func(v *platformView) { v.Outposts[1].Verdict = "outage" }, "outpost outpost-b reads outage"},
+		{"system health", func(v *platformView) { v.System.Health = "outage" }, "the platform system reads outage"},
+		{"server health", func(v *platformView) { v.Servers[0].Health = "degraded" }, "server lab-server reads degraded"},
+		{"outpost health", func(v *platformView) { v.Outposts[1].Health = "outage" }, "outpost outpost-b reads outage"},
 		{"alarm", func(v *platformView) {
 			v.Servers[0].Alarms = []platformViewAlarm{{Rule: "ingest-lag-high", Severity: "warning", Message: "lag"}}
 		}, "alarm open on lab-server: ingest-lag-high (warning)"},
@@ -240,7 +240,7 @@ func TestPlatformHealthReasons(t *testing.T) {
 		}, "alarm open on lab-server: disk swap (high)"},
 		{"end to end loss", func(v *platformView) { v.Pipeline.EndToEndTotal.Newest = &loss }, "the newest windows lost 0.1 of their work end to end"},
 		{"figures not visible", func(v *platformView) { v.FiguresRead = false }, "the platform's figures are not visible to you"},
-		{"system not visible", func(v *platformView) { v.System = nil }, "the platform system's verdict is not visible to you"},
+		{"system not visible", func(v *platformView) { v.System = nil }, "the platform system's health is not visible to you"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -264,7 +264,7 @@ func TestPlatformHealthNamesWhatIsNotVisible(t *testing.T) {
 	v.Servers = nil
 	v.Pipeline = nil
 	r := readPlatformHealth(v)
-	for _, part := range []string{"system verdict", "servers", "pipeline", "outpost figures"} {
+	for _, part := range []string{"system health", "servers", "pipeline", "outpost figures"} {
 		if !contains(r.NotVisible, part) {
 			t.Errorf("not visible = %v, want it to name %q", r.NotVisible, part)
 		}

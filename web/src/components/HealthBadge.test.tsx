@@ -17,7 +17,7 @@ function mount(el: () => unknown, seed?: { key: readonly unknown[]; data: FleetH
 const health = (verdict: string, owner: string): FleetHealth => ({
   owner,
   owner_kind: "system",
-  verdict,
+  health: verdict,
   slots: [],
   systems: [],
   transitions: [],

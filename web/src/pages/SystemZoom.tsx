@@ -225,7 +225,7 @@ export default function SystemZoom() {
     return Math.max(coarse(), t.length ? Date.parse(t[t.length - 1].ts) : 0);
   });
   const verdictSpans = createMemo(() =>
-    timelineSpans((health.data?.transitions ?? []).map((t) => ({ ts: t.ts, value: t.verdict })), health.data?.verdict ?? null, historyNow()),
+    timelineSpans((health.data?.transitions ?? []).map((t) => ({ ts: t.ts, value: t.health })), health.data?.health ?? null, historyNow()),
   );
   const uptime = createMemo(() => uptimePct(verdictSpans()));
   const stretches = createMemo(() => stretchesOf(verdictSpans(), historyNow()));
@@ -261,8 +261,8 @@ export default function SystemZoom() {
   // view's dot as the fallback before the first poll lands.
   const componentVerdict = createMemo(() => {
     const dots = new Map((system()?.dots ?? []).map((d) => [d.component, d] as const));
-    const polled = new Map((membersQ.data ?? []).map((m) => [m.component_id, m.component_verdict] as const));
-    return (cid: string) => verdictOf(polled.get(cid) ?? dots.get(cid)?.verdict);
+    const polled = new Map((membersQ.data ?? []).map((m) => [m.component_id, m.component_health] as const));
+    return (cid: string) => verdictOf(polled.get(cid) ?? dots.get(cid)?.health);
   });
   // Each member's label, icon, product, alarm and verdict: one context shared
   // by the component rows and the map (#1074), so a marker reads exactly like
@@ -336,7 +336,7 @@ export default function SystemZoom() {
           <section data-testid="system-card" class="card overflow-hidden border border-base-300 bg-base-200 p-0">
             <div data-testid="system-header" class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-base-300 px-4 py-3 text-sm">
               <Eyebrow label="System" hint="The logical group of components that makes this location work, and the thing Omniglass monitors: its verdict is what the components filling its slots add up to." />
-              <HealthBadge verdict={health.data?.verdict} size="sm" />
+              <HealthBadge verdict={health.data?.health} size="sm" />
               <Show when={health.data && sinceOf(health.data, now())}>
                 {(sc) => <span data-testid="since-line" class="tabular-nums text-base-content/70">since {fmtTime(sc().ts)} · {durationText(sc().ms)}</span>}
               </Show>
@@ -395,7 +395,7 @@ export default function SystemZoom() {
                 <span class="text-[10px] text-base-content/45">of the last 30 days</span>
               </div>
               <div class="flex min-w-60 flex-1 flex-col justify-center rounded-box border border-base-300 bg-base-100 p-3.5" data-testid="health-history-full">
-                <HealthHistory compact transitions={health.data?.transitions ?? []} verdict={health.data?.verdict} />
+                <HealthHistory compact transitions={health.data?.transitions ?? []} verdict={health.data?.health} />
                 <div class="relative mt-1 h-2">
                   <For each={windowAlarms()}>
                     {(inc) => (

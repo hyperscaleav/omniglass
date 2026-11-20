@@ -36,14 +36,14 @@ export type ReachEndpoint = {
   transport: string;
   address?: string;
   outpost?: string;
-  // Why verdict is null (#981), present only while it is: no outpost is assigned
+  // Why reachability is null (#981), present only while it is: no outpost is assigned
   // to probe the endpoint, or its outpost has not landed a first probe.
   pending?: "no-outpost" | "awaiting-probe";
   // When ingest last landed a batch this endpoint's task delivered, by the
   // server's clock, whatever the batch carried (#933). The one freshness
   // every endpoint has, a driver endpoint's included.
   last_seen?: string;
-  verdict: ReachVerdict | null;
+  reachability: ReachVerdict | null;
   // The layer-7 rungs (#812): responds (the protocol itself answered) and,
   // only when a credential was tried, auth. Absent until a probe climbs them.
   responsive?: ReachVerdict | null;
@@ -91,7 +91,7 @@ export function verdictWord(v: ReachVerdict | null, now: number = Date.now()): V
 export type PendingNotice = { text: string; href: string; linkLabel: string };
 
 export function pendingNotice(iface: ReachEndpoint): PendingNotice | null {
-  if (iface.verdict) return null;
+  if (iface.reachability) return null;
   switch (iface.pending) {
     case "no-outpost":
       return {
@@ -124,8 +124,8 @@ export function lastSeenAt(iface: ReachEndpoint): string | null {
 // by last_seen. Before any stamp it ages by the verdict's own time, which can
 // only read older than the truth, never fresher.
 export function endpointWord(iface: ReachEndpoint, now: number = Date.now()): VerdictWord {
-  if (!iface.verdict) return "unknown";
-  return verdictWord({ value: iface.verdict.value, ts: lastSeenAt(iface) ?? iface.verdict.ts }, now);
+  if (!iface.reachability) return "unknown";
+  return verdictWord({ value: iface.reachability.value, ts: lastSeenAt(iface) ?? iface.reachability.ts }, now);
 }
 
 // A segment of the availability strip: one contiguous stretch in a single state,

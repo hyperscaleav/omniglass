@@ -1,6 +1,6 @@
 ---
 title: Health, KPIs, and service levels
-description: "Health as a verdict rolled up from alarms through the slots its components occupy, recorded as a transition so the edges are accurate, plus the KPIs every fleet should track and SLI / SLO / SLA."
+description: "Health as a health value rolled up from alarms through the slots its components occupy, recorded as a transition so the edges are accurate, plus the KPIs every fleet should track and SLI / SLO / SLA."
 # An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
 sidebar:
   hidden: true
@@ -8,21 +8,21 @@ sidebar:
 
 Health answers "is this system working right now?" and "since when?". It is a **first-class
 model**, not a rules-engine byproduct: a deliberate chain (an alarm impairs a component's own
-verdict, an outage component no longer occupies the slot it fills, an impaired slot sinks its
+health, an outage component no longer occupies the slot it fills, an impaired slot sinks its
 system by a declared impact) carried on the ordinary sample pipeline: stored, queried, and trended
 like any other signal.
 
 What health produces is named by the concept: a system, a location and a component each **have a
 health**, one of `healthy`, `incomplete`, `degraded` and `outage` ("the system's health is degraded"),
 and an endpoint's up/down result is its **reachability**, an input to health rather than a health
-of its own ([ADR-2086](/architecture/decisions/#adr-2086-health-is-the-word-for-healths-result-verdict-retires)). The API, the code and the
-rest of this page still call the value a verdict until that rename lands.
+of its own ([ADR-2086](/architecture/decisions/#adr-2086-health-is-the-word-for-healths-result-verdict-retires)). The API, the CLI and the
+code say `health` and `reachability` the same way, and this page follows them.
 
 :::note[Partial]
 Built today: the **`alarm`** table (component-local, impairing its component wholesale), **`impact`**
 on a `system_slot`, the **rollup** from component through system to location, and the **recorded
 transition history**. Three reads serve it: the two explanations
-(`GET /systems/{name}/health` and `GET /locations/{name}/health`) and the bulk verdict read
+(`GET /systems/{name}/health` and `GET /locations/{name}/health`) and the bulk health read
 (`GET /systems:health`, #653), alongside the alarm write surface on a component, and alarms are
 also raised and cleared by [event rules](/architecture/alarms-actions/#the-event_rule) (#819), the
 official `reachability-lost` among them, so an unplugged component moves its system with nobody
@@ -30,40 +30,40 @@ writing anything. Severity is a [ranked catalog](/architecture/alarms-actions/#s
 `high` and above is an outage, and every severity chip renders the level's label and color. The console
 ships **HealthBadge**, **HealthHistory**, and **AlarmsPanel** on the component, system, and
 location detail views; healthy reads green there and a muted green in the outline, so it never
-reads as the grey of an unknown verdict
+reads as the grey of an unknown health
 ([ADR-0154](/architecture/decisions/#adr-0154-healthy-reads-green-tiered-so-a-calm-fleet-stays-calm)). See [implementation status](/architecture/status/).
 :::
 
-## Two shapes of read: the explanation and the verdict
+## Two shapes of read: the explanation and the health
 
 A health read comes in two shapes, and which one a surface takes is a design rule rather than a
 preference.
 
-`GET /systems/{name}/health` is the **explanation**: the verdict plus every slot the system needs,
+`GET /systems/{name}/health` is the **explanation**: the health plus every slot the system needs,
 whether it is impaired, what an impaired slot costs the system, which assigned components are down,
 the alarms that took them down, and thirty days of recorded transitions. It is what a panel opens
 into, and it is expensive by design, because explaining is the job.
 
-`GET /systems:health` is the **verdict**, in bulk: one word per system in the caller's read scope, in
-one statement whatever the fleet size. It is what a list paints its health column from.
+`GET /systems:health` (`list-system-health`) is the **health**, in bulk: one `{system, health}` entry
+under `systems` per system in the caller's read scope, in one statement whatever the fleet size. It is what a list paints its health column from.
 
 The rule is that **a list never pays for an explanation it does not render**. Before #653 the systems
 list had no bulk read available and so took the explanation once per row, which cost a page of two
 hundred systems two hundred requests and two hundred full resolutions to colour one column.
-`HealthBadge` accepts a verdict from its caller for exactly this reason and only fetches when nobody
+`HealthBadge` accepts a health value from its caller for exactly this reason and only fetches when nobody
 has one.
 
 The bulk read reports a system with nothing recorded as `healthy` rather than omitting it, and that is
-not a guess: a verdict is written only on a transition, so a system that has never been recomputed has
+not a guess: a health value is written only on a transition, so a system that has never been recomputed has
 no row, and a system with no impaired active slot is healthy. The two reads are held to agreeing.
 
-## The chain: a component's own verdict is the routing key
+## The chain: a component's own health is the routing key
 
 Health is a chain, every hop a thing an operator already models:
 
 ```text
 alarm on a component
-  -> the component's own verdict moves (any active alarm; #626)
+  -> the component's own health moves (any active alarm; #626)
     -> an alarm at or above high takes it to outage, and only then does it stop
        occupying the slots it is assigned to (a lesser alarm still degrades
        it, but it keeps its slot)
@@ -77,7 +77,7 @@ alarm on a component
   component **wholesale**: any active alarm degrades it, one at or above `high` is an outage. It no longer
   names what it takes away (#626 retired the capability catalog that used to route it).
 - A component **occupies** a [system slot](/architecture/core-entities/#system-slots-what-a-system-needs-filled)
-  it is assigned to unless its own verdict is currently **outage**: a merely **degraded** component
+  it is assigned to unless its own health is currently **outage**: a merely **degraded** component
   (an info or warning alarm) still counts, since severity is how loudly to page somebody, not a
   second threshold for staffing. The typed-slot guard (accepted `component_type`s, optionally
   pinned products) is checked once, at assignment; it plays no further part in health.
@@ -85,12 +85,12 @@ alarm on a component
   **impact**; the system takes the **worst** contribution, the location the worst across its
   subtree's systems.
 
-A component's own verdict is the only thing that travels from the box that breaks to the slot that
+A component's own health is the only thing that travels from the box that breaks to the slot that
 cares: hence the routing key ([ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain), amended #626).
 
 ### A component nothing has observed
 
-"No active alarms" is two different facts, and a component's verdict keeps them apart (#1454). A
+"No active alarms" is two different facts, and a component's health keeps them apart (#1454). A
 component that something has **observed** and found clean is `healthy`. A component that **nothing has
 ever observed** reads **`unknown`**, because `healthy` there would be a false green: a device created a
 moment ago, with an endpoint no outpost has probed, has had no chance to be wrong.
@@ -99,12 +99,12 @@ A component counts as observed once either has happened: an alarm was ever raise
 counts, since what was wrong outlives the fix), or one of its endpoints has delivered a batch of anything
 (the `last_seen` stamp, #933). Until then the component's own read, `GET /components/{name}/alarms`,
 and the fleet view's dots and a system's members read all say `unknown`, so the component's page and the
-Explore outline never disagree about the same device. A recorded verdict always wins: once the rollup has
+Explore outline never disagree about the same device. A recorded health always wins: once the rollup has
 written one, the component has been observed by definition.
 
-`unknown` here is a reading of those reads alone. It never enters the rollup (the built verdict domain
+`unknown` here is a reading of those reads alone. It never enters the rollup (the built health domain
 stays `healthy`, `incomplete`, `degraded`, `outage`), so an unobserved member neither raises nor hides a
-system's verdict, and the console words it with the same grey chip as a verdict it was never sent. The
+system's health, and the console words it with the same grey chip as a health value it was never sent. The
 [design below](#unknown-and-honest-coverage) is the larger step: an unmeasured slot changing what a
 system reads.
 
@@ -124,9 +124,9 @@ differently per slot: a dead confidence monitor is not a dead main display.
 is impaired the moment either degrades. Redundancy is the gap between staffed and needed, no
 separate vocabulary.
 
-## The verdict vocabulary
+## The health vocabulary
 
-A verdict is one of four values, ordered so "worst" has a meaning:
+A health value is one of four values, ordered so "worst" has a meaning:
 
 ```text
 healthy  <  incomplete  <  degraded  <  outage
@@ -182,7 +182,7 @@ one reads as one** (a slot no component need fill is not a slot).
 > The most important thing about health is that we have a real, accurate history of the edges. We need to
 > know exactly when a system went from healthy to unhealthy, and be able to look back at it weeks later.
 
-If the history must be **accurate**, the verdict must be computed at the **write** that changed it;
+If the history must be **accurate**, the health must be computed at the **write** that changed it;
 if it must be **edges**, the right carrier already exists. Health lands in
 the **`property` lane**, **already transition-only** (the ingest path writes a row only when the value
 differs from the last stored), reusing that primitive with its own owner-arc read
@@ -198,23 +198,23 @@ started watching" from "never evaluated".
 
 ### Two alternatives, and why both fail
 
-**Compute the verdict on read** keeps **no history at all**, the opposite of the requirement.
+**Compute the health on read** keeps **no history at all**, the opposite of the requirement.
 **Compute on read and write the result through** is more dangerous: the history **looks** real but
 is sampled by whoever opens a page (a room that broke Friday night and was opened Monday reads as
 breaking Monday morning), worse than none because it will be trusted.
 
 ### Recompute at the write, in the same transaction
 
-A verdict is recomputed by **every mutation that can change it**, inside the caller's transaction, so
-the cause and the verdict commit together or not at all:
+A health value is recomputed by **every mutation that can change it**, inside the caller's transaction, so
+the cause and the health commit together or not at all:
 
 | the write | why it can move health |
 |---|---|
-| raise or clear an **alarm** | the component's own verdict, and every slot it occupies, can flip |
+| raise or clear an **alarm** | the component's own health, and every slot it occupies, can flip |
 | **assign** or **unassign** a component | a slot reaches or falls below its quorum |
 | **declare** or **withdraw** a slot | a system gains or loses a slot it can be short of |
 | change a slot's **quorum** or **impact** | the same staffing crosses a different line |
-| **create** a system | its opening verdict gives its history a beginning |
+| **create** a system | its opening health gives its history a beginning |
 | change the **standard** a system conforms to | the whole inherited slot set is swapped, and its staffing is carried onto the new slots or released first ([ADR-0506](/architecture/decisions/#adr-0506-changing-a-systems-standard-carries-its-staffing-onto-the-roles-that-still-exist)) |
 | change a system's **location** | the contribution moves between rollups, so **both** are recomputed |
 | change a **location's parent** | its whole subtree's contribution moves, so **both** ancestor chains are recomputed |
@@ -229,7 +229,7 @@ chain, so this row that used to reach the whole fleet on a catalog edit is retir
 
 A **location move** is the relocation shape one tier up
 ([ADR-0092](/architecture/decisions/#adr-0092-a-location-move-recomputes-both-ancestor-chains)): a
-location's verdict folds every system in its own **subtree**, so moving it carries that whole
+location's health folds every system in its own **subtree**, so moving it carries that whole
 contribution from one ancestor chain to the other, and the **parent it left** is named for the same
 reason the location a system left is. One row per side is the whole input, not a walk: each named
 location **seeds** a recursive ancestry walk, so naming the moved location covers its new chain and
@@ -269,11 +269,11 @@ total by construction, since two owners can share a name but never an id.
 
 ### A location rolls up from its children
 
-A location's **recorded** verdict is the worst of its **direct children's recorded verdicts**: the
+A location's **recorded** health is the worst of its **direct children's recorded health values**: the
 systems placed in it and the locations under it, one latest row each, read by the owner indexes
-([ADR-1562](/architecture/decisions/#adr-1562-a-location-rolls-up-from-its-childrens-recorded-verdicts)).
+([ADR-1562: recorded health values](/architecture/decisions/#adr-1562-a-location-rolls-up-from-its-childrens-recorded-verdicts)).
 It is the same answer as the worst over every system in its subtree, because the rollup is worst-wins
-and a child location's verdict is already the worst of its own subtree. What changes is the cost: a
+and a child location's health is already the worst of its own subtree. What changes is the cost: a
 write pays for the chain it touches (one system, and one row per location above it), not for the
 fleet under each of those locations or the length of each system's history.
 
@@ -286,8 +286,8 @@ live, and the tests hold the recorded tree to that full fold after every kind of
 ### A read never writes
 
 Self-healing on read would stamp the edge at read time, precisely the inaccuracy this model avoids.
-The reads do, however, **compute the verdict they serve from the same rows they display**, a
-correctness fix: serving the **last recorded** verdict while resolving contributing slots
+The reads do, however, **compute the health they serve from the same rows they display**, a
+correctness fix: serving the **last recorded** health while resolving contributing slots
 **live** once let a system report `healthy` beside an impaired `outage` slot. **Recorded transitions
 remain the source for history**; a missing trigger can cost an **edge**, never a report that
 **lies about the present**.
@@ -295,15 +295,15 @@ remain the source for history**; a missing trigger can cost an **edge**, never a
 ## Reading health
 
 Two reads, both scope-injected, both a non-disclosing 404 for an owner outside the caller's scope
-([API](/architecture/api/#health-the-verdict-and-why)).
+([API](/architecture/api/#health-and-why)).
 
-**A system's report** is the verdict, every slot it needs filled, and for an impaired slot the
+**A system's report** is the health, every slot it needs filled, and for an impaired slot the
 causing chain: "the `room-mic` slot wants 2 and has 1, because `mic-pod-2` went down on a high
 alarm raised at 14:02" tells the operator where to walk. A slot impaired with **no assigned component
 down** (nobody assigned, or fewer assigned than the quorum wants) names no alarm, distinguishing
 **short-staffed** from **broken**.
 
-**A location's report** is the verdict plus every system beneath it with its own verdict, a map
+**A location's report** is the health plus every system beneath it with its own health, a map
 rather than a duplicated explanation.
 
 Both reports carry the **recorded transitions** over the last 30 days, oldest first, one entry per
@@ -316,22 +316,22 @@ An alarm is a row on a component with a **`severity`** (a [severity level](/arch
 **keeps the row**; clearing an already-cleared alarm is an explicit miss, not a silent success.
 
 Health is **acknowledgement-independent**, and that is enforced rather than merely intended:
-acknowledging an alarm annotates it and never closes it, so it recomputes no verdict and a broken
+acknowledging an alarm annotates it and never closes it, so it recomputes no health and a broken
 room cannot be made to look healthy by somebody looking at it
 ([alarms and actions](/architecture/alarms-actions/#acknowledgement-a-fact-about-a-person)). The
-verdict answers "is this component out", which is a question about the fault; the
+health answers "is this component out", which is a question about the fault; the
 acknowledgement answers "has anybody seen this", which is a question about a person.
 
 The health report carries the acknowledgement anyway. Each alarm under `slots[].alarms[]` has
 `acknowledged`, `acknowledged_at` and `acknowledged_by`, the same fields and rules as the component's
 alarm list, so a reader of the report sees which causing alarms somebody already looked at. They
-annotate the alarm and never feed the verdict. The system page's Why strip reads them to show who
+annotate the alarm and never feed the health. The system page's Why strip reads them to show who
 acknowledged and when, and to offer **Acknowledge** on the rest (#990).
 
-Severity drives the **component's own** verdict (any active alarm makes it `degraded`, one at or above `high`
+Severity drives the **component's own** health (any active alarm makes it `degraded`, one at or above `high`
 one an `outage`) and **nothing above it**: what reaches a slot is only whether its occupant's
-verdict is `outage`, not the severity that produced it or whether it is merely `degraded`. Severity
-is how loudly to page somebody, impact is what the room lost. A component's verdict records on its
+health is `outage`, not the severity that produced it or whether it is merely `degraded`. Severity
+is how loudly to page somebody, impact is what the room lost. A component's health records on its
 own arc, so a component filling no slot still carries accurate history.
 
 ## Where alarms come from
@@ -340,12 +340,12 @@ An alarm is written by an **operator or API caller**, or by an
 [**event rule**](/architecture/alarms-actions/#the-event_rule) (#819): a rule watches one sample key on
 the components it selects, opens an alarm when the value meets its fire criteria for its sustain, and
 clears it the same way, through the same guarded write and the same health recompute a hand-raised
-alarm uses. A rule-opened alarm impairs its owner's own verdict exactly as a hand-raised one does
+alarm uses. A rule-opened alarm impairs its owner's own health exactly as a hand-raised one does
 (#626: it names nothing it takes away; the component is impaired wholesale), and the
 acknowledgement-independence above holds for it identically. The official `reachability-lost` rule is
-what closes the monitoring loop with no operator in between: an endpoint whose verdict reads `down` for
+what closes the monitoring loop with no operator in between: an endpoint whose reachability reads `down` for
 its sustain opens a `high` alarm, the component goes to outage and stops filling its slots, and the
-system reads whatever those slots' impact says; reading `up` clears it and the verdict recovers.
+system reads whatever those slots' impact says; reading `up` clears it and the component's health recovers.
 
 ::::design[Target design (ADR-0050)]
 
@@ -362,8 +362,8 @@ event has, so a **system-scoped** rule reading member data raises a **system-own
 fault only the system cares about (a display on **input 2** is normal for the display, wrong for
 the room); the component stays generic. **SaaS and vendor status**
 ([shared-API collection](/architecture/collection/)) follows the same discipline: a vendor's
-"offline" is an observed signal to author system rules over, **corroborated**, never a verdict.
-The acyclic discipline holds: an alarm that **feeds** health impairs a component's own verdict, the
+"offline" is an observed signal to author system rules over, **corroborated**, never a health value.
+The acyclic discipline holds: an alarm that **feeds** health impairs a component's own health, the
 alarm that fires **off** the `health` state impairs nothing; health rolls up only, no loop.
 
 ### `unknown`, and honest coverage
@@ -383,7 +383,7 @@ but calling the system an outage overstates it.
 ### The `global` fleet top
 
 The rollup ends at a location today; the design adds the singleton **`global`** owner above every
-location for the fleet-wide verdict and KPIs. The **owner** gives a reading its level: one `health`
+location for the fleet-wide health and KPIs. The **owner** gives a reading its level: one `health`
 key serves component, system, location, and global without cross-triggering.
 
 ::::
@@ -462,10 +462,10 @@ drivers that feed the utilization KPIs.
 ## Why this is the Zabbix service tree, done right
 
 Zabbix bolts services, SLA, and the service tree on as a separate subsystem. Omniglass makes health
-**first-class but not separate**: the **system tree is the service tree**, the verdict a `property`
+**first-class but not separate**: the **system tree is the service tree**, the health a `property`
 sample, the history its transitions, the SLI a calc over them, the SLA an alarm. Today a system's
-verdict rolls up to its location, not through the system tree; how a parent system (a divisible
-hall's head-end) relates to its subsystems' verdicts is decided with the grouping slice
+health rolls up to its location, not through the system tree; how a parent system (a divisible
+hall's head-end) relates to its subsystems' health values is decided with the grouping slice
 ([ADR-0140](/architecture/decisions/#adr-0140-a-system-is-what-the-business-groups-a-location-is-where-things-sit-and-a-room-is-one-thing),
 #879).
 

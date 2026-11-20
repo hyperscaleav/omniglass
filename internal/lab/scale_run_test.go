@@ -39,7 +39,7 @@ func scaleServer(t *testing.T, sites map[string][]string, silent, down map[strin
 		if down[strings.TrimPrefix(r.PathValue("id"), "id-")] {
 			verdict = "down"
 		}
-		fmt.Fprintf(w, `{"endpoints":[{"label":"","verdict":{"value":%q}}]}`, verdict)
+		fmt.Fprintf(w, `{"endpoints":[{"label":"","reachability":{"value":%q}}]}`, verdict)
 	})
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)

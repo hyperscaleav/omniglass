@@ -26,11 +26,11 @@ const owner: Me = { user: { id: "u-root", kind: "person" }, person: { username: 
 const viewer: Me = { user: { id: "u-view", kind: "person" }, person: { username: "viewer" }, permissions: ["location:read", "system:read", "component:read", "tag:read"], grants: [] };
 
 const loc = (h: string, label: string, type: string, parent = "") => ({
-  id: uuidFor(h), name: h, label, location_type: type, location_type_id: uuidFor(`t-${type}`), parent: parent ? uuidFor(parent) : undefined, verdict: "healthy",
+  id: uuidFor(h), name: h, label, location_type: type, location_type_id: uuidFor(`t-${type}`), parent: parent ? uuidFor(parent) : undefined, health: "healthy",
 });
-const dot = (h: string, verdict = "healthy", shared = false) => ({ component: uuidFor(h), name: h, verdict, primary: true, shared });
+const dot = (h: string, verdict = "healthy", shared = false) => ({ component: uuidFor(h), name: h, health: verdict, primary: true, shared });
 const sys = (h: string, label: string, at: string, verdict: string, dots: ReturnType<typeof dot>[] = []) => ({
-  id: uuidFor(h), name: h, label, location: at ? uuidFor(at) : undefined, verdict, dots,
+  id: uuidFor(h), name: h, label, location: at ? uuidFor(at) : undefined, health: verdict, dots,
 });
 
 const view = {

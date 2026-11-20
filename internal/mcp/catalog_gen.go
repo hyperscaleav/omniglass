@@ -438,7 +438,7 @@ var catalog = []tooldef.Def{
 	{
 		Name:        "get-component-reachability",
 		Title:       "Read a component's per-endpoint reachability",
-		Description: "Composes, per endpoint, the latest reachability verdict, the probe-layer signals that compose it, and the recent verdict transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+		Description: "Composes, per endpoint, the latest reachability, the probe-layer signals that compose it, and the recent reachability transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
 		Method:      "GET",
 		Path:        "/components/{name}/reachability",
 		Permission:  "component:read",

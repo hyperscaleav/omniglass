@@ -68,7 +68,7 @@ func readReach(ctx context.Context, c *http.Client, base, componentID string, pl
 			Webhook json.RawMessage `json:"webhook"`
 			Verdict *struct {
 				Value string `json:"value"`
-			} `json:"verdict"`
+			} `json:"reachability"`
 		} `json:"endpoints"`
 	}
 	if err := getJSON(ctx, c, base+"/api/v1/components/"+componentID+"/reachability", &reach); err != nil {

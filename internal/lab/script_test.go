@@ -66,7 +66,7 @@ func fakeServerWithTokens(t *testing.T, mints *atomic.Int32) *httptest.Server {
 		fmt.Fprint(w, `{"connected":true,"devices":[{"component_id":"c-1","status":"running"}]}`)
 	})
 	mux.HandleFunc("GET /api/v1/components/c-1/reachability", func(w http.ResponseWriter, _ *http.Request) {
-		fmt.Fprint(w, `{"endpoints":[{"label":"","verdict":{"value":"up"}}]}`)
+		fmt.Fprint(w, `{"endpoints":[{"label":"","reachability":{"value":"up"}}]}`)
 	})
 	mux.HandleFunc("POST /api/v1/auth/me/tokens", func(w http.ResponseWriter, r *http.Request) {
 		if c, err := r.Cookie("og_session"); err != nil || c.Value != "s" {

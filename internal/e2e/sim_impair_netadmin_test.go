@@ -180,7 +180,7 @@ func TestImpairingASimulatedDeviceShowsInCollection(t *testing.T) {
 				Endpoint string `json:"endpoint"`
 				Verdict  *struct {
 					Value string `json:"value"`
-				} `json:"verdict"`
+				} `json:"reachability"`
 			} `json:"endpoints"`
 		}
 		out := map[string]string{}
@@ -266,7 +266,7 @@ func TestImpairingASimulatedDeviceShowsInCollection(t *testing.T) {
 	}
 	verdict := func() string {
 		var out struct {
-			Verdict string `json:"verdict"`
+			Verdict string `json:"health"`
 		}
 		if !get("/systems/impair-sys/health", &out) {
 			return ""

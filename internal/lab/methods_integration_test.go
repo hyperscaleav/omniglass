@@ -97,7 +97,7 @@ func methodsExercised(ctx context.Context, c *http.Client, base string, planted 
 			LastSeen *string `json:"last_seen"`
 			Verdict  *struct {
 				Value string `json:"value"`
-			} `json:"verdict"`
+			} `json:"reachability"`
 		} `json:"endpoints"`
 	}
 	reaches := map[string]reach{}

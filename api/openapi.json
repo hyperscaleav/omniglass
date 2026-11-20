@@ -6807,6 +6807,10 @@
             "description": "The component's uuid: what a renderer navigates to when a dot is clicked",
             "type": "string"
           },
+          "health": {
+            "description": "healthy, incomplete, degraded, or outage: the component's own verdict, which is the only thing that colours the dot",
+            "type": "string"
+          },
           "name": {
             "description": "The component's name, for the dot's hover title",
             "type": "string"
@@ -6818,16 +6822,12 @@
           "shared": {
             "description": "True when the component belongs to more than one system, which is what earns it a ring",
             "type": "boolean"
-          },
-          "verdict": {
-            "description": "healthy, incomplete, degraded, or outage: the component's own verdict, which is the only thing that colours the dot",
-            "type": "string"
           }
         },
         "required": [
           "component",
           "name",
-          "verdict",
+          "health",
           "primary",
           "shared"
         ],
@@ -6843,6 +6843,10 @@
             ],
             "format": "uri",
             "readOnly": true,
+            "type": "string"
+          },
+          "health": {
+            "description": "healthy, incomplete, degraded, or outage: the rollup of the slots or systems served beside it. incomplete is a commissioning gap, a slot short because the hardware was never installed rather than because installed hardware is failing, and it ranks between healthy and degraded",
             "type": "string"
           },
           "owner": {
@@ -6880,16 +6884,12 @@
               "array",
               "null"
             ]
-          },
-          "verdict": {
-            "description": "healthy, incomplete, degraded, or outage: the rollup of the slots or systems served beside it. incomplete is a commissioning gap, a slot short because the hardware was never installed rather than because installed hardware is failing, and it ranks between healthy and degraded",
-            "type": "string"
           }
         },
         "required": [
           "owner_kind",
           "owner",
-          "verdict",
+          "health",
           "slots",
           "systems",
           "transitions"
@@ -6899,6 +6899,10 @@
       "FleetLocationBody": {
         "additionalProperties": false,
         "properties": {
+          "health": {
+            "description": "The location's recorded verdict, worst-wins over the systems beneath it",
+            "type": "string"
+          },
           "id": {
             "description": "The location's uuid, the address a renderer navigates by",
             "type": "string"
@@ -6920,10 +6924,6 @@
           "parent": {
             "description": "The uuid of this location's parent; absent on a root. The tree is flat here and assembled by the client",
             "type": "string"
-          },
-          "verdict": {
-            "description": "The location's recorded verdict, worst-wins over the systems beneath it",
-            "type": "string"
           }
         },
         "required": [
@@ -6932,7 +6932,7 @@
           "label",
           "location_type",
           "location_type_id",
-          "verdict"
+          "health"
         ],
         "type": "object"
       },
@@ -6949,6 +6949,10 @@
               "null"
             ]
           },
+          "health": {
+            "description": "The system's recorded verdict, the same one its health read serves",
+            "type": "string"
+          },
           "id": {
             "description": "The system's uuid, the address a renderer navigates by",
             "type": "string"
@@ -6962,17 +6966,13 @@
           },
           "name": {
             "type": "string"
-          },
-          "verdict": {
-            "description": "The system's recorded verdict, the same one its health read serves",
-            "type": "string"
           }
         },
         "required": [
           "id",
           "name",
           "label",
-          "verdict",
+          "health",
           "dots"
         ],
         "type": "object"
@@ -7312,33 +7312,33 @@
       "HealthSystemBody": {
         "additionalProperties": false,
         "properties": {
-          "name": {
+          "health": {
             "type": "string"
           },
-          "verdict": {
+          "name": {
             "type": "string"
           }
         },
         "required": [
           "name",
-          "verdict"
+          "health"
         ],
         "type": "object"
       },
       "HealthTransitionBody": {
         "additionalProperties": false,
         "properties": {
-          "ts": {
-            "format": "date-time",
+          "health": {
             "type": "string"
           },
-          "verdict": {
+          "ts": {
+            "format": "date-time",
             "type": "string"
           }
         },
         "required": [
           "ts",
-          "verdict"
+          "health"
         ],
         "type": "object"
       },
@@ -7770,7 +7770,7 @@
           "component": {
             "type": "string"
           },
-          "verdict": {
+          "health": {
             "description": "The component's own verdict, the one its active alarms make (healthy, degraded, or outage), whatever the filter: a component's view reads it here rather than off the whole fleet view. unknown when nothing has ever observed the component (no alarm raised, no endpoint delivered): there is nothing to call healthy on",
             "type": "string"
           }
@@ -7778,7 +7778,7 @@
         "required": [
           "component",
           "alarms",
-          "verdict"
+          "health"
         ],
         "type": "object"
       },
@@ -11082,6 +11082,10 @@
             "description": "The current figure per key, by key name: a gauge's latest sample, a window count only while its window is the newest. A key the outpost has never reported, or whose last window has passed, is absent, never zero; the whole map is absent without a fleet-wide component read",
             "type": "object"
           },
+          "health": {
+            "description": "The outpost's platform component verdict, which tones the row; absent without a fleet-wide component read",
+            "type": "string"
+          },
           "label": {
             "type": "string"
           },
@@ -11096,10 +11100,6 @@
             "type": "number"
           },
           "name": {
-            "type": "string"
-          },
-          "verdict": {
-            "description": "The outpost's platform component verdict, which tones the row; absent without a fleet-wide component read",
             "type": "string"
           }
         },
@@ -11497,6 +11497,10 @@
               "null"
             ]
           },
+          "health": {
+            "description": "The server component's recorded verdict",
+            "type": "string"
+          },
           "name": {
             "description": "The server's platform component name",
             "type": "string"
@@ -11504,10 +11508,6 @@
           "started_at": {
             "description": "When the server's current boot started (server-started-at); uptime is read_at minus this",
             "format": "date-time",
-            "type": "string"
-          },
-          "verdict": {
-            "description": "The server component's recorded verdict",
             "type": "string"
           },
           "version": {
@@ -11518,7 +11518,7 @@
         "required": [
           "component",
           "name",
-          "verdict",
+          "health",
           "groups",
           "alarms"
         ],
@@ -11865,22 +11865,22 @@
       "PlatformSystemBody": {
         "additionalProperties": false,
         "properties": {
+          "health": {
+            "description": "The platform system's recorded verdict, the same one its health read serves",
+            "type": "string"
+          },
           "id": {
             "description": "The platform system's uuid: the page's verdict links to its system detail, where the verdict is explained",
             "type": "string"
           },
           "name": {
             "type": "string"
-          },
-          "verdict": {
-            "description": "The platform system's recorded verdict, the same one its health read serves",
-            "type": "string"
           }
         },
         "required": [
           "id",
           "name",
-          "verdict"
+          "health"
         ],
         "type": "object"
       },
@@ -13105,7 +13105,7 @@
             "type": "string"
           },
           "authenticated": {
-            "$ref": "#/components/schemas/ReachVerdictBody",
+            "$ref": "#/components/schemas/ReachReadingBody",
             "description": "The auth rung (the probe's credential was accepted, or a held session's login passed), present only when a credential was tried"
           },
           "endpoint": {
@@ -13160,19 +13160,23 @@
             "type": "string"
           },
           "pending": {
-            "description": "Why verdict is null, present only while it is: no-outpost, the endpoint has no outpost assigned so nothing probes it (create and enroll an outpost, run it, then assign the endpoint to it); awaiting-probe, an outpost is assigned and its first probe has not landed. Absent once a verdict exists, and on a push endpoint, which has no verdict to wait for. Derived at read time, not stored",
+            "description": "Why reachability is null, present only while it is: no-outpost, the endpoint has no outpost assigned so nothing probes it (create and enroll an outpost, run it, then assign the endpoint to it); awaiting-probe, an outpost is assigned and its first probe has not landed. Absent once a verdict exists, and on a push endpoint, which has no verdict to wait for. Derived at read time, not stored",
             "enum": [
               "no-outpost",
               "awaiting-probe"
             ],
             "type": "string"
           },
+          "reachability": {
+            "$ref": "#/components/schemas/ReachReadingBody",
+            "description": "The latest reachability reading (up or down), or null if none yet (pending says why)"
+          },
           "rejection": {
             "$ref": "#/components/schemas/ReachRejectionBody",
             "description": "The gate a terminal refusal holds on the endpoint, its rung, class and reason, whether or not the endpoint holds a session (a reachability probe's refusal gates it too); absent when none holds"
           },
           "responsive": {
-            "$ref": "#/components/schemas/ReachVerdictBody",
+            "$ref": "#/components/schemas/ReachReadingBody",
             "description": "The layer-7 responds rung (the protocol itself answered), when a probe has climbed it"
           },
           "session": {
@@ -13187,10 +13191,6 @@
             "description": "The transport (icmp, tcp, ...)",
             "type": "string"
           },
-          "verdict": {
-            "$ref": "#/components/schemas/ReachVerdictBody",
-            "description": "The latest reachability verdict, or null if none yet (pending says why)"
-          },
           "webhook": {
             "$ref": "#/components/schemas/EndpointWebhookBody",
             "description": "A webhook endpoint's block (#1024): a push endpoint has no ladder and reads last_seen (last heard) in place of a verdict, never down for silence; its scheme, whether it is signed, its token's secret and what its scheme refused. Absent on every dialed transport"
@@ -13200,7 +13200,7 @@
           "id",
           "endpoint",
           "transport",
-          "verdict",
+          "reachability",
           "layers",
           "history"
         ],
@@ -13279,6 +13279,25 @@
         "required": [
           "layer",
           "check",
+          "value",
+          "ts"
+        ],
+        "type": "object"
+      },
+      "ReachReadingBody": {
+        "additionalProperties": false,
+        "properties": {
+          "ts": {
+            "description": "When the verdict last changed: one is stored only on a transition, so an endpoint's freshness is last_seen, not this",
+            "format": "date-time",
+            "type": "string"
+          },
+          "value": {
+            "description": "The latest stored verdict value (up/down)",
+            "type": "string"
+          }
+        },
+        "required": [
           "value",
           "ts"
         ],
@@ -13384,25 +13403,6 @@
         },
         "required": [
           "mode"
-        ],
-        "type": "object"
-      },
-      "ReachVerdictBody": {
-        "additionalProperties": false,
-        "properties": {
-          "ts": {
-            "description": "When the verdict last changed: one is stored only on a transition, so an endpoint's freshness is last_seen, not this",
-            "format": "date-time",
-            "type": "string"
-          },
-          "value": {
-            "description": "The latest stored verdict value (up/down)",
-            "type": "string"
-          }
-        },
-        "required": [
-          "value",
-          "ts"
         ],
         "type": "object"
       },
@@ -16760,6 +16760,52 @@
         ],
         "type": "object"
       },
+      "SystemHealthEntryBody": {
+        "additionalProperties": false,
+        "properties": {
+          "health": {
+            "description": "healthy, degraded, or outage",
+            "type": "string"
+          },
+          "system": {
+            "description": "The system's uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "system",
+          "health"
+        ],
+        "type": "object"
+      },
+      "SystemHealthListOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/SystemHealthListOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "systems": {
+            "description": "One entry per system in the caller's read scope, in no particular order.",
+            "items": {
+              "$ref": "#/components/schemas/SystemHealthEntryBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "systems"
+        ],
+        "type": "object"
+      },
       "SystemLogBody": {
         "additionalProperties": false,
         "properties": {
@@ -16864,12 +16910,12 @@
             "description": "Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)",
             "type": "string"
           },
-          "component_id": {
-            "description": "The component's uuid",
+          "component_health": {
+            "description": "The component's own recorded verdict (healthy, degraded, or outage), the one its active alarms make; never the system's",
             "type": "string"
           },
-          "component_verdict": {
-            "description": "The component's own recorded verdict (healthy, degraded, or outage), the one its active alarms make; never the system's",
+          "component_id": {
+            "description": "The component's uuid",
             "type": "string"
           },
           "primary": {
@@ -16897,7 +16943,7 @@
           "component_id",
           "primary",
           "system_count",
-          "component_verdict"
+          "component_health"
         ],
         "type": "object"
       },
@@ -17167,52 +17213,6 @@
           "name",
           "label",
           "official"
-        ],
-        "type": "object"
-      },
-      "SystemVerdictBody": {
-        "additionalProperties": false,
-        "properties": {
-          "system": {
-            "description": "The system's uuid",
-            "type": "string"
-          },
-          "verdict": {
-            "description": "healthy, degraded, or outage",
-            "type": "string"
-          }
-        },
-        "required": [
-          "system",
-          "verdict"
-        ],
-        "type": "object"
-      },
-      "SystemVerdictsOutputBody": {
-        "additionalProperties": false,
-        "properties": {
-          "$schema": {
-            "description": "A URL to the JSON Schema for this object.",
-            "examples": [
-              "/api/v1/schemas/SystemVerdictsOutputBody.json"
-            ],
-            "format": "uri",
-            "readOnly": true,
-            "type": "string"
-          },
-          "verdicts": {
-            "description": "One entry per system in the caller's read scope, in no particular order.",
-            "items": {
-              "$ref": "#/components/schemas/SystemVerdictBody"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "verdicts"
         ],
         "type": "object"
       },
@@ -24857,7 +24857,7 @@
     },
     "/components/{name}/reachability": {
       "get": {
-        "description": "Composes, per endpoint, the latest reachability verdict, the probe-layer signals that compose it, and the recent verdict transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+        "description": "Composes, per endpoint, the latest reachability, the probe-layer signals that compose it, and the recent reachability transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
         "operationId": "get-component-reachability",
         "parameters": [
           {
@@ -34350,14 +34350,14 @@
     },
     "/systems:health": {
       "get": {
-        "description": "The current verdict for every system in the caller's read scope, in one call: the bulk counterpart of the per-system health read, carrying the one fact a list's health column renders and none of the explanation. A console painting a page of systems reads this once instead of resolving every slot, occupant, alarm and transition per row. A system that has never been recomputed reads healthy. Gated by system:read; an empty scope is an empty list, not a 403.",
-        "operationId": "list-system-verdicts",
+        "description": "The current health for every system in the caller's read scope, in one call: the bulk counterpart of the per-system health read, carrying the one fact a list's health column renders and none of the explanation. A console painting a page of systems reads this once instead of resolving every slot, occupant, alarm and transition per row. A system that has never been recomputed reads healthy. Gated by system:read; an empty scope is an empty list, not a 403.",
+        "operationId": "list-system-health",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SystemVerdictsOutputBody"
+                  "$ref": "#/components/schemas/SystemHealthListOutputBody"
                 }
               }
             },
@@ -34374,7 +34374,7 @@
             "description": "Error"
           }
         },
-        "summary": "Read every system's health verdict",
+        "summary": "Read every system's health",
         "x-omniglass-permission": "system:read"
       }
     },

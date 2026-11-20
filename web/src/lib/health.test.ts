@@ -77,7 +77,7 @@ describe("activeSlots and inactiveSlots", () => {
   // shape is precisely this (a satisfied all-in-one alternate beside an
   // unbuilt component-built one).
   const withInactiveChoice = {
-    verdict: "healthy",
+    health: "healthy",
     slots: [
       slot({ name: "video-bar", label: "Video bar", impaired: false, impact: "outage", active: true, choice: "conferencing", alternate: "all-in-one" }),
       slot({ name: "codec", label: "Codec", impaired: true, impact: "outage", active: false, choice: "conferencing", alternate: "component-built" }),

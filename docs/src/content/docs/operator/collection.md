@@ -74,7 +74,7 @@ omniglass endpoint update <endpoint> --outpost edge-1
 omniglass component reachability list <component>
 ```
 
-Until step 3, the endpoint's row carries `"verdict": null` and `"pending": "no-outpost"`: nothing is
+Until step 3, the endpoint's row carries `"reachability": null` and `"pending": "no-outpost"`: nothing is
 assigned to probe it. After step 3 and before the first probe lands, it reads `"pending":
 "awaiting-probe"`, and the field is gone once a verdict exists. The console's Endpoints panel says
 the same beneath the row, with a link to the Outposts page (or, once an outpost is assigned, to that outpost's

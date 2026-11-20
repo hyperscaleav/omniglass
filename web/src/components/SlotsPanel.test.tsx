@@ -81,7 +81,7 @@ const owner: Me = { user: { id: "p", kind: "person" }, permissions: [">"], grant
 const health: FleetHealth = {
   owner_kind: "system",
   owner: "boardroom",
-  verdict: "degraded",
+  health: "degraded",
   transitions: [],
   systems: [],
   slots: [

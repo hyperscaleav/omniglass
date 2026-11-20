@@ -20,7 +20,7 @@ const seed: Reachability = {
       transport: "tcp",
       address: "10.20.4.11:5000",
       outpost: "outpost-a",
-      verdict: { value: "up", ts: nowIso },
+      reachability: { value: "up", ts: nowIso },
       layers: [
         { layer: "ping", check: "icmp-reachable", value: "up", detail: "12.0 ms", ts: nowIso },
         { layer: "port", check: "tcp-open", value: "open", detail: "3.1 ms", ts: nowIso },
@@ -32,7 +32,7 @@ const seed: Reachability = {
       transport: "icmp",
       address: "10.20.4.11",
       outpost: "outpost-a",
-      verdict: { value: "down", ts: nowIso },
+      reachability: { value: "down", ts: nowIso },
       layers: [
         { layer: "ping", check: "icmp-reachable", value: "up", ts: nowIso },
         { layer: "port", check: "tcp-open", value: "closed", ts: nowIso },
@@ -64,7 +64,7 @@ describe("ReachabilityPanel", () => {
       component: "disp-2",
       endpoints: [{
         endpoint: "disp-2-tcp", transport: "tcp", outpost: "outpost-a",
-        verdict: { value: "up", ts: old },
+        reachability: { value: "up", ts: old },
         last_seen: ago(5_000),
         layers: [{ layer: "port", check: "tcp-open", value: "open", ts: ago(5_000) }],
         history: [{ ts: old, value: "up" }],
@@ -108,8 +108,8 @@ describe("ReachabilityPanel", () => {
     const stale: Reachability = {
       component: "c2",
       endpoints: [
-        { endpoint: "i-stale", transport: "tcp", verdict: { value: "up", ts: ago(600_000) }, layers: [], history: [] },
-        { endpoint: "i-unknown", transport: "tcp", verdict: null, layers: [], history: [] },
+        { endpoint: "i-stale", transport: "tcp", reachability: { value: "up", ts: ago(600_000) }, layers: [], history: [] },
+        { endpoint: "i-unknown", transport: "tcp", reachability: null, layers: [], history: [] },
       ],
     };
     const { getByText } = mount(stale);
@@ -180,8 +180,8 @@ describe("ReachabilityPanel identity", () => {
   const twoOfAKind: Reachability = {
     component: "codec-1",
     endpoints: [
-      { endpoint: "ssh", label: "Control processor", transport: "ssh", address: "10.0.0.9:22", outpost: "outpost-a", verdict: null, layers: [], history: [] },
-      { endpoint: "ssh", transport: "ssh", address: "10.0.0.10:22", outpost: "outpost-a", verdict: null, layers: [], history: [] },
+      { endpoint: "ssh", label: "Control processor", transport: "ssh", address: "10.0.0.9:22", outpost: "outpost-a", reachability: null, layers: [], history: [] },
+      { endpoint: "ssh", transport: "ssh", address: "10.0.0.10:22", outpost: "outpost-a", reachability: null, layers: [], history: [] },
     ],
   };
 
@@ -204,12 +204,12 @@ describe("the layer-7 rungs", () => {
       endpoints: [
         {
           endpoint: "ssh", transport: "ssh", address: "10.0.0.9:22",
-          verdict: { value: "up", ts: new Date().toISOString() },
+          reachability: { value: "up", ts: new Date().toISOString() },
           responsive: { value: "up", ts: new Date().toISOString() },
           authenticated: { value: "no", ts: new Date().toISOString() },
           layers: [], history: [],
         },
-        { endpoint: "disp-1-tcp", transport: "tcp", verdict: null, layers: [], history: [] },
+        { endpoint: "disp-1-tcp", transport: "tcp", reachability: null, layers: [], history: [] },
       ],
     });
     const groups = screen.getAllByRole("group", { name: /reachability ladder/i });
@@ -226,7 +226,7 @@ describe("the layer-7 rungs", () => {
       const t0 = new Date().toISOString();
       const { getByText, queryByText } = mount({
         component: "disp-3",
-        endpoints: [{ endpoint: "disp-3-tcp", transport: "tcp", outpost: "outpost-a", verdict: { value: "up", ts: t0 }, last_seen: t0, layers: [], history: [] }],
+        endpoints: [{ endpoint: "disp-3-tcp", transport: "tcp", outpost: "outpost-a", reachability: { value: "up", ts: t0 }, last_seen: t0, layers: [], history: [] }],
       } as unknown as Reachability);
       expect(getByText("responding")).toBeTruthy();
       await vi.advanceTimersByTimeAsync(200_000);
@@ -244,7 +244,7 @@ describe("the layer-7 rungs", () => {
 describe("a held session on the row", () => {
   const telnetRow = (state: "up" | "rejected", lastSeen = new Date().toISOString()) => ({
     id: uuidFor("if-telnet"), endpoint: "telnet", transport: "telnet", outpost: "outpost-a", last_seen: lastSeen,
-    verdict: { value: "up", ts: lastSeen }, responsive: { value: "up", ts: lastSeen },
+    reachability: { value: "up", ts: lastSeen }, responsive: { value: "up", ts: lastSeen },
     ...(state === "rejected"
       ? { authenticated: { value: "no", ts: lastSeen }, session: { state, ts: lastSeen, reason: "auth: auth rejected" }, rejection: { rung: "authenticated" as const, class: "auth", ts: "2026-10-23T11:58:00.000Z" } }
       : { session: { state, ts: lastSeen } }),
@@ -294,7 +294,7 @@ describe("a held session on the row", () => {
 describe("a probe's gate on the row, no session held", () => {
   const snmpRow = (gated: boolean) => ({
     id: uuidFor("if-snmp"), endpoint: "snmp", label: "Panel SNMP", transport: "snmp", address: "127.60.0.9:10161", outpost: "outpost-a", last_seen: nowIso,
-    verdict: { value: gated ? "down" : "up", ts: nowIso }, responsive: { value: gated ? "down" : "up", ts: nowIso },
+    reachability: { value: gated ? "down" : "up", ts: nowIso }, responsive: { value: gated ? "down" : "up", ts: nowIso },
     ...(gated
       ? { authenticated: { value: "no", ts: nowIso }, rejection: { rung: "authenticated" as const, class: "auth", ts: nowIso, reason: "auth: the agent answered authorizationError for the community" } }
       : {}),
@@ -329,7 +329,7 @@ describe("a tls endpoint", () => {
     address: "127.60.0.9:51326",
     outpost: "outpost-a",
     last_seen: nowIso,
-    verdict: { value: "up", ts: nowIso },
+    reachability: { value: "up", ts: nowIso },
     responsive: { value: "up", ts: nowIso },
     layers: [{ layer: "port", check: "tcp-open", value: "open", detail: "0.4 ms", ts: nowIso }],
     history: [{ ts: ago(120_000), value: "up" }],
@@ -407,7 +407,7 @@ describe("a udp endpoint", () => {
     address: "127.60.0.9:51327",
     outpost: "outpost-a",
     last_seen: nowIso,
-    verdict: { value: answered ? "up" : "down", ts: nowIso },
+    reachability: { value: answered ? "up" : "down", ts: nowIso },
     responsive: { value: answered ? "up" : "down", ts: nowIso },
     layers: [
       { layer: "ping", check: "icmp-reachable", value: "up", ts: nowIso },
@@ -485,7 +485,7 @@ describe("ReachabilityPanel pending reason", () => {
 
   it("explains an endpoint with no outpost and links to the Outposts page", () => {
     const { getByTestId } = mountPending({
-      endpoint: "panel-1-icmp", transport: "icmp", verdict: null, pending: "no-outpost", layers: [], history: [],
+      endpoint: "panel-1-icmp", transport: "icmp", reachability: null, pending: "no-outpost", layers: [], history: [],
     });
     const notice = getByTestId("endpoint-pending-notice");
     expect(notice.textContent).toMatch(/no outpost is assigned/i);
@@ -494,7 +494,7 @@ describe("ReachabilityPanel pending reason", () => {
 
   it("names the outpost an endpoint awaits its first probe from, linking its blade", () => {
     const { getByTestId } = mountPending({
-      endpoint: "panel-1-icmp", transport: "icmp", outpost: "edge-1", verdict: null, pending: "awaiting-probe", layers: [], history: [],
+      endpoint: "panel-1-icmp", transport: "icmp", outpost: "edge-1", reachability: null, pending: "awaiting-probe", layers: [], history: [],
     });
     const notice = getByTestId("endpoint-pending-notice");
     expect(notice.textContent).toContain("edge-1");
@@ -503,7 +503,7 @@ describe("ReachabilityPanel pending reason", () => {
 
   it("shows no reason once the endpoint has a verdict", () => {
     const { queryByTestId } = mountPending({
-      endpoint: "panel-1-icmp", transport: "icmp", outpost: "edge-1", verdict: { value: "up", ts: nowIso }, layers: [], history: [],
+      endpoint: "panel-1-icmp", transport: "icmp", outpost: "edge-1", reachability: { value: "up", ts: nowIso }, layers: [], history: [],
     });
     expect(queryByTestId("endpoint-pending-notice")).toBeNull();
   });

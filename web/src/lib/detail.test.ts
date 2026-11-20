@@ -9,9 +9,9 @@ import { uuidFor } from "./testids";
 // it; the path names each location once.
 
 const loc = (h: string, label: string, parent = "") => ({
-  id: uuidFor(h), name: h, label, location_type: "room", location_type_id: uuidFor("t-room"), parent: parent ? uuidFor(parent) : undefined, verdict: "healthy",
+  id: uuidFor(h), name: h, label, location_type: "room", location_type_id: uuidFor("t-room"), parent: parent ? uuidFor(parent) : undefined, health: "healthy",
 });
-const sys = (h: string, label: string, at: string) => ({ id: uuidFor(h), name: h, label, location: at ? uuidFor(at) : undefined, verdict: "healthy", dots: [] });
+const sys = (h: string, label: string, at: string) => ({ id: uuidFor(h), name: h, label, location: at ? uuidFor(at) : undefined, health: "healthy", dots: [] });
 
 const view = {
   locations: [

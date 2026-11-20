@@ -55,7 +55,7 @@ export function collectionState(iface: ReachEndpoint, outpost: Outpost | undefin
   // does not exist cannot have stopped heartbeating.
   const missing = !outpost;
   const outpostDown = !!outpost && outpostStatus(outpost, now) !== "up";
-  const last = lastSeenAt(iface) ?? iface.verdict?.ts ?? null;
+  const last = lastSeenAt(iface) ?? iface.reachability?.ts ?? null;
   if (!last) return { kind: missing ? "no-outpost" : outpostDown ? "outpost-offline" : "unknown", outpost: iface.outpost };
   if (now - new Date(last).getTime() > STALENESS_WINDOW_MS) return { kind: missing ? "no-outpost" : outpostDown ? "outpost-offline" : "component-or-path", outpost: iface.outpost };
   if (iface.session?.state === "rejected" || pollsHeld(iface)) return { kind: "rejected", outpost: iface.outpost };
@@ -207,7 +207,7 @@ export function leafAlarmSince(alarms: Alarm[], now: number, levels?: SeverityLe
 export function dotVerdict(view: FleetView, componentId: string): string | null {
   for (const s of view.systems ?? []) {
     for (const d of s.dots ?? []) {
-      if (d.component === componentId) return d.verdict ?? null;
+      if (d.component === componentId) return d.health ?? null;
     }
   }
   return null;

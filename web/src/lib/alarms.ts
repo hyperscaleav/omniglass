@@ -34,7 +34,7 @@ export async function componentAlarmsRead(name: string): Promise<ComponentAlarms
     params: { path: { name }, query: { include_cleared: true } },
   });
   if (error) throw error;
-  return { alarms: (data?.alarms ?? []) as Alarm[], verdict: data?.verdict };
+  return { alarms: (data?.alarms ?? []) as Alarm[], verdict: data?.health };
 }
 
 // componentAlarms reads every alarm on the component, cleared ones included: the

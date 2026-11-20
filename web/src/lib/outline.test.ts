@@ -9,11 +9,11 @@ import { uuidFor } from "./testids";
 
 const loc = (h: string, label: string, type: string, parent = "", verdict = "healthy") => ({
   id: uuidFor(h), name: h, label, location_type: type, location_type_id: uuidFor(`t-${type}`),
-  parent: parent ? uuidFor(parent) : undefined, verdict,
+  parent: parent ? uuidFor(parent) : undefined, health: verdict,
 });
-const dot = (h: string, verdict = "healthy", shared = false) => ({ component: uuidFor(h), name: h, verdict, primary: true, shared });
+const dot = (h: string, verdict = "healthy", shared = false) => ({ component: uuidFor(h), name: h, health: verdict, primary: true, shared });
 const sys = (h: string, label: string, at: string, verdict: string, dots: ReturnType<typeof dot>[] = []) => ({
-  id: uuidFor(h), name: h, label, location: at ? uuidFor(at) : undefined, verdict, dots,
+  id: uuidFor(h), name: h, label, location: at ? uuidFor(at) : undefined, health: verdict, dots,
 });
 const type = (name: string, label: string, parents: string[]) => ({ name, label, icon: name, allowed_parent_types: parents });
 

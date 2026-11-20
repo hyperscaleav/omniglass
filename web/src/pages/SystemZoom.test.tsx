@@ -42,7 +42,7 @@ const view: FleetView = {
       location_type: "room",
       location_type_id: uuidFor("szpt-room"),
       parent: "",
-      verdict: "degraded",
+      health: "degraded",
     },
   ],
   systems: [
@@ -51,11 +51,11 @@ const view: FleetView = {
       name: "boardroom",
       label: "Boardroom",
       location: uuidFor("szp-room"),
-      verdict: "degraded",
+      health: "degraded",
       dots: [
-        { component: uuidFor("szp-c-bar"), name: "videobar-1", verdict: "healthy", primary: true, shared: true },
-        { component: uuidFor("szp-c-power"), name: "device-1", verdict: "healthy", primary: true, shared: false },
-        { component: uuidFor("szp-c-mic"), name: "mic-1", verdict: "outage", primary: true, shared: false },
+        { component: uuidFor("szp-c-bar"), name: "videobar-1", health: "healthy", primary: true, shared: true },
+        { component: uuidFor("szp-c-power"), name: "device-1", health: "healthy", primary: true, shared: false },
+        { component: uuidFor("szp-c-mic"), name: "mic-1", health: "outage", primary: true, shared: false },
       ],
     },
     {
@@ -63,14 +63,14 @@ const view: FleetView = {
       name: "overflow",
       label: "Overflow Room",
       location: null,
-      verdict: "healthy",
-      dots: [{ component: uuidFor("szp-c-bar"), name: "videobar-1", verdict: "healthy", primary: false, shared: true }],
+      health: "healthy",
+      dots: [{ component: uuidFor("szp-c-bar"), name: "videobar-1", health: "healthy", primary: false, shared: true }],
     },
   ],
 } as unknown as FleetView;
 
 const health: FleetHealth = {
-  verdict: "incomplete",
+  health: "incomplete",
   slots: [
     {
       name: "main-display", label: "Main Display", impact: "outage", quorum: 1, satisfying: 0, short: 1, spare: 0,
@@ -94,8 +94,8 @@ const health: FleetHealth = {
   ],
   systems: [],
   transitions: [
-    { ts: "2026-08-01T09:00:00Z", verdict: "healthy" },
-    { ts: "2026-08-15T14:20:00Z", verdict: "degraded" },
+    { ts: "2026-08-01T09:00:00Z", health: "healthy" },
+    { ts: "2026-08-15T14:20:00Z", health: "degraded" },
   ],
 } as unknown as FleetHealth;
 
@@ -167,7 +167,7 @@ function memberRowsOf(v: FleetView, systemId: string, verdicts: Record<string, s
   const sys = (v.systems ?? []).find((s) => s.id === systemId);
   return (sys?.dots ?? []).map((d) => ({
     system: sys!.name, system_id: systemId, component: d.name, component_id: d.component,
-    primary: d.primary, system_count: d.shared ? 2 : 1, component_verdict: verdicts[d.name] ?? d.verdict,
+    primary: d.primary, system_count: d.shared ? 2 : 1, component_health: verdicts[d.name] ?? d.health,
   }));
 }
 
@@ -224,7 +224,7 @@ describe("the system zoom", () => {
   it("a fully staffed room says nothing about slots: deployed is the norm, not an achievement", () => {
     const full = {
       ...health,
-      verdict: "healthy",
+      health: "healthy",
       slots: (health.slots ?? []).map((r) => ({
         ...r,
         satisfying: r.quorum,
@@ -476,7 +476,7 @@ describe("the map tab (#791)", () => {
     // a new payload and everything derived from it recomputes.
     r.qc.setQueryData([...systemHealthKey(uuidFor("szp-sys"))], {
       ...health,
-      transitions: [...(health.transitions ?? []), { ts: "2026-08-16T09:00:00Z", verdict: "degraded" }],
+      transitions: [...(health.transitions ?? []), { ts: "2026-08-16T09:00:00Z", health: "degraded" }],
     });
     // the query cache notifies observers on a later tick
     await new Promise((resolve) => setTimeout(resolve, 20));
@@ -588,7 +588,7 @@ describe("the history tab (#792)", () => {
   // worry someone the trouble hue: the tone answers the number shown.
   it("tones a full uptime in the healthy green and a poor one in the trouble hue", () => {
     const figure = () => within(screen.getByTestId("uptime-kpi")).getByText("%").parentElement!;
-    const steady = { ...health, verdict: "healthy", transitions: [{ ts: "2026-01-01T00:00:00Z", verdict: "healthy" }] } as unknown as FleetHealth;
+    const steady = { ...health, health: "healthy", transitions: [{ ts: "2026-01-01T00:00:00Z", health: "healthy" }] } as unknown as FleetHealth;
     const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`, steady);
     expect(figure().textContent).toBe("100%");
     expect(figure().className).toContain("text-healthy");
@@ -615,7 +615,7 @@ describe("the history tab (#792)", () => {
   // after the clock last ticked) would have a negative length and vanish.
   it("keeps a stretch that opened seconds ago on the list", () => {
     vi.setSystemTime(new Date("2026-08-20T16:00:40Z"));
-    const fresh = { ...health, transitions: [{ ts: "2026-08-01T09:00:00Z", verdict: "healthy" }, { ts: "2026-08-20T16:00:30Z", verdict: "degraded" }] } as unknown as FleetHealth;
+    const fresh = { ...health, transitions: [{ ts: "2026-08-01T09:00:00Z", health: "healthy" }, { ts: "2026-08-20T16:00:30Z", health: "degraded" }] } as unknown as FleetHealth;
     mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`, fresh);
     const list = screen.getByTestId("stretch-list");
     expect(within(list).getAllByTestId(/^stretch-/)[0].textContent).toMatch(/ongoing/);
@@ -987,7 +987,7 @@ describe("the miss face (#800)", () => {
     // The read is held open until answer, so the miss clearing here is the page
     // seeing the refetch, not the refetch landing.
     await waitFor(() => expect(screen.queryByText(/No system answers this address/)).toBeNull());
-    const fresh = { ...view, systems: [...(view.systems ?? []), { id: uuidFor("szp-new"), name: "fresh", label: "Fresh Room", location: (view.systems ?? [])[0]?.location, verdict: "incomplete", dots: [] }] };
+    const fresh = { ...view, systems: [...(view.systems ?? []), { id: uuidFor("szp-new"), name: "fresh", label: "Fresh Room", location: (view.systems ?? [])[0]?.location, health: "incomplete", dots: [] }] };
     answer(new Response(JSON.stringify(fresh), { status: 200, headers: { "content-type": "application/json" } }));
     expect(await screen.findByRole("heading", { name: "Fresh Room" })).toBeTruthy();
     expect(screen.queryByText(/No system answers this address/)).toBeNull();
@@ -1041,21 +1041,21 @@ describe("the system view refreshes (#940)", () => {
   // Quiet: every slot staffed, nobody down, nothing raised.
   const calm = {
     ...health,
-    verdict: "healthy",
+    health: "healthy",
     slots: [
       {
         name: "room-mic", label: "Room Microphone", impact: "degraded", quorum: 1, satisfying: 1, short: 0, spare: 0,
         impaired: false, active: true, assigned_to: ["mic-1"], down: [], alarms: [],
       },
     ],
-    transitions: [{ ts: "2026-08-01T09:00:00Z", verdict: "healthy" }],
+    transitions: [{ ts: "2026-08-01T09:00:00Z", health: "healthy" }],
   } as unknown as FleetHealth;
   // A high alarm opened on the mic: it no longer occupies its slot, and the
   // slot's impact takes the system to degraded.
   const raisedAt = () => new Date().toISOString();
   const moved = () => ({
     ...calm,
-    verdict: "degraded",
+    health: "degraded",
     slots: [
       {
         name: "room-mic", label: "Room Microphone", impact: "degraded", quorum: 1, satisfying: 0, short: 1, spare: 0,
@@ -1063,7 +1063,7 @@ describe("the system view refreshes (#940)", () => {
         alarms: [{ id: "al-9", component: "mic-1", component_id: uuidFor("szp-c-mic"), severity: "high", message: "Reachability lost", raised_at: raisedAt() }],
       },
     ],
-    transitions: [...(calm.transitions ?? []), { ts: raisedAt(), verdict: "degraded" }],
+    transitions: [...(calm.transitions ?? []), { ts: raisedAt(), health: "degraded" }],
   });
   const calmMembers = () => memberRowsOf(view, uuidFor("szp-sys"), { "mic-1": "healthy" });
 
@@ -1112,7 +1112,7 @@ describe("the system view refreshes (#940)", () => {
       ...view,
       systems: (view.systems ?? []).map((sys) => sys.id !== uuidFor("szp-sys") ? sys : {
         ...sys,
-        dots: [...(sys.dots ?? []), ...Array.from({ length: 12 }, (_, i) => ({ component: uuidFor(`szp-c-extra-${i}`), name: `extra-${i}`, verdict: "healthy", primary: true, shared: false }))],
+        dots: [...(sys.dots ?? []), ...Array.from({ length: 12 }, (_, i) => ({ component: uuidFor(`szp-c-extra-${i}`), name: `extra-${i}`, health: "healthy", primary: true, shared: false }))],
       }),
     } as unknown as FleetView;
     const gets: string[] = [];
@@ -1165,7 +1165,7 @@ describe("the system view refreshes (#940)", () => {
   it("ages the since-line with the clock when the polled report stays the same", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"] });
     const t0 = new Date().toISOString();
-    const still = { ...calm, transitions: [{ ts: t0, verdict: "healthy" }] } as unknown as FleetHealth;
+    const still = { ...calm, transitions: [{ ts: t0, health: "healthy" }] } as unknown as FleetHealth;
     // Every read stays in flight: only a clock can move the line.
     vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise<Response>(() => {}));
     mount(undefined, still, [], [], me, calmMembers());
@@ -1237,7 +1237,7 @@ describe("ambiguous name addresses (#853)", () => {
           location_type: "room",
           location_type_id: uuidFor("szpt-room"),
           parent: "",
-          verdict: "degraded",
+          health: "degraded",
         },
       ],
       systems: [
@@ -1246,7 +1246,7 @@ describe("ambiguous name addresses (#853)", () => {
           name: "boardroom",
           label: "Boardroom",
           location: uuidFor("szp-room"),
-          verdict: "degraded",
+          health: "degraded",
           dots: [],
         },
         {
@@ -1254,7 +1254,7 @@ describe("ambiguous name addresses (#853)", () => {
           name: "boardroom",
           label: "Boardroom Duplicate",
           location: null,
-          verdict: "healthy",
+          health: "healthy",
           dots: [],
         },
       ],

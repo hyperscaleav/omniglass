@@ -50,7 +50,7 @@ func (l *fakeLab) routes() map[string]any {
 		if l.profile {
 			verdict = "up"
 		}
-		reach = []any{map[string]any{"id": "ep1", "verdict": map[string]any{"value": verdict}}}
+		reach = []any{map[string]any{"id": "ep1", "reachability": map[string]any{"value": verdict}}}
 	}
 	sample := func(key string) map[string]any {
 		if l.dropBuiltIn == key {

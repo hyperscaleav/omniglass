@@ -207,7 +207,7 @@ func Collect(ctx context.Context, c *http.Client, base string, planted []string)
 				LastSeen *string `json:"last_seen"`
 				Verdict  *struct {
 					Value string `json:"value"`
-				} `json:"verdict"`
+				} `json:"reachability"`
 				Session *struct {
 					State string `json:"state"`
 				} `json:"session"`

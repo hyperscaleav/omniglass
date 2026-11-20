@@ -34,7 +34,7 @@ type reachResp struct {
 		Verdict  *struct {
 			Value string    `json:"value"`
 			TS    time.Time `json:"ts"`
-		} `json:"verdict"`
+		} `json:"reachability"`
 		Responsive *struct {
 			Value string    `json:"value"`
 			TS    time.Time `json:"ts"`

@@ -37,24 +37,24 @@ describe("verdictWord", () => {
 // time an outpost wrote on its samples (#931, #933).
 describe("an endpoint's freshness is the server's last_seen (#931, #933)", () => {
   const ep = (over: Partial<ReachEndpoint>): ReachEndpoint =>
-    ({ endpoint: "tcp", transport: "tcp", verdict: null, layers: [], history: [], ...over }) as ReachEndpoint;
+    ({ endpoint: "tcp", transport: "tcp", reachability: null, layers: [], history: [], ...over }) as ReachEndpoint;
   const layer = (msAgo: number) => ({ layer: "port", check: "tcp-open", value: "open", ts: ago(msAgo) });
 
   it("ages an old transition by last_seen, not the transition", () => {
-    const e = ep({ verdict: { value: "up", ts: ago(21 * 60_000) }, last_seen: ago(5_000) });
+    const e = ep({ reachability: { value: "up", ts: ago(21 * 60_000) }, last_seen: ago(5_000) });
     expect(lastSeenAt(e)).toBe(ago(5_000));
     expect(endpointWord(e, now)).toBe("responding");
   });
   it("keeps a down verdict's word while it is fresh", () => {
-    expect(endpointWord(ep({ verdict: { value: "down", ts: ago(400_000) }, last_seen: ago(2_000) }), now)).toBe("down");
+    expect(endpointWord(ep({ reachability: { value: "down", ts: ago(400_000) }, last_seen: ago(2_000) }), now)).toBe("down");
   });
   it("is stale once last_seen is past the window, however new an outpost dated its samples", () => {
-    const e = ep({ verdict: { value: "up", ts: ago(-3_600_000) }, layers: [layer(-3_600_000)], last_seen: ago(STALENESS_WINDOW_MS + 1_000) });
+    const e = ep({ reachability: { value: "up", ts: ago(-3_600_000) }, layers: [layer(-3_600_000)], last_seen: ago(STALENESS_WINDOW_MS + 1_000) });
     expect(lastSeenAt(e)).toBe(ago(STALENESS_WINDOW_MS + 1_000));
     expect(endpointWord(e, now)).toBe("stale");
   });
   it("falls back to the verdict's own time before any stamp, which can only read older", () => {
-    expect(endpointWord(ep({ verdict: { value: "up", ts: ago(900_000) } }), now)).toBe("stale");
+    expect(endpointWord(ep({ reachability: { value: "up", ts: ago(900_000) } }), now)).toBe("stale");
   });
   it("is unknown with no verdict, and has no time with no stamp", () => {
     expect(endpointWord(ep({ last_seen: ago(1_000) }), now)).toBe("unknown");
@@ -89,7 +89,7 @@ describe("reason", () => {
   const base: ReachEndpoint = {
     endpoint: "disp-1-tcp",
     transport: "tcp",
-    verdict: { value: "down", ts: ago(5_000) },
+    reachability: { value: "down", ts: ago(5_000) },
     layers: [],
     history: [],
   };
@@ -111,7 +111,7 @@ describe("reason", () => {
     expect(reason(iface, now)).toMatch(/unreachable/i);
   });
   it("is empty when the interface is not down", () => {
-    expect(reason({ ...base, verdict: { value: "up", ts: ago(5_000) } }, now)).toBe("");
+    expect(reason({ ...base, reachability: { value: "up", ts: ago(5_000) } }, now)).toBe("");
   });
   // A udp endpoint has no port to open (#1037): its transport rung is the
   // driver's request answered, so ping-up request-unanswered names that.
@@ -193,7 +193,7 @@ describe("layerWord", () => {
 describe("requestRung", () => {
   const ping = { layer: "ping", check: "icmp-reachable", value: "up", ts: ago(0) };
   const port = { layer: "port", check: "tcp-open", value: "open", ts: ago(0) };
-  const base: ReachEndpoint = { endpoint: "udp", transport: "udp", verdict: { value: "up", ts: ago(0) }, layers: [ping], history: [] };
+  const base: ReachEndpoint = { endpoint: "udp", transport: "udp", reachability: { value: "up", ts: ago(0) }, layers: [ping], history: [] };
   it("is the responsive rung where there is no port to open", () => {
     expect(requestRung({ ...base, responsive: { value: "up", ts: ago(0) } })).toBe(true);
     expect(requestRung({ ...base, responsive: { value: "down", ts: ago(0) } })).toBe(false);
@@ -211,7 +211,7 @@ describe("requestRung", () => {
 
 describe("pendingNotice", () => {
   const ep = (over: Partial<ReachEndpoint>): ReachEndpoint =>
-    ({ endpoint: "tcp", transport: "tcp", verdict: null, layers: [], history: [], ...over }) as ReachEndpoint;
+    ({ endpoint: "tcp", transport: "tcp", reachability: null, layers: [], history: [], ...over }) as ReachEndpoint;
 
   it("sends an endpoint no outpost probes to the outpost list", () => {
     const n = pendingNotice(ep({ pending: "no-outpost" }));
@@ -225,6 +225,6 @@ describe("pendingNotice", () => {
   });
   it("says nothing of a row with a verdict or no reason", () => {
     expect(pendingNotice(ep({}))).toBeNull();
-    expect(pendingNotice(ep({ verdict: { value: "up", ts: ago(1000) } }))).toBeNull();
+    expect(pendingNotice(ep({ reachability: { value: "up", ts: ago(1000) } }))).toBeNull();
   });
 });

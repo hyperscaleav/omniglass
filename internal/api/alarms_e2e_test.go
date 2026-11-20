@@ -33,7 +33,7 @@ func TestComponentAlarmsVerdictIsUnknownUntilSomethingObservesIt(t *testing.T) {
 	verdictOf := func(name string) string {
 		t.Helper()
 		var env struct {
-			Verdict string `json:"verdict"`
+			Verdict string `json:"health"`
 		}
 		raw := c.do(owner, http.MethodGet, "/components/"+name+"/alarms", nil, http.StatusOK)
 		if err := json.Unmarshal(raw, &env); err != nil {

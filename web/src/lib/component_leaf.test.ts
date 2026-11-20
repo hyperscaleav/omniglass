@@ -14,8 +14,8 @@ import { SEEDED_LEVELS } from "./testseverity";
 const now = Date.parse("2026-08-15T12:00:00Z");
 const iso = (secondsAgo: number) => new Date(now - secondsAgo * 1000).toISOString();
 
-const iface = (verdict: { value: string; ts: string } | null, outpost?: string): ReachEndpoint =>
-  ({ endpoint: "ssh", transport: "ssh", outpost, verdict, layers: [], history: [] }) as unknown as ReachEndpoint;
+const iface = (reachability: { value: string; ts: string } | null, outpost?: string): ReachEndpoint =>
+  ({ endpoint: "ssh", transport: "ssh", outpost, reachability, layers: [], history: [] }) as unknown as ReachEndpoint;
 
 const outpost = (heartbeatSecondsAgo: number | null): Outpost =>
   ({ name: "edge-1", enrolled: true, last_heartbeat_at: heartbeatSecondsAgo === null ? undefined : iso(heartbeatSecondsAgo), tags: {} }) as Outpost;
@@ -24,7 +24,7 @@ describe("collectionState", () => {
   // A push endpoint (#1024) is never down for silence: no outpost collects it,
   // so neither a missing outpost nor an old last heard reads as offline or stale.
   it("a push endpoint listens, however long it has been silent", () => {
-    const hook = { endpoint: "webhook", transport: "webhook", verdict: null, layers: [], history: [], last_seen: iso(86_400),
+    const hook = { endpoint: "webhook", transport: "webhook", reachability: null, layers: [], history: [], last_seen: iso(86_400),
       webhook: { path: "/webhooks/x", scheme: "hmac", signed: true } } as unknown as ReachEndpoint;
     expect(collectionState(hook, undefined, now).kind).toBe("listening");
     expect(collectionState({ ...hook, last_seen: undefined }, undefined, now).kind).toBe("listening");
@@ -128,7 +128,7 @@ describe("collectionState", () => {
   // certificate that expired under a long-lived connection) stops nothing,
   // and beside a down one the polls are tried and failing.
   it("a probe's gate beside a held session leaves its polls to the session", () => {
-    const up = { ...gated("tls", "responsive"), verdict: { value: "up", ts: iso(10) }, session: { state: "up", ts: iso(30) } } as ReachEndpoint;
+    const up = { ...gated("tls", "responsive"), reachability: { value: "up", ts: iso(10) }, session: { state: "up", ts: iso(30) } } as ReachEndpoint;
     expect(collectionState(up, outpost(5), now).kind).toBe("collecting");
     const down = { ...gated("tls", "responsive"), session: { state: "down", ts: iso(30) } } as ReachEndpoint;
     expect(collectionState(down, outpost(5), now).kind).toBe("session-down");
@@ -141,20 +141,20 @@ describe("collectionState", () => {
 
 const view: FleetView = {
   locations: [
-    { id: uuidFor("cl-l-huddle"), name: "huddle", label: "Huddle Room", location_type: "room", parent: null, verdict: "healthy" },
-    { id: uuidFor("cl-l-201"), name: "class-201", label: "Class 201", location_type: "room", parent: null, verdict: "healthy" },
+    { id: uuidFor("cl-l-huddle"), name: "huddle", label: "Huddle Room", location_type: "room", parent: null, health: "healthy" },
+    { id: uuidFor("cl-l-201"), name: "class-201", label: "Class 201", location_type: "room", parent: null, health: "healthy" },
   ],
   systems: [
     // A system named for its room, the commonest naming in the field: the
     // room would only repeat the label, so the row carries no where.
-    { id: uuidFor("cl-s-huddle"), name: "huddle", label: "Huddle Room", location: uuidFor("cl-l-huddle"), verdict: "healthy", dots: [] },
-    { id: uuidFor("cl-s-201"), name: "meeting", label: "Meeting Room", location: uuidFor("cl-l-201"), verdict: "healthy", dots: [] },
-    { id: uuidFor("cl-s-a"), name: "boardroom", label: "Boardroom A System", location: null, verdict: "healthy", dots: [] },
-    { id: uuidFor("cl-s-b"), name: "overflow", label: "Overflow", location: null, verdict: "healthy", dots: [] },
+    { id: uuidFor("cl-s-huddle"), name: "huddle", label: "Huddle Room", location: uuidFor("cl-l-huddle"), health: "healthy", dots: [] },
+    { id: uuidFor("cl-s-201"), name: "meeting", label: "Meeting Room", location: uuidFor("cl-l-201"), health: "healthy", dots: [] },
+    { id: uuidFor("cl-s-a"), name: "boardroom", label: "Boardroom A System", location: null, health: "healthy", dots: [] },
+    { id: uuidFor("cl-s-b"), name: "overflow", label: "Overflow", location: null, health: "healthy", dots: [] },
     // A second system sharing the name of the first: the bare name is
     // ambiguous, so no uuid resolves for it.
-    { id: uuidFor("cl-s-a2"), name: "twin", label: "Twin 1", location: null, verdict: "healthy", dots: [] },
-    { id: uuidFor("cl-s-a3"), name: "twin", label: "Twin 2", location: null, verdict: "healthy", dots: [] },
+    { id: uuidFor("cl-s-a2"), name: "twin", label: "Twin 1", location: null, health: "healthy", dots: [] },
+    { id: uuidFor("cl-s-a3"), name: "twin", label: "Twin 2", location: null, health: "healthy", dots: [] },
   ],
 } as unknown as FleetView;
 
@@ -313,7 +313,7 @@ describe("the leaf's dispatch facts (#786)", () => {
     const v = {
       locations: [],
       systems: [
-        { id: uuidFor("cl-dv-s1"), name: "a", label: "A", location: null, verdict: "degraded", dots: [{ component: uuidFor("cl-dv-c9"), name: "mic-1", verdict: "outage", primary: true, shared: false }] },
+        { id: uuidFor("cl-dv-s1"), name: "a", label: "A", location: null, health: "degraded", dots: [{ component: uuidFor("cl-dv-c9"), name: "mic-1", health: "outage", primary: true, shared: false }] },
       ],
     } as never;
     expect(dotVerdict(v, uuidFor("cl-dv-c9"))).toBe("outage");

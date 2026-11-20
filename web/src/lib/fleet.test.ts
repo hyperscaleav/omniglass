@@ -14,13 +14,13 @@ const loc = (handle: string, name: string, type: string, parent?: string) => ({
   location_type: type,
   location_type_id: uuidFor(`type-${type}`),
   parent: parent ? uuidFor(parent) : "",
-  verdict: "healthy",
+  health: "healthy",
 });
 
 const dot = (component: string, name: string, verdict: string, primary: boolean, shared: boolean) => ({
   component,
   name,
-  verdict,
+  health: verdict,
   primary,
   shared,
 });
@@ -44,7 +44,7 @@ const view: FleetView = {
       name: "hq-huddle",
       label: "HQ Huddle",
       location: uuidFor("l-r1"),
-      verdict: "degraded",
+      health: "degraded",
       dots: [dot(uuidFor("c-bar"), "bar-1", "healthy", true, true), dot(uuidFor("c-mic"), "mic-1", "degraded", true, false)],
     },
     {
@@ -52,7 +52,7 @@ const view: FleetView = {
       name: "depot-huddle",
       label: "",
       location: uuidFor("l-dr1"),
-      verdict: "outage",
+      health: "outage",
       // The same physical box, a ghost here: owned by hq-huddle.
       dots: [dot(uuidFor("c-bar"), "bar-1", "healthy", false, true)],
     },

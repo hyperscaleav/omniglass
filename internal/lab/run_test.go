@@ -218,7 +218,7 @@ func fakeServer(t *testing.T) *httptest.Server {
 		fmt.Fprint(w, `{"connected":true,"devices":[{"component_id":"c-1","status":"running"}]}`)
 	})
 	mux.HandleFunc("GET /api/v1/components/c-1/reachability", func(w http.ResponseWriter, _ *http.Request) {
-		fmt.Fprint(w, `{"endpoints":[{"label":"","verdict":{"value":"up"}},{"label":"Panel SNMP","verdict":{"value":"down"}},{"label":"Hooks","webhook":{"path":"/x"},"verdict":null}]}`)
+		fmt.Fprint(w, `{"endpoints":[{"label":"","reachability":{"value":"up"}},{"label":"Panel SNMP","reachability":{"value":"down"}},{"label":"Hooks","webhook":{"path":"/x"},"reachability":null}]}`)
 	})
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
@@ -484,7 +484,7 @@ func TestRunSaysWhatIsPendingWhenCollectionIsSlow(t *testing.T) {
 		fmt.Fprint(w, `{"connected":true,"devices":[{"component_id":"c-1","status":"running"}]}`)
 	})
 	mux.HandleFunc("GET /api/v1/components/c-1/reachability", func(w http.ResponseWriter, _ *http.Request) {
-		fmt.Fprint(w, `{"endpoints":[{"verdict":{"value":"up"}},{"verdict":{"value":"down"}}]}`)
+		fmt.Fprint(w, `{"endpoints":[{"reachability":{"value":"up"}},{"reachability":{"value":"down"}}]}`)
 	})
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
