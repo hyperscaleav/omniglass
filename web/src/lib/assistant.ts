@@ -24,7 +24,7 @@ export type Step = {
   decision?: "approved" | "declined";
 };
 
-export type Item = { kind: "user"; text: string; context?: ContextEntry[] } | { kind: "text"; id: string; text: string } | Step;
+export type Item = { kind: "user"; text: string; context?: ContextEntry[] } | { kind: "text"; id: string; text: string } | { kind: "reasoning"; id: string; text: string } | Step;
 
 // The call a run paused on, waiting for the person.
 export type Ask = {
@@ -107,6 +107,13 @@ export function reduce(s: RunState, ev: AguiEvent): RunState {
       return {
         ...s,
         items: s.items.map((i) => (i.kind === "text" && i.id === ev.messageId ? { ...i, text: i.text + String(ev.delta ?? "") } : i)),
+      };
+    case "REASONING_MESSAGE_START":
+      return { ...s, items: [...s.items, { kind: "reasoning", id: String(ev.messageId), text: "" }] };
+    case "REASONING_MESSAGE_CONTENT":
+      return {
+        ...s,
+        items: s.items.map((i) => (i.kind === "reasoning" && i.id === ev.messageId ? { ...i, text: i.text + String(ev.delta ?? "") } : i)),
       };
     case "TOOL_CALL_START":
       return { ...s, items: [...s.items, { kind: "step", id: String(ev.toolCallId), tool: String(ev.toolCallName), args: {} }] };

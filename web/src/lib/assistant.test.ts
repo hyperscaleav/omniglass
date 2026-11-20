@@ -171,3 +171,20 @@ describe("running omnibot", () => {
     await expect(runOmnibot("lobby", { prompt: "x" }, () => {})).rejects.toThrow("omnibot has no model on this server");
   });
 });
+
+describe("a model's reasoning", () => {
+  it("is its own item, apart from the answer (#2259)", () => {
+    const evs = [
+      { type: "REASONING_MESSAGE_START", messageId: "r-1", role: "reasoning" },
+      { type: "REASONING_MESSAGE_CONTENT", messageId: "r-1", delta: "User asks 2+2." },
+      { type: "REASONING_MESSAGE_END", messageId: "r-1" },
+      { type: "TEXT_MESSAGE_START", messageId: "r-2", role: "assistant" },
+      { type: "TEXT_MESSAGE_CONTENT", messageId: "r-2", delta: "Four." },
+    ];
+    const s = evs.reduce(reduce, initialRun);
+    expect(s.items).toEqual([
+      { kind: "reasoning", id: "r-1", text: "User asks 2+2." },
+      { kind: "text", id: "r-2", text: "Four." },
+    ]);
+  });
+});

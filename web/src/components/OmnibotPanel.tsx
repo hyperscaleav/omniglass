@@ -243,6 +243,14 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
                 <Match when={item.kind === "text" && item}>
                   {(t) => <div class="text-sm whitespace-pre-wrap">{t().text}</div>}
                 </Match>
+                <Match when={item.kind === "reasoning" && item}>
+                  {(r) => (
+                    <details data-testid="omnibot-thinking" class="text-xs text-base-content/60">
+                      <summary class="cursor-pointer select-none">Thinking</summary>
+                      <div class="mt-1 whitespace-pre-wrap border-l-2 border-base-300 pl-2">{r().text}</div>
+                    </details>
+                  )}
+                </Match>
                 <Match when={item.kind === "step" && item}>{(s) => <OmnibotStep step={s()} waiting={state().interrupt?.id === s().id} />}</Match>
               </Switch>
             )}
