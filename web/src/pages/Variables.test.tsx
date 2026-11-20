@@ -138,4 +138,28 @@ describe("Variables create owner picker survives duplicate names (#627)", () => 
     await pickTree(ownerSelect, 2);
     expect(await selectedTree(ownerSelect)).toEqual([2]);
   });
+
+  it("labels the location picker after the scope moves to it from another owner kind", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...VARIABLES_KEY], []);
+    qc.setQueryData([...LOCATIONS_KEY], [{ id: uuidFor("loc-hq-v"), name: "hq", label: "HQ", location_type: "campus" }]);
+    qc.setQueryData([...SYSTEMS_KEY], []);
+    qc.setQueryData([...COMPONENTS_KEY], []);
+    qc.setQueryData([...ME_KEY], owner);
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Variables />
+      </QueryClientProvider>
+    ));
+    fireEvent.click(screen.getByRole("button", { name: /new variable/i }));
+    fireEvent.change(screen.getByLabelText("Scope"), { target: { value: "system" } });
+    expect(await screen.findByLabelText("System")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Scope"), { target: { value: "location" } });
+    // The label must point at the picker now on screen, not the one it replaced:
+    // clicking a <label for> whose target left the page does nothing.
+    const label = (await screen.findByText("Location", { selector: "label" })) as HTMLLabelElement;
+    const target = document.getElementById(label.htmlFor);
+    expect(target?.isConnected).toBe(true);
+    await pickTree(target as HTMLElement, "HQ");
+  });
 });

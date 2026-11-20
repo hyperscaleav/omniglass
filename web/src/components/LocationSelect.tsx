@@ -4,6 +4,7 @@ import TreeSelect from "./TreeSelect";
 import { LOCATIONS_KEY, listLocations, type Location } from "../lib/locations";
 import { LOCATION_TYPES_KEY, listLocationTypes } from "../lib/location_types";
 import { locationTreeNodes } from "../lib/location_tree";
+import { can, useMe } from "../lib/auth";
 
 // LocationSelect: the one field that picks a location. It reads the fleet's
 // locations and their types itself and draws them as the location tree
@@ -32,7 +33,11 @@ export default function LocationSelect(p: {
 }): JSX.Element {
   const enabled = () => p.enabled ?? true;
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations, enabled: enabled() }));
-  const types = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes, enabled: enabled() }));
+  // The type catalog only orders siblings, and it has its own permission: a
+  // viewer who may read locations but not location_type gets the tree in
+  // label order rather than a refused read.
+  const me = useMe();
+  const types = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes, enabled: enabled() && can(me.data, "location_type", "read") }));
   const items = createMemo(() =>
     locationTreeNodes(locations.data ?? [], types.data ?? [], { addressOf: p.addressOf, pickable: p.pickable }),
   );

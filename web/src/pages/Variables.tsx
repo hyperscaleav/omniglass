@@ -358,11 +358,17 @@ function CreateVariableForm(p: { onCreated: (v: Variable) => void }): JSX.Elemen
           </select>
         </FieldRow>
       </div>
-      <Show when={ownerKind() !== "platform"}>
+      {/* One FieldRow per control: FieldRow aims its label at the control it
+          mounted with, so swapping the picker inside one row would leave the
+          label pointing at a control that left the page. */}
+      <Show when={ownerKind() === "location"}>
+        <FieldRow label="Location">
+          <LocationSelect value={owner()} onChange={setOwner} rootLabel="Choose…" />
+        </FieldRow>
+      </Show>
+      <Show when={ownerKind() !== "platform" && ownerKind() !== "location"}>
         <FieldRow label={ownerKind().charAt(0).toUpperCase() + ownerKind().slice(1)}>
-          <Show when={ownerKind() === "location"} fallback={<TreeSelect items={ownerTree()} value={owner()} onChange={setOwner} rootLabel="Choose…" />}>
-            <LocationSelect value={owner()} onChange={setOwner} rootLabel="Choose…" />
-          </Show>
+          <TreeSelect items={ownerTree()} value={owner()} onChange={setOwner} rootLabel="Choose…" />
         </FieldRow>
       </Show>
       <FieldRow label="Value" hint={valueType() === "json" ? "A JSON object, array, or scalar." : valueType() === "bool" ? "true or false." : undefined}>

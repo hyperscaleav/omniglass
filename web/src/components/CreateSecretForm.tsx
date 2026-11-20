@@ -123,11 +123,17 @@ export default function CreateSecretForm(p: { onCreated: (s: Secret) => void }):
             <For each={ownerKinds()}>{(k) => <option value={k}>{k.charAt(0).toUpperCase() + k.slice(1)}</option>}</For>
           </select>
         </FieldRow>
-        <Show when={ownerKind() !== "platform"}>
-          <FieldRow label={ownerKind().charAt(0).toUpperCase() + ownerKind().slice(1)}>
-            <Show when={ownerKind() === "location"} fallback={<TreeSelect items={ownerTree()} value={owner()} onChange={setOwner} rootLabel="Choose…" />}>
+        {/* One FieldRow per control: FieldRow aims its label at the control it
+            mounted with, so swapping the picker inside one row would leave the
+            label pointing at a control that left the page. */}
+        <Show when={ownerKind() === "location"}>
+          <FieldRow label="Location">
             <LocationSelect value={owner()} onChange={setOwner} rootLabel="Choose…" />
-          </Show>
+          </FieldRow>
+        </Show>
+        <Show when={ownerKind() !== "platform" && ownerKind() !== "location"}>
+          <FieldRow label={ownerKind().charAt(0).toUpperCase() + ownerKind().slice(1)}>
+            <TreeSelect items={ownerTree()} value={owner()} onChange={setOwner} rootLabel="Choose…" />
           </FieldRow>
         </Show>
       </div>

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { createSignal } from "solid-js";
 import { render, screen, waitFor } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
@@ -6,6 +6,7 @@ import LocationSelect from "./LocationSelect";
 import { LOCATIONS_KEY, type Location } from "../lib/locations";
 import { LOCATION_TYPES_KEY, type LocationType } from "../lib/location_types";
 import { uuidFor } from "../lib/testids";
+import { ME_KEY, type Me } from "../lib/auth";
 import { openTree, pickTree, treeOptions } from "./TreeSelect.testkit";
 
 const types = [
@@ -19,8 +20,11 @@ const locs = [
   { id: uuidFor("c1"), name: "hq", label: "HQ", location_type: "campus", path: "hq" },
 ] as Location[];
 
-function mount(ui: () => import("solid-js").JSX.Element, seed = true) {
+const owner: Me = { user: { id: "p", kind: "person" }, permissions: [">"], grants: [] };
+
+function mount(ui: () => import("solid-js").JSX.Element, seed = true, me: Me = owner) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+  qc.setQueryData(ME_KEY, me);
   if (seed) {
     qc.setQueryData(LOCATIONS_KEY, locs);
     qc.setQueryData(LOCATION_TYPES_KEY, types);
@@ -73,4 +77,15 @@ describe("LocationSelect", () => {
     mount(() => <LocationSelect value="" onChange={() => {}} excludeSubtreeOf={uuidFor("b1")} rootLabel="Root" />);
     expect(await treeOptions(trigger())).toEqual(["Root", "HQ"]);
   });
+
+  it("does not ask for the type catalog when the viewer cannot read it", async () => {
+    const fetches = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ locations: [] }), { headers: { "content-type": "application/json" } }));
+    const placer: Me = { user: { id: "q", kind: "person" }, permissions: ["location:read"], grants: [] };
+    const qc = mount(() => <LocationSelect value="" onChange={() => {}} rootLabel="None" />, false, placer);
+    await waitFor(() => expect(qc.getQueryState(LOCATIONS_KEY)?.status).toBe("success"));
+    const urls = fetches.mock.calls.map(([input]) => (typeof input === "string" ? input : (input as Request).url));
+    expect(urls.some((u) => u.includes("/location-types"))).toBe(false);
+  });
 });
+
+afterEach(() => vi.restoreAllMocks());
