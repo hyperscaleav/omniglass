@@ -2148,7 +2148,7 @@ export type CreateEndpointInputBody = {
   out_of_band?: boolean;
   /** Outpost placement, by name or id */
   outpost?: string;
-  /** Address/target settings (jsonb); an attach derives them from the inputs instead */
+  /** Address/target settings (jsonb): set target as host[:port] (host and port keys are refused); timeout, count (icmp), tls-mode (tls, https, wss); an attach derives them from the inputs instead */
   params?: unknown;
   /** A transport name from the built-in transports (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set */
   transport?: string;
@@ -3439,7 +3439,7 @@ export type EndpointBody = {
   outpost?: string;
   /** The placed outpost's id; the stable form of outpost */
   outpost_id?: string;
-  /** The address/target settings (jsonb) */
+  /** The address/target settings (jsonb): set target as host[:port] (host and port keys are refused); timeout, count (icmp), tls-mode (tls, https, wss) */
   params?: unknown;
   /** The transport name (the wire this endpoint speaks over), from the built-in transports */
   transport: string;
@@ -8401,7 +8401,7 @@ export type UpdateEndpointInputBody = {
   out_of_band?: boolean;
   /** Reassign the outpost placement, by name or id */
   outpost?: string;
-  /** Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs */
+  /** Replace the address/target settings (jsonb): set target as host[:port] (host and port keys are refused); timeout, count (icmp), tls-mode (tls, https, wss). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs */
   params?: unknown;
   /** The transport: a driver-attached endpoint takes only one its driver speaks */
   transport?: string;

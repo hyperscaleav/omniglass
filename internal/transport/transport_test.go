@@ -164,6 +164,21 @@ func TestWebhookIsAPushTransportWithNoRung(t *testing.T) {
 	}
 }
 
+// An outpost dials every transport but a push one and udp, which binds a local
+// port: those are the transports whose bare endpoint must name a target
+// (#1187). An unknown name is dialed by no one.
+func TestIsDialedIsEveryTransportButPushAndUDP(t *testing.T) {
+	for _, tr := range transport.All() {
+		want := tr.Name != "webhook" && tr.Name != "udp"
+		if got := transport.IsDialed(tr.Name); got != want {
+			t.Errorf("IsDialed(%s) = %v, want %v", tr.Name, got, want)
+		}
+	}
+	if transport.IsDialed("nope") {
+		t.Error("IsDialed of an unknown name = true")
+	}
+}
+
 // A built transport an outpost dials declares the keys its probe lands and the
 // params it reads (#1087), and the lab's expectation (BuiltIn, Answered) is a
 // subset of that declaration: the probe lands what the lab expects of it. A

@@ -12,8 +12,11 @@ summary: "`udp` is the line protocol as datagrams, built and stateless, its tran
      There is no connection to hold, so no `session-state` lands: reachability is the request rung,
      every tick.
   2. **One socket per endpoint.** Each udp endpoint binds its own local port on the node, its
-     driver's `listen-port` input (a number, 1 to 65535, derived into the endpoint's params as `host`
-     and `port` are, so a fingerprint input), else a port the kernel picks. Its request rung, polls,
+     driver's `listen-port` input (a number, 1 to 65535, derived into the endpoint's params as the
+     `host` and `port` inputs are, those into the one `target` key, so a fingerprint input), else a
+     port the kernel picks. An attach never writes `host` or `port` params keys; a bare dialed
+     endpoint's params carrying them were stored as given before #1187 and are refused at write
+     since (ADR-0160). Its request rung, polls,
      commands and arm conversation all leave from it, so a reply and a push arrive on one socket with
      no table of sources. The operator configures the component and the node's firewall. A datagram
      from any source but the endpoint's component is counted, self-logged once per tick and dropped,

@@ -1,15 +1,19 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/hyperscaleav/omniglass/internal/collection/rejection"
-	"github.com/hyperscaleav/omniglass/internal/driver"
+	"net"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/hyperscaleav/omniglass/internal/collection/rejection"
+	"github.com/hyperscaleav/omniglass/internal/driver"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/transport"
@@ -33,18 +37,30 @@ var (
 	// driver's declared inputs refuse, an undeclared input, a transport the
 	// driver does not speak, or a raw target on a driver-attached endpoint.
 	ErrEndpointPatchInvalid = errors.New("storage: endpoint patch invalid")
-	// ErrEndpointParamsInvalid refuses a bare endpoint's create whose params
-	// carry a value its transport's dialer cannot read (a tls mode that is
-	// not a mode), naming the field.
+	// ErrEndpointParamsInvalid refuses a bare endpoint's create or edit whose
+	// params carry a value its transport cannot use: a missing or wrong target
+	// on a dialed endpoint (#1187), host or port keys instead of target, a
+	// timeout that is not a positive Go duration string, a count on icmp that is
+	// not a non-negative integer, an invalid tls-mode on tls/https/wss, or an
+	// invalid listen-port on udp; naming the field.
 	ErrEndpointParamsInvalid = errors.New("storage: endpoint params invalid")
 )
 
 // checkBareParams reads what a bare endpoint's params hand its transport's
-// dialer with meaning, refusing a value it cannot use: the mode of an
-// endpoint over the tls handshake (tls #1035, https #902), which a
-// driver-attached one has checked as an input instead.
+// dialer with meaning, refusing a value it cannot use: the target an outpost
+// dials (required of every dialed transport when params are present, #1187),
+// a timeout that is not a positive Go duration string, a count on an icmp endpoint
+// that is not a non-negative integer, and the mode of an endpoint over the tls
+// handshake (tls #1035, https #902), which a driver-attached one has checked
+// as an input instead.
 func checkBareParams(transportName string, params []byte) error {
-	if (!transport.UsesTLS(transportName) && transportName != "udp") || len(params) == 0 {
+	// TODO(#2228): a create with no params at all is not yet held to this check.
+	if transport.IsDialed(transportName) && len(params) > 0 {
+		if err := checkTarget(transportName, params); err != nil {
+			return err
+		}
+	}
+	if len(params) == 0 {
 		return nil
 	}
 	var p map[string]any
@@ -52,7 +68,24 @@ func checkBareParams(transportName string, params []byte) error {
 		return nil // params are passed through as given; their shape is not this check's
 	}
 	if transportName == "udp" {
+		// udp dials no target, but the outpost parses its timeout as any probe's.
+		if err := checkTimeout(p); err != nil {
+			return err
+		}
 		return checkListenPort(p)
+	}
+	if transport.IsDialed(transportName) {
+		if err := checkTimeout(p); err != nil {
+			return err
+		}
+		if transportName == "icmp" {
+			if err := checkCount(params); err != nil {
+				return err
+			}
+		}
+	}
+	if !transport.UsesTLS(transportName) {
+		return nil
 	}
 	raw, ok := p[driver.TLSModeInput]
 	if !ok {
@@ -64,6 +97,93 @@ func checkBareParams(transportName string, params []byte) error {
 	}
 	return nil
 }
+
+// checkTimeout refuses a bare endpoint's params whose timeout value is not a
+// positive Go duration string (the outpost calls time.ParseDuration on it at
+// probe time; a bad value would skip the task forever), the same rule a
+// driver-attached endpoint's timeout input is held to.
+func checkTimeout(p map[string]any) error {
+	raw, ok := p["timeout"]
+	if !ok {
+		return nil
+	}
+	s, isString := raw.(string)
+	if !isString {
+		return fmt.Errorf("params.timeout must be a duration string (e.g. \"2s\"), and %v is not", raw)
+	}
+	if d, err := time.ParseDuration(s); err != nil || d <= 0 {
+		return fmt.Errorf("params.timeout must be a positive duration string (e.g. \"2s\"), and %q is not", s)
+	}
+	return nil
+}
+
+// checkCount refuses a bare icmp endpoint's params whose count value is not a
+// non-negative integer literal (the outpost unmarshals it into an int, which
+// takes no other spelling: 3.0 or 1e1 faults the parse as 1.5 or -1 would, and
+// the task would skip forever). The literal is read as written, not as a float.
+func checkCount(params []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(params))
+	dec.UseNumber()
+	var p map[string]any
+	if err := dec.Decode(&p); err != nil {
+		return nil // params are passed through as given; their shape is not this check's
+	}
+	raw, ok := p["count"]
+	if !ok {
+		return nil
+	}
+	n, isNumber := raw.(json.Number)
+	if !isNumber {
+		return fmt.Errorf("params.count must be a non-negative integer, and %v is not", raw)
+	}
+	if v, err := strconv.ParseInt(n.String(), 10, 0); err != nil || v < 0 {
+		return fmt.Errorf("params.count must be a non-negative integer, and %s is not", n)
+	}
+	return nil
+}
+
+// portOptional is the dialed transports whose target may omit the port: icmp
+// dials none and snmp defaults to 161.
+var portOptional = map[string]bool{"icmp": true, "snmp": true}
+
+// checkTarget refuses a dialed endpoint's params that carry no target the
+// outpost can dial (#1187): the outpost reads the one `target` key as host[:port]
+// and skips a task whose target is empty, forever, so the endpoint's
+// reachability would never read. Params left out are not this check's (an
+// unchanged edit carries none); a host or port key is the likely mistake, and
+// the message names the key to use instead. The target needs a port on every
+// transport the outpost dials by host:port with no default: icmp dials no port,
+// and snmp falls back to 161 (collection/snmp.go), so those two take a bare host.
+// A bare host on any other transport would dial nothing and read down forever.
+func checkTarget(transportName string, params []byte) error {
+	var p map[string]any
+	if err := json.Unmarshal(params, &p); err != nil {
+		return fmt.Errorf("params must be a JSON object holding a %s", targetParam)
+	}
+	for _, k := range []string{"host", "port"} {
+		if _, ok := p[k]; ok {
+			return fmt.Errorf("params.%s is not a key: set params.%s as host[:port], the address the outpost dials", k, targetParam)
+		}
+	}
+	raw, present := p[targetParam]
+	target, isString := raw.(string)
+	if present && !isString {
+		return fmt.Errorf("params.%s must be a string, host:port, and %v is not", targetParam, raw)
+	}
+	if strings.TrimSpace(target) == "" {
+		return fmt.Errorf("params.%s is required: the address the outpost dials, as host[:port]", targetParam)
+	}
+	if !portOptional[transportName] {
+		if _, port, err := net.SplitHostPort(target); err != nil || port == "" {
+			return fmt.Errorf("params.%s must be host:port on %s, and %q is not (did you omit the port?)", targetParam, transportName, target)
+		}
+	}
+	return nil
+}
+
+// targetParam is the params key the outpost reads a dialed endpoint's address
+// from (endpointParams.Target in internal/outpost).
+const targetParam = "target"
 
 // checkListenPort refuses a bare udp endpoint's listen port the outpost could
 // not bind (#1037), through the one reading the outpost itself uses.
@@ -437,7 +557,8 @@ func (p *PG) createEndpointTx(ctx context.Context, tx pgx.Tx, actorID string, sp
 		return nil, ErrUnknownTransport
 	}
 	if plan == nil {
-		if err := checkBareParams(spec.Transport, params); err != nil {
+		// The params as given, not the {} left out ones are stored as.
+		if err := checkBareParams(spec.Transport, spec.Params); err != nil {
 			return nil, fmt.Errorf("%w: %v", ErrEndpointParamsInvalid, err)
 		}
 	}

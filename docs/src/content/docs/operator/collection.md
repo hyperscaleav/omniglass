@@ -108,6 +108,22 @@ without one reads its transport name exactly.
     with a standard get carrying its driver's community, so it too needs a driver, never a standalone
     probe; there is no free-text name), an outpost placement, and a target (`host:port` for the
     tcp-family transports, `host` for icmp).
+
+    From the CLI or the API a probe's address is the one `target` key of its `params`, written as
+    `host:port`, or a bare `host` on icmp (which dials no port) and snmp (which defaults to 161); a
+    bare host on any other transport is refused, since the outpost would dial nothing. `timeout` tunes any probe's wait; `count` and `timeout` together tune an icmp probe, and `tls-mode` a `tls`, `https`, or `wss` one.
+    Params present at create or edit are validated: a `timeout` that is not a positive Go duration
+    string (e.g. `"30s"`, `"1m30s"`), or a `count` on icmp that is not a non-negative integer,
+    are refused with a 422 on create (a 400 on an edit) naming the field. There are no `host` or
+    `port` keys: on every dialed transport (all but `udp`, which binds its `listen-port` and dials
+    no target, and `webhook`, which the server hosts and nothing dials), params that are present but carry no `target`, or carry either of those keys, are
+    refused the same way, because the outpost would otherwise skip the endpoint forever and its
+    reachability would never read. Creating with no `params` field at all is not yet checked (#2228).
+
+    ```bash
+    omniglass endpoint create --component amp-9 --transport tcp --params '{"target":"10.20.4.61:8080"}'
+    ```
+
   - **Attach a driver**: pick a **driver** (only drivers whose declarative spec exists are
     offered) and fill the **inputs** its spec declares: a host, a port with its default
     pre-filled, credentials as **secret references** (the name of a secret of the declared
