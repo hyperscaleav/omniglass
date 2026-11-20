@@ -64,6 +64,12 @@ screenshots:
         timeout: 150000
       - action: click
         selector: "[data-testid=server-panels-server] > summary .eyebrow"
+      # The lab's outpost never checks in, and the outpost-silent alarm raises
+      # partway through a capture: the liveness pill reads healthy before and
+      # outage after, so the shot holds until the alarm has landed (#2168).
+      - action: wait
+        selector: "table >> text=outage"
+        timeout: 150000
     mask:
       - "[data-testid=platform-version] >> xpath=ancestor::div[3]"
       - "[data-testid=platform-uptime] >> xpath=ancestor::div[3]"
