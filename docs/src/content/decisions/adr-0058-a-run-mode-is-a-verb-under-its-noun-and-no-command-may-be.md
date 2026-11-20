@@ -5,7 +5,7 @@ status: "Accepted"
 summary: "A run mode is a verb under its noun, and no command may be shadowed"
 ---
 
-- **Date:** 2026-07-22 | **Status:** Accepted | **Pages:** [CLI guide](/guides/cli/)
+- **Date:** 2026-07-22 | **Status:** Accepted | **Pages:** [CLI guide](/developer/cli/)
 - **Decision:** the edge run mode becomes **`omniglass node run`**, a leaf under the generated
   `node` group, rather than a top-level `node`. A **guard test walks the assembled command tree
   and fails on any duplicate name**, so the hand-written and generated command sets can no longer

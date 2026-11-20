@@ -273,7 +273,7 @@ ledger the server can read, so it records nothing: its items stay `missing`, and
   ([ADR-1746.2](/architecture/decisions/#adr-17462-the-push-lanes-single-publisher-holds-at-the-corporate-3000-push-load)).
 
 `omniglass lab measure` prints the table
-([lab](/guides/lab/#reading-the-delivery-table)).
+([lab](/developer/lab/#reading-the-delivery-table)).
 
 :::design[Target design, tracked in #430]
 

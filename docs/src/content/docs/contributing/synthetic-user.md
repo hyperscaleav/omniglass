@@ -17,7 +17,7 @@ fleet, the example fleet having a bad day, or the example fleet at enterprise si
 
 ## The probe and its digest
 
-`make probe` brings up a throwaway [lab](/guides/lab/) of its own (the fleet picked by
+`make probe` brings up a throwaway [lab](/developer/lab/) of its own (the fleet picked by
 `STACK_SCENARIO`; a fresh install runs no outpost), visits every route in the console's route manifest, and replays
 every [walkthrough](/contributing/demos/) at machine speed, a beat after each action rather
 than a person's pace, all on that one lab in alphabetical order: unlike the recorder, which gives each

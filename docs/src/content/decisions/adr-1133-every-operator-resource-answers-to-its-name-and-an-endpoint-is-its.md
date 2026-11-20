@@ -9,7 +9,7 @@ refs: [1133]
 - **Date:** 2026-10-25 | **Status:** Accepted | **Pages:** [api](/architecture/api/),
   [identity and access](/architecture/identity-access/), [groups](/architecture/groups/),
   [files](/architecture/files/), [glossary](/architecture/glossary/),
-  [API first](/contributing/api-first/), [CLI](/guides/cli/)
+  [API first](/contributing/api-first/), [CLI](/developer/cli/)
 - **Decision:** (#1133, the architect's request in session.)
   1. **An endpoint is `<component>/<endpoint name>`, on the route it already had.** Every
      per-endpoint route (`GET`, `PATCH`, `DELETE /endpoints/{endpoint}`, `POST

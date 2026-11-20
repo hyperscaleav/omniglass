@@ -1,6 +1,11 @@
 ---
 title: "PR preview environments"
 description: "How a pull request gets a live, isolated preview of the console, and how it is torn down."
+sidebar:
+  order: 5
+  badge:
+    text: Built
+    variant: success
 ---
 
 Any pull request can get its own live copy of the operator console, at a

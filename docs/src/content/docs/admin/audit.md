@@ -67,7 +67,7 @@ one-sided. Auth events (sign-ins, password changes)
 record no row images at all, and the drawer says so. Sealed material never appears: a secret's audit
 row carries its metadata only, and password changes record that the credential changed, never a value.
 
-An action an AI agent took through the [MCP server](/guides/agents/) is the user's own row, and the
+An action an AI agent took through the [MCP server](/developer/agents/) is the user's own row, and the
 trail also records how it arrived. The **Channel** column marks such a row with an `mcp` pill and, under
 it, the client the agent declared about itself (`claude-code/2.1.0`); a direct API call carries no pill.
 An agent acting on its own token adds an `agent <name>` tag beside the person it acted for in **Who**:

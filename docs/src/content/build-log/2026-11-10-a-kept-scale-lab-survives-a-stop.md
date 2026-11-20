@@ -15,6 +15,6 @@ kept lab started at another scenario or size is refused, naming `--fresh`. The s
 ready banner name a kept scale lab's own restart command, its `--project` included when not the
 default. `--keep` is refused on a seeded fleet, whose
 lab keeps its data already, and beside `--ephemeral`. The lab guide gains
-[a soak run](/guides/lab/#a-soak-run): the pinned build, the lab and sampler units, retention inside
+[a soak run](/developer/lab/#a-soak-run): the pinned build, the lab and sampler units, retention inside
 the run, reading the series, upgrading mid-soak, and reaching the console through a tunnel. The soak
 host and its 72-hour run are not in the repo; worker-run soaks are #1737.

@@ -6,7 +6,7 @@ summary: "omnibot's model is an OpenAI-compatible provider the assistant setting
 refs: [2109, 2121, 1166]
 ---
 
-- **Date:** 2026-11-18 | **Status:** Accepted | **Pages:** [AI](/architecture/ai/), [settings](/architecture/settings/), [connect an agent](/guides/agents/#pointing-omnibot-at-a-model)
+- **Date:** 2026-11-18 | **Status:** Accepted | **Pages:** [AI](/architecture/ai/), [settings](/architecture/settings/), [connect an agent](/developer/agents/#pointing-omnibot-at-a-model)
 - **Decision:** (#2109, on the server-run loop of [ADR-2121](/architecture/decisions/#adr-2121-the-server-runs-omnibot-as-the-person-streaming-ag-ui).)
   1. **One adapter, chosen by URL.** OpenAI-compatible chat completions with tool calls, OpenRouter
      by default; OpenAI, Ollama, vLLM and LM Studio are the same adapter at another `base_url`. The

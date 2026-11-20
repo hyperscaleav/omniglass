@@ -6,7 +6,7 @@ summary: "Amends ADR-0094: `make perf-check SIZE=ci|laptop` (`omniglass lab perf
 refs: [1640, 1639, 1641, 1632, 1695, 1719, 1662, 1749, 1750, 1751]
 ---
 
-- **Date:** 2026-11-10 | **Status:** Accepted | **Pages:** [test-driven](/contributing/test-driven/), [lab](/guides/lab/#checking-against-the-baseline), [labels](/contributing/labels/)
+- **Date:** 2026-11-10 | **Status:** Accepted | **Pages:** [test-driven](/contributing/test-driven/), [lab](/developer/lab/#checking-against-the-baseline), [labels](/contributing/labels/)
 - **Decision:** (#1640; amends
   [ADR-0094](#adr-0094-benchmarks-are-the-second-performance-instrument-and-they-gate-nothing), and
   extends [ADR-1277](#adr-1277-the-lab-footprint-measures-a-running-lab-per-container-and-gates-nothing).)

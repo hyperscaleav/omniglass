@@ -6,7 +6,7 @@ summary: "Delivery is measured as one loss ratio per telemetry kind per hop, `(i
 refs: [1641, 1623, 453, 1595, 1639, 1640, 1625, 1628, 1691, 1692, 1696, 1698, 1699]
 ---
 
-- **Date:** 2026-11-09 | **Status:** Accepted | **Pages:** [messaging](/architecture/messaging/#accounting-every-item-the-loss-ratio), [nodes](/architecture/nodes/#delivery-a-batch-lands-once), [scaling](/architecture/scaling/#ingest-one-batch-per-tick), [lab](/guides/lab/#reading-the-delivery-table)
+- **Date:** 2026-11-09 | **Status:** Accepted | **Pages:** [messaging](/architecture/messaging/#accounting-every-item-the-loss-ratio), [nodes](/architecture/nodes/#delivery-a-batch-lands-once), [scaling](/architecture/scaling/#ingest-one-batch-per-tick), [lab](/developer/lab/#reading-the-delivery-table)
 - **Decision:** (#1641, the first slice under #1623.)
   1. **One measurement, one shape.** Every kind (metric, property, event, log) at every hop reads
      `loss = (in - out) / in`, the kind a value and never part of a key. Out is the items accounted

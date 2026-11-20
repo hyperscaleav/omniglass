@@ -6,7 +6,7 @@ summary: "omnibot drives the server's MCP tools as a one-day agent token it mint
 refs: [1166, 1161, 1179, 2048, 2063]
 ---
 
-- **Date:** 2026-11-17 | **Status:** Accepted | **Pages:** [AI](/architecture/ai/), [audit](/architecture/audit/), [connect an agent](/guides/agents/#omnibot-the-assistant-in-the-cli)
+- **Date:** 2026-11-17 | **Status:** Accepted | **Pages:** [AI](/architecture/ai/), [audit](/architecture/audit/), [connect an agent](/developer/agents/#omnibot-the-assistant-in-the-cli)
 - **Decision:** (#1166, slice 1 of the re-scoped split under #1161.)
   1. **omnibot is a client of the MCP server, not a path beside it.** It lists and calls the same
      generated tools any agent does, so every call is authorized, scoped, refused and audited by the

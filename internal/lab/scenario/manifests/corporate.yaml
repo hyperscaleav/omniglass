@@ -3,7 +3,7 @@
 # with meeting spaces sized from huddle rooms to divisible conference rooms,
 # and lobby signage. `omniglass lab run --scenario corporate
 # --systems N --plan` resolves it at N systems; the format and the rounding
-# rule are in the lab guide (docs/src/content/docs/guides/lab.mdx).
+# rule are in the lab guide (docs/src/content/docs/developer/lab.mdx).
 #
 # Every standard is a standard template from the catalog, every system_type a
 # registered system type, and every product a catalog product a simulator

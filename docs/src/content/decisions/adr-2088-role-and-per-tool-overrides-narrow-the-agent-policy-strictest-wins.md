@@ -6,7 +6,7 @@ summary: "The agent settings namespace gains roles (a class per role name) and t
 refs: [2088, 2063, 1161]
 ---
 
-- **Date:** 2026-11-17 | **Status:** Accepted | **Pages:** [AI](/architecture/ai/), [connect an agent](/guides/agents/#narrowing-it-by-role-or-by-tool), [settings](/architecture/settings/)
+- **Date:** 2026-11-17 | **Status:** Accepted | **Pages:** [AI](/architecture/ai/), [connect an agent](/developer/agents/#narrowing-it-by-role-or-by-tool), [settings](/architecture/settings/)
 - **Decision:** (#2088, extending [ADR-2063](/architecture/decisions/#adr-2063-an-install-sets-always-ask-or-never-per-class-of-operation-for-every-agent).)
   1. **Both overrides live in the agent settings namespace.** `agent.roles` maps a role name to a
      partial set of classes, and `agent.tools` maps an operation ID to `always`, `ask` or `never`.

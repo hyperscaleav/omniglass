@@ -4,7 +4,7 @@ description: "A demo is a recording of a PR's feature working, made on the lab (
 ---
 
 A **demo** is a short recording of a pull request's feature working, made on the
-[lab](/guides/lab/) (the server, and an outpost collecting from the simulator in its own process, all in
+[lab](/developer/lab/) (the server, and an outpost collecting from the simulator in its own process, all in
 Docker: the same lab a learner runs, "lab instance" banner and all) and posted on the PR, so a reviewer watches the feature work rather than
 reading a transcript of it. A demo is one concept with two recorders, one for each way the product
 is driven:

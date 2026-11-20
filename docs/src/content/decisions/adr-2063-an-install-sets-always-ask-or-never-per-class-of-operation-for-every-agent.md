@@ -6,7 +6,7 @@ summary: "Every operation has one agent class (read, write, destructive, credent
 refs: [2063, 1161, 2088, 1166]
 ---
 
-- **Date:** 2026-11-17 | **Status:** Accepted | **Pages:** [AI](/architecture/ai/), [connect an agent](/guides/agents/#what-an-agent-may-do), [settings](/architecture/settings/)
+- **Date:** 2026-11-17 | **Status:** Accepted | **Pages:** [AI](/architecture/ai/), [connect an agent](/developer/agents/#what-an-agent-may-do), [settings](/architecture/settings/)
 - **Decision:** (#2063, slice 1.)
   1. **One class per operation, the most sensitive wins.** An operation gated on `secret:bind`,
      directly or as its conditional second gate, is `credential_destination`; else a destructive

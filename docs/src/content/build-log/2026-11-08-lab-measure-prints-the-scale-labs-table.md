@@ -8,7 +8,7 @@ The last slice of the scale lab: `omniglass lab measure` (and `make scale-measur
 lab for a stated window and prints one table, then writes the same figures as JSON so two runs compare.
 With `--systems N` it brings a throwaway lab up, measures it and removes it; without, it measures the
 scale lab already running. How to run it and how to read each row is in the
-[lab guide](/guides/lab/#measuring-a-scale-lab).
+[lab guide](/developer/lab/#measuring-a-scale-lab).
 
 It extends the lab footprint (#1277) rather than starting over. Reused unchanged: the window arithmetic
 (`WindowOf`, `UsageFromStats`), the database counters query (`DBCountersQuery`), the harness's

@@ -6,7 +6,7 @@ summary: "An OAuth-connected MCP client's access token lives an hour and a refre
 refs: [2073, 2048, 1179]
 ---
 
-- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/#mcp-clients-sign-in-with-oauth-21), [connect an agent](/guides/agents/#sign-in-from-the-client)
+- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/#mcp-clients-sign-in-with-oauth-21), [connect an agent](/developer/agents/#sign-in-from-the-client)
 - **Decision:** (#2073, amending point 5 of
   [ADR-2048](#adr-2048-an-mcp-client-signs-in-with-oauth-21-for-an-agent-token-linked-to-it).)
   1. **An hour, renewed for a sliding 30 days.** The exchange issues an access token good for an hour

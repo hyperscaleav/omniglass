@@ -6,7 +6,7 @@ summary: "Accepted: every lab level that measures runs the corporate scenario at
 refs: [1719, 1277, 1640, 1633]
 ---
 
-- **Date:** 2026-11-10 | **Status:** Accepted | **Pages:** [lab](/guides/lab/), [test-driven](/contributing/test-driven/), [scaling](/architecture/scaling/)
+- **Date:** 2026-11-10 | **Status:** Accepted | **Pages:** [lab](/developer/lab/), [test-driven](/contributing/test-driven/), [scaling](/architecture/scaling/)
 - **Decision:** (#1719; extends
   [ADR-1277](#adr-1277-the-lab-footprint-measures-a-running-lab-per-container-and-gates-nothing).)
   1. **One fleet shape, one ladder.** `make test-lab` and `make lab-footprint` run corporate at 20
