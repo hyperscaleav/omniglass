@@ -247,8 +247,100 @@ jobs:
             If you cannot finish, push what you have, leave the PR a draft, and say in its
             body exactly what is left.
 
+            The run's GitHub token lasts an hour, and a long run can outlast it. If a git push
+            or gh command fails with an authentication error (401, 403 or "Bad credentials"),
+            do not retry it or look for another token. Leave what is left in
+            ${{ runner.temp }}/agent-pending/ instead, one file each: the branch name in branch,
+            the PR's title in title and its body in body.md when no PR is open yet, and an empty
+            file named ready when you would have marked it ready. Then keep working: the
+            workflow pushes the branch and opens or readies the PR with a fresh token after you
+            stop. make preflight must pass on the branch as you leave it, as before any push.
+
             Last, write a few lines to ${{ runner.temp }}/agent-summary.md saying what you
             built, or why you opened no PR: the workflow posts them on the issue.
+
+      # The agent controls its checkout's .git (hooks, core.fsmonitor and other
+      # config run code on a git command), so no step that holds a token runs
+      # git in the workspace. This one holds none: it copies only the agent's
+      # branch into a fresh bare repo and checks it there.
+      - name: Collect the branch the expired token stopped
+        id: pending
+        if: always() && steps.agent.outcome != 'skipped'
+        run: |
+          set -uo pipefail
+          left="${RUNNER_TEMP}/agent-pending"
+          [ -s "$left/branch" ] || { echo "nothing left to push"; exit 0; }
+          export GIT_TERMINAL_PROMPT=0 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
+          branch=$(head -n 1 "$left/branch" | tr -d '[:space:]')
+          if ! [[ "$branch" =~ ^[a-z]+/issue-${NUMBER}-[A-Za-z0-9._-]+$ ]]; then
+            echo "::error::the agent left a push for '${branch}', which is not a branch of issue #${NUMBER}"
+            exit 1
+          fi
+          # A name the agent cannot have pre-created: a reused repo would keep its config.
+          bare=$(mktemp -d "${RUNNER_TEMP}/push-bare.XXXXXX")
+          git init -q --bare "$bare"
+          gitb() { git -C "$bare" -c core.hooksPath=/dev/null "$@"; }
+          gitb fetch -q --no-tags "file://${GITHUB_WORKSPACE}" "refs/heads/${branch}:refs/heads/${branch}" \
+            || { echo "::error::the agent left no local branch ${branch}"; exit 1; }
+          gitb fetch -q --no-tags "https://github.com/${REPO}.git" "+refs/heads/main:refs/remotes/origin/main" \
+            || { echo "::error::could not fetch main to check the branch against"; exit 1; }
+          touched=$(gitb diff --name-only "refs/remotes/origin/main...refs/heads/${branch}" | grep '^\.github/workflows/' || true)
+          if [ -n "$touched" ]; then
+            echo "::error::${branch} changes workflow files, which the agent's push may not: ${touched//$'\n'/, }"
+            exit 1
+          fi
+          { echo "push=true"; echo "bare=${bare}"; } >> "$GITHUB_OUTPUT"
+
+      # The App's token lasts an hour and the agent can run longer, so its
+      # last pushes failed and the work was lost. Every step after the agent
+      # uses this token, minted once the agent has stopped. It is scoped to
+      # what those steps do: push, PRs, and the status comment and lock.
+      - name: Mint a fresh App token
+        id: fresh
+        if: always() && steps.agent.outcome != 'skipped'
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.AGENT_APP_CLIENT_ID }}
+          private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+
+      # What the agent could not do once its token ran out: push its branch,
+      # open the draft PR it wrote, mark it ready. Only for a branch of this
+      # ticket, never a force push, and only what the agent asked for. It
+      # pushes from the bare repo above and runs gh outside the checkout.
+      - name: Finish what the expired token stopped
+        if: always() && steps.fresh.outcome == 'success' && steps.pending.outputs.push == 'true'
+        env:
+          bare: ${{ steps.pending.outputs.bare }}
+          GH_TOKEN: ${{ steps.fresh.outputs.token }}
+          TOKEN: ${{ steps.fresh.outputs.token }}
+        run: |
+          set -uo pipefail
+          left="${RUNNER_TEMP}/agent-pending"
+          export GIT_TERMINAL_PROMPT=0 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
+          cd "$RUNNER_TEMP"
+          auth=$(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)
+          echo "::add-mask::${auth}"
+          url="https://github.com/${REPO}.git"
+          gitf() { git -C "$bare" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c http.proxy= -c http.sslVerify=true -c http.sslCAInfo= -c http.https://github.com/.extraheader= -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" "$@"; }
+          branch=$(head -n 1 "$left/branch" | tr -d '[:space:]')
+          gitf push "$url" "refs/heads/${branch}:refs/heads/${branch}" \
+            || { echo "::error::could not push ${branch} with a fresh token"; exit 1; }
+          pr=$(gh pr list --repo "$REPO" --head "$branch" --state open --json number --jq '.[0].number // ""')
+          if [ -z "$pr" ] && [ -s "$left/title" ] && [ -s "$left/body.md" ]; then
+            gh pr create --repo "$REPO" --draft --base main --head "$branch" \
+              --title "$(head -n 1 "$left/title")" --body-file "$left/body.md" \
+              || { echo "::error::could not open the PR for ${branch}"; exit 1; }
+            pr=$(gh pr list --repo "$REPO" --head "$branch" --state open --json number --jq '.[0].number // ""')
+          fi
+          [ -n "$pr" ] || echo "::warning::pushed ${branch}, but the agent left no PR title and body to open it with"
+          if [ -n "$pr" ] && [ -e "$left/ready" ]; then
+            gh pr ready "$pr" --repo "$REPO" || { echo "::error::could not mark PR #${pr} ready"; exit 1; }
+          fi
 
       # Keep what the agent ran (#2230), so the daily lessons sweep can tell a
       # miss from a flake: the action's transcript and each shell command with
@@ -290,7 +382,7 @@ jobs:
       - name: Show what the agent did
         if: always() && steps.status.outcome == 'success'
         env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
+          GH_TOKEN: ${{ steps.fresh.outputs.token || steps.app.outputs.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           COMMENT: ${{ steps.status.outputs.comment }}
           JOB: ${{ job.status }}
@@ -325,5 +417,5 @@ jobs:
       - name: Unlock the conversation
         if: always() && steps.gate.outputs.decision == 'run' && steps.gate.outputs.was_locked != 'true'
         env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
+          GH_TOKEN: ${{ steps.fresh.outputs.token || steps.app.outputs.token }}
         run: gh api -X DELETE "repos/${REPO}/issues/${NUMBER}/lock" --silent
