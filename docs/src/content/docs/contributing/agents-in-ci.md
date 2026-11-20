@@ -60,7 +60,7 @@ The label comes off as the build starts, so applying it again is the retry. The 
 issue's conversation to collaborators while it works, moves the ticket to In Progress, and
 follows CLAUDE.md like any session: test first, docs with the change, a draft PR with the
 template that says `Closes #<n>`, then `/ship-slice`, then ready for review. Linking the PR
-moves the ticket to In Review. The model follows the ticket's tier: sonnet for `tier:jr` and
+moves the ticket to In Review. The model follows the ticket's tier: Sonnet 5.5 (`claude-sonnet-5-5`) for `tier:jr` and
 `tier:mid`, opus for `tier:sr`, with a turn cap per tier and a 240 minute limit. A run that
 stops early comments on the issue with its link; one that runs out of room leaves the PR a
 draft saying what is left.

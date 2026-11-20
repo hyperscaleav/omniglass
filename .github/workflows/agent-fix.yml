@@ -128,7 +128,7 @@ jobs:
             echo "bot_id=$(gh api "users/${SLUG}%5Bbot%5D" --jq .id)"
             echo "agent_pr=$([ "$author" = "$bot" ] && echo true || echo false)"
             echo "config_ok=$config_ok"
-            if [ "$tier" = "tier:sr" ]; then echo "model=opus"; else echo "model=sonnet"; fi
+            if [ "$tier" = "tier:sr" ]; then echo "model=opus"; else echo "model=claude-sonnet-5-5"; fi
           } >> "$GITHUB_OUTPUT"
 
       # The reviewer and the fixer could not agree in five rounds: park the PR
@@ -240,7 +240,7 @@ jobs:
       - name: Address the feedback
         id: agent
         if: steps.gate.outputs.decision == 'run'
-        uses: anthropics/claude-code-action@c3d45e8e941e1b2ad7b278c57482d9c5bf1f35b3 # v1.0.99
+        uses: anthropics/claude-code-action@c84e279f859e2591391e95bd309286eb111c345f # v1.0.284
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ steps.app.outputs.token }}

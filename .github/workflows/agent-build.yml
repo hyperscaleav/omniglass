@@ -167,8 +167,8 @@ jobs:
                   "## Comments from the project\n\n" + (map("**@\(.user):**\n\n\(.body)\n") | join("\n")) end' >> "$out"
           case "$TIER" in
             tier:sr) echo "model=opus" >> "$GITHUB_OUTPUT"; echo "turns=200" >> "$GITHUB_OUTPUT" ;;
-            tier:jr) echo "model=sonnet" >> "$GITHUB_OUTPUT"; echo "turns=120" >> "$GITHUB_OUTPUT" ;;
-            *) echo "model=sonnet" >> "$GITHUB_OUTPUT"; echo "turns=200" >> "$GITHUB_OUTPUT" ;;
+            tier:jr) echo "model=claude-sonnet-5-5" >> "$GITHUB_OUTPUT"; echo "turns=120" >> "$GITHUB_OUTPUT" ;;
+            *) echo "model=claude-sonnet-5-5" >> "$GITHUB_OUTPUT"; echo "turns=200" >> "$GITHUB_OUTPUT" ;;
           esac
           echo "bot_name=${SLUG}[bot]" >> "$GITHUB_OUTPUT"
           echo "bot_id=$(gh api "users/${SLUG}%5Bbot%5D" --jq .id)" >> "$GITHUB_OUTPUT"
@@ -202,7 +202,7 @@ jobs:
       - name: Build the ticket
         id: agent
         if: steps.gate.outputs.decision == 'run'
-        uses: anthropics/claude-code-action@c3d45e8e941e1b2ad7b278c57482d9c5bf1f35b3 # v1.0.99
+        uses: anthropics/claude-code-action@c84e279f859e2591391e95bd309286eb111c345f # v1.0.284
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ steps.app.outputs.token }}
