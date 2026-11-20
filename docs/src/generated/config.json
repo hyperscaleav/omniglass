@@ -325,7 +325,7 @@
   {
    "key": "OMNIGLASS_SETTING__NOTIFICATION__MAIL_SECRET",
    "scope": "server",
-   "doc": "A platform basic-auth secret, by name, the relay session authenticates with; empty sends without authenticating. Setting it, or moving mail_relay while one is set, takes secret:bind on that secret",
+   "doc": "A platform basic-auth secret, by name, the relay session authenticates with; empty sends without authenticating. Setting it, or moving mail_relay while one is set, takes secret:bind on that secret via the console or API; the env and file layers bypass that check",
    "family": "OMNIGLASS_SETTING__"
   },
   {
@@ -388,13 +388,13 @@
    "key": "OMNIGLASS_SETTING__ASSISTANT__BASE_URL",
    "default": "https://openrouter.ai/api/v1",
    "scope": "server",
-   "doc": "The server's base URL, /chat/completions appended. An internal server is reached only when the notification settings' egress_allow names it. Moving it while a key_secret is bound takes secret:bind on that secret",
+   "doc": "The server's base URL, /chat/completions appended. An internal server is reached only when the notification settings' egress_allow names it. Moving it while a key_secret is bound takes secret:bind on that secret via the console or API; the env and file layers bypass that check",
    "family": "OMNIGLASS_SETTING__"
   },
   {
    "key": "OMNIGLASS_SETTING__ASSISTANT__KEY_SECRET",
    "scope": "server",
-   "doc": "A platform api-key secret, by name, sent as the bearer on every model call; empty calls without a key (a local server). Setting it takes secret:bind on it. The key never leaves the server",
+   "doc": "A platform api-key secret, by name, sent as the bearer on every model call; empty calls without a key (a local server). Setting it takes secret:bind on it via the console or API; the env and file layers bypass that check. The key never leaves the server",
    "family": "OMNIGLASS_SETTING__"
   },
   {

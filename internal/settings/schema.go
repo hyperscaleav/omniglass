@@ -103,7 +103,7 @@ type NotificationSettings struct {
 	MailRelay    string `json:"mail_relay" default:"" doc:"The SMTP relay email notifications go through, host:port (smtp.example.com:587). Empty turns email off. An internal relay is reached only when egress_allow names it"`
 	MailSecurity string `json:"mail_security" enum:"starttls,tls,none" default:"starttls" doc:"How the session to the relay is protected: starttls (the relay must offer it), tls (implicit TLS, port 465), or none, admitted only for a relay egress_allow names (a lab's mail sim)"`
 	MailFrom     string `json:"mail_from" default:"" doc:"The From address of an email notification (Omniglass <alerts@example.com>)"`
-	MailSecret   string `json:"mail_secret" default:"" doc:"A platform basic-auth secret, by name, the relay session authenticates with; empty sends without authenticating. Setting it, or moving mail_relay while one is set, takes secret:bind on that secret"`
+	MailSecret   string `json:"mail_secret" default:"" doc:"A platform basic-auth secret, by name, the relay session authenticates with; empty sends without authenticating. Setting it, or moving mail_relay while one is set, takes secret:bind on that secret via the console or API; the env and file layers bypass that check"`
 }
 
 // RetentionSettings is the retention namespace (#417): how long each sample
@@ -191,8 +191,8 @@ type AssistantSettings struct {
 	ConversationDays int    `json:"conversation_days" minimum:"1" maximum:"36500" default:"30" doc:"Days a stored omnibot conversation is kept after it last changed"`
 	Provider         string `json:"provider" enum:"none,openai" default:"none" doc:"The model omnibot runs on: openai (any OpenAI-compatible chat completions server, OpenRouter by default) or none, which leaves the server's recording, if any"`
 	Model            string `json:"model" default:"openai/gpt-4.1-mini" doc:"The model's name on that server (openai/gpt-4.1-mini on OpenRouter, llama3.1 on Ollama)"`
-	BaseURL          string `json:"base_url" default:"https://openrouter.ai/api/v1" doc:"The server's base URL, /chat/completions appended. An internal server is reached only when the notification settings' egress_allow names it. Moving it while a key_secret is bound takes secret:bind on that secret"`
-	KeySecret        string `json:"key_secret" default:"" doc:"A platform api-key secret, by name, sent as the bearer on every model call; empty calls without a key (a local server). Setting it takes secret:bind on it. The key never leaves the server"`
+	BaseURL          string `json:"base_url" default:"https://openrouter.ai/api/v1" doc:"The server's base URL, /chat/completions appended. An internal server is reached only when the notification settings' egress_allow names it. Moving it while a key_secret is bound takes secret:bind on that secret via the console or API; the env and file layers bypass that check"`
+	KeySecret        string `json:"key_secret" default:"" doc:"A platform api-key secret, by name, sent as the bearer on every model call; empty calls without a key (a local server). Setting it takes secret:bind on it via the console or API; the env and file layers bypass that check. The key never leaves the server"`
 }
 
 // AgentClassOverride is one role's override of the class policies (#2088). An

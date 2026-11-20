@@ -115,10 +115,26 @@ func validateEnvValue(ns, key string, coerced any, raw string) error {
 		return nil
 	}
 	var fe *FieldError
-	if errors.As(err, &fe) && (raw == "" || !strings.Contains(fe.Message, raw)) {
+	if errors.As(err, &fe) && !rawLeaksIntoMessage(raw, fe.Message) {
 		return errors.New(fe.Message)
 	}
 	return errors.New("the value is not one this setting accepts")
+}
+
+// rawLeaksIntoMessage reports whether any part of raw appears in msg. For
+// comma-separated list values, each entry is checked independently: a list
+// validator (such as egress.ParsePolicy) quotes the offending entry, not the
+// full raw string, so checking only the full string misses the leak.
+func rawLeaksIntoMessage(raw, msg string) bool {
+	if raw == "" {
+		return false
+	}
+	for _, seg := range strings.Split(raw, ",") {
+		if seg = strings.TrimSpace(seg); seg != "" && strings.Contains(msg, seg) {
+			return true
+		}
+	}
+	return false
 }
 
 // splitEnv is os.LookupEnv's split applied to an Environ entry: the KEY=VALUE

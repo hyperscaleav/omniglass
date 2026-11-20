@@ -1099,7 +1099,7 @@
         "properties": {
           "base_url": {
             "default": "https://openrouter.ai/api/v1",
-            "description": "The server's base URL, /chat/completions appended. An internal server is reached only when the notification settings' egress_allow names it. Moving it while a key_secret is bound takes secret:bind on that secret",
+            "description": "The server's base URL, /chat/completions appended. An internal server is reached only when the notification settings' egress_allow names it. Moving it while a key_secret is bound takes secret:bind on that secret via the console or API; the env and file layers bypass that check",
             "type": "string"
           },
           "conversation_days": {
@@ -1111,7 +1111,7 @@
             "type": "integer"
           },
           "key_secret": {
-            "description": "A platform api-key secret, by name, sent as the bearer on every model call; empty calls without a key (a local server). Setting it takes secret:bind on it. The key never leaves the server",
+            "description": "A platform api-key secret, by name, sent as the bearer on every model call; empty calls without a key (a local server). Setting it takes secret:bind on it via the console or API; the env and file layers bypass that check. The key never leaves the server",
             "type": "string"
           },
           "model": {
@@ -10384,7 +10384,7 @@
             "type": "string"
           },
           "mail_secret": {
-            "description": "A platform basic-auth secret, by name, the relay session authenticates with; empty sends without authenticating. Setting it, or moving mail_relay while one is set, takes secret:bind on that secret",
+            "description": "A platform basic-auth secret, by name, the relay session authenticates with; empty sends without authenticating. Setting it, or moving mail_relay while one is set, takes secret:bind on that secret via the console or API; the env and file layers bypass that check",
             "type": "string"
           },
           "mail_security": {

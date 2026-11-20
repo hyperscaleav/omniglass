@@ -153,6 +153,28 @@ func TestLoadEnvValueNotQuotedForSecretVariable(t *testing.T) {
 	}
 }
 
+// TestLoadEnvDoesNotLeakListEntryInError pins the value-hiding invariant for
+// list settings: if one entry in a comma-separated list fails validation, the
+// error must name the variable, never the bad entry. egress_allow drives a
+// list through ParsePolicy, which quotes the offending entry in its message;
+// that quoted segment must not appear in the boot error.
+func TestLoadEnvDoesNotLeakListEntryInError(t *testing.T) {
+	_, err := LoadEnv([]string{"OMNIGLASS_SETTING__NOTIFICATION__EGRESS_ALLOW=10.0.0.0/8,badentry!"})
+	if err == nil {
+		t.Fatal("LoadEnv accepted an invalid egress_allow entry")
+	}
+	if !errors.Is(err, ErrEnvBadValue) {
+		t.Errorf("err = %v, want wraps ErrEnvBadValue", err)
+	}
+	if !contains(err.Error(), "OMNIGLASS_SETTING__NOTIFICATION__EGRESS_ALLOW") {
+		t.Errorf("err %q does not name the variable", err)
+	}
+	// The bad entry must not appear in the error; the validator quotes it.
+	if contains(err.Error(), "badentry!") {
+		t.Errorf("err %q leaks the list entry value", err)
+	}
+}
+
 // TestLoadEnvIgnoresOtherVariables ignores anything without the prefix,
 // including secret variables (handled separately).
 func TestLoadEnvIgnoresOtherVariables(t *testing.T) {
