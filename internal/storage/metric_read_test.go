@@ -18,8 +18,11 @@ import (
 
 // seriesReads is what every reader of the rig's series answers: the series
 // read over the rig's week, the raw read, and the buckets holding samples at
-// a sub-hour, an hourly and a daily resolution (the grid and its covered edge
-// move with the clock; the buckets holding rows are what a fold could change).
+// an hourly and a daily resolution, a sub-hour one clamped to the hour over
+// the rig's 30 days (the grid and its covered edge move with the clock; the
+// buckets holding rows are what a fold could change). Each grid takes its
+// closed hours from the trends (#1566) and must equal the grid read from the
+// samples alone.
 type seriesReads struct {
 	samples []storage.BlockSample
 	raw     []storage.MetricSample
@@ -47,6 +50,13 @@ func (r *blockRig) reads(ids ...int64) seriesReads {
 		if err != nil {
 			r.t.Fatal(err)
 		}
+		fromSamples, err := r.gw.ListMetricBucketsFromSamples(r.ctx, "component", "prune-c1", "prune-rtt", nil, blockLaneDays*24*time.Hour, res)
+		if err != nil {
+			r.t.Fatal(err)
+		}
+		if err := sameBuckets(fromSamples.Buckets, grid.Buckets); err != nil {
+			r.t.Errorf("the %s buckets from the trends differ from the series read's: %v", res, err)
+		}
 		for _, b := range grid.Buckets {
 			if b.Count > 0 {
 				out.buckets[res] = append(out.buckets[res], b)
@@ -72,6 +82,15 @@ func (r *blockRig) same(when string, want, got seriesReads) {
 	}
 }
 
+// foldTrends folds the trends of every hour of the rig's week and the days
+// either side, as the compaction would have before the rig's compacted mark.
+func (r *blockRig) foldTrends() {
+	r.t.Helper()
+	if err := r.gw.FoldMetricTrendHours(r.ctx, r.day(-1), r.day(8)); err != nil {
+		r.t.Fatal(err)
+	}
+}
+
 // dropCovered deletes ids' raw rows of the rig's week, every day of which a
 // block covers once the week has folded: what a read of the blocks alone
 // would see.
@@ -85,6 +104,7 @@ func (r *blockRig) dropCovered(ids ...int64) {
 // (none of them dropped), and again with them gone.
 func (r *blockRig) foldAndRead(ids ...int64) {
 	r.t.Helper()
+	r.foldTrends()
 	before := r.reads(ids...)
 	if len(before.samples) == 0 || len(before.raw) == 0 {
 		r.t.Fatal("the series hold no samples to read")
@@ -166,6 +186,7 @@ func TestLateSamplesIntoFoldedDaysReadBackOnce(t *testing.T) {
 	mustExec(t, r.conn, `delete from metric where series_id = $1 and ts >= $2`, id, r.day(0).Add(23*time.Hour))
 	r.spaced(id, r.day(1), 170)
 	r.spaced(id, r.day(3), 5)
+	r.foldTrends()
 	r.fold(storage.BlockFold{MaxDays: blockLaneDays})
 	r.ingest(
 		sampleOf("", r.day(0).Add(10*time.Hour+time.Millisecond), -1),

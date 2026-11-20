@@ -30,7 +30,7 @@ merging it, and releasing it. Everything between the gates runs without a person
    another one first says so with GitHub's **blocked by** link, and a build refuses to start
    while any blocker is open. **Gate 1:** applying `run:dev-gha` is the
    approval to start.
-3. **Build and review.** The builder opens a draft PR, and marks it ready once `make test`
+3. **Build and review.** The builder opens a draft PR, and marks it ready once `make preflight`
    passes and `/ship-slice` is clean. Ready starts agent-review; its Changes requested starts
    agent-fix, whose push starts agent-review again. The loop ends when the reviewer says ship,
    which turns its check green, or after five fix rounds, when the PR parks with `needs-fred`.
@@ -92,8 +92,34 @@ which waits for every lens, posts them as one review: a finding on a diff line b
 comment, any other goes in the review's body. One blocking finding from any lens makes it
 request changes (on a PR its own App wrote, GitHub allows only a comment, so the review
 comments and opens with the blocking count), so agent-fix still sees one review per round and the five-round cap still
-counts rounds, not lenses. A lens that fails, times out or runs out of its 80 turns fails the check rather than passing
+counts rounds, not lenses. A lens that fails, times out or runs out of its turns fails the check rather than passing
 without its part; rerunning the failed jobs retries it.
+
+The review is short to read (#2224). Its body opens with one verdict line, `✅ Ship · nothing found`,
+`❌ Changes requested · N blocking · M advisory`, or `⚠️ N advisory` when every finding is advisory,
+then one strip with each lens's mark, then one line per finding that is not on a diff line. Each
+inline comment opens with its finding's title in bold. The failure, the fix and each lens's notes
+sit in collapsed `<details>` blocks under them.
+
+A re-review starts from what changed. After the first review, a push is reviewed from the head the
+reviewer last reviewed: the PR's own commits since, with what a merge from `main` brought in left
+out. That diff is where the lenses look first, not a fence: they read any code, pull up the whole
+PR diff, and run `go build`, `go vet` and `go test` when a finding turns on what the code does, and
+they raise a finding wherever the new changes cause or expose a problem. A force push that
+rewrites that history, or a last review that left a blocking finding in its body rather than on a
+line, gets a full review instead. The diff under review also picks the lenses and their turns. A
+diff that touches no code (Go, web, shell, SQL or the workflows) runs only the `neighbor` lens,
+plus the `recheck` lens when earlier findings are still open, and the turn limit grows with the
+diff, from 40 for up to 100 changed lines to 120 past 2,000.
+
+Open findings carry forward, and each one is rechecked. Every unresolved thread the reviewer
+opened, outdated ones included, still counts in the next verdict. When any are open, the re-review
+adds a `recheck` lens that goes through them one by one against the PR as it is now and says fixed
+or open for each. The reviewer then replies on each thread (`✅ Verified fixed at <sha>` or
+`❌ Still open at <sha>`, with what it saw) and resolves the fixed ones. A thread stops counting only
+when the recheck lens says fixed and no other lens raised it again, or when a person resolves it,
+so a blocker nobody fixed keeps the check red. A finding a lens raises again on an open thread is
+not posted twice.
 
 The review posts as a second GitHub App, `hyperscale-reviewer`, when one is set up. GitHub lets
 no App request changes on a PR it wrote, and the agents' App writes most PRs here, so without
@@ -115,10 +141,32 @@ too. The agent reads only the comment or review that started it. Write the ask t
 @hyperscale-agent the retry in poller.go never backs off; add the backoff and a test for it
 ```
 
+agent-fix answers each point on one line in its status comment, `✅ <point> · Fixed in <sha>`
+or `↩️ <point> · Not changed`, with its reasons collapsed under them, and replies
+`✅ Fixed in <sha>` on each review thread a commit it pushed fixed. A point counts as fixed only
+when its commit is one the run pushed. It never resolves a thread: the reviewer's recheck does
+that once it has seen the fix.
+
 When agent-review requests changes, agent-fix answers it automatically, up to five rounds per
 PR. After the fifth the PR parks: it gets the `needs-fred` label and a comment, and waits for a
 person to request changes, mention `@hyperscale-agent` or take it over. Fork PRs
 are skipped.
+
+## Green before it pushes
+
+Both agents run `make preflight` before every push and push only when it passes. It runs what
+the PR's required checks run: `make gen` with a drift check, `make test`, the docs build and
+the migration check against `origin/main`. The e2e tier and the image smoke stay CI-only.
+`scripts/preflight_test.go` fails if the target and the workflows it mirrors drift apart.
+Run it yourself before you push a PR by hand; it needs Docker and a fetched `origin/main`.
+
+agent-fix merges `main` into the PR's branch before the agent starts, with
+`scripts/agent-sync.sh merge`, and hands the agent any conflicts as its first job.
+claude-code-action puts main's copies of the agents' own config (`CLAUDE.md`, `.claude/`,
+`.mcp.json` and the like) into the work tree, and an agent PR must not commit them: `make
+preflight` fails an agent's run that does, and after the run agent-fix puts main's copies
+back in one commit if any slipped through. A ticket labeled `area:ci` may change that config;
+a PR a person opens is never held to it.
 
 ## Seeing an agent at work
 
@@ -133,6 +181,15 @@ agent-fix also puts an `agent-fix` check on the PR's head. It stays in progress 
 works, then finishes as success when the run pushed, neutral when it pushed nothing, and failure
 when the run broke. A run that pushed shows the finished check on the new head as well, since a
 PR lists only its head's checks. The check is not required; it is there to be seen.
+
+Every agent-build and agent-fix run also keeps what the agent did, as an artifact on the run
+named `agent-transcript-<issue or PR>-<run id>`, for 14 days. It holds the action's transcript
+and `agent-commands.json`: each shell command the agent ran with its exit code, then whether
+`make preflight` and `make test` ran and how each last ended. This is how a red push is told apart
+from a flake: an agent that never ran preflight shows it. The repo is public, so its artifacts
+are too, so `scripts/agent-transcript.sh` keeps no tool output (each result is cut to its exit
+code line) and masks secrets in what is left: the run's own tokens by value, with their base64
+forms, then private keys, tokens, JWTs, Authorization headers and URL credentials by shape.
 
 ## PRs from a session
 

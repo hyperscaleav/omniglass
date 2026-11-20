@@ -12,29 +12,29 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// SettlementVerdict is the computed state of a command's effect: never stored,
+// Settlement is the computed state of a command's effect: never stored,
 // always derived from the intended value it opened, the observed value the device
 // reports, and the command_type's settle window (the driver's fact about how long
 // the device takes to actuate). This is what turns the series' want/told/is
 // pivot into a command-settlement judgment. The verdict stays computed; what a
 // settle-check SEES it records onto the command row as a terminal status (#590),
 // the same way health records its transitions at the write that evaluates them.
-type SettlementVerdict string
+type Settlement string
 
 const (
 	// SettlementNone: nothing was commanded (no intended value), so there is
 	// nothing to settle.
-	SettlementNone SettlementVerdict = "none"
+	SettlementNone Settlement = "none"
 	// SettlementPending: still within the settle window since the command was
 	// issued, so a difference from observed is not yet drift (the device is given
 	// time to actuate).
-	SettlementPending SettlementVerdict = "pending"
+	SettlementPending Settlement = "pending"
 	// SettlementSettled: past the window, the observed value matches the intended
 	// one, so the command took effect.
-	SettlementSettled SettlementVerdict = "settled"
+	SettlementSettled Settlement = "settled"
 	// SettlementFailed: past the window, the observed value does not match the
 	// intended one (or is absent), so the command did not take effect.
-	SettlementFailed SettlementVerdict = "failed"
+	SettlementFailed Settlement = "failed"
 )
 
 // Settle computes a command's settlement verdict. Pure: the whole judgment is a
@@ -54,7 +54,7 @@ const (
 // sample's ts comes from, which closes the skew for every other window; this
 // branch is what makes the zero case independent of the clock rather than merely
 // agreeing with it.
-func Settle(intended, observed *CurrentValue, windowSeconds int, now time.Time) SettlementVerdict {
+func Settle(intended, observed *CurrentValue, windowSeconds int, now time.Time) Settlement {
 	if intended == nil {
 		return SettlementNone
 	}

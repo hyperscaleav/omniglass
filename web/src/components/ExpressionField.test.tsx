@@ -138,9 +138,9 @@ describe("ExpressionField", () => {
     expect(bound).toEqual(["humidity"]);
   });
 
-  it("inserts a template at the cursor, the cursor left in its slot", async () => {
-    const templates = [{ label: "max(▮)", text: "max()", cursor: 4, title: "The largest" }];
-    mount("", "temperature-c", false, { templates });
+  it("inserts a starter at the cursor, the cursor left in its slot", async () => {
+    const starters = [{ label: "max(▮)", text: "max()", cursor: 4, title: "The largest" }];
+    mount("", "temperature-c", false, { starters });
     const ed = await editor();
     (await screen.findByRole("button", { name: "max(▮)" })).click();
     const view = EditorView.findFromDOM(ed)!;

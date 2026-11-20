@@ -379,8 +379,31 @@ Properties have no trends.
 
 Trends are kept for `retention.trend_days` (730 by default) and pruned a chunk at a time, a window of
 their own: nothing forces it to exceed `retention.metric_days`, so a trend can go before its samples. A trend row
-costs about 145 bytes with its key, about 3.5 KB per series per day. Reading trends beyond the hot
-window is the bucketed series read (#1269).
+costs about 145 bytes with its key, about 3.5 KB per series per day.
+
+**Wide charts read the trends (#1566).** The bucketed series read takes closed hours from
+`metric_trend` rather than unnesting every sample of them
+([ADR-1566](/architecture/decisions/#adr-1566-a-wide-bucketed-read-is-whole-hours-and-takes-closed-hours-from-the-trends)):
+
+- **A wide read is whole hours.** A metric read of more than 48 hours (`BucketClampSpan`), or one
+  reaching past the series' hot window, is raised to whole hours, at least one
+  (`ClampBucketResolution`, pure). The response's `resolution_seconds` is the width applied, so 30
+  days asked at five minutes answers 720 hourly buckets. A property read is not clamped.
+- **Closed hours come from the trend, the rest from the series read.** At whole hours an observed
+  series (`trendedSeries`, the one place a trend setting would hook in, #1531) takes each hour from
+  its trend row from the trend window's edge up to the compacted mark, and stops at the first dirty
+  hour inside the hot window, since a dirtied hour's row is stale until it is recomputed. Every
+  other hour (open, after the mark, from that dirty hour on, the partial hours at either edge) is
+  the series read, so each hour is counted once, from one source. A calculated series, a sub-hour
+  or non-whole-hour resolution, and an instance with a calculated series beside its observed one
+  read the samples alone: a bucket's `last` there has to be placed across two series' samples,
+  which a trend row cannot.
+- **Equal to the series read.** count, min, max and last are exact, and avg differs only by the
+  order its sum was added in. The coverage of a trend-served read reaches back to the trend window,
+  so `covered_from` there is no longer the samples' retention edge.
+- **Measured.** Fifty series at one sample every 30 seconds for 30 days, read hourly over the 30
+  days: about 3.2 ms a series from the trends, against 80 ms over raw rows and 93 ms over folded
+  blocks from the series read, 185 ms for all fifty against 4.1 to 4.8 s, the same buckets both ways.
 
 **Lossless blocks: the compacted tier.** A raw row costs about 133 bytes a sample. The compacted tier
 holds the same samples, every one exact, for about 7 to 9: `metric_block` is one row per observed
@@ -448,7 +471,8 @@ where b.series_id = $1 order by b.span_start, b.span;
   max, avg, count and last), the series API and the CLI, the calc window and inputs, the event rule's
   judge, the rule preview and backtest, settlement, the current value and the trend recompute all
   read a series' samples through one Storage Gateway read (`metricReadSQL`, `metricNewestSQL`,
-  `MetricSeriesSamples`), so each answers the same before a day folds and after
+  `MetricSeriesSamples`), so each answers the same before a day folds and after (a whole-hour
+  bucketed read takes its closed hours from the trends instead, and is held to equal this read, #1566)
   ([ADR-1530](/architecture/decisions/#adr-1530-a-series-read-takes-a-folded-day-from-its-blocks-and-the-rest-from-raw-rows)).
   The judge's window averages and series and process ages (`ruleWindowSQL`, `ruleAgeSQL`,
   `processAgeSQL`) still read raw rows directly until they move to the blocks (#1572).

@@ -42,12 +42,22 @@ describe("action rail ownership", () => {
   });
 
   // The exact shape both offenders hand-rolled. A form body that lays out its own
-  // right-aligned button row is drawing a rail the shell already owns. This does NOT
-  // ban the full-page create forms' inline `border-t ... pt-4` row: that rail is not
-  // pinned and has no shell to move it to until the CRUD form primitive lands (#337).
+  // right-aligned button row is drawing a rail the shell already owns.
   it("no panel form body hand-rolls a right-aligned button row", () => {
     const handRolled = /class="[^"]*\bmt-1 flex justify-end gap-2\b[^"]*"/;
     const offenders = files.filter((f) => handRolled.test(readFileSync(f, "utf8"))).map(rel);
     expect(offenders).toEqual([]);
+  });
+
+  // The full-page create forms' inline `border-t ... pt-4` row is the one form
+  // action rail outside the shell's ownership. FormActionBar inline draws it, so
+  // no component may hand-roll a row with the inline rail's exact class signature,
+  // except FormActionBar which owns it. PanelFooter has different padding, and the
+  // blade row in pages/Files.tsx adds flex-wrap, so neither shares the signature.
+  it("FormActionBar inline is the one full-page form action rail", () => {
+    const inlineRail = /class="[^"]*\bflex items-center gap-2 border-t border-base-300 pt-4\b[^"]*"/;
+    const allowlist = ["components/FormActionBar.tsx"];
+    const offenders = files.filter((f) => inlineRail.test(readFileSync(f, "utf8"))).map(rel);
+    expect(offenders).toEqual(allowlist);
   });
 });

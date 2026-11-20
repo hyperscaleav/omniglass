@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   type CalcRule,
   aliasError,
-  calcTemplates,
+  calcStarters,
   createCalcBody,
   draftFromCalcRule,
   emptyCalcDraft,
@@ -122,14 +122,14 @@ describe("calc rules", () => {
     expect(previewCalcBody(d).name).toBeUndefined();
   });
 
-  // The start-from templates: each list function with its slot, the cursor
+  // The starters: each list function with its slot, the cursor
   // placed in the slot, and on a system the count over members.
-  it("offers start-from templates with the cursor in the slot", () => {
-    const comp = calcTemplates("component");
-    expect(comp.map((t) => t.text)).toEqual(["max()", "min()", "avg()", "sum()", "len()", "any()", "all()", "majority()"]);
+  it("offers starters with the cursor in the slot", () => {
+    const comp = calcStarters("component");
+    expect(comp.map((t: { text: string }) => t.text)).toEqual(["max()", "min()", "avg()", "sum()", "len()", "any()", "all()", "majority()"]);
     expect(comp[0].cursor).toBe(4);
-    const sys = calcTemplates("system");
-    const count = sys.find((t) => t.text.startsWith("count"))!;
+    const sys = calcStarters("system");
+    const count = sys.find((t: { text: string }) => t.text.startsWith("count"))!;
     expect(count.text).toBe("count(members, )");
     expect(count.text.slice(0, count.cursor)).toBe("count(members, ");
     for (const t of [...comp, ...sys]) expect(t.label).toBe(t.text.slice(0, t.cursor) + "▮" + t.text.slice(t.cursor));

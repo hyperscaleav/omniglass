@@ -21,7 +21,8 @@ Pick the path that fits where you are running it:
 - **[Container image](/guides/container-image/)** is the published distroless image: what it
   contains, where it ships, and how to run it with the `migrate` then `server` flow.
 - **[Deploying with Helm](/guides/helm/)** is the chart that serves both production (BYO Postgres)
-  and disposable previews (bundled Postgres) from one set of values.
+  and disposable previews (bundled Postgres) from one set of values. Production deployments are
+  framed in the [Helm guide's Production section](/guides/helm/#production).
 - **[PR preview environments](/guides/pr-previews/)** stand up a live, isolated copy of the console
   for any pull request, so a change is reviewed against a running system.
 

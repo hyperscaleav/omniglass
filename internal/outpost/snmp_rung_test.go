@@ -81,7 +81,7 @@ func TestTheSNMPRungIsAStandardGetAnswered(t *testing.T) {
 	if _, ok := got[collection.SignalTCPOpen]; ok {
 		t.Fatal("an snmp endpoint landed tcp-open")
 	}
-	if up, ok := collection.EndpointVerdict(dps); !ok || !up {
+	if up, ok := collection.EndpointReachability(dps); !ok || !up {
 		t.Fatalf("verdict = %v, %v; the get decides an snmp endpoint's verdict", up, ok)
 	}
 	if fake.community[0] != "lab-ro" || len(fake.oids[0]) != 1 || fake.oids[0][0] != driver.SysUpTimeOID {
@@ -157,7 +157,7 @@ func TestAnSNMPAuthorizationErrorGatesTheSessionRungAndHoldsTheGet(t *testing.T)
 	if r := held[collection.SignalEndpointResponsive]; r.Text != "down" || r.Labels[collection.ReasonLabel] != "rejected: auth" {
 		t.Fatalf("held responsive = %+v, want down, rejected: auth", r)
 	}
-	if up, ok := collection.EndpointVerdict(dps); !ok || up {
+	if up, ok := collection.EndpointReachability(dps); !ok || up {
 		t.Fatalf("held verdict = %v, %v, want down", up, ok)
 	}
 	poll := collection.TaskSpec{ID: "p1", Mode: "poll", Transport: "snmp", EndpointID: "ep-s", EndpointName: "snmp", Fingerprint: "fp-1",

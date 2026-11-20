@@ -742,13 +742,13 @@ func TestHealthReadsServeOnlyTheRollup(t *testing.T) {
 		values (clock_timestamp() + interval '1 second', 'system', $1::uuid, (select id from property_type where name = 'health'), '', to_jsonb('healthy'::text), 'declared')`, sys.ID); err != nil {
 		t.Fatal(err)
 	}
-	vs, err := f.gw.SystemVerdicts(f.ctx, all)
+	vs, err := f.gw.SystemHealths(f.ctx, all)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, v := range vs {
 		if v.SystemID == sys.ID && v.Verdict != "outage" {
-			t.Errorf("SystemVerdicts serves %q, want the rollup's outage", v.Verdict)
+			t.Errorf("SystemHealths serves %q, want the rollup's outage", v.Verdict)
 		}
 	}
 	fv, err := f.gw.FleetProjection(f.ctx, all, all, all)

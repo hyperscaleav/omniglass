@@ -24,10 +24,10 @@ import { describeError } from "../lib/format";
 // keyboard. No native validation attributes (validation-guard): the check is
 // the server's, and the caller learns the verdict through onCheck.
 //
-// A caller may offer start-from templates (a calc rule's list functions,
-// inserted at the cursor with the cursor left in the slot) and an action on
-// a name nothing binds (onBind: a calc rule binds it by giving an input that
-// alias), beside the fault and in its underline's tooltip.
+// A caller may offer starters (a calc rule's list functions, inserted at the
+// cursor with the cursor left in the slot) and an action on a name nothing
+// binds (onBind: a calc rule binds it by giving an input that alias), beside
+// the fault and in its underline's tooltip.
 export default function ExpressionField(p: {
   site: ValidateExpression["site"];
   // The sample key the expression reads (criteria types its value by it); the
@@ -54,9 +54,9 @@ export default function ExpressionField(p: {
   // checked against, could not be checked, or the editor did not load),
   // undefined while a check is pending.
   onCheck?: (ok: boolean | undefined) => void;
-  // Start-from templates, each inserted at the cursor, the cursor left
+  // Starters, each inserted at the cursor, the cursor left
   // `cursor` characters in (label draws the slot).
-  templates?: { label: string; text: string; cursor: number; title: string }[];
+  starters?: { label: string; text: string; cursor: number; title: string }[];
   // Bind a name the expression uses that nothing binds.
   onBind?: (name: string) => void;
 }): JSX.Element {
@@ -227,10 +227,10 @@ export default function ExpressionField(p: {
   return (
     <>
       {host}
-      <Show when={p.templates && p.templates.length > 0}>
+      <Show when={p.starters && p.starters.length > 0}>
         <div class="flex flex-wrap items-center gap-1" role="group" aria-label="Start from">
           <span class="text-[11px] text-base-content/50">Start from</span>
-          <For each={p.templates}>
+          <For each={p.starters}>
             {(t) => (
               <Button
                 intent="quiet"

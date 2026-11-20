@@ -37,7 +37,7 @@ pills, state-over-time strips, tables whose cells carry those, and event, alarm,
 and log lists.
 
 Excluded, because they state a fact about configuration, not about the fleet: origin chips
-(`official` / `custom` / `overridden`), type and kind chips, tag and role chips, `enabled` /
+(`official` / `custom` / `overridden`), type and kind chips, tag and slot chips, `enabled` /
 `disabled` and `active` / `paused` flags on rules, targets and subscriptions, tier and provenance
 badges (`ProvenanceDot`, the Properties panel), the lab banner, and credential lists
 (`SessionsList`). These recur on most admin pages; they are checked in the [page list](#every-page)

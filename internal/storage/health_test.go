@@ -483,7 +483,7 @@ func pureSlots(rows []storage.HealthSlot) []health.Slot {
 		slot := health.Slot{Name: r.Name, Quorum: r.Quorum, Impact: r.Impact}
 		for i := 0; i < r.Satisfying; i++ {
 			slot.Assigned = append(slot.Assigned, health.Component{
-				Name: fmt.Sprintf("%s-%d", r.Name, i), Verdict: health.Healthy,
+				Name: fmt.Sprintf("%s-%d", r.Name, i), Value: health.Healthy,
 			})
 		}
 		out = append(out, slot)
@@ -497,7 +497,7 @@ func pureSlots(rows []storage.HealthSlot) []health.Slot {
 // believed.
 func mustAgree(t *testing.T, rep *storage.HealthReport) {
 	t.Helper()
-	want := health.SystemVerdict(pureSlots(rep.Slots)).String()
+	want := health.SystemValue(pureSlots(rep.Slots)).String()
 	if rep.Verdict != want {
 		t.Fatalf("verdict %q contradicts its own slots (which roll up to %q): %+v", rep.Verdict, want, rep.Slots)
 	}
@@ -877,10 +877,10 @@ func TestHealthMovesOnLocationMove(t *testing.T) {
 }
 
 // reportedVerdicts reads the drill-down's verdicts back for the consistency check.
-func reportedVerdicts(systems []storage.HealthSystem) []health.Verdict {
-	out := make([]health.Verdict, 0, len(systems))
+func reportedVerdicts(systems []storage.HealthSystem) []health.Value {
+	out := make([]health.Value, 0, len(systems))
 	for _, s := range systems {
-		out = append(out, health.ParseVerdict(s.Verdict))
+		out = append(out, health.ParseValue(s.Verdict))
 	}
 	return out
 }

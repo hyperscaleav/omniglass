@@ -217,7 +217,7 @@ func TestTheUDPRequestRungIsTheTransportRung(t *testing.T) {
 	if _, ok := got[collection.SignalTCPOpen]; ok {
 		t.Fatalf("a udp endpoint landed tcp-open: %v", names(dps))
 	}
-	if up, ok := collection.EndpointVerdict(dps); !ok || !up {
+	if up, ok := collection.EndpointReachability(dps); !ok || !up {
 		t.Fatalf("verdict = %v, %v; the request rung decides a udp endpoint's verdict", up, ok)
 	}
 
@@ -234,7 +234,7 @@ func TestTheUDPRequestRungIsTheTransportRung(t *testing.T) {
 	if _, ok := got[collection.SignalUDPResponseTime]; ok {
 		t.Fatal("a lost request landed a timing")
 	}
-	if up, ok := collection.EndpointVerdict(dps); !ok || up {
+	if up, ok := collection.EndpointReachability(dps); !ok || up {
 		t.Fatalf("silent verdict = %v, %v, want down", up, ok)
 	}
 }

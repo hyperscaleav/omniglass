@@ -40,7 +40,7 @@ var labelUnsetExempt = map[string]string{
 	"task":             "content-addressed and derived; its label is minted with the row, never operator-typed",
 	"slot_choice":      "written as part of a slot declaration, covered by the system_slot prover on the same write",
 	"choice_alternate": "written inside its choice, covered by the same write as slot_choice",
-	"system_slot":      "written by SetStandardSlot with a label the declaration carries; the arc is keyed by owner, not by a bare name",
+	"system_slot":      "written by SetSystemSlot with a label the declaration carries; the arc is keyed by owner, not by a bare name",
 	"person":           "keyed by username rather than name; covered by the human profile prover below",
 	"user_group":       "covered by the group prover below, which is keyed by name like the rest",
 	// The three PENNED tables. A create with no label does not leave the column

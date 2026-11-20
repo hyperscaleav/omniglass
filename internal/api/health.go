@@ -205,7 +205,7 @@ func registerHealthRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Summary:     "Read every system's health verdict",
 		Description: "The current verdict for every system in the caller's read scope, in one call: the bulk counterpart of the per-system health read, carrying the one fact a list's health column renders and none of the explanation. A console painting a page of systems reads this once instead of resolving every slot, occupant, alarm and transition per row. A system that has never been recomputed reads healthy. Gated by system:read; an empty scope is an empty list, not a 403.",
 	}, "system", "read"), func(ctx context.Context, _ *struct{}) (*systemVerdictsOutput, error) {
-		vs, err := gw.SystemVerdicts(ctx, a.scopeFor(ctx, "system", "read"))
+		vs, err := gw.SystemHealths(ctx, a.scopeFor(ctx, "system", "read"))
 		if err != nil {
 			return nil, mapSystemErr(err)
 		}

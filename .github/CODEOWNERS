@@ -1,7 +1,10 @@
 # Default owners for everything in the repo. Required reviewers on every PR.
 * @hyperscaleav/maintainers
 
-# Architecture and doctrine docs get maintainer eyes specifically.
-/docs/architecture/ @hyperscaleav/maintainers
-/docs/contributing/ @hyperscaleav/maintainers
-/CLAUDE.md          @hyperscaleav/maintainers
+# Architecture and doctrine docs, the hook configuration, and CI get maintainer
+# eyes specifically so a rename or restructure does not silently drop ownership.
+/docs/src/content/docs/architecture/ @hyperscaleav/maintainers
+/docs/src/content/docs/contributing/ @hyperscaleav/maintainers
+/CLAUDE.md                           @hyperscaleav/maintainers
+/.claude/                            @hyperscaleav/maintainers
+/.github/                            @hyperscaleav/maintainers

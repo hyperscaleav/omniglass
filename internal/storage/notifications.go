@@ -274,7 +274,7 @@ func (p *PG) queueNotifications(ctx context.Context, tx pgx.Tx, componentID, ala
 		default:
 			f.subject, f.text, err = renderNotification(eng, r.subject, r.text, facts)
 			if err != nil {
-				f.status, f.reason = NotificationFailed, "the notification did not render: "+TemplateRefusal(err)
+				f.status, f.reason = NotificationFailed, "the notification did not render: "+RuleRefusal(err)
 			}
 		}
 		fires = append(fires, f)

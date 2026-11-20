@@ -87,7 +87,7 @@ func TestPanelTelnetSessionLogsInOperatesAndRecovers(t *testing.T) {
 	var armMu sync.Mutex
 	arms := 0
 	states := make(chan collection.SessionTransition, 64)
-	verdicts := make(chan collection.AuthVerdict, 8)
+	verdicts := make(chan collection.AuthReachability, 8)
 	s := collection.StartSession(collection.SessionConfig{
 		Target: target, Timeout: 2 * time.Second, Dialer: collection.NewTelnetSessionDialer(),
 		Auth: panelLogin("newtron"), Terminal: authRejected,
@@ -98,7 +98,7 @@ func TestPanelTelnetSessionLogsInOperatesAndRecovers(t *testing.T) {
 			armMu.Unlock()
 		},
 		OnTransition: func(tr collection.SessionTransition) { states <- tr },
-		OnAuth:       func(v collection.AuthVerdict) { verdicts <- v },
+		OnAuth:       func(v collection.AuthReachability) { verdicts <- v },
 	})
 	defer s.Close()
 	awaitSessionState(t, states, collection.SessionUp)
@@ -151,12 +151,12 @@ func TestPanelTelnetWrongPasswordIsRejectedAfterOneAttempt(t *testing.T) {
 	target := faceAddr(t, panel, "nvp-telnet")
 	dialer := &countingDialer{StagedDialer: collection.NewTelnetSessionDialer()}
 	states := make(chan collection.SessionTransition, 64)
-	verdicts := make(chan collection.AuthVerdict, 8)
+	verdicts := make(chan collection.AuthReachability, 8)
 	s := collection.StartSession(collection.SessionConfig{
 		Target: target, Timeout: 2 * time.Second, Dialer: dialer,
 		Auth: panelLogin("wrong"), Terminal: authRejected, Arm: []string{"SUBSCRIBE INPUT"},
 		OnTransition: func(tr collection.SessionTransition) { states <- tr },
-		OnAuth:       func(v collection.AuthVerdict) { verdicts <- v },
+		OnAuth:       func(v collection.AuthReachability) { verdicts <- v },
 	})
 	defer s.Close()
 	tr := awaitSessionState(t, states, collection.SessionRejected)

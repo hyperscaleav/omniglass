@@ -195,8 +195,8 @@ func (c *collector) runProbe(ctx context.Context, task collection.TaskSpec) erro
 	// row closes it as unreachable, the next up reopens it, and the
 	// dispatcher is woken to release or hold the endpoint's polls. A probe
 	// that could not be attempted left above and never reaches here, and a
-	// refusal's own down reading is no verdict (probeVerdict).
-	if up, ok := probeVerdict(dps); ok {
+	// refusal's own down reading is no verdict (probeReachability).
+	if up, ok := probeReachability(dps); ok {
 		c.sessions.verdict(task.EndpointID, task.ID, up, began)
 		c.wake()
 	}
@@ -371,7 +371,7 @@ func collectDriverTask(ctx context.Context, runner *collection.Runner, task coll
 // reachability metric (nothing to judge) or the verdict is unchanged, dps is
 // returned untouched.
 func appendVerdict(dps []collection.Sample, taskID string, verdicts map[string]string) []collection.Sample {
-	up, ok := collection.EndpointVerdict(dps)
+	up, ok := collection.EndpointReachability(dps)
 	if !ok {
 		return dps
 	}

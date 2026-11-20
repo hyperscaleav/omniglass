@@ -16,17 +16,40 @@ import (
 // truncates to a tail answers a 30-day request with the last 16 hours; a bucket
 // grid answers it with 720 hourly buckets whatever the cadence, and a one-sample
 // spike survives as its bucket's max. Nothing is stored for it: the buckets are
-// computed from the series' samples at read time (the series read, its raw
-// rows or the blocks a folded day is read from), inside the hot window. Beyond the
-// window the hourly trends will answer (#1276); until they exist nothing is read
-// past it, and CoveredFrom says where that edge is.
+// computed at read time. A metric read chooses its tier (#1566, ADR-1566): a
+// series with trends, read at whole hours, takes each hour the trend fold has
+// closed from its metric_trend row, so a 30-day read sums 720 rows rather than
+// unnesting a month of blocks, and reads back as far as the trends are kept;
+// every other hour, and every bucket of a series without trends, comes from
+// the series read (its raw rows or the blocks a folded day is read from),
+// inside the hot window. CoveredFrom says where the read's edge is.
 //
 // A bucket aggregates one logical series (#1485): one instance of the type on
 // the owner, measured rows only (observed and calculated). Two instances are
 // two series, and a declared or intended row is a want, not a reading, so
 // neither may move a bucket's min, max, avg or last. Rows of one instance from
-// different sources or collector outposts stay one series: an outpost move or a task
+// different sources or collector nodes stay one series: a node move or a task
 // reassignment does not split what was measured.
+
+// BucketClampSpan is the longest window a metric read may bucket finer than an
+// hour (ADR-1566): past it the resolution is raised to whole hours, so a wide
+// read is served from the hourly trends.
+const BucketClampSpan = 48 * time.Hour
+
+// ClampBucketResolution is the resolution a metric read of window applies to
+// a requested one (ADR-1566): unchanged for a window of at most BucketClampSpan
+// that stays inside retained (the series' hot window; zero when not yet
+// known), else rounded up to a whole number of hours, at least one. Pure, so
+// the rule tests without a database.
+func ClampBucketResolution(window, resolution, retained time.Duration) time.Duration {
+	if window <= BucketClampSpan && (retained <= 0 || window <= retained) {
+		return resolution
+	}
+	if resolution <= time.Hour {
+		return time.Hour
+	}
+	return (resolution + time.Hour - 1) / time.Hour * time.Hour
+}
 
 // MetricBucket is one regular bucket of a metric series. An empty bucket has
 // Count 0 and every aggregate nil.
@@ -36,12 +59,14 @@ type MetricBucket struct {
 	Min, Max, Avg, Last *float64
 }
 
-// MetricBuckets is a metric series' bucket grid, oldest first, and the
-// earliest instant the read could have data for: a bucket before it is empty
-// because retention removed its rows, not because collection stopped.
+// MetricBuckets is a metric series' bucket grid, oldest first, the bucket
+// width it applied (ClampBucketResolution), and the earliest instant the read
+// could have data for: a bucket before it is empty because retention removed
+// its rows, not because collection stopped.
 type MetricBuckets struct {
 	// Instance is the one instance the buckets aggregate (#1485).
 	Instance    string
+	Resolution  time.Duration
 	CoveredFrom time.Time
 	Buckets     []MetricBucket
 }
@@ -145,9 +170,10 @@ const (
 )
 
 // bucketJoinSQL lays the aggregates (the agg CTE, keyed by bucket start b) over
-// every bucket of the grid, an empty bucket left null.
+// every bucket of the grid, an empty bucket left null, each row carrying the
+// read's coverage floor (the first verb, bucketFloorSQL or a wider one).
 const bucketJoinSQL = `
-		select g.b, ` + bucketFloorSQL + `, coalesce(agg.n, 0), %s
+		select g.b, %s, coalesce(agg.n, 0), %s
 		from generate_series(` + bucketLoSQL + `, ` + bucketHiSQL + ` - make_interval(secs => $3), make_interval(secs => $3)) g(b)
 		left join agg on agg.b = g.b
 		order by g.b`
@@ -189,17 +215,75 @@ func scanInstances(rows pgx.Rows) ([]string, error) {
 	return out, rows.Err()
 }
 
-// ListMetricBuckets reads one metric series as regular buckets of resolution
-// over the last window, oldest first: one instance's measured rows, bounded to
-// the hot window the series' type retains for, read through the series read
-// (metricReadSQL), so a folded day buckets as its raw rows did. A bucket's
-// last is its newest sample, of the newest series of the instance when two
-// share its instant, then of the newest lineage and the last landed (before
-// #1572 it was the last landed row of any). instance nil asks the read to
-// pick the one instance with measured rows in the window, and an
+// trendedSeries is the condition that series a has hourly trends: the trend
+// fold closes its hours (foldTrendHour) and a bucketed read may take them from
+// metric_trend. Observed series only; a calculated series is sparse already
+// (ADR-1534). The per-type trend setting (#1531) narrows it here.
+func trendedSeries(a string) string {
+	return a + `.provenance = 'observed'`
+}
+
+// The trend-served stretch of a bucketed metric read (#1566), as SQL over the
+// grid's bind parameters: $8 is the trend window in days and $9 whether the
+// read may use trends at all (a whole-hour resolution). trendLoSQL is the
+// first whole hour the trends still hold inside the grid, or the grid's end
+// when the read uses none; pure, so it bounds the series read below it as the
+// grid's own bounds do. trendHiSQL is where a series' (alias s) trend-served
+// hours end: at the compacted mark, the grid's end, or the first hour inside
+// the hot window a late sample has dirtied and the recompute has not yet
+// folded again, whichever is first, never before trendLoSQL. From there the
+// series read answers, so a late sample is counted whether or not its hour has
+// been recomputed: the dirty mark is written in the sample's own transaction
+// and cleared in the recompute's, and the read is one statement. A series
+// whose instance also has a series without trends (a calculated one beside
+// the observed) takes no hour from its trends: a trend row does not say when
+// in its hour its last sample fell, so a bucket both share could not pick its
+// last as the series read does.
+const trendLoSQL = `(case when $9 then least(` + bucketHiSQL + `, date_bin('1 hour', greatest(` + bucketLoSQL + `,
+		now() - make_interval(days => $8::int)) - interval '1 microsecond', ` + trendEpoch + `) + interval '1 hour')
+		else ` + bucketHiSQL + ` end)`
+
+// untrendedSibling is the condition that series s's instance also has a
+// measured series without trends.
+var untrendedSibling = `exists (select 1 from metric_series u where u.owner_id = s.owner_id and u.owner_kind = s.owner_kind
+	and u.metric_type_id = s.metric_type_id and u.instance = s.instance
+	and u.provenance in ` + measuredProvenance + ` and not ` + trendedSeries("u") + `)`
+
+var trendHiSQL = `greatest(` + trendLoSQL + `, least(` + bucketHiSQL + `,
+		case when ` + untrendedSibling + ` then '-infinity'::timestamptz end,
+		coalesce((select tm.compacted_through from metric_trend_mark tm), '-infinity'),
+		coalesce((select min(td.hour) from metric_trend_dirty td
+			where td.series_id = s.id and td.hour >= greatest(` + trendLoSQL + `, ` + bucketFloorSQL + `)), 'infinity')))`
+
+// metricBucketSeries is the series a bucketed metric read aggregates (alias
+// s): the type on the owner, measured rows only.
+const metricBucketSeries = `s.owner_id = $1::uuid and s.owner_kind = $6 and s.metric_type_id = $2::uuid
+	and s.provenance in ` + measuredProvenance
+
+// ListMetricBuckets reads one metric series as regular buckets over the last
+// window, oldest first: one instance's measured rows, at the resolution
+// ClampBucketResolution applies, which it returns. At whole hours a series
+// with trends takes every hour the trend fold has closed from metric_trend,
+// back to the trend window's edge; every other hour, and a series without
+// trends, is read through the series read (metricReadSQL) inside the hot
+// window the series' type retains for, so a folded day buckets as its raw rows
+// did. Each hour is counted once, from one of them. A bucket's last is its
+// newest sample, of the newest series of the instance when two share its
+// instant, then of the newest lineage and the last landed; an instance with a
+// series without trends beside one with them reads every hour through the
+// series read (trendHiSQL), so a trend row's last never has to be placed
+// against another series' samples. instance nil asks the read
+// to pick the one instance with measured rows in the window, and an
 // *AmbiguousInstanceError lists them when there is more than one. The caller
 // resolves the owner in scope first, as for ListMetricSeries.
 func (p *PG) ListMetricBuckets(ctx context.Context, ownerKind, ownerRef, key string, instance *string, window, resolution time.Duration) (MetricBuckets, error) {
+	return p.listMetricBuckets(ctx, ownerKind, ownerRef, key, instance, window, resolution, true)
+}
+
+// listMetricBuckets is ListMetricBuckets, with trends only when trends is
+// set: unset, every bucket comes from the series read, the answer the trends
+// must equal.
+func (p *PG) listMetricBuckets(ctx context.Context, ownerKind, ownerRef, key string, instance *string, window, resolution time.Duration, trends bool) (MetricBuckets, error) {
 	var out MetricBuckets
 	if err := checkBucketing(window, resolution); err != nil {
 		return out, err
@@ -219,16 +303,20 @@ func (p *PG) ListMetricBuckets(ctx context.Context, ownerKind, ownerRef, key str
 	if err != nil {
 		return out, err
 	}
+	resolution = ClampBucketResolution(window, resolution, time.Duration(days)*24*time.Hour)
+	useTrends := trends && resolution%time.Hour == 0
 	n := bucketCount(window, resolution)
-	args := []any{arc, typeID, resolution.Seconds(), (time.Duration(n) * resolution).Seconds(), days, ownerKind, s.Retention.MetricDays}
-	read := metricReadSQL("s.id", bucketFloorSQL, bucketHiSQL, "$7")
+	args := []any{arc, typeID, resolution.Seconds(), (time.Duration(n) * resolution).Seconds(), days, ownerKind,
+		s.Retention.MetricDays, s.Retention.TrendDays, useTrends}
+	read := func(from, to string) string { return metricReadSQL("s.id", from, to, "$7") }
 	var measured []string
 	if instance == nil {
 		rows, err := p.pool.Query(ctx, `
 			select s.instance from metric_series s
-			where s.owner_id = $1::uuid and s.owner_kind = $6 and s.metric_type_id = $2::uuid
-			  and s.provenance in `+measuredProvenance+`
-			  and exists (`+read+`)
+			where `+metricBucketSeries+`
+			  and (exists (`+read(bucketFloorSQL, bucketHiSQL)+`)
+				or `+trendedSeries("s")+` and not `+untrendedSibling+` and exists (select 1 from metric_trend t
+					where t.series_id = s.id and t.hour >= `+trendLoSQL+` and t.hour < `+bucketHiSQL+`))
 			group by s.instance
 			order by s.instance`, args...)
 		if err != nil {
@@ -242,22 +330,51 @@ func (p *PG) ListMetricBuckets(ctx context.Context, ownerKind, ownerRef, key str
 	if err != nil {
 		return out, err
 	}
+	// pieces is every sample, or trend hour, the buckets aggregate, each with
+	// its bucket b, the instant it orders by for last (k: a sample's ts, a trend
+	// hour's last instant), and its part of count, min, max, sum and last. A
+	// series without trends is read whole; one with trends is read below the
+	// trends and after them, and takes its trend rows between.
+	const sample = `date_bin(make_interval(secs => $3), m.ts, timestamptz 'epoch') as b, m.ts as k, s.id as sid,
+				m.source_rule, m.source_rule_version, m.source_rule_id, m.ord,
+				1::bigint as n, m.value as mn, m.value as mx, m.value as sm, m.value as lst`
+	of := metricBucketSeries + ` and s.instance = $10`
+	covered := `(case when $9 and exists (select 1 from metric_series s where ` + of + ` and ` + trendedSeries("s") + `
+			and not ` + untrendedSibling + `)
+		then least(` + bucketFloorSQL + `, ` + trendLoSQL + `) else ` + bucketFloorSQL + ` end)`
 	rows, err := p.pool.Query(ctx, `with
+		pieces as (
+			select `+sample+`
+			from metric_series s cross join lateral (`+read(bucketFloorSQL, bucketHiSQL)+`) m
+			where `+of+` and not `+trendedSeries("s")+`
+			union all
+			select `+sample+`
+			from metric_series s cross join lateral (`+read(bucketFloorSQL, trendLoSQL)+`) m
+			where `+of+` and `+trendedSeries("s")+`
+			union all
+			select date_bin(make_interval(secs => $3), t.hour, timestamptz 'epoch'), t.hour + interval '1 hour' - interval '1 microsecond', s.id,
+				null::text, null::bigint, null::uuid, null::bigint,
+				t.count::bigint, t.min, t.max, t.sum, t.last
+			from metric_series s cross join lateral (select `+trendHiSQL+` as t_hi) th
+			join metric_trend t on t.series_id = s.id and t.hour >= `+trendLoSQL+` and t.hour < th.t_hi
+			where `+of+` and `+trendedSeries("s")+`
+			union all
+			select `+sample+`
+			from metric_series s cross join lateral (select greatest(`+trendHiSQL+`, `+bucketFloorSQL+`) as r_from) th
+			cross join lateral (`+read("th.r_from", bucketHiSQL)+`) m
+			where `+of+` and `+trendedSeries("s")+`),
 		agg as (
-			select date_bin(make_interval(secs => $3), m.ts, timestamptz 'epoch') as b, count(*) as n,
-				min(m.value) as mn, max(m.value) as mx, avg(m.value) as av,
-				(array_agg(m.value order by m.ts desc, s.id desc, `+metricLineageOrder("m", true)+`))[1] as lst
-			from metric_series s
-			cross join lateral (`+read+`) m
-			where s.owner_id = $1::uuid and s.owner_kind = $6 and s.metric_type_id = $2::uuid
-			  and s.instance = $8 and s.provenance in `+measuredProvenance+`
-			group by 1)`+fmt.Sprintf(bucketJoinSQL, "agg.mn, agg.mx, agg.av, agg.lst"),
+			select p.b, sum(p.n)::bigint as n, min(p.mn) as mn, max(p.mx) as mx, sum(p.sm) / sum(p.n)::float8 as av,
+				(array_agg(p.lst order by p.k desc, p.sid desc, `+metricLineageOrder("p", true)+`))[1] as lst
+			from pieces p
+			group by p.b)`+fmt.Sprintf(bucketJoinSQL, covered, "agg.mn, agg.mx, agg.av, agg.lst"),
 		append(args, inst)...)
 	if err != nil {
 		return out, fmt.Errorf("storage: list metric buckets %s/%s: %w", ownerRef, key, err)
 	}
 	defer rows.Close()
 	out.Instance = inst
+	out.Resolution = resolution
 	out.Buckets = make([]MetricBucket, 0, n)
 	for rows.Next() {
 		var b MetricBucket
@@ -340,7 +457,7 @@ func (p *PG) ListPropertyBuckets(ctx context.Context, ownerKind, ownerRef, key s
 			where pr.%s = $1::uuid and pr.property_type_id = $2::uuid
 			  and pr.instance = $6 and pr.provenance in `+measuredProvenance+`
 			  and pr.ts >= `+bucketFloorSQL+` and pr.ts < `+bucketHiSQL+`
-			group by 1)`, col)+fmt.Sprintf(bucketJoinSQL, "agg.lst"),
+			group by 1)`, col)+fmt.Sprintf(bucketJoinSQL, bucketFloorSQL, "agg.lst"),
 		append(args, inst)...)
 	if err != nil {
 		return out, fmt.Errorf("storage: list property buckets %s/%s: %w", ownerRef, key, err)

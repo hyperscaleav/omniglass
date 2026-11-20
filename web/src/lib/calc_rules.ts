@@ -13,7 +13,7 @@ import { CALC_ALIAS_MAX, CALC_RESERVED_NAMES } from "./calc_names.gen";
 // may read; writing one takes an all-scope grant.
 //
 // The pure half (the alias rules, the draft a form edits, the bodies it
-// sends, the start-from templates) takes plain values, so the form's rules are unit-tested
+// sends, the starters) takes plain values, so the form's rules are unit-tested
 // without a component.
 
 // The Go server sends an empty list as null; the layer reads every list as a
@@ -318,33 +318,33 @@ export function previewCalcBody(d: CalcDraft, editing?: string): CalcPreviewInpu
   return body;
 }
 
-// ---- start-from templates ---------------------------------------------------
+// ---- starters ---------------------------------------------------------------
 
-// A template inserts a list function with an empty slot, the cursor in it,
+// A starter inserts a list function with an empty slot, the cursor in it,
 // so the author's next keystroke (or a completion) names the input to fold.
 // label draws the slot as ▮.
-export type CalcTemplate = { label: string; text: string; cursor: number; title: string };
+export type CalcStarter = { label: string; text: string; cursor: number; title: string };
 
-function template(text: string, cursor: number, title: string): CalcTemplate {
+function starter(text: string, cursor: number, title: string): CalcStarter {
   return { label: text.slice(0, cursor) + "▮" + text.slice(cursor), text, cursor, title };
 }
 
-// calcTemplates are the templates for a rule of an owner kind: the list
+// calcStarters are the starters for a rule of an owner kind: the list
 // functions over one input's values, and on a system a count over its
 // members' records.
-export function calcTemplates(ownerKind: OwnerKind): CalcTemplate[] {
+export function calcStarters(ownerKind: OwnerKind): CalcStarter[] {
   const out = [
-    template("max()", 4, "The largest of an input's values"),
-    template("min()", 4, "The smallest of an input's values"),
-    template("avg()", 4, "The mean of an input's values"),
-    template("sum()", 4, "The total of an input's values"),
-    template("len()", 4, "How many values an input has"),
-    template("any()", 4, "Whether any of an input's bools is true"),
-    template("all()", 4, "Whether every one of an input's bools is true"),
-    template("majority()", 9, "The most common of an input's values; a tie goes to the one that sorts first"),
+    starter("max()", 4, "The largest of an input's values"),
+    starter("min()", 4, "The smallest of an input's values"),
+    starter("avg()", 4, "The mean of an input's values"),
+    starter("sum()", 4, "The total of an input's values"),
+    starter("len()", 4, "How many values an input has"),
+    starter("any()", 4, "Whether any of an input's bools is true"),
+    starter("all()", 4, "Whether every one of an input's bools is true"),
+    starter("majority()", 9, "The most common of an input's values; a tie goes to the one that sorts first"),
   ];
   if (ownerKind === "system") {
-    out.push(template("count(members, )", 15, "How many members pass a test of their own values, e.g. .has.t && .value.t > 30"));
+    out.push(starter("count(members, )", 15, "How many members pass a test of their own values, e.g. .has.t && .value.t > 30"));
   }
   return out;
 }

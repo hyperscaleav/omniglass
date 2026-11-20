@@ -19,7 +19,7 @@ import (
 // derived on read).
 
 // MetricTrendHorizon is how long after an hour ends the compaction waits
-// before closing it: the late-data horizon (ADR-0311, the outpost spool replays
+// before closing it: the late-data horizon (ADR-0311, the node spool replays
 // up to 12 hours), so an on-time spool replay lands before its hour closes.
 const MetricTrendHorizon = 24 * time.Hour
 
@@ -248,7 +248,7 @@ func (p *PG) foldTrendHour(ctx context.Context, h time.Time) error {
 	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
 	if _, err := tx.Exec(ctx, `insert into metric_trend (series_id, hour, count, min, max, sum, first, last)
 		select `+trendAggregates("$1::timestamptz")+`
-		from metric m join metric_series s on s.id = m.series_id and s.provenance = 'observed'
+		from metric m join metric_series s on s.id = m.series_id and `+trendedSeries("s")+`
 		where m.ts >= $1 and m.ts < $2
 		group by m.series_id `+trendUpsert, h, h.Add(time.Hour)); err != nil {
 		return fmt.Errorf("storage: compact the hour from %s: %w", h.Format(time.RFC3339), err)

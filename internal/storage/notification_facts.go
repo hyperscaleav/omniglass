@@ -197,14 +197,14 @@ const (
 	NotificationTextMax    = 4000
 )
 
-// ParseNotificationTemplate compiles one notification subject or text rule through the
-// sandbox's grammar: the edit-time check, so a template it refuses is never
+// ParseNotificationRule compiles one notification subject or text rule through the
+// sandbox's grammar: the edit-time check, so a rule it refuses is never
 // stored.
-func ParseNotificationTemplate(src string) (*sandbox.Template, error) {
+func ParseNotificationRule(src string) (*sandbox.Template, error) {
 	return sandbox.Basic.Parse(src)
 }
 
-// renderNotification renders a type's two templates over one fact map.
+// renderNotification renders a type's two rules over one fact map.
 func renderNotification(eng *sandbox.Engine, subject, text string, facts sandbox.Data) (string, string, error) {
 	st, err := eng.Parse(subject)
 	if err != nil {
