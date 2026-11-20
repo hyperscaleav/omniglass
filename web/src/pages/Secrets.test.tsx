@@ -26,7 +26,7 @@ const types: SecretType[] = [
 const seed: Secret[] = [
   { id: uuidFor("s-tier"), name: "poll_community", secret_type: "snmp-community", owner_kind: "platform", fields: [{ name: "community", value: "••••••", secret: true }] },
   { id: uuidFor("s-below"), name: "room_community", secret_type: "snmp-community", owner_kind: "location", owner_name: "room", fields: [{ name: "community", value: "••••••", secret: true }] },
-  { id: "env:bedrock-key", name: "bedrock-key", secret_type: "api-key", owner_kind: "platform", fields: [], source: "env", source_var: "OMNIGLASS_SECRET__BEDROCK_KEY" },
+  { id: uuidFor("env-bedrock-key"), name: "bedrock-key", secret_type: "api-key", owner_kind: "platform", fields: [], source: "env", source_var: "OMNIGLASS_SECRET__BEDROCK_KEY" },
 ];
 
 const owner: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
