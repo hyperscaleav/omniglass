@@ -305,3 +305,20 @@ func TestEnvReferenceListsOnlyLoadableKeys(t *testing.T) {
 		}
 	}
 }
+
+// TestLoadEnvHidesABadListEntry pins the no-echo rule for a list variable: a
+// check that rejects one entry quotes that entry, not the whole value, so the
+// boot error must not carry it either.
+func TestLoadEnvHidesABadListEntry(t *testing.T) {
+	const bad = "not!an!address"
+	_, err := LoadEnv([]string{"OMNIGLASS_SETTING__NOTIFICATION__EGRESS_ALLOW=10.0.0.0/8," + bad})
+	if err == nil {
+		t.Fatal("a bad egress_allow entry loaded")
+	}
+	if strings.Contains(err.Error(), bad) || strings.Contains(err.Error(), "10.0.0.0/8") {
+		t.Errorf("error echoes the value: %v", err)
+	}
+	if !strings.Contains(err.Error(), "OMNIGLASS_SETTING__NOTIFICATION__EGRESS_ALLOW") {
+		t.Errorf("error does not name the variable: %v", err)
+	}
+}

@@ -115,10 +115,29 @@ func validateEnvValue(ns, key string, coerced any, raw string) error {
 		return nil
 	}
 	var fe *FieldError
-	if errors.As(err, &fe) && (raw == "" || !strings.Contains(fe.Message, raw)) {
+	if errors.As(err, &fe) && !quotesValue(fe.Message, raw) {
 		return errors.New(fe.Message)
 	}
 	return errors.New("the value is not one this setting accepts")
+}
+
+// quotesValue reports whether msg carries the raw value or any entry of it.
+// A list variable is checked entry by entry, since a check on one bad entry
+// quotes that entry and not the whole comma-separated value. It fails closed:
+// a short entry that happens to appear in msg costs only the specific message.
+func quotesValue(msg, raw string) bool {
+	if raw == "" {
+		return false
+	}
+	if strings.Contains(msg, raw) {
+		return true
+	}
+	for _, part := range strings.Split(raw, ",") {
+		if part = strings.TrimSpace(part); part != "" && strings.Contains(msg, part) {
+			return true
+		}
+	}
+	return false
 }
 
 // splitEnv is os.LookupEnv's split applied to an Environ entry: the KEY=VALUE
