@@ -6,7 +6,7 @@ import (
 )
 
 func TestTypedEffective(t *testing.T) {
-	svc := NewService(Doc{}, func(ctx context.Context, scope string) (Doc, map[string][]string, error) {
+	svc := NewService(Doc{}, nil, func(ctx context.Context, scope string) (Doc, map[string][]string, error) {
 		return Doc{"ui": {"theme": "omniglass-light"}}, nil, nil
 	})
 	s, err := svc.EffectiveTyped(context.Background())

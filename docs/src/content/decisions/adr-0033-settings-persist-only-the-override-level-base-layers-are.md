@@ -24,3 +24,4 @@ summary: "The settings engine persists only the override level; the `code` and `
   epic [#270](https://github.com/hyperscaleav/omniglass/issues/270). Design:
   `docs/superpowers/specs/2026-07-17-settings-engine-design.md`.
 - **Amended by [ADR-0057](#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier):** the model is unchanged, the level names are not: `code` is now `default` (off the axis, the setting's own declaration) and `global` is now `platform` (the install-wide rung).
+- **Amended by [ADR-2223](#adr-2223-settings-read-an-env-layer-between-the-settings-file-and-the-console):** an `env` level, read from `OMNIGLASS_SETTING__*` variables, is a base layer beside `file`, between it and `platform`, recomputed in memory on every boot as `file` is, so restore re-exposes it as well.

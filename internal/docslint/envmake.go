@@ -1,6 +1,8 @@
 package docslint
 
 import (
+	"encoding/json"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -72,7 +74,38 @@ func loadEnvUniverse() (map[string]bool, error) {
 			return nil, err
 		}
 	}
+	// A family's per-key rows (#2223, the env settings layer) are read
+	// as a family, by prefix, so no literal names them; the generated
+	// reference, rendered from the Settings struct, is their source of truth.
+	if err := addGeneratedEnvKeys(universe); err != nil {
+		return nil, err
+	}
 	return universe, nil
+}
+
+// addGeneratedEnvKeys adds every concrete name the generated env-var
+// reference (docs/src/generated/config.json, make gen) carries: the per-key
+// rows of a family the binary reads by prefix. A placeholder row (a
+// <NAME> in the key) is no name and adds nothing.
+func addGeneratedEnvKeys(universe map[string]bool) error {
+	b, err := os.ReadFile(filepath.Join(repoRoot, "docs", "src", "generated", "config.json"))
+	if err != nil {
+		return err
+	}
+	var doc struct {
+		Vars []struct {
+			Key string `json:"key"`
+		} `json:"vars"`
+	}
+	if err := json.Unmarshal(b, &doc); err != nil {
+		return fmt.Errorf("docslint: config.json: %w", err)
+	}
+	for _, v := range doc.Vars {
+		if envVarName.FindString(v.Key) == v.Key {
+			universe[v.Key] = true
+		}
+	}
+	return nil
 }
 
 // scanUnfenced runs fn over every unfenced line of every non-history docs

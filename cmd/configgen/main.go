@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 
 	"github.com/hyperscaleav/omniglass/internal/config"
+	_ "github.com/hyperscaleav/omniglass/internal/config/settingsfacts"
 )
 
 const dst = "docs/src/generated/config.json"

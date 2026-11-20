@@ -1292,11 +1292,13 @@ type PG struct {
 	tracer pgx.QueryTracer
 
 	// The settings the gateway itself reads. Today that is the acronym
-	// dictionary the label engine titles with (#684); the file layer is captured
-	// at construction and the platform layer is read live off the pool, so an
-	// operator's edit reaches the next render without a restart. labelEngines
-	// holds the engine built from whatever the last read resolved.
+	// dictionary the label engine titles with (#684); the file and env layers
+	// are captured at construction and the platform layer is read live off
+	// the pool, so an operator's edit reaches the next render without a
+	// restart. labelEngines holds the engine built from whatever the last
+	// read resolved.
 	settingsFile settings.Doc
+	settingsEnv  settings.Doc
 	settings     *settings.Service
 	labelEngines label.EngineCache
 	// judges is each event rule's compiled criteria, per rule version.
@@ -1345,6 +1347,16 @@ func WithBlobStore(store blob.Store) Option {
 // settings read served another.
 func WithSettingsFile(doc settings.Doc) Option {
 	return func(p *PG) { p.settingsFile = doc }
+}
+
+// WithSettingsEnv installs the env settings layer the gateway's settings
+// reads resolve through (#2223), the layer between the operator file and the
+// platform binding. Like the file layer it is captured once at boot, because
+// the process environment is the interface and rotation is a restart; the
+// gateway needs it for the same reason it needs the file, so its own reads
+// cannot answer differently from the API's.
+func WithSettingsEnv(doc settings.Doc) Option {
+	return func(p *PG) { p.settingsEnv = doc }
 }
 
 // WithQueryTracer installs a pgx query tracer on every connection the pool
@@ -1411,7 +1423,7 @@ func NewPG(ctx context.Context, dsn string, opts ...Option) (*PG, error) {
 	// platform binding, which is this gateway: injecting a service that closes
 	// over the gateway would make the two mutually constructing, and the settings
 	// package deliberately does not import storage.
-	p.settings = settings.NewService(p.settingsFile, func(ctx context.Context, scope string) (settings.Doc, map[string][]string, error) {
+	p.settings = settings.NewService(p.settingsFile, p.settingsEnv, func(ctx context.Context, scope string) (settings.Doc, map[string][]string, error) {
 		return p.settingLevel(ctx, p.pool, scope)
 	})
 	return p, nil

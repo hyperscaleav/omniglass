@@ -31,23 +31,31 @@ document is complete, except for an [optional setting](#the-single-source-struct
 none and is absent until a level sets it. It is the **fall-through**, not the bottom rung
 ([cascade](/architecture/cascade/#bindings-cascade-declarations-do-not)).
 
-**The base layer** is recomputed into memory on every boot and never stored in the binding table:
+**The base layers** are recomputed into memory on every boot and never stored in the binding table:
 
 1. **`file`**: an operator settings file (`settings.json` or YAML) at a bootstrap-configured path,
    optional. The GitOps / Kubernetes ConfigMap layer; a change lands on pod restart.
+2. **`env`**: variables of the form `OMNIGLASS_SETTING__<NAMESPACE>__<KEY>=value` (double-underscore
+   separators), parsed at boot and feeding one key each. Values are coerced to the key's Go kind
+   (ints, bools, scalars, and comma-separated lists) through the same declaration the file validates
+   against, so the single-source struct is still the only shape. A `profile`-domain namespace is
+   refused at boot (naming the variable), since per-user values do not live in the process
+   environment. The twelve-factor rung between the committed file and the DB admin override: a
+   container's secret, a CI's temporary nudge, a per-environment flip without an edit to the file
+   image (#2223).
 
 **Binding levels** are rows in Postgres, the identity cascade: a value set at a level is that level's **binding**, and a more-specific binding **shadows** a broader one.
 
-2. **`platform`**: the install-wide admin binding. **Slice-0.**
+3. **`platform`**: the install-wide admin binding. **Slice-0.**
 
 :::design[The group and user binding rungs, tracked in #270]
-3. **`group`**: per user-group binding. **Fast-follow.**
-4. **`user`**: per-user binding. **Fast-follow.**
+4. **`group`**: per user-group binding. **Fast-follow.**
+5. **`user`**: per-user binding. **Fast-follow.**
 :::
 
 ### Most-specific wins
 
-Absent any lock, a more-specific level wins: `user > group > platform > file`. Where no level set
+Absent any lock, a more-specific level wins: `user > group > platform > env > file`. Where no level set
 the key, the value is the setting's `default`, which provenance reports as a **declaration**, not a
 level. Merge is a **deep merge in JSON map-space**, so key **presence** decides a binding, not a
 Go zero-value: a key set to `false` shadows, an absent key inherits. A write is an RFC 7386 JSON
@@ -68,7 +76,7 @@ falls out: a user may edit a key at level L if and only if no broader level has 
 Every resolved key reports **where it came from** and its **lock state**: the admin read returns the
 effective document plus a sibling `sources` map (`namespace.key` to the winning level, or `default`)
 and a `locks` map (`namespace.key` to the locking level). The Admin page badges a set key
-(`From settings file` / `Set in console`) and badges nothing for a declared default ("Declared
+(`From settings file` / `From environment` / `Set in console`) and badges nothing for a declared default ("Declared
 default" in the layer stack); a row expands to teach the full layer stack (doctrine 4).
 
 ## Domains: platform versus profile
@@ -98,14 +106,14 @@ threshold past which the server logs and counts a query as slow, re-read each re
 
 ## Storage: one binding table, unscoped
 
-The declared defaults and the file layer live in memory, so Postgres holds **only the binding
-levels**: a single `setting_binding(scope, user_id, namespace, doc, locks, ...)` table with a
+The declared defaults, the file layer and the env layer live in memory, so Postgres holds **only
+the binding levels**: a single `setting_binding(scope, user_id, namespace, doc, locks, ...)` table with a
 `unique nulls not distinct (scope, user_id, namespace)` identity (a surrogate `id` primary
 key; `user_id` is nullable, and Postgres forbids NULL in a PK column). `scope` is under a
 CHECK naming the persisted levels, today `platform` alone, so a level the resolver would
 never read cannot be written and a future tier rename fails loudly. Restore falls out of the layer
 model: **restore a namespace** is a `DELETE` of its row, **restore everything** truncates the
-scope, and the file layer plus declared defaults re-supply the values. The table is **never
+scope, and the env layer, the file layer and the declared defaults re-supply the values. The table is **never
 boot-seeded** (operator data). Persisting only the bindings is a recorded call
 ([ADR-0033](/architecture/decisions/#adr-0033-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory)),
 diverging from the scaling page's "materialized in Postgres" sketch.
@@ -265,7 +273,7 @@ Two read audiences, two read endpoints, and merge-patch writes:
   Merge Patch onto the namespace's binding at the acting scope (`platform` in slice-0); `null`
   restores a key.
 - **`DELETE /settings/{namespace}`** (same gates): drop the binding, restoring the namespace to
-  defaults.
+  its env layer, file layer and defaults.
 - **`POST /settings:restoreDefaults`** (same gates): an AIP custom method, a factory reset of the
   acting scope.
 
@@ -308,7 +316,7 @@ caller (the Storage Gateway) through a narrow function seam.
 
 ## Slice-0 boundary
 
-**In:** the platform level (file plus DB), the full cascade-shaped payload, and the platform lock
+**In:** the platform level (file, env and DB), the full cascade-shaped payload, and the platform lock
 stored, shown, and enforced, end to end through the pure engine, the binding table, the Gateway,
 the API, the two permissions, the two seeded `profile` namespaces, and the Admin settings page.
 

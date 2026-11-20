@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/hyperscaleav/omniglass/internal/outpost"
+	"github.com/hyperscaleav/omniglass/internal/settings"
 	"github.com/hyperscaleav/omniglass/internal/simoutpost"
 )
 
@@ -289,6 +290,12 @@ type Options struct {
 	// the seed alone is handed it, seals it as a platform secret and points
 	// omnibot at it. Empty plays the recording.
 	OmnibotKey string
+	// ServerSettingsEnv is the host's OMNIGLASS_SETTING__<NS>__<KEY>=value
+	// entries (#2223), forwarded to the server alone so the server's env
+	// settings layer takes them: a lab exported with the assistant's base_url
+	// and model runs omnibot on that model with no setting update. Each entry
+	// is checked to carry the prefix; the server judges the rest at boot.
+	ServerSettingsEnv []string
 	// Cadence names the outpost's cadence profile (CadenceProfiles); empty is
 	// the lab's own.
 	Cadence string
@@ -541,6 +548,11 @@ func Plan(o Options) (Spec, error) {
 	if o.OmnibotKey != "" && o.Scale() {
 		return Spec{}, fmt.Errorf("a scale lab runs no omnibot of its own, so it cannot take --omnibot-key-env")
 	}
+	for _, e := range o.ServerSettingsEnv {
+		if name, _, _ := strings.Cut(e, "="); !strings.HasPrefix(name, settings.EnvPrefix) {
+			return Spec{}, fmt.Errorf("lab: %s is not a server setting variable (%s<NAMESPACE>__<KEY>)", name, settings.EnvPrefix)
+		}
+	}
 	if o.PlatformHistory && !o.Ephemeral {
 		return Spec{}, fmt.Errorf("--platform-history seeds made-up platform figures for a capture, so it needs --ephemeral: a learner's lab reads its own")
 	}
@@ -678,6 +690,9 @@ func Plan(o Options) (Spec, error) {
 		// lab's seed writes none, so its server is not pointed at one.
 		spec.Server.Env = append(spec.Server.Env, "OMNIGLASS_OMNIBOT_REPLAY="+OmnibotReplayPath)
 	}
+	// The host's settings variables (#2223) reach the server alone, after
+	// the lab's own, so the server's env layer resolves them.
+	spec.Server.Env = append(spec.Server.Env, o.ServerSettingsEnv...)
 	outpostCmd := []string{"outpost", "run", "--simulate", "--impairments", "--heartbeat", cadence.Heartbeat,
 		"--probe-every", cadence.ProbeEvery, "--worklist-every", cadence.WorklistEvery, "--poll", cadence.SimPoll}
 	outpostService := func(service, name, token string, components int, role string) Service {

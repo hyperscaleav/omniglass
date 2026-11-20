@@ -107,15 +107,20 @@ func runServer(ctx context.Context, version string, lab bool) error {
 	}
 	log.Info("encryption key loaded", "source", source)
 
-	// Settings engine: the operator file layer is captured once at boot, the
-	// declared defaults are reflected from the type, and the platform DB override
-	// is read live per call. The gateway builds the resolver (it IS the override
-	// reader) and the API is handed the same one, so the labels the gateway
-	// renders and the settings the console reads cannot come from two documents.
-	// The file is loaded BEFORE the gateway because the gateway captures it.
+	// Settings engine: the operator file and environment layers are captured
+	// once at boot, the declared defaults are reflected from the type, and the
+	// platform DB override is read live per call. The gateway builds the
+	// resolver (it IS the override reader) and the API is handed the same
+	// one, so the labels the gateway renders and the settings the console
+	// reads cannot come from two documents. The file and env are loaded
+	// BEFORE the gateway because the gateway captures them.
 	settingsFile, err := settings.LoadFile(c.SettingsFile)
 	if err != nil {
 		return fmt.Errorf("server: load settings file: %w", err)
+	}
+	settingsEnv, err := settings.LoadEnv(config.Environ(settings.EnvPrefix))
+	if err != nil {
+		return fmt.Errorf("server: load settings env: %w", err)
 	}
 
 	// The server's measure of itself (#1627): its slow-query tracer is
@@ -124,6 +129,7 @@ func runServer(ctx context.Context, version string, lab bool) error {
 	gw, err := storage.NewPG(ctx, c.DSN,
 		storage.WithSecretProvider(secret.NewStaticProvider(kek)),
 		storage.WithSettingsFile(settingsFile),
+		storage.WithSettingsEnv(settingsEnv),
 		storage.WithQueryTracer(self.tracer))
 	if err != nil {
 		return err

@@ -48,7 +48,7 @@ export const settingsSchema = {
   },
   "assistant": {
     "base_url": {
-      "description": "The server's base URL, /chat/completions appended. An internal server is reached only when the notification settings' egress_allow names it. Moving it while a key_secret is bound takes secret:bind on that secret",
+      "description": "The server's base URL, /chat/completions appended. An internal server is reached only when the notification settings' egress_allow names it. Moving it from the console or API while a key_secret is bound takes secret:bind on that secret; the settings file and environment are trusted as deployment config",
       "type": "string"
     },
     "conversation_days": {
@@ -59,7 +59,7 @@ export const settingsSchema = {
       "format": "int64"
     },
     "key_secret": {
-      "description": "A platform api-key secret, by name, sent as the bearer on every model call; empty calls without a key (a local server). Setting it takes secret:bind on it. The key never leaves the server",
+      "description": "A platform api-key secret, by name, sent as the bearer on every model call; empty calls without a key (a local server). Setting it from the console or API takes secret:bind on it; the settings file and environment are trusted as deployment config. The key never leaves the server",
       "type": "string"
     },
     "model": {
@@ -148,7 +148,7 @@ export const settingsSchema = {
       "type": "string"
     },
     "mail_secret": {
-      "description": "A platform basic-auth secret, by name, the relay session authenticates with; empty sends without authenticating. Setting it, or moving mail_relay while one is set, takes secret:bind on that secret",
+      "description": "A platform basic-auth secret, by name, the relay session authenticates with; empty sends without authenticating. Setting it from the console or API, or moving mail_relay there while one is set, takes secret:bind on that secret; the settings file and environment are trusted as deployment config",
       "type": "string"
     },
     "mail_security": {

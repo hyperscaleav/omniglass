@@ -301,7 +301,11 @@ run, naming it, rather than playing the recording. `{"provider":"none"}` turns t
 
 A lab runs omnibot on a live model with one flag: `omniglass lab run --omnibot-key-env OPENROUTER_API_KEY`
 stores that variable's value as the lab's key and points `assistant` at OpenRouter. Without the
-flag the lab plays its recording, and a lab started without it again forgets the key.
+flag the lab plays its recording, and a lab started without it again forgets the key. The assistant's
+`base_url` and `model` may also come from the server's environment, as
+`OMNIGLASS_SETTING__ASSISTANT__BASE_URL` and `OMNIGLASS_SETTING__ASSISTANT__MODEL`; a lab forwards
+both from your shell, so the same flag runs omnibot on Bedrock or any other OpenAI-compatible
+server ([the lab guide](/guides/lab/)).
 
 ### Giving omnibot a credential
 

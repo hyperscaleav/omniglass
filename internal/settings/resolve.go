@@ -4,7 +4,7 @@ import "fmt"
 
 // Level is one contribution to the cascade: a named layer, its document, and the
 // key-paths it locks per namespace. Levels are passed to Resolve broad to specific
-// (default, file, platform, then later group, user). "default" is the type's own
+// (default, file, env, platform, then later group, user). "default" is the type's own
 // declaration rather than a binding: it is what the setting is when nobody set it,
 // and it never appears as a row.
 type Level struct {
@@ -31,7 +31,7 @@ type Resolved struct {
 func Resolve(levels ...Level) Resolved {
 	// Lock identity keys on the level name, so names must be unique: a duplicate
 	// would let a more-specific level bypass a broader level's lock. Level names are
-	// engine constants (default, file, platform, group, user), so a collision is a
+	// engine constants (default, file, env, platform, group, user), so a collision is a
 	// programming defect, not a runtime condition.
 	seen := make(map[string]bool, len(levels))
 	for _, lvl := range levels {

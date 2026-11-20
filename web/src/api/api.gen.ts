@@ -704,7 +704,7 @@ export const AssistantSettingsProvider = {
 } as const;
 
 export type AssistantSettings = {
-  /** The server's base URL, /chat/completions appended. An internal server is reached only when the notification settings' egress_allow names it. Moving it while a key_secret is bound takes secret:bind on that secret */
+  /** The server's base URL, /chat/completions appended. An internal server is reached only when the notification settings' egress_allow names it. Moving it from the console or API while a key_secret is bound takes secret:bind on that secret; the settings file and environment are trusted as deployment config */
   base_url: string;
   /**
      * Days a stored omnibot conversation is kept after it last changed
@@ -712,7 +712,7 @@ export type AssistantSettings = {
      * @maximum 36500
      */
   conversation_days: number;
-  /** A platform api-key secret, by name, sent as the bearer on every model call; empty calls without a key (a local server). Setting it takes secret:bind on it. The key never leaves the server */
+  /** A platform api-key secret, by name, sent as the bearer on every model call; empty calls without a key (a local server). Setting it from the console or API takes secret:bind on it; the settings file and environment are trusted as deployment config. The key never leaves the server */
   key_secret: string;
   /** The model's name on that server (openai/gpt-4.1-mini on OpenRouter, llama3.1 on Ollama) */
   model: string;
@@ -6135,7 +6135,7 @@ export type NotificationSettings = {
   mail_from: string;
   /** The SMTP relay email notifications go through, host:port (smtp.example.com:587). Empty turns email off. An internal relay is reached only when egress_allow names it */
   mail_relay: string;
-  /** A platform basic-auth secret, by name, the relay session authenticates with; empty sends without authenticating. Setting it, or moving mail_relay while one is set, takes secret:bind on that secret */
+  /** A platform basic-auth secret, by name, the relay session authenticates with; empty sends without authenticating. Setting it from the console or API, or moving mail_relay there while one is set, takes secret:bind on that secret; the settings file and environment are trusted as deployment config */
   mail_secret: string;
   /** How the session to the relay is protected: starttls (the relay must offer it), tls (implicit TLS, port 465), or none, admitted only for a relay egress_allow names (a lab's mail sim) */
   mail_security: NotificationSettingsMailSecurity;
@@ -7849,7 +7849,7 @@ export type SettingsMeOutputBody = {
 export type SettingsReadOutputBodyLocks = {[key: string]: string};
 
 /**
- * key 'namespace.key' to the winning level (default|file|platform)
+ * key 'namespace.key' to the winning level (default|file|env|platform)
  */
 export type SettingsReadOutputBodySources = {[key: string]: string};
 
@@ -7858,7 +7858,7 @@ export type SettingsReadOutputBody = {
   readonly $schema?: string;
   /** key 'namespace.key' to the locking level, when locked */
   locks: SettingsReadOutputBodyLocks;
-  /** key 'namespace.key' to the winning level (default|file|platform) */
+  /** key 'namespace.key' to the winning level (default|file|env|platform) */
   sources: SettingsReadOutputBodySources;
   values: Settings;
 };
@@ -20340,7 +20340,7 @@ export const getDeleteSettingsNamespaceUrl = (namespace: string,) => {
 }
 
 /**
- * Drops the namespace's platform binding, restoring the file layer and the declared defaults. Gated by settings:update and platform:update.
+ * Drops the namespace's platform binding, restoring the env layer, the file layer and the declared defaults. Gated by settings:update and platform:update.
  * @summary Restore a settings namespace to defaults
  */
 export const deleteSettingsNamespace = async (namespace: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteSettingsNamespaceResponse> => {
@@ -20429,7 +20429,7 @@ export const getRestoreSettingsDefaultsUrl = () => {
 }
 
 /**
- * Removes every platform binding (a factory reset). Gated by settings:update and platform:update.
+ * Removes every platform binding (a factory reset), restoring the env layer, the file layer and the declared defaults. Gated by settings:update and platform:update.
  * @summary Restore all settings to defaults
  */
 export const restoreSettingsDefaults = async ( options?: Parameters<typeof ogFetch>[1]): Promise<restoreSettingsDefaultsResponse> => {

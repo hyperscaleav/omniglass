@@ -540,7 +540,7 @@ func specAPI(gw storage.Gateway) huma.API {
 // during the server-less spec dump (handlers are only registered, not called), so
 // specAPI's stub gateway is fine.
 func defaultSettingsService(gw storage.Gateway) *settings.Service {
-	return settings.NewService(nil, func(ctx context.Context, scope string) (settings.Doc, map[string][]string, error) {
+	return settings.NewService(nil, nil, func(ctx context.Context, scope string) (settings.Doc, map[string][]string, error) {
 		rows, err := gw.GetSettingBindings(ctx, scope)
 		if err != nil {
 			return nil, nil, err

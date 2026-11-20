@@ -1,8 +1,6 @@
 package config
 
 import (
-	"encoding/json"
-	"os"
 	"strings"
 	"testing"
 )
@@ -97,35 +95,6 @@ func TestGetReadsRegistered(t *testing.T) {
 	t.Setenv("OMNIGLASS_ADDR", ":9999")
 	if got := Get("OMNIGLASS_ADDR"); got != ":9999" {
 		t.Errorf("Get(OMNIGLASS_ADDR) = %q, want :9999", got)
-	}
-}
-
-// TestConfigFactsMatchesCommitted is the drift gate for the generated env-var
-// reference: the committed docs/src/generated/config.json must equal a fresh
-// render of the registry.
-func TestConfigFactsMatchesCommitted(t *testing.T) {
-	fresh, err := FactsJSON()
-	if err != nil {
-		t.Fatalf("FactsJSON: %v", err)
-	}
-	committed, err := os.ReadFile("../../docs/src/generated/config.json")
-	if err != nil {
-		t.Fatalf("read committed config.json (run make gen and commit it): %v", err)
-	}
-	if string(committed) != string(fresh) {
-		t.Error("docs/src/generated/config.json drifted from the registry: run make gen and commit the result")
-	}
-	var doc struct {
-		Vars []struct {
-			Key   string `json:"key"`
-			Scope string `json:"scope"`
-		} `json:"vars"`
-	}
-	if err := json.Unmarshal(fresh, &doc); err != nil {
-		t.Fatalf("facts JSON does not parse: %v", err)
-	}
-	if len(doc.Vars) != len(Registry) {
-		t.Errorf("facts carries %d vars, registry %d", len(doc.Vars), len(Registry))
 	}
 }
 

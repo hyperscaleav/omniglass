@@ -187,6 +187,13 @@ describe("Settings page", () => {
     expect(calls[0].body).toEqual({ metric_days: 7 });
   });
 
+  // A key the server's environment feeds (#2223) says so, and its layer stack
+  // places the environment between the settings file and the console.
+  it("badges a key the server's environment sets as From environment", async () => {
+    mount({ values: { retention: { metric_days: 30 } }, sources: { "retention.metric_days": "env" }, locks: {} });
+    expect(await screen.findByText("From environment")).toBeTruthy();
+  });
+
   it("blocks Save on a list whose entries are empty", async () => {
     mount(listRead);
     enterEdit();
