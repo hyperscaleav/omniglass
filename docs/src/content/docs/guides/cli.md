@@ -370,7 +370,7 @@ params. A **task** is **derived** when its endpoint is created, so there is no
 `task create`, `update`, or `delete`; its placement follows the endpoint's. An outpost purge
 cascades its endpoints and their derived tasks.
 
-Read a component's composed reachability (the verdict, the probe-layer signals, and the
+Read a component's composed reachability (the `reachability` reading, the probe-layer signals, and the
 recent transitions the availability strip draws):
 
 ```sh
@@ -850,7 +850,7 @@ omniglass platform health --json | jq '.healthy, .reasons'
 platform  platform  healthy
 read at   2026-11-17T04:32:22Z
 
-SERVER      VERDICT  VERSION  UP
+SERVER      HEALTH   VERSION  UP
 lab-server  healthy  v9.9.9   1h0m0s
 
 lab-server
@@ -872,7 +872,7 @@ FAILURES
 healthy
 ```
 
-The table is the page's answer read top down: the platform system's verdict, each server's verdict,
+The table is the page's answer read top down: the platform system's health, each server's health,
 build and uptime with its current figures (ingest lag, the queues, the database, retention), the
 alarms open on the servers, each pipeline hop's in, out and loss for the newest window and the last
 hour with the end to end beneath, the outposts with loss or not healthy, and every failure figure above
@@ -890,7 +890,7 @@ Error: the platform is not healthy: ...: ingest lag over a minute
 
 **It reads what your token may read, and says what it cannot.** The view is gated by `outpost:read`; the
 server figures and the pipeline need a fleet-wide (all-scope) `component:read`, and the platform
-system's verdict a fleet-wide `system:read`. A part the token cannot read prints as
+system's health a fleet-wide `system:read`. A part the token cannot read prints as
 `not visible to you`, never as zero or as an empty list, and the command then exits nonzero, because a
 reading that cannot see the platform cannot vouch for it: run it with a token that reads the whole
 platform.

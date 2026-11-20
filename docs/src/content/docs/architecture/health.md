@@ -44,8 +44,8 @@ whether it is impaired, what an impaired slot costs the system, which assigned c
 the alarms that took them down, and thirty days of recorded transitions. It is what a panel opens
 into, and it is expensive by design, because explaining is the job.
 
-`GET /systems:health` is the **verdict**, in bulk: one word per system in the caller's read scope, in
-one statement whatever the fleet size. It is what a list paints its health column from.
+`GET /systems:health` (`list-system-health`) is the **health**, in bulk: one `{system, health}` entry
+under `systems` per system in the caller's read scope, in one statement whatever the fleet size. It is what a list paints its health column from.
 
 The rule is that **a list never pays for an explanation it does not render**. Before #653 the systems
 list had no bulk read available and so took the explanation once per row, which cost a page of two

@@ -571,14 +571,14 @@ scope-injected through the same `GetComponent` gate, so an out-of-scope componen
 non-disclosing 404 (a deliberate early exception to
 [reads no route was written for are views](#reads-no-route-was-written-for-are-views)):
 
-- `GET /components/{name}/reachability` composes, per endpoint, the latest verdict state
-  (`endpoint-reachable`), the probe-layer signals that compose it (the raw `icmp`/`tcp` metrics,
+- `GET /components/{name}/reachability` composes, per endpoint, its `reachability`, the latest
+  `endpoint-reachable` reading (`up`/`down`, or null with `pending` saying why), the probe-layer signals that compose it (the raw `icmp`/`tcp` metrics,
   and for a `udp` endpoint a `request` layer: its request answered, off `endpoint-responsive`, timed
   by `udp-response-time` only while answered, #1037),
   the recent verdict transitions the availability strip reads, and `last_seen`, when ingest last
   landed a batch the endpoint's task delivered, by the server's clock and to within a few seconds,
-  whatever the batch carried. A verdict is stored only on a transition, so its `ts` is when it last
-  changed, and a driver endpoint has no verdict at all; `last_seen` is the one freshness every
+  whatever the batch carried. A reachability reading is stored only on a transition, so its `ts` is when it last
+  changed, and a driver endpoint has no reachability at all; `last_seen` is the one freshness every
   endpoint has. Each row also carries the endpoint's `id` (the address `:retry` takes), its held
   `session` while it is configured to hold one (a standing listen task, or a driver declaring a
   session: the latest `session-state`, when it changed, and the `session-reason` beside it, cut to
@@ -1148,7 +1148,7 @@ user directory's readers.
 
 The reports are one shape over two owners:
 
-- `GET /systems/{name}/health` (`system:read`) returns the verdict (`healthy` / `incomplete` /
+- `GET /systems/{name}/health` (`system:read`) returns its `health` (`healthy` / `incomplete` /
   `degraded` / `outage`, in rank order, where `incomplete` is a slot short because its hardware was
   never installed rather than because installed hardware is failing)
   plus `slots`: every slot the system needs filled, where `satisfying` counts the assigned
@@ -1158,12 +1158,15 @@ The reports are one shape over two owners:
   different job for the operator.
 - `GET /locations/{name}/health` (`location:read`) returns the same envelope with `systems` filled
   instead: every system placed **anywhere** beneath the location, with its verdict, as the drill-down.
-- `transitions` is the **recorded edges** over the last 30 days, oldest first, each `{ts, verdict}`: one
+- `transitions` is the **recorded edges** over the last 30 days, oldest first, each `{ts, health}`: one
   entry per change, never a sample.
-- `GET /systems/{name}/members` (`system:read`) carries each member's own `component_verdict`, the
+- `GET /systems/{name}/members` (`system:read`) carries each member's own `component_health`, the
   same recorded value a fleet view dot reads. It is the per-system read of the members' health, so a
   system's view polls it with the system's health report rather than the whole fleet view
   ([#940](https://github.com/hyperscaleav/omniglass/issues/940)).
+- `GET /systems:health` (`list-system-health`, `system:read`) is the bulk counterpart: one
+  `{system, health}` entry under `systems` per system in the caller's read scope, keyed by uuid, carrying
+  the one word a list's health column paints and none of the explanation.
 - `GET /systems/{name}/alarms` (`system:read`) is every member's alarms in one read, newest first, each
   naming its component: the active ones whatever their age and those cleared in the last 30 days, capped
   at 500. A system's health history explains its unhealthy stretches with it, one request however many members the
@@ -1180,8 +1183,8 @@ Every read above answers "what is this row". A **view** answers "what does this 
 earns its own tier only when composing the entity reads in the browser would be the wrong shape.
 
 - `GET /views/fleet` (`location:read`) is the read behind Explore: every location flat
-  with its `parent` and `verdict`, every system with its `location` and `verdict`, and one **dot**
-  per component in each system. A dot is `{component, name, verdict, primary, shared}` and nothing
+  with its `parent` and `health`, every system with its `location` and `health`, and one **dot**
+  per component in each system. A dot is `{component, name, health, primary, shared}` and nothing
   else. A renderer draws a mark per component across the whole fleet, so a component **row** per
   mark is a fleet-sized payload on every draw; the projection is the shape that avoids it, and
   the wire is pinned by test against being widened back into a component list.
@@ -1189,8 +1192,8 @@ earns its own tier only when composing the entity reads in the browser would be 
   components the caller may read, which is the Home Open alarms tile. It is absent, never zero,
   for a caller with no component read.
 - `GET /views/platform` (`outpost:read`) is the read behind
-  [Platform health](/operator/platform-health/): the platform system's verdict, each
-  server's build and start time with its panel groups (each key's current figure, a key written
+  [Platform health](/operator/platform-health/): the platform system's `health`, each
+  server's `health`, build and start time with its panel groups (each key's current figure, a key written
   only for a window that saw something only while that window is current, a ranked key's
   instances as the server cut its newest window, and the alarms open on the server's keys, #1645),
   the outpost table's column groups with each key's catalog facts, and one row per outpost with its current figure per key (a gauge's latest sample, a
