@@ -400,7 +400,7 @@ jobs:
           auth=$(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)
           echo "::add-mask::${auth}"
           url="https://github.com/${REPO}.git"
-          gitf() { git -C "$bare" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c http.proxy= -c http.sslVerify=true -c http.sslCAInfo= -c http.https://github.com/.extraheader= -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" "$@"; }
+          gitf() { git -C "$bare" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c http.proxy= -c http.sslVerify=true -c http.https://github.com/.extraheader= -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" "$@"; }
           gitf push "$url" "refs/heads/${HEAD_REF}:refs/heads/${HEAD_REF}" \
             || { echo "::error::could not push ${HEAD_REF} with a fresh token"; exit 1; }
 
@@ -477,7 +477,7 @@ jobs:
           auth=$(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)
           echo "::add-mask::${auth}"
           url="https://github.com/${REPO}.git"
-          gitf() { git -C "$bare" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c http.proxy= -c http.sslVerify=true -c http.sslCAInfo= -c http.https://github.com/.extraheader= -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" "$@"; }
+          gitf() { git -C "$bare" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c http.proxy= -c http.sslVerify=true -c http.https://github.com/.extraheader= -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" "$@"; }
           gitf push "$url" "refs/heads/${HEAD_REF}:refs/heads/${HEAD_REF}" \
             || { echo "::error::could not push ${HEAD_REF} with a fresh token"; exit 1; }
           printf '%s\n' "The agent stopped before it finished. The workflow pushed what it left, as it stood, to \`${HEAD_REF}\`: it has not passed make preflight." \
@@ -508,7 +508,7 @@ jobs:
           dir=$(mktemp -d "${RUNNER_TEMP}/config-guard.XXXXXX")
           git init -q "$dir"
           cd "$dir"
-          gitc() { git -c core.hooksPath=/dev/null -c core.fsmonitor=false -c http.proxy= -c http.sslVerify=true -c http.sslCAInfo= "$@"; }
+          gitc() { git -c core.hooksPath=/dev/null -c core.fsmonitor=false -c http.proxy= -c http.sslVerify=true "$@"; }
           gitc fetch -q --no-tags "$url" "+refs/heads/main:refs/remotes/origin/main" \
             "+refs/heads/${HEAD_REF}:refs/remotes/origin/${HEAD_REF}"
           gitc checkout -q --detach "origin/${HEAD_REF}"
