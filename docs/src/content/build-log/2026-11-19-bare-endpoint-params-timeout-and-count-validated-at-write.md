@@ -11,4 +11,5 @@ Both are refused with a 422 on create (a 400 on an edit) naming the field. Befor
 value like `{"target":"10.0.0.1","timeout":"five minutes"}` stored 201 and the outpost then
 failed to parse the duration at probe time, skipping the task forever. The outpost's own parse
 (probe.go: `time.ParseDuration` for timeout, `int` unmarshal for count) is the reference for
-what is accepted.
+what parses; the write check is stricter on timeout and also refuses zero or negative
+durations, which would otherwise store an endpoint with no usable timeout.

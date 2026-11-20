@@ -40,7 +40,7 @@ var (
 	// ErrEndpointParamsInvalid refuses a bare endpoint's create or edit whose
 	// params carry a value its transport cannot use: a missing or wrong target
 	// on a dialed endpoint (#1187), host or port keys instead of target, a
-	// timeout that is not a valid Go duration string, a count on icmp that is
+	// timeout that is not a positive Go duration string, a count on icmp that is
 	// not a non-negative integer, an invalid tls-mode on tls/https/wss, or an
 	// invalid listen-port on udp; naming the field.
 	ErrEndpointParamsInvalid = errors.New("storage: endpoint params invalid")
@@ -49,7 +49,7 @@ var (
 // checkBareParams reads what a bare endpoint's params hand its transport's
 // dialer with meaning, refusing a value it cannot use: the target an outpost
 // dials (required of every dialed transport when params are present, #1187),
-// a timeout that is not a valid Go duration string, a count on an icmp endpoint
+// a timeout that is not a positive Go duration string, a count on an icmp endpoint
 // that is not a non-negative integer, and the mode of an endpoint over the tls
 // handshake (tls #1035, https #902), which a driver-attached one has checked
 // as an input instead.
