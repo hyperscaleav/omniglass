@@ -14,6 +14,7 @@ import {
   listSecrets,
   updateSecret,
   deleteSecret,
+  isEnvSecret,
 } from "../lib/secrets";
 import { useMe, can, canAtPlatform, platformTierGap, platformAuthorityHint } from "../lib/auth";
 import { describeError } from "../lib/format";
@@ -31,7 +32,14 @@ function ownerLabel(s: Secret): string {
   return s.owner_name ? `${tier}: ${s.owner_name}` : tier;
 }
 
+// ENV_ORIGIN is the origin text an env secret reads (#2223), the words the
+// Settings page gives an env-fed key, so one concept reads one way.
+const ENV_ORIGIN = "From environment";
+
 function fieldsPreview(s: Secret): JSX.Element {
+  // An env secret's fields never leave the server; its origin is what the row
+  // can say.
+  if (isEnvSecret(s)) return <span class="badge badge-ghost badge-sm">{ENV_ORIGIN}</span>;
   return (
     <span class="font-data text-xs text-base-content/60">
       <For each={s.fields}>
@@ -167,12 +175,12 @@ function SecretBladeBody(p: { id: string }): JSX.Element {
   // tier the resource permission alone still decides.
   const mayWrite = (action: string) => {
     const s = secret();
-    if (!s) return false;
+    if (!s || isEnvSecret(s)) return false;
     return s.owner_kind === "platform" ? canAtPlatform(me.data, "secret", action) : can(me.data, "secret", action);
   };
   // Holding the resource half without the tier half is the one state worth
   // explaining: the actions are gone and nothing else on the blade says why.
-  const tierGap = () => (secret()?.owner_kind === "platform" ? platformTierGap(me.data, "secret", ["update", "delete"]) : []);
+  const tierGap = () => (secret()?.owner_kind === "platform" && secret()?.source !== "env" ? platformTierGap(me.data, "secret", ["update", "delete"]) : []);
 
   // The footer action rail: Edit (pencil -> inline field edit -> Save/Cancel) for
   // secret:update, and Delete as the destructive action.
@@ -195,34 +203,44 @@ function SecretBladeBody(p: { id: string }): JSX.Element {
               <span>{platformAuthorityHint("A secret", tierGap())}</span>
             </div>
           </Show>
+          <Show when={isEnvSecret(s())}>
+            <div role="status" class="alert alert-info alert-soft text-sm">
+              <span>
+                {ENV_ORIGIN}: the server's <code class="font-data">{s().source_var}</code> declares this secret. Change that variable
+                and restart the server to change it; its value is held in the server's memory, never stored or shown.
+              </span>
+            </div>
+          </Show>
           <BladeField bind="label" value={() => s().label ?? ""} draft={label} onInput={setLabel} />
           <div class="grid grid-cols-2 gap-3 text-sm">
             <KVStacked label="Type" value={<span class="badge badge-ghost badge-sm">{s().secret_type}</span>} />
             <KVStacked label="Scope" value={<span>{ownerLabel(s())}</span>} />
           </div>
-          <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Fields</span>
-            <Show
-              when={edit.editing()}
-              fallback={<SecretFields secretId={s().id} fields={s().fields} canReveal={can(me.data, "secret", "reveal")} />}
-            >
-              <div class="flex flex-col gap-3">
-                <For each={s().fields}>
-                  {(f) => (
-                    <FieldRow label={f.name} hint={f.secret ? "Leave blank to keep the current value." : undefined}>
-                      <input
-                        class="input input-bordered w-full font-data"
-                        type={f.secret ? "password" : "text"}
-                        placeholder={f.secret ? "••••••" : undefined}
-                        value={inputs()[f.name] ?? ""}
-                        onInput={(e) => setInputs({ ...inputs(), [f.name]: e.currentTarget.value })}
-                      />
-                    </FieldRow>
-                  )}
-                </For>
-              </div>
-            </Show>
-          </div>
+          <Show when={!isEnvSecret(s())}>
+            <div class="flex flex-col gap-1.5">
+              <span class="eyebrow">Fields</span>
+              <Show
+                when={edit.editing()}
+                fallback={<SecretFields secretId={s().id} fields={s().fields} canReveal={can(me.data, "secret", "reveal")} />}
+              >
+                <div class="flex flex-col gap-3">
+                  <For each={s().fields}>
+                    {(f) => (
+                      <FieldRow label={f.name} hint={f.secret ? "Leave blank to keep the current value." : undefined}>
+                        <input
+                          class="input input-bordered w-full font-data"
+                          type={f.secret ? "password" : "text"}
+                          placeholder={f.secret ? "••••••" : undefined}
+                          value={inputs()[f.name] ?? ""}
+                          onInput={(e) => setInputs({ ...inputs(), [f.name]: e.currentTarget.value })}
+                        />
+                      </FieldRow>
+                    )}
+                  </For>
+                </div>
+              </Show>
+            </div>
+          </Show>
         </div>
       )}
     </Show>
