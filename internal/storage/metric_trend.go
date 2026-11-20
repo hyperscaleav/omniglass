@@ -292,17 +292,17 @@ func (p *PG) recomputeDirtyTrends(ctx context.Context, laneDays int) (int64, err
 // insert that waits for it lands after the mark is cleared, and marks the
 // hour again. An hour of a day that has folded is read from the block that
 // covers it, which a late sample merges into in its own insert's
-// transaction (#1529): the hour or day block when the day has hour or day
-// blocks, else the week block of its ISO week; any other hour is read from
-// its raw rows. A block covers a sample only while its day is intact
-// (blockIntact, the merge's own test, #1546): a day whose start has slipped
-// past the window takes no late sample into its block, so an hour of it
-// still inside the window reads its raw rows, which hold what the block
-// does not. The merge and this statement run in different transactions, so a
-// window widened between them can make intact a day the merge found not: the
-// merge records that on the hour's dirty mark (raw_only, #1560), and an hour
-// so marked reads its raw rows whatever the window is now. Each hour reads
-// exactly one source. Raw rows are what raw_only reads, so the raw drop
+// transaction (#1529); any other hour is read from its raw rows. Both are
+// the series read's (metricReadFromSQL, ADR-1530), which takes a day from
+// its blocks only while the day is intact (blockIntact, the merge's own
+// test, #1546): a day whose start has slipped past the window takes no late
+// sample into its block, so an hour of it still inside the window reads its
+// raw rows, which hold what the block does not. The merge and this statement
+// run in different transactions, so a window widened between them can make
+// intact a day the merge found not: the merge records that on the hour's
+// dirty mark (raw_only, #1560), and an hour so marked reads the series read
+// with its blocks switched off, its raw rows whatever the window is now. An
+// observed series has one lineage, so each hour reads exactly one source. Raw rows are what raw_only reads, so the raw drop
 // (#1530) must leave a raw_only hour's day alone until the mark is cleared.
 func (p *PG) recomputeDirtyChunk(ctx context.Context, laneDays int) (int64, error) {
 	tx, err := p.pool.BeginTx(ctx, trendTxOptions)
@@ -321,32 +321,14 @@ func (p *PG) recomputeDirtyChunk(ctx context.Context, laneDays int) (int64, erro
 			where x.series_id = y.series_id and x.hour = y.hour
 			returning x.series_id, x.hour, x.raw_only),
 		intact as (
-			select d.series_id, d.hour, `+blockIntact("date_bin('1 day', d.hour, "+trendEpoch+")", "$2")+` and not d.raw_only as day_intact
+			select d.series_id, d.hour, d.raw_only
 			from d
 			join metric_series s on s.id = d.series_id
 			join metric_type t on t.id = s.metric_type_id
 			where d.hour >= now() - make_interval(days => coalesce(t.retention_days, $2::int))),
-		f as (
-			select i.series_id, i.hour, i.day_intact, date_bin('1 day', i.hour, `+trendEpoch+`) as day from intact i),
-		c as (
-			select f.series_id, f.hour, f.day, date_bin('7 days', f.day, `+blockWeekEpoch+`) as week,
-				f.day_intact and exists (select 1 from metric_block b where b.series_id = f.series_id and b.span <> 'week'
-					and b.span_start >= f.day and b.span_start < f.day + interval '24 hours') as day_blocked,
-				f.day_intact and exists (select 1 from metric_block b where b.series_id = f.series_id and b.span = 'week'
-					and b.span_start = date_bin('7 days', f.day, `+blockWeekEpoch+`)) as week_blocked
-			from f),
 		samples as (
-			select c.series_id, c.hour, m.ts, m.id, m.value
-			from c join metric m on m.series_id = c.series_id and m.ts >= c.hour and m.ts < c.hour + interval '1 hour'
-			where not c.day_blocked and not c.week_blocked
-			union all
-			select c.series_id, c.hour, u.ts, u.ord, u.v
-			from c join metric_block b on b.series_id = c.series_id and (
-				c.day_blocked and (b.span = 'hour' and b.span_start = c.hour or b.span = 'day' and b.span_start = c.day)
-				or not c.day_blocked and c.week_blocked and b.span = 'week' and b.span_start = c.week)
-			cross join lateral (select b.span_start + x.o * interval '1 millisecond' as ts, x.ord, x.v
-				from unnest(b.offset_ms, b.value) with ordinality as x(o, v, ord)) u
-			where u.ts >= c.hour and u.ts < c.hour + interval '1 hour')
+			select f.series_id, f.hour, r.ts, r.ord as id, r.value
+			from intact f cross join lateral (`+metricReadFromSQL("f.series_id", "f.hour", "f.hour + interval '1 hour'", "$2", "not f.raw_only")+`) r)
 		insert into metric_trend (series_id, hour, count, min, max, sum, first, last)
 		select `+trendAggregates("m.hour")+`
 		from samples m

@@ -631,13 +631,17 @@ func (p *PG) platformFigures(ctx context.Context, ids []string) (map[string]map[
 			windowKeys = append(windowKeys, k)
 		}
 	}
+	lane, err := p.metricLane(ctx, p.pool)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := p.pool.Query(ctx, `
 		with latest as (
 			select distinct on (s.component_id, mt.name, s.instance)
 			       s.component_id, mt.name, n.value, n.ts
 			from metric_series s
 			join metric_type mt on mt.id = s.metric_type_id
-			cross join lateral (`+metricNewestSQL("s.id")+`) n
+			cross join lateral (`+metricNewestSQL("s.id", lane)+`) n
 			where s.owner_kind = 'component' and s.component_id = any($1::uuid[])
 			  and mt.namespace = 'og' and mt.name = any($2::text[])
 			  and s.provenance in ('observed', 'calculated')
@@ -738,6 +742,10 @@ func (p *PG) serverFigures(ctx context.Context, ids, names []string, ranks []int
 	if err != nil {
 		return nil, err
 	}
+	lane, err := p.metricLane(ctx, p.pool)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := p.pool.Query(ctx, `
 		with k as (
 			select * from unnest($2::text[], $3::int[], $4::bool[]) as k(name, rank, win)
@@ -746,7 +754,7 @@ func (p *PG) serverFigures(ctx context.Context, ids, names []string, ranks []int
 			       s.component_id, mt.name, s.instance, n.value, n.ts
 			from metric_series s
 			join metric_type mt on mt.id = s.metric_type_id
-			cross join lateral (`+metricNewestSQL("s.id")+`) n
+			cross join lateral (`+metricNewestSQL("s.id", lane)+`) n
 			where s.owner_kind = 'component' and s.component_id = any($1::uuid[])
 			  and mt.namespace = 'og' and mt.name = any($2::text[])
 			  and s.provenance in ('observed', 'calculated')

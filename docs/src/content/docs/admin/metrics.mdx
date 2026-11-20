@@ -118,8 +118,7 @@ above are `outpost-probe`, written only by the outpost that probed the endpoint,
 anyone the class does not admit is refused naming the key, and a new metric cannot take a native probe
 key's name.
 
-The **current value** is the latest series row: "what is this metric now?" is answered by reading
-the newest row for that metric on that owner, not from a separately maintained copy
+The **current value** is derived on read: the newest raw row unless a block holds a newer sample (the metric lane uses `metricNewestSQL`), never from a separately maintained copy
 ([the sample lanes](/architecture/properties/)). A **declared** metric value is not writable
 today: the metric lane refuses `declared` provenance until a writer exists, so a number an
 operator asserts by hand has nowhere to land yet.

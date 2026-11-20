@@ -46,6 +46,22 @@ var pinnedClockFuncs = []struct{ name, volatility string }{
 // setting, read when a session starts.
 func PinClock(t testing.TB, dsn string, at time.Time) func() time.Time {
 	t.Helper()
+	return pinClock(t, dsn, at, false)
+}
+
+// StopClock is PinClock with the clock stopped at at: it reads at for as
+// long as the test runs, so a read made at at twice, seconds apart, reads the
+// same instant (#1573). The returned clock reads at too. Like PinClock it may
+// be called again to move the clock, and a gateway opened afterward reads it.
+func StopClock(t testing.TB, dsn string, at time.Time) func() time.Time {
+	t.Helper()
+	pinClock(t, dsn, at, true)
+	return func() time.Time { return at.UTC() }
+}
+
+// pinClock shadows the time functions at at, running on from it or stopped.
+func pinClock(t testing.TB, dsn string, at time.Time, stopped bool) func() time.Time {
+	t.Helper()
 	ctx := context.Background()
 	cfg, err := pgx.ParseConfig(dsn)
 	if err != nil {
@@ -63,9 +79,13 @@ func PinClock(t testing.TB, dsn string, at time.Time) func() time.Time {
 	offset := at.Sub(wall)
 	stmts := []string{`create schema if not exists ` + pinnedClockSchema}
 	for _, f := range pinnedClockFuncs {
+		body := fmt.Sprintf(`pg_catalog.%s() + make_interval(secs => %f)`, f.name, offset.Seconds())
+		if stopped {
+			body = `'` + at.UTC().Format(time.RFC3339Nano) + `'::timestamptz`
+		}
 		stmts = append(stmts, fmt.Sprintf(`create or replace function %[1]s.%[2]s() returns timestamptz
-			language sql %[3]s parallel safe as $$ select pg_catalog.%[2]s() + make_interval(secs => %[4]f) $$`,
-			pinnedClockSchema, f.name, f.volatility, offset.Seconds()))
+			language sql %[3]s parallel safe as $$ select %[4]s $$`,
+			pinnedClockSchema, f.name, f.volatility, body))
 	}
 	stmts = append(stmts, `alter database `+pgx.Identifier{cfg.Database}.Sanitize()+
 		` set search_path = `+pinnedClockSchema+`, pg_catalog, "$user", public`)

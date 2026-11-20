@@ -41,6 +41,36 @@ func TestPinClockMovesTheDatabaseClock(t *testing.T) {
 	}
 }
 
+// TestStopClockHoldsTheDatabaseClock: after StopClock, a session reads the
+// stopped instant exactly, in two statements a moment apart, and moving the
+// stopped clock moves what a new session reads.
+func TestStopClockHoldsTheDatabaseClock(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dsn := NewDSN(t)
+	for _, at := range []time.Time{time.Date(2026, 11, 7, 23, 59, 30, 0, time.UTC), time.Date(2026, 10, 12, 10, 0, 0, 0, time.UTC)} {
+		clock := StopClock(t, dsn, at)
+		conn, err := pgx.Connect(ctx, dsn)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var first, now, wall time.Time
+		if err := conn.QueryRow(ctx, `select now()`).Scan(&first); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(10 * time.Millisecond)
+		if err := conn.QueryRow(ctx, `select now(), clock_timestamp()`).Scan(&now, &wall); err != nil {
+			t.Fatal(err)
+		}
+		_ = conn.Close(ctx)
+		for name, got := range map[string]time.Time{"the first now()": first, "now()": now, "clock_timestamp()": wall, "the Go clock": clock()} {
+			if !got.Equal(at) {
+				t.Errorf("%s = %s, want the stopped %s", name, got.UTC().Format(time.RFC3339Nano), at.Format(time.RFC3339))
+			}
+		}
+	}
+}
+
 // TestAProvisionedDatabaseCarriesYesterday: the template is rolled when it is
 // built, so a cloned database has a metric day for yesterday as well as the
 // days the migration made. Without it, a binary whose template was built
