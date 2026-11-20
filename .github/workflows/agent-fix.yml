@@ -123,6 +123,8 @@ jobs:
             echo "decision=${decision%%:*}"
             echo "reason=${decision#*: }"
             echo "head=$(printf '%s' "$pr" | jq -r .headRefName)"
+            # The ticket the PR closes, named in a wip commit's Refs line; the PR itself when none.
+            echo "issue=$(printf '%s' "$pr" | jq -r --arg n "$NUMBER" '.closingIssuesReferences[0].number // $n' 2>/dev/null || echo "$NUMBER")"
             echo "from_app=$([ "$SENDER" = "$bot" ] || { [ -n "$reviewer" ] && [ "$SENDER" = "$reviewer" ]; } && echo true || echo false)"
             echo "bot_name=$bot"
             echo "bot_id=$(gh api "users/${SLUG}%5Bbot%5D" --jq .id)"
@@ -160,6 +162,7 @@ jobs:
           cp trusted/scripts/agent-sync.sh "${RUNNER_TEMP}/agent-sync.sh"
           cp trusted/scripts/agent-toolchain.sh "${RUNNER_TEMP}/agent-toolchain.sh"
           cp trusted/scripts/agent-transcript.sh "${RUNNER_TEMP}/agent-transcript.sh"
+          cp trusted/scripts/agent-rescue.sh "${RUNNER_TEMP}/agent-rescue.sh"
           head_sha=$(gh api "repos/${REPO}/pulls/${NUMBER}" --jq .head.sha)
           body=$(jq -cn --arg run "$RUN_URL" '{workflow: "agent-fix", state: "working", run_url: $run}' \
             | bash "${RUNNER_TEMP}/agent-status.sh" body)
@@ -251,6 +254,7 @@ jobs:
             --model ${{ steps.gate.outputs.model }}
             --max-turns 200
             --allowedTools "Bash,Read,Edit,Write,Glob,Grep,Task,TodoWrite,Skill"
+            --disallowedTools "Monitor"
           prompt: |
             Address feedback on PR #${{ env.NUMBER }} of ${{ github.repository }}, unattended,
             in a GitHub Actions run. Its branch, ${{ steps.gate.outputs.head }}, is checked out.
@@ -278,11 +282,26 @@ jobs:
             Follow CLAUDE.md: a failing test first where the feedback is about behavior, the
             fix, the docs it touches, and green tests for what you changed.
 
-            Before every push, run make preflight. It runs what the PR's required checks run
-            (make gen with a drift check, make test, the docs build, the migration check) and
-            fails if this branch commits the agents' own config. Push to
-            ${{ steps.gate.outputs.head }} only when it passes. If you cannot make it pass,
-            push nothing and name the step that stays red in your summary.
+            Keep your work in commits as you go. This run is claude -p: the moment you end
+            your turn it exits, and the checkout is thrown away with everything not pushed.
+            So commit after each point of the feedback you complete, and end each commit
+            message with the line "Refs #${{ steps.gate.outputs.issue }}"; never write Fixes
+            or Closes in a commit. Do NOT push mid-run: every push to this PR starts a full
+            agent-review, so push once, to ${{ steps.gate.outputs.head }}, at the very end,
+            after your last commit and a green make preflight. Before each commit, run that
+            point's tests (make test-short at least) and scripts/agent-sync.sh guard
+            origin/main. make preflight runs what the PR's required checks run (make gen
+            with a drift check, make test, the docs build, the migration check) and fails if
+            this branch commits the agents' own config. If you cannot make it pass, name the
+            step that stays red in your summary: the workflow pushes whatever you leave
+            unpushed, committed or not, as it stands.
+
+            Never end your turn with work outstanding. Wait in the foreground: a Bash call
+            that blocks until the build or the test run finishes, repeated under the tool's
+            time limit if it is long. Do not use Monitor, run_in_background, background
+            tasks or a sleep you mean to come back to, for anything you need to finish: they
+            do not outlive your turn. Only end your turn after your one push and the
+            answers below.
 
             Never commit CLAUDE.md, CLAUDE.local.md, AGENTS.md, .claude/, .mcp.json or the
             other agent config files: the action puts main's copies in the work tree, and
@@ -419,6 +438,50 @@ jobs:
           path: ${{ runner.temp }}/agent-transcript/
           retention-days: 14
           if-no-files-found: warn
+
+      # The agent can end its turn with work it never pushed, and claude -p
+      # exits then (#2223, run 44743523903: a commit and edits, lost). Whatever
+      # the checkout still holds past the PR's head becomes one fast-forward
+      # push: its commits, and its uncommitted files as a wip commit. This step
+      # holds no token and runs no git in the checkout beyond ls-files, with a
+      # scrubbed environment (scripts/agent-rescue.sh). The PR exists, so there
+      # is no PR to open; the push itself runs agent-review as any push does.
+      - name: Gather what the agent left unpushed
+        id: rescue
+        if: always() && steps.agent.outcome != 'skipped'
+        env:
+          HEAD_REF: ${{ steps.gate.outputs.head }}
+          ISSUE: ${{ steps.gate.outputs.issue }}
+          BOT_NAME: ${{ steps.gate.outputs.bot_name }}
+          BOT_ID: ${{ steps.gate.outputs.bot_id }}
+        run: |
+          set -uo pipefail
+          dir=$(mktemp -d "${RUNNER_TEMP}/rescue.XXXXXX")
+          if ! out=$(WORKSPACE="$GITHUB_WORKSPACE" BARE="${dir}/repo" BRANCH="$HEAD_REF" ISSUE="$ISSUE"               REPO_URL="https://github.com/${REPO}.git" AUTHOR_NAME="$BOT_NAME"               AUTHOR_EMAIL="${BOT_ID}+${BOT_NAME}@users.noreply.github.com"               bash "${RUNNER_TEMP}/agent-rescue.sh" snapshot); then
+            echo "::error::could not save what the agent left unpushed"
+            exit 1
+          fi
+          printf '%s\n' "$out"
+          { printf '%s\n' "$out"; echo "bare=${dir}/repo"; } >> "$GITHUB_OUTPUT"
+
+      - name: Push what the agent left unpushed
+        if: always() && steps.fresh.outcome == 'success' && steps.rescue.outputs.push == 'true'
+        env:
+          bare: ${{ steps.rescue.outputs.bare }}
+          TOKEN: ${{ steps.fresh.outputs.token }}
+          HEAD_REF: ${{ steps.gate.outputs.head }}
+        run: |
+          set -uo pipefail
+          export GIT_TERMINAL_PROMPT=0 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
+          cd "$RUNNER_TEMP"
+          auth=$(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)
+          echo "::add-mask::${auth}"
+          url="https://github.com/${REPO}.git"
+          gitf() { git -C "$bare" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c http.proxy= -c http.sslVerify=true -c http.sslCAInfo= -c http.https://github.com/.extraheader= -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" "$@"; }
+          gitf push "$url" "refs/heads/${HEAD_REF}:refs/heads/${HEAD_REF}" \
+            || { echo "::error::could not push ${HEAD_REF} with a fresh token"; exit 1; }
+          printf '%s\n' "The agent stopped before it finished. The workflow pushed what it left, as it stood, to \`${HEAD_REF}\`: it has not passed make preflight." \
+            >> "${RUNNER_TEMP}/agent-summary.md"
 
       # The guard of last resort (#2232): if the agent's push still carries
       # changes to the agents' own config, put main's merge-base copies back in
