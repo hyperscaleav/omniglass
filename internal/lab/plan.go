@@ -287,6 +287,9 @@ type Options struct {
 	// throwaway lab takes it, and never a scale lab, whose figures are the
 	// measurement.
 	PlatformHistory bool
+	// OmnibotReplay names the recording the lab's omnibot plays when no live
+	// model is configured (#2298); empty is the scenario's own (OmnibotReplayFor).
+	OmnibotReplay string
 	// OmnibotKey is a live model's key (#2109), read from the host's env:
 	// the server alone is handed it, as the env-backed platform secret
 	// OmnibotKeySecret with the assistant settings naming it (#2223), so
@@ -532,6 +535,11 @@ func Plan(o Options) (Spec, error) {
 	if o.Ephemeral && o.Project == DefaultProject {
 		return Spec{}, fmt.Errorf("a throwaway lab removes its data when it stops, so it needs a --project of its own, never %s", DefaultProject)
 	}
+	if o.OmnibotReplay != "" {
+		if err := CheckOmnibotReplay(o.OmnibotReplay); err != nil {
+			return Spec{}, err
+		}
+	}
 	cadence, err := LookupCadence(o.Cadence, o.Ephemeral)
 	if err != nil {
 		return Spec{}, err
@@ -547,9 +555,6 @@ func Plan(o Options) (Spec, error) {
 	}
 	if o.PlatformHistory && o.Scale() {
 		return Spec{}, fmt.Errorf("a scale lab's platform figures are its measurement, so it cannot take --platform-history")
-	}
-	if o.OmnibotKey != "" && o.Scale() {
-		return Spec{}, fmt.Errorf("a scale lab runs no omnibot of its own, so it cannot take --omnibot-key-env")
 	}
 	for _, e := range o.ServerEnv {
 		if name, _, _ := strings.Cut(e, "="); !strings.HasPrefix(name, settings.EnvPrefix) && !strings.HasPrefix(name, secret.EnvPrefix) {
@@ -636,6 +641,11 @@ func Plan(o Options) (Spec, error) {
 	if o.PlatformHistory {
 		seedCmd = append(seedCmd, "--platform-history")
 	}
+	replay := o.OmnibotReplay
+	if replay == "" {
+		replay = OmnibotReplayFor(o.Scenario)
+	}
+	seedCmd = append(seedCmd, "--omnibot-replay", replay)
 	pusherTokens := PusherTokensEnv + "=" + FormatPusherTokens(o.Pushers)
 	seedEnv := append(append([]string{}, appEnv...), "OMNIGLASS_LAB_OUTPOST_TOKEN_HASH="+o.OutpostTokenHash, pusherTokens)
 	if o.Scale() {
@@ -644,6 +654,7 @@ func Plan(o Options) (Spec, error) {
 		if o.InduceUnregistered {
 			seedCmd = append(seedCmd, "--induce-unregistered")
 		}
+		seedCmd = append(seedCmd, "--omnibot-replay", replay)
 		if !o.Ephemeral {
 			// A kept scale lab (#1633): the seed keeps the fleet its
 			// database already holds and re-enrolls the site outposts.
@@ -685,11 +696,9 @@ func Plan(o Options) (Spec, error) {
 		Role: "The control plane and the console, in lab mode. Its console is the one published port; " +
 			"its bus listens on the lab network for the outpost.",
 	}
-	if !o.Scale() {
-		// The seed writes the lab's omnibot recording (#2121); a scale
-		// lab's seed writes none, so its server is not pointed at one.
-		spec.Server.Env = append(spec.Server.Env, "OMNIGLASS_OMNIBOT_REPLAY="+OmnibotReplayPath)
-	}
+	// The seed writes the lab's omnibot recording (#2121), a scale lab's
+	// too (#2298), and the server plays it when no live model is configured.
+	spec.Server.Env = append(spec.Server.Env, "OMNIGLASS_OMNIBOT_REPLAY="+OmnibotReplayPath)
 	// The host's settings and secret variables (#2223) reach the server
 	// alone, after the lab's own, so the server's env layer and env secrets
 	// resolve them; --omnibot-key-env adds its own beneath the shell's.

@@ -1,0 +1,39 @@
+# The corporate outage (#2298): what omnibot plays on a corporate lab whose
+# capture staged one outage, the main display of the 86-inch meeting room
+# hq-mr86-1 unplugged (web/e2e/marketing/shots.yaml). The calls run for real
+# against the lab; only the model's words are recorded, and each one is true
+# of that staged state: the display is dark on ping and SNMP alike, the
+# shipped reachability rule holds a High alarm on it, the room is degraded
+# with its main-display slot short, and the rest of the room answers.
+turns:
+  - tool_calls:
+      - name: get-system-health
+        arguments: {name: hq-mr86-1}
+  - tool_calls:
+      - name: get-component-reachability
+        arguments: {name: hq.hq-annex.hq-annex-1.hq-annex-1-05.$comp.display-1}
+  - text: >-
+      This room is degraded because its main display is down. The display stopped
+      answering ping and SNMP at the same moment, so the reachability rule raised a
+      High alarm on it. Every protocol going dark at once points at the display's
+      power or its network drop, not its configuration. The touch panel, scheduler
+      and video bar still answer. Next step: check the display's power and its
+      switch port. I will ask before changing anything.
+conversations:
+  # The triage-alarm skill's run on the display's alarm: read the component,
+  # its alarms and its reachability, then assess, changing nothing.
+  - match: "# Triage an alarm"
+    turns:
+      - tool_calls:
+          - name: get-component
+            arguments: {name: hq.hq-annex.hq-annex-1.hq-annex-1-05.$comp.display-1}
+          - name: list-component-alarms
+            arguments: {name: hq.hq-annex.hq-annex-1.hq-annex-1-05.$comp.display-1}
+      - tool_calls:
+          - name: get-component-reachability
+            arguments: {name: hq.hq-annex.hq-annex-1.hq-annex-1-05.$comp.display-1}
+      - text: >-
+          The display's High alarm is active: it stopped answering ping and SNMP at
+          the same moment, so the device is dark, not misconfigured. Its room is
+          degraded with the main-display slot short. Next step: check the display's
+          power and its switch port. I will ask before running anything.
