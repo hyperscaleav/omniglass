@@ -25,12 +25,13 @@ import { COMPONENTS_KEY, listComponents, updateComponent, renameComponent, reset
 import { STANDARDS_KEY, listStandards } from "../lib/standards";
 import { SYSTEM_TYPES_KEY, listSystemTypes } from "../lib/system_types";
 import { LOCATION_TYPES_KEY, listLocationTypes } from "../lib/location_types";
-import { typeRanks } from "../lib/location_type_graph";
+import { locationTreeNodes } from "../lib/location_tree";
 import { PRODUCTS_KEY, listProducts } from "../lib/products";
 import { createSystem } from "../lib/systems";
 import { createLocation } from "../lib/locations";
 import { createComponent } from "../lib/components";
 import TreeSelect from "./TreeSelect";
+import LocationSelect from "./LocationSelect";
 import FieldRow from "./FieldRow";
 import CreateIdentity from "./CreateIdentity";
 import SystemTypeSelect from "./SystemTypeSelect";
@@ -305,28 +306,13 @@ export default function EntityForm(props: {
     destructive: props.destructive,
   });
 
-  // The parent options exclude the location's own subtree: the server refuses
-  // the cycle anyway, so the select never offers it (advisory, like the name
-  // precheck). Walks parent_id upward per candidate; the tree is small.
-  const legalParents = createMemo(() => {
-    const list = locations.data ?? [];
-    const parentOf = new Map(list.map((l) => [l.id, (l as { parent_id?: string | null }).parent_id ?? ""]));
-    const inSubtree = (candidate: string): boolean => {
-      let cur: string = candidate;
-      for (let hops = 0; cur && hops < 100; hops++) {
-        if (cur === props.id) return true;
-        cur = parentOf.get(cur) ?? "";
-      }
-      return false;
-    };
-    // Narrowed to the location's own (stored) type's allowed_parent_types:
-    // empty means unconstrained. Filtering on the stored type rather than the
-    // in-progress draft avoids a picker that invalidates itself mid-edit; a
-    // final mismatch still surfaces from the server through the save error.
-    const allowed = (locationTypes.data ?? []).find((t) => t.name === (row()?.location_type as string))?.allowed_parent_types ?? [];
-    const pool = allowed.length === 0 ? list : list.filter((l) => allowed.includes((l as { location_type: string }).location_type));
-    return pool.filter((l) => !inSubtree(l.id));
-  });
+  // A parent the location may move under: one of its own (stored) type's
+  // allowed_parent_types, empty meaning unconstrained. Reading the stored type
+  // rather than the in-progress draft avoids a picker that invalidates itself
+  // mid-edit; a final mismatch still surfaces from the server through the save
+  // error. Its own subtree is LocationSelect's excludeSubtreeOf.
+  const allowedParentTypes = createMemo(() => (locationTypes.data ?? []).find((t) => t.name === (row()?.location_type as string))?.allowed_parent_types ?? []);
+  const legalParent = (l: { location_type: string }) => allowedParentTypes().length === 0 || allowedParentTypes().includes(l.location_type);
   const parentHint = () => {
     const allowed = (locationTypes.data ?? []).find((t) => t.name === (row()?.location_type as string))?.allowed_parent_types ?? [];
     if (!allowed.length) return undefined;
@@ -476,15 +462,17 @@ export default function EntityForm(props: {
               info="Moving re-parents the subtree and re-scopes who can see it: its own authorization act, gated by location:move."
               hint={parentHint()}
               children={slot.editing() && canMove() && locations.data ? (
-                // The parent pool churns when the type catalog lands (the
-                // allowed_parent_types filter arrives with it), so the binder
-                // tracks legalParents, which reads both queries.
-                <select ref={bindSelectValue(parentName, legalParents)} class="select select-bordered w-full" onChange={(e) => setParentName(e.currentTarget.value)}>
-                  <Show when={initialParent() === ""}>
-                    <option value="">Root (current)</option>
-                  </Show>
-                  <For each={legalParents()}>{(l) => <option value={l.id}>{entityLabel(l)}</option>}</For>
-                </select>
+                // The location's own subtree is left out (the server refuses
+                // the cycle anyway), and a location its type may not sit under
+                // stays in the tree, disabled, so the places beneath it keep
+                // their nesting.
+                <LocationSelect
+                  value={parentName()}
+                  onChange={setParentName}
+                  excludeSubtreeOf={props.id}
+                  pickable={legalParent}
+                  rootLabel={initialParent() === "" ? "Root (current)" : undefined}
+                />
               ) : undefined}
             />
           </Show>
@@ -569,16 +557,13 @@ export function EntityCreateForm(props: {
   const products = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts, enabled: isComponent() }));
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards, enabled: isSystem() }));
   const systemTypes = useQuery(() => ({ queryKey: SYSTEM_TYPES_KEY, queryFn: listSystemTypes, enabled: isSystem() }));
-  // Every create reads the catalog: a location's type list, and every kind's
-  // placement picker, which orders sibling locations by their type's rank in the
-  // customer's hierarchy (never by a table of the shipped type names).
+  // Every create reads the catalog for a location's type list. The placement
+  // pickers are LocationSelect, which reads it again from the same cache key.
   const locationTypes = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes }));
-  const typeRank = createMemo(() => typeRanks(locationTypes.data ?? []));
 
-  // Keyed AND valued on uuid, not name (#627): two same-named rows would
-  // otherwise render as identical options, and posting either would name an
-  // ambiguous ref. The API dual-accepts uuid-or-name (ADR-0062).
-  const locationItems = createMemo<TreeNode[]>(() => (locations.data ?? []).map((l) => ({ id: l.id, value: l.id, label: entityLabel(l), parentId: l.parent_id, rank: typeRank().get(l.location_type) ?? Number.MAX_SAFE_INTEGER })));
+  // The same tree LocationSelect draws, keyed and valued on uuid (#627), read
+  // here only for the placement context line beside the name (pathTo).
+  const locationItems = createMemo<TreeNode[]>(() => locationTreeNodes(locations.data ?? [], locationTypes.data ?? []));
   const systemItems = createMemo<TreeNode[]>(() => (systems.data ?? []).map((sy) => ({ id: sy.id, value: sy.id, label: entityLabel(sy), parentId: sy.parent_id })));
   const componentItems = createMemo<TreeNode[]>(() => (components.data ?? []).map((c) => ({ id: c.id, value: c.id, label: entityLabel(c), parentId: c.parent_id })));
   // The systems a component may be bound to on create: those the caller's
@@ -741,7 +726,7 @@ export function EntityCreateForm(props: {
         <Show when={isSystem()}>
           <div class="grid grid-cols-2 gap-3">
             <FieldRow label="Location">
-              <TreeSelect items={locationItems()} value={location()} onChange={setLocation} rootLabel="None" />
+              <LocationSelect value={location()} onChange={setLocation} rootLabel="None" />
             </FieldRow>
             <FieldRow label="Parent system">
               <TreeSelect items={systemItems()} value={parent()} onChange={setParent} rootLabel="Root (no parent)" />
@@ -751,7 +736,7 @@ export function EntityCreateForm(props: {
         <Show when={isLocation()}>
           <div class="grid grid-cols-2 gap-3">
             <FieldRow label="Parent">
-              <TreeSelect items={locationItems()} value={parent()} onChange={setParent} rootLabel="Root (no parent)" />
+              <LocationSelect value={parent()} onChange={setParent} rootLabel="Root (no parent)" />
             </FieldRow>
           </div>
         </Show>
@@ -780,7 +765,7 @@ export function EntityCreateForm(props: {
               </FieldRow>
             </Show>
             <FieldRow label="Location">
-              <TreeSelect items={locationItems()} value={location()} onChange={setLocation} rootLabel="None" />
+              <LocationSelect value={location()} onChange={setLocation} rootLabel="None" />
             </FieldRow>
           </div>
           <FieldRow label="Parent component" hint="Omit for a root component.">

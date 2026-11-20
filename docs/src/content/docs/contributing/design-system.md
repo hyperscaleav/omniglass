@@ -384,7 +384,19 @@ its first option is the placeholder the fallback would land on anyway.
 `bindSelectValue`. It derives the selected option from its `value` and its options together, so a
 value set before the options load selects once they arrive. The closed trigger shows the bare label
 (the indent and the `└` glyph are drawn by CSS on the open list, never typed into the text), with the
-ancestor path as muted context beside it.
+ancestor path as muted context beside it. A node marked `disabled` is drawn in its place, muted, and
+cannot be chosen, so a caller that narrows the choices keeps the nesting of what sits beneath them.
+
+**A location is always picked with `LocationSelect`** (#2301). It wraps `TreeSelect`, reads the
+locations and their types itself, and builds the tree through one pure function
+(`lib/location_tree.ts`): nested by parent, siblings ordered by their type's rank in the fleet's own
+hierarchy, then by label. So every location field (a placement on a create form, a location's parent,
+an outpost's location, a secret or variable owned by a location) shows the same tree, and the picking
+UX changes in one place. `addressOf` sets the value the field commits (the uuid by default; an
+outpost commits the name, the simulation and template forms the dotted path); `pickable` narrows the
+choices without dropping the rest from the tree; `excludeSubtreeOf` is the reparent self-guard. A
+guard test (`LocationSelect.guard.test.ts`) fails on a native `<select>` or a hand-built `TreeSelect`
+over locations anywhere else.
 
 ### How an entity's identity reads
 

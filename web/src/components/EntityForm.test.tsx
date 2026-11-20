@@ -227,8 +227,7 @@ describe("the one form, editing", () => {
     const { slot } = mount("location", uuidFor("ef-room"));
     const form = await screen.findByTestId("entity-form");
     slot().begin();
-    const parent = await within(form).findByRole("combobox", { name: /parent/i });
-    fireEvent.change(parent, { target: { value: uuidFor("ef-hq") } });
+    await pickTree(await within(form).findByLabelText("Parent"), "Headquarters");
     const name = within(form).getByDisplayValue("huddle-room");
     fireEvent.input(name, { target: { value: "huddle-2" } });
     await slot().save();

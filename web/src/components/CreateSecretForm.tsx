@@ -2,13 +2,13 @@ import { For, Show, createEffect, createMemo, createSignal, type JSX } from "sol
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { createIdentity, entityLabel } from "../lib/entities";
 import TreeSelect from "./TreeSelect";
+import LocationSelect from "./LocationSelect";
 import FieldRow from "./FieldRow";
 import { useFormActions } from "../lib/formactions";
 import { Plus } from "./icons";
 import { type TreeNode } from "../lib/treeselect";
 import { type Secret, type OwnerKind, SECRETS_KEY, createSecret } from "../lib/secrets";
 import { SECRET_TYPES_KEY, listSecretTypes } from "../lib/secret_types";
-import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { COMPONENTS_KEY, listComponents } from "../lib/components";
 import { useMe, platformTierGap, platformAuthorityHint } from "../lib/auth";
 import { describeError } from "../lib/format";
@@ -22,7 +22,6 @@ export default function CreateSecretForm(p: { onCreated: (s: Secret) => void }):
   const qc = useQueryClient();
   const me = useMe();
   const types = useQuery(() => ({ queryKey: SECRET_TYPES_KEY, queryFn: listSecretTypes }));
-  const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
 
   // The operator types the label and the cascade name follows it, until they
@@ -52,9 +51,9 @@ export default function CreateSecretForm(p: { onCreated: (s: Secret) => void }):
   // The fields the operator fills (lifecycle-origin fields are set by the secret's
   // own machinery, never at creation).
   const operatorFields = createMemo(() => (shape()?.fields ?? []).filter((f) => f.origin !== "lifecycle"));
-  // The owner picker is a tree: locations and components nest by
-  // parent_id, so the dropdown indents each candidate to its tier (the shared
-  // TreeSelect, same as the location/parent pickers). Keyed on uuid, not name
+  // The owner picker is a tree: a location owner is picked with LocationSelect,
+  // and components nest by parent_id in the shared TreeSelect, so the dropdown
+  // indents each candidate to its tier. Keyed on uuid, not name
   // (#627): two same-named owners in different placement buckets are legal,
   // and flattenTree keys its id set and children map on TreeNode.id, so a
   // name-keyed picker rendered duplicates as identical, value-indistinguishable
@@ -62,7 +61,6 @@ export default function CreateSecretForm(p: { onCreated: (s: Secret) => void }):
   // (ADR-0062, uuid-or-name dual accept).
   const ownerTree = createMemo<TreeNode[]>(() => {
     switch (ownerKind()) {
-      case "location": return (locations.data ?? []).map((l) => ({ id: l.id, value: l.id, label: entityLabel(l), parentId: l.parent_id }));
       case "component": return (components.data ?? []).map((c) => ({ id: c.id, value: c.id, label: entityLabel(c), parentId: c.parent_id }));
       default: return [];
     }
@@ -127,7 +125,9 @@ export default function CreateSecretForm(p: { onCreated: (s: Secret) => void }):
         </FieldRow>
         <Show when={ownerKind() !== "platform"}>
           <FieldRow label={ownerKind().charAt(0).toUpperCase() + ownerKind().slice(1)}>
-            <TreeSelect items={ownerTree()} value={owner()} onChange={setOwner} rootLabel="Choose…" />
+            <Show when={ownerKind() === "location"} fallback={<TreeSelect items={ownerTree()} value={owner()} onChange={setOwner} rootLabel="Choose…" />}>
+            <LocationSelect value={owner()} onChange={setOwner} rootLabel="Choose…" />
+          </Show>
           </FieldRow>
         </Show>
       </div>

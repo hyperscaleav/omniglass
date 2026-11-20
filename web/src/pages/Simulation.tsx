@@ -21,7 +21,7 @@ import { describeError, rel } from "../lib/format";
 import { entityLabel } from "../lib/entities";
 import type { FilterKey } from "../lib/predicate";
 import { COMPONENTS_KEY, listComponents, type Component as FleetComponent } from "../lib/components";
-import { LOCATIONS_KEY, listLocations } from "../lib/locations";
+import LocationSelect from "../components/LocationSelect";
 import {
   BLINK_MS,
   PAGE_POLL_MS,
@@ -489,7 +489,6 @@ function AddComponentForm(props: { outposts: string[]; close: () => void }) {
   // and is never shown (or sent for) a list it would be refused.
   const canReadLocations = () => can(me.data, "location", "read");
   const profiles = useQuery(() => ({ queryKey: SIM_PROFILES_KEY, queryFn: listSimProfiles }));
-  const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations, enabled: canReadLocations() }));
   const [draft, setDraft] = createSignal<AddComponentDraft>({ outpost: props.outposts.length === 1 ? props.outposts[0] : "", product: "", name: "", location: "" });
   const [touched, setTouched] = createSignal<Partial<Record<keyof AddComponentDraft, boolean>>>({});
   const [busy, setBusy] = createSignal(false);
@@ -571,10 +570,7 @@ function AddComponentForm(props: { outposts: string[]; close: () => void }) {
       </FieldRow>
       <Show when={canReadLocations()}>
         <FieldRow label="Location" info="Where the component sits. Optional: an unplaced component is still served and collected.">
-          <select class="select select-bordered w-full" value={draft().location} onChange={(e) => set("location", e.currentTarget.value)} disabled={busy()}>
-            <option value="">(unplaced)</option>
-            <For each={locations.data ?? []}>{(l) => <option value={l.path || l.name}>{entityLabel(l)}{l.path ? ` (${l.path})` : ""}</option>}</For>
-          </select>
+          <LocationSelect value={draft().location} onChange={(v) => set("location", v)} addressOf={(l) => l.path || l.name} rootLabel="(unplaced)" disabled={busy()} />
         </FieldRow>
       </Show>
     </form>

@@ -6,6 +6,7 @@ import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import BladeTitle from "../components/BladeTitle";
 import TreeSelect from "../components/TreeSelect";
+import LocationSelect from "../components/LocationSelect";
 import KVStacked from "../components/KVStacked";
 import FieldRow from "../components/FieldRow";
 import { useFormActions } from "../lib/formactions";
@@ -25,7 +26,6 @@ import {
   parseInput,
 } from "../lib/variables";
 import { SYSTEMS_KEY, listSystems } from "../lib/systems";
-import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { COMPONENTS_KEY, listComponents } from "../lib/components";
 import { useMe, can, canAtPlatform, platformTierGap, platformAuthorityHint } from "../lib/auth";
 import { describeError } from "../lib/format";
@@ -256,7 +256,6 @@ function CreateVariableForm(p: { onCreated: (v: Variable) => void }): JSX.Elemen
   const qc = useQueryClient();
   const me = useMe();
   const systems = useQuery(() => ({ queryKey: SYSTEMS_KEY, queryFn: listSystems }));
-  const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
 
   // The operator types the label and the cascade name follows it, until they
@@ -288,7 +287,6 @@ function CreateVariableForm(p: { onCreated: (v: Variable) => void }): JSX.Elemen
   // which resolveVariableOwner accepts (ADR-0062, uuid-or-name dual accept).
   const ownerTree = createMemo<TreeNode[]>(() => {
     switch (ownerKind()) {
-      case "location": return (locations.data ?? []).map((l) => ({ id: l.id, value: l.id, label: entityLabel(l), parentId: l.parent_id }));
       case "system": return (systems.data ?? []).map((s) => ({ id: s.id, value: s.id, label: entityLabel(s), parentId: s.parent_id }));
       case "component": return (components.data ?? []).map((c) => ({ id: c.id, value: c.id, label: entityLabel(c), parentId: c.parent_id }));
       default: return [];
@@ -362,7 +360,9 @@ function CreateVariableForm(p: { onCreated: (v: Variable) => void }): JSX.Elemen
       </div>
       <Show when={ownerKind() !== "platform"}>
         <FieldRow label={ownerKind().charAt(0).toUpperCase() + ownerKind().slice(1)}>
-          <TreeSelect items={ownerTree()} value={owner()} onChange={setOwner} rootLabel="Choose…" />
+          <Show when={ownerKind() === "location"} fallback={<TreeSelect items={ownerTree()} value={owner()} onChange={setOwner} rootLabel="Choose…" />}>
+            <LocationSelect value={owner()} onChange={setOwner} rootLabel="Choose…" />
+          </Show>
         </FieldRow>
       </Show>
       <FieldRow label="Value" hint={valueType() === "json" ? "A JSON object, array, or scalar." : valueType() === "bool" ? "true or false." : undefined}>

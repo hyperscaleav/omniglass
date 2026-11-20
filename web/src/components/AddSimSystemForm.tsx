@@ -10,6 +10,7 @@ import { describeError } from "../lib/format";
 import { entityLabel } from "../lib/entities";
 import { COMPONENTS_KEY } from "../lib/components";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
+import LocationSelect from "./LocationSelect";
 import { STANDARDS_KEY, listStandards } from "../lib/standards";
 import { SYSTEM_TYPES_KEY, listSystemTypes } from "../lib/system_types";
 import {
@@ -145,10 +146,7 @@ export default function AddSimSystemForm(props: { outposts: string[]; close: () 
       <Show when={canReadLocations()}>
         <LoadError what="the locations" query={locations} testid="locations-error" />
         <FieldRow label="Location" info="Where the system and its components sit. Optional: an unplaced system is still served and collected.">
-          <select class="select select-bordered w-full" value={draft().location} onChange={(e) => set("location", e.currentTarget.value)} disabled={busy()}>
-            <option value="">(unplaced)</option>
-            <For each={locations.data ?? []}>{(l) => <option value={l.path || l.name}>{entityLabel(l)}{l.path ? ` (${l.path})` : ""}</option>}</For>
-          </select>
+          <LocationSelect value={draft().location} onChange={(v) => set("location", v)} addressOf={(l) => l.path || l.name} rootLabel="(unplaced)" disabled={busy()} />
         </FieldRow>
       </Show>
       <FieldRow bind="name" info="Optional. Lowercase letters, digits and hyphens; left empty, a name is minted from the system type. Component names are minted the same way, and each gets the lowest free address in the simulated block." hint={shown("name")}>
