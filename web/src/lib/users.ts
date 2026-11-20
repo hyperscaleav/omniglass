@@ -186,7 +186,7 @@ function permResources(perms: string[]): string[] {
 const uniqSorted = (xs: string[]): string[] => [...new Set(xs.filter(Boolean))].sort();
 
 // roleFilterKeys are the faceted-search fields for the Roles catalog, consumed by
-// the shared FilterBar/ListShell exactly as the inventory lists and the audit
+// the shared FilterBar/ListShell exactly as the entity lists and the audit
 // trail are. `name` is the substring default (a bare term searches the display
 // name or id); `id` is exact; `permission` is a substring over the role's
 // effective permission strings, so an admin can find every role that grants, for

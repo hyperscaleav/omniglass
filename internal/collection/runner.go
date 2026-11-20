@@ -272,7 +272,7 @@ func (r *Runner) CollectTelnet(ctx context.Context, t TelnetTask) ([]Sample, err
 		responsive = "up"
 		out = append(out, Sample{Name: SignalTelnetResponseTime, Value: res.ResponseMS, TS: now})
 	}
-	out = append(out, ladderVerdict(SignalEndpointResponsive, responsive, res.Reason, now))
+	out = append(out, ladderReachability(SignalEndpointResponsive, responsive, res.Reason, now))
 	return out, nil
 }
 
@@ -288,11 +288,11 @@ type SSHTask struct {
 	HostKeyPin string
 }
 
-// ladderVerdict renders one responds/auth verdict as a property-lane text
+// ladderReachability renders one responds/auth verdict as a property-lane text
 // sample: the value is up/down (or yes/no for the auth rung), the reason label
 // says why when down. The ingest consumer stores transitions only, so a probe
 // may emit its verdict every run.
-func ladderVerdict(name, value string, reason Reachability, ts time.Time) Sample {
+func ladderReachability(name, value string, reason Reachability, ts time.Time) Sample {
 	return Sample{
 		Name:   name,
 		Text:   value,
@@ -343,7 +343,7 @@ func (r *Runner) CollectHTTPResult(ctx context.Context, t HTTPTask) ([]Sample, H
 	if res.Responded {
 		out = append(out, Sample{Name: SignalHTTPResponseTime, Value: res.ResponseMS, TS: now})
 	}
-	out = append(out, ladderVerdict(SignalEndpointResponsive, responsive, res.Reason, now))
+	out = append(out, ladderReachability(SignalEndpointResponsive, responsive, res.Reason, now))
 	if t.TLS != nil && res.Accepted && !res.Facts.NotAfter.IsZero() {
 		out = append(out,
 			Sample{Name: SignalTLSCertificateExpiry, Text: res.Facts.NotAfter.UTC().Format(time.RFC3339), IsText: true, TS: now},
@@ -384,13 +384,13 @@ func (r *Runner) CollectSSHResult(ctx context.Context, t SSHTask) ([]Sample, SSH
 		responsive = "up"
 		out = append(out, Sample{Name: SignalSSHHandshakeTime, Value: res.HandshakeMS, TS: now})
 	}
-	out = append(out, ladderVerdict(SignalEndpointResponsive, responsive, res.Reason, now))
+	out = append(out, ladderReachability(SignalEndpointResponsive, responsive, res.Reason, now))
 	if res.AuthAttempted {
 		authed := "no"
 		if res.Authenticated {
 			authed = "yes"
 		}
-		out = append(out, ladderVerdict(SignalEndpointAuthenticated, authed, res.Reason, now))
+		out = append(out, ladderReachability(SignalEndpointAuthenticated, authed, res.Reason, now))
 	}
 	return out, res, nil
 }

@@ -341,7 +341,7 @@ func TestLegacyBackfillRetiresWhatTheRulingRefuses(t *testing.T) {
 	if n := f.count(t, `select count(*) from command c join event e on e.id = c.caused_event_id`); n != 1 {
 		t.Errorf("the issued command lost its event: %d", n)
 	}
-	vs, err := f.gw.SystemVerdicts(f.ctx, all)
+	vs, err := f.gw.SystemHealths(f.ctx, all)
 	if err != nil {
 		t.Fatal(err)
 	}

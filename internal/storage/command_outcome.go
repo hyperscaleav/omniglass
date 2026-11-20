@@ -129,7 +129,7 @@ func targetKey(ct *CommandType) string {
 // queued for the endpoint that carries it never reached the device, so a
 // reading that disagrees is not the device's answer to it: its window
 // closing is a timeout where it stopped, never a failure (ADR-0456).
-func (p *PG) observationOutcome(ctx context.Context, q querier, ct *CommandType, id int64, verdict SettlementVerdict, intended, observed *CurrentValue) (settlementOutcome, error) {
+func (p *PG) observationOutcome(ctx context.Context, q querier, ct *CommandType, id int64, verdict Settlement, intended, observed *CurrentValue) (settlementOutcome, error) {
 	if verdict == SettlementSettled {
 		return settlementOutcome{status: "settled", by: SettledByObservation, observed: observed,
 			reason: fmt.Sprintf("observed %s, the intended value", valueText(observed.Value))}, nil

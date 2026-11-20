@@ -6,6 +6,9 @@
 // come from internal/labfootprint, for the page's test to hold the page to.
 // The perf gate's figure and size tables (docs/src/generated/perfgate.json)
 // come from internal/labfootprint's gate tables, for the lab guide to render.
+// The collection-method table (docs/src/generated/methods.json) comes from
+// internal/devseed's fixture and MethodGaps, for the simulation page and the
+// lab guide to render (#1419).
 // The driver cost table (docs/src/generated/drivercost.json) joins the
 // committed driver sweep with the shipped plan, so a driver added since the
 // sweep ran renders as not yet measured.
@@ -16,6 +19,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/hyperscaleav/omniglass/internal/devseed"
 	"github.com/hyperscaleav/omniglass/internal/lab"
 	"github.com/hyperscaleav/omniglass/internal/labfootprint"
 )
@@ -24,6 +28,7 @@ const (
 	dst       = "docs/src/generated/lab.json"
 	readsDst  = "web/src/lib/system_page_reads.gen.ts"
 	perfDst   = "docs/src/generated/perfgate.json"
+	methDst   = "docs/src/generated/methods.json"
 	driverDst = "docs/src/generated/drivercost.json"
 )
 
@@ -48,6 +53,14 @@ func main() {
 		log.Fatalf("labgen: write %s: %v", perfDst, err)
 	}
 	log.Printf("wrote the perf gate's tables to %s", perfDst)
+	methods, err := devseed.MethodFactsJSON()
+	if err != nil {
+		log.Fatalf("labgen: %v", err)
+	}
+	if err := os.WriteFile(methDst, methods, 0o644); err != nil {
+		log.Fatalf("labgen: write %s: %v", methDst, err)
+	}
+	log.Printf("wrote the collection-method table to %s", methDst)
 	drivers, err := labfootprint.DriverCostFactsJSON()
 	if err != nil {
 		log.Fatalf("labgen: %v", err)

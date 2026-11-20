@@ -162,7 +162,7 @@ type resolvedSlot struct {
 	// set when this slot joins one alternate of a choice (#626); nil means
 	// unconditional (system_slot.alternate_id is NULL), always folded
 	// directly rather than grouped. splitHealthSlots is what turns these
-	// back into health.SystemVerdictWith's shape.
+	// back into health.SystemValueWith's shape.
 	ChoiceID      *string
 	ChoiceName    *string
 	AlternateID   *string
@@ -217,7 +217,7 @@ type ownerRef struct {
 //
 // Each owner is recomputed once per call, however many of its descendants the
 // call touches, and from its direct inputs only: a system from its slots, a
-// location from its children's recorded verdicts (locationVerdict). So the
+// location from its children's recorded verdicts (locationHealth). So the
 // cost of a write is its chain's length, not the size of the fleet under it
 // (#1562).
 func (p *PG) recomputeChain(ctx context.Context, q txQuerier, components, systems, locations []ownerRef) error {
@@ -231,7 +231,7 @@ func (p *PG) recomputeChain(ctx context.Context, q txQuerier, components, system
 		if err != nil {
 			return err
 		}
-		if err := recordHealth(ctx, q, "component", c.ID, health.ComponentVerdict(ranks)); err != nil {
+		if err := recordHealth(ctx, q, "component", c.ID, health.ComponentValue(ranks)); err != nil {
 			return err
 		}
 		staffed, err := p.systemsStaffedBy(ctx, q, c.ID)
@@ -251,7 +251,7 @@ func (p *PG) recomputeChain(ctx context.Context, q txQuerier, components, system
 			return err
 		}
 		unconditional, choices, _ := splitHealthSlots(slots)
-		if err := recordHealth(ctx, q, "system", s.ID, health.SystemVerdictWith(unconditional, choices)); err != nil {
+		if err := recordHealth(ctx, q, "system", s.ID, health.SystemValueWith(unconditional, choices)); err != nil {
 			return err
 		}
 	}
@@ -272,7 +272,7 @@ func (p *PG) recomputeChain(ctx context.Context, q txQuerier, components, system
 		}
 	}
 	for _, l := range bottomUp(affectedLocations, parents) {
-		v, err := p.locationVerdict(ctx, q, l.ID)
+		v, err := p.locationHealth(ctx, q, l.ID)
 		if err != nil {
 			return err
 		}
@@ -326,7 +326,7 @@ func (d *healthDeferral) flush(ctx context.Context, p *PG, q txQuerier) error {
 }
 
 // bottomUp orders a location chain so every location comes after each of its
-// children in the set, which is the order locationVerdict needs: a location
+// children in the set, which is the order locationHealth needs: a location
 // folds its children's recorded verdicts, so a child has to be recorded before
 // its parent reads it. parents maps a location's id to its parent's; the set is
 // closed upward (locationsOver returns every ancestor), so a location's depth
@@ -532,7 +532,7 @@ func (p *PG) recomputeMovedLocation(ctx context.Context, q txQuerier, moved owne
 // always has one, via ownerRef; SystemHealth and LocationHealth resolve their
 // own before calling healthTransitions below), a name for an outpost (unchanged;
 // outpost names stay globally unique). See ownerArcExprN.
-func recordHealth(ctx context.Context, q txQuerier, ownerKind, ownerID string, v health.Verdict) error {
+func recordHealth(ctx context.Context, q txQuerier, ownerKind, ownerID string, v health.Value) error {
 	col, err := ownerColumn(ownerKind)
 	if err != nil {
 		return fmt.Errorf("storage: record health %s/%s: %w", ownerKind, ownerID, err)
@@ -607,15 +607,15 @@ func (p *PG) activeAlarmRanks(ctx context.Context, q txQuerier, componentID stri
 	return ranks, nil
 }
 
-// ComponentVerdict is one component's own current verdict, by its id, the
+// ComponentHealth is one component's own current verdict, by its id, the
 // one its active alarms make: the same live computation the recompute
 // records, so a reader of one component need not read the fleet for it. A
 // component nothing has ever observed reads "unknown" rather than healthy
 // (#1454): the same answer the fleet view's dots give, so the component's own
 // page and the outline never disagree about a device nothing has collected
 // from. "unknown" is a reading of this read alone; it never enters the rollup.
-func (p *PG) ComponentVerdict(ctx context.Context, componentID string) (string, error) {
-	v, err := p.componentVerdict(ctx, p.pool, componentID)
+func (p *PG) ComponentHealth(ctx context.Context, componentID string) (string, error) {
+	v, err := p.componentHealth(ctx, p.pool, componentID)
 	if err != nil {
 		return "", err
 	}
@@ -631,18 +631,18 @@ func (p *PG) ComponentVerdict(ctx context.Context, componentID string) (string, 
 	return v.String(), nil
 }
 
-// componentVerdict resolves one component's own current verdict from its
+// componentHealth resolves one component's own current verdict from its
 // active alarms: not the recorded row (a read must not trust a trigger it did
 // not just run), but the same live computation the recompute makes. It is the
 // only input a slot it occupies takes now: an alarm impairs a component
 // wholesale, not by name capability, so there is nothing else to resolve.
 // Takes the component's id (see activeAlarmRanks).
-func (p *PG) componentVerdict(ctx context.Context, q txQuerier, componentID string) (health.Verdict, error) {
+func (p *PG) componentHealth(ctx context.Context, q txQuerier, componentID string) (health.Value, error) {
 	ranks, err := p.activeAlarmRanks(ctx, q, componentID)
 	if err != nil {
 		return health.Healthy, err
 	}
-	return health.ComponentVerdict(ranks), nil
+	return health.ComponentValue(ranks), nil
 }
 
 // systemsStaffedBy lists the systems this component fills a slot in, the systems
@@ -757,7 +757,7 @@ func (p *PG) locationsOver(ctx context.Context, q txQuerier, systems, named []ow
 	return out, parents, nil
 }
 
-// locationVerdict rolls up a location from the RECORDED health of its direct
+// locationHealth rolls up a location from the RECORDED health of its direct
 // children: the systems placed in it and the locations under it. That is the
 // same answer as folding every system in its subtree, because the rollup is
 // worst-wins (health.RollUp) and a child location's recorded verdict is
@@ -773,7 +773,7 @@ func (p *PG) locationsOver(ctx context.Context, q txQuerier, systems, named []ow
 // recorded row has never been unhealthy and is skipped, which is
 // health.RollUp's own reading of nothing. Takes the location's id directly
 // (see activeAlarmRanks).
-func (p *PG) locationVerdict(ctx context.Context, q txQuerier, locationID string) (health.Verdict, error) {
+func (p *PG) locationHealth(ctx context.Context, q txQuerier, locationID string) (health.Value, error) {
 	rows, err := q.Query(ctx, `
 		with health as (
 			select id from property_type_in_effect() property_type where name = $2
@@ -794,14 +794,14 @@ func (p *PG) locationVerdict(ctx context.Context, q txQuerier, locationID string
 	}
 	defer rows.Close()
 
-	var children []health.Verdict
+	var children []health.Value
 	for rows.Next() {
 		var value *string
 		if err := rows.Scan(&value); err != nil {
 			return health.Healthy, fmt.Errorf("storage: scan location verdict %q: %w", locationID, err)
 		}
 		if value != nil {
-			children = append(children, health.ParseVerdict(*value))
+			children = append(children, health.ParseValue(*value))
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -810,17 +810,17 @@ func (p *PG) locationVerdict(ctx context.Context, q txQuerier, locationID string
 	return health.RollUp(children), nil
 }
 
-// SystemVerdict is one system's recorded health verdict, the single fact a list
+// SystemHealthEntry is one system's recorded health verdict, the single fact a list
 // row's badge renders. Deliberately not a HealthReport: the report resolves every
 // slot, its occupants, their alarms and thirty days of transitions, which is the
 // right read for one system's panel and the wrong one to pay N times to colour a
 // column (#653).
-type SystemVerdict struct {
+type SystemHealthEntry struct {
 	SystemID string
 	Verdict  string
 }
 
-// SystemVerdicts is the BULK health read: every system in the caller's read
+// SystemHealths is the BULK health read: every system in the caller's read
 // scope with its current verdict, in one statement whatever the fleet size.
 //
 // It exists because the console had no bulk read and paid a full health
@@ -830,17 +830,17 @@ type SystemVerdict struct {
 // a caller sees a verdict for exactly the systems it sees rows for, and an empty
 // scope is an empty answer rather than a refusal.
 //
-// The shape is locationVerdict's, one `distinct on` pass over the series rather
+// The shape is locationHealth's, one `distinct on` pass over the series rather
 // than a correlated latest-row subquery per system, so a fleet of fifteen
 // thousand systems reads the property series once and not once per row.
 //
 // A system with nothing recorded is reported HEALTHY rather than omitted, and
 // that default is not a guess: recordHealth only writes on a TRANSITION, so a
-// system that has never been recomputed has no row, and SystemVerdictWith over no
-// impaired active slot is Healthy. TestSystemVerdictsAgreeWithTheReport holds
-// this read to SystemHealth's own verdict, defaulted rows included, so the two
+// system that has never been recomputed has no row, and SystemValueWith over no
+// impaired active slot is Healthy. TestSystemHealthsAgreeWithTheReport holds
+// this read to SystemHealth's own value, defaulted rows included, so the two
 // cannot drift.
-func (p *PG) SystemVerdicts(ctx context.Context, read scope.Set) ([]SystemVerdict, error) {
+func (p *PG) SystemHealths(ctx context.Context, read scope.Set) ([]SystemHealthEntry, error) {
 	if read.Empty() {
 		return nil, nil
 	}
@@ -866,9 +866,9 @@ func (p *PG) SystemVerdicts(ctx context.Context, read scope.Set) ([]SystemVerdic
 		return nil, fmt.Errorf("storage: system verdicts: %w", err)
 	}
 	defer rows.Close()
-	out := []SystemVerdict{}
+	out := []SystemHealthEntry{}
 	for rows.Next() {
-		var v SystemVerdict
+		var v SystemHealthEntry
 		if err := rows.Scan(&v.SystemID, &v.Verdict); err != nil {
 			return nil, fmt.Errorf("storage: scan system verdict: %w", err)
 		}
@@ -964,11 +964,11 @@ func (p *PG) resolveHealthSlots(ctx context.Context, q txQuerier, systemID strin
 			id := r.assignedIDs[i]
 			c, ok := resolved[id]
 			if !ok {
-				v, err := p.componentVerdict(ctx, q, id)
+				v, err := p.componentHealth(ctx, q, id)
 				if err != nil {
 					return nil, err
 				}
-				c = health.Component{Name: name, Verdict: v}
+				c = health.Component{Name: name, Value: v}
 				resolved[id] = c
 			}
 			slot.Assigned = append(slot.Assigned, c)
@@ -979,7 +979,7 @@ func (p *PG) resolveHealthSlots(ctx context.Context, q txQuerier, systemID strin
 }
 
 // splitHealthSlots partitions a system's resolved slots into the two shapes
-// health.SystemVerdictWith takes (#626): the slots that always count
+// health.SystemValueWith takes (#626): the slots that always count
 // (system_slot.alternate_id is NULL) and the slots grouped by the choice and
 // alternate they belong to, each alternate's slots ordered by
 // choice_alternate.position (internal/health.Choice.Active's tie-break).
@@ -1098,7 +1098,7 @@ func (p *PG) SystemHealth(ctx context.Context, systemName string, window time.Du
 		return nil, err
 	}
 	unconditional, choices, choicesByID := splitHealthSlots(slots)
-	rep.Verdict = health.SystemVerdictWith(unconditional, choices).String()
+	rep.Verdict = health.SystemValueWith(unconditional, choices).String()
 	// The same choices splitHealthSlots just grouped for the verdict name
 	// which alternate is active in each, so explainSlot can mark every slot
 	// with whether it is the reason the verdict reads what it does or a
@@ -1150,18 +1150,18 @@ func (p *PG) LocationHealth(ctx context.Context, locationName string, window tim
 		return nil, err
 	}
 	rep.Systems = systems
-	rep.Verdict = health.RollUp(systemVerdicts(systems)).String()
+	rep.Verdict = health.RollUp(systemHealthValues(systems)).String()
 	if rep.Transitions, err = healthTransitions(ctx, p.pool, "location", loc.ID, window); err != nil {
 		return nil, err
 	}
 	return rep, nil
 }
 
-// systemVerdicts projects the reported systems onto the pure rollup's input.
-func systemVerdicts(systems []HealthSystem) []health.Verdict {
-	out := make([]health.Verdict, 0, len(systems))
+// systemHealthValues projects the reported systems onto the pure rollup's input.
+func systemHealthValues(systems []HealthSystem) []health.Value {
+	out := make([]health.Value, 0, len(systems))
 	for _, s := range systems {
-		out = append(out, health.ParseVerdict(s.Verdict))
+		out = append(out, health.ParseValue(s.Verdict))
 	}
 	return out
 }

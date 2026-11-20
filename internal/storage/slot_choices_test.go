@@ -396,7 +396,7 @@ func TestHealthSlotReportsChoiceAndActive(t *testing.T) {
 	// screen is unstaffed and unconditional, so the verdict is incomplete
 	// (#631: a box nobody installed, not a box that broke), not healthy: this
 	// pins that an unconditional slot beside a satisfied choice still counts,
-	// the same assertion TestSystemVerdictWithChoices makes at the pure level.
+	// the same assertion TestSystemValueWithChoices makes at the pure level.
 	// It pinned outage (screen's declared impact) before the incomplete
 	// verdict landed; impact describes failure only now.
 	if rep.Verdict != "incomplete" {

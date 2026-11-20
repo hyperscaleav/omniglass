@@ -6,13 +6,13 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
 )
 
-// The interface reachability verdict: a built-in STATE sample, the AND of the
+// The interface reachability: a built-in STATE sample, the AND of the
 // raw probe results (tcp-open, icmp-reachable). endpoint-reachable is gated
 // per interface and its value domain is up/down; availability is time_in_state
 // over it. The outpost computes it and emits it as a state sample; the ingest
 // consumer routes it to state by its property_type lane membership.
 const (
-	// SignalEndpointReachable is the seeded state key the verdict lands under.
+	// SignalEndpointReachable is the seeded state key the reachability lands under.
 	SignalEndpointReachable = probekeys.EndpointReachable
 	// VerdictUp / VerdictDown are the state's value domain.
 	VerdictUp   = "up"
@@ -59,14 +59,14 @@ func ProbeReached(d Sample) (reached, isResult bool) {
 	return d.IsText && d.Text == upWord, true
 }
 
-// EndpointVerdict computes an interface's reachability verdict from the
+// EndpointReachability computes an interface's reachability from the
 // samples its probe(s) produced: up iff at least one probe result is present
 // and every present one reads reached (the AND); down if any reads not. ok is
 // false when no probe result is present, so the caller emits nothing (an
-// interface with only a connect-time reading, or none, has no verdict to record).
+// interface with only a connect-time reading, or none, has nothing to record).
 // For the inline tcp/icmp interfaces this is degenerate (one probe -> the
-// verdict), but it generalizes to an interface with several probes.
-func EndpointVerdict(dps []Sample) (up bool, ok bool) {
+// reachability), but it generalizes to an interface with several probes.
+func EndpointReachability(dps []Sample) (up bool, ok bool) {
 	up = true
 	for _, d := range dps {
 		if reached, isResult := ProbeReached(d); isResult {
@@ -77,15 +77,15 @@ func EndpointVerdict(dps []Sample) (up bool, ok bool) {
 		}
 	}
 	if !ok {
-		return responsiveVerdict(dps)
+		return responsiveReachability(dps)
 	}
 	return up, true
 }
 
-// responsiveVerdict is the verdict of an endpoint whose transport rung is a
-// request answered, where no port can be opened (udp, #1037): the
+// responsiveReachability is the reachability of an endpoint whose transport
+// rung is a request answered, where no port can be opened (udp, #1037): the
 // responsive rung itself. ok is false when no such rung landed.
-func responsiveVerdict(dps []Sample) (up bool, ok bool) {
+func responsiveReachability(dps []Sample) (up bool, ok bool) {
 	for _, d := range dps {
 		if d.Name == SignalEndpointResponsive && d.IsText {
 			return d.Text == VerdictUp, true

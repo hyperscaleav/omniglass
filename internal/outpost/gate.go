@@ -621,14 +621,14 @@ func (g *gates) retain(endpoints, taskIDs map[string]bool) {
 // udp), or the terminal reply that just gated it.
 const rejectedReason = "rejected: "
 
-// probeVerdict is the verdict a probe's samples give the gate (#1650):
-// EndpointVerdict, less a down that is only a refusal's echo. A rung that
+// probeReachability is the verdict a probe's samples give the gate (#1650):
+// EndpointReachability, less a down that is only a refusal's echo. A rung that
 // reads down because a refusal holds it says nothing of whether the endpoint
 // can be reached, so it neither adds to the unreachable streak nor resets it,
 // as an inconclusive probe does not. A probe result (a port opened or not) is
 // always the endpoint's own, refused or not.
-func probeVerdict(dps []collection.Sample) (up, ok bool) {
-	up, ok = collection.EndpointVerdict(dps)
+func probeReachability(dps []collection.Sample) (up, ok bool) {
+	up, ok = collection.EndpointReachability(dps)
 	if !ok || up {
 		return up, ok
 	}

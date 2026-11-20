@@ -82,25 +82,25 @@ type FleetView struct {
 	OpenAlarms *int
 }
 
-// latestVerdict is the current recorded health for an owner column, the same
+// latestHealth is the current recorded health for an owner column, the same
 // read subtreeSystemHealth makes: the rollup's calculated rows alone (health is
 // a platform key, ADR-0161), the highest id wins, not the newest ts,
 // because a health row's ts is taken before its identity is assigned and two
 // concurrent writes can land with the two inverted (#356). An owner with
 // nothing recorded reads healthy: nothing has been claimed about it.
-func latestVerdict(ownerCol, table string) string {
-	return recordedVerdict(ownerCol, table, `'healthy'`)
+func latestHealth(ownerCol, table string) string {
+	return recordedHealth(ownerCol, table, `'healthy'`)
 }
 
-// latestComponentVerdict is latestVerdict for a component, whose silence is
+// latestComponentHealth is latestHealth for a component, whose silence is
 // two different facts (#1454): a component something has observed and found
 // clean reads healthy, and one nothing has ever observed reads unknown, since
 // healthy there would be a false green. See componentObservedSQL.
-func latestComponentVerdict(table string) string {
-	return recordedVerdict("component_id", table, `case when `+componentObservedSQL(table+`.id`)+` then 'healthy' else 'unknown' end`)
+func latestComponentHealth(table string) string {
+	return recordedHealth("component_id", table, `case when `+componentObservedSQL(table+`.id`)+` then 'healthy' else 'unknown' end`)
 }
 
-func recordedVerdict(ownerCol, table, fallback string) string {
+func recordedHealth(ownerCol, table, fallback string) string {
 	return `coalesce((select v.value #>> '{}' from property v
 		where v.` + ownerCol + ` = ` + table + `.id
 		  and v.property_type_id = (select id from property_type where namespace = 'og' and name = 'health')
@@ -125,10 +125,10 @@ func componentObservedSQL(idExpr string) string {
 var fleetLocationCols = `id, name, coalesce(label, '') as label,
 	(select t.name from location_type t where t.id = location.location_type) as location_type_name,
 	location.location_type as location_type_id,
-	parent_id, ` + latestVerdict("location_id", "location") + ` as verdict`
+	parent_id, ` + latestHealth("location_id", "location") + ` as verdict`
 
 var fleetSystemCols = `id, name, coalesce(label, '') as label, location_id, ` +
-	latestVerdict("system_id", "system") + ` as verdict`
+	latestHealth("system_id", "system") + ` as verdict`
 
 // FleetProjection reads the whole in-scope fleet as the canvas draws it.
 func (p *PG) FleetProjection(ctx context.Context, locRead, sysRead, compRead scope.Set) (*FleetView, error) {
@@ -254,7 +254,7 @@ func (p *PG) fleetDots(ctx context.Context, systemIDs []string, read scope.Set) 
 	if read.Empty() {
 		return out, nil
 	}
-	cols := `m.system_id, c.id, c.name, ` + latestComponentVerdict("c") + `,
+	cols := `m.system_id, c.id, c.name, ` + latestComponentHealth("c") + `,
 		m.is_primary,
 		(select count(*) from system_member peer where peer.component_id = m.component_id) > 1`
 	from := ` from system_member m join component c on c.id = m.component_id

@@ -105,7 +105,7 @@ type SystemSlotSpec struct {
 	// means "the caller did not mention this field", so an update leaves
 	// whatever is already declared alone, the same reading Capacity already
 	// gets one field up. A pointer to "" is the explicit detach path
-	// (unconditional, always folded directly by health.SystemVerdictWith); a
+	// (unconditional, always folded directly by health.SystemValueWith); a
 	// pointer to a choice_alternate.id joins that alternate. This is nil, a
 	// pointer to empty, or a pointer to a value on purpose: a plain string
 	// (the pre-#626-fix-round shape) cannot tell "omitted" apart from

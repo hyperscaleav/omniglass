@@ -6072,7 +6072,7 @@ export type MetricSeriesOutputBody = {
      * @nullable
      */
   buckets?: MetricBucketBody[] | null;
-  /** The earliest instant the read could have data for: the start of the window or the series' effective retention, whichever is later. A bucket before it is empty because of retention, not because collection stopped */
+  /** The earliest instant the read could have data for: the start of the window, or the oldest the series keeps when that is later, its samples' effective retention or, at whole hours for a series with hourly trends, the trends' window. A bucket before it is empty because of retention, not because collection stopped */
   covered_from?: string;
   /** The one instance the buckets aggregate, measured samples only (observed and calculated); present only on a bucketed read */
   instance?: string;
@@ -6080,7 +6080,7 @@ export type MetricSeriesOutputBody = {
   metric: string;
   /** The owner's name */
   owner: string;
-  /** The bucket width asked for; present only on a bucketed read */
+  /** The bucket width applied: the one asked for, raised to whole hours over a window of more than 48 hours or past the series' retention (ADR-1566); present only on a bucketed read */
   resolution_seconds?: number;
   /**
      * Newest first; empty when a resolution was asked for
@@ -6986,7 +6986,7 @@ export type PropertySeriesOutputBody = {
   owner: string;
   /** The series' property_type name */
   property: string;
-  /** The bucket width asked for; present only on a bucketed read */
+  /** The bucket width applied, the one asked for; present only on a bucketed read */
   resolution_seconds?: number;
   /**
      * Newest first: the change history behind the effective value; empty when a resolution was asked for
@@ -9037,7 +9037,7 @@ export type ListComponentMetricSeriesParams = {
    */
   limit?: number;
   /**
-   * The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused
+   * The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. Over a window of more than 48 hours, or one past the series' retention, it is raised to whole hours, at least one, and resolution_seconds says the width applied. A window of more than 5000 buckets is refused
    * @minimum 1
    * @maximum 2592000
    */
@@ -9147,7 +9147,7 @@ export type ListSystemMetricSeriesParams = {
    */
   limit?: number;
   /**
-   * The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused
+   * The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. Over a window of more than 48 hours, or one past the series' retention, it is raised to whole hours, at least one, and resolution_seconds says the width applied. A window of more than 5000 buckets is refused
    * @minimum 1
    * @maximum 2592000
    */
@@ -13414,7 +13414,7 @@ export const getListComponentMetricSeriesUrl = (name: string,
 }
 
 /**
- * The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with count, min, max, avg and last (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured samples (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured samples in the window, or a 422 listing them when there are several. Nothing is read beyond the series' effective retention until trends exist (#1276). Gated by component:read; an out-of-scope owner is a non-disclosing 404.
+ * The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with count, min, max, avg and last (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured samples (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured samples in the window, or a 422 listing them when there are several. Over more than 48 hours, or past the series' retention, the resolution is raised to whole hours, and resolution_seconds is the width applied. At whole hours a series with hourly trends (an observed one) takes every hour the trend fold has closed from its trend, so the read reaches back as far as the trends are kept, and its open hours from the samples; any other series, or a finer resolution, reads its samples, within their retention (ADR-1566). Gated by component:read; an out-of-scope owner is a non-disclosing 404.
  * @summary Read one metric series' samples
  */
 export const listComponentMetricSeries = async (name: string,
@@ -22365,7 +22365,7 @@ export const getListSystemMetricSeriesUrl = (name: string,
 }
 
 /**
- * The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with count, min, max, avg and last (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured samples (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured samples in the window, or a 422 listing them when there are several. Nothing is read beyond the series' effective retention until trends exist (#1276). Gated by system:read; an out-of-scope owner is a non-disclosing 404.
+ * The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with count, min, max, avg and last (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured samples (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured samples in the window, or a 422 listing them when there are several. Over more than 48 hours, or past the series' retention, the resolution is raised to whole hours, and resolution_seconds is the width applied. At whole hours a series with hourly trends (an observed one) takes every hour the trend fold has closed from its trend, so the read reaches back as far as the trends are kept, and its open hours from the samples; any other series, or a finer resolution, reads its samples, within their retention (ADR-1566). Gated by system:read; an out-of-scope owner is a non-disclosing 404.
  * @summary Read one metric series' samples
  */
 export const listSystemMetricSeries = async (name: string,

@@ -23,3 +23,4 @@ refs: [1269, 1265, 1264, 1276, 1475, 1485, 1488]
   - **Splitting a series by source or collector node.** One instance is one logical series across a node move; splitting would chart a reassignment as a gap.
   - **Making `last` the held value.** A bucket's `last` would then no longer say whether anything happened in it, and the next change's bucket could not be told from a quiet one.
   - **A carried-in point in `points`.** The crosshair reads what was measured; the carried-in value is drawn but is no sample in the window.
+- **Amended by [ADR-1566](#adr-1566-a-wide-bucketed-read-is-whole-hours-and-takes-closed-hours-from-the-trends):** decision 2 no longer holds for a whole-hour metric read of a series with hourly trends: it reads its closed hours from the trends past the hot window, and `covered_from` is the trends' edge rather than the samples' retention.

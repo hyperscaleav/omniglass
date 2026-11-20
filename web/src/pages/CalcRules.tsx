@@ -37,7 +37,7 @@ import {
   CALC_RULES_KEY,
   boundInputs,
   calcStateKey,
-  calcTemplates,
+  calcStarters,
   createCalcBody,
   createCalcRule,
   deleteCalcRule,
@@ -68,7 +68,7 @@ import {
 // inputs, failing, over the owners the caller may read); a row opens a blade
 // with the state per owner, in the server's order; New and Edit open the one
 // form in a Drawer: the inputs (a key, its alias pre-filled), the expression
-// editor with start-from templates, and a preview that computes the draft now
+// editor with starters, and a preview that computes the draft now
 // without saving. Writing a rule needs an all-scope grant (fleetView), as for
 // event rules.
 
@@ -714,7 +714,7 @@ function OutputCreate(p: { lane: "metric" | "property"; onCreated: (name: string
 // is fixed at create. The form is the inputs, each a key and the alias its
 // expression binds it by (filled from the key's name until edited), then the
 // expression editor against the calc site (checked as it is typed, with the
-// inputs and owner kind it binds; start-from templates; a name nothing binds
+// inputs and owner kind it binds; starters; a name nothing binds
 // offered as a new input). Every rule is judged in TypeScript
 // (lib/calc_rules, the alias rules generated from the server's) and gates
 // the submit, with the expression's own verdict.
@@ -976,7 +976,7 @@ export function CalcRuleForm(p: { mode: "create" | "edit"; rule?: CalcRule; onSa
           value={d.expr}
           onInput={(v) => setD("expr", v)}
           onCheck={(ok) => setExprOk(ok)}
-          templates={calcTemplates(d.ownerKind)}
+          starters={calcStarters(d.ownerKind)}
           onBind={bindName}
         />
         <Show when={shown(errors().reduce)}>{(m) => <p class="text-[11px] text-error">{m()}</p>}</Show>

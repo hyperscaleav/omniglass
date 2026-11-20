@@ -26,9 +26,9 @@ func TestInterfaceVerdict(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			up, ok := EndpointVerdict(c.dps)
+			up, ok := EndpointReachability(c.dps)
 			if up != c.wantUp || ok != c.wantOk {
-				t.Fatalf("EndpointVerdict = (%v,%v), want (%v,%v)", up, ok, c.wantUp, c.wantOk)
+				t.Fatalf("EndpointReachability = (%v,%v), want (%v,%v)", up, ok, c.wantUp, c.wantOk)
 			}
 		})
 	}
@@ -51,7 +51,7 @@ func TestTheResponsiveRungIsTheVerdictWhereNoPortCanBeOpened(t *testing.T) {
 		{"unanswered", []Sample{down}, false, true},
 		{"beside an open port it decides nothing", []Sample{{Name: SignalTCPOpen, Text: PortOpen, IsText: true}, down}, true, true},
 	} {
-		gotUp, gotOk := EndpointVerdict(tc.dps)
+		gotUp, gotOk := EndpointReachability(tc.dps)
 		if gotUp != tc.wantUp || gotOk != tc.wantOk {
 			t.Errorf("%s: verdict = %v, %v; want %v, %v", tc.name, gotUp, gotOk, tc.wantUp, tc.wantOk)
 		}

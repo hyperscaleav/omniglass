@@ -34,7 +34,7 @@ import {
 // reports under an identity (a match key and its value) lands on the owner a
 // binding names. The panel teaches that on the real data, two lists under one
 // card: the identities it FANS OUT (each value and the system or component its
-// samples land on), and the ones it HEARD that nothing places (their values
+// samples land on), and the ones it HEARD that nothing binds (their values
 // land nowhere until bound), each bindable in place. A component that has
 // neither renders nothing: most components speak only for themselves.
 //

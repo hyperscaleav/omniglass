@@ -1381,9 +1381,9 @@ func (p *PG) MoveLocation(ctx context.Context, actorID, name string, move Locati
 	}
 	// A reparent recomputes both ancestor chains (#642), the one exception to
 	// ":move never recomputes health" on this tier, and the same exception a
-	// system's relocate already carries one level down. locationVerdict rolls
+	// system's relocate already carries one level down. locationHealth rolls
 	// up recursively through the location tree (locationsOver walks a system's
-	// location upward, locationVerdict folds every system in a location's own
+	// location upward, locationHealth folds every system in a location's own
 	// subtree downward), so a location with placed descendants moving to a new
 	// parent really does change what its old and new ancestors' rollups read:
 	// the chain it left has lost that whole subtree's contribution and the
