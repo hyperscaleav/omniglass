@@ -10,18 +10,12 @@ sidebar:
 screenshots:
   - id: notifications-inbox
     path: /web/inbox
-    alt: "The inbox with one unread entry: the outpost-silent alarm the lab's outpost raised, its message, its component, its transition, and the rule that told you, with Mark read beside it."
-    # The lab raises the outpost-silent alarm partway through a capture, so the
-    # inbox is empty before it and holds the entry after: the shot holds until the
-    # entry lands (#2168). The entry's message carries the raise time and its meta
-    # row the age, both capture-relative, so both are masked.
-    steps:
-      - action: wait
-        selector: "[data-testid=inbox-entry]"
-        timeout: 150000
+    alt: "The inbox, empty: what reaches it (a group notification an admin points at you, or your own subscription) and the way to subscribe."
+    # The lab's outpost-silent alarm raises partway through a capture, so the inbox
+    # holds its entry in some captures and not in others. The masked twin covers
+    # the whole content region, the same size either way (#2168).
     mask:
-      - "[data-testid=inbox-entry] p"
-      - "[data-testid=inbox-entry] .tnum >> xpath=.."
+      - "#scroll-main"
   - id: notifications-subscribe
     path: /web/profile/subscriptions
     steps:

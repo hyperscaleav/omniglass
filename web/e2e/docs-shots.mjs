@@ -111,7 +111,15 @@ for (const spec of specs) {
   for (const step of spec.steps ?? []) {
     // wait holds the shot until the selector shows (a figure the lab writes a
     // while after it comes up), for up to its timeout in ms, else two minutes.
-    if (step.action === 'wait') await page.locator(step.selector).first().waitFor({ state: 'visible', timeout: step.timeout ?? 120_000 });
+    if (step.action === 'wait') {
+      try {
+        await page.locator(step.selector).first().waitFor({ state: 'visible', timeout: step.timeout ?? 120_000 });
+      } catch (e) {
+        // A wait may name what never showed, so the failure reads as its cause.
+        if (step.message) throw new Error(`${spec.id}: ${step.message} (waited for ${step.selector})`);
+        throw e;
+      }
+    }
     else if (step.action === 'click') await page.click(step.selector, { modifiers: step.modifiers });
     else if (step.action === 'hover') await page.hover(step.selector);
     else if (step.action === 'press') await page.keyboard.press(step.value);

@@ -69,7 +69,8 @@ screenshots:
       # outage after, so the shot holds until the alarm has landed (#2168).
       - action: wait
         selector: "table >> text=outage"
-        timeout: 150000
+        timeout: 60000
+        message: "the outpost-silent alarm never raised, so the liveness pill never read outage"
     mask:
       - "[data-testid=platform-version] >> xpath=ancestor::div[3]"
       - "[data-testid=platform-uptime] >> xpath=ancestor::div[3]"

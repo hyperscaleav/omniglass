@@ -16,9 +16,9 @@ and the fonts loaded, else the capture fails naming what kept moving. The tolera
 inbox badge (#2196) was a third cause and is fixed separately. The `users` 5 px region was not
 isolated without a lab run; if it recurs, the capture output now rules out a layout still moving.
 
-Two more shots alternated between two exact renders for a reason the layout never showed: the lab's
+One more shot alternated between two exact renders for a reason the layout never showed: the lab's
 outpost-silent alarm raises partway through a capture. `platform-health-outposts` read a healthy
-liveness pill before it and an outage pill after, and `notifications-inbox` was empty before it and
-held the entry after. Both now wait for the alarm to land (the outage pill, the inbox entry) before
-they shoot, and the inbox shot masks the entry's message and its meta row, whose raise time and age
-move with the clock. The inbox shot now shows an unread entry rather than the empty state.
+liveness pill before it and an outage pill after, so it now waits (60 s, failing with a message
+naming the alarm) for the outage pill. The inbox does not reliably receive the alarm's entry, so
+`notifications-inbox` does not wait for it: its masked twin covers the whole content region, the same
+with or without the entry, and the shot keeps its empty-inbox alt text.
