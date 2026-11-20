@@ -152,7 +152,9 @@ command itself; here is when you would reach for each:
   `omniglass omnibot` answer for real ([pointing omnibot at a model](/guides/agents/#pointing-omnibot-at-a-model)).
   Nothing is sealed: the key lives in the server container's environment, visible to `docker inspect`
   on this machine, as the outpost's token is. Without the flag omnibot plays the lab's recording; a key
-  an older lab sealed is removed. A scale lab runs no omnibot, so it refuses the flag.
+  an older lab sealed is removed. A scale lab takes the flag too, so omnibot answers against a
+  corporate-size fleet; without it a scale lab has no recording to play, and its omnibot answers only
+  on a model you point it at.
 - Every `OMNIGLASS_SETTING__<NAMESPACE>__<KEY>` and `OMNIGLASS_SECRET__<NAME>` variable in your shell
   reaches the lab's server as its [environment settings](/admin/settings/) and
   [environment secrets](/admin/secrets/#secrets-from-the-environment), and the start line names them

@@ -160,7 +160,7 @@ func TestLabRunScenarioRefusals(t *testing.T) {
 		{[]string{"--scenario", "nope", "--plan"}, "scale lab scenarios: corporate"},
 		{[]string{"--scenario", "dev", "--induce-unregistered"}, "--induce-unregistered is a scale lab's"},
 		{[]string{"--scenario", "dev", "--omnibot-key-env", "OMNIGLASS_TEST_NO_SUCH_KEY"}, "OMNIGLASS_TEST_NO_SUCH_KEY is not set"},
-		{[]string{"--scenario", "corporate", "--systems", "20", "--omnibot-key-env", "HOME"}, "--omnibot-key-env is a seeded fleet's"},
+		{[]string{"--scenario", "corporate", "--systems", "20", "--omnibot-key-env", "OMNIGLASS_TEST_NO_SUCH_KEY"}, "OMNIGLASS_TEST_NO_SUCH_KEY is not set"},
 	} {
 		root := newRoot("test", "")
 		var out strings.Builder
@@ -292,6 +292,27 @@ func TestLabRunScaleForwardsSettingsEnv(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "OMNIGLASS_SETTING__ASSISTANT__MODEL") || strings.Contains(out.String(), "gpt-oss") {
 		t.Errorf("start line should name the variable and not its value:\n%s", out.String())
+	}
+}
+
+// A scale lab run with --omnibot-key-env reads the key from the host and
+// hands it to the plan (#2298), as a seeded lab run does. The run is
+// captured, so no Docker is needed.
+func TestLabRunScaleTakesOmnibotKey(t *testing.T) {
+	t.Setenv("OMNIGLASS_TEST_LAB_MODEL_KEY", "ghp-scale-key")
+	var got lab.Config
+	var out strings.Builder
+	err := runLab(context.Background(), &out, "test", labFlags{scenario: "corporate", systems: 20,
+		project: lab.DefaultProject, listen: lab.DefaultListen, port: lab.DefaultPort, omnibotKeyEnv: "OMNIGLASS_TEST_LAB_MODEL_KEY",
+		start: func(_ context.Context, _ io.Writer, cfg lab.Config) error { got = cfg; return nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.OmnibotKey != "ghp-scale-key" {
+		t.Errorf("scale run OmnibotKey = %q, want the host's key", got.OmnibotKey)
+	}
+	if strings.Contains(out.String(), "ghp-scale-key") {
+		t.Errorf("the start line printed the key:\n%s", out.String())
 	}
 }
 

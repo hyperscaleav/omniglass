@@ -548,9 +548,6 @@ func Plan(o Options) (Spec, error) {
 	if o.PlatformHistory && o.Scale() {
 		return Spec{}, fmt.Errorf("a scale lab's platform figures are its measurement, so it cannot take --platform-history")
 	}
-	if o.OmnibotKey != "" && o.Scale() {
-		return Spec{}, fmt.Errorf("a scale lab runs no omnibot of its own, so it cannot take --omnibot-key-env")
-	}
 	for _, e := range o.ServerEnv {
 		if name, _, _ := strings.Cut(e, "="); !strings.HasPrefix(name, settings.EnvPrefix) && !strings.HasPrefix(name, secret.EnvPrefix) {
 			return Spec{}, fmt.Errorf("lab: %s is not a server setting or secret variable (%s<NAMESPACE>__<KEY> or %s<NAME>)", name, settings.EnvPrefix, secret.EnvPrefix)

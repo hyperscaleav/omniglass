@@ -145,9 +145,6 @@ func newLabRunCmd(version, imageDigest string) *cobra.Command {
 // the plan up (#1554): Postgres, the server, and one outpost per site, each
 // simulating its site's components, after a check that the host can fit it.
 func runLabScenario(ctx context.Context, out io.Writer, m *labscenario.Manifest, f labFlags) error {
-	if f.omnibotKeyEnv != "" {
-		return fmt.Errorf("--omnibot-key-env is a seeded fleet's lab; scenario %s is a scale lab, which runs no omnibot of its own", m.Name)
-	}
 	if f.keep && f.script.ephemeral {
 		return errors.New("--keep and --ephemeral contradict each other: a kept scale lab keeps its data when it stops, a throwaway one removes it")
 	}
@@ -208,6 +205,10 @@ func runLabScenario(ctx context.Context, out io.Writer, m *labscenario.Manifest,
 	if cadence == "" {
 		cadence = lab.CadenceLab
 	}
+	omnibotKey, err := labOmnibotKey(f.omnibotKeyEnv, config.Named)
+	if err != nil {
+		return err
+	}
 	settingsEnv, err := labServerEnv(append(config.Environ(settings.EnvPrefix), config.Environ(secret.EnvPrefix)...))
 	if err != nil {
 		return err
@@ -234,7 +235,7 @@ func runLabScenario(ctx context.Context, out io.Writer, m *labscenario.Manifest,
 			Systems: plan.Totals.Systems, SiteOutposts: outposts, Pushers: pushers,
 			Owner: lab.CurrentOwner(host), WorkDir: wd,
 			Ephemeral: !f.keep, Cadence: cadence, InduceUnregistered: f.scale.induce,
-			ServerEnv: settingsEnv,
+			ServerEnv: settingsEnv, OmnibotKey: omnibotKey,
 		},
 		Image: choice, Fresh: f.fresh, Hold: true, ReadyFile: f.script.readyFile, WhilePID: f.script.whilePID,
 		ScaleRun: scale,
