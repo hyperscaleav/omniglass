@@ -4,8 +4,8 @@
 // name. The HEALTH read has the figures and the grouping facts (satisfying,
 // short, down, choice, alternate, active); the SLOTS read has the declaration
 // (accepted types, pinned products, positions and their labels). Nothing here
-// computes a figure: every number and every verdict on a card is the server's
-// own, which is the console-computes-no-verdict rule the health module states.
+// computes a figure: every number and every health on a card is the server's
+// own, which is the console-computes-no-health rule the health module states.
 //
 // The occupant wire carries names, not ids (a slot's assigned_to is the
 // component's name within this system), so the shared-with chip resolves an
@@ -31,7 +31,7 @@ export type SlotOccupant = {
   // fleet projection carries no dot for the name, which the wire never does
   // for an assigned member; the page then renders the name without a link.
   componentId: string;
-  // Down means the occupant's OWN verdict is outage: it holds the slot and
+  // Down means the occupant's OWN health is outage: it holds the slot and
   // cannot serve it, the opposite of a slot nobody filled.
   down: boolean;
   // The labels of the OTHER systems this occupant also serves, empty for an
@@ -168,7 +168,7 @@ export function systemZoomVM(health: FleetHealth, declared: EffectiveSlot[], vie
 // One active alarm on the system, joined for the strip (#785): the health
 // read already carries every alarm on a down occupant per slot; this flattens
 // the ACTIVE slots' alarms (an inactive alternate's alarms did not move the
-// verdict, and rendering one would contradict the header), joins the slot's
+// health, and rendering one would contradict the header), joins the slot's
 // label and the component's uuid (the wire's component_id; names repeat
 // across rooms), and orders worst first.
 export type AlarmRow = {

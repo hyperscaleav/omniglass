@@ -162,12 +162,12 @@ function mount(path = `/web/systems/${uuidFor("szp-sys")}`, healthOverride: Flee
 }
 
 // The members read the fleet view's dots stand for: one row per member, each
-// carrying the component's own verdict.
-function memberRowsOf(v: FleetView, systemId: string, verdicts: Record<string, string> = {}) {
+// carrying the component's own health.
+function memberRowsOf(v: FleetView, systemId: string, healths: Record<string, string> = {}) {
   const sys = (v.systems ?? []).find((s) => s.id === systemId);
   return (sys?.dots ?? []).map((d) => ({
     system: sys!.name, system_id: systemId, component: d.name, component_id: d.component,
-    primary: d.primary, system_count: d.shared ? 2 : 1, component_health: verdicts[d.name] ?? d.health,
+    primary: d.primary, system_count: d.shared ? 2 : 1, component_health: healths[d.name] ?? d.health,
   }));
 }
 
@@ -320,7 +320,7 @@ describe("the system zoom", () => {
 
   // The history strip is Activity's (#872): Overview's header already says
   // since when, and saying it twice was the audit's finding.
-  it("draws the verdict history on Activity, not on Overview", () => {
+  it("draws the health history on Activity, not on Overview", () => {
     mount();
     expect(screen.queryByTestId("health-history-full")).toBeNull();
     cleanup();
@@ -430,11 +430,11 @@ describe("the map tab (#791)", () => {
     expect(within(screen.getByTestId("mapmarker-main-display-1")).getByText("Main Display")).toBeTruthy();
   });
 
-  // A marker is its component's type icon in its own verdict's hue (#1074,
-  // the #1071 colours), its label under it: the same icon, label and verdict
+  // A marker is its component's type icon in its own health's hue (#1074,
+  // the #1071 colours), its label under it: the same icon, label and health
   // its row shows. An empty position is a dashed ring in the no-data grey,
   // named for its slot.
-  it("draws each occupant as its type icon in its verdict's hue, label under it, and a gap as a grey ring", () => {
+  it("draws each occupant as its type icon in its health's hue, label under it, and a gap as a grey ring", () => {
     const glyph = (id: string) => screen.getByTestId(id).querySelector("[data-glyph]")!;
     mount(`/web/systems/${uuidFor("szp-sys")}?tab=map`, health, [], MAPPED);
     expect(glyph("mapmarker-room-mic-1").getAttribute("class")).toContain("text-healthy");
@@ -747,8 +747,8 @@ describe("the data tab (#794, stacked per the #795 review)", () => {
 
 describe("the system card's header says each thing once (#872)", () => {
   // A counts line above the card repeated what its header said (slots, the
-  // verdict's count); the header alone now carries the system's facts.
-  it("carries the verdict, the standard's label, the component count and the gap, with no counts line", () => {
+  // health's count); the header alone now carries the system's facts.
+  it("carries the health, the standard's label, the component count and the gap, with no counts line", () => {
     mount(undefined, health, [], [{ id: uuidFor("std"), name: "huddle-room", label: "Huddle Room Standard" }]);
     const header = screen.getByTestId("system-header");
     expect(within(header).getByText("Huddle Room Standard")).toBeTruthy();
@@ -1027,7 +1027,7 @@ describe("a configure select takes its value when its catalog lands (#782)", () 
 
 // A monitoring console's system view moves as its members' health moves
 // (#940): the system's own reads poll at the leaf's cadence, so a member's
-// alarm opening lands as the degraded verdict and the alarm in Why without a
+// alarm opening lands as the degraded health and the alarm in Why without a
 // reload. Each read is one request a poll, and nothing it polls grows with
 // the fleet.
 describe("the system view refreshes (#940)", () => {
@@ -1067,7 +1067,7 @@ describe("the system view refreshes (#940)", () => {
   });
   const calmMembers = () => memberRowsOf(view, uuidFor("szp-sys"), { "mic-1": "healthy" });
 
-  it("polls its health and its members, so a member's alarm moves the verdict and Why without a reload, one request per read", async () => {
+  it("polls its health and its members, so a member's alarm moves the health and Why without a reload, one request per read", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
     const gets: string[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
@@ -1098,7 +1098,7 @@ describe("the system view refreshes (#940)", () => {
     for (const p of ["/health", "/members", "/metrics"]) {
       expect(count(p)).toBe(1);
     }
-    // Nothing the view polls grows with the fleet: no fleet view, no fleet-wide verdicts.
+    // Nothing the view polls grows with the fleet: no fleet view, no fleet-wide health results.
     expect(count("/views/fleet")).toBe(0);
     expect(count("/systems:health")).toBe(0);
   });

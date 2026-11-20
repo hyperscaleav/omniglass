@@ -6,7 +6,7 @@ import { durationText, share, spans, type Span } from "../lib/timeline";
 import type { HealthTransition } from "../lib/health";
 
 // HealthHistory renders the recorded EDGES: the moments this system or location
-// changed verdict, and how long each state held.
+// changed health, and how long each state held.
 //
 // This is the durable requirement behind the whole health design. A live badge
 // answers "is it broken now", which an operator can also get by walking into the
@@ -20,8 +20,8 @@ import type { HealthTransition } from "../lib/health";
 // strip uses, drawn from the same lib/timeline spans. One timeline idiom in the
 // console, two things measured with it.
 
-// Every verdict the domain has, because the fallback below is the NO-DATA tone:
-// a verdict missing from this map renders as though it were never measured
+// Every health the domain has, because the fallback below is the NO-DATA tone:
+// a health missing from this map renders as though it were never measured
 // (#631, found in review when incomplete first became recordable).
 const TONE: Record<string, string> = {
   healthy: "bg-healthy",
@@ -41,9 +41,9 @@ const pill = (v: string) => PILL[v] ?? "badge-ghost";
 
 export default function HealthHistory(props: {
   transitions: HealthTransition[];
-  // The current verdict, so a window with no recorded change still draws as the
+  // The current health, so a window with no recorded change still draws as the
   // state it is in rather than as an empty bar.
-  verdict?: string;
+  health?: string;
   // What the window covers, in the API's terms.
   window?: string;
   // Strip only, no per-span rows: for a surface that narrates the spans
@@ -56,7 +56,7 @@ export default function HealthHistory(props: {
   const now = Date.now();
   const edges = () => props.transitions ?? [];
   const list = createMemo<Span<string>[]>(() =>
-    spans(edges().map((t) => ({ ts: t.ts, value: t.health })), props.verdict ?? null, now),
+    spans(edges().map((t) => ({ ts: t.ts, value: t.health })), props.health ?? null, now),
   );
   // Newest first for the reading order: what it is now, then what it was before.
   const rows = createMemo(() => [...list()].reverse());
@@ -75,7 +75,7 @@ export default function HealthHistory(props: {
 
       {/* In compact form the surface beside this strip owns the number (the
           history tab's uptime card), so the trailing hint would say it twice. */}
-      <StateStrip segments={list()} tone={tone} height="h-2.5" title="Verdict over the recorded window">
+      <StateStrip segments={list()} tone={tone} height="h-2.5" title="HealthState over the recorded window">
         <Show when={!props.compact}>
           <Show when={healthy() !== null} fallback={<span class="text-[11px] text-base-content/40">no data</span>}>
             <span class="w-20 shrink-0 text-right text-[11px] tabular-nums text-base-content/60">{healthy()}% healthy</span>

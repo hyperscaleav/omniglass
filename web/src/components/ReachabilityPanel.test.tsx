@@ -7,7 +7,7 @@ import { ENDPOINTS_KEY, type Endpoint } from "../lib/endpoints";
 import { uuidFor } from "../lib/testids";
 import { Router, Route } from "@solidjs/router";
 
-// The panel is read-only and derives verdict/strip/reason client-side from the
+// The panel is read-only and derives state/strip/reason client-side from the
 // real API fields. Data is seeded into the query cache so no server is needed.
 const nowIso = new Date().toISOString();
 const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
@@ -76,7 +76,7 @@ describe("ReachabilityPanel", () => {
     expect(getByText(/last checked/).textContent).not.toMatch(/21 ?m/);
   });
 
-  it("renders the endpoint count and a verdict pill per endpoint", () => {
+  it("renders the endpoint count and a state pill per endpoint", () => {
     const { getByText, getAllByText } = mount();
     expect(getByText("2 endpoints")).toBeTruthy();
     expect(getByText("responding")).toBeTruthy();
@@ -98,13 +98,13 @@ describe("ReachabilityPanel", () => {
     // expand the down (icmp) interface row via its name button
     fireEvent.click(getByText("disp-1-icmp"));
     expect(getByText(/service down, box up/i)).toBeTruthy();
-    // the gate breakdown lists the layer checks and the verdict line
+    // the gate breakdown lists the layer checks and the state line
     expect(getByText("icmp-reachable")).toBeTruthy();
     expect(getByText("tcp-open")).toBeTruthy();
     expect(getByText(/probed by/)).toBeTruthy();
   });
 
-  it("derives stale and unknown verdicts client-side", () => {
+  it("derives stale and unknown health results client-side", () => {
     const stale: Reachability = {
       component: "c2",
       endpoints: [
@@ -398,7 +398,7 @@ describe("a tls endpoint", () => {
 
 // A udp endpoint has no port to open (#1037): its transport rung is the
 // driver's request answered, so the breakdown lists that rung (the layer the
-// verdict follows), and a down one explains itself.
+// state follows), and a down one explains itself.
 describe("a udp endpoint", () => {
   const udpRow = (answered: boolean) => ({
     endpoint: "udp",
@@ -466,7 +466,7 @@ describe("a udp endpoint", () => {
   });
 });
 
-// An endpoint with a null verdict says why (#981): beneath the row, without
+// An endpoint with a null state says why (#981): beneath the row, without
 // expanding it, with a link to where the operator fixes it. The panel sits in
 // the app's router, so these mount inside one for the link.
 describe("ReachabilityPanel pending reason", () => {
@@ -501,7 +501,7 @@ describe("ReachabilityPanel pending reason", () => {
     expect(notice.querySelector("a")?.getAttribute("href")).toMatch(/\/outposts\?n=edge-1$/);
   });
 
-  it("shows no reason once the endpoint has a verdict", () => {
+  it("shows no reason once the endpoint has a state", () => {
     const { queryByTestId } = mountPending({
       endpoint: "panel-1-icmp", transport: "icmp", outpost: "edge-1", reachability: { value: "up", ts: nowIso }, layers: [], history: [],
     });

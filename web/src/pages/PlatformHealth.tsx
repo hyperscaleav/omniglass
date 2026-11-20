@@ -13,7 +13,7 @@ import { ArrowUpRight, ChevronRight, TriangleAlert } from "../components/icons";
 import { fmtTime } from "../lib/format";
 import { LEAF_POLL_MS } from "../lib/component_leaf";
 import { entityLabel } from "../lib/entities";
-import { verdictOf } from "../lib/health";
+import { healthOf } from "../lib/health";
 import type { OutpostStatus } from "../lib/outposts";
 import { createViewBinding } from "../lib/binding";
 import {
@@ -65,7 +65,7 @@ import {
 //
 // The page holds no key list and no thresholds. The columns are the groups the
 // view returns, each headed with its catalog description, and a row's tone is
-// its component's recorded verdict, which the seeded rules decide. One clock:
+// its component's recorded health, which the seeded rules decide. One clock:
 // the pill and the uptime are both judged at the view's read_at.
 
 const NEUTRAL_PILL = "bg-base-content/10 text-base-content/70 border-transparent";
@@ -75,7 +75,7 @@ const PILL: Record<OutpostStatus, string> = {
   never: NEUTRAL_PILL,
 };
 
-// A row's tone is its verdict: the failure hues only, so a healthy fleet reads
+// A row's tone is its health: the failure hues only, so a healthy fleet reads
 // calm and the rows that need a look stand out.
 const ROW_TONE: Record<string, string> = {
   outage: "bg-error/5",
@@ -129,12 +129,12 @@ export default function PlatformHealth() {
 function Header(props: { view: PlatformView }) {
   return (
     <div class="grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-4" data-testid="platform-header">
-      <Fact label="Platform" sub={props.view.system ? "the platform system's verdict" : "needs a fleet-wide system read"}>
+      <Fact label="Platform" sub={props.view.system ? "the platform system's health" : "needs a fleet-wide system read"}>
         <Show when={props.view.system} fallback={<span class="text-base-content/30">-</span>}>
           {(s) => (
             <A href={`/systems/${s().id}`} class="inline-flex items-center gap-1 hover:underline">
-              <span data-testid="platform-verdict">
-                <HealthBadge verdict={s().health} size="md" />
+              <span data-testid="platform-health">
+                <HealthBadge health={s().health} size="md" />
               </span>
               <ArrowUpRight size={14} />
             </A>
@@ -231,14 +231,14 @@ function OutpostTable(props: { view: PlatformView }) {
 function OutpostRow(props: { outpost: PlatformOutpost; view: PlatformView }) {
   const navigate = useNavigate();
   const pill = () => outpostPill(props.outpost, props.view.read_at);
-  const verdict = () => verdictOf(props.outpost.health);
+  const rowHealth = () => healthOf(props.outpost.health);
   const title = () => entityLabel(props.outpost);
   const open = () => props.outpost.component && navigate(`/components/${props.outpost.component}`);
   return (
     <tr
       data-testid={`platform-outpost-${props.outpost.name}`}
-      data-verdict={verdict() ?? undefined}
-      class={ROW_TONE[verdict() ?? ""] ?? ""}
+      data-health={rowHealth() ?? undefined}
+      class={ROW_TONE[rowHealth() ?? ""] ?? ""}
       classList={{ "cursor-pointer hover:bg-base-200": !!props.outpost.component }}
       onClick={open}
     >
@@ -255,7 +255,7 @@ function OutpostRow(props: { outpost: PlatformOutpost; view: PlatformView }) {
       <td>
         <div class="flex items-center gap-2">
           <span class={`badge badge-sm ${PILL[pill()]}`}>{pill()}</span>
-          <Show when={verdict()}>{(v) => <HealthBadge verdict={v()} size="xs" />}</Show>
+          <Show when={rowHealth()}>{(v) => <HealthBadge health={v()} size="xs" />}</Show>
         </div>
       </td>
       <KeyedFor each={platformColumns(props.view)} by={(c) => c.key}>
@@ -303,7 +303,7 @@ function ServerPanels(props: { server: PlatformServer; view: PlatformView; open:
         <span data-disclosure class="text-base-content/60 transition-transform" classList={{ "rotate-90": open() }}><ChevronRight size={14} /></span>
         <span class="eyebrow">Server</span>
         <A href={`/components/${props.server.component}`} class="font-medium hover:underline" onClick={(e) => e.stopPropagation()}>{props.server.name}</A>
-        <HealthBadge verdict={props.server.health} size="xs" />
+        <HealthBadge health={props.server.health} size="xs" />
         <Show when={(props.server.alarms ?? []).length > 0}>
           <span class="badge badge-soft badge-warning badge-sm">{(props.server.alarms ?? []).length} open</span>
         </Show>

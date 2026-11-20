@@ -18,7 +18,7 @@ import { entityLabel } from "./entities";
 
 // The leaf's poll (#934): a monitoring console's component view moves as
 // collection arrives. The component's own reads (reachability, vitals, and
-// its alarms with the verdict they make) poll at the cadence of the sibling
+// its alarms with the health they make) poll at the cadence of the sibling
 // live surfaces (a rule's detail, the Simulation section); the outpost behind
 // each endpoint (usually one) at a slower cadence, its heartbeat moving no
 // faster. Nothing it polls grows with the fleet: no fleet view, no outpost
@@ -44,10 +44,10 @@ export type CollectionState = {
 };
 
 // Collection is judged by when the endpoint last delivered anything (the
-// server's last_seen), not by its reachability verdict: a driver endpoint
-// never gets a verdict, yet its batches say it is collecting (#933). Before
-// any stamp a verdict's own time stands in, which can only read older. Only
-// a probe endpoint carries a verdict, and only its down value says more than
+// server's last_seen), not by its reachability health: a driver endpoint
+// never gets a health, yet its batches say it is collecting (#933). Before
+// any stamp a health's own time stands in, which can only read older. Only
+// a probe endpoint carries a health, and only its down value says more than
 // freshness does.
 export function collectionState(iface: ReachEndpoint, outpost: Outpost | undefined, now: number = Date.now()): CollectionState {
   if (iface.webhook) return { kind: "listening" };
@@ -201,10 +201,10 @@ export function leafAlarmSince(alarms: Alarm[], now: number, levels?: SeverityLe
   return { message: worst.message, severity: worst.severity, ts: worst.raised_at, ms: now - Date.parse(worst.raised_at) };
 }
 
-// dotVerdict reads the component's verdict off the fleet projection: any
-// system's dot for it carries the component's OWN verdict, the same value
+// dotHealth reads the component's health off the fleet projection: any
+// system's dot for it carries the component's OWN health, the same value
 // wherever it appears.
-export function dotVerdict(view: FleetView, componentId: string): string | null {
+export function dotHealth(view: FleetView, componentId: string): string | null {
   for (const s of view.systems ?? []) {
     for (const d of s.dots ?? []) {
       if (d.component === componentId) return d.health ?? null;

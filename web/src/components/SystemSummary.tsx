@@ -15,7 +15,7 @@ import { fmtTime } from "../lib/format";
 import { durationText } from "../lib/timeline";
 
 // SystemSummary (#872): one system at a location holding several, in brief. What
-// it is (label, standard), whether it needs somebody (verdict, since-when,
+// it is (label, standard), whether it needs somebody (health, since-when,
 // the why), its slot arithmetic only while something is missing, and how
 // many components it holds. Choosing it opens the system's own view, where
 // its location is the card of context.
@@ -50,7 +50,7 @@ export default function SystemSummary(props: { systemId: string }) {
     >
       <span class="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span class="font-semibold">{system() ? entityLabel(system()!) : ""}</span>
-        <HealthBadge verdict={system()?.health ?? undefined} size="sm" />
+        <HealthBadge health={system()?.health ?? undefined} size="sm" />
         <Show when={health.data && sinceOf(health.data, now)}>
           {(sc) => <span data-testid="summary-since" class="tabular-nums text-base-content/60">since {fmtTime(sc().ts)} · {durationText(sc().ms)}</span>}
         </Show>

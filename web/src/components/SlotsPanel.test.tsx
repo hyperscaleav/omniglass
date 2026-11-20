@@ -185,7 +185,7 @@ describe("SlotsPanel", () => {
 
   // #626 choices: a slot belonging to a choice's losing alternate can read
   // impaired on its own terms, but its own figures never counted toward the
-  // verdict. Rendering short/spare/impact for it anyway is the exact
+  // health. Rendering short/spare/impact for it anyway is the exact
   // contradiction commit 5472723 fixed on HealthPanel; task 9 review, finding
   // C5, caught it reintroduced here.
   it("does not render short/spare/impact for a slot whose alternate lost its choice", () => {

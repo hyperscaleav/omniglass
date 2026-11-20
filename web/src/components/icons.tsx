@@ -186,7 +186,7 @@ export const LogOut: Component<P> = (p) => (
 export const Info: Component<P> = (p) => (
   <Svg size={p.size}><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></Svg>
 );
-// Health glyphs: one shape per verdict, so healthy / degraded / outage reads
+// Health glyphs: one shape per health, so healthy / degraded / outage reads
 // without relying on the badge hue alone.
 export const CircleCheck: Component<P> = (p) => (
   <Svg size={p.size}><circle cx="12" cy="12" r="9" /><path d="m8.5 12.2 2.4 2.4 4.6-4.8" /></Svg>
@@ -197,7 +197,7 @@ export const TriangleAlert: Component<P> = (p) => (
 export const OctagonX: Component<P> = (p) => (
   <Svg size={p.size}><path d="M8.6 2.6h6.8l4.8 4.8v6.8l-4.8 4.8H8.6l-4.8-4.8V7.4z" /><path d="m9.5 9.5 5 5M14.5 9.5l-5 5" /></Svg>
 );
-// CircleDashed is the incomplete verdict: the outline of a thing that is not
+// CircleDashed is the incomplete health: the outline of a thing that is not
 // there yet. Dashed rather than solid on purpose, so a commissioning gap reads
 // as unfinished rather than broken even in greyscale, where its indigo cannot
 // help. The dash array is on the element because the shared Svg wrapper sets

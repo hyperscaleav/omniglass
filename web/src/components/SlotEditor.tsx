@@ -53,7 +53,7 @@ import { describeError } from "../lib/format";
 // the controls do not.
 
 // A slot's impact, as the draft edits it: what an impaired slot means for its
-// system's verdict. Kept a plain string in the draft (a <select> value) and
+// system's health. Kept a plain string in the draft (a <select> value) and
 // narrowed only where SlotSpec needs the literal union.
 type Impact = "outage" | "degraded" | "none";
 
