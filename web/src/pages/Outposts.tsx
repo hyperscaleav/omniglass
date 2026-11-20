@@ -1,4 +1,4 @@
-import { createIdentity, entityLabel } from "../lib/entities";
+import { createIdentity } from "../lib/entities";
 import { Show, For, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { Dialog } from "@kobalte/core/dialog";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
@@ -9,7 +9,6 @@ import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import Button from "../components/Button";
 import { useFormActions } from "../lib/formactions";
-import { bindSelectValue } from "../lib/selectvalue";
 import { Check, Copy, Plus, Server } from "../components/icons";
 import KVStacked from "../components/KVStacked";
 import LogsPanel from "../components/LogsPanel";
@@ -31,7 +30,8 @@ import {
   outpostLabel,
   outpostFilterKeys,
 } from "../lib/outposts";
-import { LOCATIONS_KEY, listLocations } from "../lib/locations";
+import LocationSelect from "../components/LocationSelect";
+import FieldRow from "../components/FieldRow";
 import { TASKS_KEY, listTasks } from "../lib/tasks";
 import { ENDPOINTS_KEY, listEndpoints } from "../lib/endpoints";
 import { useMe, can } from "../lib/auth";
@@ -186,11 +186,10 @@ function OutpostBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput)
   }
 
   // The editable identity fields (label, description, location), the same
-  // read-edit-save shape the component/location blades use. The location options
-  // are the fleet's locations (a descriptive placement, not scope). The signals
+  // read-edit-save shape the component/location blades use. The location is a
+  // descriptive placement, not scope, picked from the location tree. The signals
   // re-sync from the live outpost whenever it changes or edit mode toggles, so Cancel
   // reverts and a Save reflects.
-  const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: () => listLocations() }));
   const [label, setLabel] = createSignal("");
   const [description, setDescription] = createSignal("");
   const [location, setLocation] = createSignal("");
@@ -299,13 +298,10 @@ function OutpostBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput)
               </Show>
             }
           >
-            {/* The directory can answer after the blade is on screen, and a
-                <select> keeps no value it has no option for, so the control takes
-                its value through the shared binder (lib/selectvalue.ts, #772). */}
-            <select ref={bindSelectValue(location, () => locations.data)} class="select select-bordered w-full" onChange={(e) => setLocation(e.currentTarget.value)}>
-              <option value="">(unplaced)</option>
-              <For each={locations.data ?? []}>{(l) => <option value={l.name}>{entityLabel(l)}</option>}</For>
-            </select>
+            {/* An outpost's location is held by name. The tree derives its
+                selection from value and options together, so a directory that
+                answers after the blade opens still shows the stored location. */}
+            <LocationSelect value={location()} onChange={setLocation} addressOf={(l) => l.name} rootLabel="(unplaced)" />
           </BladeField>
 
           <BladeField
@@ -372,7 +368,6 @@ function OutpostBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput)
 // where Enroll is the primary action once the device is ready to claim a token.
 function CreateOutpostForm(props: { close: () => void; onCreated: (row: Outpost) => void }) {
   const qc = useQueryClient();
-  const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: () => listLocations() }));
   // Label leads and the address follows it, stopping the moment the
   // operator edits the address by hand (lib/entities).
   const { display, setDisplay, name, setName, nameDerived } = createIdentity();
@@ -416,26 +411,18 @@ function CreateOutpostForm(props: { close: () => void; onCreated: (row: Outpost)
       <Show when={err()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
       </Show>
-      <div>
-        <label class="eyebrow mb-1.5 block" for="new-outpost-display">Label</label>
-        <input id="new-outpost-display" autocomplete="off" class="input input-bordered w-full" value={display()} placeholder="HQ Closet Outpost" onInput={(e) => setDisplay(e.currentTarget.value)} disabled={busy()} />
-      </div>
-      <div>
-        <label class="eyebrow mb-1.5 block" for="new-outpost-name">Name</label>
-        <input id="new-outpost-name" autocomplete="off" class="input input-bordered w-full font-data" value={name()} placeholder="edge-hq-1" onInput={(e) => setName(e.currentTarget.value)} disabled={busy()} aria-required="true" />
-        <p class="mt-1 text-xs text-base-content/50">{nameDerived() ? "Derived from the label. Edit to set your own." : "The outpost's address, used by the API and CLI."}</p>
-      </div>
-      <div>
-        <label class="eyebrow mb-1.5 block" for="new-outpost-location">Location</label>
-        <select id="new-outpost-location" class="select select-bordered w-full" value={location()} onChange={(e) => setLocation(e.currentTarget.value)} disabled={busy()}>
-          <option value="">(unplaced)</option>
-          <For each={locations.data ?? []}>{(l) => <option value={l.name}>{entityLabel(l)}</option>}</For>
-        </select>
-      </div>
-      <div>
-        <label class="eyebrow mb-1.5 block" for="new-outpost-desc">Description</label>
-        <input id="new-outpost-desc" autocomplete="off" class="input input-bordered w-full" value={description()} placeholder="HQ network closet" onInput={(e) => setDescription(e.currentTarget.value)} disabled={busy()} />
-      </div>
+      <FieldRow bind="label">
+        <input autocomplete="off" class="input input-bordered w-full" value={display()} placeholder="HQ Closet Outpost" onInput={(e) => setDisplay(e.currentTarget.value)} disabled={busy()} />
+      </FieldRow>
+      <FieldRow bind="name" hint={nameDerived() ? "Derived from the label. Edit to set your own." : "The outpost's address, used by the API and CLI."}>
+        <input autocomplete="off" class="input input-bordered w-full font-data" value={name()} placeholder="edge-hq-1" onInput={(e) => setName(e.currentTarget.value)} disabled={busy()} aria-required="true" />
+      </FieldRow>
+      <FieldRow label="Location">
+        <LocationSelect value={location()} onChange={setLocation} addressOf={(l) => l.name} rootLabel="(unplaced)" disabled={busy()} />
+      </FieldRow>
+      <FieldRow label="Description">
+        <input autocomplete="off" class="input input-bordered w-full" value={description()} placeholder="HQ network closet" onInput={(e) => setDescription(e.currentTarget.value)} disabled={busy()} />
+      </FieldRow>
     </form>
   );
 }

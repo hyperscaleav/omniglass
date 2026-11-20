@@ -2,14 +2,13 @@ import { For, Index, Match, Show, Switch, createMemo, createSignal, type JSX } f
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FieldRow from "./FieldRow";
 import Eyebrow from "./Eyebrow";
-import TreeSelect from "./TreeSelect";
+import LocationSelect from "./LocationSelect";
 import { Plus } from "./icons";
 import { useFormActions } from "../lib/formactions";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { byLabel, entityLabel } from "../lib/entities";
 import { nameStemError } from "../lib/validate";
-import { type TreeNode } from "../lib/treeselect";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { OUTPOSTS_KEY, listOutposts } from "../lib/outposts";
 import { STANDARDS_KEY, listStandards } from "../lib/standards";
@@ -97,10 +96,9 @@ function useSubmit(run: () => Promise<string>, onDone: (href: string) => void) {
 function useCarriedLocation(carried?: string) {
   const me = useMe();
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations, enabled: can(me.data, "location", "read") }));
-  const items = createMemo<TreeNode[]>(() => (locations.data ?? []).map((l) => ({ id: l.id, value: locationValue(l), label: entityLabel(l), parentId: l.parent_id })));
   const [chosen, setChosen] = createSignal<string | null>(null);
   const value = () => chosen() ?? locationRef(locations.data ?? [], carried);
-  return { items, value, set: (v: string) => setChosen(v) };
+  return { value, set: (v: string) => setChosen(v), readable: () => can(me.data, "location", "read") };
 }
 
 // The standards the fleet holds, by name: what decides whether a start creates
@@ -268,7 +266,7 @@ function ComponentForm(props: StartFormProps): JSX.Element {
       <ErrorAlert err={err()} />
       <MissingAlert missing={missing()} />
       <FieldRow label="Location" info="Where the component sits. Optional.">
-        <TreeSelect items={location.items()} value={location.value()} onChange={location.set} rootLabel="None" />
+        <LocationSelect value={location.value()} onChange={location.set} addressOf={locationValue} enabled={location.readable()} rootLabel="None" />
       </FieldRow>
       <NameField value={d().name} onInput={(v) => set("name", v)} placeholder="minted from its type" info="Optional. Empty mints one from its type, as any component's name is." />
       <LabelField value={d().label} onInput={(v) => set("label", v)} placeholder={props.template.label} />
@@ -350,7 +348,7 @@ function SystemForm(props: StartFormProps): JSX.Element {
       <ErrorAlert err={err()} />
       <MissingAlert missing={missing()} />
       <FieldRow label="Location" info="Where the system and its components sit. Optional.">
-        <TreeSelect items={location.items()} value={location.value()} onChange={location.set} rootLabel="None" />
+        <LocationSelect value={location.value()} onChange={location.set} addressOf={locationValue} enabled={location.readable()} rootLabel="None" />
       </FieldRow>
       <NameField value={d().name} onInput={(v) => set("name", v)} placeholder="minted from its type" info="Optional. Empty mints one from its system type." />
       <LabelField value={d().label} onInput={(v) => set("label", v)} placeholder={props.template.label} />
@@ -420,7 +418,7 @@ function LocationsForm(props: StartFormProps): JSX.Element {
       <ErrorAlert err={err()} />
       <MissingAlert missing={missing()} />
       <FieldRow label="Parent location" info="The place the subtree sits under. Each location's type has to be allowed under its parent's; None makes the root a new top.">
-        <TreeSelect items={parent.items()} value={parent.value()} onChange={parent.set} rootLabel="None (a new top)" />
+        <LocationSelect value={parent.value()} onChange={parent.set} addressOf={locationValue} enabled={parent.readable()} rootLabel="None (a new top)" />
       </FieldRow>
       <NameField value={d().name} onInput={(v) => set("name", v)} placeholder={props.template.location?.name || "minted from its type"} info="The root location's name. Empty takes the template's, else its type's name rule mints one." />
       <LabelField value={d().label} onInput={(v) => set("label", v)} placeholder={entityLabel({ name: entityLabel(props.template), label: props.template.location?.label })} />

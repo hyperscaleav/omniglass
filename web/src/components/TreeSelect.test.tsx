@@ -46,6 +46,20 @@ describe("TreeSelect", () => {
     expect(optionFor("Boardroom").style.paddingLeft).not.toBe("");
   });
 
+  it("shows a disabled node in its place but does not let it be chosen", async () => {
+    const picked: string[] = [];
+    const gated: TreeNode[] = items.map((n) => (n.id === "b1" ? { ...n, disabled: true } : n));
+    render(() => <TreeSelect items={gated} value="" onChange={(v) => picked.push(v)} rootLabel="None" />);
+    open();
+    await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(5));
+    expect(optionFor("Bldg 1").getAttribute("aria-disabled")).toBe("true");
+    // Its child still nests beneath it.
+    expect(parseFloat(optionFor("Floor 2").style.paddingLeft)).toBeGreaterThan(parseFloat(optionFor("Bldg 1").style.paddingLeft));
+    fireEvent.click(optionFor("Bldg 1"));
+    fireEvent.click(optionFor("Floor 2"));
+    expect(picked).toEqual(["floor-2"]);
+  });
+
   it("reports the chosen value, and the empty value for the root option", async () => {
     const picked: string[] = [];
     render(() => (

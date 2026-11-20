@@ -15,6 +15,7 @@ import { STANDARDS_KEY } from "../lib/standards";
 import { PRODUCTS_KEY } from "../lib/products";
 import { COMPONENT_TYPES_KEY } from "../lib/component_types";
 import { uuidFor } from "../lib/testids";
+import { pickTree, treeChoices, treeOptions, treeValue } from "../components/TreeSelect.testkit";
 
 // A location's detail view (#872): systems are the unit, locations are folders. A
 // location holding one system lands on that system; a folder (no system, or a
@@ -302,28 +303,29 @@ describe("the configure mover keeps the classic contract (#800)", () => {
   it("narrows to allowed_parent_types, excludes the subtree, uuid-valued", async () => {
     mount(`/web/locations/${uuidFor("lz-b1")}?tab=configure&edit=1`);
     const face = await screen.findByTestId("configure-face");
-    const select = (await within(face).findByLabelText("Parent")) as HTMLSelectElement;
-    const labels = Array.from(select.options).map((o) => o.textContent?.trim());
-    // building allows [root, campus]: both campuses offered, never itself,
-    // and no root option since it already has a parent.
-    expect(labels).toContain("Headquarters");
-    expect(labels).toContain("Lab");
-    expect(labels.some((l) => l?.includes("West Building"))).toBe(false);
-    expect(labels).not.toContain("Root (current)");
-    // seeded from and valued by uuid (#627)
-    expect(select.value).toBe(uuidFor("lz-hq"));
-    fireEvent.change(select, { target: { value: uuidFor("lz-hq2") } });
-    expect(select.value).toBe(uuidFor("lz-hq2"));
+    const picker = await within(face).findByLabelText("Parent");
+    // building allows [root, campus]: both campuses are choices, never itself
+    // or its subtree, and no root option since it already has a parent.
+    const choices = await treeChoices(picker);
+    expect(choices).toContain("Headquarters");
+    expect(choices).toContain("Lab");
+    expect(choices).not.toContain("Root (current)");
+    const drawn = await treeOptions(picker);
+    fireEvent.keyDown(picker, { key: "Escape" });
+    expect(drawn).toEqual(["Headquarters", "Lab"]);
+    // seeded from the stored parent's uuid (#627)
+    expect(treeValue(picker)).toBe("Headquarters");
+    await pickTree(picker, "Lab");
+    expect(treeValue(picker)).toBe("Lab");
   });
 
   it("offers only the current-root placeholder when nothing matches the allowed set", async () => {
     mount(`/web/locations/${uuidFor("lz-hq")}?tab=configure&edit=1`);
     const face = await screen.findByTestId("configure-face");
-    const select = (await within(face).findByLabelText("Parent")) as HTMLSelectElement;
-    const labels = Array.from(select.options).map((o) => o.textContent?.trim());
+    const picker = await within(face).findByLabelText("Parent");
     // campus allows [root] only: no location is of type root, so the only
-    // option is the current-root placeholder.
-    expect(labels).toEqual(["Root (current)"]);
+    // choice is the current-root placeholder.
+    expect(await treeChoices(picker)).toEqual(["Root (current)"]);
   });
 
   it("sends the move by uuid on save and surfaces a refusal in place", async () => {
@@ -343,8 +345,7 @@ describe("the configure mover keeps the classic contract (#800)", () => {
     try {
       mount(`/web/locations/${uuidFor("lz-b1")}?tab=configure&edit=1`);
       const face = await screen.findByTestId("configure-face");
-      const select = (await within(face).findByLabelText("Parent")) as HTMLSelectElement;
-      fireEvent.change(select, { target: { value: uuidFor("lz-hq2") } });
+      await pickTree(await within(face).findByLabelText("Parent"), "Lab");
       fireEvent.click(within(face).getByRole("button", { name: /save/i }));
       await waitFor(() => {
         const move = calls.find((c) => c.method === "POST" && c.url.includes(":move"));
@@ -407,8 +408,8 @@ describe("a configure select takes its value when its catalog lands (#782)", () 
     const face = await screen.findByTestId("configure-face");
     const typePicker = (await within(face).findByLabelText("Location type")) as HTMLSelectElement;
     expect(typePicker.options.length).toBe(0);
-    const parentPicker = () => within(face).getByLabelText("Parent") as HTMLSelectElement;
-    expect(parentPicker().value).toBe(uuidFor("lz-hq"));
+    const parentPicker = () => within(face).getByLabelText("Parent");
+    expect(treeValue(parentPicker())).toBe("Headquarters");
 
     qc.setQueryData([...LOCATION_TYPES_KEY], types);
 
@@ -416,8 +417,8 @@ describe("a configure select takes its value when its catalog lands (#782)", () 
     expect(typePicker.value).toBe("building");
     // The filter that arrived with the catalog narrowed the parent pool to
     // campuses; the stored parent is one, and stays chosen through the churn.
-    await waitFor(() => expect(parentPicker().options.length).toBe(2));
-    expect(parentPicker().value).toBe(uuidFor("lz-hq"));
+    await waitFor(async () => expect(await treeChoices(parentPicker())).toEqual(["Headquarters", "Lab"]));
+    expect(treeValue(parentPicker())).toBe("Headquarters");
   });
 });
 
