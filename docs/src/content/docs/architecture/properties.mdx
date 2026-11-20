@@ -69,7 +69,7 @@ The telemetry model is **five lanes** with five names and no overlap: a **metric
 - A **metric is a quantity**: a numeric reading of a registered `metric_type`, a float8 row in `metric`. Quantities **aggregate**: `AVG(volume)`, a p95 latency, a rate over time are all meaningful. The firehose.
 - A **property is a value**: what something *is* right now, a jsonb row in `property` typed by a registered `property_type`. A value can be a **number used as a name** (input 3, zone 4): averaging inputs is meaningless. A probe's **state** is a value too (`icmp-reachable` is `up` or `down`, `tcp-open` is `open` or `closed`): nothing is averaged over it and the operator's question is when it flipped, so it is written transition-only while the probe's timing beside it stays a metric ([ADR-1592](/architecture/decisions/#adr-1592-a-probes-state-is-a-transition-only-property-not-a-metric-row)). Values do not aggregate, they **have duration**: "how long was the input 3?" is the question the lane answers, so it is written transition-only and the series is its own edge history.
 
-A **sample** is one timestamped reading in either lane, `(owner, type, instance, ts, value, provenance, source, lineage)`. A **series** is one stream of them, `(type, owner, instance, provenance)`. The **current value** is the latest sample of a series, derived by reading it, never stored beside it: on the property lane its latest row, on the metric lane its newest raw row unless a folded block holds a newer sample (`metricNewestSQL`) ([below](#current-value-is-the-latest-series-row)).
+A **sample** is one timestamped reading in either lane, `(owner, type, instance, ts, value, provenance, source, lineage)`. A **series** is one stream of them, `(type, owner, instance, provenance)`. The **current value** is the latest sample of a series, derived by reading it, never stored beside it: on the property lane its latest row, on the metric lane its newest raw row unless a folded block holds a newer sample (`metricNewestSQL`) ([below](#current-value-is-the-latest-series-sample)).
 
 The two lanes are one shape in code and two tables in storage, split because they answer different questions and retain differently, not because they differ conceptually. The lane a name belongs to is decided by **catalog membership**: `volume` is a metric because `metric_type` holds it. There is no per-key `kind` column; the split catalog made it redundant ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)).
 
@@ -304,7 +304,7 @@ observer, which is why a collected key keeps all four provenances side by side.
   lane or a driver spec writing it is refused; an operator's declared value still resolves ahead of
   the calculated one.
 
-## Current value is the latest series row
+## Current value is the latest series sample
 
 "What is this property now?" is answered by **reading the series**: the latest row per `(type, owner, instance, provenance)`. What orders a series depends on the lane, because the lanes differ in who supplies `ts`:
 
