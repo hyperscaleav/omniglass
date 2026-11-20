@@ -330,7 +330,8 @@ jobs:
             echo "::error::the agent left a push for '${branch}', not this PR's branch ${HEAD_REF}"
             exit 1
           fi
-          bare="${RUNNER_TEMP}/push-bare"
+          # A name the agent cannot have pre-created: a reused repo would keep its config.
+          bare=$(mktemp -d "${RUNNER_TEMP}/push-bare.XXXXXX")
           git init -q --bare "$bare"
           gitb() { git -C "$bare" -c core.hooksPath=/dev/null "$@"; }
           gitb fetch -q --no-tags "file://${GITHUB_WORKSPACE}" "refs/heads/${HEAD_REF}:refs/heads/${HEAD_REF}" \
@@ -343,7 +344,7 @@ jobs:
             echo "::error::${HEAD_REF} changes workflow files, which the agent's push may not: ${touched//$'\n'/, }"
             exit 1
           fi
-          echo "push=true" >> "$GITHUB_OUTPUT"
+          { echo "push=true"; echo "bare=${bare}"; } >> "$GITHUB_OUTPUT"
 
       # The App's token lasts an hour and the agent can run longer, so its
       # last pushes failed and the work was lost. Every step after the agent
@@ -370,17 +371,17 @@ jobs:
       - name: Push what the expired token stopped
         if: always() && steps.fresh.outcome == 'success' && steps.pending.outputs.push == 'true'
         env:
+          bare: ${{ steps.pending.outputs.bare }}
           TOKEN: ${{ steps.fresh.outputs.token }}
           HEAD_REF: ${{ steps.gate.outputs.head }}
         run: |
           set -uo pipefail
           export GIT_TERMINAL_PROMPT=0 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
           cd "$RUNNER_TEMP"
-          bare="${RUNNER_TEMP}/push-bare"
           auth=$(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)
           echo "::add-mask::${auth}"
           url="https://github.com/${REPO}.git"
-          gitf() { git -C "$bare" -c core.hooksPath=/dev/null -c http.https://github.com/.extraheader= -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" "$@"; }
+          gitf() { git -C "$bare" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c http.proxy= -c http.sslVerify=true -c http.sslCAInfo= -c http.https://github.com/.extraheader= -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" "$@"; }
           gitf push "$url" "refs/heads/${HEAD_REF}:refs/heads/${HEAD_REF}" \
             || { echo "::error::could not push ${HEAD_REF} with a fresh token"; exit 1; }
 
@@ -441,10 +442,10 @@ jobs:
           url="https://github.com/${REPO}.git"
           # A fresh clone the agent never touched, read from GitHub with no
           # credentials; the token is used only for the push below.
-          dir="${RUNNER_TEMP}/config-guard"
+          dir=$(mktemp -d "${RUNNER_TEMP}/config-guard.XXXXXX")
           git init -q "$dir"
           cd "$dir"
-          gitc() { git -c core.hooksPath=/dev/null "$@"; }
+          gitc() { git -c core.hooksPath=/dev/null -c core.fsmonitor=false -c http.proxy= -c http.sslVerify=true -c http.sslCAInfo= "$@"; }
           gitc fetch -q --no-tags "$url" "+refs/heads/main:refs/remotes/origin/main" \
             "+refs/heads/${HEAD_REF}:refs/remotes/origin/${HEAD_REF}"
           gitc checkout -q --detach "origin/${HEAD_REF}"
@@ -501,7 +502,7 @@ jobs:
             # The config guard may have pushed a commit this checkout lacks. Read
             # the range in a fresh bare repo from GitHub, with no token and
             # never git in the agent's checkout.
-            bare="${RUNNER_TEMP}/range-bare"
+            bare=$(mktemp -d "${RUNNER_TEMP}/range-bare.XXXXXX")
             git init -q --bare "$bare"
             GIT_TERMINAL_PROMPT=0 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git -C "$bare" -c core.hooksPath=/dev/null \
               fetch -q --no-tags "https://github.com/${REPO}.git" "$BEFORE" "$after" 2>/dev/null || true

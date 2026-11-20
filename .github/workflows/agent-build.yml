@@ -276,7 +276,8 @@ jobs:
             echo "::error::the agent left a push for '${branch}', which is not a branch of issue #${NUMBER}"
             exit 1
           fi
-          bare="${RUNNER_TEMP}/push-bare"
+          # A name the agent cannot have pre-created: a reused repo would keep its config.
+          bare=$(mktemp -d "${RUNNER_TEMP}/push-bare.XXXXXX")
           git init -q --bare "$bare"
           gitb() { git -C "$bare" -c core.hooksPath=/dev/null "$@"; }
           gitb fetch -q --no-tags "file://${GITHUB_WORKSPACE}" "refs/heads/${branch}:refs/heads/${branch}" \
@@ -288,7 +289,7 @@ jobs:
             echo "::error::${branch} changes workflow files, which the agent's push may not: ${touched//$'\n'/, }"
             exit 1
           fi
-          echo "push=true" >> "$GITHUB_OUTPUT"
+          { echo "push=true"; echo "bare=${bare}"; } >> "$GITHUB_OUTPUT"
 
       # The App's token lasts an hour and the agent can run longer, so its
       # last pushes failed and the work was lost. Every step after the agent
@@ -314,6 +315,7 @@ jobs:
       - name: Finish what the expired token stopped
         if: always() && steps.fresh.outcome == 'success' && steps.pending.outputs.push == 'true'
         env:
+          bare: ${{ steps.pending.outputs.bare }}
           GH_TOKEN: ${{ steps.fresh.outputs.token }}
           TOKEN: ${{ steps.fresh.outputs.token }}
         run: |
@@ -321,11 +323,10 @@ jobs:
           left="${RUNNER_TEMP}/agent-pending"
           export GIT_TERMINAL_PROMPT=0 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
           cd "$RUNNER_TEMP"
-          bare="${RUNNER_TEMP}/push-bare"
           auth=$(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)
           echo "::add-mask::${auth}"
           url="https://github.com/${REPO}.git"
-          gitf() { git -C "$bare" -c core.hooksPath=/dev/null -c http.https://github.com/.extraheader= -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" "$@"; }
+          gitf() { git -C "$bare" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c http.proxy= -c http.sslVerify=true -c http.sslCAInfo= -c http.https://github.com/.extraheader= -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" "$@"; }
           branch=$(head -n 1 "$left/branch" | tr -d '[:space:]')
           gitf push "$url" "refs/heads/${branch}:refs/heads/${branch}" \
             || { echo "::error::could not push ${branch} with a fresh token"; exit 1; }
