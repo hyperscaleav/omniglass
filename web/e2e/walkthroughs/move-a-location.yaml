@@ -1,0 +1,33 @@
+# Move a location in the location tree (#2301): every location field is the same
+# tree picker, so a reparent shows where each candidate sits, and a place the
+# location's type may not sit under is drawn but cannot be chosen.
+title: Move a location to another building
+description: Open a room's Configure, pick its new parent from the location tree, and save. The tree shows the nesting, and rooms (which a room may not sit under) stay in place but cannot be picked.
+steps:
+  - goto: /explore
+    caption: Explore is the outline of every location in the fleet, with what each one holds.
+  - click: { role: button, name: Expand Service Depot }
+    caption: Open the depot. Bay 3 is a room inside it.
+  - click: { role: treeitem, name: Bay 3 }
+    caption: Bay 3 holds one system, so opening the location opens that system.
+  - wait: { role: dialog, name: Bay 3 }
+    caption: The system's panel names the place it sits in.
+  - click: { role: button, name: Expand, exact: true }
+    caption: Expand the panel to the system's full view.
+  - click: { role: tab, name: Configure }
+    caption: Configure holds the location's form first.
+  - click: '[data-testid="configure-face-location"] >> role=button[name="Edit"]'
+    caption: Edit the location. Moving it is its own permission, location:move.
+  - click: '[data-testid="configure-face-location"] >> role=button[name=/^Parent/]'
+    caption: The parent is picked from the location tree, the same picker every location field uses.
+  - wait: { role: option, name: Annex }
+    caption: Each place sits under its parent. Rooms are muted, since a room cannot hold a room, but they keep the tree readable.
+    hold: 1500
+  - click: { role: option, name: Annex }
+    caption: Choose the Annex building at the airport office.
+  - click: '[data-testid="configure-face-location"] >> role=button[name="Save changes"]'
+    caption: Save. The move re-scopes who can see the room and what it holds.
+  - wait: { selector: '[data-testid="breadcrumb"]:has-text("Annex")' }
+    caption: The room now sits in the Annex, and the breadcrumb says so.
+    hold: 1500
+    poster: true
