@@ -409,6 +409,12 @@
    "scope": "server",
    "doc": "Seconds between heartbeats",
    "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SECRET__\u003cNAME\u003e",
+   "scope": "server",
+   "doc": "declares a platform secret from the environment, named \u003cNAME\u003e lowercased with each underscore a hyphen (OMNIGLASS_SECRET__BEDROCK_KEY is bedrock-key); the value is a JSON object {\"type\": \"\u003csecret type\u003e\", \"fields\": {...}} checked against the type at boot. Held in memory, never sealed or written; listed with source env and changed only by its variable and a restart, and a stored platform secret of the same name fails the boot",
+   "family": "OMNIGLASS_SECRET__"
   }
  ]
 }

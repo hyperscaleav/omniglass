@@ -9,6 +9,7 @@ import (
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -107,4 +108,20 @@ func newGCM(key []byte) (cipher.AEAD, error) {
 		return nil, fmt.Errorf("secret: aes cipher: %w", err)
 	}
 	return cipher.NewGCM(block)
+}
+
+// VersionKeyer is a provider that can derive a stable key for versioning the
+// env-backed secrets (#2223): every server holding the same KEK derives the
+// same key, so they report one version for one value, and the key reveals
+// nothing of the KEK.
+type VersionKeyer interface {
+	VersionKey() []byte
+}
+
+// VersionKey derives the env-secret version key from the KEK, under a label of
+// its own so it never equals a key used to seal anything.
+func (p *StaticProvider) VersionKey() []byte {
+	m := hmac.New(sha256.New, p.kek)
+	m.Write([]byte("omniglass env secret version"))
+	return m.Sum(nil)
 }

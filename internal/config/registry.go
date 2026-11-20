@@ -53,11 +53,13 @@ type Family struct {
 
 // Families declares the prefix variables omniglass reads (#2223). The env
 // settings layer (OMNIGLASS_SETTING__*) is expanded per-key in the generated
-// reference. Env-backed platform secrets are the ticket's other half and
-// join this list when the server reads them.
+// reference; the env-backed platform secrets (OMNIGLASS_SECRET__*) render as
+// one family row, since their names are the operator's.
 var Families = []Family{
 	{Prefix: "OMNIGLASS_SETTING__", Scope: "server",
 		Doc: "sets one platform setting from the environment (OMNIGLASS_SETTING__<NAMESPACE>__<KEY>=value); the env layer sits between the settings file and the platform binding, so a console edit still wins. See the generated per-key rows"},
+	{Prefix: "OMNIGLASS_SECRET__", Scope: "server",
+		Doc: `declares a platform secret from the environment, named <NAME> lowercased with each underscore a hyphen (OMNIGLASS_SECRET__BEDROCK_KEY is bedrock-key); the value is a JSON object {"type": "<secret type>", "fields": {...}} checked against the type at boot. Held in memory, never sealed or written; listed with source env and changed only by its variable and a restart, and a stored platform secret of the same name fails the boot`},
 }
 
 // Registry declares every environment variable the binary reads, in the order
