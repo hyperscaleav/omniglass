@@ -255,3 +255,32 @@ func TestRunFinishesStoppedAtTheStepLimit(t *testing.T) {
 		t.Errorf("RUN_FINISHED %d times, want once", n)
 	}
 }
+
+// A model's reasoning is its own message, apart from the answer, and reads
+// back as the event the loop reported (#2259).
+func TestReasoningIsNarratedApartFromTheAnswer(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	r := NewRun(&buf, "lobby", "run-1")
+	r.Start()
+	r.Hear(assistant.Event{Kind: assistant.EventReasoning, Text: "User asks 2+2."})
+	r.Hear(assistant.Event{Kind: assistant.EventText, Text: "Four."})
+	r.Hear(assistant.Event{Kind: assistant.EventReasoning})
+	r.Finish()
+	evs := events(t, buf.Bytes())
+	want := "RUN_STARTED,REASONING_MESSAGE_START,REASONING_MESSAGE_CONTENT,REASONING_MESSAGE_END,TEXT_MESSAGE_START,TEXT_MESSAGE_CONTENT,TEXT_MESSAGE_END,RUN_FINISHED"
+	if got := strings.Join(types(evs), ","); got != want {
+		t.Fatalf("events = %s, want %s", got, want)
+	}
+	if evs[2]["delta"] != "User asks 2+2." || evs[5]["delta"] != "Four." {
+		t.Errorf("events = %v", evs)
+	}
+	var heard []assistant.Event
+	end, err := Read(&buf, map[string]string{}, func(e assistant.Event) { heard = append(heard, e) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(heard) != 2 || heard[0].Kind != assistant.EventReasoning || heard[0].Text != "User asks 2+2." || end.Text != "Four." {
+		t.Errorf("heard %+v, ending %+v", heard, end)
+	}
+}

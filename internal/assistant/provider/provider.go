@@ -20,8 +20,11 @@ const (
 // the call named by ToolCallID. Its JSON is how a stored conversation keeps
 // it (#2113).
 type Message struct {
-	Role       Role       `json:"role"`
-	Text       string     `json:"text,omitempty"`
+	Role Role   `json:"role"`
+	Text string `json:"text,omitempty"`
+	// Reasoning is the model's chain of thought for the turn, kept in the
+	// transcript for the panel and never sent back to the model (#2259).
+	Reasoning  string     `json:"reasoning,omitempty"`
 	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
 	ToolCallID string     `json:"tool_call_id,omitempty"`
 	IsError    bool       `json:"is_error,omitempty"`
@@ -45,7 +48,9 @@ type ToolCall struct {
 // Turn is a model's answer: text for the person, calls to make, or both. A
 // turn with no calls ends the run.
 type Turn struct {
-	Text      string
+	Text string
+	// Reasoning is the model's chain of thought, apart from its answer.
+	Reasoning string
 	ToolCalls []ToolCall
 }
 

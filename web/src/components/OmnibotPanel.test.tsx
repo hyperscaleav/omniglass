@@ -101,6 +101,29 @@ describe("the omnibot panel", () => {
     expect((screen.getByLabelText("Ask omnibot") as HTMLTextAreaElement).disabled).toBe(true);
   });
 
+  it("shows reasoning collapsed under Thinking, apart from the answer (#2259)", async () => {
+    const ev = (o: object) => `data: ${JSON.stringify(o)}\n\n`;
+    runReply = () =>
+      sse(
+        ev({ type: "RUN_STARTED", threadId: "conv-1", runId: "r" }) +
+          ev({ type: "REASONING_MESSAGE_START", messageId: "m1", role: "reasoning" }) +
+          ev({ type: "REASONING_MESSAGE_CONTENT", messageId: "m1", delta: "User asks 2+2." }) +
+          ev({ type: "REASONING_MESSAGE_END", messageId: "m1" }) +
+          ev({ type: "TEXT_MESSAGE_START", messageId: "m2", role: "assistant" }) +
+          ev({ type: "TEXT_MESSAGE_CONTENT", messageId: "m2", delta: "Four." }) +
+          ev({ type: "TEXT_MESSAGE_END", messageId: "m2" }) +
+          ev({ type: "RUN_FINISHED", threadId: "conv-1", runId: "r", outcome: { type: "success" } }),
+      );
+    open();
+    send("2+2?");
+    await screen.findByText("Four.");
+    const thinking = screen.getByTestId("omnibot-thinking") as HTMLDetailsElement;
+    expect(thinking.open).toBe(false);
+    expect(within(thinking).getByText("Thinking")).toBeTruthy();
+    expect(thinking.textContent).toContain("User asks 2+2.");
+    expect(screen.getByText("Four.").closest("details")).toBeNull();
+  });
+
   it("runs on a plain-http origin, where the browser has no crypto.randomUUID", async () => {
     vi.spyOn(crypto, "randomUUID").mockImplementation(() => {
       throw new TypeError("crypto.randomUUID is not a function");

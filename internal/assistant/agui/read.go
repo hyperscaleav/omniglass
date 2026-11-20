@@ -45,6 +45,7 @@ type wireEvent struct {
 func Read(r io.Reader, tools map[string]string, hear func(assistant.Event)) (Ending, error) {
 	var end Ending
 	text := map[string]*strings.Builder{}
+	reasoning := map[string]*strings.Builder{}
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 0, 64<<10), 4<<20)
 	for sc.Scan() {
@@ -68,6 +69,17 @@ func Read(r io.Reader, tools map[string]string, hear func(assistant.Event)) (End
 				end.Text = b.String()
 				delete(text, ev.MessageID)
 				hear(assistant.Event{Kind: assistant.EventText, Text: end.Text})
+			}
+		case typeReasoningStart:
+			reasoning[ev.MessageID] = &strings.Builder{}
+		case typeReasoningContent:
+			if b := reasoning[ev.MessageID]; b != nil {
+				b.WriteString(ev.Delta)
+			}
+		case typeReasoningEnd:
+			if b := reasoning[ev.MessageID]; b != nil {
+				delete(reasoning, ev.MessageID)
+				hear(assistant.Event{Kind: assistant.EventReasoning, Text: b.String()})
 			}
 		case typeToolCallStart:
 			tools[ev.ToolCallID] = ev.ToolCallName

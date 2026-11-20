@@ -474,7 +474,7 @@ where b.series_id = $1 order by b.span_start, b.span;
   `MetricSeriesSamples`), so each answers the same before a day folds and after (a whole-hour
   bucketed read takes its closed hours from the trends instead, and is held to equal this read, #1566)
   ([ADR-1530](/architecture/decisions/#adr-1530-a-series-read-takes-a-folded-day-from-its-blocks-and-the-rest-from-raw-rows)).
-  The judge's window averages and series and process ages (`ruleWindowSQL`, `ruleAgeSQL`,
+  The reconcile's window averages and series and process ages (`ruleWindowSQL`, `ruleAgeSQL`,
   `processAgeSQL`) still read raw rows directly until they move to the blocks (#1572).
   A late sample lands raw and merges, so a folded day holds it twice; the read takes each day of
   each lineage from one source. A day is read from its blocks when a block of its lineage covers it

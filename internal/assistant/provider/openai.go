@@ -48,6 +48,10 @@ type chatMessage struct {
 	Content    *string    `json:"content"`
 	ToolCalls  []chatCall `json:"tool_calls,omitempty"`
 	ToolCallID string     `json:"tool_call_id,omitempty"`
+	// Reasoning is read only: the servers that send a chain of thought in a
+	// field of its own name it one of these. It is never written back.
+	ReasoningContent string `json:"reasoning_content,omitempty"`
+	Reasoning        string `json:"reasoning,omitempty"`
 }
 
 type chatCall struct {
@@ -160,7 +164,17 @@ func (p *OpenAI) request(messages []Message, tools []Tool) chatRequest {
 func turnFrom(m chatMessage) (Turn, error) {
 	var t Turn
 	if m.Content != nil {
-		t.Text = strings.TrimSpace(*m.Content)
+		t.Reasoning, t.Text = splitReasoning(*m.Content)
+	}
+	field := strings.TrimSpace(m.ReasoningContent)
+	if field == "" {
+		field = strings.TrimSpace(m.Reasoning)
+	}
+	if field != "" {
+		if t.Reasoning != "" {
+			field += "\n\n" + t.Reasoning
+		}
+		t.Reasoning = field
 	}
 	for _, c := range m.ToolCalls {
 		call := ToolCall{ID: c.ID, Name: c.Function.Name}
@@ -175,6 +189,31 @@ func turnFrom(m chatMessage) (Turn, error) {
 		return Turn{}, errors.New("the model gave no answer")
 	}
 	return t, nil
+}
+
+const (
+	reasoningOpen  = "<reasoning>"
+	reasoningClose = "</reasoning>"
+)
+
+// splitReasoning pulls the leading <reasoning> blocks (Bedrock's gpt-oss
+// inlines its chain of thought so) off a message's content: the blocks
+// joined, and the answer after them. An unclosed block is all reasoning.
+func splitReasoning(content string) (reasoning, answer string) {
+	rest := strings.TrimSpace(content)
+	var blocks []string
+	for strings.HasPrefix(rest, reasoningOpen) {
+		body := rest[len(reasoningOpen):]
+		end := strings.Index(body, reasoningClose)
+		if end < 0 {
+			blocks = append(blocks, strings.TrimSpace(body))
+			rest = ""
+			break
+		}
+		blocks = append(blocks, strings.TrimSpace(body[:end]))
+		rest = strings.TrimSpace(body[end+len(reasoningClose):])
+	}
+	return strings.Join(blocks, "\n\n"), rest
 }
 
 // statusErr names a refused request by its cause, with the server's own

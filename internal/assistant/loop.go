@@ -76,6 +76,9 @@ type EventKind string
 const (
 	// EventText: the model's text for a turn.
 	EventText EventKind = "text"
+	// EventReasoning: the model's chain of thought for a turn (Text), shown
+	// apart from its answer and never sent back to the model (#2259).
+	EventReasoning EventKind = "reasoning"
 	// EventProposed: the model asked for a call (CallID, Tool, Arguments,
 	// Policy), before anything is decided about it.
 	EventProposed EventKind = "proposed"
@@ -230,7 +233,10 @@ func (l *Loop) drive(ctx context.Context, msgs []provider.Message, decided *bool
 			return out, fmt.Errorf("the model: %w", err)
 		}
 		out.Steps++
-		msgs = append(msgs, provider.Message{Role: provider.RoleAssistant, Text: turn.Text, ToolCalls: turn.ToolCalls})
+		msgs = append(msgs, provider.Message{Role: provider.RoleAssistant, Text: turn.Text, Reasoning: turn.Reasoning, ToolCalls: turn.ToolCalls})
+		if turn.Reasoning != "" {
+			l.emit(Event{Kind: EventReasoning, Text: turn.Reasoning})
+		}
 		if turn.Text != "" {
 			l.emit(Event{Kind: EventText, Text: turn.Text})
 		}
