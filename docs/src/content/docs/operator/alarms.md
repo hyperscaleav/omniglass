@@ -40,7 +40,7 @@ what was wrong underneath.
 Raising one takes two things:
 
 - a **severity**: one of the severity levels, listed with their rank, color and effect under **Catalog,
-  under Actions: Severity** (the [rules guide](/guides/admin/rules/#severity-levels) renders the shipped
+  under Actions: Severity** (the [rules guide](/admin/rules/#severity-levels) renders the shipped
   set, and an admin can add more between them on that page). Every alarm wears its level's label in its color. This is how loudly to treat it, and it sets the
   **component's own** verdict (any active alarm makes the component degraded, one at a level marked
   outage takes it out). Only an **outage** stops a component occupying a slot it fills: an info or warning
@@ -48,7 +48,7 @@ Raising one takes two things:
   a system on its own;
 - a **message**, for whoever reads it later. Write it for the person who finds this at 8am, not for you.
 
-**Not every alarm is raised by hand.** An [event rule](/guides/admin/rules/) raises and clears its
+**Not every alarm is raised by hand.** An [event rule](/admin/rules/) raises and clears its
 own as telemetry lands: such an alarm says **by rule** and the rule's name, and the rule clears it
 when the rule clears (the official reachability rule does this for every endpoint that stops
 answering). You acknowledge it like any other. Clearing it by hand works too, and **a hand clear of a
@@ -103,7 +103,7 @@ the alarm clears and is raised again, the new alarm is snoozed too, until the de
 the same component is not affected. When the snooze ends, by its deadline or by **Unsnooze**, and the
 alarm is still raised, the people its rules reach are told again; an alarm that cleared meanwhile gets nothing.
 
-It is not acknowledging (nobody is recorded as having looked), not [opting out](/guides/admin/notifications/)
+It is not acknowledging (nobody is recorded as having looked), not [opting out](/admin/notifications/)
 (that silences only you), and not pausing an action rule (that silences a rule for every alarm). It
 changes nothing about the alarm itself: the component stays exactly as broken, and an unacknowledged
 alarm stays in the queue. It needs the `alarm:snooze` permission, which the **Operator** role carries;

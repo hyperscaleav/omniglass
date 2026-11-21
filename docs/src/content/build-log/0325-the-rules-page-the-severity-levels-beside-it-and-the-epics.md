@@ -14,7 +14,7 @@ API, #930), and every alarm chip in the console renders through the registry. "L
 ship (#929, ADR-0144 point 7). Writing the docs caught the console teaching the wrong thing: the
 disable hint and the delete confirmation said a rule's open alarms stay open, where the server clears
 them; both now say so, under a test. The seed facts render the shipped levels and the official rule, so
-the alarms page and the new [rules guide](/guides/admin/rules/) no longer restate them by hand. The
+the alarms page and the new [rules guide](/admin/rules/) no longer restate them by hand. The
 closed loop was walked on a simulated fleet with NET_ADMIN: unplugging a component opened the official
 rule's High alarm and degraded its system, replugging cleared both, and a rule created on `/rules` opened
 its alarm, in an operator level's label and color, when a simulated panel's input moved.
@@ -31,7 +31,7 @@ Criteria values are kept exact (edge spaces refused, a metric a strict decimal).
 scope), while writes keep an all-scope grant (ADR-0144, amended).
 
 The slice carries the epic's walkthrough, Watch a rule raise an alarm, embedded in the
-[rules guide](/guides/admin/rules/): a simulated touch panel unplugged from its page, the official
+[rules guide](/admin/rules/): a simulated touch panel unplugged from its page, the official
 rule's blade showing the streak wait out its 15s sustain and then the open High alarm, and the panel's
 system degraded with its Touch Control role short. It waits on the blade's own poll rather than holding
 for a fixed time, and it stops at the open alarm: the probe's detection, the sustain and the sweep tick

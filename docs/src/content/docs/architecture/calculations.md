@@ -18,7 +18,7 @@ rules are authored, type-checked and kept acyclic, below. **Component and system
 #997, [ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer)): on a durable pending set and a
 server tick rather than a JetStream consumer, below. A rule's **state** and a candidate's **preview**
 are read on [the API](/architecture/api/) (#998), and the console authors, previews and reads them
-(Catalog, Actions: Calc rules, #999; [the guide](/guides/admin/calc-rules/)), linking a calculated
+(Catalog, Actions: Calc rules, #999; [the guide](/admin/calc-rules/)), linking a calculated
 value on a component or a system to its rule. A reduce is always an **expression** over **aliased
 inputs** held by uuid, each bound as the list of its values (#1018). Event rules do not yet judge a system-owned output
 (#1002), and the `action_rule` is still design.

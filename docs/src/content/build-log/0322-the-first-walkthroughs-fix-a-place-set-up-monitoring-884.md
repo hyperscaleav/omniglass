@@ -12,6 +12,6 @@ ICMP endpoint to a simulated display, then reopens its page to show reachability
 view does not poll yet, #934, so the driver goes first and the probe holds past a node heartbeat); it is embedded in the
 [collection guide](/operator/collection/). Node enrollment runs on the node's host, so the
 walkthrough uses the node the stack enrolls and says so; the unplug, the rule's alarm and the health verdict
-are their own walkthrough, Watch a rule raise an alarm, embedded in the [rules guide](/guides/admin/rules/) (#921). The walkthrough stack adds one simulated-product component with no
+are their own walkthrough, Watch a rule raise an alarm, embedded in the [rules guide](/admin/rules/) (#921). The walkthrough stack adds one simulated-product component with no
 endpoint (`bay-2-display`) so the monitoring walkthrough starts from nothing, and the page header carries a
 `page-header` test id as a stable wait target. Defects found on the way are filed: #931, #932, #933, #934.

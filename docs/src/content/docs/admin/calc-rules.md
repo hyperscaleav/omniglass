@@ -1,6 +1,11 @@
 ---
 title: Calc rules
 description: "Writing a calc rule: the value it derives on each component or system, the inputs it reads and the aliases its expression uses for them, the expression that folds them into one value, what it writes, previewing it before saving, and reading what it last computed on each owner, from the console, the CLI, or the API."
+sidebar:
+  order: 21
+  badge:
+    text: Partial
+    variant: note
 walkthroughs:
   - id: derive-a-value-with-a-calc-rule
   - id: fix-an-expression-with-a-quick-fix
@@ -14,7 +19,7 @@ that as a **calculated** sample of its **output key**, naming the rule. The valu
 other: it shows among a component's vitals and properties and a system's data, linked back to the rule
 ("by calc rule rtt-worst"), and event rules judge it on a component like an observed sample. How it runs is on [calculations](/architecture/calculations/).
 
-Calc rules read like a catalog, as [event rules](/guides/admin/rules/) do: any grant carrying
+Calc rules read like a catalog, as [event rules](/admin/rules/) do: any grant carrying
 `rule:read` lists them all, with live counts over the owners you may read. **Writing** one is
 fleet-wide, so **New rule**, Edit, Disable and Delete are offered on an all-scope grant only.
 
@@ -138,5 +143,8 @@ omniglass calc-rule create --name rtt-5m --owner-kind component \
 
 The value moves as samples arrive and again as old ones leave the window, with no new sample needed;
 a window left empty writes nothing and the rule's state names the input missing. Windows are for
-component rules, and are written from the CLI or the API for now: the console's form does not show a
-window yet ([what is not built yet](/architecture/calculations/#windowed-inputs)).
+component rules ([how they read](/architecture/calculations/#windowed-inputs)).
+
+:::design[The console form does not show a window yet, tracked in #1143]
+Until it does, write a windowed input from the CLI or the API, as above.
+:::

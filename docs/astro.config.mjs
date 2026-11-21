@@ -71,6 +71,10 @@ export default defineConfig({
     '/guides/admin/events/': '/admin/events/',
     '/guides/admin/commands/': '/admin/commands/',
     '/guides/admin/standards/': '/admin/standards/',
+    // The automation pages joined the Admin section (#2191).
+    '/guides/admin/rules/': '/admin/rules/',
+    '/guides/admin/calc-rules/': '/admin/calc-rules/',
+    '/guides/admin/notifications/': '/admin/notifications/',
     // Find things in your fleet folded into the outline guide (#861).
     '/guides/operator/inventory/': '/operator/fleet/',
     // The operator guide became the Operator section (#2157); alarms and
@@ -256,9 +260,6 @@ export default defineConfig({
               label: 'Admin guide',
               collapsed: true,
               items: [
-                { label: 'Rules and severity', slug: 'guides/admin/rules' },
-                { label: 'Calc rules', slug: 'guides/admin/calc-rules' },
-                { label: 'Notifications', slug: 'guides/admin/notifications' },
                 { label: 'Drivers', slug: 'guides/admin/drivers' },
               ],
             },
