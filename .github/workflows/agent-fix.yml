@@ -203,7 +203,7 @@ jobs:
           git config user.name "$BOT_NAME"
           git config user.email "${BOT_ID}+${BOT_NAME}@users.noreply.github.com"
           git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
-          out=$(bash "${RUNNER_TEMP}/agent-sync.sh" merge origin/main); code=$?
+          out=$(bash "${RUNNER_TEMP}/agent-sync.sh" merge origin/main) && code=0 || code=$?
           case "$code" in
             0) status=$out ;;
             3) status=conflict ;;
