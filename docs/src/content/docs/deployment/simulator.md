@@ -12,7 +12,7 @@ The simulator is the same binary, so a deployment can serve simulated components
 without a device. This page is the how-to for standing one up and granting it what it needs; the
 concept is [simulation](/architecture/simulation/) and the operator's walk-through is
 [simulate a fleet](/operator/simulation/). To try it with nothing to set up but Docker, use
-[the lab](/guides/lab/).
+[the lab](/developer/lab/).
 
 The same binary simulates components. The simplest way is to let the outpost run it:
 `omniglass outpost run --simulate` runs the simulator in the outpost's own process, serving every component
@@ -28,7 +28,7 @@ omniglass outpost run --name edge-hq --token "$OUTPOST_TOKEN" --simulate
 
 `--impairments`, `--port-offset` and `--poll` are the simulator's flags, and the outpost refuses them
 without `--simulate`. A simulator crash stops the outpost with it, so run it under something that
-restarts it (a container restart policy, as the [lab](/guides/lab/) does).
+restarts it (a container restart policy, as the [lab](/developer/lab/) does).
 
 To keep the simulator a process of its own beside an outpost, `omniglass sim run` does the same with the
 outpost's identity. It must share the outpost's loopback: the same host, or the same container or pod
@@ -93,7 +93,7 @@ wired by the seed, whatever the scenario). It takes a couple of minutes to seed.
 
 Whatever the scenario, the example fleet plants one secret cascade to read. The simulated panel login
 (`sim-panel-login`) exists at the platform, on Boardroom A, and on the touch panel inside it, so the
-panel's [effective secrets](/guides/cli/#secrets) (the secrets resolution on the component's page in the
+panel's [effective secrets](/developer/cli/#secrets) (the secrets resolution on the component's page in the
 console, or `omniglass component effective-secret list <panel id>`) show the panel's own copy as the winner with
 the room's and the platform's shadowed beneath it. Another component in Boardroom A resolves the room's
 copy, and every component elsewhere the platform's. Secrets carry no system band, so there are three
