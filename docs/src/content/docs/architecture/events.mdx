@@ -1,52 +1,77 @@
 ---
 title: Events
-description: "Events: our semantic assertion that something happened, the event_type catalog, and the four ways an event arrives."
-# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
+description: "How events are built: our assertion that something happened, the event_type catalog, and the four ways an event arrives."
 sidebar:
-  hidden: true
+  order: 22
+  badge:
+    text: Partial
+    variant: note
 ---
 
 import SchemaTable from '../../../components/SchemaTable.astro';
 
-:::note[Partial: the event_type catalog, the richer occurrence, and rule-derived events are built]
-[ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables) confirms this separation. The **`event_type` catalog** is built: list, get, and custom-type create/update/delete over `/event-types`, seeded official types (`call-started`, `command-issued`), operator-extensible, official rows read-only, mirroring the sample catalogs. The **`event`** occurrence carries **`origin`** (caught/caused/derived/scheduled) plus the ADR-0066 lineage columns (`source_event_id`, `source_log_line_id`, `derived_by_rule_id`) and the `correlation_id` trace. Beside the rule-derived producer below, two producers are built: the **native caught path** (a component publishing an occurrence on the wire's own event lane, an xAPI event or SNMP trap, validated against `event_type` and landed with `origin=caught`, under the same owner-confinement and reject-not-project as a metric or property) and the **`caused`** origin (a [command](/architecture/commands/) records a caused `command-issued` event on issue, #396). Raw log lines are a **separate ingest lane**, not events ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)): the **component-only** `log_line` table, the outpost-owned **`outpost_log`** self-log table beside it ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)), their reads, and the first producer are built (an outpost ships its own operational log lines as untyped `LogLine`s; the ingest consumer lands them in `outpost_log`, with a console **Self-logs** panel on the outpost blade). The **`derived`** origin is built for **event rules** (#949): a rule writes its fire event when it fires and its clear event when it clears, once per edge, naming the rule and carrying the alarm it opened or resolved, in the same transaction as the alarm transition ([alarms and actions](/architecture/alarms-actions/#the-event_rule)); the component and system event reads return the rule (`derived_by_rule`) and the alarm (`alarm_id`) on each such row. The **derivation rules** that turn a log line into a registered event are directional, along with the `scheduled` producer and the CDC publisher.
-:::
-
-An **event** is *our semantic assertion that something happened*, in our vocabulary: a discrete, point-in-time occurrence the action layer reacts to, owned through the same exclusive-arc as a sample. It is **not** a sample ([the has-a-value-now razor](/architecture/properties/#the-has-a-value-now-razor-sample-vs-event)): samples are what rules read, events are what event rules produce. The rules live on [calculations](/architecture/calculations/); alarms and the responding actions on [alarms and actions](/architecture/alarms-actions/).
+An **event** is our semantic assertion that something happened, in our vocabulary: a discrete,
+point-in-time occurrence the action layer reacts to, owned through the same exclusive arc as a sample.
+It is not a sample ([the has-a-value-now razor](/architecture/properties/#the-has-a-value-now-razor-sample-vs-event)):
+samples are what rules read, and events are what event rules produce. To operate event types, see
+[the admin Events page](/admin/events/). The model is
+[ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables).
 
 ## The event_type catalog
 
-A sample and an event are different shapes, so each gets its own catalog: [the two sample catalogs](/architecture/properties/#the-two-catalogs) (`metric_type`, `property_type`) for samples, `event_type` for events. **`event_type`** describes every event key: `(name, label, payload_schema, official, ...)`, with the **`official`** boolean (shipped-canonical versus org-local) as the built governance column; the fuller org / official **scope ladder** is future design, shared with the sample catalog ([key scope](/architecture/properties/#key-scope-org-and-official)). Declaring event types (`call-started`, `cable-unplugged`, `command-issued`) gives events a known schema, makes them inspectable, and is what a derivation rule targets when turning a raw log line into a *registered* event; raw lines live untyped in the [`log_line` lane](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events) until then, and most never become events.
+A sample and an event are different shapes, so each gets its own catalog: `metric_type` and
+`property_type` for [samples](/architecture/properties/#the-two-catalogs), `event_type` for events.
+An `event_type` row is `(name, label, payload_schema, official, ...)`. It is built: list, get and
+custom-type create, update and delete over `/event-types`, with seeded official types
+(`call-started`, `command-issued`) that are read-only and operator-extensible beside them. Declaring
+types gives events a known schema and makes them inspectable.
+
+:::caution[Open question]
+Today `official` is a boolean. Whether the sample catalog's fuller org and official scope ladder
+extends to event types is undecided.
+:::
 
 ## Events: caught, caused, derived, scheduled
 
-An event arrives one of four ways; none is auto-manufactured from a value flip (a transition is already two consecutive sample rows, derivable by query).
+An event's **origin** is one of four, none manufactured from a value flip (a transition is already
+two consecutive sample rows):
 
-1. **caught**: a component publishes a structured occurrence natively (an xAPI Event channel, a webhook, an SNMP trap), and a driver's emit maps it to its event type, a message and attributes rendered into the payload ([an emit lands on any lane](/architecture/collection/#an-emit-lands-on-any-lane), [ADR-1145](/architecture/decisions/#adr-1145-a-driver-emit-lands-on-any-of-the-four-lanes-and-a-log-lines-severity-is-rfc-5424s)).
-2. **caused**: we issued a command, recorded as an event; this is what opens an [intended](/architecture/properties/#intended-the-declared-effect-of-a-command) sample.
+1. **caught**: a component publishes a structured occurrence natively (an xAPI event, a webhook, an
+   SNMP trap), and a driver's emit maps it to its event type
+   ([an emit lands on any lane](/architecture/collection/#an-emit-lands-on-any-lane)). Built: it is
+   validated against `event_type` and landed under the same owner confinement and reject-not-project
+   as a metric.
+2. **caused**: we issued a [command](/architecture/commands/), recorded as a `command-issued` event.
+   Built.
+3. **derived**: an event rule fuses signals into an operator-meaningful fact. Built for event rules:
+   a rule writes its fire event when it fires and its clear event when it clears, once per edge, in
+   the same transaction as the alarm transition ([alarms and actions](/architecture/alarms-actions/#the-event_rule)).
+4. **scheduled**: the clock fired a schedule.
 
-:::design[The `derived` and `scheduled` producers: the `event_rule` (ADR-0050), log derivation (#410), and the clock (#419)]
-3. **derived**: an event rule fuses signals into an operator-meaningful fact ("codec in-call + traffic spike + room booked, so meeting started"), or turns a raw log line from the [`log_line` lane](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events) into a registered event, inferred without instrumenting the control system.
-4. **scheduled**: the clock fired a schedule. A schedule fire *is* an event with `origin=scheduled`, manufactured by the clock (a leader-elected singleton on a NATS KV CAS lock); there is no separate schedule log table. So `action_rule` subscribes to events uniformly (**schedule to event to action**: digests, synthetic checks, SLA resets are all schedule fires an action subscribes to).
+:::design[Log derivation and the scheduled producer, tracked in #410 and #419]
+Derivation rules that turn a raw log line into a registered event, and the clock that writes
+`origin=scheduled` events (a leader-elected singleton), are not built.
 :::
 
-Caught/caused/derived/scheduled is the event's **origin**, a small vocabulary on the event table, not the same enum as sample provenance. What keeps an event-driven system from rotting: events are declared (registered keys) and rules are inspectable (the blast-radius preview in the UI).
+Raw log lines are a separate ingest lane, not events
+([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)): the
+component-only `log_line` table and the outpost-owned `outpost_log` self-log table
+([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)).
 
 ## Storage
 
-The `event` row is the semantic-occurrence log; `event_type` is its key catalog. Physical layout (partitioning, the owner arc, lineage) lives on [storage](/architecture/storage/).
+The `event` row is the semantic-occurrence log and `event_type` its key catalog. An event carries the
+lineage columns that name what produced it (`source_event_id`, `source_log_line_id`,
+`derived_by_rule_id`), a flat `correlation_id` that threads a causal chain, and a nullable `alarm_id`:
+a rule's fire event names the alarm it opened and its clear event the alarm it resolved. The component
+and system event reads return the rule and the alarm on each such row. Layout and partitioning live on
+[storage](/architecture/storage/).
 
-:::design[The `event_rule` write path and the CDC publisher (ADR-0050; the CDC lane is #430)]
-An event is **born in a Postgres transaction**, on the record lane: a firing `event_rule` writes the
-`event` row and its paired alarm transition in one transaction (serialized per
-`(event_rule, owner)`), and the [CDC publisher](/architecture/messaging/) fans the committed change
-onto JetStream for the `action_rule` consumers (no dual-write). The opposite lane from samples,
-which live on NATS and sink to PG asynchronously ([samples](/architecture/properties/)).
+:::design[The CDC publisher for event consumers, tracked in #430]
+An event is born in a Postgres transaction on the record lane, and a change-data-capture publisher
+would fan the committed row onto JetStream for the action consumers, with no dual write
+([messaging](/architecture/messaging/)). The publisher is not built.
 :::
-
-An event **carries its alarm** in a nullable `alarm_id` (#948, written from #949): a rule's fire event
-names the alarm it opened and its clear event the alarm it resolved, set null if the alarm row goes;
-an event no rule wrote, or one an informational rule wrote, leaves it null. The **lineage** columns ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)) name what produced the event; the flat `correlation_id` threads the causal chain.
 
 <SchemaTable
   table="event"
@@ -56,8 +81,8 @@ an event no rule wrote, or one an informational rule wrote, leaves it null. The 
     instance: 'The sub-entity the occurrence is about, when the owner is not enough',
     source_event_id: 'Lineage: the parent event, when one event caused another',
     source_log_line_id: 'Lineage: the raw log line a derivation rule promoted',
-    derived_by_rule_id: 'Lineage: the rule that did the deriving (FK event_rule, set null when the rule is deleted; source_rule keeps its name); a natively-caught event has none',
-    alarm_id: 'The alarm a rule\'s fire event opened or its clear event resolved; NULL for most events, and if the alarm goes',
+    derived_by_rule_id: 'Lineage: the rule that did the deriving; NULL when the rule is deleted or the event was caught',
+    alarm_id: 'The alarm a rule\'s fire event opened or its clear event resolved; NULL for most events',
     correlation_id: 'Threads the causal chain flat, across lineage hops',
   }}
 />
@@ -69,5 +94,3 @@ an event no rule wrote, or one an informational rule wrote, leaves it null. The 
     official: 'Shipped-canonical versus org-local; official rows are read-only',
   }}
 />
-
-Related: [calculations](/architecture/calculations/) (the `event_rule`), [alarms and actions](/architecture/alarms-actions/), [samples](/architecture/properties/), and [the glossary](/architecture/glossary/).
