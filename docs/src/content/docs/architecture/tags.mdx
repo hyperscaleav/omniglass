@@ -1,139 +1,99 @@
 ---
 title: Tags
-description: A governed key vocabulary and per-entity value bindings that resolve union-on-key, shadow-on-value down the cascade.
-# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
+description: "How tags are built: a governed key vocabulary, per-entity value bindings, and union-on-key, shadow-on-value resolution down the cascade."
 sidebar:
-  hidden: true
+  order: 20
+  badge:
+    text: Partial
+    variant: note
 ---
 
 import SchemaTable from '../../../components/SchemaTable.astro';
 
-:::note[Partial]
-The first slice ([ADR-0021](/architecture/decisions/#adr-0021-tag-slice-1-a-governed-key-registry-with-entity-update-gated-bindings)) is
-**built**: the governed **`tag`** key catalog, the per-entity **`tag_binding`** cell on the exclusive arc, and the
-union-on-key / shadow-on-value **cascade** resolver, over the API and the generated CLI. Also built: the
-console **Tags directory**, the per-entity **binding editor**, **value-domain enums**
-([#190](https://github.com/hyperscaleav/omniglass/issues/190)), the directory **Tags column** with per-key
-**tag filtering** (by effective value, plus **is set** / **is absent**,
-[#189](https://github.com/hyperscaleav/omniglass/issues/189),
-[#226](https://github.com/hyperscaleav/omniglass/issues/226)), and the winner-plus-shadowed **cascade
-provenance** panel (the ResolutionPanel on the component detail). Deferred: binding through
-[groups](/architecture/groups/) and a `template`-scoped binding (the shared-resolver work in
-[#184](https://github.com/hyperscaleav/omniglass/issues/184)), binding onto a [file](/architecture/files/)
-([#191](https://github.com/hyperscaleav/omniglass/issues/191)), and a stored per-key color override; logged in
-the [decision log](/architecture/decisions/).
-:::
+A **tag** is an operator `key: value` label for a dimension Omniglass does not model natively
+(`category: audio-dsp`, `environment: prod`, `cost-center: 4021`). It is not a signal and has no
+lifecycle. It rides the same [cascade](/architecture/cascade/) as
+[variables and secrets](/architecture/variables/), with one difference in how values combine. To
+operate tags, see [the admin Tags page](/admin/tags/).
 
-A **tag** is an operator **`key: value`** label for dimensions Omniglass does not model natively
-(`category: audio-dsp`, `environment: prod`, `cost-center: 4021`): not a signal, no lifecycle, riding the
-same [cascade](/architecture/cascade/) as
-[variables, secrets, and declared values](/architecture/variables/) but with a **union-on-key, shadow-on-value**
-combinator rather than a single most-specific value.
+## Two layers: the key and the binding
 
-## Two layers: the key vocabulary and the value binding
+- **`tag`** is the governed key vocabulary: one row per key, shared across the install. It owns no value.
+- **`tag_binding`** is the value cell: one value for one key at one owner on the exclusive arc
+  (platform, location, system, component or outpost), the same arc a variable is owned at.
 
-- **`tag`** is the **governed key vocabulary**: one row per key (`category`, `environment`), shared across the
-  whole tenant (one catalog per database, the tenant boundary). It owns no value.
-- **`tag_binding`** is the **value cell**: a value for a key at one owner on the exclusive arc
-  (`platform | location | system | component | outpost`), exactly the arc a [variable](/architecture/variables/)
-  or a secret is owned at.
-
-Splitting them keeps the vocabulary **normalized**: `environment` is minted once and reused, no one
-inventing `env` beside `environment` beside `Environment`. What an operator binds by is the tag's
-**`name`**, and it is an ordinary entity name: `storage.ValidateName` reads the shape the `tag` table
-declares and applies the one-segment rule (lowercase letters, digits, and hyphens, 100 characters, a uuid
-refused), so `cost-center` is the canonical spelling and `cost_center` never enters the vocabulary.
-
-That rule tightening is the reason a key also carries a **`label`**, the friendly string an operator
-reads ("Cost Center") beside the one they bind by
+Splitting them keeps the vocabulary normalized: `environment` is minted once and reused, so nobody
+invents `env` beside `Environment`. An operator binds by the tag's **name**, an ordinary entity name
+(lowercase letters, digits and hyphens, 100 characters, never a uuid), enforced by the [Storage Gateway](/architecture/storage/#the-storage-gateway-and-tiering), the one layer every database read and write passes through.
+A key also carries an optional **label**, the friendly string an operator reads ("Cost Center"). The
+label is not an identifier: it has no uniqueness and nothing resolves through it
 ([ADR-0119](/architecture/decisions/#adr-0119-a-table-an-operator-names-carries-a-label-or-declares-why-it-does-not)).
-It is optional and it is not an identifier: no uniqueness, no pattern, and nothing resolves through
-it. A key with none renders `cost-center` **verbatim** in every list, never re-cased. The directory
-is ordered by the label an operator reads, with the unlabelled keys last.
 
-## The governance split is the point
+## Minting a key and setting a value are different permissions
 
-Minting a key and setting a value are **two different permissions**, deliberately:
+- Minting a key is governance: an all-scope `tag:create` (and `tag:update`, `tag:delete`), held by an
+  admin or curator ([identity and access](/architecture/identity-access/)).
+- Setting a value is the ordinary entity write: binding `environment: prod` onto a component is
+  `component:update`, and system and location likewise. A **platform** binding has no owning entity,
+  so it takes `tag:update` plus `platform:update`.
 
-- **Minting a key is a tenant-wide governance action**: an all-scope **`tag:create`** grant (an admin or
-  curator, [identity and access](/architecture/identity-access/)); governance edits are `tag:update`,
-  deletes `tag:delete`, both all-scope.
-- **Setting a value is the ordinary entity write**: binding `environment: prod` onto a component is a
-  **`component:update`** (system and location likewise), no new permission. A **platform** binding has no
-  owning entity, so it takes `tag:update` plus the install-wide
-  [`platform:update`](/architecture/identity-access/#install-wide-authority-is-not-fleet-scope).
+The vocabulary stays curated while tagging stays routine. Reading rides the viewer floor.
 
-The vocabulary stays curated while tagging stays routine; reading rides the viewer floor (`tag:read`,
-`component:read`).
+## What a key governs
 
-## A key governs where it applies and whether it cascades
-
-Two fields on the key shape its bindings:
-
-- **`applies_to`** narrows a key to a subset of entity kinds (`component`, `system`, `location`, `outpost`):
-  empty is **universal**, a non-empty set rejects a binding on any other kind at write time (a
-  `rack-position` key that `applies_to: [location]` cannot be bound onto a component).
-- **`propagates`** says whether a bound value cascades. A **propagating** key (the default) resolves down the
-  [cascade](/architecture/cascade/); a **non-propagating** key binds as a **flat per-entity set**, resolving
-  only from a binding on the entity itself.
-
-:::design[Binding onto a file, tracked in #191]
-The flat case is the shape a [file](/architecture/files/) needs (a file is not on the structural arc, so it
-has no parent to cascade from); the same key model serves both, toggled by this one field.
-:::
+- **`applies_to`** narrows a key to a set of entity kinds. Empty means universal; a binding on any
+  other kind is refused at write time.
+- **`propagates`** says whether a bound value cascades. A propagating key (the default) resolves down
+  the cascade. A non-propagating key is a flat per-entity set that resolves only from a binding on
+  the entity itself.
+- **`allowed_values`** constrains the key to an enum. Empty is free text, which autocompletes the
+  distinct values already in use (`GET /tags/{name}:values`); a non-empty set is enforced on the
+  binding write and refused with a 422 otherwise
+  ([ADR-0024](/architecture/decisions/#adr-0024-a-tag-key-may-constrain-its-values-to-an-enum)).
 
 ## Values resolve union-on-key, shadow-on-value
 
-An entity's effective tags resolve down the same [cascade](/architecture/cascade/) as every other
-operator-set value; the structural chain, precedence key, and fall-through rule are stated once, there. Tags
-differ only in the combinator: **keys union** (an entity surfaces **every** key bound at or above it) and
-**values override** (for a single key set at several scopes, the most-specific binding wins, with the shadowed
-candidates returned so the surface can teach the override).
+An entity's effective tags resolve down the [cascade](/architecture/cascade/), whose chain and
+precedence are stated once there. Tags differ only in the combinator: **keys union** (an entity
+surfaces every key bound at or above it) and **values override** (for one key set at several
+scopes, the most specific binding wins, and the shadowed candidates come back so the console can show
+the override).
 
-A non-propagating key is admitted into the resolve only from the target entity itself.
-`GET /components/{name}/effective-tags` returns the resolved set (winner plus shadowed);
-`GET /components/{name}:listTags` returns only the bindings set **directly** on the component; the writes are
-the `:setTag` / `:removeTag` custom methods. The system band resolves through `system_member` membership as
-the [cascade](/architecture/cascade/#structural-multi-membership-a-component-in-n-systems) defines
-(`?system=` asks as a specific system; otherwise the primary membership seeds the chain), so a shared device
-answers differently per system.
+- `GET /components/{name}/effective-tags` returns the resolved set, winner plus shadowed.
+- `GET /components/{name}:listTags` returns only the bindings set directly on the component.
+- `:setTag` and `:removeTag` are the writes.
+- A component in several systems resolves per system: `?system=` asks as one membership, otherwise
+  the primary membership seeds the chain.
+- A location resolves platform plus its own tree. A system resolves platform, its own tree, and the
+  tree of the location it is placed at. An outpost resolves platform plus its own bindings
+  ([ADR-0022](/architecture/decisions/#adr-0022-effective-tags-resolve-onto-systems-and-locations-a-placed-system-inherits-its-location)).
+- The list routes carry an `effective_tags` map (key to winning value) per row, resolved for the
+  whole page in one batched query.
 
 **The cascade is authorized by the component it resolves for, not band by band**
-([ADR-0093](/architecture/decisions/#adr-0093-the-tag-cascade-follows-the-component-it-resolves-for)). A caller
-who can read the component sees every value that cascades onto it, including one owned by a system or a
-location they could not have listed directly, because a resolved value is part of that component's own
-configuration and reporting a filtered one would describe a configuration the platform does not actually
-apply. `?system=` narrows that answer to one membership and can never widen it: the named system must already
-be one the component belongs to.
+([ADR-0093](/architecture/decisions/#adr-0093-the-tag-cascade-follows-the-component-it-resolves-for)).
+A caller who can read the component sees every value that cascades onto it, including one owned by a
+system or location they could not list directly, because a resolved value is part of that component's
+configuration. `?system=` narrows the answer and never widens it.
 
-**Systems and locations resolve too.** A **location** resolves `platform` plus its own location tree; a
-**system** resolves `platform`, its own system tree, and **the location it is placed at** (its `location_id`
-tree), so a system in a PCI building surfaces `compliance: pci`; an **outpost** is fleet-wide, resolving
-`platform` plus its own direct bindings only. This is the read behind the directory **Tags column**: the list
-routes (`GET /components`, `/systems`, `/locations`, `/outposts`) each carry an **`effective_tags`** map (key to
-winning value, winners only) per row, resolved for the whole page in **one batched query** (a
-`Gateway.EffectiveTags` per kind); provenance stays in the per-entity detail view.
+:::design[Binding through groups and onto templates, tracked in #184]
+A binding owned by a [group](/architecture/groups/) or a template, folded in by the shared cascade
+resolver, is not built.
+:::
 
-**A key may constrain its values to an enum.** A key carries an **`allowed_values`** set: empty (the
-default) is free text, a non-empty set is enforced on the binding write (a value outside it is a 422) and
-rendered as a strict dropdown. A **free** key instead autocompletes the **distinct values already in use** (a
-`GET /tags/{name}:values` read)
-([ADR-0024](/architecture/decisions/#adr-0024-a-tag-key-may-constrain-its-values-to-an-enum)).
+:::design[Binding onto a file, tracked in #191]
+A [file](/architecture/files/) is not on the structural arc and has no parent to cascade from, so it
+needs the flat, non-propagating form of the same key model.
+:::
 
 :::caution[Open question]
-The rest of value-domain governance: whether a key may carry a typed **`value_type`** (int, bool, date,
-validated like a [`property_type`](/architecture/properties/) domain) and whether it may **normalize** values
-on input (lowercase, trim, fold synonyms, so `Prod`, `prod `, and `PROD` resolve to one value). The enum was
-the first, most-asked-for slice; the rest is deferred.
+Whether a key may carry a typed value (int, bool, date) and normalize values on input, so `Prod` and
+`prod ` resolve to one value. The enum was the first slice; the rest is deferred.
 :::
 
 ## Storage
 
-The key vocabulary and the value cell; the physical layout lives on [storage](/architecture/storage/). Both
-tables are **built**; the column mechanics render from the generated schema facts (`make gen`), the notes
-hand-written.
-
-The `tag` row is the tenant-wide governed key vocabulary; minting a key needs `tag:create`.
+Both tables are built; the column mechanics render from the generated schema facts.
 
 <SchemaTable
   table="tag"
@@ -145,11 +105,6 @@ The `tag` row is the tenant-wide governed key vocabulary; minting a key needs `t
     allowed_values: 'The value enum; empty is free text, enforced on the binding write',
   }}
 />
-
-The `tag_binding` row is the `key: value` cell at one owner on the exclusive arc
-(`platform / location / system / component / outpost`); it resolves **union on key, shadow on value** down the
-[cascade](/architecture/cascade/). Setting a value is the owner's own `update` write, except at `platform`
-(`tag:update` plus `platform:update`).
 
 <SchemaTable
   table="tag_binding"
