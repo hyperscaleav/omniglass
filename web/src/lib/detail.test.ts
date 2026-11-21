@@ -102,7 +102,7 @@ describe("a system's components as rows", () => {
     ],
   };
   const ctx = {
-    verdict: (id: string) => (id === "c-mic" ? "outage" as const : "healthy" as const),
+    health: (id: string) => (id === "c-mic" ? "outage" as const : "healthy" as const),
     alarm: (id: string) => (id === "c-mic" ? "No route to host" : undefined),
     product: (id: string) => ({ "c-bar": "Lyra Bar 80" } as Record<string, string>)[id] ?? "",
     label: (id: string, name: string) => (id === "c-bar" ? "Video Bar" : name),

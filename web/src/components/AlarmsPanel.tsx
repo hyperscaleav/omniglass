@@ -23,10 +23,10 @@ import TroubleshootButton from "./TroubleshootButton";
 // AlarmsPanel: what is wrong with this component, and what was.
 //
 // An alarm is where fleet health starts, and it impairs its component's own
-// verdict wholesale (#626): any active alarm degrades it, one at an outage
+// health wholesale (#626): any active alarm degrades it, one at an outage
 // severity level (high and above) is an outage. A system slot the component fills no longer counts it toward quorum
 // while it is down, so the slot can drop below quorum and its impact becomes
-// the system's verdict.
+// the system's health.
 //
 // Clearing keeps the row rather than deleting it, so the panel shows recently
 // cleared alarms below the active ones: "what was wrong, and when" is the thing an
@@ -126,9 +126,9 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
         <span class="shrink-0 text-[10.5px] text-base-content/40">what is wrong here, and what it takes down</span>
       </div>
       <p class="text-[11px] text-base-content/50">
-        An alarm is raised on this component when a rule fires with a severity, and takes its own verdict down (any active alarm degrades it,
+        An alarm is raised on this component when a rule fires with a severity, and takes its own health down (any active alarm degrades it,
         one at an outage level is an outage). Any slot it fills stops counting it toward quorum while it stays down, which is
-        how a fault on a box becomes a verdict on a system.
+        how a fault on a box becomes a health on a system.
       </p>
       <p class="text-[11px] text-base-content/50">
         Acknowledging is separate from clearing: it records that a human has seen the alarm and changes nothing else,
@@ -148,7 +148,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
         fallback={
           <Show when={!q.isLoading}>
             <p class="rounded-box border border-dashed border-base-300 px-3 py-4 text-center text-[12px] text-base-content/45">
-              Nothing is wrong here: this component has no active alarm, so its own verdict is healthy.
+              Nothing is wrong here: this component has no active alarm, so its own health is healthy.
             </p>
           </Show>
         }

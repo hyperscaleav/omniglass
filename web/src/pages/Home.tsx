@@ -7,12 +7,12 @@ import { fleetView, FLEET_VIEW_KEY } from "../lib/fleet";
 import { listLocations, LOCATIONS_KEY } from "../lib/locations";
 import { listOutposts, OUTPOSTS_KEY } from "../lib/outposts";
 import { can, useMe } from "../lib/auth";
-import { VERDICT_HUE, verdictOf } from "../lib/health";
+import { HEALTH_HUE, healthOf } from "../lib/health";
 import { notUpCount, platformView, PLATFORM_VIEW_KEY, retryPlatformView } from "../lib/platformhealth";
 
 // Home is the situation room. Every tile is a real, scoped read: locations,
 // systems and open alarms (the fleet view), collectors (the outposts list) and
-// the platform's own verdict. A tile that cannot say what it counts reads why
+// the platform's own health. A tile that cannot say what it counts reads why
 // (loading, an error, a missing permission), never a placeholder.
 export default function Home() {
   const navigate = useNavigate();
@@ -22,12 +22,12 @@ export default function Home() {
   const readsOutposts = () => can(me.data, "outpost", "read");
   // The Outposts tile counts the outposts list, which the outpost read opens.
   const outposts = useQuery(() => ({ queryKey: OUTPOSTS_KEY, queryFn: listOutposts, enabled: readsOutposts() }));
-  // The Platform tile (#1644): the platform system's verdict and how many
+  // The Platform tile (#1644): the platform system's health and how many
   // outposts are not up, the door to Platform health. Shown only where the page
   // itself opens, an outpost read. An outpost read held for only some locations is
   // refused by the view, and the tile says so rather than reading forever.
   const platform = useQuery(() => ({ queryKey: PLATFORM_VIEW_KEY, queryFn: platformView, retry: retryPlatformView, enabled: readsOutposts() }));
-  const platformVerdict = () => verdictOf(platform.data?.system?.health);
+  const platformHealth = () => healthOf(platform.data?.system?.health);
   const platformUnit = () => {
     const v = platform.data;
     if (!v) {
@@ -75,9 +75,9 @@ export default function Home() {
           <Stat
             label="Platform"
             testid="home-platform"
-            value={platformVerdict() ?? "-"}
+            value={platformHealth() ?? "-"}
             unit={platformUnit()}
-            tone={platformVerdict() ? VERDICT_HUE[platformVerdict()!] : undefined}
+            tone={platformHealth() ? HEALTH_HUE[platformHealth()!] : undefined}
             onClick={() => navigate("/platform")}
           />
         </Show>

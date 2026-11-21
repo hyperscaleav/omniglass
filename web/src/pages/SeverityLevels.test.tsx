@@ -6,7 +6,7 @@ import { ME_KEY, type Me } from "../lib/auth";
 import { OFFICIAL_LOCK } from "../lib/catalog";
 import { MAJOR_LEVEL, SEEDED_LEVELS, seedSeverityLevels } from "../lib/testseverity";
 import { componentAlarmsKey } from "../lib/alarms";
-import { SYSTEM_VERDICTS_KEY, locationHealthKey, systemHealthKey } from "../lib/health";
+import { SYSTEM_HEALTHS_KEY, locationHealthKey, systemHealthKey } from "../lib/health";
 import { FLEET_VIEW_KEY } from "../lib/fleet";
 import { COMPONENTS_KEY } from "../lib/components";
 import { EVENT_RULES_KEY } from "../lib/event_rules";
@@ -201,7 +201,7 @@ describe("Severity levels page", () => {
       componentAlarmsKey("display-1"),
       systemHealthKey("huddle-1"),
       locationHealthKey("hq"),
-      SYSTEM_VERDICTS_KEY,
+      SYSTEM_HEALTHS_KEY,
       FLEET_VIEW_KEY,
       COMPONENTS_KEY,
       EVENT_RULES_KEY,

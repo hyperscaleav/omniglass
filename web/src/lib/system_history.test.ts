@@ -3,7 +3,7 @@ import { stretchReasons, memberAlarmRows, stretchesOf, markerX, uptimePct } from
 import type { Alarm } from "./alarms";
 import { SEEDED_LEVELS } from "./testseverity";
 
-// The history tab's pure core (#792): the verdict spans come from the health
+// The history tab's pure core (#792): the health spans come from the health
 // read (timeline.spans, already proven); this file is the CAUSES: every
 // member alarm in the window, cleared ones included, merged worst-first-now
 // then newest, each placeable on the same axis the spans use.
@@ -83,7 +83,7 @@ describe("uptimePct", () => {
 });
 
 describe("stretchesOf", () => {
-  it("groups consecutive unhealthy spans into one stretch carrying the worst verdict and its sub-spans", () => {
+  it("groups consecutive unhealthy spans into one stretch carrying the worst health and its sub-spans", () => {
     const spans = [
       span("healthy", 720, 200),
       span("degraded", 200, 190),

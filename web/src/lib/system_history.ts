@@ -1,4 +1,4 @@
-// The history tab's pure core (#792): the statuspage read. The verdict spans
+// The history tab's pure core (#792): the statuspage read. The health spans
 // over the window come from the health read through timeline.spans (already
 // proven); this file derives the CAUSES beside them: every member's alarms,
 // cleared ones included, merged onto one list and one axis. Ongoing first
@@ -6,7 +6,7 @@
 // cleared before the window began is history the window does not show.
 import type { Alarm } from "./alarms";
 import { compareSeverity, type SeverityLevel } from "./severity";
-import { verdictRank } from "./health";
+import { healthRank } from "./health";
 import type { Span } from "./timeline";
 
 export type MemberAlarms = { component: string; componentId: string; alarms: Alarm[] };
@@ -80,7 +80,7 @@ export type UnhealthyStretch = {
   from: number;
   to: number;
   ongoing: boolean;
-  // The worst verdict the stretch reached: what the entry wears.
+  // The worst health the stretch reached: what the entry wears.
   worst: string;
   // The sub-transitions inside the stretch, oldest first.
   spans: Span<string>[];
@@ -88,7 +88,7 @@ export type UnhealthyStretch = {
 
 // stretchesOf groups consecutive unhealthy spans into stretches, ongoing
 // first and then newest first: one entry per contiguous stretch away from
-// healthy, however many verdict changes it contained.
+// healthy, however many health changes it contained.
 export function stretchesOf(spans: Span<string>[], now: number): UnhealthyStretch[] {
   const out: UnhealthyStretch[] = [];
   let cur: Span<string>[] = [];
@@ -100,7 +100,7 @@ export function stretchesOf(spans: Span<string>[], now: number): UnhealthyStretc
       from,
       to,
       ongoing: Math.abs(to - now) < 1000,
-      worst: [...cur].sort((a, b) => verdictRank(b.value as never) - verdictRank(a.value as never))[0].value,
+      worst: [...cur].sort((a, b) => healthRank(b.value as never) - healthRank(a.value as never))[0].value,
       spans: cur,
     });
     cur = [];

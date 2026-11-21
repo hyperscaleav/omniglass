@@ -11,7 +11,7 @@ import { simStatus, type SimComponent, type SimState } from "../lib/simulation";
 // never a glyph: offline is the simulator gone quiet, failed is the simulator
 // present and refusing this one component.
 //
-// The words are deliberately not up/down (reachability's verdict) or degraded
+// The words are deliberately not up/down (reachability's health) or degraded
 // (health's): this says what the simulator is doing, not what monitoring
 // concluded. What an operator broke is not a status either, so it rides beside
 // the status as its own warning chip: "unplugged", or the shaped traffic in a

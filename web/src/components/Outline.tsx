@@ -3,7 +3,7 @@ import { Dynamic } from "solid-js/web";
 import { Popover } from "@kobalte/core/popover";
 import { ChevronRight, CircleCheck, CircleDashed, LayoutDashboard, OctagonX, Plus, TriangleAlert, resolveIcon } from "./icons";
 import type { ComponentGroup, ComponentRow, Lights, LocationNode } from "../lib/outline";
-import { VERDICT_HUE, type Verdict } from "../lib/health";
+import { HEALTH_HUE, type HealthState } from "../lib/health";
 
 // The outline (#867): every location in the fleet as one tree, drawn as aligned
 // columns. A location wears its system (standard and health on its own row) and
@@ -42,17 +42,17 @@ export type Row =
   | { kind: "group"; key: string; depth: number; group: ComponentGroup; location: LocationNode; parent: string }
   | { kind: "component"; key: string; depth: number; row: ComponentRow; location: LocationNode; parent: string };
 
-const VERDICTS: Verdict[] = ["healthy", "incomplete", "degraded", "outage"];
-const WORDS: Record<Verdict, string> = { healthy: "healthy", incomplete: "incomplete", degraded: "degraded", outage: "outage" };
+const HEALTHS: HealthState[] = ["healthy", "incomplete", "degraded", "outage"];
+const WORDS: Record<HealthState, string> = { healthy: "healthy", incomplete: "incomplete", degraded: "degraded", outage: "outage" };
 // Healthy wears the muted green (#1067), so the one troubled branch still pops.
-const HUE = VERDICT_HUE;
-const GLYPH: Record<Verdict, typeof CircleCheck> = { healthy: CircleCheck, incomplete: CircleDashed, degraded: TriangleAlert, outage: OctagonX };
+const HUE = HEALTH_HUE;
+const GLYPH: Record<HealthState, typeof CircleCheck> = { healthy: CircleCheck, incomplete: CircleDashed, degraded: TriangleAlert, outage: OctagonX };
 
-// One verdict as its glyph alone, in the slot vocabulary's hue (healthy
+// One health as its glyph alone, in the slot vocabulary's hue (healthy
 // muted green), named for a screen reader: where a row is one thing, not a count.
-export function HealthGlyph(props: { verdict: Verdict | null }) {
+export function HealthGlyph(props: { health: HealthState | null }) {
   return (
-    <Show when={props.verdict}>
+    <Show when={props.health}>
       {(v) => (
         <span data-testid="health" class={`inline-flex ${HUE[v()]}`} role="img" aria-label={WORDS[v()]} title={WORDS[v()]}>
           <Dynamic component={GLYPH[v()]} size={14} />
@@ -62,19 +62,19 @@ export function HealthGlyph(props: { verdict: Verdict | null }) {
   );
 }
 
-export function HealthSlots(props: { lights?: Lights; single?: Verdict | null }) {
-  const counts = (): Partial<Record<Verdict, number>> => {
+export function HealthSlots(props: { lights?: Lights; single?: HealthState | null }) {
+  const counts = (): Partial<Record<HealthState, number>> => {
     if (props.single) return { [props.single]: 0 };
     const l = props.lights;
     return l ? { healthy: l.healthy, incomplete: l.incomplete, degraded: l.degraded, outage: l.outage } : {};
   };
   const words = () => {
     if (props.single) return WORDS[props.single];
-    return VERDICTS.filter((v) => (counts()[v] ?? 0) > 0).map((v) => `${counts()[v]} ${WORDS[v]}`).join(", ");
+    return HEALTHS.filter((v) => (counts()[v] ?? 0) > 0).map((v) => `${counts()[v]} ${WORDS[v]}`).join(", ");
   };
   return (
     <span data-testid="health" class="grid grid-cols-[repeat(4,2.375rem)] font-data text-[12.5px] font-medium @max-[28rem]:flex @max-[28rem]:gap-2" aria-label={words() || undefined} title={words() || undefined}>
-      <For each={VERDICTS}>
+      <For each={HEALTHS}>
         {(v) => {
           const shown = () => (props.single ? props.single === v : (counts()[v] ?? 0) > 0);
           const Glyph = GLYPH[v];

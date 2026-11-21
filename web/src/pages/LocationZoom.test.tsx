@@ -24,14 +24,14 @@ import { pickTree, treeChoices, treeOptions, treeValue } from "../components/Tre
 
 const me: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
 
-const loc = (handle: string, name: string, label: string, type: string, parent: string, verdict: string) => ({
+const loc = (handle: string, name: string, label: string, type: string, parent: string, health: string) => ({
   id: uuidFor(handle),
   name,
   label,
   location_type: type,
   location_type_id: uuidFor(`lzt-${type}`),
   parent: parent ? uuidFor(parent) : "",
-  health: verdict,
+  health: health,
 });
 
 const view: FleetView = {
@@ -220,7 +220,7 @@ describe("a folder location (#872)", () => {
     expect(window.location.pathname + window.location.search).toBe(`/web/explore?node=${uuidFor("lz-b1")}`);
   });
 
-  it("gives each system it holds a brief card, with its verdict and its gap, opening the system", async () => {
+  it("gives each system it holds a brief card, with its health and its gap, opening the system", async () => {
     mount();
     const lobby = screen.getByTestId(`system-summary-${uuidFor("lz-s-lobby")}`);
     expect(within(lobby).getByText("Lobby AV")).toBeTruthy();

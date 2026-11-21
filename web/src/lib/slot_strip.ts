@@ -2,7 +2,7 @@
 // the standard wants filled, computed over the ACTIVE slots' quorum from the
 // health read. A filled square carries its occupant's state, an empty one is
 // outlined. The gap line beneath uses the design's own words. Pure, and no
-// verdict is computed: filled/down/empty are the server's assigned and down
+// health is computed: filled/down/empty are the server's assigned and down
 // lists read back.
 
 import type { FleetHealth } from "./health";

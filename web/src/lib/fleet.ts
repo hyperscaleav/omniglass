@@ -2,9 +2,9 @@ import { api } from "../api/client";
 import type { FleetViewOutputBody } from "../api/api.gen";
 
 // The fleet view: the scoped projection every fleet surface reads (locations,
-// their systems, each system's components with its recorded verdict), and the
+// their systems, each system's components with its recorded health), and the
 // small pure walks over its location tree that the outline (lib/outline) and the
-// detail views (lib/detail) share. Verdicts are never computed here; the
+// detail views (lib/detail) share. Health results are never computed here; the
 // server records them and this module carries them.
 //
 // The band renderers this module once fed (bands, groupings, clusters, holes)

@@ -92,7 +92,7 @@ export type BladePrimary = {
   disabled?: () => boolean;
   busy?: () => boolean;
 };
-// The lock verdict a detail body binds (see `locked` below). Null is no lock.
+// The lock health a detail body binds (see `locked` below). Null is no lock.
 // A string locks BOTH footer sides with that one reason (the official row) and
 // overrides every live slot. An object locks each side independently: a side
 // with a reason renders greyed carrying it, a null / absent side keeps its live

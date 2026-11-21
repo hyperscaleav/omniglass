@@ -1,13 +1,13 @@
 import { describe, it, expect } from "vitest";
 import {
-  verdictHue,
+  healthHue,
   activeSlots,
   impactPhrase,
   inactiveSlots,
   quorumLabel,
-  verdictOf,
-  verdictRank,
-  worstVerdict,
+  healthOf,
+  healthRank,
+  worstHealth,
   type FleetHealth,
   type HealthSlot,
 } from "./health";
@@ -28,38 +28,38 @@ const slot = (over: Partial<HealthSlot>): HealthSlot => ({
   ...over,
 });
 
-describe("verdictOf", () => {
+describe("healthOf", () => {
   it("narrows to the three states the console knows", () => {
-    expect(verdictOf("healthy")).toBe("healthy");
-    expect(verdictOf("incomplete")).toBe("incomplete");
-    expect(verdictOf("degraded")).toBe("degraded");
-    expect(verdictOf("outage")).toBe("outage");
+    expect(healthOf("healthy")).toBe("healthy");
+    expect(healthOf("incomplete")).toBe("incomplete");
+    expect(healthOf("degraded")).toBe("degraded");
+    expect(healthOf("outage")).toBe("outage");
   });
   it("is null for anything else, rather than guessing", () => {
-    expect(verdictOf(undefined)).toBeNull();
-    expect(verdictOf("")).toBeNull();
-    expect(verdictOf("brand-new-state")).toBeNull();
+    expect(healthOf(undefined)).toBeNull();
+    expect(healthOf("")).toBeNull();
+    expect(healthOf("brand-new-state")).toBeNull();
   });
 });
 
-describe("worstVerdict", () => {
+describe("worstHealth", () => {
   it("takes the worst, which is how a location rolls up its systems", () => {
-    expect(worstVerdict(["healthy", "outage", "degraded"])).toBe("outage");
-    expect(worstVerdict(["healthy", "degraded"])).toBe("degraded");
-    expect(worstVerdict(["incomplete", "degraded"])).toBe("degraded");
-    expect(worstVerdict(["healthy", "incomplete"])).toBe("incomplete");
-    expect(worstVerdict(["healthy", "healthy"])).toBe("healthy");
+    expect(worstHealth(["healthy", "outage", "degraded"])).toBe("outage");
+    expect(worstHealth(["healthy", "degraded"])).toBe("degraded");
+    expect(worstHealth(["incomplete", "degraded"])).toBe("degraded");
+    expect(worstHealth(["healthy", "incomplete"])).toBe("incomplete");
+    expect(worstHealth(["healthy", "healthy"])).toBe("healthy");
   });
   it("ignores states it cannot read, and is null when nothing is readable", () => {
-    expect(worstVerdict(["healthy", undefined, "nonsense"])).toBe("healthy");
-    expect(worstVerdict([])).toBeNull();
+    expect(worstHealth(["healthy", undefined, "nonsense"])).toBe("healthy");
+    expect(worstHealth([])).toBeNull();
   });
   it("ranks outage above degraded above healthy", () => {
-    expect(verdictRank("outage")).toBeGreaterThan(verdictRank("degraded"));
+    expect(healthRank("outage")).toBeGreaterThan(healthRank("degraded"));
     // incomplete sits between healthy and degraded: worth surfacing above a
     // clean system, worth burying under anything actually broken.
-    expect(verdictRank("degraded")).toBeGreaterThan(verdictRank("incomplete"));
-    expect(verdictRank("incomplete")).toBeGreaterThan(verdictRank("healthy"));
+    expect(healthRank("degraded")).toBeGreaterThan(healthRank("incomplete"));
+    expect(healthRank("incomplete")).toBeGreaterThan(healthRank("healthy"));
   });
 });
 
@@ -71,7 +71,7 @@ describe("activeSlots and inactiveSlots", () => {
 
   // A slot belonging to a choice's LOSING alternate can still read impaired
   // on its own terms (active: false); its impaired/short/spare did not move
-  // the verdict, because a different alternate answered the choice. Showing
+  // the health, because a different alternate answered the choice. Showing
   // it as an ordinary impairment is the exact contradiction active exists to
   // prevent (see healthSlotBody's own doc string): the seeded huddle-room
   // shape is precisely this (a satisfied all-in-one alternate beside an
@@ -105,19 +105,19 @@ describe("quorumLabel and impactPhrase", () => {
   });
 });
 
-// One verdict as a glyph's hue (#1071, #1074): the outline's slots and the
-// map's icons. A known verdict always wins, so a glyph agrees with the row
+// One health as a glyph's hue (#1071, #1074): the outline's slots and the
+// map's icons. A known health always wins, so a glyph agrees with the row
 // beside it; an unknown one falls back to down (red) or the no-data grey.
-describe("verdictHue", () => {
-  it("tones each verdict with its own hue, healthy in the muted tier", () => {
-    expect(verdictHue("healthy")).toBe("text-healthy");
-    expect(verdictHue("incomplete")).toBe("text-incomplete");
-    expect(verdictHue("degraded")).toBe("text-warning");
-    expect(verdictHue("outage")).toBe("text-error");
+describe("healthHue", () => {
+  it("tones each health with its own hue, healthy in the muted tier", () => {
+    expect(healthHue("healthy")).toBe("text-healthy");
+    expect(healthHue("incomplete")).toBe("text-incomplete");
+    expect(healthHue("degraded")).toBe("text-warning");
+    expect(healthHue("outage")).toBe("text-error");
   });
-  it("lets a known verdict win over down, and falls back to down or grey when unknown", () => {
-    expect(verdictHue("healthy", true)).toBe("text-healthy");
-    expect(verdictHue(null, true)).toBe("text-error");
-    expect(verdictHue(null)).toBe("text-base-content/35");
+  it("lets a known health win over down, and falls back to down or grey when unknown", () => {
+    expect(healthHue("healthy", true)).toBe("text-healthy");
+    expect(healthHue(null, true)).toBe("text-error");
+    expect(healthHue(null)).toBe("text-base-content/35");
   });
 });

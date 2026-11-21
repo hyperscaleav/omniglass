@@ -1,5 +1,5 @@
 import { type FleetView } from "./fleet";
-import { verdictOf, type Verdict } from "./health";
+import { healthOf, type HealthState } from "./health";
 import { entityLabel } from "./entities";
 
 // The outline's model (#866): every location in the fleet as one tree, each
@@ -19,7 +19,7 @@ import { entityLabel } from "./entities";
 
 export type Lights = { healthy: number; incomplete: number; degraded: number; outage: number };
 
-export type SystemRef = { id: string; name: string; label: string; standard: string; health: Verdict | null };
+export type SystemRef = { id: string; name: string; label: string; standard: string; health: HealthState | null };
 
 export type ComponentRow = {
   id: string;
@@ -28,7 +28,7 @@ export type ComponentRow = {
   product: string;
   // The component type's icon key (resolved by components/icons.tsx).
   icon: string;
-  health: Verdict | null;
+  health: HealthState | null;
   // The other systems a shared component serves, by label.
   also: string[];
 };
@@ -52,7 +52,7 @@ export type LocationNode = {
   lights: Lights;
   // The one system's health when the location holds exactly one; otherwise the
   // row's lights carry it.
-  health: Verdict | null;
+  health: HealthState | null;
 };
 
 export type Outline = {
@@ -110,7 +110,7 @@ export function buildOutline(input: OutlineInput): Outline {
 
   const systemRef = (s: (typeof fleetSystems)[number]): SystemRef => {
     const std = standardOf.get(s.id);
-    return { id: s.id, name: s.name, label: entityLabel(s), standard: std ? input.standardLabel(std) : "", health: verdictOf(s.health) };
+    return { id: s.id, name: s.name, label: entityLabel(s), standard: std ? input.standardLabel(std) : "", health: healthOf(s.health) };
   };
 
   // Which systems each component serves, so a shared one can name the others.
@@ -132,7 +132,7 @@ export function buildOutline(input: OutlineInput): Outline {
           label,
           product: c?.product ? input.productLabel(c.product) : "",
           icon: iconFor(c?.product),
-          health: verdictOf(d.health),
+          health: healthOf(d.health),
           also: (servedBy.get(d.component) ?? []).filter((l) => l !== entityLabel(s)),
         };
       })
@@ -282,14 +282,14 @@ export type OutlineEntry = {
   type: string;
   standard: string;
   product: string;
-  verdict: Verdict | null;
+  health: HealthState | null;
   tags: Record<string, string>;
   search: string;
 };
 
-const worst = (vs: (Verdict | null)[]): Verdict | null => {
-  const rank: Record<Verdict, number> = { healthy: 0, incomplete: 1, degraded: 2, outage: 3 };
-  let w: Verdict | null = null;
+const worst = (vs: (HealthState | null)[]): HealthState | null => {
+  const rank: Record<HealthState, number> = { healthy: 0, incomplete: 1, degraded: 2, outage: 3 };
+  let w: HealthState | null = null;
   for (const v of vs) if (v && (!w || rank[v] > rank[w])) w = v;
   return w;
 };
@@ -309,7 +309,7 @@ export function entriesOf(outline: Outline, roots?: LocationNode[]): OutlineEntr
       product: "",
       // A location's own health is its systems'; a location holding none has none of
       // its own to match on.
-      verdict: worst(n.systems.map((s) => s.health)),
+      health: worst(n.systems.map((s) => s.health)),
       // A location's tags are its own, merged over the ones its systems carry.
       tags: Object.assign({}, ...n.systems.map((s) => outline.tags.get(s.id) ?? {}), outline.tags.get(n.id) ?? {}),
       search: [own, ...n.systems.flatMap((s) => [s.label, s.name, s.standard])].join(" "),
@@ -324,7 +324,7 @@ export function entriesOf(outline: Outline, roots?: LocationNode[]): OutlineEntr
         type: "",
         standard: g.system?.standard ?? "",
         product: c.product,
-        verdict: c.health,
+        health: c.health,
         tags: outline.tags.get(c.id) ?? {},
         search: [c.label, c.name, c.product].join(" "),
       });
