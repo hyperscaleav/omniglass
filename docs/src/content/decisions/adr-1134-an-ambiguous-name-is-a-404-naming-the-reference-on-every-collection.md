@@ -7,7 +7,7 @@ refs: [1134, 1133]
 ---
 
 - **Date:** 2026-11-13 | **Status:** Accepted | **Pages:** [api](/architecture/api/),
-  [core entities](/architecture/core-entities/), [CLI](/guides/cli/)
+  [core entities](/architecture/core-entities/), [CLI](/developer/cli/)
 - **Decision:** (#1134, the follow-up ADR-1133 named.)
   1. **One status for a repeated name.** The tree entities (component, system, location) answered an
      ambiguous bare name with a 409, while an endpoint, secret, variable, file, group or principal

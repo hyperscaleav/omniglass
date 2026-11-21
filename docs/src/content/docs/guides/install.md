@@ -52,7 +52,7 @@ The binary is the server, the collection outpost, and the CLI in one. To stand u
 console you need Postgres and the same environment the image uses; see
 [Container image](/guides/container-image/#running-it) for the `OMNIGLASS_DSN` and
 `migrate`/`server`/`bootstrap`/`token` flow, which is identical for the binary. To drive a
-running server from the command line, see [the CLI](/guides/cli/).
+running server from the command line, see [the CLI](/developer/cli/).
 
 To try it first, with nothing to set up but Docker, run `omniglass lab run`: it brings up a working
 omniglass, its own Postgres and an edge outpost collecting from a simulated fleet, prints the console's
@@ -74,7 +74,7 @@ omniglass outpost run --name edge-hq --token "$OUTPOST_TOKEN" --simulate
 
 `--impairments`, `--port-offset` and `--poll` are the simulator's flags, and the outpost refuses them
 without `--simulate`. A simulator crash stops the outpost with it, so run it under something that
-restarts it (a container restart policy, as the [lab](/guides/lab/) does).
+restarts it (a container restart policy, as the [lab](/developer/lab/) does).
 
 To keep the simulator a process of its own beside an outpost, `omniglass sim run` does the same with the
 outpost's identity. It must share the outpost's loopback: the same host, or the same container or pod
@@ -136,7 +136,7 @@ wired by the seed, whatever the scenario). It takes a couple of minutes to seed.
 
 Whatever the scenario, the example fleet plants one secret cascade to read. The simulated panel login
 (`sim-panel-login`) exists at the platform, on Boardroom A, and on the touch panel inside it, so the
-panel's [effective secrets](/guides/cli/#secrets) (the secrets resolution on the component's page in the
+panel's [effective secrets](/developer/cli/#secrets) (the secrets resolution on the component's page in the
 console, or `omniglass component effective-secret list <panel id>`) show the panel's own copy as the winner with
 the room's and the platform's shadowed beneath it. Another component in Boardroom A resolves the room's
 copy, and every component elsewhere the platform's. Secrets carry no system band, so there are three
@@ -152,7 +152,7 @@ they reach only its own container's namespace. In a container the simulator bind
 the fleet is seeded unlifted. It prints the console's address, on `127.0.0.1:8080` (sign in as
 `dev`/`dev`), and tears everything down on Ctrl-C, keeping the data for the next run. Breaking a
 component on purpose works there as in
-[simulate a fleet](/operator/simulation/#break-it-on-purpose). The [lab guide](/guides/lab/)
+[simulate a fleet](/operator/simulation/#break-it-on-purpose). The [lab guide](/developer/lab/)
 covers what runs, with which privilege, and why Docker is required.
 
 The demo pipeline records on the same lab ([#1197](https://github.com/hyperscaleav/omniglass/issues/1197)),

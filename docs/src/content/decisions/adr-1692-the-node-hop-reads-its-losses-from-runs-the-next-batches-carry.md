@@ -6,7 +6,7 @@ summary: "Accepted: a node's own losses ride the `DeliveryLedger` of the batches
 refs: [1692, 1641, 1659, 1691, 1733, 1623]
 ---
 
-- **Date:** 2026-11-10 | **Status:** Accepted | **Pages:** [messaging](/architecture/messaging/#accounting-every-item-the-loss-ratio), [nodes](/architecture/nodes/#delivery-a-batch-lands-once), [lab](/guides/lab/#reading-the-delivery-table)
+- **Date:** 2026-11-10 | **Status:** Accepted | **Pages:** [messaging](/architecture/messaging/#accounting-every-item-the-loss-ratio), [nodes](/architecture/nodes/#delivery-a-batch-lands-once), [lab](/developer/lab/#reading-the-delivery-table)
 - **Decision:** (#1692, under #1623.)
   1. **A drop is reported by the batches after it.** A batch the spool gives up on (the count or byte
      cap, its age, a bus refusal) took a seq and never ships, so only a later batch of the boot can

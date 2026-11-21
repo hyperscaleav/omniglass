@@ -477,7 +477,7 @@ process through the Storage Gateway, so neither an outpost nor a push may write 
 reads them as it reads any metric
 ([ADR-1369](/architecture/decisions/#adr-1369-every-endpoint-reports-its-own-collection-once-a-report-window)).
 
-The [lab](/guides/lab/) exercises every collection method on both tiers (#1370): each seeded driver
+The [lab](/developer/lab/) exercises every collection method on both tiers (#1370): each seeded driver
 and each registry transport runs on a dev-fleet component, and counts only when it carries both, its
 built-in data (reads up, or, pushed to, has been heard) and collected values its driver emits landed
 from it. A driver that only connects does not count. Two methods carry one tier by nature: a bare
@@ -973,7 +973,7 @@ bearer header.
 
 The seeded `newtron-panel-web` reads the simulated Newtron panel's https API behind its form login,
 and `boreal-edge-web` the simulated Boreal display's web admin over digest (and drives its power);
-the [lab](/guides/lab/) runs both on its HQ boardroom (#1370).
+the [lab](/developer/lab/) runs both on its HQ boardroom (#1370).
 Proven over real sockets (`internal/collection/httpsession_integration_test.go`: one session across
 many requests, one re-login and replay on a lapse, a wrong password one attempt and never retried, a
 token renewed before its expiry, concurrent requests sharing one login, digest with MD5 and SHA-256
@@ -1129,7 +1129,7 @@ login's headers. The probe is http's (`https`'s over `wss`): a
 credential-free `GET /` whose answer, any status, is the transport rung, so reachability stays
 observed beneath a refused upgrade.
 
-The seeded `kestrel-ws` (run in the [lab](/guides/lab/) on the HQ boardroom's bar, #1370) holds the simulated Kestrel bar's control socket over `wss`: its subscribe
+The seeded `kestrel-ws` (run in the [lab](/developer/lab/) on the HQ boardroom's bar, #1370) holds the simulated Kestrel bar's control socket over `wss`: its subscribe
 armed on every connection, its call, volume, mute and power pushed as they change, polls and the
 `set-volume` and `set-mute` commands answered by their ids (a command settling from its answer).
 Proven by the driver's validation and correlation tests (`internal/driver/websocket_test.go`), over

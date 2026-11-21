@@ -136,13 +136,13 @@ From the CLI: `omniglass component alarm list <name> [--include-cleared] [--unac
 ### Troubleshooting an alarm with omnibot
 
 The **bot** button on an active alarm (in the **Why** strip and the alarms panel) asks
-[omnibot](/guides/agents/#omnibot-in-the-console) to troubleshoot it: the panel opens and runs the
+[omnibot](/developer/agents/#omnibot-in-the-console) to troubleshoot it: the panel opens and runs the
 triage-alarm skill the server ships on that alarm. Omnibot is handed the alarm **by reference**, its
 component and the rule that raised it (or, for a hand-raised alarm, when it was raised), never the
 message or anything else the row shows, and it reads the component, its alarms and its reachability
 itself, under your grants. It says whether the alarm is still true, the likely cause with its
 evidence, and one next step, and changes nothing until you agree: any write it proposes waits on your
-[agent policy](/guides/agents/#what-an-agent-may-do) like every other. A cleared alarm offers no
+[agent policy](/developer/agents/#what-an-agent-may-do) like every other. A cleared alarm offers no
 button: there is nothing left to troubleshoot. It needs the `assistant:use` permission; without it the
 row has no button.
 

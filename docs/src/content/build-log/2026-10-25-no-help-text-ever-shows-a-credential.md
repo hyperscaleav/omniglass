@@ -14,7 +14,7 @@ generated CLI reference was a function of whatever the person running `make gen`
 The connection flags now resolve at run time (`flagOrEnv` in `internal/cli/api_hooks.go`): the
 flag when given, an explicit empty value included, else the variable, else the literal default.
 Their defaults are fixed literals, and help names `$OMNIGLASS_TOKEN` and `$OMNIGLASS_SERVER` as the
-sources instead. The [CLI guide](/guides/cli/#connecting) teaches the order and why help is now
+sources instead. The [CLI guide](/developer/cli/#connecting) teaches the order and why help is now
 safe to paste.
 
 Proven with the token in the environment, not in a flag: a walk of all 390 commands renders each

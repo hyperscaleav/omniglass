@@ -95,7 +95,7 @@ func isNamePlaceholder(v string) bool {
 // A comment line returns nothing. A comment inside a fence is prose that happens
 // to sit in a code block, and prose names illegal spellings on purpose: the first
 // draft of this lint reported `--name flag.` out of the sentence "there is no
-// --name flag" in guides/cli.md.
+// --name flag" in developer/cli.md.
 func scanNamesInFence(line string) []string {
 	trimmed := strings.TrimSpace(line)
 	if strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "//") {

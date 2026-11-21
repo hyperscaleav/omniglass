@@ -6,7 +6,7 @@ summary: "A pusher is an emulator device of a profile with a push face (a cadenc
 refs: [1743, 1370, 1696, 1623]
 ---
 
-- **Date:** 2026-11-10 | **Status:** Accepted | **Pages:** [simulation](/architecture/simulation/#a-pusher-pushes-on-its-own-cadence), [lab](/guides/lab/#the-manifest-format)
+- **Date:** 2026-11-10 | **Status:** Accepted | **Pages:** [simulation](/architecture/simulation/#a-pusher-pushes-on-its-own-cadence), [lab](/developer/lab/#the-manifest-format)
 - **Decision:** (#1743.)
   1. **The push face is an engine primitive.** A profile may declare `push: {every, body}`: the body is a template rendered for each system the device's grant names, over its state, id and clock, and posted through `POST /telemetry:push` with the device's bearer token on every tick. The face reads its systems off its own grant (`GET /auth/me`) and reads them again after any failure. The booking service is a profile (`booking-service`), its meeting day profile state and `bookingsAt` a template function, so the next pusher is YAML.
   2. **A scenario declares its pushers like its devices.** A scale manifest's `pushers` names each one's profile, how many a site has and how many of the site's systems each pushes for; the validator refuses a profile with no push face and a pusher with no systems. The dev fleet's fixtures declare theirs (`sim_pushers`) in the same terms, with the systems named.

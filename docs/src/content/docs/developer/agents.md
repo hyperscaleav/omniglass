@@ -1,5 +1,5 @@
 ---
-title: Connect an agent
+title: Agents and MCP
 description: "Point Claude Code, or any MCP client, at omniglass: the MCP server's tools are generated from the API and run with your token."
 screenshots:
   - id: omnibot-panel
@@ -17,6 +17,11 @@ screenshots:
     # The system's since line behind the drawer ages with the clock.
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
+sidebar:
+  order: 3
+  badge:
+    text: Built
+    variant: success
 ---
 
 Omniglass serves the **Model Context Protocol** (MCP), so an AI agent you already use (Claude Code, or
@@ -317,7 +322,7 @@ the same way, with no field to reveal. A console edit still wins over the enviro
 
 A lab forwards every such variable from your shell, or from `.env` and `.env.local` in the
 directory you run it from, so a lab with those five runs omnibot on Bedrock with no further command
-([the lab guide](/guides/lab/)). `omniglass lab run --omnibot-key-env OPENROUTER_API_KEY` is the
+([the lab guide](/developer/lab/)). `omniglass lab run --omnibot-key-env OPENROUTER_API_KEY` is the
 shortcut for OpenRouter: it declares that variable's value as the lab server's env secret
 `lab-omnibot-key` and sets `provider` and `key_secret` to it, under any you set yourself. Without
 either the lab plays its recording.

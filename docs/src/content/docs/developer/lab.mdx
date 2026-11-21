@@ -1,6 +1,11 @@
 ---
 title: "The lab"
 description: "A working omniglass on Docker with a simulated fleet: what it runs and with which privilege, its flags, the scale lab, and what to do when it will not start."
+sidebar:
+  order: 4
+  badge:
+    text: Built
+    variant: success
 ---
 
 import LabTopology from '../../../components/LabTopology.astro';
@@ -149,7 +154,7 @@ command itself; here is when you would reach for each:
   value as the [env-backed platform secret](/admin/secrets/#secrets-from-the-environment)
   `lab-omnibot-key` and sets the assistant's `provider` and `key_secret` to it from the environment
   (`--omnibot-key-env OPENROUTER_API_KEY` runs OpenRouter's default model), so the panel and
-  `omniglass omnibot` answer for real ([pointing omnibot at a model](/guides/agents/#pointing-omnibot-at-a-model)).
+  `omniglass omnibot` answer for real ([pointing omnibot at a model](/developer/agents/#pointing-omnibot-at-a-model)).
   Nothing is sealed: the key lives in the server container's environment, visible to `docker inspect`
   on this machine, as the outpost's token is. Without the flag omnibot plays the lab's recording; a key
   an older lab sealed is removed. A scale lab runs no omnibot, so it refuses the flag.
@@ -964,7 +969,7 @@ shorter than the `--window` it measures, and `--json`. The schedule's health on 
 latency are not in a sample yet (#1625, #1626).
 
 A sample reads the lab from its host, through Docker. To read the same platform from anywhere else,
-with a token and the API alone, use [`omniglass platform health`](/guides/cli/#platform-health): one
+with a token and the API alone, use [`omniglass platform health`](/developer/cli/#platform-health): one
 reading whose exit status is the verdict, or the same `--every`, `--window`, `--append` and
 `--page-clients` series against a server you can reach but not shell into, such as a soak's from your
 desk.

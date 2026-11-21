@@ -10,7 +10,7 @@ database, so a deployment is that one binary in one of its run modes (`server`, 
 plus a database. How it scales and the deploy model behind these pages is
 [scaling and deployment](/architecture/scaling/).
 
-To try it before deploying anything, [the lab](/guides/lab/) brings up a working omniglass on
+To try it before deploying anything, [the lab](/developer/lab/) brings up a working omniglass on
 Docker with one command, with a simulated fleet to collect from; it is for learning, not for
 production.
 
@@ -23,11 +23,11 @@ Pick the path that fits where you are running it:
 - **[Deploying with Helm](/guides/helm/)** is the chart that serves both production (BYO Postgres)
   and disposable previews (bundled Postgres) from one set of values. Production deployments are
   framed in the [Helm guide's Production section](/guides/helm/#production).
-- **[PR preview environments](/guides/pr-previews/)** stand up a live, isolated copy of the console
+- **[PR preview environments](/developer/pr-previews/)** stand up a live, isolated copy of the console
   for any pull request, so a change is reviewed against a running system.
 
 Once a server is up, the first owner is minted with the trusted direct-database lane
-(`omniglass bootstrap`), covered in [the CLI guide](/guides/cli/#authentication); from there,
+(`omniglass bootstrap`), covered in [the CLI guide](/developer/cli/#authentication); from there,
 managing accounts and access moves to the [Admin section](/admin/).
 
 ## Sizing PostgreSQL
@@ -49,7 +49,7 @@ would see:
 Leave `synchronous_commit` on. Turning it off trades durability for throughput: a crash loses the
 last transactions the server already acknowledged, and an acknowledged sample that disappears is the
 loss the platform exists to measure. `track_commit_timestamp=on` is needed only by
-[`omniglass lab measure`](/guides/lab/#measuring-a-scale-lab), which reads ingest lag from commit
+[`omniglass lab measure`](/developer/lab/#measuring-a-scale-lab), which reads ingest lag from commit
 times.
 
 In a container, `shared_buffers` is not held in `/dev/shm`: Postgres maps it as anonymous memory, so

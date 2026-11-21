@@ -6,7 +6,7 @@ summary: "Amends ADR-1896's drain rule. A live node whose latest worklist-task-c
 refs: [2008, 1896, 1882]
 ---
 
-- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [lab](/guides/lab/)
+- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [lab](/developer/lab/)
 - **Decision:** (#2008, amending point 5 of
   [ADR-1896](#adr-1896-ingest-lands-on-a-lane-per-partition-of-the-nodes-name-in-order-per-node).)
   A node counts as live for the drain only while its latest `worklist-task-count`, on its platform

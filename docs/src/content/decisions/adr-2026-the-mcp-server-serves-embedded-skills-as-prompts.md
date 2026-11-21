@@ -7,7 +7,7 @@ refs: [2026, 1162, 1161, 1165, 2025]
 ---
 
 - **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [api](/architecture/api/),
-  [AI](/architecture/ai/), [connect an agent](/guides/agents/), [MCP skills](/reference/mcp/skills/)
+  [AI](/architecture/ai/), [connect an agent](/developer/agents/), [MCP skills](/reference/mcp/skills/)
 - **Decision:** (#2026, under epic #1161.)
   1. **One primitive, one file per skill.** A skill is a directory under `internal/mcp/skills/` holding
      one `SKILL.md`: front matter (`name`, equal to the directory; `description`; `category`, one of

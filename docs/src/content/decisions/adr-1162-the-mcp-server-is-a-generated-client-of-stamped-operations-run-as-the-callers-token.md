@@ -9,7 +9,7 @@ refs: [1162, 1161]
 - **Date:** 2026-10-25 | **Status:** Accepted | **Pages:** [api](/architecture/api/),
   [AI](/architecture/ai/), [audit](/architecture/audit/),
   [identity and access](/architecture/identity-access/), [API first](/contributing/api-first/),
-  [connect an agent](/guides/agents/), [MCP tools](/reference/mcp/)
+  [connect an agent](/developer/agents/), [MCP tools](/reference/mcp/)
 - **Decision:** (#1162, the first slice of epic #1161, whose decisions 1 and 2 the architect ruled
   as recommended.)
   1. **Generated, and curated in Go.** The API page and the AI page said the catalog is curated, not
