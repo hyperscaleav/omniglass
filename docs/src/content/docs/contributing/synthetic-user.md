@@ -13,7 +13,7 @@ reads.
 
 Every run starts from a throwaway lab seeded with a **scenario**: a fresh install, the example
 fleet, the example fleet having a bad day, or the example fleet at enterprise size. Scenarios are
-`omniglass seed-dev --scenario <name>`; see [seed a different fleet](/guides/install/#seed-a-different-fleet).
+`omniglass seed-dev --scenario <name>`; see [seed a different fleet](/deployment/simulator/#seed-a-different-fleet).
 
 ## The probe and its digest
 

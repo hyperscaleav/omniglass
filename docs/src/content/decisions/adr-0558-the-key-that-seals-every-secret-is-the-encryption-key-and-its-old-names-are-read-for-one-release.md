@@ -6,7 +6,7 @@ summary: "The key-encryption key's variables are `OMNIGLASS_ENCRYPTION_KEY` and 
 refs: [558, 825]
 ---
 
-- **Date:** 2026-10-26 | **Status:** Accepted | **Pages:** [config, secrets, and variables](/architecture/variables/), [Helm](/guides/helm/)
+- **Date:** 2026-10-26 | **Status:** Accepted | **Pages:** [config, secrets, and variables](/architecture/variables/), [Helm](/deployment/helm/)
 - **Decision:** (#558, pre-tag hygiene for 0.1.0, #825.)
   1. **It is the encryption key.** The variables that supply the key every secret is sealed under
      are `OMNIGLASS_ENCRYPTION_KEY` (base64, 32 bytes) and `OMNIGLASS_ENCRYPTION_KEY_FILE` (a path

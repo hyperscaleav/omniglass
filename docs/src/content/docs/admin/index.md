@@ -11,7 +11,7 @@ reach, what the fleet runs on, and what happens when something goes wrong.
 
 **In this section:** users, roles, groups and grants; the audit trail; secrets, variables and files;
 the platform settings; and the catalog, the shared vocabulary the fleet is described in. Running the fleet day to day is the [Operator](/operator/) section's job,
-and standing the platform up is [Deployment](/guides/deployment/).
+and standing the platform up is [Deployment](/deployment/).
 
 ## What makes someone an admin
 

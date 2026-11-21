@@ -9,8 +9,22 @@ sidebar:
 **For:** the people who install Omniglass and keep it running: the platform or IT team that owns
 the server, its PostgreSQL database and the outposts that collect from the fleet.
 
-**In this section:** installing the single binary, the container image, deploying with Helm, and
-running it in production (upgrades, backups, scaling).
+Omniglass is a single self-contained Go binary with the operator console compiled in, plus a
+bring-your-own PostgreSQL database. A deployment is that one binary in one of its run modes (`server`,
+`outpost run`, `migrate`) and a database; how it scales is
+[scaling and deployment](/architecture/scaling/). To try it first with nothing but Docker, [the lab](/guides/lab/)
+brings up a working omniglass with a simulated fleet; it is for learning, not production.
 
-Until this section is written (#2160), the current pages are the **Deployment** guides under
-**Being rebuilt** in the sidebar, starting at its [overview](/guides/deployment/).
+**In this section:** pick the path that fits where you are running it.
+
+- **[Install](/deployment/install/)** downloads a prebuilt binary for your OS and architecture.
+- **[Container image](/deployment/container-image/)** is the published distroless image, its tags,
+  its configuration and the `migrate` then `server` flow.
+- **[Deploying with Helm](/deployment/helm/)** is the chart that serves production (BYO Postgres) and
+  disposable previews (bundled Postgres) from one set of values.
+- **[Running in production](/deployment/production/)** covers sizing PostgreSQL, backups, upgrades and
+  what is still to come.
+- **[Running a simulator](/deployment/simulator/)** serves a simulated fleet to an outpost.
+- **[PR preview environments](/guides/pr-previews/)** give a pull request a live copy of the console.
+
+Once a server is up, managing accounts and access moves to the [Admin](/admin/) section.

@@ -13,7 +13,7 @@ call.
 creating and editing what is in the fleet; alarms, health and commands; your inbox; starting from a
 template; connecting outposts and reading reachability; whether Omniglass itself is well; and a
 simulated fleet to practise on. Who may sign in and what they may do is the [Admin](/admin/)
-section's job, and standing the platform up is [Deployment](/guides/deployment/).
+section's job, and standing the platform up is [Deployment](/deployment/).
 
 ## Two ways in, one API
 

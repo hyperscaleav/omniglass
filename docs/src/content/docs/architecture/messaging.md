@@ -87,7 +87,7 @@ The transports meet at one `land()` write path, so neither can drift from the ot
 
 ## Streams and consumers
 
-As built today there is **one stream**, `OG_TELEMETRY`, bound to the outpost subjects (`og.v1.telemetry.*`) and the API push subject (`og.v1.api.telemetry`), consumed by the ingest lanes; `og.v1.telemetry.<outpost>` is the sample firehose itself, carrying each outpost's samples and its raw self-logs. The stream files an outpost's batch under a partition of its name, `og.v1.telemetry.<p>.<outpost>` (its own `partition` subject transform, FNV-1a modulo the lane count), and each partition has a durable, `og-telemetry-worker-<p>`, with one batch in flight; `og-telemetry-worker` keeps the push subject. The lane count is `OMNIGLASS_INGEST_PARTITIONS` ([configuration](/guides/container-image/#configuration)), 4 by default and held under the database pool less one; change it with the backlog drained, since a change moves outposts between lanes and a start that changes it over a held backlog only warns (#1934; [ADR-1896](/architecture/decisions/#adr-1896-ingest-lands-on-a-lane-per-partition-of-the-nodes-name-in-order-per-node)). The set below is the target topology:
+As built today there is **one stream**, `OG_TELEMETRY`, bound to the outpost subjects (`og.v1.telemetry.*`) and the API push subject (`og.v1.api.telemetry`), consumed by the ingest lanes; `og.v1.telemetry.<outpost>` is the sample firehose itself, carrying each outpost's samples and its raw self-logs. The stream files an outpost's batch under a partition of its name, `og.v1.telemetry.<p>.<outpost>` (its own `partition` subject transform, FNV-1a modulo the lane count), and each partition has a durable, `og-telemetry-worker-<p>`, with one batch in flight; `og-telemetry-worker` keeps the push subject. The lane count is `OMNIGLASS_INGEST_PARTITIONS` ([configuration](/deployment/container-image/#configuration)), 4 by default and held under the database pool less one; change it with the backlog drained, since a change moves outposts between lanes and a start that changes it over a held backlog only warns (#1934; [ADR-1896](/architecture/decisions/#adr-1896-ingest-lands-on-a-lane-per-partition-of-the-nodes-name-in-order-per-node)). The set below is the target topology:
 
 :::design[Target design, tracked in #430]
 - **samples** (data lane): raw ingress, the **admission consumer** (owner-confines per publisher
@@ -140,7 +140,7 @@ The canonical triple is built on `OG_TELEMETRY`
 A publisher lets go of a batch at the stream's ack, so the ack is only as durable as the stream's
 store. The embedded server keeps it under `OMNIGLASS_NATS_STORE_DIR`, a temporary directory removed at
 shutdown unless one is set; the lab and the Helm chart set it onto a persistent volume, so a batch the
-stream acknowledged before a restart lands after it ([Helm: durable state](/guides/helm/#durable-state), #1286).
+stream acknowledged before a restart lands after it ([Helm: durable state](/deployment/helm/#durable-state), #1286).
 
 The property lane's transition guard is the insert's own condition, held per series by a lock, so two
 batches landing at once never write one value twice. The guard is right only if a series lands in

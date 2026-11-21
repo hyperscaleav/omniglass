@@ -33,7 +33,7 @@ Postgres (data does not survive a restart, which is the point). It runs the char
 from *this PR's* commit, so schema migrations and API changes in the PR are
 exercised end to end. Sign in as the seeded owner: the bot comment carries only
 the link, never a credential; the credential is the bootstrap token printed once
-to the init container's logs (the [Helm guide](/guides/helm/) shows how to read
+to the init container's logs (the [Helm guide](/deployment/helm/) shows how to read
 it).
 
 ## Teardown
@@ -43,8 +43,8 @@ reaper also sweeps any namespace left behind, so nothing lingers.
 
 ## How it works
 
-The image and chart are built here (see [Container image](/guides/container-image/)
-and [Deploying with Helm](/guides/helm/)); the per-PR wiring lives in the ops
+The image and chart are built here (see [Container image](/deployment/container-image/)
+and [Deploying with Helm](/deployment/helm/)); the per-PR wiring lives in the ops
 repo. An Argo CD PullRequest generator watches labeled PRs and renders the chart
 into a per-PR namespace, pinned to the commit's immutable image tag. Traffic
 reaches it through a Cloudflare tunnel to an in-cluster ingress controller that

@@ -22,7 +22,7 @@ A single setting may also be fed from the server's environment. Set
 (`OMNIGLASS_SETTING__RETENTION__METRIC_DAYS=30`). The level sits between the settings file and the
 console binding, so the console still wins. A per-user namespace (the `profile` domain, `ui` and
 `keybindings`) is refused at boot, naming the variable: those levels are per-user, not per-process.
-The generated [server variables reference](/guides/container-image/#configuration) lists every
+The generated [server variables reference](/deployment/container-image/#configuration) lists every
 key a variable can set, one `OMNIGLASS_SETTING__*` row per key. A scalar or a comma-separated list
 can come from a variable; a keyed map (`agent.roles`, `agent.tools`) cannot, and is set in the
 settings file or the console.
