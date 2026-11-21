@@ -1,12 +1,17 @@
 ---
 title: Rules and severity
 description: "Writing an event rule: what it reads, when it fires and clears, the events it writes, how long the criteria must hold, the severity level it raises an alarm at (or none, for an informational rule), and how to watch it work, from the console, the CLI, or the API."
+sidebar:
+  order: 20
+  badge:
+    text: Partial
+    variant: note
 walkthroughs:
   - id: watch-a-rule-raise-an-alarm
   - id: write-a-rule-as-an-expression
 ---
 
-import SeededSet from '../../../../components/SeededSet.astro';
+import SeededSet from '../../../components/SeededSet.astro';
 
 **Catalog, under Actions: Rules** (with `rule:read`) is where alarms come from when nobody raises
 them by hand, and where what happened is recorded when nobody needs paging. An **event rule** watches
@@ -22,7 +27,7 @@ How the evaluator works is on [alarms and actions](/architecture/alarms-actions/
 Beside it, **Catalog, under Actions: Severity** (with `severity_level:read`) lists the levels a rule
 raises at, and is where you add your own (with `severity_level:create` on an all-scope grant).
 **Catalog, under Actions: Calc rules** derives values from others for rules like these to judge
-([calc rules](/guides/admin/calc-rules/)).
+([calc rules](/admin/calc-rules/)).
 
 Rules **read like a catalog**: any grant carrying `rule:read`, wherever it is scoped, lists every
 rule. The live counts and a rule's open alarms and streaks name components, so they cover only the
@@ -201,8 +206,12 @@ the expression itself, an unfinished line pointed at, the fix, a preview of the 
 
 ### Write a trend rule
 
+:::design[The console drawer does not edit a sample window yet, tracked in #2315]
+Until it does, a trend rule is written from the CLI or the API, as below.
+:::
+
 A rule on a metric can fire on where its series is heading rather than where it is: a heap that keeps
-climbing, a database that keeps growing. The drawer does not edit this yet; write it with the API or
+climbing, a database that keeps growing. Write it with the API or
 the CLI (`--sample-window 6h` on the create command). Its **`sample_window`** (a duration up to a
 week) is how much of the series' history the criteria read, bound as **`window`**: the series' points
 over it, oldest first, in at most 360 even buckets. Three functions read it: `span(window)` is the

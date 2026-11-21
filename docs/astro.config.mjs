@@ -76,6 +76,10 @@ export default defineConfig({
     '/guides/admin/events/': '/admin/events/',
     '/guides/admin/commands/': '/admin/commands/',
     '/guides/admin/standards/': '/admin/standards/',
+    // The automation pages joined the Admin section (#2191).
+    '/guides/admin/rules/': '/admin/rules/',
+    '/guides/admin/calc-rules/': '/admin/calc-rules/',
+    '/guides/admin/notifications/': '/admin/notifications/',
     // Find things in your fleet folded into the outline guide (#861).
     '/guides/operator/inventory/': '/operator/fleet/',
     // The operator guide became the Operator section (#2157); alarms and
@@ -193,12 +197,9 @@ export default defineConfig({
                 // the journey, in the order the data travels
                 { label: 'Data collection', slug: 'architecture/collection' },
                 { label: 'Metrics and properties', slug: 'architecture/properties' },
-                { label: 'Events', slug: 'architecture/events' },
                 { label: 'Commands', slug: 'architecture/commands' },
                 { label: 'Config & credentials', slug: 'architecture/variables' },
-                { label: 'Tags', slug: 'architecture/tags' },
                 { label: 'Cascade', slug: 'architecture/cascade' },
-                { label: 'Groups', slug: 'architecture/groups' },
                 { label: 'Health & KPIs', slug: 'architecture/health' },
                 { label: 'Alarms and actions', slug: 'architecture/alarms-actions' },
                 { label: 'UI', slug: 'architecture/ui' },
@@ -213,8 +214,6 @@ export default defineConfig({
                 { label: 'Scaling and deployment', slug: 'architecture/scaling' },
                 { label: 'Settings', slug: 'architecture/settings' },
                 { label: 'Identity and access', slug: 'architecture/identity-access' },
-                { label: 'Audit', slug: 'architecture/audit' },
-                { label: 'Files and blobs', slug: 'architecture/files' },
                 { label: 'Glossary', slug: 'architecture/glossary' },
               ],
             },
@@ -266,9 +265,6 @@ export default defineConfig({
               label: 'Admin guide',
               collapsed: true,
               items: [
-                { label: 'Rules and severity', slug: 'guides/admin/rules' },
-                { label: 'Calc rules', slug: 'guides/admin/calc-rules' },
-                { label: 'Notifications', slug: 'guides/admin/notifications' },
                 { label: 'Drivers', slug: 'guides/admin/drivers' },
               ],
             },

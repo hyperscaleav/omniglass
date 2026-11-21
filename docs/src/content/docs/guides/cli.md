@@ -753,7 +753,7 @@ paging tool somebody watches: a `notification-type` says what a message says (an
 `preview` renders it against a real alarm), a `notification-target` says where it goes (admin-only,
 its URL masked until `reveal`), an `action-rule` says when (`rule:*`, all-scope), and a
 `notification` is one message on its way. The whole task is the
-[notifications guide](/guides/admin/notifications/).
+[notifications guide](/admin/notifications/).
 
 ```sh
 omniglass notification-type preview alarm-raised --component panel-2 | jq -c '{subject, text}'

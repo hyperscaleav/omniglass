@@ -63,7 +63,13 @@ Omniglass and takes your own entries beside it; each page says which of its rows
 - **[Standards](/admin/standards/)**: the contract a system is built to, and the slots a conforming
   system fills.
 
-The automation pages and drivers are still the **Admin guide** under **Being rebuilt** in the
-sidebar until they land here: [rules and severity](/guides/admin/rules/),
-[calc rules](/guides/admin/calc-rules/) and [notifications](/guides/admin/notifications/) (#2191),
-and [drivers](/guides/admin/drivers/) (#2200).
+Automation is what happens when a value crosses a line:
+
+- **[Rules and severity](/admin/rules/)**: the event rules that raise and clear alarms, and the
+  severity levels they raise at.
+- **[Calc rules](/admin/calc-rules/)**: values derived from other values, for rules to judge.
+- **[Notifications](/admin/notifications/)**: the targets, action rules and messages that tell
+  somebody about an alarm.
+
+Drivers are still the **Admin guide** under **Being rebuilt** in the sidebar until they land here
+([drivers](/guides/admin/drivers/), #2200).
