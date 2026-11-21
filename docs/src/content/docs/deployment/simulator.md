@@ -93,7 +93,7 @@ wired by the seed, whatever the scenario). It takes a couple of minutes to seed.
 
 Whatever the scenario, the example fleet plants one secret cascade to read. The simulated panel login
 (`sim-panel-login`) exists at the platform, on Boardroom A, and on the touch panel inside it, so the
-panel's [effective secrets](/developer/cli/#secrets) (the secrets resolution on the component's page in the
+panel's [effective secrets](/reference/cli/#omniglass-component-effective-secret) (the secrets resolution on the component's page in the
 console, or `omniglass component effective-secret list <panel id>`) show the panel's own copy as the winner with
 the room's and the platform's shadowed beneath it. Another component in Boardroom A resolves the room's
 copy, and every component elsewhere the platform's. Secrets carry no system band, so there are three
