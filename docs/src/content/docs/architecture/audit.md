@@ -27,7 +27,7 @@ source. To read it, see [the admin Audit page](/admin/audit/).
   in `old`. Images are read under the row's lock, so they are the state the write replaced. A secret's
   image is its metadata and a digest of the sealed value, never the plaintext, and the password verbs
   carry no field images ([ADR-1442](/architecture/decisions/#adr-1442-an-audit-row-outlives-its-subject-both-images-and-a-string-reference)).
-- **The actor** is a person, machine user or outpost, resolved by the gateway to its identifier and
+- **The actor** is a person, machine user or outpost, resolved by the [Storage Gateway](/architecture/storage/#the-storage-gateway-and-tiering), the one layer every database read and write passes through, to its identifier and
   snapshotted on the row (`actor_username`), so the trail stays attributable after the actor is purged
   ([ADR-0016](/architecture/decisions/#adr-0016-a-principal-can-be-purged-and-the-audit-trail-is-denormalized-to-survive-it),
   [ADR-0110](/architecture/decisions/#adr-0110-a-principals-identifier-is-the-gateways-answer-not-a-stored-functions)).

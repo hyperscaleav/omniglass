@@ -24,7 +24,7 @@ operate tags, see [the admin Tags page](/admin/tags/).
 
 Splitting them keeps the vocabulary normalized: `environment` is minted once and reused, so nobody
 invents `env` beside `Environment`. An operator binds by the tag's **name**, an ordinary entity name
-(lowercase letters, digits and hyphens, 100 characters, never a uuid), enforced by the Storage Gateway.
+(lowercase letters, digits and hyphens, 100 characters, never a uuid), enforced by the [Storage Gateway](/architecture/storage/#the-storage-gateway-and-tiering), the one layer every database read and write passes through.
 A key also carries an optional **label**, the friendly string an operator reads ("Cost Center"). The
 label is not an identifier: it has no uniqueness and nothing resolves through it
 ([ADR-0119](/architecture/decisions/#adr-0119-a-table-an-operator-names-carries-a-label-or-declares-why-it-does-not)).

@@ -12,7 +12,8 @@ import SchemaTable from '../../../components/SchemaTable.astro';
 
 Files keep the opaque bytes that go with a fleet (a firmware image, a config dump, a runbook, a
 capture) searchable and deduplicated: a **file** handle over a content-addressed **blob** store,
-behind the same Storage Gateway as everything else
+behind the same [Storage Gateway](/architecture/storage/#the-storage-gateway-and-tiering), the one layer every database read and write passes through,
+as everything else
 ([ADR-0029](/architecture/decisions/#adr-0029-files-slice-1-a-content-addressed-blob-store-and-a-tenant-wide-file-handle)).
 To use them, see [the admin Files page](/admin/files/).
 

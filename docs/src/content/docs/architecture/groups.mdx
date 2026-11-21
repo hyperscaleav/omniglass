@@ -23,7 +23,7 @@ Built end to end is the **user** kind: `user_group` and its membership, group-ta
 attached to the group reaches its members. It is not yet an access scope, and `scope_kind='group'` is
 refused with a 422.
 
-- A group's name is an ordinary entity name, checked by the Storage Gateway on create and rename
+- A group's name is an ordinary entity name, checked by the [Storage Gateway](/architecture/storage/#the-storage-gateway-and-tiering), the one layer every database read and write passes through, on create and rename
   ([ADR-0077](/architecture/decisions/#adr-0077-a-group-name-obeys-the-entity-name-rule-tightening-a-pattern-the-code-had-excused)).
 - Renaming is the `:rename` custom method, gated by `user_group:rename`; the PATCH body carries no
   name ([ADR-0076](/architecture/decisions/#adr-0076-a-renameable-human-typed-identifier-stays-in-the-url-and-the-write-returns-the-uuid)).
