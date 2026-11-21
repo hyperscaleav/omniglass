@@ -59,7 +59,7 @@ Wait
 Type `omniglass user list | jq -c '.users[] | select(.machine.name == "sim-booking-service") | {service: .machine.name, grants: [.grants[] | {role, scope_kind, scope_op}]}'`
 Enter
 Wait
-Type `sys='hq.west.level-2.boardroom-a.$sys.boardroom'`
+Type `sys='hq.west.level-2.boardroom-a.$sys.board-meeting'`
 Enter
 Wait
 Hide

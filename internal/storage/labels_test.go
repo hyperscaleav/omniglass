@@ -649,10 +649,10 @@ func TestASystemAndALocationGetLabelsToo(t *testing.T) {
 	}
 }
 
-// TestTwoSameTypeSystemsInOneRoomReadDifferently is #693: a divisible boardroom
+// TestTwoSameTypeSystemsInOneRoomReadDifferently is #693: a divisible board-meeting
 // whose two halves are both `board` systems in the same room. The shipped
 // system rule read the type alone, so both rendered "Board Meeting": the platform
-// could tell them apart (`boardroom` and `boardroom-2`) and the operator
+// could tell them apart (`board-meeting` and `board-meeting-2`) and the operator
 // reading the console could not.
 //
 // The rule reads the ordinal under the same {{if}} the component's has always
@@ -678,8 +678,8 @@ func TestTwoSameTypeSystemsInOneRoomReadDifferently(t *testing.T) {
 
 	// The names are the fixture: this is the fleet ADR-0101's suppression
 	// produces, and the labels are what the operator reads off it.
-	if first.Name != "boardroom" || second.Name != "boardroom-2" {
-		t.Fatalf("names = %q and %q, want %q and %q", first.Name, second.Name, "boardroom", "boardroom-2")
+	if first.Name != "board-meeting" || second.Name != "board-meeting-2" {
+		t.Fatalf("names = %q and %q, want %q and %q", first.Name, second.Name, "board-meeting", "board-meeting-2")
 	}
 	// Both read their place first (#872), and a place holding several
 	// systems names each one's kind after it; the ordinal follows the name,

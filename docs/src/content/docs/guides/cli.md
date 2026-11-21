@@ -25,7 +25,7 @@ ephemeral Postgres via testcontainers.
 
 The example fleet deliberately types almost none of its own names: its devices and its
 systems all ask the platform to name them, so what you sign in to is the name generator's
-own output (`display-1` in three different rooms, `boardroom` and `boardroom-2` for the
+own output (`display-1` in three different rooms, `board-meeting` and `board-meeting-2` for the
 two halves of one) rather than a list somebody wrote out. The rows that do carry a typed
 name are the ones no rule could produce: every LOCATION, since no shipped location type
 carries a name rule (a campus, a building, a floor and a room each have a name you hold
@@ -387,7 +387,7 @@ A system's list carries the same block:
 
 ```sh
 omniglass component property list disp-1 | jq -c '.properties[] | {property_type_name, reconciliation}'   # needs component:read
-omniglass system property list boardroom                                     # needs system:read
+omniglass system property list board-meeting                                 # needs system:read
 ```
 
 Push telemetry an integration observed, for a component or for a system as a whole (a cloud
@@ -421,7 +421,7 @@ What it reported that no binding places waits in its unbound inbox:
 ```sh
 omniglass component identity-binding list 'hq.$comp.ucc-platform'                       # needs component:read
 omniglass component identity-binding update 'hq.$comp.ucc-platform' ucc-room-id zr-boardroom-b \
-  --owner-kind system --owner 'hq.west.level-2.boardroom-b.$sys.boardroom'               # needs component:update and system:update
+  --owner-kind system --owner 'hq.west.level-2.boardroom-b.$sys.board-meeting'           # needs component:update and system:update
 omniglass component identity-binding delete 'hq.$comp.ucc-platform' ucc-room-id zr-boardroom-b
 omniglass component unbound-identity list 'hq.$comp.ucc-platform'                        # needs component:read
 ```
@@ -808,10 +808,10 @@ omniglass standard property update huddle-room room-capacity --default-value 6 -
 omniglass standard property delete huddle-room room-capacity        # systems keep any value they set
 
 omniglass component property list dsp-boardroom-3                      # every property, reconciled
-omniglass system property list boardroom                               # same shape, system side
+omniglass system property list board-meeting                           # same shape, system side
 omniglass location property list east-campus                           # same shape, location side
-omniglass system property update boardroom room-capacity --value 12    # idempotent
-omniglass system property delete boardroom room-capacity             # falls back to the contract default
+omniglass system property update board-meeting room-capacity --value 12  # idempotent
+omniglass system property delete board-meeting room-capacity           # falls back to the contract default
 ```
 
 The read resolves the classifier's contract against the instance's own values, so a **one-off system**

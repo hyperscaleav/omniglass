@@ -9,7 +9,7 @@ import "testing"
 // TestGenIndexHandsOutAllocationOrder proves the index answers with the fleet's
 // rows in the order the generator allocated them, whatever order they were read
 // in. Sorting on the stored ordinal rather than the name is the point: a
-// suppressed first ordinal ("boardroom" is 1, "boardroom-2" is 2) sorts
+// suppressed first ordinal ("board-meeting" is 1, "board-meeting-2" is 2) sorts
 // correctly here and would sort backwards by name.
 func TestGenIndexHandsOutAllocationOrder(t *testing.T) {
 	t.Parallel()

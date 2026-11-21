@@ -1195,12 +1195,12 @@ property_values:
 # half only.
 #
 # Neither system names itself: each is the first `board` system in its own room,
-# so the platform mints `boardroom` in each bucket (the first of its stem in a
+# so the platform mints `board-meeting` in each bucket (the first of its stem in a
 # bucket carries no ordinal, ADR-0101). Same name, two rooms, which is the
 # placement-scoped name index doing for systems what display-1-per-room does
 # for components. The same-BUCKET siblings that demonstrate the ordinal (#693)
 # live in the media lab now (below), since an air wall makes two rooms, not two
-# boardrooms inside one.
+# board-meetings inside one.
 systems:
   - key: boardroom-a
     standard: divisible-conference
@@ -1232,7 +1232,7 @@ systems:
   # briefing-av below the ONE provisioning exception. The pods keep their other
   # job: the fleet's same-BUCKET same-type siblings, the pair that demonstrates
   # the ordinal the system rule reads (#693): two `class` systems in one room
-  # mint `classroom` and `classroom-2`, rendering "Teaching" and "Teaching 2".
+  # mint `teaching` and `teaching-2`, rendering "Teaching" and "Teaching 2".
   - key: lab-pod-a
     standard: classroom
     system_type: class
