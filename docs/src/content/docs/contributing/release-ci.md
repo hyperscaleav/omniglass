@@ -53,7 +53,7 @@ on GitHub-hosted runners and have a page of their own, [Agents in CI](/contribut
   tolerance is zero).
 
 Three more PR workflows: **`image.yml`** builds the multi-arch container image (see
-[Container image](/guides/container-image/)), **`preview-comment.yml`** reacts to the
+[Container image](/deployment/container-image/)), **`preview-comment.yml`** reacts to the
 `run:preview` label (see [PR previews](/guides/pr-previews/)), and **`demo.yml`**
 reacts to the `run:demo` label, recording the [demos](/contributing/demos/) the PR body tags
 (each on a runner of its own) to the PR's evidence ref, keeping one comment listing every demo and

@@ -195,7 +195,7 @@ tags pile up as you rebuild; `docker image prune` or `docker rmi` clears them. A
 was built with, `ghcr.io/hyperscaleav/omniglass@sha256:...`, pulled if absent: the release builds and
 pushes the image first and stamps its digest into the binary, so the binary never asks the registry
 what the `v<version>` tag points at, and a tag pushed again later cannot change what it runs
-([container image](/guides/container-image/#where-it-ships)). A release-versioned binary that carries
+([container image](/deployment/container-image/#where-it-ships)). A release-versioned binary that carries
 no digest (one built outside the release workflow) refuses to start a lab and says
 to name an image with `--image`, which runs it with the usual warning.
 
@@ -318,7 +318,7 @@ estimate is a model, not a promise: it was measured at small sizes, and
 [`omniglass lab measure`](#measuring-a-scale-lab) measures a running lab.
 
 **A scale lab's Postgres is sized for the host and the fleet**, the way a production one is
-([sizing PostgreSQL](/guides/deployment/#sizing-postgresql)): `shared_buffers` is a quarter of the
+([sizing PostgreSQL](/deployment/production/#sizing-postgresql)): `shared_buffers` is a quarter of the
 host's memory (8 GB at most), and never more than the fleet's estimate leaves of what the host can
 spare, so the buffers grow into spare memory and never refuse a fleet that fits. They never drop
 below Postgres's stock 128 MB, the size the estimate was measured with. A forced `--host-memory`

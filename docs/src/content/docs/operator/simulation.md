@@ -29,7 +29,7 @@ applied, so the seeded fleet is collected for real and the console is at `http:/
 
 **Beside an outpost of your own**, run the outpost with the simulator in its process:
 `omniglass outpost run --simulate` serves the components placed on that outpost on its own loopback, with
-the outpost's own identity ([run a simulator](/guides/install/#run-a-simulator)).
+the outpost's own identity ([run a simulator](/deployment/simulator/)).
 
 **As a process of its own**, the simulator is `omniglass sim run`, started beside an outpost with that
 outpost's identity:
@@ -42,7 +42,7 @@ It reads the same `OMNIGLASS_SERVER`, `OMNIGLASS_OUTPOST_NAME` and `OMNIGLASS_OU
 `outpost run`, and must share the outpost's loopback (the same host, or the same pod or container network
 namespace). It binds the profiles' real ports when it may (SNMP 161, HTTP 80, SSH 22), or lifts them
 with `--port-offset` when it may not; the endpoints must target the ports it serves. The privileges
-it can use, and how to grant them, are in the [install guide](/guides/install/#run-a-simulator).
+it can use, and how to grant them, are in the [deployment guide](/deployment/simulator/).
 
 The simulator follows the fleet as it changes: every ten seconds it pulls the components placed on
 its outpost, so a component added on the server starts answering, and a deleted one goes dark, with no

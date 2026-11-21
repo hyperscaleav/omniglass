@@ -259,8 +259,8 @@ and `walkthrough.json`, the manifest of the title, the captions and the still ea
 (with the budget mark and the preview's name added once the mp4 and the preview pass the budget).
 The preview's frame rate, width and quality are set at the top of
 [`web/e2e/walkthroughs.sh`](https://github.com/hyperscaleav/omniglass/blob/main/web/e2e/walkthroughs.sh).
-Recording details for both, including the image each recorder pins, are in the
-[install guide](/guides/install/#recording-a-demo).
+Recording details for both, including the image each recorder pins, are in
+[recording details](#recording-details).
 
 ## Show it on the PR
 
@@ -436,3 +436,61 @@ Three checks keep the embed true to its recording:
 Only a leaf directive alone on its line embeds (`::walkthrough{#id}`, attributes allowed); a
 directive quoted in code or inside an HTML comment, an inline `:walkthrough`, or a `:::` container
 is not counted as using the declaration.
+
+## Recording details
+
+Each recorder runs on a lab of its own. `make demo ID=<id>` records one demo of either kind
+(`ID="<a> <b>"` several, no `ID` every demo), each recorder on a lab of its own (it runs `make` first,
+since the lab is the binary and the image `make` builds); when a PR needs
+which, and how to write and review each, are in [demos](/contributing/demos/).
+
+**A terminal demo** is a [VHS](https://github.com/charmbracelet/vhs) tape, `scripts/demo/<id>.tape`.
+VHS runs from its own image, `ghcr.io/charmbracelet/vhs` at v0.12.1, pinned by digest in
+[`web/e2e/tape/Dockerfile`](https://github.com/hyperscaleav/omniglass/blob/main/web/e2e/tape/Dockerfile);
+the image bundles what VHS drives (ttyd for the terminal, chromium to render it, ffmpeg to encode the
+GIF and MP4) and the fonts the house settings name, and publishes a multi-platform index, so it runs
+on amd64 and arm64 hosts alike. The recorder adds `jq`, the prelude every tape sources, and this
+tree's `omniglass` binary, copied out of the lab's image, so a tape types the CLI the lab serves.
+Nothing is installed on the host. `make demo` writes `scripts/demo/out/<id>/`: the GIF, the MP4 and
+`demo.json`, the manifest a passing recording carries. A terminal demo is a test: a command it types
+that exits non-zero, a wait in it that runs out, or a recording over its budget (`MAX_GIF_BYTES` and
+`MAX_SECONDS` in
+[`web/e2e/tapelib.mjs`](https://github.com/hyperscaleav/omniglass/blob/main/web/e2e/tapelib.mjs))
+fails the run, naming the tape and the cause. `make test-demos` proves each of those failures.
+
+**A walkthrough** is a script, `web/e2e/walkthroughs/<id>.yaml` (the id is lowercase letters, digits and
+hyphens): a `title`, an optional `description`, and `steps`, each one kind of action or a wait for a
+visible result, with a `caption` shown while it runs. The step kinds, their fields and the rules are
+defined, with an annotated example, at the top of
+[`web/e2e/walkthroughlib.mjs`](https://github.com/hyperscaleav/omniglass/blob/main/web/e2e/walkthroughlib.mjs).
+The format is validated strictly: an unknown key or kind fails, naming the file and the step, and so does a
+script that ends on an action rather than a wait for its result. An optional `setup` makes, through the
+API and off camera, what the scene needs that the walkthrough does not teach (set-up-monitoring's
+display in Bay 2, which nothing collects from yet); one that already exists counts as made.
+
+```yaml
+title: Read a simulated component's status
+steps:
+  - goto: /simulation
+    caption: The Simulation page shows the simulated fleet, live.
+  - click: '[data-testid="sim-row"] >> nth=0'
+    caption: Open a simulated component.
+  - wait: { selector: '[data-testid="sim-status"]' }
+    caption: Its status says where it is served, and how often collection has reached it.
+    poster: true
+```
+
+The recording's ffmpeg image is pinned by digest to an amd64-only image (its tag publishes no
+multi-platform index), so recording on an arm64 host needs amd64 emulation registered with Docker.
+
+`make walkthroughs` records every script on a lab (`make walkthroughs ID=<id>` records
+one) into `web/e2e/walkthroughs/out/<id>/`: an mp4 opening on a title card, with a cursor that glides to
+each target and ripples where it clicks, a highlight on the target and a caption bar; `preview.webp`, an
+animated preview encoded from the mp4 by the same pinned ffmpeg (a lower frame rate and width, looping),
+which is what the PR comment and a docs page play inline; `poster.png`; and a still per step. A walkthrough
+is a test: a step whose result never appears fails the run, naming the step, its kind and what it waited
+for, and keeps the stills taken so far; so does a recording over the budget, whose limits on length, mp4
+size and preview size are `MAX_SECONDS`, `MAX_BYTES` and `MAX_PREVIEW_BYTES` in
+[`web/e2e/walkthroughlib.mjs`](https://github.com/hyperscaleav/omniglass/blob/main/web/e2e/walkthroughlib.mjs). `make test-walkthroughs` proves both failures, an over-budget preview among them.
+When a PR needs a walkthrough, how to review its stills, and how a docs page embeds one are in
+[demos](/contributing/demos/).

@@ -46,6 +46,11 @@ export default defineConfig({
   // Keep its old URL alive for external links and bookmarks.
   redirects: {
     '/guides/console/': '/operator/',
+    // The Deployment guides became the Deployment section (#2160).
+    '/guides/deployment/': '/deployment/',
+    '/guides/install/': '/deployment/install/',
+    '/guides/container-image/': '/deployment/container-image/',
+    '/guides/helm/': '/deployment/helm/',
     '/architecture/datapoints/': '/architecture/properties/',
     // The joint Types guide split into one page per catalog (#598); the old
     // URL lands on the location half, which inherited most of its content.
@@ -267,10 +272,6 @@ export default defineConfig({
               label: 'Deployment',
               collapsed: true,
               items: [
-                { label: 'Overview', slug: 'guides/deployment' },
-                { label: 'Install', slug: 'guides/install' },
-                { label: 'Container image', slug: 'guides/container-image' },
-                { label: 'Deploying with Helm', slug: 'guides/helm' },
                 { label: 'PR preview environments', slug: 'guides/pr-previews' },
               ],
             },

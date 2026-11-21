@@ -13,4 +13,4 @@ The two live and die together, and the first real failure is the one reported. `
 `omniglass sim run` stays for a simulator as a process of its own. The
 [simulation](/architecture/simulation/#in-the-nodes-own-process) and
 [nodes](/architecture/nodes/#serving-its-own-simulated-components) pages and the install guide's
-[run a simulator](/guides/install/#run-a-simulator) teach it.
+[run a simulator](/deployment/simulator/) teach it.
