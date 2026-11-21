@@ -106,7 +106,7 @@ func TestABootClearsAStaleReadyFileFirst(t *testing.T) {
 // The CLI guide's example ready file carries exactly the keys the server
 // writes, so the teaching copy cannot drift from the report.
 func TestTheCLIGuideShowsTheReadyFileAsWritten(t *testing.T) {
-	guide, err := os.ReadFile(filepath.Join("..", "..", "docs", "src", "content", "docs", "guides", "cli.md"))
+	guide, err := os.ReadFile(filepath.Join("..", "..", "docs", "src", "content", "docs", "developer", "cli.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
