@@ -116,7 +116,7 @@ the latest observed value either matches the intended one or does not. A command
 instance is judged on the endpoint that carries it (the one it went out over, or the one it is
 queued for), and one no endpoint can carry on every endpoint reporting its target, settling when any
 of them agrees
-([which observation](/architecture/commands/#settlement-the-verdict-is-computed-the-outcome-is-recorded)). The command row also
+([which observation](/architecture/commands/#settlement-the-settlement-is-computed-the-outcome-is-recorded)). The command row also
 records a terminal **status**, `issued` until it is stamped `settled`, `failed` (the device
 reported a different value, or its reply said no), or `timed-out` (the window expired with
 nothing observed), with `settled_at` as the terminal moment. A fire-and-forget command has no

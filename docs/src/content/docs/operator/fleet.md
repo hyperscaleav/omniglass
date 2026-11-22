@@ -443,7 +443,7 @@ The X on a bound row unbinds it after a confirm, and its next value waits under 
 again. The CLI does the same with `omniglass component identity-binding` (`list`, `update`, `delete`) and `omniglass component unbound-identity list`.
 
 The component's view refreshes on its own while it is open: its Collection, Vitals, and its alarms
-with the reachability they make every 5 seconds, the outpost behind Collection every 10, so an endpoint you
+with the health they make every 5 seconds, the outpost behind Collection every 10, so an endpoint you
 just added, or a component going down, shows up without a reload. It reads only this component and
 its outpost, never the whole fleet, and stops while the browser tab is hidden.
 
