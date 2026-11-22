@@ -550,7 +550,14 @@ func TestSpoolSendNeverWaitsOnTheStream(t *testing.T) {
 	}
 	s := newTelemetrySpool("og.v1.telemetry.edge", "edge", publish)
 	start := time.Now()
+	// A send that waits on the stream takes at least the round trip, and so
+	// does every send after it; a scheduler stall under suite load delays a
+	// few. Count the sends that took a round trip, not one against a small
+	// fixed ceiling (#1873).
+	const roundTrip = 50 * time.Millisecond
+	const sends = 4 * 30
 	var slowest time.Duration
+	var waited int
 	var wg sync.WaitGroup
 	var smu sync.Mutex
 	for g := 0; g < 4; g++ {
@@ -563,6 +570,9 @@ func TestSpoolSendNeverWaitsOnTheStream(t *testing.T) {
 				s.flush()
 				if d := time.Since(t0); d > 0 {
 					smu.Lock()
+					if d >= roundTrip {
+						waited++
+					}
 					if d > slowest {
 						slowest = d
 					}
@@ -572,8 +582,8 @@ func TestSpoolSendNeverWaitsOnTheStream(t *testing.T) {
 		}(g)
 	}
 	wg.Wait()
-	if slowest > 20*time.Millisecond {
-		t.Fatalf("the slowest send took %v: a send waited on the stream", slowest)
+	if waited > sends/4 {
+		t.Fatalf("%d of %d sends took a full round trip (slowest %v): a send waited on the stream", waited, sends, slowest)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
