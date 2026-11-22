@@ -6,7 +6,7 @@ summary: "What a person hands omnibot from the console is references and the pag
 refs: [2122, 523, 2121, 2026, 1167]
 ---
 
-- **Date:** 2026-11-18 | **Status:** Accepted; superseded in part by [ADR-2162](#adr-2162-omnibot-is-handed-the-page-not-what-the-person-gathers) | **Pages:** [UI](/architecture/ui/#handing-the-console-to-omnibot), [AI](/architecture/ai/), [connect an agent](/guides/agents/#omnibot-in-the-console)
+- **Date:** 2026-11-18 | **Status:** Accepted; superseded in part by [ADR-2162](#adr-2162-omnibot-is-handed-the-page-not-what-the-person-gathers) | **Pages:** [UI](/architecture/ui/#handing-the-console-to-omnibot), [AI](/architecture/ai/), [connect an agent](/developer/agents/#omnibot-in-the-console)
 - **Decision:** (#2122, on the server run of [ADR-2121](/architecture/decisions/#adr-2121-the-server-runs-omnibot-as-the-person-streaming-ag-ui).)
   1. **Context is references, not renders.** A subject is a kind and a name, dotted address or rule
      (`alarm` is `component/rule`, else `component@raised_at`), or the page as its route and

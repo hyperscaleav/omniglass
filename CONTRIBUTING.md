@@ -31,7 +31,7 @@ operational checklist.
   exports this machine's binary to `bin/omniglass` from one Dockerfile, so neither Go nor Node is
   required to build or run omniglass. `make` builds and runs nothing else; running goes through the
   CLI (`./bin/omniglass lab run`, or `make lab`). See
-  [the lab guide](docs/src/content/docs/guides/lab.mdx).
+  [the lab guide](docs/src/content/docs/developer/lab.mdx).
 - **Go and Node** are needed for `make test` (the Go tiers and the SPA's typecheck and vitest
   suite), `make gen`, and the console's fast loop below. `make dev` builds the `make` outputs and
   runs `npm install` in `web/`, so the loop is ready; it starts nothing.

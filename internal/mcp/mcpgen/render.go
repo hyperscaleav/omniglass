@@ -80,7 +80,7 @@ Every tool the omniglass MCP server serves, generated from the [API](/reference/
 ` + "`make gen`" + ` that generates the CLI. A tool is an API operation stamped for MCP in the server's Go
 source: calling it runs that route with the caller's token, so its gate, its scope and its audit row
 are the route's own, and the row records that it came over MCP. To connect an agent, see
-[connect an agent](/guides/agents/).
+[connect an agent](/developer/agents/).
 
 Each tool says what a client may assume of it, from one rule over the route's method and gate:
 
@@ -92,7 +92,7 @@ Each tool says what a client may assume of it, from one rule over the route's me
 
 A tool that is not read-only and not destructive adds something (a create).
 
-Each tool also has an **agent class**, the one the install's [agent policy](/guides/agents/#what-an-agent-may-do)
+Each tool also has an **agent class**, the one the install's [agent policy](/developer/agents/#what-an-agent-may-do)
 sets to always, ask or never: **read** (read-only), **destructive**, **credential_destination** (it may bind a
 stored credential to a destination, the most sensitive class, whatever else it does) or **write** (the rest). On
 ` + "`tools/list`, each tool's `_meta` carries `omniglass/agent_policy`" + `, its class and the policy the install resolves

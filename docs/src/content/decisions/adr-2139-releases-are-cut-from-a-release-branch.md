@@ -6,7 +6,7 @@ summary: "A release is cut from a release/<major>.<minor> branch made from main,
 refs: [2139, 1940, 1988, 1257, 64]
 ---
 
-- **Date:** 2026-11-18 | **Status:** Accepted | **Pages:** [release and CI](/contributing/release-ci/#cutting-a-release-manual), [a soak run](/guides/lab/#a-soak-run)
+- **Date:** 2026-11-18 | **Status:** Accepted | **Pages:** [release and CI](/contributing/release-ci/#cutting-a-release-manual), [a soak run](/developer/lab/#a-soak-run)
 - **Decision:** (#2139, decided by the architect for 0.1.0.)
   1. **A release branch, not a frozen main.** On the cut, `release/<major>.<minor>` is made from
      `main`, and `main` stays open. The release workflow runs only on such a branch.

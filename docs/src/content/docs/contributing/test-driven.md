@@ -71,7 +71,7 @@ unproven proves nothing about the capability.
   port rule: every end-to-end test in `internal/e2e` starts `omniglass server` through one
   helper, `startServer`, which asks for port 0 on both the API and the embedded bus and reads
   the addresses the server bound back from its ready file
-  ([a server on ports it picks](/guides/cli/#a-server-on-ports-it-picks)). Nothing picks a
+  ([a server on ports it picks](/developer/cli/#a-server-on-ports-it-picks)). Nothing picks a
   free port, releases it and hands the number to a later bind, which a concurrent run on the
   host could take in between; a guard test in the package fails any test there that starts
   the server another way or sets its listen addresses. The browser tier, the docs
@@ -308,10 +308,10 @@ run. `make lab-footprint` does
 ([ADR-1277](/architecture/decisions/#adr-1277-the-lab-footprint-measures-a-running-lab-per-container-and-gates-nothing)).
 It builds the image, brings up a throwaway lab of its own project, the `corporate` scenario at
 20 systems (`-scenario` and `-systems` change it), at a
-[cadence profile](/guides/lab/#what-runs-with-which-privilege), warms it up, and measures N
+[cadence profile](/developer/lab/#what-runs-with-which-privilege), warms it up, and measures N
 back-to-back windows. Every lab level that measures runs the corporate scenario at a stated size, so
 a figure from here compares with the same size on the
-[scale ladder](/guides/lab/#which-fleet-each-level-measures); the dev lab is the showcase,
+[scale ladder](/developer/lab/#which-fleet-each-level-measures); the dev lab is the showcase,
 never a lab measurement's basis, and the report names the scenario and size it read from the lab's
 labels ([ADR-1719](/architecture/decisions/#adr-1719-every-measuring-lab-runs-the-corporate-fleet-at-a-stated-size)).
 
@@ -339,7 +339,7 @@ make lab-footprint LAB_FOOTPRINT_ARGS="-cadence default -windows 7 -json out.jso
 ```
 
 `-cadence` takes any of the lab guide's
-[cadence profiles](/guides/lab/#what-runs-with-which-privilege); `-json` writes the report for a
+[cadence profiles](/developer/lab/#what-runs-with-which-privilege); `-json` writes the report for a
 generator to render.
 
 A scale lab's figures are diagnostic, but one thing it reads is not a cost and is held: whether
@@ -347,7 +347,7 @@ every request an outpost sent reached its simulated endpoint and was answered. `
 reconciles each outpost's tally against what its simulators observed and what landed, hop by hop
 (`connect-not-accepted`, `sent-not-received`, `received-not-settled`, `answered-not-returned`,
 `published-not-landed`, `spool-dropped`, `unhit-endpoint`), each a lower bound with its masking
-term beside it ([how to read them](/guides/lab/#every-request-reached-its-endpoint-and-was-answered)).
+term beside it ([how to read them](/developer/lab/#every-request-reached-its-endpoint-and-was-answered)).
 The arithmetic is pure and unit-tested gap by gap; `make test-lab` brings up a 20-system corporate
 scale lab, measures it with `lab measure`'s own path at that size, and fails on any loss, any face that saw two requests at once, any polled protocol that
 drew no request, or a restart inside the window. It needs the image `make` builds, so it is outside
@@ -420,7 +420,7 @@ that size's committed baseline:
   not fail. The loss figures (closed-loop gaps, delivery loss, redeliveries) are exact and must be 0.
 
 How to run and read it is in the lab guide's
-[Checking against the baseline](/guides/lab/#checking-against-the-baseline).
+[Checking against the baseline](/developer/lab/#checking-against-the-baseline).
 
 Three rules make a benchmark here mean anything:
 

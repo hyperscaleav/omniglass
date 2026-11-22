@@ -9,4 +9,4 @@ never a migration or boot-seed row) and starts its server in lab mode, a hidden 
 `omniglass lab run` passes. A server outside lab mode refuses a marked database, and a lab refuses a
 database that holds data and no mark, each saying why and what to do. `GET /auth/status` reports
 `lab`, and the console shows a **Lab instance** banner on the sign-in page and in the shell. The
-[lab guide's safety rails](/guides/lab/#safety-rails) teach it.
+[lab guide's safety rails](/developer/lab/#safety-rails) teach it.

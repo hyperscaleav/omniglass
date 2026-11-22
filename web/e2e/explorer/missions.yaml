@@ -52,7 +52,7 @@ missions:
     goal: Using only the CLI and the API, list the fleet's failing systems as JSON and raise then clear an alarm on one device.
     scenario: degraded
     lenses: [ai-friendliness, performance]
-    surfaces: [internal/cli, internal/api, docs/src/content/docs/guides/cli.md, docs/src/content/docs/reference]
+    surfaces: [internal/cli, internal/api, docs/src/content/docs/developer/cli.md, docs/src/content/docs/reference]
     done: The failing systems came out as parseable JSON and the alarm was raised and cleared without reading source code.
 
   - id: set-up-monitoring

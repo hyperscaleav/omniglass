@@ -12,7 +12,7 @@ A production deployment is the same binary and [chart](/deployment/helm/) as a p
 values changed: a database you own, no auto-created owner, and a key you keep. The server runs as one
 replica, the supported shape; [scaling and deployment](/architecture/scaling/) holds the deferred
 fork for more. Once it is up, mint the first owner with `omniglass bootstrap`
-([the CLI guide](/guides/cli/#authentication)), then move to the [Admin](/admin/) section.
+([the CLI guide](/developer/cli/#authentication)), then move to the [Admin](/admin/) section.
 
 ## The three values
 
@@ -77,7 +77,7 @@ would see:
 Leave `synchronous_commit` on. Turning it off trades durability for throughput: a crash loses the
 last transactions the server already acknowledged, and an acknowledged sample that disappears is the
 loss the platform exists to measure. `track_commit_timestamp=on` is needed only by
-[`omniglass lab measure`](/guides/lab/#measuring-a-scale-lab), which reads ingest lag from commit
+[`omniglass lab measure`](/developer/lab/#measuring-a-scale-lab), which reads ingest lag from commit
 times.
 
 In a container, `shared_buffers` is not held in `/dev/shm`: Postgres maps it as anonymous memory, so

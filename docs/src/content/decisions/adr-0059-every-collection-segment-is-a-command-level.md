@@ -5,7 +5,7 @@ status: "Accepted"
 summary: "Every collection segment is a command level"
 ---
 
-- **Date:** 2026-07-22 | **Status:** Accepted | **Pages:** [api-first](/contributing/api-first/), [CLI guide](/guides/cli/)
+- **Date:** 2026-07-22 | **Status:** Accepted | **Pages:** [api-first](/contributing/api-first/), [CLI guide](/developer/cli/)
 - **Decision:** the CLI command path is derived from the **whole route**: every collection segment
   contributes a level and the verb is last, so a subresource is always addressed under the resource
   that owns it. `/components/{name}/properties` is `component property list`;

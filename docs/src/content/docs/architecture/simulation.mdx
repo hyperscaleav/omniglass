@@ -31,7 +31,7 @@ simulated device through the API and CLI, applied by a simulator run with `--imp
 `NET_ADMIN`, with ping made truthful. Also built: the console surfaces (#890): the fleet view, a
 device's API surface and firing any operation at it, adding a device, and the Simulation page,
 drawer and component section over them. Also built: the simulator in the outpost's own process,
-`omniglass outpost run --simulate` (#1198), and the [lab](/guides/lab/) (#1194), which runs that outpost
+`omniglass outpost run --simulate` (#1198), and the [lab](/developer/lab/) (#1194), which runs that outpost
 in a container of its own with every privilege the simulator can use. Also built: every
 collection method healthy in the lab (#1370): each seeded driver and each registry transport runs on
 a dev-fleet component that is no planted fault, the simulator subscribes a simulated service to its
@@ -129,7 +129,7 @@ both are built from the platform's standards:
 - a **scale lab scenario**: a manifest (`internal/lab/scenario/manifests`) that names standards from the
   template catalog, the system type each is classified under, the shipped catalog product filling each
   of a standard's slots, and how many sites of which shape hold how many systems of each. It resolves
-  at a size to a plan, and the [lab](/guides/lab/#scale-lab-scenarios) seeds the plan. A product the
+  at a size to a plan, and the [lab](/developer/lab/#scale-lab-scenarios) seeds the plan. A product the
   simulator does not serve is refused, so a scenario cannot invent a device.
 
 Neither has a vocabulary of its own: a slot is a standard's slot, a system type a registered one, a
@@ -158,7 +158,7 @@ pushed to) is a separate stream. The engine does not know who consumes either; t
 A device's address is a loopback address (`127.x.y.z`), so the whole fleet shares one host's
 network with the collector beside it, with no routing between them: on Linux, no containers are
 required either (macOS needs an alias per address, and impairments need a namespace of their own,
-which is why the [lab](/guides/lab/#why-docker-is-required) runs in Docker). On Linux every
+which is why the [lab](/developer/lab/#why-docker-is-required) runs in Docker). On Linux every
 `127.0.0.0/8` address is local without configuration, and the kernel routes each connection by its
 destination, so a device's TCP and UDP listeners answer on its address alone: a TCP connect to an
 address with no device is refused, and a UDP datagram draws a port-unreachable.
@@ -365,7 +365,7 @@ over the outpost's devices, with a count of devices that saw nothing on a protoc
 their ids (capped at twenty), and the overlapping faces likewise capped, so it stays the same size
 at any fleet. It needs `simulation:read` and an all-scope component read, since the totals span
 every component the outpost simulates. A scale lab reconciles it hop by hop
-([measuring a scale lab](/guides/lab/#measuring-a-scale-lab)), and a running server does the same
+([measuring a scale lab](/developer/lab/#measuring-a-scale-lab)), and a running server does the same
 continuously: `internal/closedloop` holds the reconcile, and its ring brackets each outpost with a
 connected simulator once a minute (faster on a lab) and reads the last ten brackets as a sliding
 window, shown on [Platform health](/operator/platform-health/#with-a-simulator). The counters
@@ -455,9 +455,9 @@ The lab proves it live: `make test-lab` waits out the warm-up and requires each 
 value its driver emits landed from it, and a system holding the booking service's push.
 
 Beyond the methods, `make test-lab` holds every component to its built-in and collected tiers and every system
-to a value of its own, bar the gaps `devseed.TierGaps` lists ([the lab guide](/guides/lab/#checking-that-the-lab-is-whole)).
+to a value of its own, bar the gaps `devseed.TierGaps` lists ([the lab guide](/developer/lab/#checking-that-the-lab-is-whole)).
 
-The [lab](/guides/lab/) runs the dev fleet with the outpost `edge-hq` serving it in process, so the
+The [lab](/developer/lab/) runs the dev fleet with the outpost `edge-hq` serving it in process, so the
 whole loop is one command: the outpost polls the simulated components, the samples land on the seeded
 components (the worked reachability check's boardroom DSP among them, re-aimed at a simulated DSP so a
 live outpost finds it up, and given that DSP's driver so it reports its mute and level like any other), and a command issued to a panel (`omniglass component command issue <panel>
@@ -588,7 +588,7 @@ The platform also reports on its own: a `rooms_report` behavior posts the same b
 subscription, the identity values bound on the component, and the simulator adds each one it has
 not added yet through the provision route, so a room bound later is added on the next pull and a
 restarted device has every room added again. That is how a scale scenario's meeting platform comes
-to speak for every system of its site ([the lab guide](/guides/lab/#scale-lab-scenarios)); it keeps
+to speak for every system of its site ([the lab guide](/developer/lab/#scale-lab-scenarios)); it keeps
 the profile's five demo rooms beside them, which land in its unbound inbox until #1756 retires them.
 It is the lab's one UCC shape: the per-room `ucc-service` it replaced is retired (#1390).
 
@@ -613,7 +613,7 @@ A pusher is declared, not built in. The dev fleet's fixtures declare theirs unde
 (a name, a profile, the systems it reports for); a scale scenario declares its own under
 `pushers` (a name, a profile, how many per site and how many of the site's systems each reports
 for), and the shipped `corporate` scenario declares one booking service per site over four
-systems ([the lab guide](/guides/lab/#the-manifest-format)). Either way the lab takes the
+systems ([the lab guide](/developer/lab/#the-manifest-format)). Either way the lab takes the
 same path: the seed grants each pusher's machine user `telemetry:push` on its systems, the
 lab mints its token on every run and sets it on the user, and the simulator beside the
 pusher's outpost runs it as an emulator device holding that token. The token reaches the simulator's

@@ -6,7 +6,7 @@ summary: "A node's polls and probes leave the heartbeat tick for a dispatcher wi
 refs: [1634, 1624, 1637, 822, 1273, 1249, 1625, 1649]
 ---
 
-- **Date:** 2026-11-09 | **Status:** Accepted | **Pages:** [nodes](/architecture/nodes/#scheduling-concurrency-and-self-observability), [collection](/architecture/collection/), [lab](/guides/lab/)
+- **Date:** 2026-11-09 | **Status:** Accepted | **Pages:** [nodes](/architecture/nodes/#scheduling-concurrency-and-self-observability), [collection](/architecture/collection/), [lab](/developer/lab/)
 - **Decision:** (#1634, under the node concurrency model of ADR-1637, #1658.)
   1. **A dispatcher with a timer of its own.** Every poll and probe task sits once in a due-time
      heap. The dispatcher sleeps until the earliest due (or a worklist change wakes it), hands each

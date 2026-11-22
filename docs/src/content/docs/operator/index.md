@@ -20,7 +20,7 @@ section's job, and standing the platform up is [Deployment](/deployment/).
 - **The console**, served by the binary at `/web`, is the point-and-click surface these pages walk
   through.
 - **The CLI** is the `omniglass` binary acting as a client of a running server, for the terminal and
-  for scripts. The [CLI guide](/guides/cli/) covers signing it in; every command is in the
+  for scripts. The [CLI guide](/developer/cli/) covers signing it in; every command is in the
   [CLI reference](/reference/cli/).
 
 Both call the same API, so both pass the same permission and scope checks, and anything you can do in
@@ -57,7 +57,7 @@ one you can do in the other.
   Locations: Types**. A catalog whose backend has not landed is dimmed with a **soon** tag. The
   subrail's first entry, **Overview**, has a card per group with live counts.
 - **The top bar** names the section you are in and carries **Search (⌘K)** and, if you may use the
-  assistant, **Ask omnibot**, which opens [omnibot](/guides/agents/#omnibot-in-the-console) with the
+  assistant, **Ask omnibot**, which opens [omnibot](/developer/agents/#omnibot-in-the-console) with the
   page you are on as its context. The console is dark-only; its theme is an
   [Admin > Settings](/admin/settings/) value, not a per-session toggle.
 - **⌘K** (or Ctrl-K) is the command palette, a jump to any destination by name: arrow keys move,

@@ -48,7 +48,7 @@ exact build. A release binary's `omniglass lab run` does not pull `v<version>` b
 its tag: the release workflow builds and pushes the image before it builds the
 binaries, and stamps the image's digest into each one, so the lab pulls
 `ghcr.io/hyperscaleav/omniglass@sha256:...`, exactly the image its release was
-built with, whatever the tag points at later ([the lab](/guides/lab/#flags)).
+built with, whatever the tag points at later ([the lab](/developer/lab/#flags)).
 
 Every image carries the build it came from in the OCI label
 `org.opencontainers.image.version`: the release version, or the build id `make`
@@ -80,7 +80,7 @@ exist without appearing here:
 <ConfigVars scope="server" />
 
 A listen address may name port 0, and the server then reports the port it got through its
-ready file ([a server on ports it picks](/guides/cli/#a-server-on-ports-it-picks)).
+ready file ([a server on ports it picks](/developer/cli/#a-server-on-ports-it-picks)).
 
 The outpost process reads its own small set (the CLI-scope variables surface through the
 [CLI reference](/reference/cli/) instead):
@@ -142,5 +142,5 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 ## Where this fits
 
 This image is the unit [the Helm chart](/deployment/helm/) deploys, and the per-PR
-[preview environments](/guides/pr-previews/) run it. See
+[preview environments](/developer/pr-previews/) run it. See
 [scaling and deployment](/architecture/scaling/) for the deployment shape.

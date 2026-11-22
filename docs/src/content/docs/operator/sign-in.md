@@ -28,7 +28,7 @@ machine user, or an operator who works from the CLI) and the console authenticat
 `Authorization` header rather than a password. Either path lands you in the same console.
 
 The first owner is created on the server with
-`omniglass bootstrap <username> --password <password>` (see [the CLI guide](/guides/cli/)).
+`omniglass bootstrap <username> --password <password>` (see [the CLI guide](/developer/cli/)).
 
 ## Your profile
 
@@ -67,7 +67,7 @@ From the CLI the same actions are `omniglass auth update-profile`, `omniglass au
 `omniglass auth set-avatar` / `omniglass auth remove-avatar` for the picture,
 `omniglass session list` / `session revoke <session-id>` / `session revoke-all` for your sessions, and
 `omniglass auth create-token --description <what-for>` to mint one for yourself (see
-[the CLI guide](/guides/cli/)).
+[the CLI guide](/developer/cli/)).
 
 ## After an administrator resets your password
 

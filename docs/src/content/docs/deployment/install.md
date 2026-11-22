@@ -60,7 +60,7 @@ The binary is the server, the collection outpost, and the CLI in one. To stand u
 console you need Postgres and the same environment the image uses; see
 [Container image](/deployment/container-image/#running-it) for the `OMNIGLASS_DSN` and
 `migrate`/`server`/`bootstrap`/`token` flow, which is identical for the binary. To drive a
-running server from the command line, see [the CLI](/guides/cli/).
+running server from the command line, see [the CLI](/developer/cli/).
 
 To try it first, with nothing to set up but Docker, run `omniglass lab run`: it brings up a working
 omniglass, its own Postgres and an edge outpost collecting from a simulated fleet, prints the console's

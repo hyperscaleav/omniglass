@@ -90,11 +90,11 @@ promise: if a label runs automation it is named `run:<task>`, and if a label is 
 
 | Label | Applying it | Wired |
 | --- | --- | --- |
-| `run:preview` | spins up a live [PR preview environment](/guides/pr-previews/); removing it tears the preview down | yes |
+| `run:preview` | spins up a live [PR preview environment](/developer/pr-previews/); removing it tears the preview down | yes |
 | `run:demo` | records the [demos](/contributing/demos/) the PR body tags (`demo: <id>`) in CI, upserts one comment listing every demo, and writes each demo's clip into the PR body's Demo section | yes |
 | `run:dev-gha` | on an issue, has a Claude Code agent in GitHub Actions build the ticket into a PR ([agents in CI](/contributing/agents-in-ci/)); only a maintainer's label counts, and the label comes off as the build starts | yes |
 
-`run:preview` is live today (the [PR previews guide](/guides/pr-previews/) covers it, and
+`run:preview` is live today (the [PR previews guide](/developer/pr-previews/) covers it, and
 `preview-comment.yml` is the workflow behind it). So is `run:demo` (`demo.yml`). Applying it
 records the demos the PR is about, each on a runner and a lab of its own, in
 parallel: exactly the demos its body tags in its Demo section (`demo: <id>`, a tape or a

@@ -6,7 +6,7 @@ summary: "omniglass lab run (make lab, the short form) brings up a working omnig
 refs: [1193, 1194, 1195, 1196, 1197, 1198]
 ---
 
-- **Date:** 2026-10-27 | **Status:** Accepted | **Pages:** [try omniglass in five minutes](/guides/lab/), [simulation](/architecture/simulation/), [nodes](/architecture/nodes/), [scaling and deployment](/architecture/scaling/), [install](/deployment/install/), [the CLI](/guides/cli/), [container image](/deployment/container-image/), [design system](/contributing/design-system/)
+- **Date:** 2026-10-27 | **Status:** Accepted | **Pages:** [try omniglass in five minutes](/developer/lab/), [simulation](/architecture/simulation/), [nodes](/architecture/nodes/), [scaling and deployment](/architecture/scaling/), [install](/deployment/install/), [the CLI](/developer/cli/), [container image](/deployment/container-image/), [design system](/contributing/design-system/)
 - **Decision:** (Epic #1193; slices #1198, #1194, #1195, #1196.) The architect's rulings of 2026-10-26, and the eight open decisions taken as recommended:
   - **Docker is required.** There is no native mode: a lab is worth running only if collection behaves as against real gear (an address per component, the profiles' real ports, truthful ping, impairments), and each of those leans on Linux networking that a bare binary on macOS or Windows does not get. Docker runs every container on a Linux kernel on all three platforms. Embedded Postgres (#19) moves back to #57.
   - **Three containers, `db`, `server` and `node`,** on one private bridge, two named volumes (the database, and the server's data directory with the lab's own encryption key), and only the console published.

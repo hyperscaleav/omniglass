@@ -17,4 +17,4 @@ version label is its own build id; a release binary runs `ghcr.io/hyperscaleav/o
 which `image.yml` now publishes on a release tag, and its boot smoke is a lab smoke. The guide's
 topology and walkthrough list render from the planner and the walkthrough manifests
 (`docs/src/generated/lab.json`, via `cmd/labgen`). `make test-lab` is the integration test against a
-real daemon. The guide is [try omniglass in five minutes](/guides/lab/).
+real daemon. The guide is [try omniglass in five minutes](/developer/lab/).

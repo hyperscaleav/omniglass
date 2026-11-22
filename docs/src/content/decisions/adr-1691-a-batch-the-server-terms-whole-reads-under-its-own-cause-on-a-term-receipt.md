@@ -6,7 +6,7 @@ summary: "Accepted: a batch the consumer Terms whole records a Term receipt, its
 refs: [1691, 1641, 1639, 1659]
 ---
 
-- **Date:** 2026-11-10 | **Status:** Accepted | **Pages:** [messaging](/architecture/messaging/), [storage](/architecture/storage/), [lab](/guides/lab/)
+- **Date:** 2026-11-10 | **Status:** Accepted | **Pages:** [messaging](/architecture/messaging/), [storage](/architecture/storage/), [lab](/developer/lab/)
 - **Decision:**
   1. **One outcome per Term path, each loss.** An owner asserted on the node lane reads
      `refused-owner`, task rows outside the groups `refused-task`, a batch the gateway refused whole

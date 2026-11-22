@@ -6,7 +6,7 @@ summary: "An agent token is a credential minted by a person, named for its agent
 refs: [1179, 1162, 1175, 1166]
 ---
 
-- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/#agent-tokens), [audit](/architecture/audit/), [agents](/guides/agents/)
+- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/#agent-tokens), [audit](/architecture/audit/), [agents](/developer/agents/)
 - **Decision:** (#1179.) An agent token is a `credential` row on the minting person, marked with an
   agent name, its own roles and a channel allowlist, minted through `POST /auth/me/tokens`; it is not
   a principal (the `agent` kind stays reserved, ADR-0001). `ttl_days` is required for it.

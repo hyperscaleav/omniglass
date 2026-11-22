@@ -87,7 +87,7 @@ token), so there is no second enrollment and no grant beyond the outpost's own s
 ([ADR-0142](/architecture/decisions/#adr-0142-the-simulator-is-a-run-mode-beside-its-node-holding-that-nodes-identity)).
 `--impairments`, `--port-offset` and `--poll` belong to the simulator and are refused without
 `--simulate`; `--impairments` needs `NET_ADMIN`, so it belongs in a container of the outpost's own. The
-[lab](/guides/lab/) runs its outpost `edge-hq` this way.
+[lab](/developer/lab/) runs its outpost `edge-hq` this way.
 
 ## Getting its instructions
 
@@ -137,7 +137,7 @@ neither was built, and `:apply` retired with the template authoring model
 The pull runs on its own goroutine and interval, apart from the heartbeat: `outpost run
 --worklist-every` (default 30 s, each wait jittered within 10% so a fleet started together drifts
 apart), so a short heartbeat is not a worklist rebuild as often. The lab pulls every 5 s and a
-walkthrough every 2 s ([the lab's cadences](/guides/lab/)).
+walkthrough every 2 s ([the lab's cadences](/developer/lab/)).
 
 - **A missed pull is retried, never fatal.** The first pull and every later one retry with
   jittered exponential backoff (each wait in the upper half of a step that doubles from 1 s to a
@@ -158,7 +158,7 @@ walkthrough every 2 s ([the lab's cadences](/guides/lab/)).
   one reads 1 too (#1882). The seeded `worklist-stale` rule opens a warning after two minutes at 1,
   [Platform health](/operator/platform-health/#the-outpost-table) shows it as the outpost's
   Worklist column, and `omniglass lab measure` fails its `worklist_loss` gate on any outpost above 0
-  ([the lab guide](/guides/lab/#measuring-a-scale-lab)).
+  ([the lab guide](/developer/lab/#measuring-a-scale-lab)).
 - **The server fails a pull whole, and says why.** A worklist the server cannot read in full (a
   transient storage error), or that is still over the bus's `max_payload` compressed, is answered
   with an `Omniglass-Error` header naming the reason and no body. The outpost treats it as a failed
@@ -200,7 +200,7 @@ walkthrough every 2 s ([the lab's cadences](/guides/lab/)).
   server logs the cumulative figures every 30 s at INFO (`msg="ingest lane"`, only when a batch
   landed since the last line). The stream is a work queue with one message in flight, so busy time
   over wall time is the lane's utilisation; `omniglass lab measure` reads it
-  ([the lab guide](/guides/lab/#measuring-a-scale-lab)). The server has no metrics endpoint.
+  ([the lab guide](/developer/lab/#measuring-a-scale-lab)). The server has no metrics endpoint.
 
 Why it is shaped this way, and what it defers (paging, set-based reads, the materialized
 worklist): [ADR-1577](/architecture/decisions/#adr-1577-a-nodes-worklist-is-compressed-served-by-a-bounded-responder-and-retried-without-exiting).
@@ -828,11 +828,11 @@ workers`, with the limits it read and where it read each), and reports it as `la
 read side by side. A cgroup v1 memory limit is not read: on v1 the outpost sizes from the host's
 `MemTotal` (ADR-1869).
 
-The [lab](/guides/lab/) runs every outpost it starts as a container capped at one CPU (#1892), an
+The [lab](/developer/lab/) runs every outpost it starts as a container capped at one CPU (#1892), an
 edge box's share, so on a cgroup v2 host (Docker's default) auto sizes each outpost's pool to the same
 23 lanes on a laptop and on a large host, and a scale run's parallelism is one known figure rather
 than the host's. (On cgroup v1 the outpost falls back to `GOMAXPROCS`, which Go holds to at least 2, so
-it takes 46.) Its memory cap is twice what the [cost model](/guides/lab/#how-big-a-lab-your-machine-can-run)
+it takes 46.) Its memory cap is twice what the [cost model](/developer/lab/#how-big-a-lab-your-machine-can-run)
 says an outpost of its site's size holds, never under 512 MiB, with the Go runtime's soft limit
 (`GOMEMLIMIT`) a tenth under it, since the runtime reads the cgroup's CPU limit but not its memory
 limit and would otherwise let the heap grow until the kernel kills it.

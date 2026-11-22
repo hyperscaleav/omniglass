@@ -54,7 +54,7 @@ over NATS and the gateway. The roles:
 ## Embedded services (single-binary mode)
 
 Until embedded Postgres lands, the one-command way to run omniglass on a laptop is the
-[lab](/guides/lab/): Docker runs Postgres, the server and an outpost with its simulated fleet as three
+[lab](/developer/lab/): Docker runs Postgres, the server and an outpost with its simulated fleet as three
 containers of one project. It is a place to learn, not the all-in-one deployment this section
 describes: its data is disposable, its login is well known, and its database refuses a real server.
 
@@ -200,12 +200,12 @@ The right-hand column is the target this slice is held to, not a measurement. `o
 prints the measured figures (batches landed, samples per batch, batches a second, receipts a day, WAL
 bytes a sample, the ingest lag at p50, p95 and p99, consumer redeliveries, and the ingest consumer
 lane's busy fraction and service time a batch) for a scale lab
-([the lab guide](/guides/lab/#measuring-a-scale-lab)); the measured run replaces this column's targets
+([the lab guide](/developer/lab/#measuring-a-scale-lab)); the measured run replaces this column's targets
 when the slice's pull request records it. A figure here is always quoted with the scenario and size it
 was read at, and compares only with the same scenario at the same size: every lab level that measures runs
 the `corporate` scenario on the ladder of 20 (the smoke run), 300, 1,000 and 3,000 systems, and the dev
 fleet is the showcase, never a measurement basis
-([which fleet each level measures](/guides/lab/#which-fleet-each-level-measures), #1719). The lane's busy fraction is the figure that says whether the
+([which fleet each level measures](/developer/lab/#which-fleet-each-level-measures), #1719). The lane's busy fraction is the figure that says whether the
 single consumer is the ceiling: the stream is a work queue with one message in flight, so the handler's
 share of the wall clock is the lane's utilisation, and a lag that sits at the outpost's one-second spool
 flush while the lane is mostly idle is not a consumer bottleneck
@@ -216,7 +216,7 @@ kind's **loss ratio** across the outpost hop and the ingest hop, `(in - out) / i
 batch carries on its receipt
 ([messaging](/architecture/messaging/#accounting-every-item-the-loss-ratio), #1641). It is the one
 delivery measurement for every kind and hop: a change that gets faster by dropping data reads a loss
-above 0 instead of a win, and the [perf gate](/guides/lab/#checking-against-the-baseline) fails such a
+above 0 instead of a win, and the [perf gate](/developer/lab/#checking-against-the-baseline) fails such a
 run, naming the kind, the hop and the cause, with no tolerance (#1640, #1695). The accounting rides on the receipt
 rather than on new rows, and its cost shows in the receipts' own figure. The receipt stores its ledger
 as a (count, before) pair per kind slot and its outcome as (code, n) pairs, integer arrays under slots
@@ -273,7 +273,7 @@ data at least half a minute old.
 An outpost's size is the sum of what its tasks cost it, and that cost differs by driver: a poll that parses
 a large JSON answer, one that walks an SNMP table, and one that asks a held session a short question do
 different work. Each shipped driver's cost per task on one outpost is measured by the lab's
-[driver cost sweep](/guides/lab/#measuring-each-drivers-cost) on an outpost with no simulator in its
+[driver cost sweep](/developer/lab/#measuring-each-drivers-cost) on an outpost with no simulator in its
 process, and rendered from the sweep's committed result by `make gen`. The first table rolls the drivers
 up by the unit an outpost is sized in, a **kind** of work (the transport a driver speaks) at a poll
 **interval**; the second is each driver on its own.
