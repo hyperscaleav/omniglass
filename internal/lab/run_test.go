@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -233,7 +234,7 @@ func testAlive(pid int, start string) bool {
 	return ok && (start == "" || start == got)
 }
 
-func testRunner(eng Engine, out *bytes.Buffer) *Runner {
+func testRunner(eng Engine, out io.Writer) *Runner {
 	return &Runner{
 		Engine: eng, Out: out, Host: "box",
 		Alive:    testAlive,
