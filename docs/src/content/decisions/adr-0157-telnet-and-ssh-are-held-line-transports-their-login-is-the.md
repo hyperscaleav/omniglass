@@ -5,7 +5,7 @@ status: "Accepted"
 summary: "`telnet` (#1033) and `ssh` (#1032) are held line transports: the same session machine and line reader, telnet behind a filter refusing every option, ssh over a shell or exec channel. Their session's login is the driver's (`session.login`, `session.credential`), not endpoint params; the telnet probe never logs in, and the ssh probe's params login is a known gap (#1060). The ssh host key is pinned on first use as the `ssh-host-key` property (observed), delivered back by the worklist, overridden by a declared value an operator sets with `:retry` and `host_key`; a changed key is a `host-key` refusal"
 ---
 
-- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [glossary](/architecture/glossary/), [drivers](/guides/admin/drivers/)
+- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [glossary](/architecture/glossary/), [drivers](/admin/drivers/)
 - **Decision:** (#1033, #1032, under the ruling ADR-0155 and ADR-0156 record.)
   1. **Held line transports.** `telnet` and `ssh` join `tcp` as transports the line protocol rides
      over a held session (the registry's `line` flag): one session machine, one reader, one routing.

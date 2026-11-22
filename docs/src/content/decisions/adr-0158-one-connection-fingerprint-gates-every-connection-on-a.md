@@ -5,7 +5,7 @@ status: "Accepted"
 summary: "One **connection fingerprint** gates every connection, held or stateless (#1056 ruling): a digest the server computes over every input a connection is made with (transport, declared params, driver inputs, each secret's sealed version, the session block, the ladder, the ssh pin, the `:retry` counter), held in `internal/fingerprint`. Connections are verified bottom up on the existing ladder (reachable, informational ping; responsive, the transport rung and the gate; authenticated, the login), declared in the driver spec with registry defaults. A terminal refusal gates its rung and above for the fingerprint; lower rungs keep running; the gate is published as `endpoint-rejection` and carried back so a restart honours it. **Amended (#1059, #1080):** the push lane refuses every native probe key by name, not only the gate and the host key"
 ---
 
-- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [glossary](/architecture/glossary/), [drivers](/guides/admin/drivers/), [api](/architecture/api/), [properties](/architecture/properties/)
+- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [glossary](/architecture/glossary/), [drivers](/admin/drivers/), [api](/architecture/api/), [properties](/architecture/properties/)
 - **Decision:** The architect's rulings of 2026-10-23 (on #1056 and #1049), for every connection to
   an endpoint, held or stateless (the reachability probe, a throwaway poll or command, the held
   session):

@@ -8,7 +8,7 @@ refs: [1163, 1161, 1160, 1147]
 
 - **Date:** 2026-10-25 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/),
   [nodes](/architecture/nodes/), [glossary](/architecture/glossary/),
-  [drivers](/guides/admin/drivers/), [CLI](/developer/cli/), [MCP tools](/reference/mcp/)
+  [drivers](/admin/drivers/), [CLI](/developer/cli/), [MCP tools](/reference/mcp/)
 - **Decision:** (#1163, slice 2 of epic #1161, whose decisions 10 and 12 the architect ruled as
   recommended.)
   1. **One primitive, two outcomes.** The on-demand node run carries a node a task as its worklist

@@ -174,8 +174,8 @@ func TestCheckInvocationRejectsDoubledSegments(t *testing.T) {
 // Renaming a command is the moment this matters most, since the guides are the
 // one surface a regeneration does not fix.
 //
-// The walk spans the guides, architecture, and contributing trees (#449):
-// commands are taught outside guides/ too. Three files are excluded as
+// The walk spans every hand-written section tree (#449, #2200):
+// commands are taught outside one section too. Three files are excluded as
 // historical records (the decision log, the build log, and the status page's
 // legend quoting them): a command named there was true at the time, and
 // rewriting them to match today would falsify the record. The generated CLI
@@ -191,7 +191,7 @@ func TestDocsOnlyNameRealCommands(t *testing.T) {
 
 	base := filepath.Join("..", "..", "docs", "src", "content", "docs")
 	var bad []string
-	for _, tree := range []string{"guides", "architecture", "contributing"} {
+	for _, tree := range []string{"start", "operator", "admin", "developer", "deployment", "architecture", "contributing"} {
 		err := filepath.Walk(filepath.Join(base, tree), func(path string, info os.FileInfo, err error) error {
 			if err != nil || info.IsDir() {
 				return err

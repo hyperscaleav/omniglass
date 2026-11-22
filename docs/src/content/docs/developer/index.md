@@ -20,6 +20,7 @@ MCP, the lab and PR preview environments, and how the project is built.
   and omnibot.
 - [The lab](/developer/lab/): a working Omniglass with a simulated fleet, on Docker.
 - [PR previews](/developer/pr-previews/): a live copy of a pull request.
+- [The driver spec](/developer/driver-spec/): the declarative document a driver is, for driver authors.
 - [Contributing](/developer/contributing/): the doctrines and the slice workflow.
 
 The generated [CLI](/reference/cli/), [MCP](/reference/mcp/) and [API](/reference/api/) references are
