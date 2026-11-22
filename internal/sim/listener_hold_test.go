@@ -12,6 +12,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/driver"
+	"github.com/hyperscaleav/omniglass/internal/sim/simtest"
 )
 
 // Listeners over a held session (#817), proven against the simulator's line
@@ -49,7 +50,7 @@ func TestPanelListenerHearsPushesAndReArms(t *testing.T) {
 		t.Skip("real-wire listener test")
 	}
 	e := newCatalogEngine(t)
-	ip := "127.88.9.4"
+	ip := simtest.ClaimLoopback(t)
 	if err := e.Sync([]DeviceSnapshot{{DeviceID: "panel", Hostname: "panel", LoopbackIP: ip,
 		ProfileName: "newtron-panel-7", Version: 1}}); err != nil {
 		t.Fatal(err)
