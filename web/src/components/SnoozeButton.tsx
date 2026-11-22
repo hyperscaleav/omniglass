@@ -112,7 +112,7 @@ export function SnoozeControl(props: { component: string; alarm: Snoozable; surf
             if (o) setOpenMenu(key());
             else if (openMenu() === key()) setOpenMenu(null);
           }}>
-          <Popover.Trigger class="btn btn-quiet btn-xs gap-1.5 self-center" aria-label={acting("Snooze", props.alarm)} title={err() ?? SNOOZE_TIP} disabled={busy()}>
+          <Popover.Trigger class="btn btn-quiet btn-xs gap-1.5" aria-label={acting("Snooze", props.alarm)} title={err() ?? SNOOZE_TIP} disabled={busy()}>
             <Moon size={14} />
             Snooze
           </Popover.Trigger>

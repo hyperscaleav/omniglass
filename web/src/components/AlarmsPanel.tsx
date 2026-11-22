@@ -157,7 +157,8 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
           <For each={active()}>
             {(a) => (
               <div class="flex flex-col gap-1.5 px-3 py-2.5">
-                <div class="flex flex-wrap items-baseline gap-2">
+                <div class="flex flex-wrap items-start gap-x-2 gap-y-1.5">
+                <div class="flex min-w-0 flex-1 basis-40 flex-wrap items-baseline gap-2">
                   <SeverityBadge name={a.severity} />
                   <span class="min-w-0 flex-1 text-sm text-base-content/85">{a.message || "(no message)"}</span>
                   <span class="shrink-0 text-[11px] text-base-content/45" title={a.raised_at}>
@@ -184,6 +185,9 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
                     </span>
                   </Show>
                   <SnoozedBadge alarm={a} />
+                </div>
+                {/* What you can do: one group that wraps as a unit and centers its own controls. */}
+                <div data-alarm-actions class="flex shrink-0 items-center gap-1">
                   <Show when={props.canAcknowledge && !a.acknowledged}>
                     <Button
                       square
@@ -209,6 +213,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
                   <SnoozeControl component={props.component} alarm={a} surface={surface} allowed={!!props.canSnooze} />
                   <TroubleshootButton alarm={a} />
                   {timelines.button(a.id, a.message)}
+                </div>
                 </div>
                 <Show when={timelines.isOpen(a.id)}>
                   <AlarmTimeline component={props.component} alarmId={a.id} id={timelines.panelId(a.id)} label={timelines.label(a.message)} />
@@ -266,8 +271,8 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
             <For each={cleared()}>
               {(a) => (
                 <div class="flex flex-col gap-1.5 px-3 py-2">
-                  <div class="flex flex-wrap items-baseline gap-2">
-                    <span class="flex min-w-0 flex-1 flex-wrap items-baseline gap-2 opacity-70">
+                  <div class="flex flex-wrap items-start gap-x-2 gap-y-1.5">
+                    <span class="flex min-w-0 flex-1 basis-40 flex-wrap items-baseline gap-2 opacity-70">
                       <SeverityBadge name={a.severity} />
                       <span class="min-w-0 flex-1 text-[12.5px] text-base-content/70">{a.message || "(no message)"}</span>
                       <span class="shrink-0 text-[11px] text-base-content/45">
@@ -277,13 +282,15 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
                             seeing in the history: it is the one that got no attention. */}
                         <Show when={!a.acknowledged}> · never acknowledged</Show>
                       </span>
+                      <SnoozedBadge alarm={a} />
                     </span>
                     {/* A snooze is stored on the component and dedup key, so a
                         cleared alarm can carry one: snoozing an alarm that just
                         cleared is how a flapping one is quieted. */}
-                    <SnoozedBadge alarm={a} />
-                    <SnoozeControl component={props.component} alarm={a} surface={surface} allowed={!!props.canSnooze} />
-                    {timelines.button(a.id, a.message)}
+                    <div data-alarm-actions class="flex shrink-0 items-center gap-1">
+                      <SnoozeControl component={props.component} alarm={a} surface={surface} allowed={!!props.canSnooze} />
+                      {timelines.button(a.id, a.message)}
+                    </div>
                   </div>
                   <Show when={timelines.isOpen(a.id)}>
                     <AlarmTimeline component={props.component} alarmId={a.id} id={timelines.panelId(a.id)} label={timelines.label(a.message)} />
