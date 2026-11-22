@@ -389,4 +389,24 @@ describe("AlarmsPanel", () => {
     expect(op.getAllByRole("button", { name: /^Unsnooze/ })).toHaveLength(2);
     expect(op.getAllByRole("button", { name: /^Snooze/ })).toHaveLength(1);
   });
+
+  // The row reads "what this alarm is" then "what you can do": the controls
+  // sit in one group that never splits, apart from the text line (#2288).
+  it("groups an alarm's actions in one container, apart from its text", () => {
+    const asker: Me = { user: { id: "u-1", kind: "person" }, person: { username: "jo" }, permissions: ["assistant:use"], grants: [] };
+    const { getByText } = mount({ me: asker, canSnooze: true });
+    for (const msg of ["HDMI board failed", "Firmware mismatch"]) {
+      const row = alarmRow(getByText(msg));
+      const group = row.querySelector('[data-alarm-actions]') as HTMLElement;
+      expect(group).toBeTruthy();
+      expect(group.className).toContain("items-center");
+      expect(group.className).toContain("shrink-0");
+      expect(group.contains(getByText(msg))).toBe(false);
+      expect(within(group).getByRole("button", { name: /^Snooze/ })).toBeTruthy();
+      expect(within(group).getByRole("button", { name: /timeline/i })).toBeTruthy();
+    }
+    const active = alarmRow(getByText("HDMI board failed")).querySelector("[data-alarm-actions]") as HTMLElement;
+    expect(within(active).getByRole("button", { name: /^Acknowledge/ })).toBeTruthy();
+    expect(within(active).getByRole("button", { name: /with omnibot$/ })).toBeTruthy();
+  });
 });
