@@ -129,7 +129,7 @@ without one reads its transport name exactly.
     pre-filled, credentials as **secret references** (the name of a secret of the declared
     shape, never a value). The spec derives the transport, the target, and the endpoint's
     tasks: a poll task per poll function, a standing listen task per listener. The
-    [Drivers](/guides/admin/drivers/) page shows each spec's menu before you attach it.
+    [Drivers](/admin/drivers/) page shows each spec's menu before you attach it.
 
     From the CLI or the API the same attach is one call. An input the spec declares as a number
     takes a JSON number, so the SNMP port is `10161`, not `"10161"` (a string still works, and the
