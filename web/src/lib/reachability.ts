@@ -4,8 +4,8 @@ import { share, spans } from "./timeline";
 
 // The reachability data layer: a thin typed wrapper over the generated client
 // plus the pure read-time derivations the panel renders. The API returns the raw
-// verdict state, the probe-layer signals, and the recent transition history; the
-// 4-state verdict word, the availability strip, the uptime hint, and the "why"
+// state state, the probe-layer signals, and the recent transition history; the
+// 4-state state word, the availability strip, the uptime hint, and the "why"
 // reason line are all derived here from those real fields (never invented). Shapes
 // follow the OpenAPI (see api/reachability.go).
 //
@@ -13,11 +13,11 @@ import { share, spans } from "./timeline";
 // lib/timeline, shared with the health history, so both surfaces read a recorded
 // edge the same way.
 
-// stalenessWindowMs mirrors v2's ~150s: a verdict older than this is stale, its
+// stalenessWindowMs mirrors v2's ~150s: a state older than this is stale, its
 // value no longer trusted as live.
 export const STALENESS_WINDOW_MS = 150_000;
 
-export type ReachVerdict = { value: string; ts: string };
+export type ReachState = { value: string; ts: string };
 // A layer's value is the probe's state word (#1592): "up"/"down" for a ping,
 // "open"/"closed" for a port, "up"/"down" for a request answered. The probe
 // result lives in the property lane, stored only when it changes.
@@ -43,11 +43,11 @@ export type ReachEndpoint = {
   // server's clock, whatever the batch carried (#933). The one freshness
   // every endpoint has, a driver endpoint's included.
   last_seen?: string;
-  reachability: ReachVerdict | null;
+  reachability: ReachState | null;
   // The layer-7 rungs (#812): responds (the protocol itself answered) and,
   // only when a credential was tried, auth. Absent until a probe climbs them.
-  responsive?: ReachVerdict | null;
-  authenticated?: ReachVerdict | null;
+  responsive?: ReachState | null;
+  authenticated?: ReachState | null;
   // The held session, when the endpoint has held one (#1059): its latest
   // state, when it changed, and why (lib/session reads it).
   session?: ReachSessionBody;
@@ -73,19 +73,19 @@ export async function getReachability(name: string): Promise<Reachability> {
   return data as Reachability;
 }
 
-// A verdict word is the read-time 4-state derivation the pill renders. responding
-// = latest verdict up and fresh; down = down and fresh; stale = a verdict exists
-// but is older than the staleness window; unknown = no verdict yet.
-export type VerdictWord = "responding" | "down" | "stale" | "unknown";
+// A state word is the read-time 4-state derivation the pill renders. responding
+// = latest state up and fresh; down = down and fresh; stale = a state exists
+// but is older than the staleness window; unknown = no state yet.
+export type ReachWord = "responding" | "down" | "stale" | "unknown";
 
-export function verdictWord(v: ReachVerdict | null, now: number = Date.now()): VerdictWord {
+export function reachWord(v: ReachState | null, now: number = Date.now()): ReachWord {
   if (!v) return "unknown";
   const age = now - new Date(v.ts).getTime();
   if (age > STALENESS_WINDOW_MS) return "stale";
   return v.value === "up" ? "responding" : "down";
 }
 
-// A pending notice is the reason an endpoint has no verdict yet and where the
+// A pending notice is the reason an endpoint has no state yet and where the
 // operator acts on it: the Outposts page to make an outpost and assign it, or the
 // assigned outpost's blade to see whether it is running (#981).
 export type PendingNotice = { text: string; href: string; linkLabel: string };
@@ -111,7 +111,7 @@ export function pendingNotice(iface: ReachEndpoint): PendingNotice | null {
 }
 
 // lastSeenAt is when the endpoint last delivered anything: the server's
-// last_seen stamp. Nothing a sample carries will do. The verdict is stored
+// last_seen stamp. Nothing a sample carries will do. The state is stored
 // only when it changes, so its ts is the last TRANSITION (#931); a driver's
 // instanced series is not stamped with the endpoint, an unchanged property
 // writes no row, and an outpost's clock can date a sample ahead (#933). Null
@@ -120,12 +120,12 @@ export function lastSeenAt(iface: ReachEndpoint): string | null {
   return iface.last_seen ?? null;
 }
 
-// endpointWord is the pill's word for one endpoint: the verdict's value, aged
-// by last_seen. Before any stamp it ages by the verdict's own time, which can
+// endpointWord is the pill's word for one endpoint: the state's value, aged
+// by last_seen. Before any stamp it ages by the state's own time, which can
 // only read older than the truth, never fresher.
-export function endpointWord(iface: ReachEndpoint, now: number = Date.now()): VerdictWord {
+export function endpointWord(iface: ReachEndpoint, now: number = Date.now()): ReachWord {
   if (!iface.reachability) return "unknown";
-  return verdictWord({ value: iface.reachability.value, ts: lastSeenAt(iface) ?? iface.reachability.ts }, now);
+  return reachWord({ value: iface.reachability.value, ts: lastSeenAt(iface) ?? iface.reachability.ts }, now);
 }
 
 // A segment of the availability strip: one contiguous stretch in a single state,
@@ -136,14 +136,14 @@ export type Segment = { value: string; weight: number };
 // window ending at now, through the shared timeline primitive. The strip only
 // needs the state and its share of the window, so the span's wall-clock bounds are
 // dropped here (the health history keeps them, to say how long a state lasted).
-export function segments(history: ReachHistory[], verdict: ReachVerdict | null, now: number = Date.now()): Segment[] {
-  return spans(history, verdict?.value ?? null, now).map((s) => ({ value: s.value, weight: s.weight }));
+export function segments(history: ReachHistory[], state: ReachState | null, now: number = Date.now()): Segment[] {
+  return spans(history, state?.value ?? null, now).map((s) => ({ value: s.value, weight: s.weight }));
 }
 
 // uptime is the fraction of the window spent up, as a whole-number percent, for
 // the "N% up" hint. Derived from the same spans the strip renders.
-export function uptime(history: ReachHistory[], verdict: ReachVerdict | null, now: number = Date.now()): number | null {
-  return share(spans(history, verdict?.value ?? null, now), (v) => v === "up");
+export function uptime(history: ReachHistory[], state: ReachState | null, now: number = Date.now()): number | null {
+  return share(spans(history, state?.value ?? null, now), (v) => v === "up");
 }
 
 // reason is the "why" line for a down interface: it reads the layer pattern to

@@ -7,13 +7,13 @@ import { uuidFor } from "./testids";
 // the components under it, the counts, folding and filter entries. Pure, so
 // everything an operator could dispute is tested here without a DOM.
 
-const loc = (h: string, label: string, type: string, parent = "", verdict = "healthy") => ({
+const loc = (h: string, label: string, type: string, parent = "", health = "healthy") => ({
   id: uuidFor(h), name: h, label, location_type: type, location_type_id: uuidFor(`t-${type}`),
-  parent: parent ? uuidFor(parent) : undefined, health: verdict,
+  parent: parent ? uuidFor(parent) : undefined, health: health,
 });
-const dot = (h: string, verdict = "healthy", shared = false) => ({ component: uuidFor(h), name: h, health: verdict, primary: true, shared });
-const sys = (h: string, label: string, at: string, verdict: string, dots: ReturnType<typeof dot>[] = []) => ({
-  id: uuidFor(h), name: h, label, location: at ? uuidFor(at) : undefined, health: verdict, dots,
+const dot = (h: string, health = "healthy", shared = false) => ({ component: uuidFor(h), name: h, health: health, primary: true, shared });
+const sys = (h: string, label: string, at: string, health: string, dots: ReturnType<typeof dot>[] = []) => ({
+  id: uuidFor(h), name: h, label, location: at ? uuidFor(at) : undefined, health: health, dots,
 });
 const type = (name: string, label: string, parents: string[]) => ({ name, label, icon: name, allowed_parent_types: parents });
 
@@ -218,13 +218,13 @@ describe("filter entries and reveal", () => {
     const ba = es.find((e) => e.id === uuidFor("ba"))!;
     expect(ba.path).toEqual(["Headquarters", "West"]);
     expect(ba.standard).toBe("Divisible Conference");
-    expect(ba.verdict).toBe("degraded");
+    expect(ba.health).toBe("degraded");
     expect(ba.search).toContain("Boardroom");
     const mic = es.find((e) => e.id === uuidFor("mic-1"))!;
     expect(mic.kind).toBe("component");
     expect(mic.path).toEqual(["Headquarters", "West", "Boardroom A"]);
     expect(mic.product).toBe("Lyra GN-12");
-    expect(mic.verdict).toBe("outage");
+    expect(mic.health).toBe("outage");
   });
 
   it("carries each entry's effective tags, so a tag filter matches locations and components alike", () => {

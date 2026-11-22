@@ -6,11 +6,11 @@ import { compareSeverity, type SeverityLevel } from "./severity";
 // pure ordering and splitting the panel renders.
 //
 // An ALARM is raised on a COMPONENT by a firing with a severity, and it impairs that component's
-// own verdict wholesale (#626): any active alarm degrades it, one at an outage
+// own health wholesale (#626): any active alarm degrades it, one at an outage
 // severity level (high and above, see lib/severity) is an outage. A system slot the component fills no longer counts it toward quorum
 // while it is down, so the slot can drop below quorum and its impact becomes the
-// system's verdict. That is the whole chain: alarm on a component, component down,
-// slot below quorum, verdict.
+// system's health. That is the whole chain: alarm on a component, component down,
+// slot below quorum, health.
 //
 // Clearing keeps the row: what was wrong and when it was wrong outlives the fix,
 // which is the point of the recorded history.
@@ -23,18 +23,18 @@ export type Alarm = AlarmBody;
 export const COMPONENT_ALARMS_PREFIX = ["component-alarms"] as const;
 export const componentAlarmsKey = (name: string) => [...COMPONENT_ALARMS_PREFIX, name] as const;
 
-// The alarms read with the component's own verdict beside them (#934), the
+// The alarms read with the component's own health beside them (#934), the
 // one its active alarms make. Keyed under componentAlarmsKey, so whatever
 // invalidates a component's alarms (an acknowledge) refreshes this too.
-export const componentAlarmsReadKey = (name: string) => [...componentAlarmsKey(name), "verdict"] as const;
-export type ComponentAlarmsRead = { alarms: Alarm[]; verdict?: string };
+export const componentAlarmsReadKey = (name: string) => [...componentAlarmsKey(name), "health"] as const;
+export type ComponentAlarmsRead = { alarms: Alarm[]; health?: string };
 
 export async function componentAlarmsRead(name: string): Promise<ComponentAlarmsRead> {
   const { data, error } = await api.GET("/components/{name}/alarms", {
     params: { path: { name }, query: { include_cleared: true } },
   });
   if (error) throw error;
-  return { alarms: (data?.alarms ?? []) as Alarm[], verdict: data?.health };
+  return { alarms: (data?.alarms ?? []) as Alarm[], health: data?.health };
 }
 
 // componentAlarms reads every alarm on the component, cleared ones included: the

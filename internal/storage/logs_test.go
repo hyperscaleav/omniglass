@@ -321,7 +321,7 @@ func TestALogLineWithANulOrAnOldClockStillLands(t *testing.T) {
 			t.Fatalf("a NUL reached the stored line: %+v %s", l, l.Attributes)
 		}
 	}
-	if l.TS.Year() != 2000 || l.ReceivedAt == nil || time.Since(*l.ReceivedAt) > time.Minute {
+	if l.TS.UTC().Year() != 2000 || l.ReceivedAt == nil || time.Since(*l.ReceivedAt) > time.Minute {
 		t.Fatalf("ts %v received %v, want the line's own time kept beside its arrival", l.TS, l.ReceivedAt)
 	}
 }

@@ -17,15 +17,15 @@ const loc = (handle: string, name: string, type: string, parent?: string) => ({
   health: "healthy",
 });
 
-const dot = (component: string, name: string, verdict: string, primary: boolean, shared: boolean) => ({
+const dot = (component: string, name: string, health: string, primary: boolean, shared: boolean) => ({
   component,
   name,
-  health: verdict,
+  health: health,
   primary,
   shared,
 });
 
-// hq's own recorded verdict deliberately DISAGREES with the fold over its
+// hq's own recorded health deliberately DISAGREES with the fold over its
 // in-scope clusters (healthy vs degraded): the band chip renders the recorded
 // row (a band that contradicts its own detail page one click away is a
 // visible bug), and the fold stays available as what it is.

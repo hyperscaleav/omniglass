@@ -203,7 +203,7 @@ jobs:
           git config user.name "$BOT_NAME"
           git config user.email "${BOT_ID}+${BOT_NAME}@users.noreply.github.com"
           git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
-          out=$(bash "${RUNNER_TEMP}/agent-sync.sh" merge origin/main); code=$?
+          out=$(bash "${RUNNER_TEMP}/agent-sync.sh" merge origin/main) && code=0 || code=$?
           case "$code" in
             0) status=$out ;;
             3) status=conflict ;;
@@ -249,6 +249,13 @@ jobs:
           github_token: ${{ steps.app.outputs.token }}
           bot_id: ${{ steps.gate.outputs.bot_id }}
           bot_name: ${{ steps.gate.outputs.bot_name }}
+          # The action denies make, Docker and other code-running commands on a PR
+          # whose author lacks write access, which every agent PR does, since the
+          # App bot writes them. Lift that only when the PR's author is this
+          # workflow's own App bot (the gate's agent_pr output, which compares the
+          # PR author with the App's login); a PR by anyone else, another allowed
+          # bot included, keeps the restriction.
+          restrict_untrusted_prs: ${{ steps.gate.outputs.agent_pr == 'true' && 'false' || 'true' }}
           allowed_bots: ${{ steps.app.outputs.app-slug }}${{ steps.reviewer.outputs.app-slug && format(',{0}', steps.reviewer.outputs.app-slug) || '' }}
           claude_args: >-
             --model ${{ steps.gate.outputs.model }}

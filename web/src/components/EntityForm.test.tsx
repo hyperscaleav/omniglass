@@ -248,7 +248,7 @@ describe("a component's memberships, editable from its own face (#767)", () => {
   const alpha = uuidFor("mf-alpha");
   const beta = uuidFor("mf-beta");
   const gamma = uuidFor("mf-gamma");
-  const member = (system_id: string, system: string, primary: boolean) => ({ component: "mic", component_id: comp, component_verdict: "healthy", primary, system, system_id, system_count: 1 });
+  const member = (system_id: string, system: string, primary: boolean) => ({ component: "mic", component_id: comp, component_health: "healthy", primary, system, system_id, system_count: 1 });
   const readerOnly: Me = { user: { id: "u-rd", kind: "person" }, person: { username: "rd" }, permissions: ["component:read", "component:update", "system:read", "location:read", "tag:read", "product:read"], grants: [] };
 
   type Call = { method: string; path: string };

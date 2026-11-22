@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  verdictWord,
+  reachWord,
   endpointWord,
   lastSeenAt,
   segments,
@@ -16,22 +16,22 @@ import {
 const now = Date.parse("2026-07-07T12:00:00Z");
 const ago = (ms: number) => new Date(now - ms).toISOString();
 
-describe("verdictWord", () => {
-  it("is responding for a fresh up verdict", () => {
-    expect(verdictWord({ value: "up", ts: ago(10_000) }, now)).toBe("responding");
+describe("reachWord", () => {
+  it("is responding for a fresh up state", () => {
+    expect(reachWord({ value: "up", ts: ago(10_000) }, now)).toBe("responding");
   });
-  it("is down for a fresh down verdict", () => {
-    expect(verdictWord({ value: "down", ts: ago(10_000) }, now)).toBe("down");
+  it("is down for a fresh down state", () => {
+    expect(reachWord({ value: "down", ts: ago(10_000) }, now)).toBe("down");
   });
-  it("is stale for a verdict older than the staleness window", () => {
-    expect(verdictWord({ value: "up", ts: ago(STALENESS_WINDOW_MS + 1_000) }, now)).toBe("stale");
+  it("is stale for a state older than the staleness window", () => {
+    expect(reachWord({ value: "up", ts: ago(STALENESS_WINDOW_MS + 1_000) }, now)).toBe("stale");
   });
-  it("is unknown when there is no verdict", () => {
-    expect(verdictWord(null, now)).toBe("unknown");
+  it("is unknown when there is no state", () => {
+    expect(reachWord(null, now)).toBe("unknown");
   });
 });
 
-// The verdict is stored on change only, so its ts is the last TRANSITION.
+// The state is stored on change only, so its ts is the last TRANSITION.
 // An endpoint's freshness is the server's own stamp, last_seen: when ingest
 // last landed a batch it delivered, whatever the batch carried and whatever
 // time an outpost wrote on its samples (#931, #933).
@@ -45,7 +45,7 @@ describe("an endpoint's freshness is the server's last_seen (#931, #933)", () =>
     expect(lastSeenAt(e)).toBe(ago(5_000));
     expect(endpointWord(e, now)).toBe("responding");
   });
-  it("keeps a down verdict's word while it is fresh", () => {
+  it("keeps a down state's word while it is fresh", () => {
     expect(endpointWord(ep({ reachability: { value: "down", ts: ago(400_000) }, last_seen: ago(2_000) }), now)).toBe("down");
   });
   it("is stale once last_seen is past the window, however new an outpost dated its samples", () => {
@@ -53,10 +53,10 @@ describe("an endpoint's freshness is the server's last_seen (#931, #933)", () =>
     expect(lastSeenAt(e)).toBe(ago(STALENESS_WINDOW_MS + 1_000));
     expect(endpointWord(e, now)).toBe("stale");
   });
-  it("falls back to the verdict's own time before any stamp, which can only read older", () => {
+  it("falls back to the state's own time before any stamp, which can only read older", () => {
     expect(endpointWord(ep({ reachability: { value: "up", ts: ago(900_000) } }), now)).toBe("stale");
   });
-  it("is unknown with no verdict, and has no time with no stamp", () => {
+  it("is unknown with no state, and has no time with no stamp", () => {
     expect(endpointWord(ep({ last_seen: ago(1_000) }), now)).toBe("unknown");
     expect(lastSeenAt(ep({}))).toBeNull();
   });
@@ -74,12 +74,12 @@ describe("segments and uptime", () => {
     expect(segs[0].weight).toBeGreaterThan(segs[1].weight);
     expect(uptime(history, null, now)).toBe(60);
   });
-  it("fills the strip with the current verdict when there is no history", () => {
+  it("fills the strip with the current state when there is no history", () => {
     const segs = segments([], { value: "up", ts: ago(5_000) }, now);
     expect(segs).toEqual([{ value: "up", weight: 1 }]);
     expect(uptime([], { value: "up", ts: ago(5_000) }, now)).toBe(100);
   });
-  it("returns an empty strip when there is neither history nor verdict", () => {
+  it("returns an empty strip when there is neither history nor state", () => {
     expect(segments([], null, now)).toEqual([]);
     expect(uptime([], null, now)).toBeNull();
   });
@@ -223,7 +223,7 @@ describe("pendingNotice", () => {
     expect(n?.text).toContain("edge 1");
     expect(n?.href).toBe("/outposts?n=edge%201");
   });
-  it("says nothing of a row with a verdict or no reason", () => {
+  it("says nothing of a row with a state or no reason", () => {
     expect(pendingNotice(ep({}))).toBeNull();
     expect(pendingNotice(ep({ reachability: { value: "up", ts: ago(1000) } }))).toBeNull();
   });

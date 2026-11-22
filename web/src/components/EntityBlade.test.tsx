@@ -22,7 +22,7 @@ import { PRODUCTS_KEY } from "../lib/products";
 import { uuidFor } from "../lib/testids";
 import { seedSeverityLevels } from "../lib/testseverity";
 
-// The fleet EntityBlade (#799, refit in #826, the glance since #872): verdict
+// The fleet EntityBlade (#799, refit in #826, the glance since #872): health
 // and since lead, the alarms say why with their severity, the context the
 // operator came for follows (a system's location, a component's systems and
 // slots, a location's systems), then the form's identity, placement and tags,
@@ -132,7 +132,7 @@ afterEach(() => {
 });
 
 describe("the system blade", () => {
-  it("leads with verdict and since, and says why with the severity and the component", async () => {
+  it("leads with health and since, and says why with the severity and the component", async () => {
     const { controller } = mountBlade({ kind: "system", id: uuidFor("eb-sys") });
     const blade = await screen.findByRole("dialog");
     expect(within(blade).getAllByText("degraded").length).toBeGreaterThan(0);
@@ -206,7 +206,7 @@ describe("the system blade", () => {
 });
 
 describe("the component blade", () => {
-  it("leads with verdict, says why with severity, and names the systems it serves", async () => {
+  it("leads with health, says why with severity, and names the systems it serves", async () => {
     mountBlade({ kind: "component", id: uuidFor("eb-c-mic") });
     const blade = await screen.findByRole("dialog");
     expect(within(blade).getAllByText("outage").length).toBeGreaterThan(0);
@@ -266,7 +266,7 @@ describe("the component blade's location, by its primary system", () => {
 });
 
 describe("the location blade", () => {
-  it("says what the location holds: its systems, each with its verdict, opening the system", async () => {
+  it("says what the location holds: its systems, each with its health, opening the system", async () => {
     mountBlade({ kind: "location", id: uuidFor("eb-room") });
     const blade = await screen.findByRole("dialog");
     const here = within(blade).getByTestId("blade-systems");

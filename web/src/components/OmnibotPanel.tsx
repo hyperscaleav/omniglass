@@ -79,10 +79,12 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
 
   const busy = () => state().status === "working" || state().status === "pending";
 
-  async function run(input: RunInput) {
+  // fresh starts a new conversation for the run, leaving the earlier one
+  // stored on the server (#2286).
+  async function run(input: RunInput, fresh = false) {
     controller = new AbortController();
     try {
-      let name = conversation();
+      let name = fresh ? undefined : conversation();
       if (!name) {
         name = await startConversation();
         setConversation(name);
@@ -108,15 +110,17 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
   }
 
   // triage runs the triage-alarm skill on an alarm, the page going with it as
-  // context.
+  // context, in a conversation of its own: it does not run on top of whatever
+  // the person asked before (#2286). Only called when no run is in flight.
   function triage(s: Subject) {
     const skill = triageCall(s);
     if (!skill || busy()) return;
     const p = page();
     const context = contextEntries(p ? [s, p] : [s]);
     setLeftOut(undefined);
-    setState((st) => ask(st, `Triage alarm ${s.ref}`, context));
-    void run({ skill, context });
+    setConversation(undefined);
+    setState(() => ask(initialRun, `Triage alarm ${s.ref}`, context));
+    void run({ skill, context }, true);
   }
 
   // A triage asked for from outside the panel runs once the panel is open.

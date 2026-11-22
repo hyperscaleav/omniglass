@@ -11,7 +11,7 @@ import type { ReachEndpoint } from "../lib/reachability";
 
 // A webhook endpoint's row on the component's Endpoints panel (#1024): a push
 // endpoint, hosted by the server. Nothing is dialed, so it has no ladder and
-// no verdict; it reads last heard (stamped by every post that lands, never
+// no health; it reads last heard (stamped by every post that lands, never
 // down for silence), the scheme that checks each post (or unsigned), and what
 // that scheme refused. Expanded, it shows the URL a sender posts to, the token
 // masked, revealed and copied only under secret:reveal (audited).
@@ -68,7 +68,7 @@ export default function WebhookEndpointRow(p: { iface: ReachEndpoint; manageId?:
           </div>
         </button>
         <div class="flex shrink-0 items-center gap-2 pr-3">
-          <InfoTip label="a push endpoint" text="A sender posts to this endpoint's URL on the server: nothing is dialed, so there is no ladder and no verdict. It reads last heard, stamped by every post that lands, and silence is never read as down." />
+          <InfoTip label="a push endpoint" text="A sender posts to this endpoint's URL on the server: nothing is dialed, so there is no ladder and no health. It reads last heard, stamped by every post that lands, and silence is never read as down." />
           <Show when={hook().refused}>
             <span class="badge badge-soft badge-error badge-sm shrink-0" title={refusedTitle()}>{hook().refused!.count} refused</span>
           </Show>
