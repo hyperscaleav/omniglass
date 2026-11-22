@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -324,5 +325,41 @@ func TestBeatCanceledContextIsNotAudited(t *testing.T) {
 	defer st.mu.Unlock()
 	if len(st.audits) != 0 {
 		t.Errorf("audit rows = %+v, want none for a send cut short by shutdown", st.audits)
+	}
+}
+
+// lateCancelCtx reports canceled (Err) once the receiver has answered, without
+// closing Done, so the request itself is never torn down: shutdown arrives
+// strictly after the answer.
+type lateCancelCtx struct {
+	context.Context
+	answered atomic.Bool
+}
+
+func (c *lateCancelCtx) Err() error {
+	if c.answered.Load() {
+		return context.Canceled
+	}
+	return nil
+}
+
+func TestBeatAuditsAnAnswerReceivedBeforeShutdown(t *testing.T) {
+	t.Parallel()
+	ctx := &lateCancelCtx{Context: context.Background()}
+	r := &receiver{}
+	r.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+		ctx.answered.Store(true)
+	}))
+	t.Cleanup(r.srv.Close)
+	st := storeFor(t, r, 1)
+	s := New(st, egress.Options{}, "omniglass-a", "v1")
+	if err := s.Beat(ctx); err == nil {
+		t.Fatal("Beat = nil, want the 502 as an error")
+	}
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	if len(st.audits) != 1 || st.audits[0].status != http.StatusBadGateway || st.audits[0].ok {
+		t.Errorf("audit rows = %+v, want one 502 failure", st.audits)
 	}
 }
