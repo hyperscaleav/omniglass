@@ -4,8 +4,6 @@ import { pageHere, pendingTriage } from "./lib/handover";
 import Sidebar from "./components/Sidebar";
 import TopBar from "./components/TopBar";
 import ImpersonationBanner from "./components/ImpersonationBanner";
-import LabBanner from "./components/LabBanner";
-import { useAuthStatus } from "./lib/authStatus";
 import CommandPalette from "./components/CommandPalette";
 import Toaster from "./components/Toaster";
 import OmnibotPanel from "./components/OmnibotPanel";
@@ -27,8 +25,6 @@ const App: ParentComponent = (props) => {
   // The effective theme comes from the settings engine (/settings/me). Until it
   // resolves (or for a value it does not carry), the dark-only default holds.
   const settingsMe = useSettingsMe();
-  // A lab says it is one on every screen (#1195).
-  const authStatus = useAuthStatus();
 
   const [collapsed, setCollapsed] = createSignal(localStorage.getItem("og-collapsed") === "1");
   const [paletteOpen, setPaletteOpen] = createSignal(false);
@@ -65,11 +61,10 @@ const App: ParentComponent = (props) => {
 
   return (
     <>
-    <div data-app-shell class="flex min-h-screen bg-base-100">
+    <div data-app-shell class="flex min-h-0 flex-1 bg-base-100">
       <Sidebar collapsed={collapsed()} onToggle={() => setCollapsed(!collapsed())} />
       <div class="flex min-w-0 flex-1 flex-col">
         <TopBar section={section()} onOpenPalette={() => setPaletteOpen(true)} onOpenOmnibot={mayAsk() ? () => openOmnibot() : undefined} />
-        <LabBanner lab={authStatus.data?.lab} />
         <ImpersonationBanner />
         <main id="scroll-main" class="mx-auto w-full max-w-330 flex-1 overflow-y-auto px-8 pb-16 pt-7">
           {props.children}
