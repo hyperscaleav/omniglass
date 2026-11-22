@@ -21,7 +21,11 @@ func TestIntegrationOutpostSizesItsLanesFromItsContainer(t *testing.T) {
 	if os.Getenv("OMNIGLASS_LAB_TEST") != "1" {
 		t.Skip("the lab's integration tests run through make test-lab (they need the image make builds)")
 	}
-	image := labTestImage()
+	choice, err := SelectImage(labTestBuild(), "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	image := choice.Ref
 	for _, tc := range []struct {
 		name, cpus, memory string
 		want               []string
