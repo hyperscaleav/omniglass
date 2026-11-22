@@ -161,7 +161,7 @@ func (p *PG) EnsureMetricPartitions(ctx context.Context) ([]string, error) {
 	from, through := days[0], days[len(days)-1].AddDate(0, 0, 1)
 	if gap, ok := metricCoverageGap(parts, from, through); ok {
 		return created, fmt.Errorf("storage: metric partitions do not cover %s (want every instant from %s to %s)",
-			gap.Format(time.RFC3339), from.Format(time.RFC3339), through.Format(time.RFC3339))
+			gap.UTC().Format(time.RFC3339), from.UTC().Format(time.RFC3339), through.UTC().Format(time.RFC3339))
 	}
 	return created, nil
 }
