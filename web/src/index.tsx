@@ -7,6 +7,7 @@ import "./app.css";
 import { setUnauthorizedHandler, clearToken } from "./api/client";
 import { ME_KEY } from "./lib/auth";
 import App from "./App";
+import AppRoot from "./components/AppRoot";
 import { AuthGuard } from "./components/AuthGuard";
 import { RouteGuard } from "./components/RouteGuard";
 import CatalogShell from "./components/CatalogShell";
@@ -51,7 +52,7 @@ const routesFor = (shell: RouteEntry["shell"]) =>
 render(
   () => (
     <QueryClientProvider client={queryClient}>
-      <Router base="/web">
+      <Router base="/web" root={AppRoot}>
         {routesFor("public")}
         <Route path="/" component={ProtectedShell}>
           {routesFor("protected")}

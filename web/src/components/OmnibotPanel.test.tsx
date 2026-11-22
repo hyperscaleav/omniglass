@@ -285,6 +285,20 @@ describe("the omnibot panel", () => {
     expect(screen.getByText("Triage alarm mic-1/icmp-unreachable")).toBeTruthy();
   });
 
+  it("starts a new conversation for a triage while one is open (#2286)", async () => {
+    runReply = () => sse(fixture("resume-declined.sse"));
+    open();
+    send("tell me about the simulation");
+    await screen.findByText("Understood, I left it alone.");
+    await waitFor(() => expect((screen.getByLabelText("Ask omnibot") as HTMLTextAreaElement).disabled).toBe(false));
+    expect(calls.filter((c) => c.url.endsWith("/assistant/conversations"))).toHaveLength(1);
+    requestTriage({ kind: "alarm", ref: "mic-1/icmp-unreachable" });
+    await waitFor(() => expect(calls.filter((c) => c.url.includes(":run"))).toHaveLength(2));
+    expect(calls.filter((c) => c.url.endsWith("/assistant/conversations"))).toHaveLength(2);
+    expect(screen.getByText("Triage alarm mic-1/icmp-unreachable")).toBeTruthy();
+    expect(screen.queryByText("tell me about the simulation")).toBeNull();
+  });
+
   it("sends no context when there is no page to name", async () => {
     open();
     send("hello");

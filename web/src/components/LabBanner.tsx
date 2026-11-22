@@ -4,9 +4,9 @@ import { Show } from "solid-js";
 // (`omniglass lab run`, #1195): its data is disposable and its login is the
 // well-known one every walkthrough uses, so it is never to be mistaken for a
 // real deployment. The server reports it on the public /auth/status, so the
-// login page shows it before anyone signs in. A sibling of the impersonation
-// banner: the same strip under the top bar, in the info hue, because it is a
-// fact about the instance rather than a warning about an action.
+// login page shows it before anyone signs in. Rendered once, by AppRoot (#2275),
+// above the top bar on every route, in the info hue, because it is a fact about
+// the instance rather than a warning about an action.
 export default function LabBanner(props: { lab: boolean | undefined }) {
   return (
     <Show when={props.lab}>
