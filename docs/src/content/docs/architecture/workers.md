@@ -116,7 +116,7 @@ backstop, carrying a rollup one hop per pass.
 
 :::
 
-**[Health](/architecture/health/) is the exception, deliberately not a worker stage**: its rollup (component -> system -> location) runs **inside the write transaction** that changed it, because a verdict recomputed a hop later would record its transition at the wrong moment. Parsing into samples is **not** a worker stage; it happens at the edge ([collection](/architecture/collection/)).
+**[Health](/architecture/health/) is the exception, deliberately not a worker stage**: its rollup (component -> system -> location) runs **inside the write transaction** that changed it, because a health recomputed a hop later would record its transition at the wrong moment. Parsing into samples is **not** a worker stage; it happens at the edge ([collection](/architecture/collection/)).
 
 ## The stateless / stateful fork
 

@@ -28,7 +28,7 @@ type commandTypeBody struct {
 	TargetMetricType    string          `json:"target_metric_type,omitempty" doc:"The metric this command sets (the other arm of the arc; never set together with target_property_type)"`
 	Disruptive          bool            `json:"disruptive" doc:"The command takes its device down (reboot): its delivery closes the gates of the hold set on the delivering outpost until each reads up again. The hold set is the target and what it hosts (host dependencies, followed down), less any out-of-band endpoint of the target"`
 	QuietSeconds        int             `json:"quiet_seconds" doc:"A disruptive type's quiet period: how long the outpost runs no poll, probe or session dial against the held endpoints after delivery. 0 on a type that is not disruptive"`
-	HoldSeconds         int             `json:"hold_seconds" doc:"A disruptive type's backstop: an endpoint with no up verdict this long after delivery reopens anyway, counted as hold-expiry-count. Not the settle window. 0 on a type that is not disruptive"`
+	HoldSeconds         int             `json:"hold_seconds" doc:"A disruptive type's backstop: an endpoint with no up reading this long after delivery reopens anyway, counted as hold-expiry-count. Not the settle window. 0 on a type that is not disruptive"`
 	PowerOutletParam    string          `json:"power_outlet_param,omitempty" doc:"Marks a power command: the name of the param that carries the outlet. Its hold set is the components that outlet feeds (their power dependencies) and what they host, not the target itself. Only on a disruptive type"`
 	Official            bool            `json:"official"`
 }
@@ -70,7 +70,7 @@ type createCommandTypeInput struct {
 		TargetMetricType    string `json:"target_metric_type,omitempty" doc:"The metric this command sets, for settlement (at most one target arm)"`
 		Disruptive          bool   `json:"disruptive,omitempty" doc:"The command takes its device down (reboot): its delivery closes the gates of the hold set (the target and what it hosts) on the delivering outpost until each reads up again"`
 		QuietSeconds        int    `json:"quiet_seconds,omitempty" minimum:"0" doc:"A disruptive type's quiet period in seconds: no poll, probe or session dial runs against the held endpoints. Only on a disruptive type"`
-		HoldSeconds         int    `json:"hold_seconds,omitempty" minimum:"0" doc:"A disruptive type's backstop in seconds, greater than quiet_seconds: an endpoint with no up verdict by then reopens anyway, counted. Not the settle window. Only on a disruptive type"`
+		HoldSeconds         int    `json:"hold_seconds,omitempty" minimum:"0" doc:"A disruptive type's backstop in seconds, greater than quiet_seconds: an endpoint with no up reading by then reopens anyway, counted. Not the settle window. Only on a disruptive type"`
 		PowerOutletParam    string `json:"power_outlet_param,omitempty" maxLength:"64" doc:"Marks a power command: the name of the param that carries the outlet, so its hold set is what that outlet feeds. Only on a disruptive type"`
 	}
 }

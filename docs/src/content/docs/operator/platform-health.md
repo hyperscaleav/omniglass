@@ -18,7 +18,7 @@ screenshots:
   # every capture, so the panel grid is masked whole in the baseline.
   - id: platform-health
     path: /web/platform
-    alt: "Platform health: the platform system's verdict linking to its system, the build the server runs and how long it has been up, then where work is lost hop by hop, then the server's panel set open on its Requests, Ingest, Queues and Retention panels, each row a key's last hour as a sparkline beside its current figure, the Requests panel ranking the slowest routes of the newest window."
+    alt: "Platform health: the platform system's health linking to its system, the build the server runs and how long it has been up, then where work is lost hop by hop, then the server's panel set open on its Requests, Ingest, Queues and Retention panels, each row a key's last hour as a sparkline beside its current figure, the Requests panel ranking the slowest routes of the newest window."
     steps:
       - action: wait
         selector: "[data-testid=server-panel-requests] tr[data-testid=panel-row-http-request-duration-max][aria-expanded]"
@@ -57,7 +57,7 @@ screenshots:
   # table then sits at a fixed position under the header and the closed set.
   - id: platform-health-outposts
     path: /web/platform
-    alt: "Platform health with the server's panel set closed to its heading, the server's name and verdict, over the outpost table: one row per outpost, its liveness pill and verdict, and the Checkin and Schedule groups in view, with the rest of the columns past the table's right edge."
+    alt: "Platform health with the server's panel set closed to its heading, the server's name and health, over the outpost table: one row per outpost, its liveness pill and health, and the Checkin and Schedule groups in view, with the rest of the columns past the table's right edge."
     steps:
       - action: wait
         selector: "[data-testid=server-panel-requests] tr[data-testid=panel-row-http-request-duration-max][aria-expanded]"
@@ -134,7 +134,7 @@ platform is well, and it answers it the way you would answer it about any system
 on the platform's own components.
 
 Open it from **Status** under Admin in the sidebar, or from the **Platform** tile on Home, which
-carries the platform's verdict and how many outposts are not up. You need `outpost:read` to open it; the
+carries the platform's health and how many outposts are not up. You need `outpost:read` to open it; the
 tile and the sidebar entry are hidden without it, and Admin shows it to an `outpost:read` holder who has
 none of its other tabs.
 
@@ -148,8 +148,8 @@ windowed figure no one writes goes unreported after two report windows, however 
 
 ## The header
 
-- **Platform** is the verdict of the platform system, the system every outpost and every server is
-  a component of. It links to that system's own view, which explains the verdict the way every
+- **Platform** is the health of the platform system, the system every outpost and every server is
+  a component of. It links to that system's own view, which explains the health the way every
   system's view does, so the reasons are written once.
 - **Version** is the build the server runs, written by the server on its own platform component
   each time it boots.
@@ -209,7 +209,7 @@ where its series read; the page draws them as the path's first hop.
 
 ## The server panels
 
-Each server has a panel set: a disclosure headed with the server's name, its verdict and how many
+Each server has a panel set: a disclosure headed with the server's name, its health and how many
 alarms are open on it, the first one open. The name links to the server's platform component. The
 four panels are **Requests**, **Ingest**, **Queues** and **Retention**, and the keys in each are the
 groups the platform view returns for a server, so the page holds no key list of its own. The page is
@@ -333,7 +333,7 @@ keeps up), and the database's size with each table's. **Retention Pass Failures*
 
 One row per outpost. **Status** is the same liveness pill the [Outposts](/operator/collection/)
 page shows (`up`, `down` or `never`), judged at the same moment the uptime is, beside the outpost's
-verdict. A row's tone is that verdict: the seeded rules on the platform keys decide it, and the
+health. A row's tone is that health: the seeded rules on the platform keys decide it, and the
 page adds no threshold of its own.
 
 The columns are the platform keys, grouped:
@@ -381,7 +381,7 @@ The platform components belong to no location, so only a fleet-wide (all-scope) 
 If your component read is scoped to part of the fleet, the page still lists every outpost with its
 pill, and one line says the platform figures need a fleet-wide read: the figures are left out, not
 shown as zero, and the server panels are left out whole. Where work is lost is left out with them,
-and the Loss column reads not reported. Without a fleet-wide system read the Platform verdict reads
+and the Loss column reads not reported. Without a fleet-wide system read the Platform health reads
 `-`.
 
 ## With a simulator
@@ -482,15 +482,15 @@ so a dropped tcp connect opens a gap too (#1723).
 
 ## From the CLI
 
-`omniglass platform health` reads this page for a terminal or a script: the verdicts, the open alarms,
+`omniglass platform health` reads this page for a terminal or a script: the health values, the open alarms,
 each hop's loss and the end to end, the outposts with loss, and every failure above zero, as one table or
 `--json`, exiting nonzero when the platform is not healthy or a part of it is not visible to the token.
 The [CLI reference](/reference/cli/#omniglass-platform-health) lists its sampling flags.
 
 The page is one read of the platform view, so `omniglass view platform list` returns the same
-answer: the system verdict, each server's build and start time with its panel groups (each key's
+answer: the system health, each server's build and start time with its panel groups (each key's
 current figure, a ranked key's routes, and the alarms open on the server), the outpost key groups,
-each outpost's verdict with its current figures and its `loss`, and the `pipeline` with each hop's
+each outpost's health with its current figures and its `loss`, and the `pipeline` with each hop's
 figures per kind and per component. A key an outpost has not reported is absent from its `figures`,
 and a hop or an outpost with nothing to compose has no `loss`, never zero, so the command reads
 not-reported the same way the page does.

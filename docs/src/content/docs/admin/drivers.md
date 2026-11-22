@@ -84,7 +84,7 @@ An endpoint carries two kinds of data, and a driver configures only one of them:
 
 - **Built-in data** is what Omniglass knows about the endpoint itself, and every endpoint gets it,
   whatever its driver, because the endpoint cannot work without it:
-  - its reachability ladder's verdicts and timings;
+  - its reachability ladder's readings and timings;
   - a held session's state and reason;
   - the gate and the pins it holds;
   - `collection-failed`;
