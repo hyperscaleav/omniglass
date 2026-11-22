@@ -2242,15 +2242,15 @@
    "id": "board",
    "label": "Board Meeting",
    "parent_id": "collaboration",
-   "stem": "boardroom",
-   "abbrev": "br"
+   "stem": "board-meeting",
+   "abbrev": "bm"
   },
   {
    "id": "class",
    "label": "Teaching",
    "parent_id": "collaboration",
-   "stem": "classroom",
-   "abbrev": "cls"
+   "stem": "teaching",
+   "abbrev": "tch"
   },
   {
    "id": "meeting",

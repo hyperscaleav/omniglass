@@ -167,8 +167,8 @@ identity pages.
 
   The locked **name** is the name the row will get, number and all: `display-3`, not `display-n`. The
   **stem** comes from the type and the **number** is the lowest one free in that placement right now.
-  Some types carry no number on the first of their kind in a location, so the first boardroom in a location is
-  `boardroom` and the second is `boardroom-2`; the form shows whichever applies rather than a shape you
+  Some types carry no number on the first of their kind in a location, so the first board-meeting in a location is
+  `board-meeting` and the second is `board-meeting-2`; the form shows whichever applies rather than a shape you
   have to read. Under it the form names the **placement the name has to be unique in**, as a path: the
   name itself never carries that path, since a name is unique within its placement rather than across
   the fleet.
@@ -200,7 +200,7 @@ identity pages.
   system you create in Boardroom 204B shows the label **Boardroom 204B**. Once a location holds several
   systems, each adds its **type**: **Media Lab Meeting** beside **Media Lab Signage**, and the
   first one restamps when the second arrives (and back when it leaves). Two of the same type add
-  the number their names carry: `boardroom-2` shows **Boardroom 204B Board Meeting 2**. A system with
+  the number their names carry: `board-meeting-2` shows **Boardroom 204B Board Meeting 2**. A system with
   no type names itself instead ("Media Lab Lobby Wall"). The two fields are one answer, so a label
   with a number in it means a name with the same number in it, and neither is a guess: both are read
   from the placement you have just picked. A system with no location reads its type.
@@ -297,7 +297,7 @@ surface that made it.
   system's type ("Meeting" under Briefing Room). A fleet created before the upgrade keeps its
   old labels until you run `omniglass system previewLabels`, then `omniglass system
   recomputeLabels`. Only the second of a kind in a location adds its type and number: a location with one
-  boardroom reads as the location, exactly as its name is `boardroom` rather than `boardroom-1`.
+  board-meeting reads as the location, exactly as its name is `board-meeting` rather than `board-meeting-1`.
 
 ## Properties on the detail
 

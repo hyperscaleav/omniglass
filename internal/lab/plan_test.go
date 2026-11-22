@@ -565,7 +565,7 @@ func TestPlanScaleLabSeedEnrollsEverySiteOutpost(t *testing.T) {
 		t.Fatal(err)
 	}
 	cmd := strings.Join(s.Seed.Cmd, " ")
-	if cmd != "lab seed --scenario corporate --systems 100 --user dev --password dev" {
+	if cmd != "lab seed --scenario corporate --systems 100 --user dev --password dev --omnibot-replay corporate-outage" {
 		t.Fatalf("seed command %q", cmd)
 	}
 	var hashes string
@@ -597,8 +597,8 @@ func TestPlanScaleLabSeedCarriesKeepOnlyWhenKept(t *testing.T) {
 		ephemeral bool
 		want      string
 	}{
-		{true, "lab seed --scenario corporate --systems 100 --user dev --password dev"},
-		{false, "lab seed --scenario corporate --systems 100 --user dev --password dev --keep"},
+		{true, "lab seed --scenario corporate --systems 100 --user dev --password dev --omnibot-replay corporate-outage"},
+		{false, "lab seed --scenario corporate --systems 100 --user dev --password dev --omnibot-replay corporate-outage --keep"},
 	} {
 		o := scaleOptions()
 		o.Ephemeral = tc.ephemeral
@@ -1012,10 +1012,36 @@ func TestPlanOmnibotKeyBecomesTheServersEnvSecret(t *testing.T) {
 			t.Fatalf("a lab with no key hands the server %s", e)
 		}
 	}
+}
+
+// A scale lab takes a live model's key the way a seeded lab does (#2298), so
+// a demo or a capture shows omnibot against a corporate-size fleet; without
+// one its server gets no key and no assistant settings.
+func TestPlanScaleLabTakesOmnibotKey(t *testing.T) {
 	sc := scaleOptions()
 	sc.OmnibotKey = "ghp-lab-key"
-	if _, err := Plan(sc); err == nil || !strings.Contains(err.Error(), "--omnibot-key-env") {
-		t.Fatalf("a scale lab with a model key: err = %v, want a refusal naming --omnibot-key-env", err)
+	s, err := Plan(sc)
+	if err != nil {
+		t.Fatalf("a scale lab with a model key: %v", err)
+	}
+	for _, want := range []string{
+		OmnibotKeySecretEnv + `={"type":"api-key","fields":{"key":"ghp-lab-key"}}`,
+		"OMNIGLASS_SETTING__ASSISTANT__PROVIDER=openai",
+		"OMNIGLASS_SETTING__ASSISTANT__KEY_SECRET=" + OmnibotKeySecret,
+	} {
+		if !slices.Contains(s.Server.Env, want) {
+			t.Errorf("scale lab server env lacks %s: %v", want, s.Server.Env)
+		}
+	}
+
+	s, err = Plan(scaleOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range s.Server.Env {
+		if strings.HasPrefix(e, OmnibotKeySecretEnv) || strings.HasPrefix(e, "OMNIGLASS_SETTING__ASSISTANT__") {
+			t.Fatalf("a scale lab with no key hands the server %s", e)
+		}
 	}
 }
 

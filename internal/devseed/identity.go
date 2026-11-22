@@ -69,7 +69,7 @@ type genIndex struct {
 // each in allocation order. Sorting on the stored ordinal rather than on the
 // name is the same choice ADR-0097 makes for allocation itself: the number is a
 // fact the platform recorded, and picking it back out of a name would have to
-// know the mint's shape, which a suppressed first ordinal ("boardroom" is
+// know the mint's shape, which a suppressed first ordinal ("board-meeting" is
 // ordinal 1) makes unrecoverable.
 func newGenIndex(rows []genRow) *genIndex {
 	sorted := make([]genRow, len(rows))

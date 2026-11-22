@@ -299,8 +299,8 @@ cell is a fact the row genuinely inherits rather than one somebody forgot to cop
 
 The row carries the identity facts that span every system of that type, **inheriting down the tree,
 shadowed at any level**: the naming **`stem`** (the prefix a generated system name is built from,
-e.g. `boardroom-2`), **`label`**, **`icon`** (the console glyph), and **`abbrev`** (the compact
-label form: `br`, `cls`, `vw`). A blank fact on a child means "inherit the nearest ancestor's", so
+e.g. `board-meeting-2`), **`label`**, **`icon`** (the console glyph), and **`abbrev`** (the compact
+label form: `bm`, `tch`, `vw`). A blank fact on a child means "inherit the nearest ancestor's", so
 `board` states its own stem and abbrev while taking its icon from `collaboration`, which shadows `av`'s. A
 type that states a fact of its own goes back to inheriting by patching that field to `""`, the same
 three-state sentinel `component_type` uses ([#716](https://github.com/hyperscaleav/omniglass/issues/716)).
@@ -969,9 +969,9 @@ positional type (a parking deck) is named with below.
 The pen, `:rename` and `:resetName` are the same three things on a system and a location that they
 are on a component. A system left nameless on create mints its `system_type` chain's `stem` plus the
 lowest free ordinal in its placement bucket, and **suppresses the ordinal on the first of that stem
-there**: a room's only boardroom is `boardroom` and the second is `boardroom-2`. Allocation stays
+there**: a room's only board-meeting is `board-meeting` and the second is `board-meeting-2`. Allocation stays
 lowest-free, so deleting the bare one while the second survives frees the bare name for the next
-create, and `boardroom-1` never exists at all. A hand-typed `boardroom` blocks the generator exactly
+create, and `board-meeting-1` never exists at all. A hand-typed `board-meeting` blocks the generator exactly
 as a hand-typed `display-1` blocks a component's, because what has to be unique is the name. A
 system with no `system_type` cannot be named this way (422 naming the reason), and neither can it be
 un-classified while the platform owns its name: `:rename` claims the name first.
@@ -1134,8 +1134,8 @@ whose name is bare while its ordinal is 1
 ([ADR-0101](/architecture/decisions/#adr-0101-the-first-of-its-stem-in-a-bucket-carries-no-ordinal-and-the-mint-that-says-so-is-the-one-allocation-tests)).
 There the key is empty, the same empty a row an operator named carries, so `{{if .Ordinal}}` is the
 whole of the suppression a rule has to write and a label can never disagree with its own name about
-how many of a thing there are. The cost is that a rule cannot render "Boardroom 1" for a system named
-`boardroom`; the [decision log](/architecture/decisions/#adr-0101-the-first-of-its-stem-in-a-bucket-carries-no-ordinal-and-the-mint-that-says-so-is-the-one-allocation-tests)
+how many of a thing there are. The cost is that a rule cannot render "Board Meeting 1" for a system named
+`board-meeting`; the [decision log](/architecture/decisions/#adr-0101-the-first-of-its-stem-in-a-bucket-carries-no-ordinal-and-the-mint-that-says-so-is-the-one-allocation-tests)
 records why that is a feature.
 
 That key is what the **shipped global rule for systems** reads, after the location and whether the

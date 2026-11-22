@@ -18,7 +18,7 @@ Show
 Type `echo "$c"`
 Enter
 Wait
-Type `huddle='hq.west.level-2.huddle.$sys.huddle'; board_a='hq.west.level-2.boardroom-a.$sys.boardroom'; board_b='hq.west.level-2.boardroom-b.$sys.boardroom'`
+Type `huddle='hq.west.level-2.huddle.$sys.huddle'; board_a='hq.west.level-2.boardroom-a.$sys.board-meeting'; board_b='hq.west.level-2.boardroom-b.$sys.board-meeting'`
 Enter
 Wait
 Type "# Its identity bindings: which system each of its room ids is"

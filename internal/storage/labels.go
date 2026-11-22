@@ -846,16 +846,16 @@ func derefRule(rule *string) string {
 // A row reaches the empty case two ways and they mean the same thing to a
 // reader. An operator named it, so the platform allocated no number at all; or
 // the platform named it and its mint SUPPRESSED the number, which is the first
-// of its stem in a bucket (ADR-0101: a room's only boardroom is `boardroom`,
-// not `boardroom-1`).
+// of its stem in a bucket (ADR-0101: a room's only board-meeting is `board-meeting`,
+// not `board-meeting-1`).
 //
 // The second case is #693 and it reverses what this map said before. The key
 // used to be the stored ordinal verbatim, on the argument that a rule should
 // read the number rather than the name's spelling of it; the shipped system
-// rule then declined to read it, because "Boardroom 1" beside a system NAMED
-// `boardroom` is the exact defect the ordinal's suppression exists to prevent.
+// rule then declined to read it, because "Board Meeting 1" beside a system NAMED
+// `board-meeting` is the exact defect the ordinal's suppression exists to prevent.
 // Deriving the value from the mint settles that once, for every rule, instead
-// of leaving each author to write the suppression by hand and get "Boardroom 1"
+// of leaving each author to write the suppression by hand and get "Board Meeting 1"
 // when they forget: the key is the number the name shows, so a label and a name
 // cannot disagree about how many of a thing there are.
 func mintedOrdinalText(m nameMint, n *int) string {

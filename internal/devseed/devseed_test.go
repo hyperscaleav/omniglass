@@ -725,7 +725,7 @@ const (
 // and stores no ordinal) as well as on the value.
 //
 // The names are not incidental. `display-1` appears once per room holding a
-// display, which is the placement-scoped unique index doing its job; and `boardroom`
+// display, which is the placement-scoped unique index doing its job; and `board-meeting`
 // carries no ordinal while storing 1, which is the first-of-its-stem suppression
 // (ADR-0101).
 //
@@ -766,12 +766,12 @@ func TestSeededNamesComeFromTheGenerator(t *testing.T) {
 
 		// Systems: the first of its stem in a bucket carries no ordinal while
 		// storing one. The boardroom halves are one bucket each now, so both
-		// mint plain `boardroom`; the lab pods share a bucket and show the
+		// mint plain `board-meeting`; the lab pods share a bucket and show the
 		// ordinal.
-		{what: "the first boardroom half", table: "system", place: "boardroom-a", name: "boardroom", ordinal: 1, generated: true},
-		{what: "the second boardroom half", table: "system", place: "boardroom-b", name: "boardroom", ordinal: 1, generated: true},
-		{what: "the first lab pod", table: "system", place: "media-lab", name: "classroom", ordinal: 1, generated: true},
-		{what: "the second lab pod", table: "system", place: "media-lab", name: "classroom-2", ordinal: 2, generated: true},
+		{what: "the first boardroom half", table: "system", place: "boardroom-a", name: "board-meeting", ordinal: 1, generated: true},
+		{what: "the second boardroom half", table: "system", place: "boardroom-b", name: "board-meeting", ordinal: 1, generated: true},
+		{what: "the first lab pod", table: "system", place: "media-lab", name: "teaching", ordinal: 1, generated: true},
+		{what: "the second lab pod", table: "system", place: "media-lab", name: "teaching-2", ordinal: 2, generated: true},
 	} {
 		placeCol := "location_id"
 		if tc.table == "location" {
@@ -797,7 +797,7 @@ func TestSeededNamesComeFromTheGenerator(t *testing.T) {
 		}
 	}
 
-	// The whole location chain is the operator's: `boardroom` sits under the
+	// The whole location chain is the operator's: `boardroom-a` sits under the
 	// floor they called `level-2`, under the building they called `west`. The
 	// join is kept (it used to prove a typed name nesting under a minted one)
 	// because it is what catches a fixture resolver that reparented the fleet.
@@ -931,16 +931,16 @@ func TestSeededLabelsRenderFromTheirRules(t *testing.T) {
 		{table: "component", place: "boardroom-a", name: "dsp", label: "Boardroom DSP", platform: false},
 		// The two halves of the divisible room are two ROOMS now, so each half
 		// is the first `board` system in its own bucket and both mint plain
-		// `boardroom` (ADR-0101): same name, two rooms. A system reads as its
+		// `board-meeting` (ADR-0101): same name, two rooms. A system reads as its
 		// place (#872), so each half reads its own room.
-		{table: "system", place: "boardroom-a", name: "boardroom", label: "Boardroom A", platform: true},
-		{table: "system", place: "boardroom-b", name: "boardroom", label: "Boardroom B", platform: true},
+		{table: "system", place: "boardroom-a", name: "board-meeting", label: "Boardroom A", platform: true},
+		{table: "system", place: "boardroom-b", name: "board-meeting", label: "Boardroom B", platform: true},
 		// The same-BUCKET same-type siblings live in the media lab: a place
 		// holding several systems names each one's kind after it, and the
-		// ordinal follows the name, so `classroom` reads "Media Lab Teaching"
-		// and `classroom-2` "Media Lab Teaching 2" (#693, #872).
-		{table: "system", place: "media-lab", name: "classroom", label: "Media Lab Teaching", platform: true},
-		{table: "system", place: "media-lab", name: "classroom-2", label: "Media Lab Teaching 2", platform: true},
+		// ordinal follows the name, so `teaching` reads "Media Lab Teaching"
+		// and `teaching-2` "Media Lab Teaching 2" (#693, #872).
+		{table: "system", place: "media-lab", name: "teaching", label: "Media Lab Teaching", platform: true},
+		{table: "system", place: "media-lab", name: "teaching-2", label: "Media Lab Teaching 2", platform: true},
 		// The two floors, which used to be here as PINS over a generated name
 		// (`1` labelled Level 2). They are named for their designations now, so
 		// the rule renders those designations and the platform holds the pen.
@@ -1019,7 +1019,7 @@ func TestSeededStaffingLandsOnTheRightDevices(t *testing.T) {
 		room string
 		want map[string]string // slot -> the component names filling it, joined
 	}{
-		// Both halves mint `boardroom` in their own rooms, so the room is the
+		// Both halves mint `board-meeting` in their own rooms, so the room is the
 		// address here. The shared rack staffs dsp and amplifier in BOTH,
 		// from its physical home in A, so both halves name dsp-1 and amp-1.
 		{room: "boardroom-a", want: map[string]string{
@@ -1078,13 +1078,13 @@ func TestSeededStaffingLandsOnTheRightDevices(t *testing.T) {
 		select count(*) from system_member m
 		join system s on s.id = m.system_id
 		join component c on c.id = m.component_id
-		where s.name = 'boardroom' and c.name = 'power-1'
+		where s.name = 'board-meeting' and c.name = 'power-1'
 		  and not exists (select 1 from system_slot_assignment a
 		    where a.system_id = m.system_id and a.component_id = m.component_id)`).Scan(&unstaffed); err != nil {
 		t.Fatalf("read the unstaffed member: %v", err)
 	}
 	if unstaffed != 1 {
-		t.Errorf("the power conditioner is a member of boardroom filling no slot in %d rows, want 1", unstaffed)
+		t.Errorf("the power conditioner is a member of board-meeting filling no slot in %d rows, want 1", unstaffed)
 	}
 }
 
@@ -1489,7 +1489,7 @@ func TestSeededFleetShowsEveryVerdict(t *testing.T) {
 
 	// Systems are platform-named, so the fixture key is not an address, and a
 	// minted name is not one either: both boardroom halves mint plain
-	// `boardroom` in their own rooms, so the bare name is ambiguous
+	// `board-meeting` in their own rooms, so the bare name is ambiguous
 	// fleet-wide. A system is resolved to its uuid through the room that
 	// holds it instead, and a room may hold more than one (the lab's two
 	// pods), so the verdict is asserted over every system in the room.
