@@ -250,10 +250,12 @@ jobs:
           bot_id: ${{ steps.gate.outputs.bot_id }}
           bot_name: ${{ steps.gate.outputs.bot_name }}
           # The action denies make, Docker and other code-running commands on a PR
-          # whose author lacks write access, and agent PRs are authored by the App
-          # bot. The gate step already refuses forks and non-team senders, so a
-          # same-repo agent PR is the only case this unlocks.
-          restrict_untrusted_prs: "false"
+          # whose author lacks write access, which every agent PR does, since the
+          # App bot writes them. Lift that only when the PR's author is this
+          # workflow's own App bot (the gate's agent_pr output, which compares the
+          # PR author with the App's login); a PR by anyone else, another allowed
+          # bot included, keeps the restriction.
+          restrict_untrusted_prs: ${{ steps.gate.outputs.agent_pr == 'true' && 'false' || 'true' }}
           allowed_bots: ${{ steps.app.outputs.app-slug }}${{ steps.reviewer.outputs.app-slug && format(',{0}', steps.reviewer.outputs.app-slug) || '' }}
           claude_args: >-
             --model ${{ steps.gate.outputs.model }}
