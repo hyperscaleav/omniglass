@@ -70,6 +70,8 @@ export default defineConfig({
     '/guides/admin/secret-types/': '/admin/secrets/#secret-types',
     '/guides/admin/variables/': '/admin/variables/',
     '/guides/admin/files/': '/admin/files/',
+    // The Drivers page joined the Admin section and its spec reference the Developer section (#2200).
+    '/guides/admin/drivers/': '/admin/drivers/',
     // The catalog pages joined the Admin section (#2190); vendors folded into
     // the products page.
     '/guides/admin/location-types/': '/admin/location-types/',
@@ -255,13 +257,6 @@ export default defineConfig({
                 { label: 'Synthetic user', slug: 'contributing/synthetic-user' },
                 { label: 'Release and CI', slug: 'contributing/release-ci' },
                 { label: 'Labels and the board', slug: 'contributing/labels' },
-              ],
-            },
-            {
-              label: 'Admin guide',
-              collapsed: true,
-              items: [
-                { label: 'Drivers', slug: 'guides/admin/drivers' },
               ],
             },
           ],

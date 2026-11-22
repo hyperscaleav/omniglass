@@ -5,7 +5,7 @@ status: "Accepted, amended by ADR-1634"
 summary: "A driver poll runs on its declared `schedule.every` at heartbeat granularity (#822): a per-task next-due time kept for the run, the first tick at or after it runs the poll, a new task runs at once, a late tick never bursts; probes stay per tick and pushes are never gated. Settles the nodes page's open question for driver polls"
 ---
 
-- **Date:** 2026-10-23 | **Status:** Accepted, amended by ADR-1634 | **Pages:** [nodes](/architecture/nodes/), [collection](/architecture/collection/), [drivers](/guides/admin/drivers/)
+- **Date:** 2026-10-23 | **Status:** Accepted, amended by ADR-1634 | **Pages:** [nodes](/architecture/nodes/), [collection](/architecture/collection/), [drivers](/admin/drivers/)
 - **Decision:** The node honors a driver poll's `schedule.every` (#822). It keeps, per task id and for
   the life of the run, when each poll is next due, and runs the poll on the first heartbeat tick at or
   after that time. The next run is booked from the due time, so tick jitter does not drift the cadence;

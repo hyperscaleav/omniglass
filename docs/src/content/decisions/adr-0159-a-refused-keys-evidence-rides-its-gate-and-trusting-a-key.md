@@ -5,7 +5,7 @@ status: "Accepted"
 summary: "A refusal of a changed key carries both keys as data on its gate (#1078, amending ADR-0158 point 5): `endpoint-rejection` appends `<pinned-key> <offered-key>`, both or neither, declared once in `internal/collection/rejection`, adopted with the gate on a restart, and served as the reachability read's `pinned_key` and `offered_key`, so no surface parses a fingerprint out of `session-reason`. `:retry` with `host_key` must name the gate's offered key while one is held (409 otherwise, nothing written) and audits the pin replaced and the pin set. The console's Trust this key confirms first and sends exactly the key it showed"
 ---
 
-- **Date:** 2026-10-24 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [api](/architecture/api/), [glossary](/architecture/glossary/), [drivers](/guides/admin/drivers/)
+- **Date:** 2026-10-24 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [api](/architecture/api/), [glossary](/architecture/glossary/), [drivers](/admin/drivers/)
 - **Decision:** (#1078, approved in session on 2026-10-24.) A host-key rejection is trusted from the
   console, and the data it needs is the refusal's own:
   1. **The evidence rides the gate** (amending ADR-0158 point 5). A refusal of a changed key (an ssh

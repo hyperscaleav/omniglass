@@ -5,7 +5,7 @@ status: "Accepted"
 summary: "Listeners run over the held session (#817): `arm` commands on every connection before up (plumbing, self-logged), `match` claims a pushed line, its emits land as push samples under the listen task. Every inbound line is routed listeners first, then the exchange in flight by its declared `request.reply` shape (or the first unclaimed line), then unclaimed (counted; `unmatched: collection-failed` lands one fault per tick). Commands ride the held session. Reverses the designed matcher order (outstanding poll first)"
 ---
 
-- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [drivers](/guides/admin/drivers/)
+- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [drivers](/admin/drivers/)
 - **Decision:** A driver's listeners come alive over the held session (#817), and one reader per
   connection routes every inbound line:
   1. **Arm on every connection.** A listener's `arm` commands are sent in order on each connection

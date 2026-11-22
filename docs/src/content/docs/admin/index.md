@@ -71,5 +71,5 @@ Automation is what happens when a value crosses a line:
 - **[Notifications](/admin/notifications/)**: the targets, action rules and messages that tell
   somebody about an alarm.
 
-Drivers are still the **Admin guide** under **Being rebuilt** in the sidebar until they land here
-([drivers](/guides/admin/drivers/), #2200).
+- **[Drivers](/admin/drivers/)**: the catalog of how a device is talked to, attaching one to an
+  endpoint, and checking a spec.

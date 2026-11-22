@@ -6,7 +6,7 @@ refs: [1034, 1113]
 summary: "A `websocket` endpoint, and a `wss` one over the shared TLS primitive, is a held session (#1034, slice 4 of epic #1113) through the staged dialer every held session uses: its auth step logs in first when the session declares an http login, then sends `session.upgrade` with the session's scheme, the login's session and its cookies, a 401 or a 403 to it a terminal auth. A message is a text frame, routed by the line session's precedence (ADR-0151): an arm subscribes on every connection, a listener claims a push, and a request is a frame (a line, or a JSON body rendered injection-safe) whose `reply.correlate` names the field the node writes a fresh random id into, its answer the frame carrying the id back. Ping and pong keep the socket proven, a frame is bounded to 1 MiB and dropped past it, and the probe is http's"
 ---
 
-- **Date:** 2026-10-25 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [glossary](/architecture/glossary/), [drivers](/guides/admin/drivers/), [simulation](/architecture/simulation/)
+- **Date:** 2026-10-25 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [glossary](/architecture/glossary/), [drivers](/admin/drivers/), [simulation](/architecture/simulation/)
 - **Decision:** (#1034, under the architect's approval of epic #1113.)
   1. **Two registry entries, one held session.** `websocket` and `wss` (decision 4 of #1113: `wss`
      over the shared TLS primitive, its own entry so a component can serve a plain socket beside a

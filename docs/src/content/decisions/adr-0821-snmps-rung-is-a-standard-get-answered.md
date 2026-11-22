@@ -6,7 +6,7 @@ refs: [821]
 summary: "`snmp` is v2c, built and stateless (`held: true` was honoured by no code path), its transport rung a get of a standard OID answered, `ladder.transport.request.get`, sysUpTime.0 unless the driver names another, sent with the endpoint's community, which the worklist now delivers to the probe (#821). Any response is an answer: responsive, one `snmp-response-time`, `endpoint-authenticated yes`, the verdict. A wrong community is dropped silently by the protocol and reads not responsive, retryable, indistinguishable from a stopped agent; only `authorizationError` is a terminal `auth` refusal at the session rung, beneath which no get is sent by the probe or a poll. The simulated faces are strict and answer a refused community with authorizationError"
 ---
 
-- **Date:** 2026-10-24 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [simulation](/architecture/simulation/), [glossary](/architecture/glossary/), [drivers](/guides/admin/drivers/)
+- **Date:** 2026-10-24 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [simulation](/architecture/simulation/), [glossary](/architecture/glossary/), [drivers](/admin/drivers/)
 - **Decision:** (#821, under the architect's approval of epic #1076, decisions 6 and 7a.)
   1. **Built and stateless.** `snmp` reads built in the transport registry and not held: the
      `held: true` it carried was honoured by no snmp code path. Its rung is `request`.

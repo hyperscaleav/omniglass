@@ -6,7 +6,7 @@ summary: "http becomes a full collection transport (#902, slice 1 of epic #1113,
 refs: [902, 1113, 1115]
 ---
 
-- **Date:** 2026-10-24 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [glossary](/architecture/glossary/), [drivers](/guides/admin/drivers/), [simulation](/architecture/simulation/)
+- **Date:** 2026-10-24 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [glossary](/architecture/glossary/), [drivers](/admin/drivers/), [simulation](/architecture/simulation/)
 - **Decision:** (#902, under the architect's approval of epic #1113, decisions 1 and 4 to 7.)
   1. **The request.** An http or https `request` declares `method` (GET by default), `path`,
      `query`, `headers`, a `body` (a JSON value rendered in its `body_format`: json, form, xml or

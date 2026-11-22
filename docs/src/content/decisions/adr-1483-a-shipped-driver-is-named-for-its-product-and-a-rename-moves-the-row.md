@@ -7,7 +7,7 @@ refs: [1483, 1363]
 ---
 
 - **Date:** 2026-11-15 | **Status:** Accepted | **Pages:**
-  [collection](/architecture/collection/), [drivers guide](/guides/admin/drivers/)
+  [collection](/architecture/collection/), [drivers guide](/admin/drivers/)
 - **Decision:** a shipped driver is named for the product it serves (the ruling on #1363); a
   shared driver exists only for the same product in different configurations. The two seed
   drivers that broke the rule once their siblings moved to drivers of their own are renamed:

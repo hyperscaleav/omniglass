@@ -378,6 +378,11 @@ func TestCommandStuckAndExpiredCounts(t *testing.T) {
 	// Both cross deliveryTTL a moment after the first pass.
 	f.exec(t, `update command set ts = $2::timestamptz - interval '10 minutes' + interval '1 millisecond'
 		where id = any($1)`, []int64{taken, ignored}, first.Now)
+	// The rows expire once the DB's now() is 1 ms past first.Now, and they are
+	// candidates only above first.Now - deliveryTTL, so backdating further would
+	// drop them from the window. Wait the clock past the boundary instead of
+	// racing it: a read inside that millisecond still counted them live.
+	f.exec(t, `select pg_sleep(0.05)`)
 	second, q := f.health(t, first.Now)
 	if got := q["edge-s"]; got.ExpiredUndelivered != 1 || got.ExpiredUnexecuted != 1 || got.Pending != 0 || got.Stuck != 0 {
 		t.Fatalf("after the TTL: %+v, want one expired undelivered, one unexecuted, nothing pending or stuck", got)

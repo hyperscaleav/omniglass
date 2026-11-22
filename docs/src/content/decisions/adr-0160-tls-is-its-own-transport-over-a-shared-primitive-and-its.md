@@ -5,7 +5,7 @@ status: "Accepted"
 summary: "`tls` is its own held line transport (rung `handshake`) over one TLS dial primitive the http, websocket and mqtt carriers consume later, so a component holds a raw port and a TLS one side by side (#1035). The verification mode is the driver input `tls-mode` (verify, pin, skip), the driver's default, verify when none, skip never a default. The pin is the public key (SPKI, the ssh `SHA256:` form), trusted on first use as `tls-certificate`, delivered back by the worklist, one per endpoint shared by its session and probe; a changed key or a failed verification is a terminal `certificate` refusal at the transport rung, the gate carrying the pinned and offered keys as data; `:retry` with `certificate` accepts a new key. The probe lands one `tls-handshake-time` per answered probe and, for an accepted certificate, `tls-certificate-expiry` and `tls-certificate-days-left`"
 ---
 
-- **Date:** 2026-10-24 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [glossary](/architecture/glossary/), [drivers](/guides/admin/drivers/), [simulation](/architecture/simulation/), [api](/architecture/api/)
+- **Date:** 2026-10-24 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [glossary](/architecture/glossary/), [drivers](/admin/drivers/), [simulation](/architecture/simulation/), [api](/architecture/api/)
 - **Decision:** (#1035, under the architect's approval of epic #1076, decisions 1 to 4 and 7a.)
   1. **A distinct transport over a shared primitive.** `tls` joins the registry as a held line
      transport with the handshake as its rung: the line protocol rides it exactly as it rides

@@ -16,7 +16,7 @@ is the directory of **products**: the concrete SKUs the fleet is built from, on 
 flat-catalog pattern as [Location Types](/admin/location-types/) and [Tags](/admin/tags/). A product is
 a specific model (a **Kestrel VRoom**, a **Boreal Edge 55**), not an organization and not an installed
 unit. It is where the two leaf catalogs converge: the [vendor](#vendors) that makes
-it and the [driver](/guides/admin/drivers/) that speaks to it, classified by a **kind** and a
+it and the [driver](/admin/drivers/) that speaks to it, classified by a **kind** and a
 **component type**. Each row shows the
 **name** (for example `kestrel-vroom`), the **label**, its
 **vendor**, **driver**, **kind**, and its **origin** (**official** or **custom**). A
@@ -137,7 +137,7 @@ by Acme") references its vendor through an optional `vendor_id`, chosen from a v
 the product's create and edit forms, and a component then points at that product. Several shipped
 official products carry a vendor this way. See
 [core entities](/architecture/core-entities/) for where the vendor catalog sits in the fleet
-model, and [Drivers](/guides/admin/drivers/) for the other leaf catalog beside it.
+model, and [Drivers](/admin/drivers/) for the other leaf catalog beside it.
 
 - **Kind** classifies the organization: a **manufacturer** builds hardware, an **integrator**
   assembles and installs systems, a **developer** ships software. It defaults to **manufacturer**
