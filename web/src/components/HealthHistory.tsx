@@ -75,7 +75,7 @@ export default function HealthHistory(props: {
 
       {/* In compact form the surface beside this strip owns the number (the
           history tab's uptime card), so the trailing hint would say it twice. */}
-      <StateStrip segments={list()} tone={tone} height="h-2.5" title="HealthState over the recorded window">
+      <StateStrip segments={list()} tone={tone} height="h-2.5" title="Health over the recorded window">
         <Show when={!props.compact}>
           <Show when={healthy() !== null} fallback={<span class="text-[11px] text-base-content/40">no data</span>}>
             <span class="w-20 shrink-0 text-right text-[11px] tabular-nums text-base-content/60">{healthy()}% healthy</span>
