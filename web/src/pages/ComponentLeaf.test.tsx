@@ -64,7 +64,7 @@ const iso = (secondsAgo: number) => new Date(now - secondsAgo * 1000).toISOStrin
 const reach: Reachability = {
   component: "videobar-1",
   endpoints: [
-    // A stale sample: last verdict long ago, but the outpost below is alive.
+    // A stale sample: last health long ago, but the outpost below is alive.
     { endpoint: "ssh", transport: "ssh", outpost: "edge-1", reachability: { value: "up", ts: iso(600) }, layers: [
       { layer: "ping", check: "icmp-reachable", value: "up", ts: iso(600) },
       { layer: "port", check: "tcp-open", value: "open", ts: iso(600) },
@@ -77,7 +77,7 @@ const outposts: Outpost[] = [{ name: "edge-1", enrolled: true, last_heartbeat_at
 // The cache the last mount rendered from, so a test can land a poll on it.
 let leafClient: QueryClient | undefined;
 
-function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: unknown[], component: Component = bar, meOverride: Me = me, alarms?: unknown[], seed?: { reach?: Reachability; outposts?: Outpost[]; commands?: Command[]; metrics?: unknown[]; view?: FleetView; alarmsVerdict?: string }, components?: Component[]) {
+function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: unknown[], component: Component = bar, meOverride: Me = me, alarms?: unknown[], seed?: { reach?: Reachability; outposts?: Outpost[]; commands?: Command[]; metrics?: unknown[]; view?: FleetView; alarmsHealth?: string }, components?: Component[]) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   leafClient = qc;
   seedSeverityLevels(qc);
@@ -96,7 +96,7 @@ function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: un
     { component: "videobar-1", system: "overflow", primary: false, system_count: 2 },
   ]);
   qc.setQueryData([...REACHABILITY_KEY(uuidFor("cf-c-bar"))], seed?.reach ?? reach);
-  qc.setQueryData([...componentAlarmsReadKey(uuidFor("cf-c-bar"))], { ...(seed?.alarmsVerdict ? { health: seed.alarmsVerdict } : {}), alarms: alarms ?? [
+  qc.setQueryData([...componentAlarmsReadKey(uuidFor("cf-c-bar"))], { ...(seed?.alarmsHealth ? { health: seed.alarmsHealth } : {}), alarms: alarms ?? [
     { id: "al-1", component: "videobar-1", component_id: uuidFor("cf-c-bar"), severity: "high", message: "No route to host", raised_at: iso(9600), active: true, acknowledged: false },
     { id: "al-0", component: "videobar-1", component_id: uuidFor("cf-c-bar"), severity: "warning", message: "Cleared last week", raised_at: iso(600000), active: false, acknowledged: true },
   ] });
@@ -246,16 +246,16 @@ describe("the component leaf", () => {
 });
 
 // A device nothing has ever collected from reads the same on every surface
-// (#1454): an unknown verdict, no outpost offline when no outpost exists, and no
+// (#1454): an unknown health, no outpost offline when no outpost exists, and no
 // ladder chip standing in for a probe that never ran. The outline reads the
-// same device as a verdict-less row, which the badge words as unknown.
+// same device as a health-less row, which the badge words as unknown.
 describe("a device nothing has collected from (#1454)", () => {
   const looseView = { ...view, systems: [] } as unknown as FleetView;
   const neverProbed = {
     component: "videobar-1",
     endpoints: [{ endpoint: "icmp", transport: "icmp", reachability: null, layers: [], history: [] }],
   } as unknown as Reachability;
-  const mountNever = () => mount(undefined, [], bar, me, [], { reach: neverProbed, outposts: [], view: looseView, alarmsVerdict: "unknown" });
+  const mountNever = () => mount(undefined, [], bar, me, [], { reach: neverProbed, outposts: [], view: looseView, alarmsHealth: "unknown" });
 
   it("wears an unknown badge, not healthy, as the outline does", () => {
     mountNever();
@@ -271,7 +271,7 @@ describe("a device nothing has collected from (#1454)", () => {
     expect(screen.queryByText("outpost offline")).toBeNull();
   });
 
-  it("shows no reachability rung without a stored verdict", () => {
+  it("shows no reachability rung without a stored health", () => {
     mountNever();
     const card = screen.getByTestId("leaf-collection");
     expect(within(card).queryByText("reachable")).toBeNull();
@@ -281,14 +281,14 @@ describe("a device nothing has collected from (#1454)", () => {
   it("shows the rung once a probe has answered", () => {
     mount(undefined, [], bar, me, [], {
       reach: { ...neverProbed, endpoints: [{ endpoint: "icmp", transport: "icmp", reachability: { value: "up", ts: iso(5) }, last_seen: iso(5), layers: [{ layer: "ping", check: "icmp-reachable", value: "up", ts: iso(5) }], history: [] }] } as unknown as Reachability,
-      outposts: [], view: looseView, alarmsVerdict: "healthy",
+      outposts: [], view: looseView, alarmsHealth: "healthy",
     });
     expect(within(screen.getByTestId("leaf-collection")).getByText("reachable")).toBeTruthy();
   });
 });
 
 describe("the leaf's dispatch facts (#786)", () => {
-  it("the header wears the component's verdict and since-when from the worst active alarm", () => {
+  it("the header wears the component's health and since-when from the worst active alarm", () => {
     mount();
     const header = screen.getByTestId("leaf-header");
     expect(within(header).getByText("outage")).toBeTruthy();
@@ -621,7 +621,7 @@ describe("the component leaf refreshes (#934)", () => {
 
   const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
 
-  it("polls its reachability, vitals, alarms and verdict, one request per read", async () => {
+  it("polls its reachability, vitals, alarms and health, one request per read", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
     const gets: string[] = [];
     const later = new Date().toISOString();
@@ -652,7 +652,7 @@ describe("the component leaf refreshes (#934)", () => {
     expect(screen.getByTestId("collection-ssh").textContent).toBe("collecting");
     expect(screen.getByTestId("leaf-vitals").textContent).toContain("Uptime");
     expect(screen.getByTestId("leaf-alarms").textContent).toContain("Reachability lost");
-    // The verdict is the component's own, off its alarms read.
+    // The health is the component's own, off its alarms read.
     expect(screen.getByTestId("leaf-header").textContent).toContain("degraded");
     const count = (p: string) => gets.filter((g) => g.endsWith(p)).length;
     // Each read polled, as one request, not one per endpoint or per series.

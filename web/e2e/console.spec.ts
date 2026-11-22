@@ -385,11 +385,11 @@ test.describe("operator console", () => {
     await page.waitForURL(/\/web\/platform$/);
 
     // The header: the build the server booted, how long it has been up, and the
-    // platform system's verdict, all read from the platform's own components.
+    // platform system's health, all read from the platform's own components.
     const header = page.getByTestId("platform-header");
     await expect(header.getByTestId("platform-version").first()).not.toHaveText(/not reported/);
     await expect(header.getByTestId("platform-uptime").first()).not.toHaveText(/not reported/);
-    await expect(header.getByTestId("platform-verdict")).toContainText(/healthy|incomplete|degraded|outage/);
+    await expect(header.getByTestId("platform-health")).toContainText(/healthy|incomplete|degraded|outage/);
     await expect(page.getByTestId("platform-lab")).toBeVisible();
 
     // A row for every enrolled outpost, and a checkin figure on each that has

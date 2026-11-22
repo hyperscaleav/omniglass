@@ -6,10 +6,10 @@ import type { FleetHealthOutputBody, HealthSlotBody, HealthTransitionBody } from
 //
 // The model, end to end, because every surface here is a view of it:
 //
-//   an ALARM impairs its COMPONENT's own verdict wholesale (#626: no longer
+//   an ALARM impairs its COMPONENT's own health wholesale (#626: no longer
 //   per named capability)
 //   -> a SLOT carries a QUORUM; when too few assigned components currently
-//      occupy it (their own verdict is not outage; degraded still occupies),
+//      occupy it (their own health is not outage; degraded still occupies),
 //      the slot is IMPAIRED
 //   -> an impaired slot contributes its IMPACT (outage, degraded, or none)
 //      UNLESS it belongs to a CHOICE (#626: an exclusive-or group, such as an
@@ -18,9 +18,9 @@ import type { FleetHealthOutputBody, HealthSlotBody, HealthTransitionBody } from
 //      its impaired/short/spare figures are then read-only trivia, not part
 //      of why the system is what it is
 //   -> a SYSTEM takes the worst contribution among its ACTIVE slots
-//   -> a LOCATION takes the worst verdict among the systems placed beneath it
+//   -> a LOCATION takes the worst health among the systems placed beneath it
 //
-// The verdict is never computed here: the server sends it, and the console shows
+// The health is never computed here: the server sends it, and the console shows
 // the chain that produced it. Recomputing it in the browser is exactly how a
 // console starts disagreeing with the API it reads. The same discipline applies
 // to ACTIVE: rendering a slot's impaired figure without checking it first is
@@ -28,7 +28,7 @@ import type { FleetHealthOutputBody, HealthSlotBody, HealthTransitionBody } from
 // impaired list that flatly disagrees with it), so every derivation below
 // filters through activeSlots rather than the raw list.
 
-export type Verdict = "healthy" | "incomplete" | "degraded" | "outage";
+export type HealthState = "healthy" | "incomplete" | "degraded" | "outage";
 export type HealthSlot = HealthSlotBody;
 export type HealthTransition = HealthTransitionBody;
 export type FleetHealth = FleetHealthOutputBody;
@@ -47,18 +47,18 @@ export async function systemHealth(name: string): Promise<FleetHealth> {
   return data as FleetHealth;
 }
 
-// The BULK verdict read (#653). One request carrying the one fact a list's
+// The BULK health read (#653). One request carrying the one fact a list's
 // health column renders, for every system the caller can see.
 //
 // Its own cache namespace, deliberately NOT the per-system one: those entries
 // hold a full FleetHealth report that the panels read slots and transitions out
-// of, and seeding them from this read would put a verdict-only object behind a
-// key whose readers expect the whole report. A write that changes a verdict
-// invalidates both, which is why SYSTEM_VERDICTS_KEY sits beside systemHealthKey
+// of, and seeding them from this read would put a health-only object behind a
+// key whose readers expect the whole report. A write that changes a health
+// invalidates both, which is why SYSTEM_HEALTHS_KEY sits beside systemHealthKey
 // at every invalidation site.
-export const SYSTEM_VERDICTS_KEY = ["system-verdicts"] as const;
+export const SYSTEM_HEALTHS_KEY = ["system-healths"] as const;
 
-export async function systemVerdicts(): Promise<Map<string, string>> {
+export async function systemHealths(): Promise<Map<string, string>> {
   const { data, error } = await api.GET("/systems:health");
   if (error) throw error;
   return new Map((data?.systems ?? []).map((v) => [v.system, v.health] as const));
@@ -70,56 +70,56 @@ export async function locationHealth(name: string): Promise<FleetHealth> {
   return data as FleetHealth;
 }
 
-// verdictOf narrows whatever the API sent to the four states the console knows.
+// healthOf narrows whatever the API sent to the four states the console knows.
 // Anything else (an unread query, a state a newer server introduces) is null, which
 // the badge renders as unknown rather than guessing.
-export function verdictOf(v: string | null | undefined): Verdict | null {
+export function healthOf(v: string | null | undefined): HealthState | null {
   return v === "healthy" || v === "incomplete" || v === "degraded" || v === "outage" ? v : null;
 }
 
 // Worst wins, everywhere: a slot over its system, a system over its location.
-// The order is the severity ranking, matching internal/health's Verdict enum
+// The order is the severity ranking, matching internal/health's HealthState enum
 // exactly. incomplete sits between healthy and degraded: a commissioning gap is
 // worth surfacing above a clean system and worth burying under anything that is
 // actually broken.
-const RANK: Record<Verdict, number> = { healthy: 0, incomplete: 1, degraded: 2, outage: 3 };
+const RANK: Record<HealthState, number> = { healthy: 0, incomplete: 1, degraded: 2, outage: 3 };
 
-export function verdictRank(v: Verdict): number {
+export function healthRank(v: HealthState): number {
   return RANK[v];
 }
 
-export function worstVerdict(list: (string | null | undefined)[]): Verdict | null {
-  let worst: Verdict | null = null;
+export function worstHealth(list: (string | null | undefined)[]): HealthState | null {
+  let worst: HealthState | null = null;
   for (const raw of list) {
-    const v = verdictOf(raw);
+    const v = healthOf(raw);
     if (v && (!worst || RANK[v] > RANK[worst])) worst = v;
   }
   return worst;
 }
 
-// One verdict as a glyph's hue (#1071, #1074): the outline's slots and the
+// One health as a glyph's hue (#1071, #1074): the outline's slots and the
 // map's icons. Healthy wears the muted tier, so a room or a fleet of healthy
 // glyphs reads calm and the one amber glyph does not.
-export const VERDICT_HUE: Record<Verdict, string> = {
+export const HEALTH_HUE: Record<HealthState, string> = {
   healthy: "text-healthy",
   incomplete: "text-incomplete",
   degraded: "text-warning",
   outage: "text-error",
 };
 
-// verdictHue is a glyph that stands for one component. The verdict wins
+// healthHue is a glyph that stands for one component. The health wins
 // whenever it is known, so the glyph never disagrees with the row showing the
-// same verdict; only an unknown verdict falls back to the staffing read's down
+// same health; only an unknown health falls back to the staffing read's down
 // (red) or the grey no-data tone.
-export function verdictHue(v: Verdict | null, down = false): string {
-  if (v) return VERDICT_HUE[v];
-  return down ? VERDICT_HUE.outage : "text-base-content/35";
+export function healthHue(v: HealthState | null, down = false): string {
+  if (v) return HEALTH_HUE[v];
+  return down ? HEALTH_HUE.outage : "text-base-content/35";
 }
 
 const slots = (h: FleetHealth | undefined): HealthSlot[] => h?.slots ?? [];
 
 // activeSlots is every slot whose own figures actually counted toward the
-// verdict: unconditional slots (no choice) plus the slot of whichever
+// health: unconditional slots (no choice) plus the slot of whichever
 // alternate answered its choice. A slot whose alternate LOST reads active
 // false; it can still be impaired on its own terms, but rendering that
 // impairment as part of "why this system reads what it does" is exactly the

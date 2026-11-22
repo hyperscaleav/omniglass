@@ -39,7 +39,7 @@ import { CalcRuleLink } from "../components/RuleLink";
 import { durationText } from "../lib/timeline";
 import { getOutpost, outpostKey } from "../lib/outposts";
 import { PRODUCTS_KEY, listProducts } from "../lib/products";
-import { LEAF_OUTPOST_POLL_MS, LEAF_POLL_MS, collectionState, dotVerdict, identityRows, instanceName, leafAlarmSince, membershipRows, spreadSummary, vitalRows, vitalValueText } from "../lib/component_leaf";
+import { LEAF_OUTPOST_POLL_MS, LEAF_POLL_MS, collectionState, dotHealth, identityRows, instanceName, leafAlarmSince, membershipRows, spreadSummary, vitalRows, vitalValueText } from "../lib/component_leaf";
 import { entityLabel } from "../lib/entities";
 import { CLOCK_TICK_MS, createClock } from "../lib/clock";
 import { createToggles } from "../lib/toggles";
@@ -53,7 +53,7 @@ import { describeError, fmtTime } from "../lib/format";
 // The component's detail view (#637, reoriented in #872): a component is a
 // piece of a system. Its location is a card of context (its own, or its system's
 // standing in for one it does not have, and the card says which); then the
-// component itself: verdict, since-when (what took it down), product, and its
+// component itself: health, since-when (what took it down), product, and its
 // three tabs. Overview reads why, what it is, the systems it serves and the
 // slot it fills in each, its vitals, and collection in context: the one place
 // an outpost appears to an operator, because the distinction that matters is
@@ -166,9 +166,9 @@ export default function ComponentLeaf() {
   // catalog's flag, #917), amber when they only degrade.
   const inOutage = createMemo(() => activeAlarms().some((a) => scale().outage(a.severity)));
   const since = createMemo(() => leafAlarmSince(alarmsQ.data?.alarms ?? [], pageNow(), scale().levels));
-  // The component's own verdict rides on its alarms read, polled; the fleet
+  // The component's own health rides on its alarms read, polled; the fleet
   // view's dot (read once, for the location and the path) stands in until then.
-  const verdict = createMemo(() => alarmsQ.data?.verdict ?? (view.data ? dotVerdict(view.data, component()?.id ?? "") : null));
+  const componentHealth = createMemo(() => alarmsQ.data?.health ?? (view.data ? dotHealth(view.data, component()?.id ?? "") : null));
   const identity = createMemo(() => identityRows(propsQ.data ?? []));
   const vitals = createMemo(() => vitalRows(metricsQ.data ?? []));
   // The vitals rows are kept by metric name, never by the objects a poll
@@ -264,7 +264,7 @@ export default function ComponentLeaf() {
                 took it down: the worst active alarm's age (#786). */}
             <div data-testid="leaf-header" class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-base-300 px-4 py-3 text-sm">
               <Eyebrow label="Component" hint="A piece of a system. Its health is what its own checks and alarms say; the systems it serves read it through the slots it fills." />
-              <HealthBadge verdict={verdict() ?? undefined} size="sm" />
+              <HealthBadge health={componentHealth() ?? undefined} size="sm" />
               <Show when={since()}>
                 {(sc) => <span data-testid="since-line" class="tabular-nums text-base-content/70">since {fmtTime(sc().ts)} · {durationText(sc().ms)}</span>}
               </Show>

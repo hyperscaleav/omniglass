@@ -32,7 +32,7 @@ import {
   validateLevelDraft,
 } from "../lib/severity";
 import { EVENT_RULES_KEY } from "../lib/event_rules";
-import { LOCATION_HEALTH_PREFIX, SYSTEM_HEALTH_PREFIX, SYSTEM_VERDICTS_KEY } from "../lib/health";
+import { LOCATION_HEALTH_PREFIX, SYSTEM_HEALTH_PREFIX, SYSTEM_HEALTHS_KEY } from "../lib/health";
 import { COMPONENT_ALARMS_PREFIX } from "../lib/alarms";
 import { FLEET_VIEW_KEY } from "../lib/fleet";
 import { COMPONENTS_KEY } from "../lib/components";
@@ -248,14 +248,14 @@ function SeverityLevelBladeBody(p: { name: string }): JSX.Element {
 
 // The query prefixes a level write moves: the levels themselves, the rules
 // naming them, every component's alarms, every system's and location's health,
-// the fleet verdicts and the fleet view.
+// the fleet health results and the fleet view.
 const LEVEL_DEPENDENTS: readonly (readonly string[])[] = [
   severityLevelsKey,
   EVENT_RULES_KEY,
   COMPONENT_ALARMS_PREFIX,
   SYSTEM_HEALTH_PREFIX,
   LOCATION_HEALTH_PREFIX,
-  SYSTEM_VERDICTS_KEY,
+  SYSTEM_HEALTHS_KEY,
   FLEET_VIEW_KEY,
   COMPONENTS_KEY,
 ];

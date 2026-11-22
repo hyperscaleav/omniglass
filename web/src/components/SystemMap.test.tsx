@@ -37,7 +37,7 @@ const markers: MapMarker[] = SPECS.map(([slot, slotLabel, position, x, y, name])
 }));
 
 const member: MemberContext = {
-  verdict: () => "healthy",
+  health: () => "healthy",
   alarm: () => undefined,
   product: () => "",
   label: (id, name) => `${SPECS.find(([r, , p]) => `c-${r}-${p}` === id)![1]} · ${name}`,

@@ -6,22 +6,22 @@ import type { HealthTransition } from "../lib/health";
 // The history strip is the surface that answers "when did this change", so the
 // one thing it must never do is render a state it knows as a state it does not.
 // Both of its lookups (the segment tone and the row pill) fall back to the
-// no-data styling for an unrecognized verdict, which makes every verdict the
+// no-data styling for an unrecognized health, which makes every health the
 // maps forget indistinguishable from never having been measured.
 const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
 
-const at = (ts: string, verdict: string): HealthTransition =>
-  ({ ts, health: verdict }) as HealthTransition;
+const at = (ts: string, health: string): HealthTransition =>
+  ({ ts, health: health }) as HealthTransition;
 
 describe("HealthHistory", () => {
-  // #631 made incomplete a recordable verdict, so this component started
+  // #631 made incomplete a recordable health, so this component started
   // receiving a value neither of its maps knew. A commissioning gap is the
-  // verdict a half-built fleet sits in for months; painting it in the
+  // health a half-built fleet sits in for months; painting it in the
   // no-data grey would tell an operator their history is missing when it is
   // in fact complete and says something specific.
   it("styles an incomplete stretch as its own state, not as no data", () => {
     const { getByText, container } = render(() => (
-      <HealthHistory transitions={[at(ago(3 * 3600_000), "incomplete")]} verdict="incomplete" />
+      <HealthHistory transitions={[at(ago(3 * 3600_000), "incomplete")]} health="incomplete" />
     ));
 
     const pill = getByText("incomplete");
@@ -40,13 +40,13 @@ describe("HealthHistory", () => {
     }
   });
 
-  // The three verdicts that already worked must keep working, so the fix above
+  // The three health results that already worked must keep working, so the fix above
   // cannot be a special case bolted past the maps.
-  it("gives each verdict a distinct tone and pill", () => {
+  it("gives each health a distinct tone and pill", () => {
     const seen = new Set<string>();
     for (const v of ["healthy", "incomplete", "degraded", "outage"]) {
       const { getByText, unmount } = render(() => (
-        <HealthHistory transitions={[at(ago(3600_000), v)]} verdict={v} />
+        <HealthHistory transitions={[at(ago(3600_000), v)]} health={v} />
       ));
       const cls = getByText(v).className;
       expect(cls).not.toContain("badge-ghost");
@@ -59,7 +59,7 @@ describe("HealthHistory", () => {
   // Healthy reads green (#1067), in the strip as in the pill: a grey healthy
   // stretch read as the no-data grey beside it.
   it("draws healthy in its own green, in the pill and the strip", () => {
-    const { getByText, container } = render(() => <HealthHistory transitions={[at(ago(3600_000), "healthy")]} verdict="healthy" />);
+    const { getByText, container } = render(() => <HealthHistory transitions={[at(ago(3600_000), "healthy")]} health="healthy" />);
     expect(getByText("healthy").className).toContain("badge-healthy");
     expect(container.querySelector(".bg-healthy")).toBeTruthy();
     expect(container.innerHTML).not.toMatch(/bg-base-content\/25/);
@@ -69,14 +69,14 @@ describe("HealthHistory", () => {
   // the label's (i), never the flow. A future edit that re-inlines the
   // pedagogy fails here.
   it("carries no inline pedagogy: the explainer is the label's tooltip", () => {
-    const { container } = render(() => <HealthHistory transitions={[at(ago(3600_000), "healthy")]} verdict="healthy" />);
+    const { container } = render(() => <HealthHistory transitions={[at(ago(3600_000), "healthy")]} health="healthy" />);
     expect(container.textContent).not.toContain("One entry per change");
     expect(screen.getByRole("button", { name: /More about History/ })).toBeTruthy();
   });
 
   it("compact draws the strip only: no span rows and never the no-change fallback", () => {
     const { container, queryByText } = render(() => (
-      <HealthHistory compact transitions={[at(ago(3600_000), "healthy"), at(ago(60_000), "degraded")]} verdict="degraded" />
+      <HealthHistory compact transitions={[at(ago(3600_000), "healthy"), at(ago(60_000), "degraded")]} health="degraded" />
     ));
     expect(container.querySelector(".og-statestrip")).toBeTruthy();
     expect(queryByText(/No change recorded/)).toBeNull();

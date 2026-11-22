@@ -7,7 +7,7 @@ import { ME_KEY, type Me } from "../lib/auth";
 import * as secrets from "../lib/secrets";
 
 // A webhook endpoint (#1024) is a push endpoint: nothing is dialed, so its row
-// carries no ladder and no verdict. It reads last heard, its scheme (or
+// carries no ladder and no health. It reads last heard, its scheme (or
 // unsigned), and what its scheme refused; expanded, the URL a sender posts to,
 // its token masked, revealed and copied only under secret:reveal.
 const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
@@ -35,7 +35,7 @@ function mount(data: Reachability, permissions: string[]) {
 }
 
 describe("a webhook endpoint's row", () => {
-  it("reads last heard and its scheme, never a verdict or a ladder", () => {
+  it("reads last heard and its scheme, never a health or a ladder", () => {
     const { getByText, queryByText } = mount(hook(), []);
     expect(getByText(/last heard/).textContent).toMatch(/1m|90s|2m/);
     expect(getByText("hmac")).toBeTruthy();

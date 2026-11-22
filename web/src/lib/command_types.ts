@@ -38,7 +38,7 @@ export type SettleWindowDraft = {
 // readSettleWindow judges the typed window against whether the type names a target
 // arm. `targeted` is the whole difference: a type naming a target arm settles
 // against a reported value, so its window decides when a difference becomes a
-// verdict and the operator has to state it; a type with no arm never reaches
+// health and the operator has to state it; a type with no arm never reaches
 // settlement at all, so leaving it blank is the whole answer and the server's own
 // default (0) supplies it. Zero is never refused: ADR-0108 makes it a statement of
 // intent ("judge it now"), and `reboot` ships that shape.

@@ -30,15 +30,15 @@ import {
   requestHeld,
   pendingNotice,
   type ReachEndpoint,
-  type VerdictWord,
+  type ReachWord,
 } from "../lib/reachability";
 
 // The Endpoints panel on the component detail: an endpoint belongs to its
 // component, so it surfaces here (not a top-level tab). One row per endpoint (an
 // endpoint is usable or not): the endpoint, an availability strip built from the
-// verdict's transition history, and a 4-state verdict pill derived at read time.
+// state's transition history, and a 4-state state pill derived at read time.
 // Expanding a row reveals the layered-gate breakdown (ping L3, port L4) plus a
-// "why" reason line when the endpoint is down. The verdict/strip/reason are
+// "why" reason line when the endpoint is down. The state/strip/reason are
 // read-only (derived from real fields, no invented latency or history); the panel
 // header carries the "Add endpoint" affordance and each row a "Manage" affordance,
 // both wired by the component detail into its shared blade stack (create + the
@@ -55,8 +55,8 @@ import {
 // buttons (each teaches its rung), so they sit beside the row's expand toggle,
 // never inside it.
 
-// The pill hue and label per derived verdict word.
-const PILL: Record<VerdictWord, { cls: string; label: string }> = {
+// The pill hue and label per derived state word.
+const PILL: Record<ReachWord, { cls: string; label: string }> = {
   responding: { cls: "badge-success", label: "responding" },
   down: { cls: "badge-error", label: "down" },
   stale: { cls: "badge-warning", label: "stale" },
@@ -150,11 +150,11 @@ function TlsRows(p: { tls: ReachTLS; responsive?: boolean; refused: boolean }) {
 
 // GateBreakdown lists one line per probe layer (dot + word + timing detail) and
 // the "why" reason line for a down endpoint. It is the pedagogical payoff: the
-// verdict is the AND of the layers, shown as the layers.
+// state is the AND of the layers, shown as the layers.
 function GateBreakdown(p: { iface: ReachEndpoint }) {
   const now = createClock(CLOCK_TICK_MS);
   const why = createMemo(() => reason(p.iface, now()));
-  const verdictOk = createMemo(() => p.iface.reachability?.value === "up");
+  const reachable = createMemo(() => p.iface.reachability?.value === "up");
   // A request rung a refusal holds: the component answered with a refusal
   // retrying cannot fix, so beneath the gate nothing is sent (#1037, #821).
   const requestGated = () => requestHeld(p.iface);
@@ -180,7 +180,7 @@ function GateBreakdown(p: { iface: ReachEndpoint }) {
       </For>
       <Show when={requestRung(p.iface) !== undefined}>
         {/* The transport rung of an endpoint with no port to open (udp):
-            the driver's request answered, the layer its verdict follows. */}
+            the driver's request answered, the layer its state follows. */}
         <div class="flex items-center gap-2" data-testid="request-rung">
           <span class={`inline-block size-2 shrink-0 rounded-full ${requestGated() ? TONE_DOT.unknown : requestRung(p.iface) ? "bg-success" : "bg-error"}`} />
           <span class="w-16 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">rung</span>
@@ -191,7 +191,7 @@ function GateBreakdown(p: { iface: ReachEndpoint }) {
           </Show>
           <InfoTip
             label="the request rung"
-            text="The transport rung where an open port cannot be detected (udp, snmp): the outpost sends the driver's named request (for snmp, a get of a standard OID with the endpoint's community) and an answer proves the protocol. Silence reads not answered (timed out), and a port the host reports closed reads refused; a v2c agent drops a wrong community silently, so it reads not answered too. With no port to open, this rung is the endpoint's verdict."
+            text="The transport rung where an open port cannot be detected (udp, snmp): the outpost sends the driver's named request (for snmp, a get of a standard OID with the endpoint's community) and an answer proves the protocol. Silence reads not answered (timed out), and a port the host reports closed reads refused; a v2c agent drops a wrong community silently, so it reads not answered too. With no port to open, this rung is the endpoint's state."
           />
         </div>
       </Show>
@@ -205,9 +205,9 @@ function GateBreakdown(p: { iface: ReachEndpoint }) {
         )}
       </Show>
       <div class="flex items-center gap-2">
-        <span class={`inline-block size-2 shrink-0 rounded-full ${verdictOk() ? "bg-success" : "bg-error"}`} />
-        <span class="w-16 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">verdict</span>
-        <span class="text-base-content/60">endpoint {verdictOk() ? "up" : "down"}</span>
+        <span class={`inline-block size-2 shrink-0 rounded-full ${reachable() ? "bg-success" : "bg-error"}`} />
+        <span class="w-16 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">reachability</span>
+        <span class="text-base-content/60">endpoint {reachable() ? "up" : "down"}</span>
       </div>
       <Show when={why()}>
         <p class="mt-0.5 rounded-md bg-warning/10 px-2 py-1.5 text-[11.5px] text-base-content/70">{why()}</p>
@@ -256,7 +256,7 @@ function EndpointRow(p: { iface: ReachEndpoint; component: string; manageId?: st
         </button>
         {/* The ladder (#1059): its rungs teach themselves on hover, so they
             are buttons of their own beside the toggle, never inside it. The
-            session pill, then the verdict pill, close the row. */}
+            session pill, then the state pill, close the row. */}
         <div class="flex shrink-0 items-center gap-2 pr-3">
           {/* Fixed slots, so the rungs, the pills and their ages line up down
               the panel whatever each row holds (a tcp row has no login rung,
@@ -291,7 +291,7 @@ function EndpointRow(p: { iface: ReachEndpoint; component: string; manageId?: st
           />
         </div>
       </Show>
-      {/* No verdict yet (#981): the reason, without expanding the row, and
+      {/* No state yet (#981): the reason, without expanding the row, and
           the way to fix it. */}
       <Show when={pendingNotice(p.iface)}>
         {(n) => (

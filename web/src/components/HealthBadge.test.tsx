@@ -5,7 +5,7 @@ import HealthBadge from "./HealthBadge";
 import { systemHealthKey, locationHealthKey, type FleetHealth } from "../lib/health";
 
 // The badge is the one health chip: three distinct states, each carrying the WORD,
-// so the verdict never depends on hue alone. It reads either a verdict the caller
+// so the health never depends on hue alone. It reads either a health the caller
 // already holds or one it fetches itself (the systems list has no bulk health read,
 // so each row's badge owns its query and shares the panel's cache key).
 function mount(el: () => unknown, seed?: { key: readonly unknown[]; data: FleetHealth }) {
@@ -14,28 +14,28 @@ function mount(el: () => unknown, seed?: { key: readonly unknown[]; data: FleetH
   return render(() => <QueryClientProvider client={qc}>{el() as never}</QueryClientProvider>);
 }
 
-const health = (verdict: string, owner: string): FleetHealth => ({
+const health = (health: string, owner: string): FleetHealth => ({
   owner,
   owner_kind: "system",
-  health: verdict,
+  health: health,
   slots: [],
   systems: [],
   transitions: [],
 });
 
 describe("HealthBadge", () => {
-  it("names each verdict in words, not colour alone", () => {
+  it("names each health in words, not colour alone", () => {
     for (const v of ["healthy", "incomplete", "degraded", "outage"]) {
-      const { getByText, unmount } = mount(() => <HealthBadge verdict={v} />);
+      const { getByText, unmount } = mount(() => <HealthBadge health={v} />);
       expect(getByText(v)).toBeTruthy();
       unmount();
     }
   });
 
-  it("gives each trouble verdict its own semantic hue, so the three read as distinct states", () => {
+  it("gives each trouble health its own semantic hue, so the three read as distinct states", () => {
     const seen = new Set<string>();
     for (const v of ["incomplete", "degraded", "outage"]) {
-      const { getByText, unmount } = mount(() => <HealthBadge verdict={v} />);
+      const { getByText, unmount } = mount(() => <HealthBadge health={v} />);
       const cls = getByText(v).className;
       expect(cls).toMatch(/badge-(incomplete|warning|error)/);
       seen.add(cls.match(/badge-(incomplete|warning|error)/)![0]);
@@ -48,7 +48,7 @@ describe("HealthBadge", () => {
   // read as the grey unknown one. Healthy wears its own class so the hue lives
   // in one place (app.css), and never the ghost chip unknown wears.
   it("draws healthy in its own green chip, never the unknown one", () => {
-    const { getByText } = mount(() => <HealthBadge verdict="healthy" />);
+    const { getByText } = mount(() => <HealthBadge health="healthy" />);
     const cls = getByText("healthy").className;
     expect(cls).toContain("badge-healthy");
     expect(cls).not.toMatch(/badge-(success|warning|error|incomplete|ghost)/);
@@ -58,9 +58,9 @@ describe("HealthBadge", () => {
   // incomplete is a commissioning gap, not a fault, and its glyph has to say so
   // as loudly as its hue does: a reader in greyscale must not mistake a room
   // nobody has finished building for a room that is broken.
-  it("gives incomplete its own glyph, distinct from the two failure verdicts", () => {
+  it("gives incomplete its own glyph, distinct from the two failure health results", () => {
     const glyph = (v: string) => {
-      const { getByText, unmount } = mount(() => <HealthBadge verdict={v} />);
+      const { getByText, unmount } = mount(() => <HealthBadge health={v} />);
       const svg = getByText(v).parentElement?.querySelector("svg")?.innerHTML ?? "";
       unmount();
       return svg;
@@ -72,7 +72,7 @@ describe("HealthBadge", () => {
     expect(incomplete).not.toBe(glyph("healthy"));
   });
 
-  it("reads a system's verdict from the cache the panel shares", () => {
+  it("reads a system's health from the cache the panel shares", () => {
     const { getByText } = mount(() => <HealthBadge system="boardroom" />, {
       key: systemHealthKey("boardroom"),
       data: health("outage", "boardroom"),
@@ -80,7 +80,7 @@ describe("HealthBadge", () => {
     expect(getByText("outage")).toBeTruthy();
   });
 
-  it("reads a location's verdict from its own namespace, so a shared name cannot collide", () => {
+  it("reads a location's health from its own namespace, so a shared name cannot collide", () => {
     const { getByText } = mount(() => <HealthBadge location="boardroom" />, {
       key: locationHealthKey("boardroom"),
       data: health("degraded", "boardroom"),
@@ -88,13 +88,13 @@ describe("HealthBadge", () => {
     expect(getByText("degraded")).toBeTruthy();
   });
 
-  it("says unknown rather than guessing when no verdict has been read", () => {
-    const { getByText } = mount(() => <HealthBadge verdict="" />);
+  it("says unknown rather than guessing when no health has been read", () => {
+    const { getByText } = mount(() => <HealthBadge health="" />);
     expect(getByText("unknown")).toBeTruthy();
   });
 
   it("renders nothing at all when quiet, so a list never flashes a column of unknowns", () => {
-    const { container } = mount(() => <HealthBadge verdict="" quiet />);
+    const { container } = mount(() => <HealthBadge health="" quiet />);
     expect(container.textContent).toBe("");
   });
 });

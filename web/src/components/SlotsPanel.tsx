@@ -25,7 +25,7 @@ import {
   quorumLabel,
   systemHealth,
   systemHealthKey,
-  SYSTEM_VERDICTS_KEY,
+  SYSTEM_HEALTHS_KEY,
   type HealthSlot,
 } from "../lib/health";
 
@@ -36,7 +36,7 @@ import {
 // UNDERSTAFFED until it has them. UNDERSTAFFED is assignment arithmetic
 // (quorum minus rows), health-blind; the panel's SHORT/SPARE figures come
 // from the health read instead (satisfying, occupancy-aware: an assigned
-// component whose own verdict is outage no longer counts), so a slot can
+// component whose own health is outage no longer counts), so a slot can
 // read fully staffed here and still short there. Both read once an occupant
 // is down, since the slots read alone cannot tell the difference (settled by
 // #626 Task 9; see web/src/lib/health.ts's own header note).
@@ -55,7 +55,7 @@ import {
 // parties, which this panel shows verbatim against the slot that refused. A
 // generic "something went wrong" would throw away the only thing the operator
 // needs. The guard runs once, at assignment; after that, an occupant keeps its
-// slot unless its own health verdict goes to outage (a lesser alarm degrades
+// slot unless its own health health goes to outage (a lesser alarm degrades
 // it but does not cost it the slot).
 //
 // A component fills at most one slot per system (#626). The picker offers every
@@ -102,7 +102,7 @@ export default function SlotsPanel(props: { system: string; canUpdate: boolean }
   }));
   // Split active from inactive (#626 choices): a slot whose alternate LOST
   // its choice can still read impaired on its own terms, but its own figures
-  // did not move the verdict, so it must never render through the same
+  // did not move the health, so it must never render through the same
   // short/spare/impact path as an active slot (the exact contradiction commit
   // 5472723 fixed on the health panel of the day; task 9 review, finding C5,
   // caught it reintroduced here).
@@ -183,7 +183,7 @@ export default function SlotsPanel(props: { system: string; canUpdate: boolean }
       await Promise.all([
         qc.invalidateQueries({ queryKey: key() }),
         qc.invalidateQueries({ queryKey: systemHealthKey(props.system) }),
-        qc.invalidateQueries({ queryKey: SYSTEM_VERDICTS_KEY }),
+        qc.invalidateQueries({ queryKey: SYSTEM_HEALTHS_KEY }),
       ]);
       setBusy(false);
     }
@@ -194,7 +194,7 @@ export default function SlotsPanel(props: { system: string; canUpdate: boolean }
     Promise.all([
       qc.invalidateQueries({ queryKey: key() }),
       qc.invalidateQueries({ queryKey: systemHealthKey(props.system) }),
-      qc.invalidateQueries({ queryKey: SYSTEM_VERDICTS_KEY }),
+      qc.invalidateQueries({ queryKey: SYSTEM_HEALTHS_KEY }),
     ]);
   const withdraw = (slot: string) => {
     if (!confirm(`Withdraw "${slot}" from this system? Everything assigned to it is unassigned.`)) return;
@@ -230,7 +230,7 @@ export default function SlotsPanel(props: { system: string; canUpdate: boolean }
     // Whether an alarm took a component down is a fact about the COMPONENT,
     // not about whether this slot's choice is the one currently answering
     // it, so an inactive slot still marks its down occupants: only the
-    // short/spare/impact VERDICT CONTRIBUTION is suppressed above, never the
+    // short/spare/impact HEALTH CONTRIBUTION is suppressed above, never the
     // per-component fact (task 9 re-review: reading down() from the active
     // map alone over-corrected C5 into hiding it here too).
     const down = () => new Set(h()?.down ?? inactiveHealth()?.down ?? []);
@@ -263,7 +263,7 @@ export default function SlotsPanel(props: { system: string; canUpdate: boolean }
             health has not loaded yet, so the row never shows undefined. An
             INACTIVE slot (its choice was answered by a different alternate)
             gets neither: its own short/spare/impact never counted toward the
-            verdict, so showing them would be the exact contradiction commit
+            health, so showing them would be the exact contradiction commit
             5472723 fixed. */}
         <Show
           when={h()}
@@ -279,7 +279,7 @@ export default function SlotsPanel(props: { system: string; canUpdate: boolean }
               {(ih) => (
                 <span
                   class="badge badge-ghost badge-sm"
-                  title={`${ih().choice}/${ih().alternate} is not the alternate currently answering this choice, so this slot's own figures did not count toward the verdict`}
+                  title={`${ih().choice}/${ih().alternate} is not the alternate currently answering this choice, so this slot's own figures did not count toward the health`}
                 >
                   not counted
                 </span>

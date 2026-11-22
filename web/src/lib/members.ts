@@ -33,7 +33,7 @@ export async function componentSystems(name: string): Promise<Member[]> {
 }
 
 // The system's end of the same relation (#940): every member of one system,
-// each carrying its own recorded verdict. A system's view polls its members'
+// each carrying its own recorded health. A system's view polls its members'
 // health here, one request for the system, never the whole fleet view.
 export const systemMembersKey = (name: string) => ["system-members", name] as const;
 
