@@ -5,7 +5,6 @@ import { resolveNext } from "../lib/next";
 import { api } from "../api/client";
 import { BrandMark, Wordmark } from "../components/Brand";
 import Button from "../components/Button";
-import LabBanner from "../components/LabBanner";
 
 // Login signs in with a username + password (the default, session-cookie path) or,
 // behind a toggle, a pasted bearer token. On success it lands at ?next= (a safe
@@ -26,10 +25,9 @@ export default function Login() {
   // Whether an owner exists yet: the bootstrap hint shows only before the first
   // owner is created. Default to true (and undefined while loading) so the hint
   // never flashes for an already-bootstrapped system.
-  // The same read says whether this server is a lab, for its banner (#1195).
   const [status] = createResource(async () => {
     const { data } = await api.GET("/auth/status");
-    return { bootstrapped: data?.bootstrapped ?? true, lab: data?.lab ?? false };
+    return { bootstrapped: data?.bootstrapped ?? true };
   });
   const bootstrapped = () => status()?.bootstrapped;
 
@@ -57,8 +55,7 @@ export default function Login() {
   }
 
   return (
-    <div class="flex min-h-screen flex-col bg-base-100">
-      <LabBanner lab={status()?.lab} />
+    <div class="flex flex-1 flex-col bg-base-100">
       <div class="flex flex-1 items-center justify-center px-6">
       <div class="card w-full max-w-sm border border-base-300 bg-base-200">
         <div class="card-body gap-4">
