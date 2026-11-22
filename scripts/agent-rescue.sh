@@ -148,7 +148,7 @@ if [ -n "$work" ] && [ -n "$tip" ]; then
   read -r -a cfg <<<"$(sed -n 's/^PATHS=(\(.*\))$/\1/p' "$(dirname "$0")/agent-sync.sh")"
   [ "${#cfg[@]}" -gt 0 ] || fail "could not read the agent config paths from agent-sync.sh"
   gitw ls-files -z --cached -- "${cfg[@]}" | xargs -0 -r git --git-dir="$BARE" --work-tree="$tmp/tree" update-index --force-remove --
-  gitb ls-tree -r --format='%(objectmode) %(objectname)%x09%(path)' "$tip" -- "${cfg[@]}" | gitw update-index --index-info
+  gitb ls-tree -r -z "$tip" -- "${cfg[@]}" | gitw update-index -z --index-info
   tree=$(gitb write-tree)
   unset GIT_INDEX_FILE
   if [ "$tree" != "$(gitb rev-parse "${tip}^{tree}")" ]; then
