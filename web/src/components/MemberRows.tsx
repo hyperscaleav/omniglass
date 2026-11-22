@@ -42,7 +42,7 @@ function Row(props: { row: MemberRow; depth: number; onOpen: (id: string) => voi
       <span class={`truncate pr-4 text-base-content/55 ${ROOMY_ONLY}`}>{r().noSlot ? "no slot" : r().slot}</span>
       <span class={`truncate pr-4 text-base-content/75 ${WIDE_ONLY}`}>{r().product}</span>
       <span class={`truncate pr-4 ${NARROW_HIDDEN}`} classList={{ "text-error": !!r().alarm, "text-base-content/55": !r().alarm }} title={r().alarm}>{r().alarm ?? ""}</span>
-      <span><HealthGlyph verdict={r().health} /></span>
+      <span><HealthGlyph health={r().health} /></span>
     </button>
   );
 }

@@ -160,7 +160,7 @@ describe("parseChips", () => {
   // input from somebody else: a pasted, truncated or hand-edited link must
   // yield no filter, never a page that throws while reading it.
   it("round-trips what the bar wrote", () => {
-    const chips = [{ key: "verdict", op: "eq", values: ["outage", "degraded"] }];
+    const chips = [{ key: "health", op: "eq", values: ["outage", "degraded"] }];
     expect(parseChips(JSON.stringify(chips))).toEqual(chips);
   });
 
@@ -173,17 +173,17 @@ describe("parseChips", () => {
     expect(parseChips("{not json")).toEqual([]);
     expect(parseChips("5")).toEqual([]);
     expect(parseChips("null")).toEqual([]);
-    expect(parseChips('{"key":"verdict"}')).toEqual([]);
+    expect(parseChips('{"key":"health"}')).toEqual([]);
   });
 
   it("drops a malformed chip and keeps the well-formed ones beside it", () => {
     const raw = JSON.stringify([
       { key: "path", op: "contains", values: ["West"] },
-      { key: "verdict" },
+      { key: "health" },
       { key: 7, op: "eq", values: ["x"] },
-      { key: "verdict", op: "no-such-op", values: ["outage"] },
-      { key: "verdict", op: "eq", values: "outage" },
-      { key: "verdict", op: "eq", values: [1, "outage"] },
+      { key: "health", op: "no-such-op", values: ["outage"] },
+      { key: "health", op: "eq", values: "outage" },
+      { key: "health", op: "eq", values: [1, "outage"] },
       null,
     ]);
     expect(parseChips(raw)).toEqual([{ key: "path", op: "contains", values: ["West"] }]);

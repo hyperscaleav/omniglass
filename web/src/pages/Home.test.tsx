@@ -11,7 +11,7 @@ import { OUTPOST_DOWN_AFTER_MS, OUTPOSTS_KEY, type Outpost } from "../lib/outpos
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 
-// Home's Platform tile (#1644): the platform system's verdict and how many
+// Home's Platform tile (#1644): the platform system's health and how many
 // outposts are not up, opening Platform health, and shown only to a caller who
 // can read outposts (the page's own door).
 const readAt = "2026-11-09T12:00:00Z";
@@ -71,7 +71,7 @@ afterEach(() => {
 });
 
 describe("Home Platform tile", () => {
-  it("shows the platform verdict and the outposts not up, and opens Platform health", async () => {
+  it("shows the platform health and the outposts not up, and opens Platform health", async () => {
     const { path } = mount(meWith(["outpost:read", "system:read"]));
     const tile = screen.getByTestId("home-platform");
     expect(tile).toHaveTextContent("degraded");

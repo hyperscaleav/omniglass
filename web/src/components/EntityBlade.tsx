@@ -14,9 +14,9 @@ import { Maximize } from "./icons";
 import { useBlades, useBladeEdit, type BladeDef, type BladeDestructive } from "../lib/blades";
 import { FLEET_VIEW_KEY, fleetView } from "../lib/fleet";
 import { entityLabel } from "../lib/entities";
-import { systemHealth, systemHealthKey, locationHealth, locationHealthKey, SYSTEM_HEALTH_PREFIX, SYSTEM_VERDICTS_KEY } from "../lib/health";
+import { systemHealth, systemHealthKey, locationHealth, locationHealthKey, SYSTEM_HEALTH_PREFIX, SYSTEM_HEALTHS_KEY } from "../lib/health";
 import { alarmRows, sinceOf } from "../lib/system_zoom";
-import { dotVerdict, leafAlarmSince } from "../lib/component_leaf";
+import { dotHealth, leafAlarmSince } from "../lib/component_leaf";
 import { SYSTEMS_KEY, listSystems, deleteSystem } from "../lib/systems";
 import { LOCATIONS_KEY, listLocations, deleteLocation } from "../lib/locations";
 import { COMPONENTS_KEY, listComponents, deleteComponent } from "../lib/components";
@@ -31,11 +31,11 @@ import { durationText } from "../lib/timeline";
 import TroubleshootButton from "./TroubleshootButton";
 
 // EntityBlade (#799, refit in #826, the glance since #872): ONE blade per
-// fleet kind, and it is where an operator lands from a row. Verdict and
+// fleet kind, and it is where an operator lands from a row. HealthState and
 // since-when lead, the active alarms say why with their severity, and the
 // context the operator came for follows: a system's location and its standard
 // and size, a component's location and the systems it serves with its slot in
-// each, a location's systems with their verdicts. Then the form's identity,
+// each, a location's systems with their health results. Then the form's identity,
 // placement and tags, read or edit through the blade's own footer.
 // Configuration (slots, properties, their cascade) and the depth (members,
 // history, vitals) are the detail view's, one Expand away. Every body
@@ -180,7 +180,7 @@ function SystemBody(props: { id: string }) {
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
       </Show>
       <div class="flex flex-wrap items-center gap-2">
-        <HealthBadge verdict={cluster()?.health ?? undefined} size="sm" />
+        <HealthBadge health={cluster()?.health ?? undefined} size="sm" />
         <SinceLine since={health.data ? sinceOf(health.data, now) : undefined} />
       </div>
       <Why
@@ -219,7 +219,7 @@ function ComponentBody(props: { id: string }) {
 
   const now = Date.now();
   const row = () => (components.data ?? []).find((c) => c.id === props.id);
-  const verdict = () => (view.data ? dotVerdict(view.data, props.id) : null);
+  const componentHealth = () => (view.data ? dotHealth(view.data, props.id) : null);
   const scale = useSeverity();
   const active = createMemo(() => splitAlarms(alarmsQ.data ?? [], scale().levels).active);
   // The systems it serves, by uuid, each with the slot it fills there, the
@@ -255,7 +255,7 @@ function ComponentBody(props: { id: string }) {
         qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] }),
         qc.invalidateQueries({ queryKey: [...SYSTEM_SLOTS_PREFIX] }),
         qc.invalidateQueries({ queryKey: [...SYSTEM_HEALTH_PREFIX] }),
-        qc.invalidateQueries({ queryKey: [...SYSTEM_VERDICTS_KEY] }),
+        qc.invalidateQueries({ queryKey: [...SYSTEM_HEALTHS_KEY] }),
       ]),
   });
 
@@ -265,7 +265,7 @@ function ComponentBody(props: { id: string }) {
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
       </Show>
       <div class="flex flex-wrap items-center gap-2">
-        <HealthBadge verdict={verdict() ?? undefined} size="sm" />
+        <HealthBadge health={componentHealth() ?? undefined} size="sm" />
         <SinceLine since={leafAlarmSince(alarmsQ.data ?? [], now, scale().levels)} />
       </div>
       <Why
@@ -339,7 +339,7 @@ function LocationBody(props: { id: string }) {
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
       </Show>
       <div class="flex flex-wrap items-center gap-2">
-        <HealthBadge verdict={anchor()?.health ?? undefined} size="sm" />
+        <HealthBadge health={anchor()?.health ?? undefined} size="sm" />
         <SinceLine since={health.data ? sinceOf(health.data, now) : undefined} />
       </div>
       {/* The locations beneath it; a room holding systems and no locations says
@@ -357,7 +357,7 @@ function LocationBody(props: { id: string }) {
             {(s) => (
               <button type="button" class="flex cursor-pointer items-center gap-2 text-left hover:underline" onClick={() => blades.push({ kind: "system", id: s.id })}>
                 <span>{entityLabel(s)}</span>
-                <HealthBadge verdict={s.health ?? undefined} size="xs" />
+                <HealthBadge health={s.health ?? undefined} size="xs" />
               </button>
             )}
           </For>

@@ -131,10 +131,10 @@ export default function OutlineWorkspace(props: { rootId?: string }) {
     return out;
   });
   const setChips = (next: Chip[]) => setSearch({ chips: next.length ? JSON.stringify(next) : undefined });
-  const attentionOn = () => chips().some((c) => c.key === "verdict" && ATTENTION.every((v) => c.values.includes(v)));
+  const attentionOn = () => chips().some((c) => c.key === "health" && ATTENTION.every((v) => c.values.includes(v)));
   const toggleAttention = () => {
-    const rest = chips().filter((c) => c.key !== "verdict");
-    setChips(attentionOn() ? rest : [...rest, { key: "verdict", op: "eq", values: ATTENTION }]);
+    const rest = chips().filter((c) => c.key !== "health");
+    setChips(attentionOn() ? rest : [...rest, { key: "health", op: "eq", values: ATTENTION }]);
   };
   // Rooted, the counts cover what the list shows: the locations beneath the
   // root, never the root's own systems (their cards sit above the outline,
@@ -160,12 +160,12 @@ export default function OutlineWorkspace(props: { rootId?: string }) {
       // The bare typed term lands on the first substring key: a name, a
       // system, a standard or a product.
       { key: "name", type: "string", hint: "substring", get: (e) => e.search },
-      { key: "verdict", type: "string", get: (e) => e.verdict ?? "", values: () => ["healthy", "incomplete", "degraded", "outage"] },
+      { key: "health", type: "string", get: (e) => e.health ?? "", values: () => ["healthy", "incomplete", "degraded", "outage"] },
       { key: "type", type: "string", get: (e) => e.type, values: (es) => [...new Set(es.map((e) => e.type).filter(Boolean))].sort() },
       { key: "standard", type: "string", get: (e) => e.standard, values: (es) => [...new Set(es.map((e) => e.standard).filter(Boolean))].sort() },
       { key: "product", type: "string", get: (e) => e.product, values: (es) => [...new Set(es.map((e) => e.product).filter(Boolean))].sort() },
       { key: "path", type: "string", hint: "substring", get: (e) => e.path.join(" / ") },
-      ...tagFilterKeys<OutlineEntry>(tagNames, new Set(["name", "verdict", "type", "standard", "product", "path"])),
+      ...tagFilterKeys<OutlineEntry>(tagNames, new Set(["name", "health", "type", "standard", "product", "path"])),
     ];
   });
 
@@ -377,7 +377,7 @@ function Results(props: { entries: OutlineEntry[]; outlineRoots: LocationNode[];
               </span>
               <span class={`truncate pr-4 text-base-content/75 ${WIDE_ONLY}`}>{e.kind === "component" ? e.product : e.standard}</span>
               <span class={`truncate pr-4 text-base-content/55 ${NARROW_HIDDEN}`}>{location()?.contents ?? ""}</span>
-              <span>{e.verdict ? <HealthSlots single={e.verdict} /> : null}</span>
+              <span>{e.health ? <HealthSlots single={e.health} /> : null}</span>
               <span />
             </li>
           );

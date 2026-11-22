@@ -17,10 +17,10 @@ import { MAJOR_LEVEL, SEEDED_LEVELS, seedSeverityLevels } from "../lib/testsever
 const sys = uuidFor("ss-sys");
 const view = {
   locations: [],
-  systems: [{ id: sys, name: "huddle", label: "Huddle", location: null, verdict: "degraded", dots: [] }],
+  systems: [{ id: sys, name: "huddle", label: "Huddle", location: null, health: "degraded", dots: [] }],
 } as unknown as FleetView;
 const health = {
-  verdict: "degraded",
+  health: "degraded",
   slots: [
     {
       name: "display", label: "Display", impact: "degraded", quorum: 1, satisfying: 1, short: 0, spare: 0,

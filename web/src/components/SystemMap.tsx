@@ -3,7 +3,7 @@ import { Dynamic } from "solid-js/web";
 import { useNavigate } from "@solidjs/router";
 import { Tooltip } from "@kobalte/core/tooltip";
 import { layoutMarkers, type MapMarker, type Rect, type StandardMapDecl } from "../lib/system_map";
-import { verdictHue } from "../lib/health";
+import { healthHue } from "../lib/health";
 import type { MemberContext } from "../lib/detail";
 import { CircleDashed, resolveIcon } from "./icons";
 import Eyebrow from "./Eyebrow";
@@ -15,7 +15,7 @@ import Eyebrow from "./Eyebrow";
 // can assert it without layout.
 //
 // A marker reads like its component's row (#1074): the type's icon in its own
-// verdict's hue, the label under it, read through the same member context the
+// health's hue, the label under it, read through the same member context the
 // rows use, so the map and the rows never disagree. The detail (slot,
 // product, health, the alarm behind a red one) rides a tooltip, never the
 // map itself. An empty position is a dashed ring named for its slot.
@@ -111,7 +111,7 @@ export default function SystemMap(props: {
                 fallback={
                   <Tooltip openDelay={150} closeDelay={100} placement="top" gutter={4}>
                     <Tooltip.Trigger as="span" tabIndex={0} data-testid={testid()} data-empty aria-label={slot()} class={`${place()} cursor-default`} style={at()}>
-                      <span data-glyph class={`inline-flex ${verdictHue(null)}`}>
+                      <span data-glyph class={`inline-flex ${healthHue(null)}`}>
                         <CircleDashed size={18} />
                       </span>
                       <Show when={placed().label}>
@@ -130,11 +130,11 @@ export default function SystemMap(props: {
               >
                 {(occ) => {
                   const id = () => occ().componentId;
-                  const verdict = () => props.member?.verdict(id()) ?? null;
+                  const memberHealth = () => props.member?.health(id()) ?? null;
                   const label = () => props.member?.label(id(), occ().name) ?? occ().name;
                   const product = () => props.member?.product(id()) ?? "";
                   const alarm = () => props.member?.alarm(id());
-                  const health = () => verdict() ?? (occ().down ? "outage" : "unknown");
+                  const health = () => memberHealth() ?? (occ().down ? "outage" : "unknown");
                   return (
                     <Tooltip openDelay={150} closeDelay={100} placement="top" gutter={4}>
                       <Tooltip.Trigger
@@ -145,7 +145,7 @@ export default function SystemMap(props: {
                         style={at()}
                         onClick={() => (props.onOpen ? props.onOpen(id()) : navigate(`/components/${id()}`))}
                       >
-                        <span data-glyph class={`inline-flex ${verdictHue(verdict(), occ().down)}`}>
+                        <span data-glyph class={`inline-flex ${healthHue(memberHealth(), occ().down)}`}>
                           <Dynamic component={resolveIcon(props.member?.icon(id()))} size={18} />
                         </span>
                         <Show when={placed().label}>
@@ -164,7 +164,7 @@ export default function SystemMap(props: {
                           <Show when={product()}>
                             <span class="text-base-content/70">{product()}</span>
                           </Show>
-                          <span class={verdictHue(verdict(), occ().down)}>{health()}</span>
+                          <span class={healthHue(memberHealth(), occ().down)}>{health()}</span>
                           <Show when={alarm()}>
                             <span class="text-error">{alarm()}</span>
                           </Show>

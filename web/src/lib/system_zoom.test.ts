@@ -21,7 +21,7 @@ const view: FleetView = {
       location_type: "room",
       location_type_id: uuidFor("szt-room"),
       parent: "",
-      verdict: "degraded",
+      health: "degraded",
     },
   ],
   systems: [
@@ -30,11 +30,11 @@ const view: FleetView = {
       name: "boardroom",
       label: "Boardroom",
       location: uuidFor("sz-room"),
-      verdict: "degraded",
+      health: "degraded",
       dots: [
-        { component: uuidFor("sz-c-bar"), name: "videobar-1", verdict: "healthy", primary: true, shared: true },
-        { component: uuidFor("sz-c-mic"), name: "mic-1", verdict: "outage", primary: true, shared: false },
-        { component: uuidFor("sz-c-power"), name: "device-1", verdict: "healthy", primary: true, shared: false },
+        { component: uuidFor("sz-c-bar"), name: "videobar-1", health: "healthy", primary: true, shared: true },
+        { component: uuidFor("sz-c-mic"), name: "mic-1", health: "outage", primary: true, shared: false },
+        { component: uuidFor("sz-c-power"), name: "device-1", health: "healthy", primary: true, shared: false },
       ],
     },
     {
@@ -42,14 +42,14 @@ const view: FleetView = {
       name: "overflow",
       label: "Overflow Room",
       location: null,
-      verdict: "healthy",
-      dots: [{ component: uuidFor("sz-c-bar"), name: "videobar-1", verdict: "healthy", primary: false, shared: true }],
+      health: "healthy",
+      dots: [{ component: uuidFor("sz-c-bar"), name: "videobar-1", health: "healthy", primary: false, shared: true }],
     },
   ],
 } as unknown as FleetView;
 
 const health: FleetHealth = {
-  verdict: "degraded",
+  health: "degraded",
   slots: [
     // Unconditional, occupant down: the failure gap.
     {
@@ -81,8 +81,8 @@ const health: FleetHealth = {
   ],
   systems: [],
   transitions: [
-    { ts: "2026-08-01T09:00:00Z", verdict: "healthy" },
-    { ts: "2026-08-15T14:20:00Z", verdict: "degraded" },
+    { ts: "2026-08-01T09:00:00Z", health: "healthy" },
+    { ts: "2026-08-15T14:20:00Z", health: "degraded" },
   ],
 } as unknown as FleetHealth;
 
@@ -176,7 +176,7 @@ describe("alarmRows", () => {
     });
   });
 
-  it("never carries an alarm from a build not in use: an inactive slot's alarms did not move the verdict", () => {
+  it("never carries an alarm from a build not in use: an inactive slot's alarms did not move the health", () => {
     const rows = alarmRows(health, SEEDED_LEVELS);
     expect(rows.find((r) => r.message === "From the build not in use")).toBeUndefined();
   });
