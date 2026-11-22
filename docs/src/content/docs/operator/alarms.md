@@ -137,7 +137,8 @@ From the CLI: `omniglass component alarm list <name> [--include-cleared] [--unac
 
 The **bot** button on an active alarm (in the **Why** strip and the alarms panel) asks
 [omnibot](/guides/agents/#omnibot-in-the-console) to troubleshoot it: the panel opens and runs the
-triage-alarm skill the server ships on that alarm. Omnibot is handed the alarm **by reference**, its
+triage-alarm skill the server ships on that alarm, in a new conversation of its own: an earlier
+conversation stays stored and the triage does not run on top of it. Omnibot is handed the alarm **by reference**, its
 component and the rule that raised it (or, for a hand-raised alarm, when it was raised), never the
 message or anything else the row shows, and it reads the component, its alarms and its reachability
 itself, under your grants. It says whether the alarm is still true, the likely cause with its
