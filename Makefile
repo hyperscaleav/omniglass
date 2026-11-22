@@ -290,8 +290,11 @@ GO_PKGS_REST = $(filter-out $(GO_PKGS_STORAGE) $(GO_PKGS_DEVSEED),$(shell go lis
 # It exits with go test's status.
 GO_TEST_SHARD = go run ./cmd/gotestreport -n 20 -- -p $(TEST_PARALLEL)
 
+# The storage shard runs under a non-UTC zone (#2313): a path that reads the
+# host's local zone, or a test that assumes UTC, fails here and not only on a
+# contributor's machine. Postgres stays UTC; only the Go process's zone moves.
 test-go-storage: test-go-shards-check
-	TESTCONTAINERS_RYUK_DISABLED=true $(GO_TEST_SHARD) $(GO_PKGS_STORAGE)
+	TZ=America/Denver TESTCONTAINERS_RYUK_DISABLED=true $(GO_TEST_SHARD) $(GO_PKGS_STORAGE)
 
 test-go-devseed: test-go-shards-check
 	TESTCONTAINERS_RYUK_DISABLED=true $(GO_TEST_SHARD) $(GO_PKGS_DEVSEED)
