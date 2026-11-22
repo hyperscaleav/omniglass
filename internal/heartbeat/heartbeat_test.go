@@ -311,3 +311,18 @@ func TestRunAuditsAChangeOfOutcomeNotEveryBeat(t *testing.T) {
 		t.Errorf("audit rows = %+v, want one for the first success and one for the move to a 502", st.audits)
 	}
 }
+
+func TestBeatCanceledContextIsNotAudited(t *testing.T) {
+	t.Parallel()
+	r := newReceiver(t)
+	st := storeFor(t, r, 1)
+	s := New(st, egress.Options{}, "omniglass-a", "v1")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_ = s.Beat(ctx)
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	if len(st.audits) != 0 {
+		t.Errorf("audit rows = %+v, want none for a send cut short by shutdown", st.audits)
+	}
+}

@@ -120,6 +120,11 @@ func (s *Sender) Beat(ctx context.Context) error {
 		return err
 	}
 	res := egress.New(pol, s.opts).Post(ctx, req)
+	if !res.OK && ctx.Err() != nil {
+		// The run's own shutdown cut the send short: not an outcome, so
+		// not audited.
+		return ctx.Err()
+	}
 	s.audit(ctx, outcome{ts.TargetID, res.OK, res.Status, res.Reason})
 	if !res.OK {
 		return fmt.Errorf("heartbeat to %q failed: %s", hb.Target, res.Reason)
