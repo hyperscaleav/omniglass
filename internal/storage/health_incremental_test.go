@@ -2,6 +2,7 @@ package storage_test
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/health"
@@ -60,16 +61,25 @@ func TestHealthIncrementalMatchesFullRecompute(t *testing.T) {
 	f.staffIn(t, ctx, pair, "pair", "sys-d", "s2-r1", "d1", "d2")
 	f.assertMatchesFullRecompute(t, ctx, "the staffed fleet")
 
+	// raise runs concurrently under runTogether, so the map is guarded.
+	var alarmsMu sync.Mutex
 	alarms := map[string]*storage.Alarm{}
 	raise := func(component, severity string) func() error {
 		return func() error {
 			a, err := f.gw.RaiseAlarm(ctx, "", component, storage.AlarmSpec{Severity: severity, Message: "eq " + component})
+			alarmsMu.Lock()
 			alarms[component] = a
+			alarmsMu.Unlock()
 			return err
 		}
 	}
 	clear := func(component string) func() error {
-		return func() error { return f.gw.ClearAlarm(ctx, "", component, alarms[component].ID) }
+		return func() error {
+			alarmsMu.Lock()
+			a := alarms[component]
+			alarmsMu.Unlock()
+			return f.gw.ClearAlarm(ctx, "", component, a.ID)
+		}
 	}
 	for _, step := range []struct {
 		what string
