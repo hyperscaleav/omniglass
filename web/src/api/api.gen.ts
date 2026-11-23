@@ -4212,12 +4212,10 @@ export type HealthMemberBody = {
   /** The component's uuid */
   id: string;
   name: string;
-  /** True when the member fills no slot in this system. An open alarm on such a member makes the system degraded, never outage: only a slot says what losing a component costs (ADR-2459) */
+  /** True when the member fills no slot in this system. Its open alarms are listed here and move nothing above the component: only a slot decides the system's health (ADR-2459) */
   outside_slot: boolean;
   /** The name of the slot the member fills in this system (as slots[].name); absent when outside_slot */
   slot?: string;
-  /** True when the member's product is collected through a driver and it has no endpoint yet */
-  to_attach: boolean;
 };
 
 export type HealthSlotBody = {
@@ -4252,11 +4250,6 @@ export type HealthSlotBody = {
   short: number;
   /** How many occupants the slot has beyond quorum; zero at or below quorum */
   spare: number;
-  /**
-     * The assigned components still to attach: their product is collected through a driver and they have no endpoint yet. They occupy the slot, but a slot short of attached occupants reads incomplete
-     * @nullable
-     */
-  to_attach: string[] | null;
 };
 
 export type HealthSystemBody = {
@@ -4285,7 +4278,7 @@ export type FleetHealthOutputBody = {
   members: HealthMemberBody[] | null;
   owner: string;
   owner_kind: string;
-  /** A system's health in words: every contributor that is not healthy, worst first, naming the slot or the members (for example: 1 member outside a slot has an open alarm (amp-1)). Absent for a location */
+  /** A system's health in words: the slots behind it, worst first (for example: slot display is impaired (0 of 1 occupying)), or that no slot is impaired. It never names a member outside a slot. Absent for a location */
   reason?: string;
   /**
      * The contributing slots; empty for a location
@@ -23015,7 +23008,7 @@ export const getGetSystemHealthUrl = (name: string,
 }
 
 /**
- * The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Members lists every component bound into the system, slotted or not, with its own health and open alarms; an open alarm on a member outside every slot makes the system degraded, never outage (ADR-2459), and a slot whose occupants are still to attach reads incomplete. Reason says the health in words. Transitions are the recorded edges inside since..until (default the last 30 days), one entry per change; since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+ * The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Members lists every component bound into the system, slotted or not, with its own health, its open alarms and the slot it fills; a member outside every slot is shown and not rolled up, since only slots decide the health (ADR-2459). Reason names the slots behind the health. Transitions are the recorded edges inside since..until (default the last 30 days), one entry per change; since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.
  * @summary Read a system's health
  */
 export const getSystemHealth = async (name: string,

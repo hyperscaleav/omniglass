@@ -249,25 +249,30 @@ describe("the system zoom", () => {
     expect(within(strip).getAllByRole("button", { name: /^Timeline of / }).length).toBeGreaterThan(0);
   });
 
-  // #2459: a member outside every slot with an open alarm is on the strip, the
-  // verdict line says why, and the members section says it is not in a slot.
-  it("lists an outside-a-slot member's alarm, states the reason, and names the member not in a slot", () => {
+  // #2459 (ADR-2459): a member outside every slot is shown, not rolled up. Its
+  // open alarm is on the strip as "not in a slot" while the badge reads healthy,
+  // the strip carries no fault tone, no reason line speaks for a healthy system,
+  // and the notice teaches that only a slot counts toward the system's health.
+  it("shows an outside-a-slot member's alarm while the system reads healthy", () => {
     const outside = {
       ...health,
-      slots: (health.slots ?? []).map((r) => ({ ...r, alarms: [] })),
-      health: "degraded",
-      reason: "1 member outside a slot has an open alarm (amp-1)",
-      members: [{ name: "amp-1", id: uuidFor("szp-c-amp"), health: "outage", outside_slot: true, to_attach: false,
+      slots: (health.slots ?? []).map((r) => ({ ...r, impaired: false, down: [], alarms: [] })),
+      health: "healthy",
+      reason: "no slot is impaired",
+      members: [{ name: "amp-1", id: uuidFor("szp-c-amp"), health: "outage", outside_slot: true,
         alarms: [{ id: "al-amp", component: "amp-1", component_id: uuidFor("szp-c-amp"), severity: "high", message: "Amplifier powered off", raised_at: "2026-08-15T15:00:00Z", acknowledged: false }] }],
     } as unknown as FleetHealth;
     mount(undefined, outside);
+    expect(within(screen.getByTestId("system-header")).getByText("healthy")).toBeTruthy();
     const strip = screen.getByTestId("alarm-strip");
     expect(within(strip).getByText("Amplifier powered off")).toBeTruthy();
     expect(within(strip).getByText(/not in a slot/)).toBeTruthy();
-    // A high alarm outside a slot degrades, never outages: the strip is not red.
     expect(strip.className).not.toContain("border-error");
-    expect(screen.getByTestId("health-reason").textContent).toBe("degraded: 1 member outside a slot has an open alarm (amp-1)");
-    expect(screen.getByTestId("outside-slot-notice").textContent).toContain("1 member is not in a slot: amp-1.");
+    expect(strip.className).not.toContain("border-warning");
+    expect(screen.queryByTestId("health-reason")).toBeNull();
+    const notice = screen.getByTestId("outside-slot-notice").textContent ?? "";
+    expect(notice).toContain("1 component is not in a slot: amp-1.");
+    expect(notice).toContain("does not count toward this system's health");
   });
 
   // The strip is where a storm is triaged from (#990): acknowledging a causing

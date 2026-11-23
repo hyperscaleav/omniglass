@@ -94,16 +94,6 @@ type HealthReport struct {
 	Slots       []HealthSlot   // system reports: the slots that contributed
 	Systems     []HealthSystem // location reports: the systems beneath it
 	Transitions []HealthTransition
-	// Reason (system reports) is the verdict's one-line explanation, computed
-	// by health.SystemReason from the same inputs as the verdict: every
-	// contributor that is not healthy, worst first, naming the slot or the
-	// members (#2459).
-	Reason string
-	// Members (system reports) is every component bound into the system, each
-	// with its own health, whether it fills a slot here, and its open alarms,
-	// so a reader sees every alarm in the system without computing which
-	// members a slot covers (#2459).
-	Members []HealthMember
 	// CarriedIn is the verdict in force when the range opened (#2425): the
 	// last recorded edge before an explicit Since, empty when the range has no
 	// Since or nothing was recorded before it. A timeline draws the stretch
@@ -112,13 +102,20 @@ type HealthReport struct {
 	// FirstRecorded is when the owner's health was first recorded (nil if
 	// never): how long it has been watched, whatever the range.
 	FirstRecorded *time.Time
+	// Reason (system reports) is the verdict in words, computed by
+	// health.SystemReason from the same slots as the verdict: the slots behind
+	// it, worst first. It never names a member outside a slot (ADR-2459).
+	Reason string
+	// Members (system reports) is every component bound into the system with
+	// its own health, its open alarms, and the slot it fills, so a reader sees
+	// every alarm in the system, the ones that move nothing above their
+	// component included (#2459).
+	Members []HealthMember
 }
 
 // HealthMember is one member of a system as its health report carries it.
-// OutsideSlot is true when the member fills no slot in this system: an open
-// alarm on it degrades the system and no more (ADR-2459). ToAttach is true when
-// its product is collected through a driver and it has no endpoint yet, which a
-// slot it fills reads as incomplete.
+// OutsideSlot is true when it fills no slot in this system: its alarms are
+// shown on the system and move nothing above the component (ADR-2459).
 type HealthMember struct {
 	Name        string
 	ID          string
@@ -126,9 +123,8 @@ type HealthMember struct {
 	OutsideSlot bool
 	// Slot is the name of the slot the member fills here; empty when
 	// OutsideSlot.
-	Slot     string
-	ToAttach bool
-	Alarms   []Alarm
+	Slot   string
+	Alarms []Alarm
 }
 
 // HealthSlot is one contributing slot, with the causing chain when it is
@@ -159,7 +155,6 @@ type HealthSlot struct {
 	AssignedTo []string
 	Down       []string // assigned components whose own verdict is outage
 	Alarms     []Alarm  // the active alarms on those down components
-	ToAttach   []string // assigned components still to attach (driver product, no endpoint)
 	Choice     string   // the choice this slot belongs to; empty when unconditional
 	Alternate  string   // the alternate within Choice; empty when unconditional
 	Active     bool     // true for an unconditional slot, or a slot in its choice's active alternate
@@ -300,7 +295,7 @@ func (p *PG) recomputeChain(ctx context.Context, q txQuerier, components, system
 		if err := recordHealth(ctx, q, "component", c.ID, health.ComponentValue(ranks)); err != nil {
 			return err
 		}
-		staffed, err := p.systemsHolding(ctx, q, c.ID)
+		staffed, err := p.systemsStaffedBy(ctx, q, c.ID)
 		if err != nil {
 			return err
 		}
@@ -317,11 +312,7 @@ func (p *PG) recomputeChain(ctx context.Context, q txQuerier, components, system
 			return err
 		}
 		unconditional, choices, _ := splitHealthSlots(slots)
-		outside, _, err := p.resolveOutsideMembers(ctx, q, s.ID)
-		if err != nil {
-			return err
-		}
-		if err := recordHealth(ctx, q, "system", s.ID, health.SystemVerdict(unconditional, choices, outside)); err != nil {
+		if err := recordHealth(ctx, q, "system", s.ID, health.SystemValueWith(unconditional, choices)); err != nil {
 			return err
 		}
 	}
@@ -715,24 +706,21 @@ func (p *PG) componentHealth(ctx context.Context, q txQuerier, componentID strin
 	return health.ComponentValue(ranks), nil
 }
 
-// systemsHolding lists the systems whose verdict this component's condition can
-// move, each as an ownerRef: every system it is a member of, slotted or not
-// (ADR-2459: a member outside a slot degrades its system), and every system it
-// fills a slot in. A slot assignment implies a membership, so the second arm is
-// belt and braces against a row the membership invariant somehow missed.
-func (p *PG) systemsHolding(ctx context.Context, q txQuerier, componentID string) ([]ownerRef, error) {
+// systemsStaffedBy lists the systems this component fills a slot in, the systems
+// whose verdict its condition can move, each as an ownerRef: the query already
+// joins by id (ra.component_id = ra.system_id -> s.id), so returning the id
+// alongside the name costs nothing and is what lets recomputeChain's caller
+// avoid a second, ambiguity-prone name lookup for every system it just found.
+func (p *PG) systemsStaffedBy(ctx context.Context, q txQuerier, componentID string) ([]ownerRef, error) {
 	rows, err := q.Query(ctx, `
-		select s.id, s.name from system s
-		where s.id in (select m.system_id from system_member m where m.component_id = $1::uuid
-		               union
-		               select ra.system_id from system_slot_assignment ra where ra.component_id = $1::uuid)
-		order by 2`,
+		select distinct s.id, s.name from system_slot_assignment ra join system s on s.id = ra.system_id
+		where ra.component_id = $1::uuid order by 2`,
 		componentID)
 	if err != nil {
-		return nil, fmt.Errorf("storage: systems holding %q: %w", componentID, err)
+		return nil, fmt.Errorf("storage: systems staffed by %q: %w", componentID, err)
 	}
 	defer rows.Close()
-	return scanOwnerRefs(rows, "systems holding")
+	return scanOwnerRefs(rows, "systems staffed by")
 }
 
 // conformingSystems lists the systems a standard's declaration reaches, each as
@@ -1037,10 +1025,11 @@ func (p *PG) resolveHealthSlots(ctx context.Context, q txQuerier, systemID strin
 			id := r.assignedIDs[i]
 			c, ok := resolved[id]
 			if !ok {
-				var err error
-				if c, _, err = p.resolveComponent(ctx, q, id, name); err != nil {
+				v, err := p.componentHealth(ctx, q, id)
+				if err != nil {
 					return nil, err
 				}
+				c = health.Component{Name: name, Value: v}
 				resolved[id] = c
 			}
 			slot.Assigned = append(slot.Assigned, c)
@@ -1048,147 +1037,6 @@ func (p *PG) resolveHealthSlots(ctx context.Context, q txQuerier, systemID strin
 		out = append(out, slot)
 	}
 	return out, nil
-}
-
-// componentToAttachSQL is true when a component is still to attach: its product
-// is collected through a driver and no endpoint is on it yet (#2459). A
-// component whose product has no driver (a passive speaker) has nothing to
-// attach, so it is never pending, whatever its endpoints.
-func componentToAttachSQL(idExpr string) string {
-	return `(exists (select 1 from component tc join product tp on tp.id = tc.product_id
-			where tc.id = ` + idExpr + ` and tp.driver_id is not null)
-		and not exists (select 1 from endpoint te where te.component = ` + idExpr + `))`
-}
-
-// resolveComponent is one component as the rollup sees it, in one statement:
-// its own value from its active alarms (componentHealth's computation), whether
-// it is still to attach, and, for a reader that words it, whether anything has
-// ever observed it (componentObservedSQL). Takes the id (see activeAlarmRanks).
-func (p *PG) resolveComponent(ctx context.Context, q txQuerier, id, name string) (health.Component, bool, error) {
-	var ranks []int
-	var toAttach, observed bool
-	if err := q.QueryRow(ctx, `
-		select coalesce((select array_agg(l.rank) from alarm a join severity_level l on l.name = a.severity
-		                 where a.component_id = $1::uuid and a.cleared_at is null), '{}'),
-		       `+componentToAttachSQL("$1::uuid")+`, `+componentObservedSQL("$1::uuid"),
-		id).Scan(&ranks, &toAttach, &observed); err != nil {
-		return health.Component{}, false, fmt.Errorf("storage: resolve component %q: %w", id, err)
-	}
-	return health.Component{Name: name, Value: health.ComponentValue(ranks), ToAttach: toAttach}, observed, nil
-}
-
-// systemMember is one member row of a system with whether it fills a slot here.
-type systemMember struct {
-	id, name string
-	slotted  bool
-	slot     string // the name of the slot it fills here; empty when none
-}
-
-// systemMembers lists a system's members, ordered by name, each with whether
-// it fills a slot in this system.
-func systemMembersOf(ctx context.Context, q txQuerier, systemID string) ([]systemMember, error) {
-	rows, err := q.Query(ctx, `
-		select c.id, c.name, exists (select 1 from system_slot_assignment ra
-		                             where ra.system_id = m.system_id and ra.component_id = m.component_id),
-		       coalesce((select r.name from system_slot_assignment ra join system_slot r on r.id = ra.slot_id
-		                 where ra.system_id = m.system_id and ra.component_id = m.component_id
-		                 order by r.name limit 1), '')
-		from system_member m join component c on c.id = m.component_id
-		where m.system_id = $1::uuid order by c.name, c.id`, systemID)
-	if err != nil {
-		return nil, fmt.Errorf("storage: system members %q: %w", systemID, err)
-	}
-	defer rows.Close()
-	var out []systemMember
-	for rows.Next() {
-		var m systemMember
-		if err := rows.Scan(&m.id, &m.name, &m.slotted, &m.slot); err != nil {
-			return nil, fmt.Errorf("storage: scan system member: %w", err)
-		}
-		out = append(out, m)
-	}
-	return out, rows.Err()
-}
-
-// resolveOutsideMembers resolves the members of a system that fill no slot in
-// it, as the rollup sees them (health.SystemVerdict's outside input), with
-// their ids index for index. One statement however many members the system
-// has: it runs on every recompute of the system, alarm writes included, so a
-// per-member read would make the alarm path grow with the room (#674).
-func (p *PG) resolveOutsideMembers(ctx context.Context, q txQuerier, systemID string) ([]health.Component, []string, error) {
-	rows, err := q.Query(ctx, `
-		select c.id, c.name,
-		       coalesce((select array_agg(l.rank) from alarm a join severity_level l on l.name = a.severity
-		                 where a.component_id = c.id and a.cleared_at is null), '{}'),
-		       `+componentToAttachSQL("c.id")+`
-		from system_member m join component c on c.id = m.component_id
-		where m.system_id = $1::uuid
-		  and not exists (select 1 from system_slot_assignment ra
-		                  where ra.system_id = m.system_id and ra.component_id = m.component_id)
-		order by c.name, c.id`, systemID)
-	if err != nil {
-		return nil, nil, fmt.Errorf("storage: outside members %q: %w", systemID, err)
-	}
-	defer rows.Close()
-	var out []health.Component
-	var ids []string
-	for rows.Next() {
-		var id, name string
-		var ranks []int
-		var toAttach bool
-		if err := rows.Scan(&id, &name, &ranks, &toAttach); err != nil {
-			return nil, nil, fmt.Errorf("storage: scan outside member: %w", err)
-		}
-		out = append(out, health.Component{Name: name, Value: health.ComponentValue(ranks), ToAttach: toAttach})
-		ids = append(ids, id)
-	}
-	return out, ids, rows.Err()
-}
-
-// reconcileHealthSQL finds the systems whose recorded verdict the rules of
-// ADR-2459 can have moved without a write to say so: a member outside every
-// slot with an open alarm, or an occupant still to attach.
-const reconcileHealthSQL = `
-	select s.id, s.name from system s
-	where exists (select 1 from system_member m
-	              where m.system_id = s.id
-	                and not exists (select 1 from system_slot_assignment ra
-	                                where ra.system_id = s.id and ra.component_id = m.component_id)
-	                and exists (select 1 from alarm a where a.component_id = m.component_id and a.cleared_at is null))
-	   or exists (select 1 from system_slot_assignment ra
-	              where ra.system_id = s.id and ` + "%s" + `)
-	order by s.id`
-
-// ReconcileHealth recomputes, once, every system whose verdict the
-// members-outside-a-slot and still-to-attach rules (ADR-2459) can have moved
-// while the fleet ran an earlier release: those verdicts were recorded under
-// the old rule, and no write since has said otherwise. It runs at boot after
-// the seed; recording is transition-only, so a system already current writes
-// nothing and a later boot is a read. It returns how many systems it visited.
-func (p *PG) ReconcileHealth(ctx context.Context) (int, error) {
-	tx, err := p.pool.Begin(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("storage: begin reconcile health: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	rows, err := tx.Query(ctx, fmt.Sprintf(reconcileHealthSQL, componentToAttachSQL("ra.component_id")))
-	if err != nil {
-		return 0, fmt.Errorf("storage: reconcile health: %w", err)
-	}
-	systems, err := scanOwnerRefs(rows, "reconcile health")
-	if err != nil {
-		return 0, err
-	}
-	if len(systems) == 0 {
-		return 0, nil
-	}
-	if err := p.recomputeChain(ctx, tx, nil, systems, nil); err != nil {
-		return 0, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return 0, fmt.Errorf("storage: commit reconcile health: %w", err)
-	}
-	return len(systems), nil
 }
 
 // splitHealthSlots partitions a system's resolved slots into the two shapes
@@ -1311,12 +1159,8 @@ func (p *PG) SystemHealth(ctx context.Context, systemName string, rng HealthRang
 		return nil, err
 	}
 	unconditional, choices, choicesByID := splitHealthSlots(slots)
-	outside, _, err := p.resolveOutsideMembers(ctx, p.pool, sys.ID)
-	if err != nil {
-		return nil, err
-	}
-	rep.Verdict = health.SystemVerdict(unconditional, choices, outside).String()
-	rep.Reason = health.SystemReason(unconditional, choices, outside)
+	rep.Verdict = health.SystemValueWith(unconditional, choices).String()
+	rep.Reason = health.SystemReason(unconditional, choices)
 	if rep.Members, err = p.healthMembers(ctx, p.pool, sys.ID); err != nil {
 		return nil, err
 	}
@@ -1355,11 +1199,41 @@ func (p *PG) SystemHealth(ctx context.Context, systemName string, rng HealthRang
 	return rep, nil
 }
 
+// systemMember is one member row of a system and the slot it fills there.
+type systemMember struct {
+	id, name string
+	slot     string // the name of the slot it fills here; empty when none
+}
+
+// systemMembersOf lists a system's members, ordered by name, each with the slot
+// it fills in this system (a component fills at most one per system, #626).
+func systemMembersOf(ctx context.Context, q txQuerier, systemID string) ([]systemMember, error) {
+	rows, err := q.Query(ctx, `
+		select c.id, c.name,
+		       coalesce((select r.name from system_slot_assignment ra join system_slot r on r.id = ra.slot_id
+		                 where ra.system_id = m.system_id and ra.component_id = m.component_id
+		                 order by r.name limit 1), '')
+		from system_member m join component c on c.id = m.component_id
+		where m.system_id = $1::uuid order by c.name, c.id`, systemID)
+	if err != nil {
+		return nil, fmt.Errorf("storage: system members %q: %w", systemID, err)
+	}
+	defer rows.Close()
+	var out []systemMember
+	for rows.Next() {
+		var m systemMember
+		if err := rows.Scan(&m.id, &m.name, &m.slot); err != nil {
+			return nil, fmt.Errorf("storage: scan system member: %w", err)
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
 // healthMembers is every member of a system for its health report: its own
 // health (unknown for a component nothing has observed, as the members read and
-// the fleet view's dots say), whether it fills a slot here, whether it is still
-// to attach, and its open alarms. Every member's alarms, slotted or not: the
-// report is where a system's page reads every alarm in the system (#2459).
+// the fleet view's dots say), the slot it fills, and its open alarms, slotted or
+// not (#2459). A read: it records nothing.
 func (p *PG) healthMembers(ctx context.Context, q txQuerier, systemID string) ([]HealthMember, error) {
 	members, err := systemMembersOf(ctx, q, systemID)
 	if err != nil {
@@ -1367,12 +1241,17 @@ func (p *PG) healthMembers(ctx context.Context, q txQuerier, systemID string) ([
 	}
 	out := make([]HealthMember, 0, len(members))
 	for _, m := range members {
-		c, observed, err := p.resolveComponent(ctx, q, m.id, m.name)
-		if err != nil {
-			return nil, err
+		var ranks []int
+		var observed bool
+		if err := q.QueryRow(ctx, `
+			select coalesce((select array_agg(l.rank) from alarm a join severity_level l on l.name = a.severity
+			                 where a.component_id = $1::uuid and a.cleared_at is null), '{}'),
+			       `+componentObservedSQL("$1::uuid"), m.id).Scan(&ranks, &observed); err != nil {
+			return nil, fmt.Errorf("storage: member health %q: %w", m.id, err)
 		}
-		h := c.Value.String()
-		if c.Value == health.Healthy && !observed {
+		v := health.ComponentValue(ranks)
+		h := v.String()
+		if v == health.Healthy && !observed {
 			h = "unknown"
 		}
 		alarms, err := p.activeAlarms(ctx, q, m.id)
@@ -1382,7 +1261,7 @@ func (p *PG) healthMembers(ctx context.Context, q txQuerier, systemID string) ([
 		if alarms == nil {
 			alarms = []Alarm{}
 		}
-		out = append(out, HealthMember{Name: m.name, ID: m.id, Health: h, OutsideSlot: !m.slotted, Slot: m.slot, ToAttach: c.ToAttach, Alarms: alarms})
+		out = append(out, HealthMember{Name: m.name, ID: m.id, Health: h, OutsideSlot: m.slot == "", Slot: m.slot, Alarms: alarms})
 	}
 	return out, nil
 }
@@ -1486,16 +1365,12 @@ func (p *PG) explainSlot(ctx context.Context, q txQuerier, r resolvedSlot, activ
 		AssignedTo: make([]string, 0, len(r.Assigned)),
 		Down:       []string{},
 		Alarms:     []Alarm{},
-		ToAttach:   []string{},
 		Choice:     choiceName,
 		Alternate:  altName,
 		Active:     active,
 	}
 	for _, c := range r.Assigned {
 		row.AssignedTo = append(row.AssignedTo, c.Name)
-		if c.ToAttach {
-			row.ToAttach = append(row.ToAttach, c.Name)
-		}
 	}
 	if !row.Impaired {
 		return row, nil

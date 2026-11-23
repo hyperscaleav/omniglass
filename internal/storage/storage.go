@@ -1133,10 +1133,6 @@ type Gateway interface {
 	// its current verdict, in one statement. The read a LIST paints its health
 	// column from, where SystemHealth is the read one system's panel opens (#653).
 	SystemHealths(ctx context.Context, read scope.Set) ([]SystemHealthEntry, error)
-	// ReconcileHealth recomputes, once at boot, every system whose recorded
-	// verdict the members-outside-a-slot and still-to-attach rules (ADR-2459)
-	// can have moved under an earlier release; it returns how many it visited.
-	ReconcileHealth(ctx context.Context) (int, error)
 	LocationHealth(ctx context.Context, locationName string, rng HealthRange, read scope.Set) (*HealthReport, error)
 	// ComponentHealthReport is a component's own current verdict beside its
 	// recorded transitions inside rng, in the report shape a system's read

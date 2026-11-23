@@ -14,10 +14,10 @@ import (
 )
 
 // TestHealthAPIOutsideSlotMember drives #2459 over HTTP as an operator would: a
-// hand-built system (no standard, so no slots) with one member, a high alarm on
-// that member, and the system's health read answering degraded with the member,
-// its alarm, the outside-a-slot fact and the reason, then healthy on the clear.
-// The place above rolls up the same verdict. Skipped under -short.
+// hand-built system (no standard, so no slots) with one member and a high alarm
+// on it. The system's health read stays healthy (only slots decide it,
+// ADR-2459) and lists the member, outside a slot, with its alarm; the place
+// above stays healthy too. Skipped under -short.
 func TestHealthAPIOutsideSlotMember(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
@@ -49,7 +49,6 @@ func TestHealthAPIOutsideSlotMember(t *testing.T) {
 			ID          string      `json:"id"`
 			Health      string      `json:"health"`
 			OutsideSlot bool        `json:"outside_slot"`
-			ToAttach    bool        `json:"to_attach"`
 			Alarms      []alarmWire `json:"alarms"`
 		} `json:"members"`
 	}
@@ -70,11 +69,11 @@ func TestHealthAPIOutsideSlotMember(t *testing.T) {
 	}
 
 	sys := read("/systems/hand/health")
-	if sys.Health != "degraded" {
-		t.Fatalf("system health = %q, want degraded: a member outside a slot never decides outage", sys.Health)
+	if sys.Health != "healthy" {
+		t.Fatalf("system health = %q, want healthy: a member outside every slot moves nothing above it", sys.Health)
 	}
-	if !strings.Contains(sys.Reason, "1 member outside a slot has an open alarm (amp-1)") {
-		t.Fatalf("reason = %q, want it to name amp-1", sys.Reason)
+	if sys.Reason != "no slot is impaired" || strings.Contains(sys.Reason, "amp-1") {
+		t.Fatalf("reason = %q, want it to name no member", sys.Reason)
 	}
 	if len(sys.Members) != 1 {
 		t.Fatalf("members = %+v, want amp-1 alone", sys.Members)
@@ -83,8 +82,8 @@ func TestHealthAPIOutsideSlotMember(t *testing.T) {
 	if m.Name != "amp-1" || m.ID == "" || !m.OutsideSlot || m.Health != "outage" || len(m.Alarms) != 1 || m.Alarms[0].ID != raised.ID {
 		t.Fatalf("member = %+v, want amp-1 outside a slot, outage, with its alarm", m)
 	}
-	if loc := read("/locations/hq/health"); loc.Health != "degraded" || loc.Reason != "" || len(loc.Members) != 0 {
-		t.Fatalf("location = %+v, want degraded, with no reason or members (a system's fields)", loc)
+	if loc := read("/locations/hq/health"); loc.Health != "healthy" || loc.Reason != "" || len(loc.Members) != 0 {
+		t.Fatalf("location = %+v, want healthy, with no reason or members (a system's fields)", loc)
 	}
 
 	c.do(tok, http.MethodDelete, "/components/amp-1/alarms/"+raised.ID, nil, http.StatusNoContent)
@@ -92,7 +91,7 @@ func TestHealthAPIOutsideSlotMember(t *testing.T) {
 	if sys.Health != "healthy" || len(sys.Members[0].Alarms) != 0 {
 		t.Fatalf("after clear = %+v, want healthy with no open alarms", sys)
 	}
-	if sys.Reason != "no slot is impaired and no member has an open alarm" {
+	if sys.Reason != "no slot is impaired" {
 		t.Fatalf("reason after clear = %q", sys.Reason)
 	}
 }

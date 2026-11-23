@@ -315,8 +315,8 @@ Cause before arithmetic:
   vocabulary, not an operator's.
 - A shared component is marked **also in** the other system; a member filling no slot reads
   **not in a slot**, a normal state, and the system names those members with the way to place them.
-  An open alarm on one makes the system **degraded**, never an outage, and its alarm is on the
-  **Why** strip with every other member's; the health line says why the system reads what it does.
+  Its open alarms are on the **Why** strip with every other member's, marked **not in a slot**, and
+  they do not move the system's health: only a slot does.
 
 ## Overview: the map and the data
 

@@ -430,9 +430,7 @@ pins; and `system_slot_assignment` is who fills the slot here.
 one attachment seen at two levels. Membership is **many-valued** (a rack DSP feeding three rooms is a
 member of all three). **Staffing a slot creates the membership**, so nobody says it twice; the
 reverse is not symmetric: giving up a slot does not end membership, and a member carrying no slot is
-ordinary (the spare on the shelf). It still counts toward its system's health: an open alarm on a
-member outside every slot makes the system degraded, never an outage
-([ADR-2459](/architecture/decisions/#adr-2459-a-member-outside-a-slot-degrades-its-system-and-an-occupant-still-to-attach-reads-incomplete)).
+ordinary (the spare on the shelf).
 
 **`is_primary`** marks which membership seeds the
 [cascade](/architecture/cascade/#structural-multi-membership-a-component-in-n-systems) for a caller

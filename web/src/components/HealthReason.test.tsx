@@ -4,12 +4,12 @@ import HealthReason from "./HealthReason";
 
 describe("HealthReason", () => {
   it("states the health and the server's reason for it", () => {
-    const { getByTestId } = render(() => <HealthReason health="degraded" reason="1 member outside a slot has an open alarm (amp-1)" />);
-    expect(getByTestId("health-reason").textContent).toBe("degraded: 1 member outside a slot has an open alarm (amp-1)");
+    const { getByTestId } = render(() => <HealthReason health="degraded" reason="slot display is impaired (0 of 1 occupying)" />);
+    expect(getByTestId("health-reason").textContent).toBe("degraded: slot display is impaired (0 of 1 occupying)");
   });
 
   it("says nothing for a healthy system: the badge already says it", () => {
-    const { queryByTestId } = render(() => <HealthReason health="healthy" reason="no slot is impaired and no member has an open alarm" />);
+    const { queryByTestId } = render(() => <HealthReason health="healthy" reason="no slot is impaired" />);
     expect(queryByTestId("health-reason")).toBeNull();
   });
 

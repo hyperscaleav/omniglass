@@ -386,7 +386,7 @@ An endpoint whose reachability reads `down` for the sustain opens a `high` alarm
 reading `up` clears it, so unplugging a simulated component takes its system out and plugging it back recovers it, with no
 operator in between. That takes the system out only when the component fills a slot whose impact
 is `outage` and losing it drops the slot below quorum; otherwise the system reads whatever the slot's
-impact says, and a component that fills no slot degrades its system and no more (ADR-2459). The second, `ingest-lag-high`,
+impact says, and a component that fills no slot moves no system. The second, `ingest-lag-high`,
 watches Omniglass itself: the server's `ingest-lag-max` held over 30 s for 2 minutes opens a
 `warning` alarm on the server's platform component, and a window back at 30 s or under clears it
 ([messaging](/architecture/messaging/#measuring-the-pipeline)). `outpost-silent` opens a `high` alarm on

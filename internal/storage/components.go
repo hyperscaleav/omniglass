@@ -209,42 +209,12 @@ var componentConfig = scopedConfig[Component]{
 	// that still owns endpoints is occupied too (#138): the FK would SET NULL
 	// their component and strand them, and their tasks, in the all-scope-only
 	// bucket, so the delete is refused instead of cascaded (#528 owns cascade).
-	// beforeDelete is set in init: it recomputes health, and the recompute's
-	// call graph reaches back to componentConfig, which a composite literal
-	// cannot refer to while it is being initialized.
-}
-
-func init() {
-	componentConfig.beforeDelete = func(ctx context.Context, p *PG, tx pgx.Tx, before *Component) error {
+	beforeDelete: func(ctx context.Context, _ *PG, tx pgx.Tx, before *Component) error {
 		if err := refusePlatformComponent(ctx, tx, before.ID); err != nil {
 			return err
 		}
-		if err := refuseOwnedEndpoints(ctx, tx, before.ID); err != nil {
-			return err
-		}
-		return releaseDeletedMember(ctx, p, tx, before.ID)
-	}
-}
-
-// releaseDeletedMember unbinds a component about to be deleted from every
-// system it belongs to and recomputes those systems, before the delete. The
-// membership FK cascades anyway, but silently: a member outside a slot with an
-// open alarm degrades its system (ADR-2459), so the system it leaves may have
-// just recovered, and only a recompute that can still read the memberships can
-// name it. A component filling a slot cannot reach here (the assignment FK
-// restricts the delete), so every system named is one it held no slot in.
-func releaseDeletedMember(ctx context.Context, p *PG, tx pgx.Tx, componentID string) error {
-	held, err := p.systemsHolding(ctx, tx, componentID)
-	if err != nil {
-		return err
-	}
-	if len(held) == 0 {
-		return nil
-	}
-	if _, err := tx.Exec(ctx, `delete from system_member where component_id = $1::uuid`, componentID); err != nil {
-		return fmt.Errorf("storage: release deleted member: %w", err)
-	}
-	return p.recomputeChain(ctx, tx, nil, held, nil)
+		return refuseOwnedEndpoints(ctx, tx, before.ID)
+	},
 }
 
 // refuseOwnedEndpoints is a *ComponentHasEndpointsError when any endpoint still
@@ -632,9 +602,9 @@ func (p *PG) componentIsDescendant(ctx context.Context, q querier, targetID, can
 
 // UpdateComponent patches a component by name with the three-way scope split
 // and in-transaction audit. Only product is classification here; a product
-// swap does not move the component's own verdict (purely its active alarms,
-// #626), but it can move whether the component is still to attach, which the
-// slots it fills read (ADR-2459), so the swap recomputes its chain.
+// swap does not move health any more: a component's own verdict is now purely
+// its active alarms (#626), so it changes only its typed-slot classification
+// for the NEXT assignment.
 //
 // Placement (a relocate or a reparent) is NOT here (#627 Task 13): it is its
 // own act, MoveComponent, gated by component:move. See that function's doc
@@ -778,16 +748,12 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 	if err := writeAuditRes(ctx, tx, actorID, "update", "component", after.ID, before, after); err != nil {
 		return nil, err
 	}
-	// A product swap does not move the component's own verdict (its active
-	// alarms, #626), but it can move whether it is still to attach (a driver
-	// product with no endpoint, ADR-2459), which every slot it fills reads; so
-	// its chain is recomputed. It also moves which component calc rules select
-	// it (#1015).
+	// A product swap no longer moves health (see the doc comment above): a
+	// component's verdict is its own active alarms, unaffected by what it is
+	// classified as. The next AssignSlot is where a changed product matters.
+	// It does move which component calc rules select it (#1015).
 	if before.ProductID == nil || after.ProductID == nil || *before.ProductID != *after.ProductID {
 		if err := p.markComponentCalcRules(ctx, tx, after.ID); err != nil {
-			return nil, err
-		}
-		if err := p.recomputeComponentSystems(ctx, tx, after.ID); err != nil {
 			return nil, err
 		}
 	}
@@ -1017,7 +983,7 @@ func (p *PG) MoveComponent(ctx context.Context, actorID, name string, move Compo
 // arc stores the uuid, which is also why the audit row keys on that uuid: a trail
 // keyed on the thing that just changed is a trail the change orphans.
 //
-// Health is not recomputed. The chain runs component -> systems-it-belongs-to ->
+// Health is not recomputed. The chain runs component -> systems-it-staffs ->
 // locations-over-those-systems and every link of it is an id, so a name move
 // changes no verdict.
 //

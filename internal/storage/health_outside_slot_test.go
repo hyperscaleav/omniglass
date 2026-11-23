@@ -2,19 +2,19 @@ package storage_test
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// The members-outside-a-slot rule (#2459, ADR-2459), held against real
-// Postgres: an open alarm on a member that fills no slot degrades its system,
-// never more; slots alone decide outage; the place above rolls up the new
-// verdict unchanged; and every write that can move the rule recomputes.
+// A member outside every slot is shown on its system, not rolled up (#2459,
+// ADR-2459), held against real Postgres: its open alarm leaves the system's
+// recorded health and the places above it as they were, and the system health
+// read lists the member, outside a slot, with that alarm. A slotted member says
+// which slot it fills.
 
 // handBuilt adds a system with no standard (so no slots) to the fixture's room,
-// with one member, amp-1, and returns nothing: the tests speak names.
+// with one member, amp-1.
 func (f *healthFixture) handBuilt(t *testing.T, ctx context.Context) {
 	t.Helper()
 	room := "hq-r1"
@@ -53,215 +53,78 @@ func member(rep *storage.HealthReport, name string) *storage.HealthMember {
 	return nil
 }
 
-func TestOutsideMemberAlarmDegradesItsSystem(t *testing.T) {
+func TestOutsideMemberAlarmIsShownNotRolledUp(t *testing.T) {
 	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	f.handBuilt(t, ctx)
 
-	if rep := f.report(t, ctx, "hand"); rep.Verdict != "healthy" {
-		t.Fatalf("before the alarm: %q, want healthy", rep.Verdict)
-	}
+	systemRows, _ := f.recorded(t, ctx, "system", "hand")
+	campusRows, _ := f.recorded(t, ctx, "location", "hq")
 
-	// A high alarm takes amp-1 to outage on its own arc; its system, which
-	// declares nothing it would lose, reads degraded and no further.
 	alarm, err := f.gw.RaiseAlarm(ctx, "", "amp-1", storage.AlarmSpec{Severity: "high", Message: "amplifier powered off"})
 	if err != nil {
 		t.Fatalf("raise alarm: %v", err)
 	}
+	// The component's own health moves; nothing above it does.
 	if _, v := f.recorded(t, ctx, "component", "amp-1"); v != "outage" {
 		t.Fatalf("component = %q, want outage", v)
 	}
-	if _, v := f.recorded(t, ctx, "system", "hand"); v != "degraded" {
-		t.Fatalf("system recorded %q, want degraded", v)
+	if n, v := f.recorded(t, ctx, "system", "hand"); v != "healthy" || n != systemRows {
+		t.Fatalf("system recorded %d rows / %q, want %d / healthy: a member outside every slot moves nothing above it", n, v, systemRows)
 	}
-	for _, loc := range []string{"hq-r1", "hq-b1", "hq"} {
-		if _, v := f.recorded(t, ctx, "location", loc); v != "degraded" {
-			t.Errorf("location %s recorded %q, want degraded: the place rolls up the new verdict unchanged", loc, v)
-		}
-	}
-	rep := f.report(t, ctx, "hand")
-	if rep.Verdict != "degraded" {
-		t.Fatalf("report verdict %q, want degraded", rep.Verdict)
-	}
-	if !strings.Contains(rep.Reason, "1 member outside a slot has an open alarm (amp-1)") {
-		t.Errorf("reason %q does not name the member", rep.Reason)
-	}
-	m := member(rep, "amp-1")
-	if m == nil || !m.OutsideSlot || m.Health != "outage" || len(m.Alarms) != 1 || m.Alarms[0].ID != alarm.ID {
-		t.Fatalf("member = %+v, want amp-1 outside a slot, outage, carrying the alarm", m)
+	if n, v := f.recorded(t, ctx, "location", "hq"); v != "healthy" || n != campusRows {
+		t.Fatalf("campus recorded %d rows / %q, want %d / healthy", n, v, campusRows)
 	}
 
-	// Clearing returns it, and the history holds both edges.
+	rep := f.report(t, ctx, "hand")
+	if rep.Verdict != "healthy" {
+		t.Fatalf("report verdict %q, want healthy", rep.Verdict)
+	}
+	if rep.Reason != "no slot is impaired" {
+		t.Errorf("reason %q: a member outside a slot is never a cause", rep.Reason)
+	}
+	m := member(rep, "amp-1")
+	if m == nil || !m.OutsideSlot || m.Slot != "" || m.Health != "outage" || len(m.Alarms) != 1 || m.Alarms[0].ID != alarm.ID {
+		t.Fatalf("member = %+v, want amp-1 outside a slot, outage, carrying its alarm", m)
+	}
+
 	if err := f.gw.ClearAlarm(ctx, "", "amp-1", alarm.ID); err != nil {
 		t.Fatalf("clear: %v", err)
 	}
-	rep = f.report(t, ctx, "hand")
-	if rep.Verdict != "healthy" {
-		t.Fatalf("after clear %q, want healthy", rep.Verdict)
-	}
-	if got := verdictSeq(rep.Transitions); !sameSeq(got, []string{"healthy", "degraded", "healthy"}) {
-		t.Fatalf("transitions = %v, want healthy, degraded, healthy", got)
-	}
-	if _, v := f.recorded(t, ctx, "location", "hq"); v != "healthy" {
-		t.Errorf("campus %q, want healthy after the clear", v)
+	if m := member(f.report(t, ctx, "hand"), "amp-1"); m == nil || len(m.Alarms) != 0 {
+		t.Fatalf("after clear member = %+v, want no open alarms", m)
 	}
 }
 
-// Severity does not reach past the member: a warning degrades the system
-// exactly as a disaster does.
-func TestOutsideMemberSeverityDoesNotMatter(t *testing.T) {
+// A slotted member carries the slot it fills, and its system's reason names the
+// slot behind the verdict; an alarmed member outside a slot beside it changes
+// neither.
+func TestSlottedMemberNamesItsSlotAndTheReasonNamesTheSlot(t *testing.T) {
 	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
-	f.handBuilt(t, ctx)
-	if _, err := f.gw.RaiseAlarm(ctx, "", "amp-1", storage.AlarmSpec{Severity: "warning", Message: "fan"}); err != nil {
-		t.Fatalf("raise: %v", err)
-	}
-	if _, v := f.recorded(t, ctx, "system", "hand"); v != "degraded" {
-		t.Fatalf("system %q, want degraded", v)
-	}
-}
-
-// A slotted outage still decides outage, a system holding both kinds takes the
-// worse, and clearing the slotted one leaves the outside one's degraded.
-func TestSlottedOutageStillDecidesOverAnOutsideAlarm(t *testing.T) {
-	t.Parallel()
-	f := newHealthFixture(t)
-	ctx := context.Background()
-	if _, err := f.gw.SetSystemSlot(ctx, "", "system", "hq-huddle", storage.SystemSlotSpec{
-		Name: "display", Label: "Display", Quorum: 1, AcceptedTypes: []string{"video-bar"}, Impact: "outage",
-	}); err != nil {
-		t.Fatalf("declare display: %v", err)
-	}
-	f.mustComponent(t, ctx, "disp-1")
-	if err := f.gw.AssignSlot(ctx, "", "hq-huddle", "display", "disp-1", f.all, f.all, f.all, f.all); err != nil {
-		t.Fatalf("assign: %v", err)
-	}
 	f.mustComponent(t, ctx, "amp-2")
 	if err := f.gw.AddMember(ctx, "", "hq-huddle", "amp-2", f.all, f.all, f.all, f.all); err != nil {
 		t.Fatalf("add member: %v", err)
 	}
-
-	slotted, err := f.gw.RaiseAlarm(ctx, "", "disp-1", storage.AlarmSpec{Severity: "high", Message: "display off"})
-	if err != nil {
-		t.Fatalf("raise slotted: %v", err)
-	}
 	if _, err := f.gw.RaiseAlarm(ctx, "", "amp-2", storage.AlarmSpec{Severity: "high", Message: "amp off"}); err != nil {
 		t.Fatalf("raise outside: %v", err)
 	}
-	rep := f.report(t, ctx, "hq-huddle")
-	if rep.Verdict != "outage" {
-		t.Fatalf("both kinds: %q, want outage (the worse)", rep.Verdict)
-	}
-	if m := member(rep, "disp-1"); m == nil || m.OutsideSlot || m.Slot != "display" {
-		t.Errorf("disp-1 = %+v, want a slotted member", m)
-	}
-	if !strings.HasPrefix(rep.Reason, "slot display is impaired") || !strings.Contains(rep.Reason, "(amp-2)") {
-		t.Errorf("reason %q, want the slot first and the outside member after", rep.Reason)
-	}
-
-	if err := f.gw.ClearAlarm(ctx, "", "disp-1", slotted.ID); err != nil {
-		t.Fatalf("clear slotted: %v", err)
-	}
-	if _, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "degraded" {
-		t.Fatalf("after clearing the slotted outage: %q, want degraded (the outside member)", v)
-	}
-}
-
-// Membership writes move the rule: binding an alarmed component degrades the
-// system, unbinding it heals it, and deleting an alarmed member heals it too.
-func TestMembershipWritesRecomputeTheOutsideRule(t *testing.T) {
-	t.Parallel()
-	f := newHealthFixture(t)
-	ctx := context.Background()
-	f.handBuilt(t, ctx)
-	f.mustComponent(t, ctx, "amp-3")
-	if _, err := f.gw.RaiseAlarm(ctx, "", "amp-3", storage.AlarmSpec{Severity: "high", Message: "off"}); err != nil {
-		t.Fatalf("raise: %v", err)
-	}
-	if _, v := f.recorded(t, ctx, "system", "hand"); v != "healthy" {
-		t.Fatalf("not yet a member: %q, want healthy", v)
-	}
-	if err := f.gw.AddMember(ctx, "", "hand", "amp-3", f.all, f.all, f.all, f.all); err != nil {
-		t.Fatalf("add member: %v", err)
-	}
-	if _, v := f.recorded(t, ctx, "system", "hand"); v != "degraded" {
-		t.Fatalf("after binding an alarmed member: %q, want degraded", v)
-	}
-	if err := f.gw.RemoveMember(ctx, "", "hand", "amp-3", f.all, f.all, f.all, f.all); err != nil {
-		t.Fatalf("remove member: %v", err)
-	}
-	if _, v := f.recorded(t, ctx, "system", "hand"); v != "healthy" {
-		t.Fatalf("after unbinding: %q, want healthy", v)
-	}
-
-	if _, err := f.gw.RaiseAlarm(ctx, "", "amp-1", storage.AlarmSpec{Severity: "high", Message: "off"}); err != nil {
-		t.Fatalf("raise amp-1: %v", err)
-	}
-	if _, v := f.recorded(t, ctx, "system", "hand"); v != "degraded" {
-		t.Fatalf("amp-1 alarmed: %q, want degraded", v)
-	}
-	if err := f.gw.DeleteComponent(ctx, "", "amp-1", f.all, f.all); err != nil {
-		t.Fatalf("delete component: %v", err)
-	}
-	if _, v := f.recorded(t, ctx, "system", "hand"); v != "healthy" {
-		t.Fatalf("after deleting the alarmed member: %q, want healthy", v)
-	}
-	if _, v := f.recorded(t, ctx, "location", "hq"); v != "healthy" {
-		t.Fatalf("campus after the delete: %q, want healthy", v)
-	}
-}
-
-// A slot staffed by a component whose product is collected through a driver
-// but which has no endpoint yet (the template case: "still to attach") reads
-// incomplete, and attaching it makes the system healthy (#2459).
-func TestOccupantStillToAttachReadsIncomplete(t *testing.T) {
-	t.Parallel()
-	f := newHealthFixture(t)
-	ctx := context.Background()
-	if _, err := f.conn.Exec(ctx, `update product set driver_id = (select id from driver order by name limit 1) where name = $1`, f.bar.Name); err != nil {
-		t.Fatalf("give the product a driver: %v", err)
-	}
-	// bar-1 is the fixture's staffed table mic: re-assigning recomputes, and
-	// its product is now collectable with no endpoint on it.
-	if err := f.gw.UnassignSlot(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all, f.all, f.all, f.all); err != nil {
-		t.Fatalf("unassign: %v", err)
-	}
-	if err := f.gw.AssignSlot(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all, f.all, f.all, f.all); err != nil {
-		t.Fatalf("assign: %v", err)
+	if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{Severity: "high", Message: "bar off"}); err != nil {
+		t.Fatalf("raise slotted: %v", err)
 	}
 	rep := f.report(t, ctx, "hq-huddle")
-	if rep.Verdict != "incomplete" {
-		t.Fatalf("verdict %q, want incomplete: its one occupant is still to attach", rep.Verdict)
+	if rep.Verdict != "degraded" {
+		t.Fatalf("verdict %q, want degraded (the table-mic slot's impact)", rep.Verdict)
 	}
-	if m := member(rep, "bar-1"); m == nil || !m.ToAttach {
-		t.Fatalf("member = %+v, want bar-1 marked still to attach", m)
+	if rep.Reason != "slot table-mic is impaired (0 of 1 occupying)" {
+		t.Errorf("reason %q, want the slot alone", rep.Reason)
 	}
-	if !strings.Contains(rep.Reason, "still to attach (bar-1)") {
-		t.Errorf("reason %q does not name the component to attach", rep.Reason)
+	if m := member(rep, "bar-1"); m == nil || m.OutsideSlot || m.Slot != "table-mic" || len(m.Alarms) != 1 {
+		t.Errorf("bar-1 = %+v, want in table-mic with its alarm", m)
 	}
-	if _, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "incomplete" {
-		t.Fatalf("recorded %q, want incomplete", v)
-	}
-
-	comp := "bar-1"
-	if _, err := f.gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge"}, f.all, f.all); err != nil {
-		t.Fatalf("outpost: %v", err)
-	}
-	edge := "edge"
-	ep, err := f.gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-		Transport: "icmp", Component: &comp, Outpost: &edge, Params: []byte(`{"target":"10.0.0.1"}`)}, all)
-	if err != nil {
-		t.Fatalf("attach: %v", err)
-	}
-	if _, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "healthy" {
-		t.Fatalf("after attaching: %q, want healthy", v)
-	}
-	if err := f.gw.DeleteEndpoint(ctx, "", ep.ID, all, all); err != nil {
-		t.Fatalf("detach: %v", err)
-	}
-	if _, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "incomplete" {
-		t.Fatalf("after detaching: %q, want incomplete", v)
+	if m := member(rep, "amp-2"); m == nil || !m.OutsideSlot || len(m.Alarms) != 1 {
+		t.Errorf("amp-2 = %+v, want outside a slot with its alarm", m)
 	}
 }

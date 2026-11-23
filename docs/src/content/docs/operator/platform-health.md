@@ -23,13 +23,6 @@ screenshots:
       - action: wait
         selector: "[data-testid=server-panel-requests] tr[data-testid=panel-row-http-request-duration-max][aria-expanded]"
         timeout: 150000
-      # The lab's outpost never checks in, so its outpost-silent alarm raises
-      # partway through a capture and, the outpost being a member of the
-      # platform system outside any slot, degrades it (ADR-2459): hold until it has.
-      - action: wait
-        selector: "[data-testid=platform-health] >> text=degraded"
-        timeout: 90000
-        message: "the outpost-silent alarm never degraded the platform system"
     mask:
       - "[data-testid=platform-version] >> xpath=ancestor::div[3]"
       - "[data-testid=platform-uptime] >> xpath=ancestor::div[3]"
@@ -51,13 +44,6 @@ screenshots:
       - action: wait
         selector: "[data-testid=server-panel-requests] tr[data-testid=panel-row-http-request-duration-max][aria-expanded]"
         timeout: 150000
-      # The lab's outpost never checks in, so its outpost-silent alarm raises
-      # partway through a capture and, the outpost being a member of the
-      # platform system outside any slot, degrades it (ADR-2459): hold until it has.
-      - action: wait
-        selector: "[data-testid=platform-health] >> text=degraded"
-        timeout: 90000
-        message: "the outpost-silent alarm never degraded the platform system"
       - action: hover
         selector: "[data-testid=panel-row-db-transaction-oldest-age] td:last-child"
     mask:
@@ -76,13 +62,6 @@ screenshots:
       - action: wait
         selector: "[data-testid=server-panel-requests] tr[data-testid=panel-row-http-request-duration-max][aria-expanded]"
         timeout: 150000
-      # The lab's outpost never checks in, so its outpost-silent alarm raises
-      # partway through a capture and, the outpost being a member of the
-      # platform system outside any slot, degrades it (ADR-2459): hold until it has.
-      - action: wait
-        selector: "[data-testid=platform-health] >> text=degraded"
-        timeout: 90000
-        message: "the outpost-silent alarm never degraded the platform system"
       - action: click
         selector: "[data-testid=server-panels-server] > summary .eyebrow"
       # The lab's outpost never checks in, and the outpost-silent alarm raises
@@ -109,13 +88,6 @@ screenshots:
       - action: wait
         selector: "[data-testid=server-panel-requests] tr[data-testid=panel-row-http-request-duration-max][aria-expanded]"
         timeout: 150000
-      # The lab's outpost never checks in, so its outpost-silent alarm raises
-      # partway through a capture and, the outpost being a member of the
-      # platform system outside any slot, degrades it (ADR-2459): hold until it has.
-      - action: wait
-        selector: "[data-testid=platform-health] >> text=degraded"
-        timeout: 90000
-        message: "the outpost-silent alarm never degraded the platform system"
       - action: click
         selector: "[data-testid=server-panels-server] > summary .eyebrow"
       # Same table as platform-health-outposts: hold until the outpost-silent
@@ -145,13 +117,6 @@ screenshots:
       - action: wait
         selector: "[data-testid=server-panel-requests] tr[data-testid=panel-row-http-request-duration-max][aria-expanded]"
         timeout: 150000
-      # The lab's outpost never checks in, so its outpost-silent alarm raises
-      # partway through a capture and, the outpost being a member of the
-      # platform system outside any slot, degrades it (ADR-2459): hold until it has.
-      - action: wait
-        selector: "[data-testid=platform-health] >> text=degraded"
-        timeout: 90000
-        message: "the outpost-silent alarm never degraded the platform system"
       - action: click
         selector: "[data-testid=pipeline-hop-ingest]"
     alt: "Where work is lost on Platform health with the Ingest hop open: what the server's ingest takes in and hands on, what counts as lost there, the three delivery keys it is read from with their descriptions, and its components with their share."
@@ -190,11 +155,8 @@ windowed figure no one writes goes unreported after two report windows, however 
 ## The header
 
 - **Platform** is the health of the platform system, the system every outpost and every server is
-  a component of. None of them fills a slot, so an open alarm on any of them (a silent outpost, a
-  server's ingest lag) reads **degraded** here, never an outage
-  ([ADR-2459](/architecture/decisions/#adr-2459-a-member-outside-a-slot-degrades-its-system-and-an-occupant-still-to-attach-reads-incomplete)).
-  It links to that system's own view, which explains the health the way every system's view does,
-  so the reasons are written once.
+  a component of. It links to that system's own view, which explains the health the way every
+  system's view does, so the reasons are written once.
 - **Version** is the build the server runs, written by the server on its own platform component
   each time it boots.
 - **Up for** is how long the server has been running: the page's read time minus the start time

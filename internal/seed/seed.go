@@ -293,13 +293,6 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 	if err := gw.EnsurePlatform(ctx); err != nil {
 		return fmt.Errorf("seed: platform system: %w", err)
 	}
-	// Not seed data, but the boot is where it belongs: a fleet upgraded across
-	// ADR-2459 holds verdicts recorded under the old rule for every system
-	// with an alarmed member outside a slot or an occupant still to attach.
-	// Recording is transition-only, so a current fleet writes nothing here.
-	if _, err := gw.ReconcileHealth(ctx); err != nil {
-		return fmt.Errorf("seed: reconcile health: %w", err)
-	}
 	return nil
 }
 

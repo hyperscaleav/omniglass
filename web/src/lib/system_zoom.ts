@@ -180,8 +180,8 @@ export type AlarmRow = {
   slotLabel: string;
   // Where the alarmed member sits (#2459): "impairs <slot>" when its alarm is
   // why the slot is impaired, "in <slot>" when it sits in a slot its alarm
-  // does not impair, "not in a slot" when it fills none (an open alarm there
-  // degrades the system, never more, ADR-2459).
+  // does not impair, "not in a slot" when it fills none (shown, and moving
+  // nothing above the component, ADR-2459).
   where: string;
   outsideSlot: boolean;
   raisedAt: string;

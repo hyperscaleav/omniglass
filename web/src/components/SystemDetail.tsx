@@ -139,9 +139,12 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
   const timelines = createTimelineToggles();
   // The strip reads red when any alarm on it is at an outage level (the
   // catalog's flag, #917), amber when they only degrade.
-  // A member outside a slot never takes the system to outage (ADR-2459), so
-  // its alarm's severity does not turn the strip red.
+  // An alarm on a member outside every slot moves nothing above it (ADR-2459),
+  // so it gives the strip no fault tone: red only for an outage-level alarm on a
+  // slotted member, amber while one of those is on it, neutral when the strip
+  // holds only alarms that do not count toward the system's health.
   const inOutage = createMemo(() => alarms().some((a) => !a.outsideSlot && scale().outage(a.severity)));
+  const counts = createMemo(() => alarms().some((a) => !a.outsideSlot));
   const bodyOf = createMemo(() => (vm() ? componentCards(vm()!) : undefined));
   const metricsQ = useQuery(() => ({ queryKey: systemMetricsKey(id()), queryFn: () => systemMetrics(id()), refetchInterval: LEAF_POLL_MS }));
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards }));
@@ -552,7 +555,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                   {/* Cause before arithmetic (#785): what is wrong, on which
                       component, impairing which slot, since when. */}
                   <Show when={alarms().length > 0}>
-                    <section data-testid="alarm-strip" class="flex flex-col gap-1.5 rounded-box border p-3" classList={{ "border-error/40 bg-error/5": inOutage(), "border-warning/40 bg-warning/5": !inOutage() }}>
+                    <section data-testid="alarm-strip" class="flex flex-col gap-1.5 rounded-box border p-3" classList={{ "border-error/40 bg-error/5": inOutage(), "border-warning/40 bg-warning/5": counts() && !inOutage(), "border-base-300": !counts() }}>
                       <h2 class="eyebrow">Why</h2>
                       <For each={alarms()}>
                         {(a) => (

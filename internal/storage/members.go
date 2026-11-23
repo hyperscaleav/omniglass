@@ -115,11 +115,6 @@ func (p *PG) AddMember(ctx context.Context, actorID, systemName, componentName s
 	if err := writeAuditRes(ctx, tx, actorID, "update", "system_member", systemID, before, after); err != nil {
 		return err
 	}
-	// A member outside a slot moves its system's verdict (ADR-2459), so a bind
-	// is a health write: an alarmed component joining degrades the system.
-	if err := p.recomputeMembership(ctx, tx, componentID, systemID, systemName); err != nil {
-		return err
-	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("storage: commit add member: %w", err)
 	}
@@ -237,10 +232,6 @@ func (p *PG) RemoveMember(ctx context.Context, actorID, systemName, componentNam
 		return err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "delete", "system_member", systemID, before, nil); err != nil {
-		return err
-	}
-	// The unbound member no longer counts against the system (ADR-2459).
-	if err := p.recomputeMembership(ctx, tx, componentID, systemID, systemName); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -604,38 +595,4 @@ func requireComponentAction(ctx context.Context, q querier, componentID string, 
 		return ErrComponentForbidden
 	}
 	return nil
-}
-
-// recomputeMembership recomputes a system after a member joins or leaves it
-// (ADR-2459). It takes the component's health lock first, in the recompute's
-// lock order, without recording the component: an alarm write on the same
-// component holds that lock to commit, so the two serialize, and whichever runs
-// second sees the other's row (the alarm write finds the new membership, or the
-// bind finds the new alarm). Recording the component here would write it a
-// first healthy row, which is what marks a component observed (#1454), and a
-// bind observes nothing.
-func (p *PG) recomputeMembership(ctx context.Context, tx pgx.Tx, componentID, systemID, systemName string) error {
-	if err := lockHealthOwner(ctx, tx, "component", componentID); err != nil {
-		return err
-	}
-	return p.recomputeChain(ctx, tx, nil, []ownerRef{{ID: systemID, Name: systemName}}, nil)
-}
-
-// recomputeComponentSystems recomputes the systems a component feeds (slots or
-// memberships) without recording the component itself: it takes the
-// component's health lock, then recomputes only its systems. Recording the
-// component would write it a first healthy row, which marks it observed
-// (#1454); an endpoint or product write observes nothing.
-func (p *PG) recomputeComponentSystems(ctx context.Context, tx pgx.Tx, componentID string) error {
-	if err := lockHealthOwner(ctx, tx, "component", componentID); err != nil {
-		return err
-	}
-	held, err := p.systemsHolding(ctx, tx, componentID)
-	if err != nil {
-		return err
-	}
-	if len(held) == 0 {
-		return nil
-	}
-	return p.recomputeChain(ctx, tx, nil, held, nil)
 }

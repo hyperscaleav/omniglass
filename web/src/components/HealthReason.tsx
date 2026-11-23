@@ -1,7 +1,7 @@
 import { Show, type JSX } from "solid-js";
 
-// HealthReason (#2459): the verdict line's reason, "degraded: 1 member outside a
-// slot has an open alarm (amp-1)". The server words it (health.SystemReason,
+// HealthReason (#2459): the verdict line's reason, "degraded: slot display is
+// impaired (0 of 1 occupying)". The server words it (health.SystemReason,
 // from the same inputs as the health), so the console never recomputes why: it
 // only says what the health read says. Nothing for a healthy system (a calm
 // fleet stays calm, ADR-0154: the badge already says it), nor when the read
