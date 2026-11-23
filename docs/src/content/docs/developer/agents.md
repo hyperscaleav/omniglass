@@ -263,6 +263,11 @@ conversations:
       - text: The meeting 405 video bar's alarm is still active ...
 ```
 
+A recorded turn can also carry `think`, how long the model works before the turn arrives (a duration
+such as `1.8s`, at most 30s), and `reasoning`, the thinking the console shows above it. Without them a
+recording answers at once; the lab's corporate recording uses both, so a capture of the console paces
+like a live model.
+
 A run can carry what you are looking at as AG-UI `context`: references, a kind and a name or address,
 never a value (#2122). omnibot reads them as data ahead of your message and looks each up with its
 tools, under your grants. At most 20 entries, each value at most 2000 characters:

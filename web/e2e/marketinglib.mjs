@@ -21,13 +21,16 @@ import { load } from 'js-yaml';
 /** @typedef {string | { role: string, name?: string, exact?: boolean } | { text: string, exact?: boolean } | { selector: string }} Target */
 /** @typedef {'out' | 'here' | Target} Focus */
 /** @typedef {{ n: number, kind: string, path?: string, key?: string, target?: Target, text?: string, value?: string, replace?: boolean, timeout: number, hold: number, focus?: Focus, zoom?: number, fast?: number }} Step */
-/** @typedef {{ id: string, kind: 'still' | 'loop', alt: string, viewport: Viewport, start: string, ready: Target | null, setup: SetupItem[], prep: Step[], steps: Step[] }} Shot */
+/** @typedef {{ id: string, kind: 'still' | 'loop', alt: string, viewport: Viewport, start: string, ready: Target | null, setup: SetupItem[], prep: Step[], steps: Step[], maxSeconds: number }} Shot */
 /** @typedef {{ lab: { scenario: string, systems: number, omnibotReplay: string }, setup: SetupItem[], shots: Shot[] }} ShotList */
 
 // A loop plays long enough to read and short enough to stay lively: 5 to 9
 // seconds, and small enough to ship on a page: 1.5 MB.
 export const LOOP_MIN_SECONDS = 5;
 export const LOOP_MAX_SECONDS = 9;
+// A loop may raise its own maximum up to this, for a story that cannot be told
+// faster without lying about it: omnibot's answer takes as long as inference does.
+export const LOOP_MAX_SECONDS_CAP = 15;
 export const LOOP_MAX_BYTES = 1_500_000;
 export const DEFAULT_VIEWPORT = { width: 1440, height: 900 };
 // Longest a wait or an await may be given, in milliseconds.
@@ -300,7 +303,7 @@ export function parseShots(text) {
       const at = isObj(s) && isStr(s.id) ? `shot ${s.id}` : `shot ${i + 1}`;
       if (!isObj(s)) return void problems.push(`${at} must be a mapping`);
       for (const k of Object.keys(s)) {
-        if (!['id', 'kind', 'alt', 'viewport', 'start', 'ready', 'setup', 'prep', 'steps'].includes(k)) problems.push(`${at} has unknown key "${k}"`);
+        if (!['id', 'kind', 'alt', 'viewport', 'start', 'ready', 'setup', 'prep', 'steps', 'max_seconds'].includes(k)) problems.push(`${at} has unknown key "${k}"`);
       }
       if (!isStr(s.id) || !ID.test(s.id)) problems.push(`${at}: id must be lowercase letters, digits and hyphens (it names its files)`);
       else if (seen.has(s.id)) problems.push(`${at}: id is used twice`);
@@ -344,9 +347,15 @@ export function parseShots(text) {
       for (const st of prep) {
         if (st.focus !== undefined && s.kind === 'loop') problems.push(`${at}: prep step ${st.n} has a focus: prep is cut from the recording`);
       }
+      let maxSeconds = LOOP_MAX_SECONDS;
+      if (s.max_seconds !== undefined) {
+        if (s.kind !== 'loop') problems.push(`${at}: max_seconds belongs on a loop`);
+        else if (!(typeof s.max_seconds === 'number' && s.max_seconds > LOOP_MAX_SECONDS && s.max_seconds <= LOOP_MAX_SECONDS_CAP)) problems.push(`${at}: max_seconds is over ${LOOP_MAX_SECONDS} and at most ${LOOP_MAX_SECONDS_CAP}`);
+        else maxSeconds = s.max_seconds;
+      }
       shots.push({
         id: s.id, kind: s.kind, alt: s.alt, viewport: vpShot ?? defaultViewport ?? DEFAULT_VIEWPORT,
-        start: s.start, ready, setup: ssetup, prep, steps,
+        start: s.start, ready, setup: ssetup, prep, steps, maxSeconds,
       });
     });
   }
@@ -368,11 +377,11 @@ export function parseShots(text) {
  * @param {{ seconds: number, bytes: number }} m
  * @returns {string[]}
  */
-export function budgetProblems(id, { seconds, bytes }) {
+export function budgetProblems(id, { seconds, bytes }, max = LOOP_MAX_SECONDS) {
   /** @type {string[]} */
   const out = [];
   if (!(seconds >= LOOP_MIN_SECONDS)) out.push(`shot ${id}: loop is ${seconds.toFixed(1)}s, under the ${LOOP_MIN_SECONDS}s minimum`);
-  if (seconds > LOOP_MAX_SECONDS) out.push(`shot ${id}: loop is ${seconds.toFixed(1)}s, over the ${LOOP_MAX_SECONDS}s maximum`);
+  if (seconds > max) out.push(`shot ${id}: loop is ${seconds.toFixed(1)}s, over the ${max}s maximum`);
   if (bytes > LOOP_MAX_BYTES) out.push(`shot ${id}: loop is ${bytes} bytes, over the ${LOOP_MAX_BYTES}-byte limit`);
   return out;
 }

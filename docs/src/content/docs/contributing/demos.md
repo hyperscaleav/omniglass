@@ -449,7 +449,8 @@ and writes the files and a `shots.json` manifest into the directory. The landing
 every image, loop, poster and alt text with no code change there.
 
 A shot is **data**: an id, a kind, a viewport, an `alt`, setup, and steps. A `still` is one 2x WebP. A
-`loop` is an H.264 MP4 of 5 to 9 seconds and at most 1.5 MB, with a WebP poster; the recorder re-encodes
+`loop` is an H.264 MP4 of 5 to 9 seconds (a loop's `max_seconds` may raise that to 15, for a story such as
+omnibot's answer that cannot be told faster without faking it) and at most 1.5 MB, with a WebP poster; the recorder re-encodes
 a loop smaller until it fits, and a loop that cannot fit, or is too short or too long, fails the run
 naming the shot and the limit. Steps use the walkthrough grammar (`goto`, `click`, `hover`, `type`,
 `select`, `press`, `wait`, and `hold` to linger) with no captions: a capture speaks for itself, and the

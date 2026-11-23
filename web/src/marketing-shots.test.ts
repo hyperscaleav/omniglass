@@ -6,6 +6,7 @@ import {
   CAPTURE_CSS,
   LOOP_MAX_BYTES,
   LOOP_MAX_SECONDS,
+  LOOP_MAX_SECONDS_CAP,
   LOOP_MIN_SECONDS,
   budgetProblems,
   cameraTail,
@@ -383,5 +384,29 @@ describe("the camera's tail and time-lapsed waits", () => {
     const bad = parseShots(`${LAB}shots:\n  - id: s\n    kind: loop\n    alt: x\n    start: /a\n    steps:\n      - click: a\n        fast: 2\n      - wait: { text: Done }\n        fast: 1\n      - wait: { text: Done }\n        fast: 12\n`);
     expect(bad.problems).toContain("shot s: step 1 (click): fast belongs on a wait");
     expect(bad.problems.filter((p: string) => p.includes("fast is a speed-up"))).toHaveLength(2);
+  });
+});
+
+describe("a loop's own maximum", () => {
+  it("defaults to the usual maximum, and a loop may raise it up to the cap", () => {
+    const plain = parseShots(LOOP("      - click: a\n"));
+    expect(plain.list?.shots[0].maxSeconds).toBe(LOOP_MAX_SECONDS);
+    const long = parseShots(LOOP("      - click: a\n").replace("    kind: loop\n", "    kind: loop\n    max_seconds: 14\n"));
+    expect(long.problems).toEqual([]);
+    expect(long.list?.shots[0].maxSeconds).toBe(14);
+  });
+
+  it("refuses one at or under the usual maximum, over the cap, or on a still", () => {
+    for (const v of [LOOP_MAX_SECONDS, LOOP_MAX_SECONDS_CAP + 1]) {
+      const { problems } = parseShots(LOOP("      - click: a\n").replace("    kind: loop\n", `    kind: loop\n    max_seconds: ${v}\n`));
+      expect(problems).toEqual([`shot a-loop: max_seconds is over ${LOOP_MAX_SECONDS} and at most ${LOOP_MAX_SECONDS_CAP}`]);
+    }
+    const still = parseShots(`${LAB}shots:\n${STILL}    max_seconds: 12\n`);
+    expect(still.problems).toEqual(["shot a-still: max_seconds belongs on a loop"]);
+  });
+
+  it("is the limit the budget holds the loop to", () => {
+    expect(budgetProblems("long", { seconds: 12, bytes: 1000 }, 14)).toEqual([]);
+    expect(budgetProblems("long", { seconds: 14.5, bytes: 1000 }, 14)).toEqual(["shot long: loop is 14.5s, over the 14s maximum"]);
   });
 });

@@ -14,8 +14,8 @@
 //                                                      (needs the lab's
 //                                                      OG_E2E_BASE, OG_TOKEN, OG_E2E_USER,
 //                                                      OG_E2E_PASSWORD)
-//   node e2e/marketing.mjs budget <id> <seconds> <bytes>   a loop's budget, exit 1 over
-//   node e2e/marketing.mjs ids <shots.yaml>            "<id> <kind>" per shot, in order
+//   node e2e/marketing.mjs budget <id> <seconds> <bytes> [max]   a loop's budget, exit 1 over
+//   node e2e/marketing.mjs ids <shots.yaml>            "<id> <kind> <max seconds>" per shot, in order
 //   node e2e/marketing.mjs manifest <shots.yaml> <dest> <dims.json>   write shots.json
 //
 // A failing step fails the run naming the shot, the step, its kind and what it
@@ -67,10 +67,10 @@ async function main() {
     const l = readList(args[0]).lab;
     console.log(`${l.scenario} ${l.systems} ${l.omnibotReplay}`);
   } else if (mode === 'ids') {
-    for (const s of readList(args[0]).shots) console.log(s.id, s.kind);
+    for (const s of readList(args[0]).shots) console.log(s.id, s.kind, s.maxSeconds);
   } else if (mode === 'budget') {
-    const [id, seconds, bytes] = args;
-    const problems = budgetProblems(id, { seconds: Number(seconds), bytes: Number(bytes) });
+    const [id, seconds, bytes, max] = args;
+    const problems = budgetProblems(id, { seconds: Number(seconds), bytes: Number(bytes) }, max ? Number(max) : undefined);
     for (const p of problems) console.error(`marketing: ${p}`);
     process.exit(problems.length ? 1 : 0);
   } else if (mode === 't0') {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 )
 
 const recording = `
@@ -154,6 +155,69 @@ func TestParseReplayRefusesMalformedConversations(t *testing.T) {
 	} {
 		if _, err := ParseReplay([]byte(doc)); err == nil {
 			t.Errorf("%s: parsed, want an error", name)
+		}
+	}
+}
+
+// A turn that records a think waits that long before it arrives, in both the
+// ordered and the positioned replay, so a capture paces like live inference;
+// a run cancelled mid-think ends with the context's error.
+func TestReplayThinksBeforeATurn(t *testing.T) {
+	t.Parallel()
+	r, err := ParseReplay([]byte(`
+turns:
+  - think: 60ms
+    reasoning: Read the components first.
+    tool_calls:
+      - name: list-components
+  - text: Done.
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	start := time.Now()
+	first, err := r.Next(ctx, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Reasoning != "Read the components first." {
+		t.Errorf("first turn's reasoning = %q, want the recorded thinking", first.Reasoning)
+	}
+	if d := time.Since(start); d < 60*time.Millisecond {
+		t.Errorf("first turn arrived after %s, want at least its 60ms think", d)
+	}
+	start = time.Now()
+	if _, err := r.Next(ctx, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if d := time.Since(start); d > 50*time.Millisecond {
+		t.Errorf("a turn with no think took %s", d)
+	}
+
+	start = time.Now()
+	if _, err := r.Positioned().Next(ctx, []Message{{Role: RoleUser, Text: "hi"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if d := time.Since(start); d < 60*time.Millisecond {
+		t.Errorf("positioned first turn arrived after %s, want at least 60ms", d)
+	}
+
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, err := r.Positioned().Next(cancelled, []Message{{Role: RoleUser, Text: "hi"}}, nil); err != context.Canceled {
+		t.Errorf("a cancelled think = %v, want context.Canceled", err)
+	}
+}
+
+// A think that is not a duration, is negative or is over the cap is refused
+// when the recording is read.
+func TestParseReplayRefusesABadThink(t *testing.T) {
+	t.Parallel()
+	for _, think := range []string{"soon", "-1s", "31s"} {
+		_, err := ParseReplay([]byte("turns:\n  - think: " + think + "\n    text: hi\n"))
+		if err == nil || !strings.Contains(err.Error(), "think") {
+			t.Errorf("think %q = %v, want an error naming the think", think, err)
 		}
 	}
 }

@@ -206,14 +206,18 @@ shots:
 
   # Assistant. The page's bullets, in order:
   #   1. Ask about a room in plain words.
-  #   2. Every call it makes against the fleet, shown as it runs.
+  #   2. Its thinking and every call it makes, shown as it runs.
   #   3. The cause and the next step. It asks before any change.
   # Asked from the degraded boardroom itself, so the question is the one the
-  # recording answers. The recording plays; its calls run for real against the
-  # outage staged above and show as cards.
+  # recording answers. The recording plays at a live model's pace (its think
+  # and reasoning, internal/lab/omnibot/corporate-outage.yaml): Working while
+  # it thinks, a Thinking line before each call, the calls running for real
+  # against the outage staged above. Inference takes as long as it takes, so
+  # this loop runs past the usual maximum.
   - id: omnibot-ask
     kind: loop
-    alt: "Asking Omniglass's assistant why a degraded boardroom is degraded: it reads the room's health and the display's reachability, shown as calls, then names the display as the cause and the next step, and says it will ask before changing anything."
+    max_seconds: 14
+    alt: "Asking Omniglass's assistant why a degraded boardroom is degraded: it thinks, reads the room's health and the display's reachability, shown as calls, then names the display as the cause and the next step, and says it will ask before changing anything."
     start: /systems/hq-mr86-1
     ready: { text: Reachability lost }
     steps:
@@ -225,13 +229,17 @@ shots:
         zoom: 1.7
         hold: 300
       - press: Enter
-      # Beat 2: the calls, as they run.
+      # Beat 2: Working while it thinks, then its first thinking, opened, and
+      # the calls as they run.
+      - wait: { selector: '[data-testid=omnibot-thinking] >> nth=0', timeout: 30000 }
+        focus: '[data-testid=omnibot-thinking] >> nth=0'
+        zoom: 1.4
+      - click: '[data-testid=omnibot-thinking] >> nth=0 >> summary'
+        hold: 300
       - wait: { selector: '[data-testid=omnibot-step] >> nth=1', timeout: 30000 }
-        focus: '[data-testid=omnibot-step] >> nth=0'
-        zoom: 1.5
-        hold: 1200
+        hold: 600
       # Beat 3: the answer, through its next step.
-      - wait: { text: Next step }
+      - wait: { text: Next step, timeout: 30000 }
         focus: here
         zoom: 1.4
         hold: 2400

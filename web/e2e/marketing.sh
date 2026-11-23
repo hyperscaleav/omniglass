@@ -97,7 +97,7 @@ compose_shot() {
 # Encode shot $1 of kind $2 from $OUT into $3 (the destination), fitting the
 # budget; prints nothing on success.
 encode_shot() {
-  local id=$1 kind=$2 dest=$3 seconds bytes crf
+  local id=$1 kind=$2 dest=$3 max=$4 seconds bytes crf
   if [ "$kind" = still ]; then
     ffmpeg_in "$OUT" "$FFMPEG_IMG" -hide_banner -loglevel error -y -i "/o/$id.png" \
       -c:v libwebp -quality "$WEBP_QUALITY" -compression_level 6 "/o/$id.webp" || return 1
@@ -119,7 +119,7 @@ encode_shot() {
   done
   seconds=$(ffmpeg_in "$OUT" --entrypoint ffprobe "$FFMPEG_IMG" -v error -show_entries format=duration \
     -of default=noprint_wrappers=1:nokey=1 "/o/$id.mp4") || return 1
-  mk budget "$id" "$seconds" "$bytes" || return 1
+  mk budget "$id" "$seconds" "$bytes" "$max" || return 1
   ffmpeg_in "$OUT" "$FFMPEG_IMG" -hide_banner -loglevel error -y -i "/o/$id.png" \
     -c:v libwebp -quality "$WEBP_QUALITY" -compression_level 6 "/o/$id.webp" || return 1
   cp -- "$OUT/$id.mp4" "$dest/$id.mp4"
@@ -188,8 +188,8 @@ lab_assert_intact
 compose_deps
 echo "encoding" >&2
 failed=0
-while read -r id kind; do
-  encode_shot "$id" "$kind" "$MARKETING_DEST" || failed=1
+while read -r id kind max; do
+  encode_shot "$id" "$kind" "$MARKETING_DEST" "$max" || failed=1
 done < <(mk ids "$SHOTS_W")
 [ "$failed" = 0 ] || {
   echo "marketing: a shot is over budget or failed to encode (above); nothing was published" >&2
