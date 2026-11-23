@@ -176,6 +176,17 @@ describe("one body in two hosts", () => {
   });
 });
 
+describe("the outline inside a blade stacks", () => {
+  it("a row in a blade's outline opens over the blade, not in place of it", async () => {
+    const r = mountBlade(FLOOR);
+    const blade = await screen.findByRole("dialog");
+    const beneath = await within(blade).findByTestId("beneath");
+    fireEvent.click(await within(beneath).findByRole("treeitem", { name: /Hall/ }));
+    await waitFor(() => expect(r.controller().stack().length).toBe(2));
+    expect(r.controller().stack()[0]).toEqual({ kind: "location", id: FLOOR });
+  });
+});
+
 describe("the blade's tab, filter and edit are its own", () => {
   it("switching tabs and filtering the outline in a blade leave the page's address untouched", async () => {
     mountBlade(FLOOR, "/web/explore?node=x");

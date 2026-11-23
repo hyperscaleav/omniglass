@@ -47,7 +47,7 @@ import { systemSlots, systemSlotsKey, SYSTEM_SLOTS_PREFIX } from "../lib/system_
 import { SYSTEM_HEALTH_PREFIX, SYSTEM_HEALTHS_KEY } from "../lib/health";
 import { isRoomOf, slotsOf } from "../lib/detail";
 import { can, useMe } from "../lib/auth";
-import { fmtTime } from "../lib/format";
+import { describeError, fmtTime } from "../lib/format";
 
 // ComponentDetail (#637, reoriented in #872, one body for both hosts since
 // #2423): a component's whole detail body, rendered by its page
@@ -235,9 +235,10 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
   return (
     <DetailGate
       noun="component"
-      missing={!pending() && !component() && !components.isFetching}
+      missing={!pending() && !component() && !components.isFetching && !components.error}
       pending={pending()}
-      error={null}
+      error={components.error && !component() ? describeError(components.error) : null}
+      retrying={components.isFetching}
       onRetry={() => { void components.refetch(); }}
     >
       <div data-testid="component-detail" data-host={props.host} class="@container flex flex-col gap-3">

@@ -159,6 +159,18 @@ describe("one body in two hosts", () => {
   });
 });
 
+describe("a failed read in a blade", () => {
+  it("says the read failed and offers Retry, never that the component was deleted", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ title: "Bad Gateway", status: 502, detail: "upstream down" }), { status: 502, headers: { "Content-Type": "application/problem+json" } }));
+    const qc = seed();
+    qc.removeQueries({ queryKey: [...COMPONENTS_KEY] });
+    mountBlade("/web/explore", qc);
+    const blade = await screen.findByRole("dialog");
+    expect(await within(blade).findByRole("button", { name: "Retry" })).toBeTruthy();
+    expect(within(blade).queryByText(/No component answers/)).toBeNull();
+  });
+});
+
 describe("the tab is the host's", () => {
   it("switching tabs in a blade leaves the page's address untouched", async () => {
     mountBlade("/web/explore?node=x");

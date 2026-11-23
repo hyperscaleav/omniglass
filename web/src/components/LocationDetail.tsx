@@ -23,7 +23,7 @@ import { sinceOf } from "../lib/system_zoom";
 import { contentsOf, systemsAtLocation } from "../lib/detail";
 import { entityLabel } from "../lib/entities";
 import { can, useMe } from "../lib/auth";
-import { fmtTime } from "../lib/format";
+import { describeError, fmtTime } from "../lib/format";
 import { durationText } from "../lib/timeline";
 import { LEAF_POLL_MS } from "../lib/component_leaf";
 
@@ -84,7 +84,8 @@ export default function LocationDetail(props: { id: string; host: DetailHost }) 
       noun="location"
       missing={!!view.data && !view.isFetching && !location()}
       pending={view.isPending}
-      error={null}
+      error={view.error && !location() ? describeError(view.error) : null}
+      retrying={view.isFetching}
       onRetry={() => void view.refetch()}
     >
       <div data-testid="location-detail" data-host={props.host} class="@container flex flex-col gap-3">

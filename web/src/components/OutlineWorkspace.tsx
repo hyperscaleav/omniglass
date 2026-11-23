@@ -206,7 +206,9 @@ export default function OutlineWorkspace(props: { rootId?: string; host?: "page"
   const blades = useBlades();
   const openTarget = (t: OpenTarget, key: string) => {
     setSelected(key.split(":").pop() === t.id ? t.id : key);
-    blades.close();
+    // On a page a row opens a fresh stack; inside a blade the stack is the
+    // one this blade sits on, so the row stacks over it (#2423).
+    if (!inBlade) blades.close();
     blades.push(t);
   };
 
@@ -323,7 +325,7 @@ export default function OutlineWorkspace(props: { rootId?: string; host?: "page"
                           const t = targetOfEntry(e, roots());
                           if (!t) return revealResult(e.id);
                           setSelected(e.id);
-                          blades.close();
+                          if (!inBlade) blades.close();
                           blades.push(t);
                         }} onReveal={(e) => revealResult(e.id)} />
                       </Show>
