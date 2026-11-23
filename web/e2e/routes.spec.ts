@@ -60,10 +60,10 @@ test.describe("console routes", () => {
     await page.locator("#login-password").fill(PASSWORD as string);
     await page.getByRole("button", { name: /sign in/i }).click();
     await page.waitForURL((url) => !url.pathname.endsWith("/login"));
-    await gotoSettled(page, "/web/outposts");
-    const row = page.locator("tbody tr").first();
-    test.skip((await row.count()) === 0, "the stack has no outposts to open");
-    await row.click();
+    const body = (await (await page.request.get("/api/v1/outposts")).json()) as { outposts?: { name: string }[] };
+    const first = body.outposts?.[0]?.name;
+    test.skip(!first, "the stack has no outposts to open");
+    await gotoSettled(page, `/web/outposts?n=${encodeURIComponent(first as string)}`);
     const drawer = page.getByRole("dialog");
     await expect(drawer).toBeVisible();
     await expect(drawer.getByText("Tasks")).toBeVisible();
