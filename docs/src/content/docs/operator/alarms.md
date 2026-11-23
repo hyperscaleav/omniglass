@@ -18,14 +18,13 @@ screenshots:
         selector: "[data-testid=alarm-strip] button:has-text('dsp-1')"
       - action: wait
         selector: "aside[data-blade] [data-testid=leaf-alarms] button[aria-label*='with omnibot']"
-    # The blade's since line and alarm ages, its live vitals and collection
+    # The blade's since line and alarm ages, its collection
     # ages, and behind it the system's since line and its alarm strip, all
     # count from the capture's own clock.
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
       - "[data-testid=alarm-strip]"
       - "[data-testid=leaf-alarms]"
-      - "aside[data-blade] [data-testid=leaf-vitals]"
       - "aside[data-blade] [data-testid=leaf-collection]"
   - id: alarm-queue
     path: /web/alarms?state=active
