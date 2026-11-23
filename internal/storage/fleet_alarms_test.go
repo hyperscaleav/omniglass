@@ -324,3 +324,50 @@ func TestFleetAlarmLocationFallsBackToTheSystemsLocation(t *testing.T) {
 		t.Errorf("location id %q, want fb-r1's uuid (%v)", rows[0].LocationID, err)
 	}
 }
+
+// The system-location fallback only ever reads systems the caller may read: a
+// component also in a hidden system that shares a visible system's name is not
+// placed by the hidden one (#2426, agent-review).
+func TestFleetAlarmLocationFallbackIgnoresHiddenSameNamedSystems(t *testing.T) {
+	t.Parallel()
+	gw, dsn := secretGateway(t)
+	ctx := context.Background()
+	all := scope.Set{All: true}
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hid-vault", LocationType: "campus"}, all); err != nil {
+		t.Fatalf("location: %v", err)
+	}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "hid-comp"}, all, all, all, all); err != nil {
+		t.Fatalf("component: %v", err)
+	}
+	// "twin" is visible and has no location; the other "twin" is hidden and sits in hid-vault.
+	visible, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "twin"}, all, all)
+	if err != nil {
+		t.Fatalf("visible system: %v", err)
+	}
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "twin", LocationName: strptr("hid-vault")}, all, all); err != nil {
+		t.Fatalf("hidden system: %v", err)
+	}
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(ctx)
+	// Both twins hold the component; AddMember takes names, which are ambiguous here.
+	if _, err := conn.Exec(ctx, `insert into system_member (system_id, component_id)
+		select s.id, c.id from system s, component c where s.name = 'twin' and c.name = 'hid-comp'`); err != nil {
+		t.Fatalf("members: %v", err)
+	}
+	if _, err := gw.RaiseAlarm(ctx, "", "hid-comp", storage.AlarmSpec{Severity: "high", Message: "x", DedupKey: "x"}); err != nil {
+		t.Fatalf("raise: %v", err)
+	}
+	rows, _, err := gw.ListFleetAlarms(ctx, all, scope.Set{IDs: []string{visible.ID}}, storage.AlarmFilter{}, 100)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("list = %d rows (%v)", len(rows), err)
+	}
+	if len(rows[0].SystemIDs) != 1 || rows[0].SystemIDs[0] != visible.ID {
+		t.Fatalf("system ids %v, want only the visible twin", rows[0].SystemIDs)
+	}
+	if rows[0].LocationName != "" || rows[0].LocationID != "" {
+		t.Errorf("location %q (%s) leaked from the hidden twin in hid-vault", rows[0].LocationName, rows[0].LocationID)
+	}
+}
