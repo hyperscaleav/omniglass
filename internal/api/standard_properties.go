@@ -90,7 +90,7 @@ func registerStandardPropertyRoutes(api huma.API, a *authenticator, gw storage.G
 		Method:      http.MethodPut,
 		Path:        "/standards/{id}/properties/{property}",
 		Summary:     "Declare a property on a standard",
-		Description: "Declares a catalog property on a custom standard, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official standards are read-only (422); an unknown standard is a 404 and a property the catalog does not know is a 422. Gated by standard:update.",
+		Description: "Declares a catalog property on a custom standard, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official standards are read-only (422); an unknown standard is a 404 and a property the catalog does not know is a 422, as is a default its property type refuses. Gated by standard:update.",
 	}, "standard", "update"), func(ctx context.Context, in *setStandardPropertyInput) (*standardPropertyOutput, error) {
 		def, err := encodePropertyJSON(in.Body.DefaultValue, "default_value")
 		if err != nil {
@@ -130,6 +130,9 @@ func registerStandardPropertyRoutes(api huma.API, a *authenticator, gw storage.G
 func mapStandardPropertyErr(err error) error {
 	if errors.Is(err, storage.ErrPropertyTypeNotFound) {
 		return huma.Error422UnprocessableEntity("unknown property")
+	}
+	if errors.Is(err, storage.ErrPropertyValueInvalid) {
+		return huma.Error422UnprocessableEntity(err.Error())
 	}
 	return mapTypeErr(err, "standard property")
 }
