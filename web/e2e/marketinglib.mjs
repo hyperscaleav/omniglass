@@ -51,8 +51,13 @@ const STEP_KEYS = [...STEP_KINDS, 'hold', 'focus', 'zoom', 'fast', 'expect'];
 // backdrop is the console's own base colour (--color-base-100, dark): the
 // frame shows it past the capture's edge when a focus near that edge is
 // centred.
-export const CAMERA = { ease: 0.6, maxZoom: 2, minZoom: 1, margin: 0.1, backdrop: '#080c16' };
-export const MAX_FAST = 8;
+// spotPad is the lit margin round a focus box, in viewport pixels; dim is how
+// dark the rest of the frame goes while the camera is on a box.
+export const CAMERA = { ease: 0.6, maxZoom: 2, minZoom: 1, margin: 0.1, backdrop: '#080c16', spotPad: 12, dim: 0.5 };
+// A wait played faster runs at up to MAX_FAST times real speed: an alarm that
+// takes a minute to raise plays in a couple of seconds, under a badge that says
+// the clip is sped up (render.mjs).
+export const MAX_FAST = 40;
 const ID = /^[a-z0-9][a-z0-9-]*$/;
 const isObj = (/** @type {unknown} */ v) => typeof v === 'object' && v !== null && !Array.isArray(v);
 const isStr = (/** @type {unknown} */ v) => typeof v === 'string' && v.length > 0;
@@ -477,7 +482,7 @@ export function referencedResources(items, start) {
 
 /** @typedef {{ x: number, y: number, width: number, height: number }} Box */
 /** @typedef {{ t: number, box: Box | null, zoom?: number }} FocusEvent */
-/** @typedef {{ at: number, dur: number, scale: number, x: number, y: number }} CameraMove */
+/** @typedef {{ at: number, dur: number, scale: number, x: number, y: number, spot: Box | null }} CameraMove */
 
 /**
  * The frame a focus asks for: the scale that fits the box with a margin (or the
@@ -597,17 +602,51 @@ export function cameraTrack(events, vp, duration) {
     if (f.scale === cur.scale && f.x === cur.x && f.y === cur.y) continue;
     const at = round(Math.max(0, e.t, free));
     if (at + CAMERA.ease > duration) break;
-    moves.push({ at, dur: CAMERA.ease, ...f });
+    moves.push({ at, dur: CAMERA.ease, ...f, spot: spotFor(e.box, vp) });
     cur = f;
     free = at + CAMERA.ease;
   }
   if (cur.scale !== 1) {
     const at = round(Math.max(free, duration - CAMERA.ease));
     const dur = round(Math.min(CAMERA.ease, duration - at));
-    if (dur > 0) moves.push({ at, dur, ...frameFor(null, vp) });
+    if (dur > 0) moves.push({ at, dur, ...frameFor(null, vp), spot: null });
   }
   return moves;
 }
+
+/**
+ * The spotlight of a move: the focus box, padded and kept on the capture,
+ * which render.mjs leaves lit while it dims the rest of the frame, so the eye
+ * lands on what changed. None for the whole frame, or for a box that fills
+ * the capture (nothing would be left to dim).
+ * @param {Box | null} box
+ * @param {{ width: number, height: number }} vp
+ * @returns {Box | null}
+ */
+export function spotFor(box, vp) {
+  if (!box) return null;
+  const pad = CAMERA.spotPad;
+  const x = Math.max(0, box.x - pad);
+  const y = Math.max(0, box.y - pad);
+  const width = Math.min(vp.width, box.x + box.width + pad) - x;
+  const height = Math.min(vp.height, box.y + box.height + pad) - y;
+  if (width * height >= vp.width * vp.height * 0.8) return null;
+  return { x: round(x), y: round(y), width: round(width), height: round(height) };
+}
+
+/**
+ * The sped-up stretches of a clip, in the clip's own time, for the badge that
+ * says so: a lapse shorter than MIN_LAPSE_BADGE seconds once shortened gets
+ * none, since a badge that flashes reads as a glitch.
+ * @param {Lapse[]} lapses in real time, ascending
+ * @returns {Lapse[]}
+ */
+export function lapseBadges(lapses) {
+  return lapses
+    .map((w) => ({ from: round(retime(w.from, lapses)), to: round(retime(w.to, lapses)), speed: w.speed }))
+    .filter((w) => w.to - w.from >= MIN_LAPSE_BADGE);
+}
+export const MIN_LAPSE_BADGE = 0.6;
 
 // The frames of a loop are screenshots at twice the viewport's pixels, taken as
 // fast as the page allows (Playwright's own video is CSS-pixel sized, so a 2x

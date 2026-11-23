@@ -244,7 +244,9 @@ const CURSOR = () => {
   svg.append(arrow);
   el.append(svg);
   const ring = document.createElement('div');
-  ring.style.cssText = 'position:fixed;left:0;top:0;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;border:2px solid #21cab9;z-index:2147483646;pointer-events:none;opacity:0';
+  // The click's ripple: a teal ring and a soft fill that spread from the
+  // pointer, large enough to read in a clip played at a third of its size.
+  ring.style.cssText = 'position:fixed;left:0;top:0;width:48px;height:48px;margin:-24px 0 0 -24px;border-radius:50%;border:3px solid #21cab9;background:rgba(33,202,185,.18);z-index:2147483646;pointer-events:none;opacity:0';
   let tx = -100, ty = -100, x = -100, y = -100;
   const tick = () => {
     x += (tx - x) * 0.22;
@@ -256,7 +258,7 @@ const CURSOR = () => {
   addEventListener('mousedown', (e) => {
     ring.style.left = `${e.clientX}px`;
     ring.style.top = `${e.clientY}px`;
-    ring.animate([{ opacity: 0.9, transform: 'scale(.4)' }, { opacity: 0, transform: 'scale(1.5)' }], { duration: 450, easing: 'ease-out' });
+    ring.animate([{ opacity: 1, transform: 'scale(.3)' }, { opacity: 0, transform: 'scale(1.9)' }], { duration: 650, easing: 'cubic-bezier(.2,.7,.3,1)' });
   }, true);
   const mount = () => { document.documentElement.append(ring, el); requestAnimationFrame(tick); };
   if (document.documentElement) mount();
@@ -343,7 +345,9 @@ async function record(browser, base, storageState, shot, out) {
       writeFrames(taken.map((f) => ({ ...f, t: retime(f.t, cam.lapses) })), out, shot.id);
       // The camera track's input: where each focus landed, in viewport pixels and
       // seconds from the clip's first frame. The compositor turns it into moves.
-      writeFileSync(join(out, `${shot.id}.camera.json`), JSON.stringify({ viewport: { width, height }, events }, null, 2));
+      // The lapses, in real time, mark the stretches played faster: the
+      // compositor badges them so a sped-up wait never passes for real time.
+      writeFileSync(join(out, `${shot.id}.camera.json`), JSON.stringify({ viewport: { width, height }, events, lapses: cam.lapses }, null, 2));
       // Each beat: when it opened, was checked and ended, the part of the capture
       // its frame shows, and the text on screen inside that frame once its step
       // had played. The storyboard takes one still per beat from the finished clip.

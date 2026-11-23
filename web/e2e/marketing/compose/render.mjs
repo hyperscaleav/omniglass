@@ -4,14 +4,14 @@
 //   node render.mjs <in.mp4> <camera.json> <seconds> <out.mp4>
 //
 // <in.mp4> is the trimmed recording, <camera.json> the recorder's focus log
-// ({ viewport, events }), <seconds> the clip's length. The moves come from
+// ({ viewport, events, lapses }), <seconds> the clip's length. The moves come from
 // cameraTrack (web/e2e/marketinglib.mjs, unit tested); Revideo renders them at
 // the viewport's size. web/e2e/marketing.sh runs this offline in the
 // Playwright image, after `npm ci` here.
 import { copyFileSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CAMERA, cameraTrack } from '../../marketinglib.mjs';
+import { CAMERA, cameraTrack, lapseBadges } from '../../marketinglib.mjs';
 
 // Revideo reports usage to its maintainers unless told not to; a capture run
 // sends nothing anywhere.
@@ -24,8 +24,9 @@ if (!input || !cameraFile || !seconds || !output || !output.endsWith('.mp4')) {
   process.exit(2);
 }
 const duration = Number(seconds);
-const { viewport, events } = JSON.parse(readFileSync(cameraFile, 'utf8'));
+const { viewport, events, lapses = [] } = JSON.parse(readFileSync(cameraFile, 'utf8'));
 const moves = cameraTrack(events, viewport, duration);
+const badges = lapseBadges(lapses);
 
 // The Playwright image's Chromium, unless CHROME names another.
 const chrome = process.env.CHROME ?? (await import('@playwright/test')).chromium.executablePath();
@@ -47,7 +48,7 @@ const made = `${process.pid}-${basename(out)}`;
 mkdirSync('out', { recursive: true });
 const file = await renderVideo({
   projectFile: './src/project.tsx',
-  variables: { src: `/${staged}`, width: viewport.width, height: viewport.height, duration, moves },
+  variables: { src: `/${staged}`, width: viewport.width, height: viewport.height, duration, moves, badges, dim: CAMERA.dim },
   settings: {
     outFile: /** @type {`${string}.mp4`} */ (made),
     outDir: './out',
@@ -59,4 +60,4 @@ const file = await renderVideo({
 }).finally(() => rmSync(`public/${staged}`, { force: true }));
 copyFileSync(resolve(file), out);
 rmSync(resolve(file), { force: true });
-console.log(`marketing: camera ${basename(out)}: ${moves.length} moves`);
+console.log(`marketing: camera ${basename(out)}: ${moves.length} moves, ${badges.length} sped-up stretches`);

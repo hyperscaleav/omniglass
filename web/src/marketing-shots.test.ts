@@ -15,6 +15,9 @@ import {
   retime,
   buildManifest,
   cameraTrack,
+  lapseBadges,
+  spotFor,
+  MAX_FAST,
   frameFor,
   frameRect,
   missingText,
@@ -403,8 +406,8 @@ describe("cameraTrack", () => {
   it("eases in on a focus and back out before the loop's end", () => {
     const moves = cameraTrack([{ t: 1, box, zoom: 1.5 }], vp, 6);
     expect(moves).toEqual([
-      { at: 1, dur: CAMERA.ease, scale: 1.5, x: 650, y: 425 },
-      { at: 6 - CAMERA.ease, dur: CAMERA.ease, scale: 1, x: 720, y: 450 },
+      { at: 1, dur: CAMERA.ease, scale: 1.5, x: 650, y: 425, spot: { x: 588, y: 388, width: 124, height: 74 } },
+      { at: 6 - CAMERA.ease, dur: CAMERA.ease, scale: 1, x: 720, y: 450, spot: null },
     ]);
   });
 
@@ -435,6 +438,28 @@ describe("cameraTrack", () => {
   });
 });
 
+describe("the spotlight and the sped-up badge", () => {
+  const vp = { width: 1440, height: 900 };
+
+  it("lights the focus box with a margin, kept on the capture", () => {
+    expect(spotFor({ x: 600, y: 400, width: 100, height: 50 }, vp)).toEqual({ x: 588, y: 388, width: 124, height: 74 });
+    expect(spotFor({ x: 4, y: 0, width: 100, height: 50 }, vp)).toEqual({ x: 0, y: 0, width: 116, height: 62 });
+  });
+
+  it("lights nothing for the whole frame, or a box that fills it", () => {
+    expect(spotFor(null, vp)).toBeNull();
+    expect(spotFor({ x: 0, y: 0, width: 1400, height: 880 }, vp)).toBeNull();
+  });
+
+  it("badges each lapse in the clip's own time, and skips one too short to read", () => {
+    const lapses = [{ from: 1, to: 3, speed: 2 }, { from: 5, to: 65, speed: 32 }, { from: 70, to: 71, speed: 4 }];
+    expect(lapseBadges(lapses)).toEqual([
+      { from: 1, to: 2, speed: 2 },
+      { from: 4, to: 5.875, speed: 32 },
+    ]);
+  });
+});
+
 describe("the camera's tail and time-lapsed waits", () => {
   it("keeps recording after a clip's last focus, and not after a zoom-out", () => {
     expect(cameraTail([])).toBe(0);
@@ -460,11 +485,11 @@ describe("the camera's tail and time-lapsed waits", () => {
     expect(retime(10, lapses)).toBeCloseTo(6);
   });
 
-  it("takes fast on a wait only, as a speed-up of 1 to 8", () => {
+  it("takes fast on a wait only, as a speed-up over 1 and at most MAX_FAST", () => {
     const ok = parseShots(`${LAB}shots:\n  - id: s\n    kind: loop\n    alt: x\n    start: /a\n    steps:\n      - wait: { text: Done }\n        fast: 4\n`);
     expect(ok.problems).toEqual([]);
     expect(ok.list?.shots[0].steps[0]).toMatchObject({ fast: 4 });
-    const bad = parseShots(`${LAB}shots:\n  - id: s\n    kind: loop\n    alt: x\n    start: /a\n    steps:\n      - click: a\n        fast: 2\n      - wait: { text: Done }\n        fast: 1\n      - wait: { text: Done }\n        fast: 12\n`);
+    const bad = parseShots(`${LAB}shots:\n  - id: s\n    kind: loop\n    alt: x\n    start: /a\n    steps:\n      - click: a\n        fast: 2\n      - wait: { text: Done }\n        fast: 1\n      - wait: { text: Done }\n        fast: ${MAX_FAST + 1}\n`);
     expect(bad.problems).toContain("shot s: step 1 (click): fast belongs on a wait");
     expect(bad.problems.filter((p: string) => p.includes("fast is a speed-up"))).toHaveLength(2);
   });

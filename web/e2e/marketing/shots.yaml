@@ -62,30 +62,50 @@ setup:
   - wait: { get: /alarms?limit=50, field: alarms.4.active, equals: true, timeout: 180000 }
 
 shots:
-  # The hero. Beats: the whole fleet, only what needs attention, the whole fleet
-  # again.
+  # The hero: from the whole fleet to the cause, in one run. Beats: the count
+  # of rooms that need attention, opening the page on the problem; the list of
+  # those rooms; one room's Why, naming the alarm and the display behind it;
+  # that display's own page, its outage. Every room the setup above unplugged
+  # reads the same cause, so the frame checks hold whichever room lists first.
   - id: fleet-overview
     kind: loop
-    alt: "The Omniglass Explore view of a corporate fleet: campuses with their system counts and health, then the same list filtered to the rooms that need attention, each with its down display, then the whole fleet again."
+    max_seconds: 15
+    alt: "From the Omniglass fleet to a cause: the count of rooms that need attention, the list of them, one room's Why naming the reachability alarm on its main display, then that display's page showing its outage."
     start: /explore
     ready: { selector: '[role=treeitem]:has-text("Headquarters")' }
     steps:
+      # Beat 1: the fleet's count, and how many rooms need attention.
       - hover: { role: button, name: need attention }
-        hold: 900
-      - click: { role: button, name: need attention }
-        focus: here
-        expect: ["need attention"]
+        focus: '[data-testid=explore-counts]'
+        expect: ["systems", "need attention"]
         zoom: 1.8
-        hold: 500
-      - wait: { text: Regional Office 06 }
-        focus: 'ul[role=list]:has-text("Regional Office 06")'
+        hold: 1300
+      # Beat 2: only those rooms.
+      - click: { role: button, name: need attention }
+        focus: 'ul[role=list][aria-label=Matches]'
         expect: ["Regional Office 06"]
         zoom: 1.3
-        hold: 1800
-      - click: { role: button, name: Clear }
+        hold: 1400
+      # Beat 3: the first of them, opened to its system and its Why.
+      - click: 'ul[role=list][aria-label=Matches] li >> nth=0'
         focus: out
-      - wait: { selector: '[role=treeitem]:has-text("Headquarters")' }
+        hold: 400
+      - click: 'aside[data-blade] button[aria-label=Expand]'
+      - wait: { selector: '[data-testid=alarm-strip]' }
+        focus: here
+        expect: ["Why", "Reachability lost", "display-1", "impairs"]
+        zoom: 1.4
         hold: 1600
+      # Beat 4: the display the alarm names, its outage at the top of its page.
+      - click: '[data-testid=alarm-strip] button:text-is("display-1")'
+        hold: 300
+      - click: 'aside[data-blade] button[aria-label=Expand]'
+        focus: out
+      - wait: { selector: '[data-testid=component-card]' }
+        focus: here
+        expect: ["outage", "Reachability lost"]
+        zoom: 1.2
+        hold: 2000
 
   # Systems. The page's bullets, in order:
   #   1. Locations nest to any depth, in any shape you define.
@@ -186,29 +206,41 @@ shots:
         hold: 1500
 
   # Health & Alarms. The page's bullets, in order:
-  #   1. A degraded room names the alarm and the slot it hurts.
-  #   2. One click to the component behind it.
-  #   3. Its outage, its vitals, and the rooms it serves.
-  # The main display of hq-mr86-1 is unplugged off camera: the shipped rule
-  # needs about a minute to hold its alarm, so the loop opens on it held.
+  #   1. A degraded room names the alarm and the slot it affects.
+  #   2. One click opens the component behind it.
+  #   3. Its outage and vitals, beside the rooms it serves.
+  # The main display of hq-mr86-1 is unplugged as the clip starts: the shipped
+  # rule needs about a minute to hold its alarm, and that minute plays at 32x.
   - id: alarm-outage
     kind: loop
-    alt: "A High reachability alarm on a headquarters boardroom, opened in one click to the display it names, whose page shows its outage, its vitals and the room it serves."
+    max_seconds: 12
+    alt: "A healthy headquarters boardroom whose main display drops off the network: the room's High reachability alarm arrives live, sped up, and one click opens the display it names, whose page shows its outage, its vitals and the room it serves."
+    # The display starts plugged in, so the clip opens on a healthy room and the
+    # alarm arrives on camera. A run that follows one that left it unplugged
+    # waits for the room to recover first.
     setup:
       - put: /components/{hq.hq-annex.hq-annex-1.hq-annex-1-05.$comp.display-1}/impairment
+        body: { unplugged: false }
+      - wait: { get: /systems/hq-mr86-1/health, field: health, equals: healthy, timeout: 180000 }
+      - put: /components/{hq.hq-annex.hq-annex-1.hq-annex-1-05.$comp.display-1}/impairment
         body: { unplugged: true }
-      - wait: { get: /systems/hq-mr86-1/alarms, field: alarms.0.active, equals: true, timeout: 180000 }
-      - wait: { get: /systems/hq-mr86-1/health, field: health, equals: degraded, timeout: 180000 }
     start: /systems/hq-mr86-1
-    ready: { text: Reachability lost }
+    ready: { selector: '[data-testid=system-header]' }
     steps:
-      # Beat 1: the room's degraded health and the Why strip under it, in one frame.
-      - hover: '[data-testid=alarm-strip]'
+      # Beat 1: the room, healthy, as its display goes dark.
+      - hover: '[data-testid=system-header]'
         focus: here
-        expect: ["degraded", "Reachability lost", "display-1", "Main Display"]
+        expect: ["healthy"]
+        zoom: 1.4
+        hold: 900
+      # Beat 2: the alarm arrives. The wait for it plays sped up, under a badge
+      # that says so; the frame holds on the Why strip as it appears.
+      - wait: { selector: '[data-testid=alarm-strip]', timeout: 180000 }
+        fast: 32
+        focus: here
+        expect: ["Why", "Reachability lost", "display-1", "Main Display"]
         zoom: 1.3
         hold: 1500
-      # Beat 2: the click, still framed on the strip so the click reads.
       - click: '[data-testid=alarm-strip] button:text-is("display-1")'
         hold: 300
       - click: 'aside[data-blade] button[aria-label=Expand]'

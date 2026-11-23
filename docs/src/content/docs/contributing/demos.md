@@ -480,20 +480,25 @@ The recorder takes the loop's frames as screenshots at twice the viewport, as fa
 is still crisp, and writes where each focused target sat on screen. ffmpeg joins the frames, each held for
 as long as it was shown, into one steady clip; a [Revideo](https://github.com/midrender/revideo) (MIT)
 project in `web/e2e/marketing/compose/` then renders the pans and zooms over it, offline, with its
-telemetry off, before the budget encode. `frameFor`, `cameraTrack` and `concatList` in `marketinglib.mjs`
-are the framing, the move list and the frame timing, unit tested.
+telemetry off, before the budget encode. While the camera is on a box, the rest of the capture dims to
+half, so the eye lands on what changed, and the box (with a 12-pixel margin) stays lit; a click shows a
+teal ripple at the pointer. `frameFor`, `cameraTrack`, `spotFor` and `concatList` in `marketinglib.mjs`
+are the framing, the move list, the lit box and the frame timing, unit tested.
 
-A `wait` may take `fast: N` (a speed-up over 1, up to 8): the quiet seconds before something changes play
+A `wait` may take `fast: N` (a speed-up over 1, up to 40): the quiet seconds before something changes play
 N times faster, a time-lapse. A loop has 9 seconds to spend and a console that needs five to recover (an
-outpost's next check-in after a credential is fixed) is not one to sit through; the clip says nothing
-false, it just does not wait.
+outpost's next check-in after a credential is fixed) is not one to sit through. The clip says nothing
+false: a sped-up stretch that lasts at least 0.6 seconds on screen carries a badge reading "N× speed"
+(`lapseBadges`), so an alarm that takes a minute to raise arrives on camera in two seconds and is never
+taken for real time.
 
 Setup runs off camera, in order, as the lab's owner. `put`, `post` and `patch` call the API (a `{braced}`
 part of a path is one address, percent-encoded whole, so a component's path address names one route
 segment), and `wait` polls a GET until a dotted field equals a value. This is how a fault is staged on the
 fleet: the main display of `hq-mr86-1` unplugged through the impairment route, a video bar's login
 repointed at a secret the device refuses. The shipped reachability rule needs about a minute to hold its
-alarm, so a loop never records the fault arriving; it records the console reading a fault that is already
+alarm. A loop that shows the fault arriving (`alarm-outage`) unplugs the display as its last setup item and
+waits for the alarm on camera at `fast: 32`; the others record the console reading a fault that is already
 true. The shots run in the order listed on one lab, and a later shot relies on the state an earlier setup
 left.
 
