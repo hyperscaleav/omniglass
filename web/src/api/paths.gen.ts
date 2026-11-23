@@ -1002,6 +1002,16 @@ export interface paths {
       error: og.setComponentTagResponseError["data"];
     };
   };
+  "/components:batchCreate": {
+    post: {
+      path: never;
+      query: never;
+      body: NonNullable<Parameters<typeof og.batchCreateComponents>[0]>;
+      bodyRequired: true;
+      data: og.batchCreateComponentsResponseSuccess["data"];
+      error: og.batchCreateComponentsResponseError["data"];
+    };
+  };
   "/components:checkName": {
     post: {
       path: never;
@@ -1646,6 +1656,16 @@ export interface paths {
       bodyRequired: true;
       data: og.setLocationTagResponseSuccess["data"];
       error: og.setLocationTagResponseError["data"];
+    };
+  };
+  "/locations:batchCreate": {
+    post: {
+      path: never;
+      query: never;
+      body: NonNullable<Parameters<typeof og.batchCreateLocations>[0]>;
+      bodyRequired: true;
+      data: og.batchCreateLocationsResponseSuccess["data"];
+      error: og.batchCreateLocationsResponseError["data"];
     };
   };
   "/locations:checkName": {
@@ -2894,6 +2914,16 @@ export interface paths {
       bodyRequired: true;
       data: og.setSystemTagResponseSuccess["data"];
       error: og.setSystemTagResponseError["data"];
+    };
+  };
+  "/systems:batchCreate": {
+    post: {
+      path: never;
+      query: never;
+      body: NonNullable<Parameters<typeof og.batchCreateSystems>[0]>;
+      bodyRequired: true;
+      data: og.batchCreateSystemsResponseSuccess["data"];
+      error: og.batchCreateSystemsResponseError["data"];
     };
   };
   "/systems:checkName": {

@@ -1590,7 +1590,7 @@ func writeAuditRes(ctx context.Context, tx pgx.Tx, actorID, verb, resource, reso
 	if err != nil {
 		return err
 	}
-	newJSON = withTemplateDetail(ctx, newJSON)
+	newJSON = withProvenanceDetail(ctx, newJSON)
 	// channel and client say how the action arrived (#1162): set on the context by
 	// the MCP dispatch, null for a direct API call. agent names the agent an
 	// agent token acts as (#1179), on the actor's behalf; null otherwise.

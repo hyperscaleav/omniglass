@@ -58,33 +58,37 @@ type componentPathInput struct {
 	Name string `path:"name" doc:"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)"`
 }
 
+// createComponentInputBody is the single create's body, which the batch create
+// (POST /components:batchCreate) takes as each of its requests.
+type createComponentInputBody struct {
+	// Name is optional (#627 Task 14): omit it and the platform mints
+	// "<stem>-<n>" from the classified product's component_type, marking
+	// name_generated. Supplied, it is validated exactly as before.
+	Name     string  `json:"name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the product's type."`
+	Label    string  `json:"label,omitempty" doc:"What an operator reads; the name is the address"`
+	Parent   *string `json:"parent,omitempty" doc:"Parent component name; omit for a root component"`
+	System   *string `json:"system,omitempty" doc:"Primary system name this component belongs to. Naming one writes that system's membership, so it costs the system:update permission and resolves in that scope; omitted, the create costs component:create alone."`
+	Location *string `json:"location,omitempty" doc:"Location name this component is placed at"`
+	// Product is required: every component is an instance of a product (the
+	// classification floor). It stays a pointer rather than a plain
+	// required string so the handler can report a specific, actionable
+	// message (naming the generics) instead of Huma's generic
+	// missing-required-field text.
+	Product *string `json:"product,omitempty" doc:"Product (catalog SKU) this component is an instance of, by name or uuid. Required: use a generic (generic-device, generic-app, generic-service) until a real product is modeled."`
+	// ExpectedName is the create form's precondition (#702, and its
+	// review). It carries the drafted NAME rather than the ordinal,
+	// because the name is what the form showed and what the operator is
+	// owed: it holds the stem, the suppression and the number together, so
+	// a type edit under the open form invalidates the claim where a number
+	// would have passed. It is still a precondition and NOT the name field:
+	// the create leaves name empty, so the row stays name_generated and the
+	// pen never moves. A pointer, so "absent" is the only spelling of no
+	// expectation.
+	ExpectedName *string `json:"expected_name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The name a create form previewed (POST /components:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the type's stem moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422."`
+}
+
 type createComponentInput struct {
-	Body struct {
-		// Name is optional (#627 Task 14): omit it and the platform mints
-		// "<stem>-<n>" from the classified product's component_type, marking
-		// name_generated. Supplied, it is validated exactly as before.
-		Name     string  `json:"name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the product's type."`
-		Label    string  `json:"label,omitempty" doc:"What an operator reads; the name is the address"`
-		Parent   *string `json:"parent,omitempty" doc:"Parent component name; omit for a root component"`
-		System   *string `json:"system,omitempty" doc:"Primary system name this component belongs to. Naming one writes that system's membership, so it costs the system:update permission and resolves in that scope; omitted, the create costs component:create alone."`
-		Location *string `json:"location,omitempty" doc:"Location name this component is placed at"`
-		// Product is required: every component is an instance of a product (the
-		// classification floor). It stays a pointer rather than a plain
-		// required string so the handler can report a specific, actionable
-		// message (naming the generics) instead of Huma's generic
-		// missing-required-field text.
-		Product *string `json:"product,omitempty" doc:"Product (catalog SKU) this component is an instance of, by name or uuid. Required: use a generic (generic-device, generic-app, generic-service) until a real product is modeled."`
-		// ExpectedName is the create form's precondition (#702, and its
-		// review). It carries the drafted NAME rather than the ordinal,
-		// because the name is what the form showed and what the operator is
-		// owed: it holds the stem, the suppression and the number together, so
-		// a type edit under the open form invalidates the claim where a number
-		// would have passed. It is still a precondition and NOT the name field:
-		// the create leaves name empty, so the row stays name_generated and the
-		// pen never moves. A pointer, so "absent" is the only spelling of no
-		// expectation.
-		ExpectedName *string `json:"expected_name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The name a create form previewed (POST /components:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the type's stem moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422."`
-	}
+	Body createComponentInputBody
 }
 
 // updateComponentInput is the PATCH body. It deliberately carries no name: a
