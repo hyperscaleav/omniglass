@@ -118,7 +118,36 @@ const row = (label: string) => {
   return r;
 };
 const rowLabels = () => rows().map(labelOf);
-const expand = (label: string) => fireEvent.click(within(row(label)).getByRole("button", { name: `Expand ${label}` }));
+const expand = (label: string) => fireEvent.click(within(row(label)).getByRole("button", { name: new RegExp(`^Expand ${label}( in .*)?$`) }));
+
+describe("expander names", () => {
+  it("tells same-named places under different parents apart, leaving the visible text alone", async () => {
+    const dup = {
+      locations: [
+        loc("north", "North Campus", "campus"),
+        loc("south", "South Campus", "campus"),
+        loc("d1", "Service Depot", "building", "north"),
+        loc("d2", "Service Depot", "building", "south"),
+        loc("n2", "Annex", "building", "north"),
+        loc("s2", "Annex", "building", "south"),
+        loc("b1", "Bay 1", "room", "d1"),
+        loc("b2", "Bay 2", "room", "d1"),
+        loc("b3", "Bay 1", "room", "d2"),
+        loc("b4", "Bay 2", "room", "d2"),
+      ],
+      systems: [],
+    } as unknown as FleetView;
+    mount("/web/explore", owner, dup, false, []);
+    await screen.findByRole("tree");
+    expand("North Campus");
+    expand("South Campus");
+    const depots = rows().filter((r) => labelOf(r) === "Service Depot");
+    expect(depots).toHaveLength(2);
+    const names = depots.map((r) => within(r).getByRole("button", { name: /^Expand/ }).getAttribute("aria-label"));
+    expect(names).toEqual(["Expand Service Depot in North Campus", "Expand Service Depot in South Campus"]);
+    expect(new Set(names).size).toBe(2);
+  });
+});
 
 describe("arrival", () => {
   it("shows the top-level locations only, sorted by name, collapsed", async () => {

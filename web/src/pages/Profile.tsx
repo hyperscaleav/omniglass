@@ -5,6 +5,7 @@ import PasswordField from "../components/PasswordField";
 import Button from "../components/Button";
 import Drawer from "../components/Drawer";
 import KVStacked from "../components/KVStacked";
+import Collapsible from "../components/ui/Collapsible";
 import FieldRow from "../components/FieldRow";
 import { useFormActions } from "../lib/formactions";
 import SessionsList from "../components/SessionsList";
@@ -396,14 +397,18 @@ export default function Profile() {
                   </For>
                 </div>
               </div>
-              <div>
-                <div class="eyebrow mb-1.5">Permissions ({me.data?.permissions.length ?? 0})</div>
+              {/* Closed by default: an admin holds well over a hundred, and the
+                  count is the fact most visits want. */}
+              <Collapsible
+                title={<>Permissions ({me.data?.permissions.length ?? 0})</>}
+                triggerClass="eyebrow group mb-1.5 flex cursor-pointer items-center gap-1 rounded-field focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/60"
+              >
                 <div class="flex flex-wrap gap-1.5">
                   <For each={me.data?.permissions ?? []} fallback={<span class="text-xs text-base-content/40">none</span>}>
                     {(p) => <span class="badge badge-ghost font-data text-[11px]">{p}</span>}
                   </For>
                 </div>
-              </div>
+              </Collapsible>
             </div>
           </div>
         </div>
