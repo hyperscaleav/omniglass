@@ -79,6 +79,18 @@ agent_token="$(lab_run -e OMNIGLASS_SERVER="$LAB_SERVER_URL" -e OMNIGLASS_TOKEN=
 out="$(lab_run -e OMNIGLASS_SERVER="$LAB_SERVER_URL" -e OMNIGLASS_TOKEN="$agent_token" "$LAB_IMAGE" \
   mcp call set-component-tag --args '{"name":"hq.west.level-4.meeting-405.$comp.videobar-1","key":"asset-id","value":"AV-0415"}')" || { echo "$out" >&2; exit 1; }
 
+# The dev fleet's faults (#2434) are recorded readings the event rules judge, so
+# their alarms open only once each rule's sustain has passed after the seed.
+# Wait until no streak is pending, so no shot lands before them and every
+# capture shows the same fleet. LOUD past the deadline: a capture that cannot
+# see the fleet's alarms is not a capture of it.
+for i in $(seq 1 60); do
+  pending="$(curl -fsS -H "Authorization: Bearer $LAB_TOKEN" "$LAB_HOST_URL/api/v1/event-rules" | jq '[.event_rules[].pending_streaks] | add')"
+  [ "$pending" = 0 ] && break
+  [ "$i" = 60 ] && { echo "capture: event rule streaks still pending after 120s ($pending)" >&2; exit 1; }
+  sleep 2
+done
+
 mkdir -p "$OUT" "$BASELINE"
 lab_run -v "$ROOT:/w" -w /w \
   --user "$(id -u):$(id -g)" -e HOME=/tmp -e PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \

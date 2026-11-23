@@ -10,7 +10,7 @@ sidebar:
 screenshots:
   - id: alarm-troubleshoot
     path: /web/systems/auditorium
-    alt: "The auditorium DSP's blade: its Why strip holds the high alarm, No route to host on the control interface, with the bot button that asks omnibot to troubleshoot it."
+    alt: "The auditorium DSP's blade: its Why strip holds the high alarm the reachability rule raised, Reachability lost, with the bot button that asks omnibot to troubleshoot it."
     # The auditorium is degraded on its DSP's high alarm; the alarm opens the
     # DSP's blade, whose Why row carries the troubleshoot button.
     steps:
