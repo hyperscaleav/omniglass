@@ -1203,7 +1203,7 @@ omniglass component alarm acknowledge <name> <id>
 Records that a human has seen this alarm, and changes nothing else. The alarm stays exactly as raised as it was: acknowledging is not fixing, so health is NOT recomputed and cleared_at is untouched. Acknowledging is orthogonal to clearing in both directions, so a cleared alarm can still be acknowledged by whoever reviews the history, and clearing never acknowledges on an operator's behalf. Acknowledging twice is idempotent: the first person and the first time stay, and the no-op writes no second audit row. Gated by alarm:acknowledge, whose scope is resolved on the component tier from that permission (not from component:update); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not acknowledge on is a 403.
 
 Arguments:
-  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -1222,7 +1222,7 @@ omniglass component alarm create <name> [flags]
 Raises an alarm on this component, then recomputes health in the same transaction: the component's own health moves, and if it is now outage (an alarm at or above the high level), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location health with it; a lesser alarm degrades the component but leaves it occupying its slots. Gated by component:update; read and update scopes drive the 404 versus 403 split.
 
 Arguments:
-  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1247,7 +1247,7 @@ omniglass component alarm delete <name> <id>
 Marks the alarm cleared and recomputes health in the same transaction, so the recovery is recorded as a transition at the moment it happened. The row is kept: what was wrong and when outlives the fix. Clearing an alarm that is already cleared or does not exist is a 404. Gated by component:update; read and update scopes drive the 404 versus 403 split.
 
 Arguments:
-  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -1266,7 +1266,7 @@ omniglass component alarm list <name> [flags]
 What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
 
 Arguments:
-  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1290,7 +1290,7 @@ omniglass component alarm snooze <name> <id> [flags]
 Snoozes the alarm, by its component and dedup_key, for a duration from now (1m to 7d), so every notification any alarm of that dedup key would send, a raise or a clear, on any channel, is written suppressed with the reason instead, and a message already waiting to be retried is suppressed when its turn comes. Snoozing a snoozed alarm replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. When the snooze ends, at its deadline or by :unsnooze, with an alarm of that dedup key still raised, that alarm is announced again as raised to whoever the action rules reach then. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403.
 
 Arguments:
-  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1313,7 +1313,7 @@ omniglass component alarm timeline <name> <id>
 The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, each snooze, unsnooze and snooze-end, and a rule edit that opened or resolved it, naming the editor) and the notifications its transitions queued, each at the moment it was queued with its status as it stands (#618). At one instant an event comes before the audit row it caused, and that before a notification. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.
 
 Arguments:
-  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -1332,7 +1332,7 @@ omniglass component alarm unsnooze <name> <id>
 Ends the alarm's snooze early, exactly as its deadline passing would: if an alarm of that dedup key is still raised, it is announced again as raised to whoever the action rules reach now. Audited on this alarm, naming the caller. Unsnoozing an alarm that is not snoozed is a 200 that writes nothing. Gated by alarm:snooze, resolved as :snooze is.
 
 Arguments:
-  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -1398,7 +1398,7 @@ omniglass component command get <name> <id>
 One command, whole: what it was told and the value it set, its recorded status with a time for each transition (issued, delivered, executed, settled), where it sits now while in flight (queued, delivered, awaiting the reply, awaiting the observation), how its binding settles it, the evidence that decided it (the reply, masked of credentials, or the observed sample) and why, the endpoint, outpost and driver that carry it, and who issued it. Gated by command:read, resolved on the component tier; a component outside the caller's component:read, or a command not on that component, is a non-disclosing 404, and a component it can read but whose commands it may not is a 403.
 
 Arguments:
-  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -1417,7 +1417,7 @@ omniglass component command issue <name> [flags]
 Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Answers with the command as it stands (as the command read returns it) and the computed settlement; with wait, once it settles, fails or times out, or wait_timeout passes. Gated by command:issue, whose scope is resolved on the component tier from that permission (not from component:read); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not command is a 403.
 
 Arguments:
-  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1445,7 +1445,7 @@ omniglass component command list <name> [flags]
 The component's command history, newest first, each command whole (as the single read returns it), narrowed by recorded status and by when it was issued, a page at a time. status=issued is what is in flight now. Gated by command:read, resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but whose commands it may not is a 403.
 
 Arguments:
-  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1522,7 +1522,7 @@ omniglass component delete <name>
 Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
 
 Arguments:
-  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -1545,7 +1545,7 @@ omniglass component dependency create <name> [flags]
 Records that this component depends on the upstream: power (fed from the named outlet of the upstream; the outlet is required on this kind and refused on the others), host (hosted by the upstream, so a reboot of the upstream holds this component's endpoints too) or path (reached through the upstream, so while the upstream's gate is closed on this component's outpost its in-band endpoints are held with an upstream reason naming it). A component never depends on itself, one edge of a kind joins a pair once (a 409 for the second), and an edge whose upstream already depends on this component through edges of the same kind would close a cycle and is a 422. The edge is a fact about the dependent: gated by component:update on it (a dependent the caller reads but cannot write is a 403), with the upstream resolved in the caller's component:read (outside it, a non-disclosing 404).
 
 Arguments:
-  <name>  Name of the dependent component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  Name of the dependent component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1570,8 +1570,8 @@ omniglass component dependency delete <name> <kind> <upstream>
 Removes this component's edge of the kind to the upstream. Gated by component:update on the dependent (read but not writable, a 403). An upstream outside the caller's component:read is a 404, as an edge that does not exist is: the list does not name it either.
 
 Arguments:
-  <name>  Name of the dependent component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
-  <upstream>  Name or uuid of the upstream component, or a dotted address; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  Name of the dependent component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
+  <upstream>  Name or uuid of the upstream component, or a dotted address; a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -1590,7 +1590,7 @@ omniglass component dependency list <name>
 This component's dependency edges both ways: its upstreams (what it depends on) and its dependents (what depends on it), each of kind power (fed from an outlet of the upstream), host (hosted by it) or path (reached through it). A disruptive command follows host edges down from its target and a power command follows the power edges from its outlet, so these edges are what a reboot or an outlet cycle holds; a path edge holds the dependent's in-band endpoints while its upstream's gate is closed. Containment (a component's parent) is a different fact and never appears here. An edge whose other end is outside the caller's component:read is counted in hidden, never named. Gated by component:read; a component outside it is a non-disclosing 404.
 
 Arguments:
-  <name>  Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -1613,7 +1613,7 @@ omniglass component effective-secret list <name>
 Resolves the secrets that cascade onto a component (platform -> location -> component), with the winner and the shadowed candidates it overrode. There is NO system band: a secret is device-facing, and the room a component happens to serve is the wrong owner for a credential the device itself answers with. Fields are masked, as in the directory; plaintext is only ever the audited reveal. Gated by secret:read, which the viewer floor does not carry, and admin-sensitive secrets appear only to the admin tier.
 
 Arguments:
-  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -1636,7 +1636,7 @@ omniglass component effective-tag list <name> [flags]
 Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union and the most specific binding shadows the rest, with the winner and the shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= (a name or a uuid, ADR-0062) to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.
 
 Arguments:
-  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1663,7 +1663,7 @@ omniglass component effective-variable list <name>
 Resolves the variables that cascade onto a component (platform -> location -> system -> component): names union and the most specific binding shadows the rest, with the winner and the shadowed candidates. The system band comes from the component's PRIMARY membership; resolving against a named system is not offered here yet, unlike effective-tags. Gated by variable:read; the component must be in the caller's component read scope.
 
 Arguments:
-  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -1686,7 +1686,7 @@ omniglass component event list <name>
 Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.
 
 Arguments:
-  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -1705,7 +1705,7 @@ omniglass component get <name>
 Fetches a component by name within the caller's read scope. Out of scope is a non-disclosing 404. Gated by component:read.
 
 Arguments:
-  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -1728,7 +1728,7 @@ omniglass component identity-binding delete <name> <key> <value>
 Removes the binding of this value, reported by the conduit component under this match key, so its samples no longer land on the owner it named. Unbinding writes onto both ends, so it costs a write on both: gated by component:update on the conduit, and it also needs update on the binding's owner (component:update, or system:update for a system), a 403 naming it when the caller reads the owner but cannot write it. A binding whose owner the caller cannot read is a 404, as one that does not exist is: the list does not name it either.
 
 Arguments:
-  <name>  Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -1747,7 +1747,7 @@ omniglass component identity-binding list <name>
 The identity bindings of this conduit component: each value it reports under a match key (a registered property type, such as ucc-room-id) and the one system or component that value's samples land on. A component that speaks for many owners (a cloud service, a controller fronting many components) is the conduit, the path rather than the owner. Each binding is named only when its owner is inside the caller's read on its tier (system:read for a system owner, component:read for a component owner); the rest are counted in hidden, never named. Gated by component:read; a conduit outside it is a non-disclosing 404.
 
 Arguments:
-  <name>  Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -1766,7 +1766,7 @@ omniglass component identity-binding update <name> <key> <value> [flags]
 Ties this value, reported by the conduit component under this match key, to one owner, a system or a component, so the conduit's samples naming it land on that owner. One identity on one conduit has exactly one owner: a put naming the owner it is already bound to changes nothing, and one naming a different owner moves it. The match key must be a registered property type (422 otherwise), and the owner a component or a system other than the conduit itself (a location or an outpost owns no observed sample, and a value with no identity already lands on the conduit: each a 422). The value rides the path as one percent-encoded segment, so a value carrying a slash, a space or another reserved character is escaped (room%2F1) and round-trips. A binding writes onto both of its ends, so it costs a write on both: gated by component:update on the conduit, and it also needs the owner's update (component:update, or system:update for a system, refused with a 403 naming it before anything resolves). Each end resolves in its own tier's read scope and must be inside its update scope: an end outside the read scope is a non-disclosing 404, one readable but not writable a 403. A move also needs update on the owner it leaves; refused, it says the identity is bound to another owner but never which one.
 
 Arguments:
-  <name>  Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1794,7 +1794,7 @@ omniglass component impairment get <name>
 The impairment an operator set on a simulated component (unplugged, or a degraded link), applied by the simulator beside its outpost when that simulator runs with impairments and NET_ADMIN. A healthy device reads all zero. Gated by simulation:read; the component resolves within the caller's component read scope.
 
 Arguments:
-  <name>  The simulated component's name, or a dotted address; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The simulated component's name, or a dotted address; a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -1813,7 +1813,7 @@ omniglass component impairment set <name> [flags]
 Sets what is broken on a simulated component: unplugged, or a link with added latency, jitter, loss or a rate limit. It replaces the whole impairment, so a field left out reads as zero (setting a latency on an unplugged device plugs it back in); an empty body repairs it. Returns the impairment as stored, loss rounded to hundredths. Audited. The simulator beside the component's outpost applies it on its next pull. Gated by simulation:update, whose scope is resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not impair is a 403. Jitter above latency, or a value outside its range, is a 422.
 
 Arguments:
-  <name>  The simulated component's name, or a dotted address; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The simulated component's name, or a dotted address; a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1856,7 +1856,7 @@ omniglass component listTags <name>
 Lists the tags bound directly on a component (not the resolved cascade). Gated by component:read.
 
 Arguments:
-  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -1879,7 +1879,7 @@ omniglass component log list <name> [flags]
 Returns the component's recent raw log lines (the ingest lane of ADR-0066, distinct from typed events), newest first, bounded to the last 24 hours, narrowed by an optional severity threshold and source, with the sources the window carries. Gated by component:read; an out-of-scope component is a non-disclosing 404.
 
 Arguments:
-  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1907,7 +1907,7 @@ omniglass component membership list <name>
 The systems this component is bound into, ordered by name. A component may belong to several: a rack DSP serving three rooms is a member of all three, and each of them depends on it. Exactly one membership may be marked primary, the default for a question asked without a system in hand. Gated by component:read; an out-of-scope component is a non-disclosing 404.
 
 Arguments:
-  <name>  Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -1930,7 +1930,7 @@ omniglass component metric list <name>
 Every metric the component's product declares, resolved to the newest observed or calculated sample across its live instances (instance names the one shown, instance_count counts them) or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the component (from_contract false). Gated by component:read; an out-of-scope component is a non-disclosing 404.
 
 Arguments:
-  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -1976,7 +1976,7 @@ omniglass component move <name> [flags]
 Relocates and/or re-parents a component: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant (a location-scoped grant reaches a component for read and create only). A separate act from update, and a separately grantable one (component:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. Does not recompute health: a component's own health is purely its active alarms, unaffected by where it sits. A taken name at the destination is a 409. Gated by component:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).
 
 Arguments:
-  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -2020,7 +2020,7 @@ omniglass component property delete <name> <property>
 Removes the component's declared value, so the property falls back to the product contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the component never set is a 404. Gated by component:update; read and update scopes drive the 404 versus 403 split.
 
 Arguments:
-  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -2039,7 +2039,7 @@ omniglass component property list <name>
 Every property the component has: each its product declares, resolved to the component's own value or the contract default (is_set marks a declared value), each set directly on the component (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by component:read; an out-of-scope component is a non-disclosing 404.
 
 Arguments:
-  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -2085,7 +2085,7 @@ omniglass component property update <name> <property> [flags]
 Declares a value for the property on this component, overriding the product contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise), and the value must satisfy the property type's data type and validation (422 otherwise). Gated by component:update; read and update scopes drive the 404 versus 403 split.
 
 Arguments:
-  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -2112,7 +2112,7 @@ omniglass component reachability list <name>
 Composes, per endpoint, the latest reachability, the probe-layer signals that compose it, and the recent reachability transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.
 
 Arguments:
-  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -2147,7 +2147,7 @@ omniglass component removeTag <name> [flags]
 Removes a key's value from a component. Gated by component:update.
 
 Arguments:
-  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -2170,7 +2170,7 @@ omniglass component rename <name> [flags]
 Moves the component's name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by component:rename; read and rename scopes drive the 404 versus 403 split.
 
 Arguments:
-  <name>  The component's current name, a dotted address, or its uuid; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The component's current name, a dotted address, or its uuid; a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -2217,7 +2217,7 @@ omniglass component resetName <name>
 Hands the pen back to the platform: regenerates the name from the component's current type and placement (the same "<stem>-<n>" rule a nameless create applies) and marks it name_generated, whether or not it already was. Gated by component:rename, the same token :rename uses: it changes the name, exactly that permission's blast radius.
 
 Arguments:
-  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -2236,7 +2236,7 @@ omniglass component setTag <name> [flags]
 Binds a value for a key on a component. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by component:update.
 
 Arguments:
-  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -2264,7 +2264,7 @@ omniglass component simulation fire <name> [flags]
 Asks the simulator beside the component's outpost to run one operation against the simulated component, on one of its protocol surfaces: an HTTP call, a command line (SSH, Telnet, TCP) or an SNMP get, and returns its answer. The simulator answers from the component's live state in process, as its listeners would, so a command's change sticks and the collector sees it; an impairment does not stop it. Audited. Gated by simulation:update, resolved on the component tier. A component that is not simulated is a 409, a surface it does not serve a 422, and no simulator answering a 503.
 
 Arguments:
-  <name>  The simulated component's name, or a dotted address; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The simulated component's name, or a dotted address; a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -2292,7 +2292,7 @@ omniglass component simulation get <name>
 Whether a component is simulated (it has an endpoint on an outpost and a product a simulator profile simulates) and, when it is, its outpost, address, live hits and impairment, the products its profile simulates, and its full API surface: every protocol surface, with its HTTP routes, commands and SNMP OIDs. A component that is not simulated reads simulated false. Gated by simulation:read; the component resolves within the caller's component read scope.
 
 Arguments:
-  <name>  The simulated component's name, or a dotted address; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The simulated component's name, or a dotted address; a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -2315,7 +2315,7 @@ omniglass component unbound-identity list <name>
 A component that speaks for many owners (a conduit) lands each value its driver identifies on the owner an identity binding names; a value naming an identity it has no binding for lands on no owner and is kept here, one row per match key and value (a count, first and last heard, the keys it carried), bounded at 1024 per conduit with the least recently heard evicted, and aged out after seven days. Binding one (PUT .../identity-bindings/{key}/{value}) makes the next value naming it land on its owner. Gated by component:read; an out-of-scope conduit is a non-disclosing 404.
 
 Arguments:
-  <name>  The conduit component's name, or a dotted address (e.g. hq.$comp.ucc-platform); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The conduit component's name, or a dotted address (e.g. hq.$comp.ucc-platform); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -2334,7 +2334,7 @@ omniglass component update <name> [flags]
 Patches a component's label or product. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Product is required, so it is unchanged when omitted and reclassified when named, but an explicit empty string is refused (422), not a clear. Gated by component:update; read and update scopes drive the 404 versus 403 split.
 
 Arguments:
-  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -2655,7 +2655,7 @@ omniglass endpoint delete <endpoint>
 Deletes an endpoint, refused while a task still references it. Gated by endpoint:delete; read and delete scopes (through the component) drive the 404 versus 403 split.
 
 Arguments:
-  <endpoint>  The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <endpoint>  The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -2674,7 +2674,7 @@ omniglass endpoint get <endpoint>
 Fetches an endpoint by its address (<component>/<endpoint name>) or uuid. An endpoint whose component is out of the caller's read scope is a non-disclosing 404, and a name no endpoint the caller can see answers to is a 404 naming what was looked up (listing each match when more than one does). Gated by endpoint:read.
 
 Arguments:
-  <endpoint>  The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <endpoint>  The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -2733,7 +2733,7 @@ omniglass endpoint retry <endpoint> [flags]
 Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key or certificate, a reply its driver declares terminal) lifts, the outpost recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport, the tls mode or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. host_key names a key to trust, the one the endpoint's transport pins (the offered key a key refusal names): an ssh host key, or a tls or https endpoint's certificate public key, which such an endpoint also takes as certificate. It becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. While the endpoint's gate names an offered key, the key must be that key, so a trust confirmed against a refusal the record has since moved past is a 409 and changes nothing. Audited, a trusted key with the pin it replaced (old) and the pin it set (new). Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.
 
 Arguments:
-  <endpoint>  The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <endpoint>  The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -2757,7 +2757,7 @@ omniglass endpoint rotateToken <endpoint>
 Mints a webhook endpoint's token anew (#1024): a post bearing the old one answers 404 at once, exactly as a token that never existed, and the new one is revealed through the endpoint's secret, to give the sender. A token deleted with its secret is minted again. A dialed endpoint has no token, a 422. Audited on the endpoint and the secret. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
 
 Arguments:
-  <endpoint>  The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <endpoint>  The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -2776,7 +2776,7 @@ omniglass endpoint update <endpoint> [flags]
 Patches an endpoint's outpost placement, params, label, out-of-band mark, or (driver-attached) its connection inputs in place: the host, port and attached secret references (a secret taking secret:bind, as on create), validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
 
 Arguments:
-  <endpoint>  The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <endpoint>  The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -3491,7 +3491,7 @@ omniglass location delete <name>
 Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
 
 Arguments:
-  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -3510,7 +3510,7 @@ omniglass location get <name>
 Fetches a location by name within the caller's read scope. Out of scope is a non-disclosing 404. Gated by location:read.
 
 Arguments:
-  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -3533,7 +3533,7 @@ omniglass location health list <name>
 The location's current health, worst-wins over every system placed anywhere beneath it, with those systems and their health as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
 
 Arguments:
-  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -3568,7 +3568,7 @@ omniglass location listTags <name>
 Lists the tags bound directly on a location (not the resolved cascade). Gated by location:read.
 
 Arguments:
-  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -3591,7 +3591,7 @@ omniglass location metric list <name>
 Every metric the location's type declares, resolved to the newest observed or calculated sample across its live instances (instance names the one shown, instance_count counts them) or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the location (from_contract false). Gated by location:read; an out-of-scope location is a non-disclosing 404.
 
 Arguments:
-  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -3610,7 +3610,7 @@ omniglass location move <name> [flags]
 Re-parents a location (a tree move): parent is required (422 if omitted), cycle-guarded, and placement-validated against the resolved location_type. Moving to root is not supported (422): MoveLocation gains no clear-to-root capability locations have never had. A separate act from update, and a separately grantable one (location:move), because a placement change is an authorization act, not a label edit. Recorded under its own audit verb, move, distinct from update. Does not recompute health. A taken name at the destination is a 409. A move can RENAME the location: a platform-generated name is scoped to its parent bucket, so a move that changes the parent re-mints the name and the ordinal under the new parent, from the same location_type name rule. A move that re-states the current parent leaves the name alone, and an operator-typed name is never touched. Gated by location:move; the read and move scopes drive the 404 versus 403 split.
 
 Arguments:
-  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -3653,7 +3653,7 @@ omniglass location property delete <name> <property>
 Removes the location's declared value, so the property falls back to the location type contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the location never set is a 404. Gated by location:update; read and update scopes drive the 404 versus 403 split.
 
 Arguments:
-  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -3672,7 +3672,7 @@ omniglass location property list <name>
 Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks a declared value), plus any property set directly on the location (from_contract false), in the component and system properties read's shape. A location owns no observed sample, so a row's reconciliation carries want and never is. Gated by location:read; an out-of-scope location is a non-disclosing 404.
 
 Arguments:
-  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -3691,7 +3691,7 @@ omniglass location property update <name> <property> [flags]
 Declares a value for the property on this location, overriding the location type contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise), and the value must satisfy the property type's data type and validation (422 otherwise). Gated by location:update; read and update scopes drive the 404 versus 403 split.
 
 Arguments:
-  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -3730,7 +3730,7 @@ omniglass location removeTag <name> [flags]
 Removes a key's value from a location. Gated by location:update.
 
 Arguments:
-  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -3753,7 +3753,7 @@ omniglass location rename <name> [flags]
 Moves the location's name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by location:rename; the read and rename scopes drive the 404 versus 403 split.
 
 Arguments:
-  <name>  The location's current name, a dotted address, or its uuid; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The location's current name, a dotted address, or its uuid; a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -3798,7 +3798,7 @@ omniglass location resetName <name>
 Hands the pen back to the platform, the same verb components and systems carry: the name is re-minted from the location_type's name rule and the lowest free ordinal in this placement, and name_generated goes back to true. A location_type carrying no name rule refuses (422), which is every type a shipped fleet has: only a positional kind of location, one whose number is an arbitrary disambiguator rather than a designation read off the signage (a parking deck, a rack row), has a name the platform can generate, and an operator declares such a type themselves. Gated by location:rename, the same token :rename uses.
 
 Arguments:
-  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -3817,7 +3817,7 @@ omniglass location setTag <name> [flags]
 Binds a value for a key on a location. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by location:update.
 
 Arguments:
-  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -3841,7 +3841,7 @@ omniglass location update <name> [flags]
 Patches a location's label or location_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Changing the location_type of a location the PLATFORM named re-mints the name from the new type's name rule, and is refused (422) when the new type carries none, which is every shipped type: :rename the location first to claim its name, then reclassify it. A location an operator named is never renamed by a reclassify. Gated by location:update; the read and update scopes drive the 404 versus 403 split.
 
 Arguments:
-  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -4766,7 +4766,7 @@ omniglass outpost listTags <name>
 Lists the tags bound directly on a outpost (not the resolved cascade). Gated by outpost:read.
 
 Arguments:
-  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -4805,7 +4805,7 @@ omniglass outpost removeTag <name> [flags]
 Removes a key's value from a outpost. Gated by outpost:update.
 
 Arguments:
-  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -4856,7 +4856,7 @@ omniglass outpost setTag <name> [flags]
 Binds a value for a key on a outpost. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by outpost:update.
 
 Arguments:
-  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -5368,7 +5368,7 @@ omniglass secret copy <secret>
 Decrypts and returns a secret's field values for a clipboard copy, audited under the copy verb (distinct from an on-screen reveal). Same exposure and the same secret:reveal gate as reveal.
 
 Arguments:
-  <secret>  The secret: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <secret>  The secret: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -5413,7 +5413,7 @@ omniglass secret delete <secret>
 Removes a secret, by name or uuid. Gated by secret:delete, plus platform:delete when the secret sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.
 
 Arguments:
-  <secret>  The secret: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <secret>  The secret: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -5448,7 +5448,7 @@ omniglass secret reveal <secret>
 Decrypts and returns a secret's field values, auditing the decrypt. Gated by secret:reveal at the caller's scope; an admin-sensitive secret additionally needs the admin tier (secret:reveal:admin), so a scoped operator reveals device secrets but never a platform credential.
 
 Arguments:
-  <secret>  The secret: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <secret>  The secret: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -5467,7 +5467,7 @@ omniglass secret update <secret> [flags]
 Replaces the given field values on a secret, re-sealing secret fields, and patches its label. Only those change; name, type, and owner are fixed at creation. An omitted field keeps its value, an omitted label leaves it alone, and an empty label clears it. Gated by secret:update, plus platform:update when the secret sits at the platform tier.
 
 Arguments:
-  <secret>  The secret: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <secret>  The secret: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -6271,7 +6271,7 @@ omniglass system alarm list <name>
 Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its alarms, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.
 
 Arguments:
-  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -6385,7 +6385,7 @@ omniglass system delete <name>
 Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
 
 Arguments:
-  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -6408,7 +6408,7 @@ omniglass system event list <name>
 Returns the system's own events and its members', newest first, bounded to the last 24 hours, each row labeled by the owner that raised it. A component shared with another system appears in both systems' lists. Gated by system:read; an out-of-scope system is a non-disclosing 404.
 
 Arguments:
-  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -6427,7 +6427,7 @@ omniglass system get <name>
 Fetches a system by name within the caller's read scope. Out of scope is a non-disclosing 404. Gated by system:read.
 
 Arguments:
-  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -6462,7 +6462,7 @@ omniglass system health list <name>
 The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
 
 Arguments:
-  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -6497,7 +6497,7 @@ omniglass system listTags <name>
 Lists the tags bound directly on a system (not the resolved cascade). Gated by system:read.
 
 Arguments:
-  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -6520,7 +6520,7 @@ omniglass system log list <name> [flags]
 Returns the members' raw log lines merged newest first, bounded to the last 24 hours and capped, each naming the component that wrote it, narrowed by an optional severity threshold and source, with the sources the window carries. Gated by system:read; an out-of-scope system is a non-disclosing 404.
 
 Arguments:
-  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -6548,8 +6548,8 @@ omniglass system member delete <name> <component>
 Unbinds this component from the system. Refused with a 409 while it still fills a slot here, since removing it would leave the system staffed by a non-member: unassign the slot first. A component that was not a member is a 404. Gated by system:update, and also needs component:update, because unbinding moves the component's primary and restamps its label; read and update scopes drive the system's 404 versus 403 split, and a member outside the component:update scope is a 403 (the system's member list already names it).
 
 Arguments:
-  <name>  Name of the system, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
-  <component>  Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  Name of the system, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
+  <component>  Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -6568,7 +6568,7 @@ omniglass system member list <name>
 The components bound into this system, ordered by name. Membership is what a slot attaches to: every component staffing a slot here is a member, and a member may also carry no slot at all (a power conditioner is in the room without filling a declared slot). Each member carries its own health, so a system's view can poll its members' health here rather than reading the whole fleet. Gated by system:read; an out-of-scope system is a non-disclosing 404.
 
 Arguments:
-  <name>  Name of the system, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  Name of the system, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -6587,8 +6587,8 @@ omniglass system member setPrimary <name> <component>
 Moves the component's default to this membership. The default answers questions asked without a system in hand; it does not decide anything that names a system explicitly. A component that was not a member here is a 404. Gated by system:update, and also needs component:update, because the default decides which system's band every cascade on the component reads; read and update scopes drive the system's 404 versus 403 split, and a member outside the component:update scope is a 403 (the system's member list already names it).
 
 Arguments:
-  <name>  Name of the system, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
-  <component>  Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  Name of the system, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
+  <component>  Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -6607,8 +6607,8 @@ omniglass system member update <name> <component>
 Binds this component into the system. Idempotent. A component's first membership becomes its primary with nobody asking, so a component in exactly one system never has to think about the concept; a later membership does not take that default away. Gated by system:update, and also needs component:update, because the binding writes onto the component (its primary, its label, the system band of its cascade): each end resolves in its own tier's read scope and must be inside its update scope, so an end outside the read scope is a non-disclosing 404 and one readable but not writable a 403.
 
 Arguments:
-  <name>  Name of the system, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
-  <component>  Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  Name of the system, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
+  <component>  Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -6631,7 +6631,7 @@ omniglass system metric list <name>
 Every metric the system's standard declares, resolved to the newest observed or calculated sample across its live instances (instance names the one shown, instance_count counts them) or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the system (from_contract false). Gated by system:read; an out-of-scope system is a non-disclosing 404.
 
 Arguments:
-  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -6677,7 +6677,7 @@ omniglass system move <name> [flags]
 Relocates and/or re-parents a system: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant (a location-scoped grant reaches a system for read and create only). A separate act from update, and a separately grantable one (system:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. A relocate still recomputes health at both ends (the location it left and the one it arrived at); a reparent does not, since the health rollup runs system -> location, never through the system tree. A taken name at the destination is a 409. A move can RENAME the system: a platform-generated name is scoped to its placement bucket, so a move that changes the bucket re-mints the name and the ordinal in the destination. A move that changes no bucket, including a re-stated placement and a relocate of a parented system (a parent wins over a location), leaves the name alone, and an operator-typed name is never touched. Gated by system:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).
 
 Arguments:
-  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -6721,7 +6721,7 @@ omniglass system property delete <name> <property>
 Removes the system's declared value, so the property falls back to the standard contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the system never set is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.
 
 Arguments:
-  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -6740,7 +6740,7 @@ omniglass system property list <name>
 Every property the system has: each its standard declares, resolved to the system's own value or the contract default (is_set marks a declared value), each set directly on the system (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by system:read; an out-of-scope system is a non-disclosing 404.
 
 Arguments:
-  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -6786,7 +6786,7 @@ omniglass system property update <name> <property> [flags]
 Declares a value for the property on this system, overriding the standard contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise), and the value must satisfy the property type's data type and validation (422 otherwise). Gated by system:update; read and update scopes drive the 404 versus 403 split.
 
 Arguments:
-  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -6825,7 +6825,7 @@ omniglass system removeTag <name> [flags]
 Removes a key's value from a system. Gated by system:update.
 
 Arguments:
-  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -6848,7 +6848,7 @@ omniglass system rename <name> [flags]
 Moves the system's name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by system:rename; read and rename scopes drive the 404 versus 403 split.
 
 Arguments:
-  <name>  The system's current name, a dotted address, or its uuid; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The system's current name, a dotted address, or its uuid; a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -6895,7 +6895,7 @@ omniglass system resetName <name>
 Hands the pen back to the platform: regenerates the name from the system's current system_type and placement (the same rule a nameless create applies, the type's stem plus the lowest free ordinal, bare for the first of that stem in the placement) and marks it name_generated, whether or not it already was. An unclassified system is a 422: the stem lives on the system_type. Gated by system:rename, the same token :rename uses: it changes the name, exactly that permission's blast radius.
 
 Arguments:
-  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -6914,7 +6914,7 @@ omniglass system setTag <name> [flags]
 Binds a value for a key on a system. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by system:update.
 
 Arguments:
-  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -6946,8 +6946,8 @@ omniglass system slot assignment delete <name> <slot> <component>
 Takes this component out of the slot, leaving the slot understaffed until another fills it. A component that was not filling the slot is a 404. Gated by system:update, and also needs component:update, as assigning does; read and update scopes drive the system's 404 versus 403 split, and an occupant outside the component:update scope is a 403 (the slot's own read already names it).
 
 Arguments:
-  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
-  <component>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
+  <component>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -6966,8 +6966,8 @@ omniglass system slot assignment update <name> <slot> <component>
 Puts this component in the slot for this system. Refused with a 422 naming both parties when the component is not a typed match: its product's component_type outside every type the slot accepts, or (if the slot pins products) its product not one of them. A slot with no accepted types takes any type. Idempotent. Gated by system:update, and also needs component:update, because staffing a slot makes the component a member and writes onto it: each end resolves in its own tier's read scope and must be inside its update scope, so an end outside the read scope is a non-disclosing 404 and one readable but not writable a 403.
 
 Arguments:
-  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
-  <component>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
+  <component>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -6986,7 +6986,7 @@ omniglass system slot delete <name> <slot>
 Removes a slot declared on this system, and with it every assignment to it. A slot the system does not declare itself is a 404 (a slot inherited from its standard is withdrawn on the standard, not here). Gated by system:update; read and update scopes drive the 404 versus 403 split.
 
 Arguments:
-  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -7005,7 +7005,7 @@ omniglass system slot list <name>
 Every slot this system needs filled: those its standard declares (from_standard true) plus those declared directly on it, each with the types it accepts (and products it pins, if any), the components filling it, and how many more it wants before quorum (understaffed). A one-off system shows only its own. Gated by system:read; an out-of-scope system is a non-disclosing 404.
 
 Arguments:
-  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -7024,7 +7024,7 @@ omniglass system slot swapPositions <name> <slot> [flags]
 Exchanges the positions of whichever components currently hold position and with within this slot: an ordering change only, it does not affect who is assigned or the system's health. Either position missing an occupant is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.
 
 Arguments:
-  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -7048,7 +7048,7 @@ omniglass system slot update <name> <slot> [flags]
 Declares a slot directly on this system (how a one-off system gets slots at all, and how a conforming one adds what its standard does not cover), or revises it in place. Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and ["*"] replaces the whole declaration. A name the system's standard already declares is a 409: a system slot never shadows an inherited one, since a slot name must mean one slot in a system. Gated by system:update; read and update scopes drive the 404 versus 403 split.
 
 Arguments:
-  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -7079,7 +7079,7 @@ omniglass system update <name> [flags]
 Patches a system's label, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. A new standard declaring a slot name the system declares itself is a 409 naming the slot, since a slot name must mean one slot in a system. A standard change carries the system's staffing in the same transaction: each occupant of an inherited slot moves onto the new standard's slot of the same name when it is still a typed match and the slot has room, and is released, staying a member, otherwise; clearing the standard releases every inherited assignment. Gated by system:update; read and update scopes drive the 404 versus 403 split.
 
 Arguments:
-  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -8163,7 +8163,7 @@ omniglass variable delete <variable>
 Removes a variable, by name or uuid. Gated by variable:delete, plus platform:delete when the variable sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.
 
 Arguments:
-  <variable>  The variable: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <variable>  The variable: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -8198,7 +8198,7 @@ omniglass variable update <variable> [flags]
 Replaces a variable's value (validated against its fixed value_type) and patches its label; either may be omitted, and an empty label clears it. Name, type, and owner are fixed at creation. Gated by variable:update, plus platform:update when the variable sits at the platform tier.
 
 Arguments:
-  <variable>  The variable: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <variable>  The variable: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|

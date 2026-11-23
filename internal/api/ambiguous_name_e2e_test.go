@@ -80,17 +80,17 @@ func problemDetail(t *testing.T, body []byte) string {
 // candidatePattern matches one "<address> (<uuid>)" spelling of a tree row.
 var candidatePattern = regexp.MustCompile(`([^\s,]+) \(([0-9a-f-]{36})\)`)
 
-// TestAmbiguousNameIs404OnEveryCollection pins #1134: a name that answers to
+// TestAmbiguousNameIs409OnEveryCollection pins #1134: a name that answers to
 // more than one row the caller can see is the same refusal on a tree entity as
-// on an endpoint, a 404 naming the reference, the count and each candidate in a
+// on an endpoint, a 409 naming the reference, the count and each candidate in a
 // spelling that resolves.
-func TestAmbiguousNameIs404OnEveryCollection(t *testing.T) {
+func TestAmbiguousNameIs409OnEveryCollection(t *testing.T) {
 	t.Parallel()
 	f := newAmbiguousFixture(t)
 
 	status, body := f.c.send(f.owner, http.MethodGet, "/components/display-1", nil)
-	if status != http.StatusNotFound {
-		t.Fatalf("GET /components/display-1 = %d, want 404\nbody: %s", status, body)
+	if status != http.StatusConflict {
+		t.Fatalf("GET /components/display-1 = %d, want 409\nbody: %s", status, body)
 	}
 	msg := problemDetail(t, body)
 	if !strings.Contains(msg, `"display-1"`) || !strings.Contains(msg, "3 you can see answer to it") {
@@ -104,8 +104,8 @@ func TestAmbiguousNameIs404OnEveryCollection(t *testing.T) {
 	}
 
 	status, body = f.c.send(f.owner, http.MethodGet, "/endpoints/display-1%2Fhttps", nil)
-	if status != http.StatusNotFound {
-		t.Fatalf("GET /endpoints/display-1%%2Fhttps = %d, want 404\nbody: %s", status, body)
+	if status != http.StatusConflict {
+		t.Fatalf("GET /endpoints/display-1%%2Fhttps = %d, want 409\nbody: %s", status, body)
 	}
 	epMsg := problemDetail(t, body)
 	if !strings.Contains(epMsg, "3 you can see answer to it") {
@@ -129,8 +129,8 @@ func TestAmbiguousNameNeverListsWhatTheCallerCannotRead(t *testing.T) {
 		grantSpec{role: "deploy", scopeKind: "component", scopeID: f.compIDs["room-b"]})
 
 	status, body := f.c.send(tok, http.MethodGet, "/components/display-1", nil)
-	if status != http.StatusNotFound {
-		t.Fatalf("scoped GET /components/display-1 = %d, want 404\nbody: %s", status, body)
+	if status != http.StatusConflict {
+		t.Fatalf("scoped GET /components/display-1 = %d, want 409\nbody: %s", status, body)
 	}
 	msg := problemDetail(t, body)
 	if !strings.Contains(msg, "2 you can see answer to it") {
@@ -146,7 +146,7 @@ func TestAmbiguousNameNeverListsWhatTheCallerCannotRead(t *testing.T) {
 	}
 
 	status, body = f.c.send(tok, http.MethodGet, "/endpoints/display-1%2Fhttps", nil)
-	if status != http.StatusNotFound || strings.Contains(string(body), "room-c") {
+	if status != http.StatusConflict || strings.Contains(string(body), "room-c") {
 		t.Errorf("scoped endpoint 404 = %d %s, want a 404 that does not name room-c", status, body)
 	}
 }
@@ -173,5 +173,42 @@ func TestAmbiguousNameCandidateResolvesOnTheSameRoute(t *testing.T) {
 		if got.ID != id {
 			t.Errorf("GET /components/%s = %s, want the %s the 404 paired it with", addr, got.ID, id)
 		}
+	}
+}
+
+// TestAmbiguousNameIs409WithIDsAndUnknownIs404 pins #2334: a name several rows
+// answer to is a 409 whose body lists each match with its id and carries the
+// machine-readable marker the CLI keys on; a name nothing answers to stays a 404.
+func TestAmbiguousNameIs409WithIDsAndUnknownIs404(t *testing.T) {
+	t.Parallel()
+	f := newAmbiguousFixture(t)
+
+	status, body := f.c.send(f.owner, http.MethodGet, "/components/display-1", nil)
+	if status != http.StatusConflict {
+		t.Fatalf("ambiguous = %d, want 409\nbody: %s", status, body)
+	}
+	var p struct {
+		Errors []struct {
+			Location string `json:"location"`
+			Value    struct {
+				Count      int      `json:"count"`
+				Candidates []string `json:"candidates"`
+			} `json:"value"`
+		} `json:"errors"`
+	}
+	if err := json.Unmarshal(body, &p); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(p.Errors) != 1 || p.Errors[0].Location != api.AmbiguousRefLocation || p.Errors[0].Value.Count != 3 {
+		t.Fatalf("errors = %+v, want one %s detail with count 3", p.Errors, api.AmbiguousRefLocation)
+	}
+	for _, room := range []string{"room-a", "room-b", "room-c"} {
+		if !strings.Contains(strings.Join(p.Errors[0].Value.Candidates, " "), f.compIDs[room]) {
+			t.Errorf("candidates %v lack the id of %s", p.Errors[0].Value.Candidates, room)
+		}
+	}
+
+	if status, body = f.c.send(f.owner, http.MethodGet, "/components/no-such-component", nil); status != http.StatusNotFound {
+		t.Errorf("unknown name = %d, want 404\nbody: %s", status, body)
 	}
 }

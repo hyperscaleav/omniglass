@@ -254,7 +254,7 @@ func TestComponentRequiresProduct(t *testing.T) {
 	}
 }
 
-// TestGetComponentByAmbiguousNameIs404 is the DDL-and-refusal-ship-together
+// TestGetComponentByAmbiguousNameIs409 is the DDL-and-refusal-ship-together
 // half of #627 proved over HTTP: mapComponentErr must translate
 // storage.ErrAmbiguousName to a 404 (#1134, via the shared mapRefErr, moved into this
 // task from its original later slot) rather than falling through to its
@@ -264,7 +264,7 @@ func TestComponentRequiresProduct(t *testing.T) {
 // created twice in different placement buckets (unplaced, and under a
 // parent), which #627 makes legal, so GET by the now-ambiguous bare name has
 // no single answer and must be refused, not guessed. Skipped under -short.
-func TestGetComponentByAmbiguousNameIs404(t *testing.T) {
+func TestGetComponentByAmbiguousNameIs409(t *testing.T) {
 	t.Parallel()
 	dsn := seededDSN(t)
 	ctx := context.Background()
@@ -291,8 +291,8 @@ func TestGetComponentByAmbiguousNameIs404(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "dup-1", "product": "generic-device", "parent": "holder"}, http.StatusCreated)
 
 	status, body := c.send(ownerTok, http.MethodGet, "/components/dup-1", nil)
-	if status != http.StatusNotFound {
-		t.Fatalf("get ambiguous bare name status = %d, want 404\nbody: %s", status, body)
+	if status != http.StatusConflict {
+		t.Fatalf("get ambiguous bare name status = %d, want 409\nbody: %s", status, body)
 	}
 	if !strings.Contains(string(body), "dup-1") {
 		t.Fatalf("404 body = %s, want it to name the ambiguous reference", body)
@@ -301,7 +301,7 @@ func TestGetComponentByAmbiguousNameIs404(t *testing.T) {
 
 // TestComponentCreateResolvesParentWithinScopeAndNeverLeaksCandidates drives
 // ruling 2 (scope decides before ambiguity) over the CREATE path, not just
-// the read path TestGetComponentByAmbiguousNameIs404 already covers: a
+// the read path TestGetComponentByAmbiguousNameIs409 already covers: a
 // deploy user scoped to one component's subtree posts a bare parent
 // name that is ambiguous FLEET-WIDE but unique within its own scope, and the
 // create must resolve to the in-scope row cleanly (not a 404, not a coin-flip
@@ -389,8 +389,8 @@ func TestComponentCreateResolvesParentWithinScopeAndNeverLeaksCandidates(t *test
 		t.Fatalf("decode wingB/shared: %v", err)
 	}
 	status, body := c.send(deployTok, http.MethodPost, "/components", map[string]any{"name": "leaf-2", "product": "generic-device", "parent": "shared"})
-	if status != http.StatusNotFound {
-		t.Fatalf("create with in-scope-ambiguous parent status = %d, want 404\nbody: %s", status, body)
+	if status != http.StatusConflict {
+		t.Fatalf("create with in-scope-ambiguous parent status = %d, want 409\nbody: %s", status, body)
 	}
 	// The out-of-scope uuid must never appear in the body (the disclosure
 	// C2 named); the two in-scope candidates MAY appear, per mapRefErr's

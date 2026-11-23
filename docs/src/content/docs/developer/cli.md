@@ -155,11 +155,11 @@ omniglass user grant create alice --role viewer --scope-kind location --scope-id
 ```
 
 A name only you can see resolves for you even where someone else's out-of-scope row shares it, and
-a name more than one row you can see answers to is a 404 listing each one in the spelling that
-resolves, so the error tells you what to type next:
+a name more than one row you can see answers to is a 409 listing each one in the spelling that
+resolves (a name nothing answers to stays a 404), and the CLI prints it as "the name matches N rows you can see; address one by its id or dotted address" followed by the matches, so the error tells you what to type next:
 
 ```text
-secret "demo-panel-login" not found: 2 you can see answer to it; address one as $platform/demo-panel-login or boi.17c/demo-panel-login
+secret "demo-panel-login" is ambiguous: 2 you can see answer to it; address one as $platform/demo-panel-login or boi.17c/demo-panel-login
 ```
 
 A name is a lookup, so it lands on whatever the one row you can see by that name is now: a write

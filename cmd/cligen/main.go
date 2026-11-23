@@ -413,7 +413,7 @@ func buildCommand(doc spec, base, path, method string, op operation) command {
 // repeatedNameHelp is the line a tree-entity argument's help carries: a name is
 // not unique, so a repeated one is refused and the operator is told how to say
 // which row they mean (#1134).
-const repeatedNameHelp = "a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead"
+const repeatedNameHelp = "a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead"
 
 // withArgHelp appends an Arguments section to a command's long help: each path
 // argument that the API addresses by a dotted address (its OpenAPI description

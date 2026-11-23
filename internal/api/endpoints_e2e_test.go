@@ -233,7 +233,7 @@ func TestEndpointParamsMustNameATarget(t *testing.T) {
 	c.do(ownerTok, http.MethodPatch, "/endpoints/"+ep.ID, map[string]any{"params": map[string]any{"target": "127.0.0.1:9090"}}, http.StatusOK)
 }
 
-// TestEndpointCreateWithAmbiguousComponentIs404 closes I1's other half: the
+// TestEndpointCreateWithAmbiguousComponentIs409 closes I1's other half: the
 // gateway resolves the create body's "component" field through
 // resolveScopedRef (ruling 2, #627), and on more than one in-scope match that
 // surfaces storage.ErrAmbiguousName, which mapEndpointErr translates through
@@ -241,7 +241,7 @@ func TestEndpointParamsMustNameATarget(t *testing.T) {
 // existed, it fell through to the handler's default, an unmapped 500, for a
 // state #627 makes routine (two same-named components in different placement
 // buckets), not exceptional. Skipped under -short.
-func TestEndpointCreateWithAmbiguousComponentIs404(t *testing.T) {
+func TestEndpointCreateWithAmbiguousComponentIs409(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -278,8 +278,8 @@ func TestEndpointCreateWithAmbiguousComponentIs404(t *testing.T) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	status, body := c.send(ownerTok, http.MethodPost, "/endpoints", map[string]any{"transport": "tcp", "component": "dup-cmp"})
-	if status != http.StatusNotFound {
-		t.Fatalf("create endpoint with ambiguous component status = %d, want 404\nbody: %s", status, body)
+	if status != http.StatusConflict {
+		t.Fatalf("create endpoint with ambiguous component status = %d, want 409\nbody: %s", status, body)
 	}
 	if !strings.Contains(string(body), "dup-cmp") {
 		t.Fatalf("404 body = %s, want it to name the ambiguous reference", body)

@@ -22,8 +22,10 @@ import (
 // than one row).
 //
 // storage.ErrAmbiguousName (a tree entity's bare name that more than one row
-// answers to) is the same 404 an unresolved #1133 reference gets (#1134), so the
-// answer to a repeated name does not depend on the collection. Its candidates are
+// answers to) is a 409 Conflict (#2334, reversing the 404 of #1134), the same as
+// an unresolved #1133 reference that more than one visible row answers to, so the
+// answer to a repeated name does not depend on the collection. A name that
+// matches nothing stays a 404. Its candidates are
 // empty for a path that resolved with no caller scope to filter by at all (the
 // three *NameTaken advisories, storage.withoutCandidates): the reference is still
 // refused, the message just names no uuid, since nothing on that path could tell
@@ -54,11 +56,14 @@ import (
 func mapRefErr(err error) (error, bool) {
 	var unresolvedRef *storage.ErrUnresolvedRef
 	if errors.As(err, &unresolvedRef) {
+		if len(unresolvedRef.Candidates) > 0 {
+			return ambiguousRefError(unresolvedRef), true
+		}
 		return huma.Error404NotFound(unresolvedRefMessage(unresolvedRef)), true
 	}
 	var ambig *storage.ErrAmbiguousName
 	if errors.As(err, &ambig) {
-		return huma.Error404NotFound(unresolvedRefMessage(ambiguousAsUnresolved(ambig))), true
+		return ambiguousRefError(ambiguousAsUnresolved(ambig)), true
 	}
 	var notFound *storage.ErrPathNotFound
 	if errors.As(err, &notFound) {
@@ -214,6 +219,35 @@ func ambiguousAsUnresolved(a *storage.ErrAmbiguousName) *storage.ErrUnresolvedRe
 		e.Hint = "more than one row answers to it; address it by dotted address or uuid"
 	}
 	return e
+}
+
+// AmbiguousRefLocation is the Location of the error detail a 409 for an
+// ambiguous name carries, so a client tells "this name matches several rows" from
+// every other 409 without reading the sentence (#2334).
+const AmbiguousRefLocation = "path.name"
+
+// AmbiguousRefValue is the Value of that detail: how many rows the caller can see
+// answer to the name, and the spelling of each (up to maxListedCandidates) that
+// resolves, a dotted address with its uuid beside it.
+type AmbiguousRefValue struct {
+	Count      int      `json:"count"`
+	Candidates []string `json:"candidates"`
+}
+
+// ambiguousRefError is the 409 for a name that more than one row the caller can
+// see answers to. The message reuses the unresolved-name wording (what was looked
+// up, the count, each candidate) behind "is ambiguous".
+func ambiguousRefError(e *storage.ErrUnresolvedRef) error {
+	msg := strings.Replace(unresolvedRefMessage(e), " not found", " is ambiguous", 1)
+	listed := e.Candidates
+	if len(listed) > maxListedCandidates {
+		listed = listed[:maxListedCandidates]
+	}
+	return huma.Error409Conflict(msg, &huma.ErrorDetail{
+		Message:  msg,
+		Location: AmbiguousRefLocation,
+		Value:    AmbiguousRefValue{Count: len(e.Candidates), Candidates: listed},
+	})
 }
 
 // maxListedCandidates caps the spellings an unresolved name's 404 lists.

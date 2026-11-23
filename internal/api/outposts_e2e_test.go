@@ -215,7 +215,7 @@ func TestOutpostAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodDelete, "/outposts/ghost", nil, http.StatusNotFound)
 }
 
-// TestOutpostCreateWithAmbiguousLocationIs404 closes I1: outpostLocationID resolves
+// TestOutpostCreateWithAmbiguousLocationIs409 closes I1: outpostLocationID resolves
 // the create/patch "location" field with the scope-blind scopedByName (correct
 // here, since outpost writes require an all scope by design, so there is no
 // narrower caller scope to filter against), and on ambiguity that returns the
@@ -225,7 +225,7 @@ func TestOutpostAPI(t *testing.T) {
 // mapInterfaceErr's component field before its own fix. Two locations sharing
 // a name is legal under #627 (one root, one nested), so this is a routine
 // state, not a corrupted one, and must 404 (#1134), not 500. Skipped under -short.
-func TestOutpostCreateWithAmbiguousLocationIs404(t *testing.T) {
+func TestOutpostCreateWithAmbiguousLocationIs409(t *testing.T) {
 	t.Parallel()
 	dsn := seededDSN(t)
 	ctx := context.Background()
@@ -259,8 +259,8 @@ func TestOutpostCreateWithAmbiguousLocationIs404(t *testing.T) {
 	}
 
 	status, body := c.send(ownerTok, http.MethodPost, "/outposts", map[string]any{"name": "site-d", "location": "dup-loc"})
-	if status != http.StatusNotFound {
-		t.Fatalf("create outpost with ambiguous location status = %d, want 404\nbody: %s", status, body)
+	if status != http.StatusConflict {
+		t.Fatalf("create outpost with ambiguous location status = %d, want 409\nbody: %s", status, body)
 	}
 	if !strings.Contains(string(body), "dup-loc") {
 		t.Fatalf("404 body = %s, want it to name the ambiguous reference", body)
@@ -269,7 +269,7 @@ func TestOutpostCreateWithAmbiguousLocationIs404(t *testing.T) {
 	// Same refusal on the patch path (UpdateOutpost calls the same resolver).
 	c.do(ownerTok, http.MethodPost, "/outposts", map[string]any{"name": "site-e"}, http.StatusCreated)
 	status, body = c.send(ownerTok, http.MethodPatch, "/outposts/site-e", map[string]any{"location": "dup-loc"})
-	if status != http.StatusNotFound {
-		t.Fatalf("patch outpost with ambiguous location status = %d, want 404\nbody: %s", status, body)
+	if status != http.StatusConflict {
+		t.Fatalf("patch outpost with ambiguous location status = %d, want 409\nbody: %s", status, body)
 	}
 }
