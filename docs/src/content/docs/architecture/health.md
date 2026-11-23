@@ -21,9 +21,9 @@ code say `health` and `reachability` the same way, and this page follows them.
 :::note[Partial]
 Built today: the **`alarm`** table (component-local, impairing its component wholesale), **`impact`**
 on a `system_slot`, the **rollup** from component through system to location, and the **recorded
-transition history**. Three reads serve it: the two explanations
-(`GET /systems/{name}/health` and `GET /locations/{name}/health`) and the bulk health read
-(`GET /systems:health`, #653), alongside the alarm write surface on a component, and alarms are
+transition history**. Four reads serve it: the three explanations
+(`GET /systems/{name}/health`, `GET /locations/{name}/health` and `GET /components/{name}/health`) and the bulk
+health read (`GET /systems:health`, #653), alongside the alarm write surface on a component, and alarms are
 also raised and cleared by [event rules](/architecture/alarms-actions/#the-event_rule) (#819), the
 official `reachability-lost` among them, so an unplugged component moves its system with nobody
 writing anything. Severity is a [ranked catalog](/architecture/alarms-actions/#severity-a-catalog-of-named-levels):
@@ -41,7 +41,7 @@ preference.
 
 `GET /systems/{name}/health` is the **explanation**: the health plus every slot the system needs,
 whether it is impaired, what an impaired slot costs the system, which assigned components are down,
-the alarms that took them down, and thirty days of recorded transitions. It is what a panel opens
+the alarms that took them down, and the recorded transitions (the last thirty days unless the caller sets `since` and `until`). It is what a panel opens
 into, and it is expensive by design, because explaining is the job.
 
 `GET /systems:health` (`list-system-health`) is the **health**, in bulk: one `{system, health}` entry
@@ -294,7 +294,7 @@ remain the source for history**; a missing trigger can cost an **edge**, never a
 
 ## Reading health
 
-Two reads, both scope-injected, both a non-disclosing 404 for an owner outside the caller's scope
+Three reads, each scope-injected and each a non-disclosing 404 for an owner outside the caller's scope
 ([API](/architecture/api/#health-and-why)).
 
 **A system's report** is the health, every slot it needs filled, and for an impaired slot the
@@ -306,8 +306,16 @@ down** (nobody assigned, or fewer assigned than the quorum wants) names no alarm
 **A location's report** is the health plus every system beneath it with its own health, a map
 rather than a duplicated explanation.
 
-Both reports carry the **recorded transitions** over the last 30 days, oldest first, one entry per
-change, never a sample: the availability strip's data and the answer to "since when".
+**A component's report** (`GET /components/{name}/health`) is the same envelope with no slots and no
+systems: the component's own health, from its active alarms, beside the edges that got it there.
+`omniglass component health list <name>` reads it from the CLI.
+
+All three reports carry the **recorded transitions**, oldest first, one entry per change, never a
+sample: the availability strip's data and the answer to "since when". The range is `since` and
+`until` (RFC 3339) on each route, defaulting to the last 30 days, so a range picker can drive them;
+`since` after `until` is a 400. When the caller bounded the range's start (a `since`, or one derived from an `until`), `carried_in`
+is the health in force when it opened, absent on the default window; `first_recorded_at` says when
+the owner was first recorded and is absent if never.
 
 ## The alarm: what is wrong with one component
 

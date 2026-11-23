@@ -1146,7 +1146,7 @@ user directory's readers.
   message?}`, the events carrying the alarm merged with its audit rows
   ([the timeline](/architecture/alarms-actions/#the-alarms-timeline)).
 
-The reports are one shape over two owners:
+The reports are one shape over three owners:
 
 - `GET /systems/{name}/health` (`system:read`) returns its `health` (`healthy` / `incomplete` /
   `degraded` / `outage`, in rank order, where `incomplete` is a slot short because its hardware was
@@ -1158,8 +1158,19 @@ The reports are one shape over two owners:
   different job for the operator.
 - `GET /locations/{name}/health` (`location:read`) returns the same envelope with `systems` filled
   instead: every system placed **anywhere** beneath the location, with its health, as the drill-down.
-- `transitions` is the **recorded edges** over the last 30 days, oldest first, each `{ts, health}`: one
-  entry per change, never a sample.
+- `GET /components/{name}/health` (`component:read`) returns the same envelope for one component:
+  `health` is its own live health (`unknown` for a device nothing has observed), `slots` and
+  `systems` are empty, and `transitions` are its recorded edges. Out of scope is a non-disclosing 404.
+- `transitions` is the **recorded edges** inside the range, oldest first, each `{ts, health}`: one
+  entry per change, never a sample. All three reads take `since` and `until` (RFC 3339); the default
+  is the last 30 days (measured on the database's clock), an absent `since` with an `until` is the
+  30 days before it, and `since` after `until` is a **400**. A range holds only edges recorded
+  inside it. A quiet range is empty, so when the caller bounded the range's start `carried_in` names the
+  health in force when it opened (the newest edge strictly before that start, whether an explicit
+  `since` or the one derived from an `until` alone; absent when nothing was recorded before it, and
+  absent on the default window), which lets a timeline draw the stretch before the first edge.
+  `first_recorded_at` is when the owner's health was first recorded (absent if never), so a reader can
+  tell a young owner from a quiet one.
 - `GET /systems/{name}/members` (`system:read`) carries each member's own `component_health`, the
   same recorded value a fleet view dot reads. It is the per-system read of the members' health, so a
   system's view polls it with the system's health report rather than the whole fleet view
@@ -1172,8 +1183,8 @@ The reports are one shape over two owners:
   at 500. A system's health history explains its unhealthy stretches with it, one request however many members the
   system has.
 
-Both resolve their owner **within the caller's scope first** (an out-of-scope system or location is a
-**non-disclosing 404**), and **neither read writes anything**: the health served is computed from the
+All three resolve their owner **within the caller's scope first** (an out-of-scope system, location or component is a
+**non-disclosing 404**), and **no read writes anything**: the health served is computed from the
 very rows served beside it, so a report can never disagree with its own evidence
 ([ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain)).
 
@@ -1182,6 +1193,13 @@ very rows served beside it, so a report can never disagree with its own evidence
 Every read above answers "what is this row". A **view** answers "what does this screen need", and it
 earns its own tier only when composing the entity reads in the browser would be the wrong shape.
 
+- `GET /search?q=&limit=` (`location:read`, the floor of every fleet reader; the component group also needs
+  `component:read`) is the read behind the command palette (#2444): up to `limit` (default 8, at most 20)
+  locations, systems and components whose name or label holds `q`, best match first, and catalog entries
+  (products, drivers, calc rules, event rules, metrics) each only for a caller holding that catalog's read
+  permission. Each fleet kind is read through its own scope by the Storage Gateway's scoped list walk, with the
+  match and the limit applied in the database, so nothing outside the caller's scope is found. A hit carries
+  its `location_path` (the locations above it) so same-named components are told apart.
 - `GET /views/fleet` (`location:read`) is the read behind Explore: every location flat
   with its `parent` and `health`, every system with its `location` and `health`, and one **dot**
   per component in each system. A dot is `{component, name, health, primary, shared}` and nothing

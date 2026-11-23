@@ -831,6 +831,27 @@ components:
         - body
         - created_at
       type: object
+    AssistantOmnibotFacts:
+      additionalProperties: false
+      properties:
+        mode:
+          description: "live: a model answers any question; replay: the server plays a recording, which answers only its prompts; none: omnibot cannot run here"
+          enum:
+            - live
+            - replay
+            - none
+          type: string
+        prompts:
+          description: The questions a recording answers, in recorded order; empty unless mode is replay
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+      required:
+        - mode
+        - prompts
+      type: object
     AssistantSettings:
       additionalProperties: false
       properties:
@@ -5333,6 +5354,13 @@ components:
           format: uri
           readOnly: true
           type: string
+        carried_in:
+          description: "The health in force when the range opened: the last recorded edge before its start. Present when the caller bounded the start (an explicit since, or the one derived from until); absent on the default window, or when nothing was recorded before it. A timeline draws the stretch before the first transition from it"
+          type: string
+        first_recorded_at:
+          description: When this owner's health was first recorded; absent if never. How long it has been watched, whatever the range
+          format: date-time
+          type: string
         health:
           description: "healthy, incomplete, degraded, or outage: the rollup of the slots or systems served beside it. incomplete is a commissioning gap, a slot short because the hardware was never installed rather than because installed hardware is failing, and it ranks between healthy and degraded"
           type: string
@@ -6116,8 +6144,12 @@ components:
           type:
             - array
             - "null"
+        omnibot:
+          $ref: "#/components/schemas/AssistantOmnibotFacts"
+          description: What omnibot is answering from, so a client can say so before the first question
       required:
         - conversations
+        - omnibot
       type: object
     ListCalcRulesOutputBody:
       additionalProperties: false
@@ -11305,6 +11337,94 @@ components:
         - recheck_minutes
         - recheck_grace_minutes
       type: object
+    SearchCatalogBody:
+      additionalProperties: false
+      properties:
+        detail:
+          description: "A short qualifier: a product's vendor, a driver's version, a metric's unit"
+          type: string
+        kind:
+          description: Which catalog the entry belongs to; the console opens its drawer on that catalog's page
+          enum:
+            - product
+            - driver
+            - calc_rule
+            - event_rule
+            - metric
+          type: string
+        label:
+          description: The entry's display label
+          type: string
+        name:
+          description: The entry's name, its address in the catalog
+          type: string
+      required:
+        - kind
+        - name
+      type: object
+    SearchEntityBody:
+      additionalProperties: false
+      properties:
+        id:
+          description: The entity's uuid, the address its page opens at
+          type: string
+        label:
+          description: The entity's display label, when it has one
+          type: string
+        location_path:
+          description: The locations it sits under, outermost first, joined with ' / '. Empty for a component that has no location of its own and is in a system; its system field says where it is
+          type: string
+        name:
+          description: The entity's name; many components share one, the location_path tells them apart
+          type: string
+        system:
+          description: A component's primary system, when it has one
+          type: string
+      required:
+        - id
+        - name
+      type: object
+    SearchOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SearchOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        catalog:
+          description: Catalog hits across products, drivers, calc rules, event rules and metrics, best match first, at most limit of each kind
+          items:
+            $ref: "#/components/schemas/SearchCatalogBody"
+          type:
+            - array
+            - "null"
+        components:
+          items:
+            $ref: "#/components/schemas/SearchEntityBody"
+          type:
+            - array
+            - "null"
+        locations:
+          items:
+            $ref: "#/components/schemas/SearchEntityBody"
+          type:
+            - array
+            - "null"
+        systems:
+          items:
+            $ref: "#/components/schemas/SearchEntityBody"
+          type:
+            - array
+            - "null"
+      required:
+        - locations
+        - systems
+        - components
+        - catalog
+      type: object
     SecretBody:
       additionalProperties: false
       description: An encrypted credential set at one level of the fleet and inherited below it.
@@ -12030,6 +12150,14 @@ components:
           type:
             - array
             - "null"
+        served_ids:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        served_truncated:
+          type: boolean
         started:
           format: date-time
           type: string
@@ -15718,7 +15846,7 @@ paths:
       x-omniglass-permission: component:read
   /assistant/conversations:
     get:
-      description: Your own stored conversations, most recently moved first, without their messages. Owner-only. Gated by assistant:use.
+      description: "Your own stored conversations, most recently moved first, without their messages, and omnibot's mode: live, replay (the server plays a recording, with the prompts it answers) or none. Owner-only. Gated by assistant:use."
       operationId: list-assistant-conversations
       responses:
         "200":
@@ -15842,7 +15970,7 @@ paths:
       x-omniglass-permission: assistant:use
   /assistant/conversations/{name}:run:
     post:
-      description: "Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {\"stopped\": \"step_limit\", \"steps\": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. The run talks to the model the assistant settings configure, read as it starts; with none, the server's recording, if it has one. A server with no model, or a configured model whose key no longer resolves, is a 503. Gated by assistant:use."
+      description: "Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {\"stopped\": \"step_limit\", \"steps\": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. The run talks to the model the assistant settings configure, read as it starts; with none, the server's recording, if it has one. A recording answers only the prompts it was recorded for: any other question is a 422 (type urn:omniglass:omnibot-replay-unmatched) that touches nothing; the list route names the prompts. A server with no model, or a configured model whose key no longer resolves, is a 503. Gated by assistant:use."
       operationId: run-assistant-conversation
       parameters:
         - description: Your conversation's name
@@ -18005,6 +18133,56 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List a component's recent events
+      x-omniglass-mcp: {}
+      x-omniglass-permission: component:read
+  /components/{name}/health:
+    get:
+      description: "The component's own current health (healthy, degraded or outage from its active alarms; unknown for a device nothing has observed) beside the recorded edges that got it there, in the shape the system health read returns: slots and systems are empty, transitions are one entry per change inside since..until (default the last 30 days), oldest first. since after until is a 400. Gated by component:read; an out-of-scope component is a non-disclosing 404."
+      operationId: get-component-health
+      parameters:
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
+            examples:
+              - hq.west.level-2.boardroom-a.$comp.videobar-1
+            type: string
+        - description: Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent
+          explode: false
+          in: query
+          name: since
+          schema:
+            description: Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent
+            examples:
+              - "2026-11-01T00:00:00Z"
+            format: date-time
+            type: string
+        - description: Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since
+          explode: false
+          in: query
+          name: until
+          schema:
+            description: Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since
+            examples:
+              - "2026-11-23T00:00:00Z"
+            format: date-time
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FleetHealthOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Read a component's health
       x-omniglass-mcp: {}
       x-omniglass-permission: component:read
   /components/{name}/identity-bindings:
@@ -20375,7 +20553,7 @@ paths:
       x-omniglass-mcp: {}
       x-omniglass-permission: location:read
     post:
-      description: Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. Gated by location:create.
+      description: "Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. The parent resolves within the caller's location:read scope before its location:create scope: a parent the caller cannot read is the same 404 as one that does not exist, so the answer never discloses a location outside the caller's read, and a parent the caller can read but not create under is a 403. Gated by location:create."
       operationId: create-location
       requestBody:
         content:
@@ -20484,7 +20662,7 @@ paths:
       x-omniglass-permission: location:update
   /locations/{name}/health:
     get:
-      description: The location's current health, worst-wins over every system placed anywhere beneath it, with those systems and their health as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+      description: The location's current health, worst-wins over every system placed anywhere beneath it, with those systems and their health as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges inside since..until (default the last 30 days); since after until is a 400. Gated by location:read; an out-of-scope location is a non-disclosing 404.
       operationId: get-location-health
       parameters:
         - description: The location's name, or a dotted address (e.g. boi.17c.415a)
@@ -20493,6 +20671,26 @@ paths:
           required: true
           schema:
             description: The location's name, or a dotted address (e.g. boi.17c.415a)
+            type: string
+        - description: Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent
+          explode: false
+          in: query
+          name: since
+          schema:
+            description: Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent
+            examples:
+              - "2026-11-01T00:00:00Z"
+            format: date-time
+            type: string
+        - description: Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since
+          explode: false
+          in: query
+          name: until
+          schema:
+            description: Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since
+            examples:
+              - "2026-11-23T00:00:00Z"
+            format: date-time
             type: string
       responses:
         "200":
@@ -22581,6 +22779,49 @@ paths:
           description: Error
       summary: List roles
       x-omniglass-permission: role:read:admin
+  /search:
+    get:
+      description: The read behind the command palette. Returns up to limit hits of each kind whose name or label holds q, case-insensitively, best match first (exact, then prefix, then the rest by name). Locations, systems and components are searched inside the caller's own read scope for each kind, so nothing outside it appears; a caller with no scope for a kind gets an empty group, not an error. Each fleet hit carries its location_path, so many components with one name are told apart. Catalog hits cover products (product:read), drivers (driver:read), calc rules and event rules (rule:read) and metrics (metric_type:read), each only for a caller who holds that permission. Gated by location:read, the floor of every fleet reader; the component group also needs component:read.
+      operationId: search
+      parameters:
+        - description: The text to find, matched case-insensitively anywhere in a name or label
+          explode: false
+          in: query
+          name: q
+          schema:
+            description: The text to find, matched case-insensitively anywhere in a name or label
+            examples:
+              - auditorium
+            maxLength: 200
+            minLength: 1
+            type: string
+        - description: The most hits returned for each kind
+          explode: false
+          in: query
+          name: limit
+          schema:
+            default: 8
+            description: The most hits returned for each kind
+            format: int64
+            maximum: 20
+            minimum: 1
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Find locations, systems, components and catalog entries by name
+      x-omniglass-conditional-permission: component:read
+      x-omniglass-permission: location:read
   /secret-types:
     get:
       description: Lists the secret_type shapes a secret can take, for the create form. Gated by secret:read.
@@ -23858,7 +24099,7 @@ paths:
       x-omniglass-permission: system:read
   /systems/{name}/health:
     get:
-      description: "The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404."
+      description: "The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Transitions are the recorded edges inside since..until (default the last 30 days), one entry per change; since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404."
       operationId: get-system-health
       parameters:
         - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
@@ -23867,6 +24108,26 @@ paths:
           required: true
           schema:
             description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
+            type: string
+        - description: Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent
+          explode: false
+          in: query
+          name: since
+          schema:
+            description: Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent
+            examples:
+              - "2026-11-01T00:00:00Z"
+            format: date-time
+            type: string
+        - description: Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since
+          explode: false
+          in: query
+          name: until
+          schema:
+            description: Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since
+            examples:
+              - "2026-11-23T00:00:00Z"
+            format: date-time
             type: string
       responses:
         "200":

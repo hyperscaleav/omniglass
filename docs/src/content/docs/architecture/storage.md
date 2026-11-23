@@ -692,6 +692,11 @@ code). One pass writes one sample per key and instance, at the pass's end:
 - **`retention-behind`** for `metric_trend compaction` and `metric_block compaction`, and
   **`retention-window-days`** (instance `metric`), when the pass ran the compactions (it skips them on
   a metric window out of range).
+- **A lane that stops reporting is written 0.** A lane drops out of a pass when a type override is
+  removed, the override read fails for a pass, a lane's stored window is out of range, or the metric
+  window is out of range (no compactions run). The loop remembers the lanes the last pass flagged
+  behind (seeded at start from the newest stored flags) and writes `retention-behind` = 0 for any of them the pass does not report, so the lane's
+  warning clears instead of firing on its last 1 with no fresh sample to end it (#1673).
 - **`retention-pass-duration`** (seconds), **`retention-pass-failure-count`**, and
   **`metric-partition-created-count`** and **`metric-partition-dropped-count`**, the days the pass
   created ahead and dropped whole.
@@ -726,7 +731,7 @@ behind, since it did not reach its window. So a failure count above zero is a fa
 server log, and a behind flag that holds is a lane the budget cannot keep up with. The seeded
 **`retention-behind`** rule reads the second: a lane flagged 1 for five minutes, several catch-up
 passes, opens a warning alarm on the server's component naming the lane, and the first pass that
-reads it 0 clears it (a lane that leaves the report while flagged keeps its alarm open, #1673). The
+reads it 0 clears it (a lane that leaves the report while flagged is written 0, so its alarm clears too; the loop seeds the flagged set from the stored flags at start, so a restart keeps that, #1673). The
 four INFO lines a pass logs stay. Only the behind flag and the failure count are loss readings, 0
 healthy. The rest are counts and levels with no zero to aim at: the deleted counts, the duration and
 the partition roll measure the work a pass did, the mark lags sit at their healthy trail (above)

@@ -13,7 +13,7 @@ describe("CalcRuleLink", () => {
       </Router>
     ));
     const a = screen.getByRole("link", { name: "room-mean" });
-    expect(a.getAttribute("href")).toBe("/calc-rules?rule=11111111-1111-7111-8111-111111111111");
+    expect(a.getAttribute("href")).toBe("/calc-rules?open=11111111-1111-7111-8111-111111111111");
     expect(screen.getByText(/calc rule/)).toBeTruthy();
   });
 });

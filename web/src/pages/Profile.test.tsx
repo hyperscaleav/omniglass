@@ -203,3 +203,20 @@ describe("Profile token lifetime", () => {
     expect(createBtn().disabled).toBe(false);
   });
 });
+
+// The permission list is long for an admin, and the count is what most visits
+// want: it sits closed under a disclosure that says how many (#2485).
+describe("Profile access", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("shows the permission count closed, and the list on opening", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response("[]", { status: 200, headers: { "Content-Type": "application/json" } }));
+    mount(false);
+    const trigger = await screen.findByRole("button", { name: "Permissions (1)" });
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByText(">")).toBeNull();
+    fireEvent.click(trigger);
+    await waitFor(() => expect(screen.getByText(">")).toBeTruthy());
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+  });
+});

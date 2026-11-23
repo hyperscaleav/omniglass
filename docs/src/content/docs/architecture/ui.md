@@ -79,9 +79,10 @@ model behind it is pure, in `lib/detail.ts` (where a location lands, the path th
 location once, the slots a component fills) and `lib/outline.ts` (`rootAt`). Since ADR-0129
 these faces ARE the identity routes' default, and since #800 the ONLY faces: one way to
 look, one altitude rule (Explore drills the location tree, systems open full screen,
-components open in blades), editing through the one `EntityForm` (ADR-0137). The side
-panel is the glance (health, why, context, identity and tags) and the configuration
-panels stay on Configure (ADR-0139). The classic detail face is retired; `?view=detail` is
+components open in blades), editing through the one `EntityForm` (ADR-0137). A fleet
+blade renders its detail page's own body (`ComponentDetail`, `SystemDetail`, `LocationDetail`,
+ADR-2423, reversing ADR-0139's glance): the host holds only the active tab, the edit intent and
+where a Delete leaves to. The classic detail face is retired; `?view=detail` is
 ignored and `?edit=1` lands Configure already editing.
 
 While a blade is open the shell (sidebar, top bar, banners and the routed page, the
@@ -237,7 +238,7 @@ the last crumb, the current page, has none and renders as plain text marked `ari
 ([ADR-0120](/architecture/decisions/#adr-0120-the-edit-face-is-a-url-fact) established the rule;
 [ADR-0132](/architecture/decisions/#adr-0132-configure-is-the-one-deep-editor) retargets it):
 `?edit=1` beside a fleet address lands the detail view's Configure tab already editing, and beside
-an identity blade's id param (`?u=<id>&edit=1`) opens that blade editing, both behind the same
+an identity blade's id param (`?open=<id>&edit=1`) opens that blade editing, both behind the same
 `<resource>:update` permission the Edit button is behind; without it the link lands read-only.
 Leaving edit (Cancel or Save) strips the param via history replace, so a refresh mid-edit keeps the
 mode while Back never re-enters an edit the operator left. One hook (`web/src/lib/editurl.ts`) owns

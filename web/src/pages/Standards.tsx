@@ -1,6 +1,6 @@
 import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
-import { useNavigate, useSearchParams } from "@solidjs/router";
+import { useNavigate } from "@solidjs/router";
 import TemplateNotice from "../components/TemplateNotice";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
@@ -59,16 +59,11 @@ const columns: FlatColumn<Standard>[] = [
 
 export default function Standards() {
   const me = useMe();
-  const [params] = useSearchParams();
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards }));
 
   const rows = createMemo(() => standards.data ?? []);
-  // ?open=<name> opens a standard's blade: a standard created from a template lands here
-  // (#1329), its ?from= carried to the notice above the list.
-  const openId = () => {
-    const v = params.open;
-    return (Array.isArray(v) ? v[0] : v) || undefined;
-  };
+  // ?open=<name> opens a standard's blade (the list's drawer address): a standard
+  // created from a template lands here (#1329), its ?from= carried to the notice.
 
   return (
     <div class="og-stack flex flex-col">
@@ -90,7 +85,6 @@ export default function Standards() {
           // Address a row by its kebab name: globally unique, and what the API
           // and CLI accept (the write paths resolve either form).
           rowId: (s) => s.name,
-          openId,
           blades: { registry: { standard: standardBlade }, rootKind: "standard" },
           create: can(me.data, "standard", "create")
             ? { label: "New standard", can: () => can(me.data, "standard", "create"), body: (ctx) => <CreateStandardBody onCreated={ctx.select} close={ctx.close} /> }
