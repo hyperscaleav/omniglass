@@ -18,6 +18,7 @@ func mcpExposed(hints ...tooldef.Hints) map[string]any {
 	for _, x := range hints {
 		h.Destructive = h.Destructive || x.Destructive
 		h.OpenWorld = h.OpenWorld || x.OpenWorld
+		h.Writes = h.Writes || x.Writes
 	}
 	return map[string]any{tooldef.Extension: h}
 }

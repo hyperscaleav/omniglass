@@ -30645,6 +30645,9 @@
           }
         },
         "summary": "Create a plan of locations, systems and components in one write",
+        "x-omniglass-mcp": {
+          "writes": true
+        },
         "x-omniglass-permission": "location:read"
       }
     },

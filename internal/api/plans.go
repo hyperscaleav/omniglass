@@ -10,6 +10,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/google/uuid"
 
+	"github.com/hyperscaleav/omniglass/internal/mcp/tooldef"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/template"
 )
@@ -335,6 +336,7 @@ func appliedBody(out *applyPlanOutput, in *applyPlanInput, made *storage.Planned
 func registerPlanRoutes(api huma.API, a *authenticator, gw storage.Gateway, cat *template.Catalog) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "apply-plan",
+		Extensions:    mcpExposed(tooldef.Hints{Writes: true}),
 		Method:        http.MethodPost,
 		Path:          "/plans:apply",
 		DefaultStatus: http.StatusCreated,

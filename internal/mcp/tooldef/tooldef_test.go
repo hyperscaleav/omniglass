@@ -33,6 +33,8 @@ func TestAnnotate(t *testing.T) {
 		{"a stamp marks a read that touches the network open-world", "GET", "outpost:read", tooldef.Hints{OpenWorld: true}, tooldef.Annotations{ReadOnly: true, Idempotent: true, OpenWorld: true}},
 		{"a patch read-gated is still a write", "PATCH", "rule:read", tooldef.Hints{}, tooldef.Annotations{Destructive: true}},
 		{"a delete read-gated is still a write", "DELETE", "rule:read", tooldef.Hints{}, tooldef.Annotations{Destructive: true, Idempotent: true}},
+		{"a stamp marks a read-gated post that writes (a plan apply) as a write", "POST", "location:read", tooldef.Hints{Writes: true}, tooldef.Annotations{}},
+		{"a writes stamp on a create changes nothing", "POST", "component:create", tooldef.Hints{Writes: true}, tooldef.Annotations{}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			got, err := tooldef.Annotate(c.method, c.permission, c.hints)
@@ -51,6 +53,9 @@ func TestAnnotate(t *testing.T) {
 func TestAnnotateRefusesAContradiction(t *testing.T) {
 	if _, err := tooldef.Annotate("GET", "component:read", tooldef.Hints{Destructive: true}); err == nil {
 		t.Error("a destructive hint on a read was accepted")
+	}
+	if _, err := tooldef.Annotate("GET", "component:read", tooldef.Hints{Writes: true}); err == nil {
+		t.Error("a writes hint on a get was accepted")
 	}
 	if _, err := tooldef.Annotate("TRACE", "", tooldef.Hints{}); err == nil {
 		t.Error("an unknown method was accepted")
@@ -92,6 +97,7 @@ func TestParseHints(t *testing.T) {
 		{`{}`, tooldef.Hints{}, true},
 		{`{"destructive":true}`, tooldef.Hints{Destructive: true}, true},
 		{`{"open_world":true}`, tooldef.Hints{OpenWorld: true}, true},
+		{`{"writes":true}`, tooldef.Hints{Writes: true}, true},
 		{`{"read_only":true}`, tooldef.Hints{}, false},
 		{`{"destructive":false}`, tooldef.Hints{}, false},
 		{`true`, tooldef.Hints{}, false},
