@@ -157,7 +157,7 @@ func registerPlatformSimulationView(api huma.API, a *authenticator, gw storage.G
 			for _, d := range w.Devices {
 				ids = append(ids, d.ComponentID)
 			}
-			places, err := gw.ComponentPlaces(ctx, ids)
+			places, err := gw.ComponentPlaces(ctx, ids, a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "location", "read"))
 			if err != nil {
 				log.ErrorContext(ctx, "read platform simulation places", "outpost", w.Outpost, "error", err)
 				return nil, huma.Error500InternalServerError("read platform simulation view")

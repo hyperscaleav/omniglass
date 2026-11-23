@@ -581,7 +581,7 @@ func (UnimplementedGateway) WithSimAddressLock(_ context.Context, fn func() erro
 func (UnimplementedGateway) OutpostSimDevices(context.Context, string, scope.Set) ([]SimDevice, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) ComponentPlaces(context.Context, []string) (map[string]ComponentPlace, error) {
+func (UnimplementedGateway) ComponentPlaces(context.Context, []string, scope.Set, scope.Set) (map[string]ComponentPlace, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) WorklistChanges(context.Context) (<-chan string, error) {

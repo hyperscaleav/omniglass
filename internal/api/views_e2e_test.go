@@ -714,7 +714,8 @@ func TestPlatformSimulationViewAPI(t *testing.T) {
 	}
 	defer gw.Close()
 	r := &platformViewRig{ctx: ctx, dsn: dsn, owner: bootstrapOwnerTok(t, ctx, gw)}
-	r.role(t, "loop-sim-reader", "simulation:read", "component:read")
+	r.role(t, "loop-sim-reader", "simulation:read", "component:read", "system:read", "location:read")
+	r.role(t, "loop-sim-blind", "simulation:read", "component:read")
 	r.role(t, "loop-component-reader", "component:read")
 	all := scope.Set{All: true}
 	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "site-a"}, all, all); err != nil {
@@ -796,6 +797,7 @@ func TestPlatformSimulationViewAPI(t *testing.T) {
 	located := userWithGrants(t, ctx, dsn, "loop-located", []grant{{role: "loop-sim-reader", scopeKind: "location", scopeID: hq}})
 	r.c.do(located, http.MethodGet, path, nil, http.StatusNotFound)
 	reader := userWithGrants(t, ctx, dsn, "loop-reader", []grant{{role: "loop-sim-reader", scopeKind: "all"}})
+	blind := userWithGrants(t, ctx, dsn, "loop-blind", []grant{{role: "loop-sim-blind", scopeKind: "all"}})
 
 	// Before the ring has bracketed anything, an admin reads no outpost.
 	if w := read(r.owner); len(w.Outposts) != 0 || w.WindowSeconds != 120 || w.BracketSeconds != 60 {
@@ -874,6 +876,11 @@ func TestPlatformSimulationViewAPI(t *testing.T) {
 	// #1724: a repeated name reads apart by the system and places it sits in.
 	if d := n.Devices[0]; d.System != "annex-av" || len(d.LocationPath) != 1 || d.LocationPath[0] != "annex" {
 		t.Fatalf("device place = %q at %v, want annex-av at annex", d.System, d.LocationPath)
+	}
+	// Without system:read and location:read the device is still there, but it
+	// names neither its system nor its place.
+	if b := read(blind); len(b.Outposts) != 1 || len(b.Outposts[0].Devices) != 1 || b.Outposts[0].Devices[0].System != "" || len(b.Outposts[0].Devices[0].LocationPath) != 0 {
+		t.Fatalf("blind reader's devices = %+v, want no system or place names", b.Outposts)
 	}
 
 	// A handler with no ring (no simulator anywhere) reads no outpost.

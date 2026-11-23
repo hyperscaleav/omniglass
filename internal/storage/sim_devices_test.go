@@ -125,14 +125,17 @@ func TestComponentPlaces(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 	all := scope.Set{All: true}
+	locID := map[string]string{}
 	for _, l := range []storage.LocationSpec{
 		{Name: "hq", LocationType: "campus"},
 		{Name: "level-2", LocationType: "building", ParentName: strptr("hq")},
 		{Name: "annex", LocationType: "campus"},
 	} {
-		if _, err := gw.CreateLocation(ctx, "", l, all, all); err != nil {
+		created, err := gw.CreateLocation(ctx, "", l, all, all)
+		if err != nil {
 			t.Fatalf("create location %s: %v", l.Name, err)
 		}
+		locID[l.Name] = created.ID
 	}
 	for _, s := range []storage.SystemSpec{{Name: "board-1", LocationName: strptr("level-2")}, {Name: "board-2", LocationName: strptr("annex")}} {
 		if _, err := gw.CreateSystem(ctx, "", s, all, all); err != nil {
@@ -153,7 +156,7 @@ func TestComponentPlaces(t *testing.T) {
 	b := mk(storage.ComponentSpec{Name: "amp-1", LocationName: strptr("annex"), SystemName: strptr("board-2")})
 	loose := mk(storage.ComponentSpec{Name: "loose-1"})
 
-	got, err := gw.ComponentPlaces(ctx, []string{a, b, loose, "00000000-0000-0000-0000-000000000000"})
+	got, err := gw.ComponentPlaces(ctx, []string{a, b, loose, "00000000-0000-0000-0000-000000000000"}, all, all)
 	if err != nil {
 		t.Fatalf("component places: %v", err)
 	}
@@ -168,5 +171,29 @@ func TestComponentPlaces(t *testing.T) {
 	}
 	if _, ok := got["00000000-0000-0000-0000-000000000000"]; ok || len(got) != 3 {
 		t.Fatalf("places = %+v, want only the three real components", got)
+	}
+
+	// No system or location read: the component is still there, but it names
+	// neither its system nor its place.
+	none, err := gw.ComponentPlaces(ctx, []string{a, b}, scope.Set{}, scope.Set{})
+	if err != nil {
+		t.Fatalf("component places without read: %v", err)
+	}
+	for _, id := range []string{a, b} {
+		if p := none[id]; p.System != "" || len(p.Path) != 0 {
+			t.Fatalf("no system or location read: %+v, want no names", p)
+		}
+	}
+	// A location read rooted at level-2 names level-2 but not the hq above it,
+	// and no system read still hides the system.
+	rooted, err := gw.ComponentPlaces(ctx, []string{a, b}, scope.Set{}, scope.Set{IDs: []string{locID["level-2"]}})
+	if err != nil {
+		t.Fatalf("component places rooted: %v", err)
+	}
+	if p := rooted[a]; p.System != "" || len(p.Path) != 1 || p.Path[0] != "level-2" {
+		t.Fatalf("rooted read of first amp-1 = %+v, want only level-2", p)
+	}
+	if p := rooted[b]; len(p.Path) != 0 {
+		t.Fatalf("rooted read of second amp-1 = %+v, want no place outside the scope", p)
 	}
 }
