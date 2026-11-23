@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
@@ -36,7 +37,7 @@ func (f *healthFixture) mustComponent(t *testing.T, ctx context.Context, name st
 
 func (f *healthFixture) report(t *testing.T, ctx context.Context, system string) *storage.HealthReport {
 	t.Helper()
-	rep, err := f.gw.SystemHealth(ctx, system, storage.HealthRange{}, f.all)
+	rep, err := f.gw.SystemHealth(ctx, system, storage.HealthRange{}, f.all, f.all)
 	if err != nil {
 		t.Fatalf("system health %s: %v", system, err)
 	}
@@ -126,5 +127,33 @@ func TestSlottedMemberNamesItsSlotAndTheReasonNamesTheSlot(t *testing.T) {
 	}
 	if m := member(rep, "amp-2"); m == nil || !m.OutsideSlot || len(m.Alarms) != 1 {
 		t.Errorf("amp-2 = %+v, want outside a slot with its alarm", m)
+	}
+}
+
+// A caller who may read the system but none of its components gets the verdict
+// and its slots, never a member's name, id or alarms: the member list follows
+// the component read scope, the same rule the fleet view's dots follow (#458).
+func TestSystemHealthMembersStayInComponentScope(t *testing.T) {
+	t.Parallel()
+	f := newHealthFixture(t)
+	ctx := context.Background()
+	f.handBuilt(t, ctx)
+	if _, err := f.gw.RaiseAlarm(ctx, "", "amp-1", storage.AlarmSpec{Severity: "high", Message: "amplifier powered off"}); err != nil {
+		t.Fatalf("raise alarm: %v", err)
+	}
+
+	rep, err := f.gw.SystemHealth(ctx, "hand", storage.HealthRange{}, f.all, scope.Set{})
+	if err != nil {
+		t.Fatalf("system health with no component read: %v", err)
+	}
+	if len(rep.Members) != 0 {
+		t.Fatalf("members = %+v, want none for a caller who may read no component", rep.Members)
+	}
+	if rep.Verdict != "healthy" {
+		t.Errorf("verdict %q, want healthy: the verdict does not depend on who reads it", rep.Verdict)
+	}
+
+	if m := member(f.report(t, ctx, "hand"), "amp-1"); m == nil {
+		t.Fatal("a caller who may read every component does not see amp-1")
 	}
 }

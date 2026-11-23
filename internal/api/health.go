@@ -268,7 +268,7 @@ func registerHealthRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		if err != nil {
 			return nil, err
 		}
-		rep, err := gw.SystemHealth(ctx, in.Name, rng, a.scopeFor(ctx, "system", "read"))
+		rep, err := gw.SystemHealth(ctx, in.Name, rng, a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "component", "read"))
 		if err != nil {
 			return nil, mapSystemErr(err)
 		}

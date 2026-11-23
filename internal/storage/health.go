@@ -1139,7 +1139,7 @@ func splitHealthSlots(rs []resolvedSlot) (unconditional []health.Slot, choices [
 // (each with Active false, HealthSlot), so the verdict can be healthy while
 // the list beside it shows impaired rows, and Active is what tells the two
 // apart rather than that being a disagreement.
-func (p *PG) SystemHealth(ctx context.Context, systemName string, rng HealthRange, read scope.Set) (*HealthReport, error) {
+func (p *PG) SystemHealth(ctx context.Context, systemName string, rng HealthRange, read, compRead scope.Set) (*HealthReport, error) {
 	// Resolved once, here, rather than through ownerInScope (which does the
 	// same lookup but discards the id): every read below, including
 	// healthTransitions, binds sys.ID, never re-derived from systemName once
@@ -1161,7 +1161,7 @@ func (p *PG) SystemHealth(ctx context.Context, systemName string, rng HealthRang
 	unconditional, choices, choicesByID := splitHealthSlots(slots)
 	rep.Verdict = health.SystemValueWith(unconditional, choices).String()
 	rep.Reason = health.SystemReason(unconditional, choices)
-	if rep.Members, err = p.healthMembers(ctx, p.pool, sys.ID); err != nil {
+	if rep.Members, err = p.healthMembers(ctx, p.pool, sys.ID, compRead); err != nil {
 		return nil, err
 	}
 	// The same choices splitHealthSlots just grouped for the verdict name
@@ -1205,16 +1205,32 @@ type systemMember struct {
 	slot     string // the name of the slot it fills here; empty when none
 }
 
-// systemMembersOf lists a system's members, ordered by name, each with the slot
-// it fills in this system (a component fills at most one per system, #626).
-func systemMembersOf(ctx context.Context, q txQuerier, systemID string) ([]systemMember, error) {
-	rows, err := q.Query(ctx, `
-		select c.id, c.name,
+// systemMembersOf lists the members of a system the caller may read, ordered by
+// name, each with the slot it fills in this system (a component fills at most
+// one per system, #626). The component scope is injected into the query through
+// the same read filter every derived component read uses, never filtered in Go
+// afterwards: a member the caller cannot read is never fetched (#458).
+func systemMembersOf(ctx context.Context, q txQuerier, systemID string, read scope.Set) ([]systemMember, error) {
+	if read.Empty() {
+		return nil, nil
+	}
+	cols := `select c.id, c.name,
 		       coalesce((select r.name from system_slot_assignment ra join system_slot r on r.id = ra.slot_id
 		                 where ra.system_id = m.system_id and ra.component_id = m.component_id
 		                 order by r.name limit 1), '')
 		from system_member m join component c on c.id = m.component_id
-		where m.system_id = $1::uuid order by c.name, c.id`, systemID)
+		where m.system_id = $1::uuid`
+	order := ` order by c.name, c.id`
+	sql, args := cols+order, []any{systemID}
+	if !read.All {
+		f := newReadFilter(componentTable, read, 2)
+		if f.With == "" {
+			return nil, nil // every scope root is malformed: nothing is in scope
+		}
+		sql = f.With + ` ` + cols + ` and ` + f.Pred("c.id") + order
+		args = append(args, f.Args...)
+	}
+	rows, err := q.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: system members %q: %w", systemID, err)
 	}
@@ -1230,12 +1246,12 @@ func systemMembersOf(ctx context.Context, q txQuerier, systemID string) ([]syste
 	return out, rows.Err()
 }
 
-// healthMembers is every member of a system for its health report: its own
+// healthMembers is every member of a system the caller may read, for its health report: its own
 // health (unknown for a component nothing has observed, as the members read and
 // the fleet view's dots say), the slot it fills, and its open alarms, slotted or
 // not (#2459). A read: it records nothing.
-func (p *PG) healthMembers(ctx context.Context, q txQuerier, systemID string) ([]HealthMember, error) {
-	members, err := systemMembersOf(ctx, q, systemID)
+func (p *PG) healthMembers(ctx context.Context, q txQuerier, systemID string, read scope.Set) ([]HealthMember, error) {
+	members, err := systemMembersOf(ctx, q, systemID, read)
 	if err != nil {
 		return nil, err
 	}

@@ -10,7 +10,10 @@ refs: [2459, 1002]
 - **Decision:** (#2459, ruled by the architect in the console review)
   1. **Shown.** `GET /systems/{name}/health` lists every member of the system with its own health,
      its open alarms, the slot it fills (`slot`) or `outside_slot` when it fills none, and a `reason`
-     line naming the slots behind the verdict. The console's system page and drawer list every
+     line naming the slots behind the verdict. The member list follows the caller's component read
+     scope, as the fleet view's dots do: a member the caller may not read is never named, though the
+     verdict and the slots are the same for everyone who may read the system. The console's system
+     page and drawer list every
      member's open alarm (labelled "impairs X", "in X" or "not in a slot"), say the reason beside the
      health, and name the members outside every slot with the action to place one in a slot.
   2. **Not rolled up.** A system's health is still decided by its slots alone: an alarm on a member
