@@ -2044,6 +2044,16 @@ export interface paths {
       error: og.addOutpostSimulationComponentResponseError["data"];
     };
   };
+  "/outposts/{name}/simulation/components:plan": {
+    get: {
+      path: { "name": string };
+      query: NonNullable<Parameters<typeof og.planOutpostSimulationComponent>[1]>;
+      body: never;
+      bodyRequired: false;
+      data: og.planOutpostSimulationComponentResponseSuccess["data"];
+      error: og.planOutpostSimulationComponentResponseError["data"];
+    };
+  };
   "/outposts/{name}/simulation/observation": {
     get: {
       path: { "name": string };

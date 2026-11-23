@@ -445,7 +445,10 @@ is a 409, a surface it does not serve a 422, and no simulator answering a 503.
 and `endpoint:create`, each in the caller's own scope) adds a simulated component: a component of a
 simulated product at the lowest free address in `127.60.0.0/16`, with the endpoint the collector reaches
 it through placed on the outpost; an outpost with no simulator connected is a 409, a product no profile
-simulates a 422. A whole simulated system is built to a standard: `GET /simulation/standards/{standard}:plan`
+simulates a 422. `GET /outposts/{name}/simulation/components:plan?product=<product>` (gated `simulation:read`)
+previews the same add without creating anything: the address and the endpoints (a driver with its inputs, a
+secret input by name, or a probe with its target) the add would make, planned as the add plans them, with
+the same refusals. It holds no address, so an add in between may take the previewed one. A whole simulated system is built to a standard: `GET /simulation/standards/{standard}:plan`
 (gated `simulation:read`) previews each of the standard's slots staffed with a simulated product that fits
 (or left short, with why), and `POST /outposts/{name}/simulation/systems` (gated `simulation:update`, and also
 needing `system:create`, `system:update`, `system:read`, `component:create`, `endpoint:create` and

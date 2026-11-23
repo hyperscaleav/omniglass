@@ -74,6 +74,18 @@ export function simulatorConnected(me: Me | null | undefined, f: SimFleet | unde
   return can(me, "simulation", "read") && f?.connected === true;
 }
 
+// planSimComponent previews a new simulated device of a product beside the
+// outpost (#2460): the address it would answer on and the driver attach the
+// simulator answers to. Creates and reserves nothing; the add-a-component flow
+// fills its endpoint from it.
+export type SimComponentPlan = S.PlanSimComponentOutputBody;
+export const simComponentPlanKey = (outpost: string, product: string) => ["simulation", "component-plan", outpost, product] as const;
+export async function planSimComponent(outpost: string, product: string): Promise<SimComponentPlan> {
+  const { data, error } = await api.GET("/outposts/{name}/simulation/components:plan", { params: { path: { name: outpost }, query: { product } } });
+  if (error) throw error;
+  return data as SimComponentPlan;
+}
+
 export async function getSimulation(): Promise<SimFleet> {
   const { data, error } = await api.GET("/simulation");
   if (error) throw error;

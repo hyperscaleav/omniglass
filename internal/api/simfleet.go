@@ -168,6 +168,81 @@ type addSimComponentOutput struct {
 	}
 }
 
+type planSimComponentInput struct {
+	Name    string `path:"name" doc:"The outpost whose simulator would serve the component"`
+	Product string `query:"product" required:"true" minLength:"1" doc:"A product a simulator profile simulates"`
+}
+
+type simPlannedEndpointBody struct {
+	Driver    string            `json:"driver,omitempty" doc:"The driver the endpoint would attach; empty for a reachability probe."`
+	Inputs    map[string]string `json:"inputs,omitempty" doc:"The driver's inputs the attach would send; a secret input holds the secret's NAME, never its value."`
+	Transport string            `json:"transport,omitempty" doc:"The transport a reachability probe would speak; empty for a driver attach."`
+	Target    string            `json:"target,omitempty" doc:"The host:port a reachability probe would reach; empty for a driver attach."`
+}
+
+type planSimComponentOutput struct {
+	Body struct {
+		Outpost   string                   `json:"outpost" doc:"The outpost whose simulator would serve the component."`
+		Product   string                   `json:"product" doc:"The simulated product planned."`
+		Address   string                   `json:"address" doc:"The loopback address the simulated component would answer on."`
+		Endpoints []simPlannedEndpointBody `json:"endpoints" doc:"The endpoints an add would create for the collector to reach it."`
+	}
+}
+
+// simOutpostConnected reads the outpost in the caller's outpost read scope and
+// the status of the simulator beside it, refusing an outpost with none
+// connected.
+func simOutpostConnected(ctx context.Context, a *authenticator, gw storage.Gateway, status func(string) (simhub.Status, bool), name string) (simhub.Status, error) {
+	if _, err := gw.GetOutpost(ctx, name, a.scopeFor(ctx, "outpost", "read")); err != nil {
+		return simhub.Status{}, mapOutpostErr(err)
+	}
+	st, seen := status(name)
+	if !seen || time.Since(st.LastSeen) > simConnectedWindow {
+		return simhub.Status{}, huma.Error409Conflict(fmt.Sprintf("no simulator is connected beside %s; start one with omniglass sim run", name))
+	}
+	return st, nil
+}
+
+// simComponentPlanner checks a profile simulates product and returns the
+// planner for one component of it: given the component's id and the
+// addresses in use, the address and endpoints an add creates, refusing a full
+// block or a profile with no surface the collector can reach. The add route
+// calls it under the address lock with the new component's id; the plan route
+// calls it with a placeholder id, since the id does not shape the plan.
+func simComponentPlanner(ctx context.Context, a *authenticator, gw storage.Gateway, product string, portOffset int) (func(id string, used map[string]bool) (simfleet.Device, error), error) {
+	store, err := simCatalog()
+	if err != nil {
+		return nil, huma.Error500InternalServerError("load simulator catalog")
+	}
+	if _, _, ok := store.ForProduct(product); !ok {
+		return nil, huma.Error422UnprocessableEntity(fmt.Sprintf("no simulator profile simulates the product %q", product))
+	}
+	products, err := gw.ListProducts(ctx)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("list products")
+	}
+	drivers := simDrivers(products)
+	cat := simfleet.Catalog{
+		ProfileFor: func(p string) (*profile.DeviceProfile, bool) {
+			name, _, ok := store.ForProduct(p)
+			return store.Devices[name], ok
+		},
+		DriverOf:   func(p string) string { return drivers[p] },
+		Attachable: simAttachable(ctx, a, gw),
+		PortOffset: portOffset,
+	}
+	return func(id string, used map[string]bool) (simfleet.Device, error) {
+		plan, err := simfleet.Plan([]simfleet.Component{{ID: id, Product: product}}, used, cat)
+		if err != nil || len(plan) != 1 {
+			return simfleet.Device{}, huma.Error409Conflict("no address is free in the simulated block")
+		}
+		if len(plan[0].Endpoints) == 0 {
+			return simfleet.Device{}, huma.Error409Conflict(fmt.Sprintf("the collector has no way to reach a simulated %s: its profile serves no HTTP or TCP surface to probe", product))
+		}
+		return plan[0], nil
+	}, nil
+}
+
 // fireKind maps a surface's protocol to the operation the simulator runs.
 func fireKind(protocol string) (string, bool) {
 	switch protocol {
@@ -463,31 +538,19 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		if !a.allows(ctx, "component", "create") || !a.allows(ctx, "endpoint", "create") {
 			return nil, huma.Error403Forbidden("adding a simulated component also needs component:create and endpoint:create")
 		}
-		if _, err := gw.GetOutpost(ctx, in.Name, a.scopeFor(ctx, "outpost", "read")); err != nil {
-			return nil, mapOutpostErr(err)
-		}
-		st, seen := status(in.Name)
-		if !seen || time.Since(st.LastSeen) > simConnectedWindow {
-			return nil, huma.Error409Conflict(fmt.Sprintf("no simulator is connected beside %s; start one with omniglass sim run", in.Name))
-		}
-		store, err := simCatalog()
+		st, err := simOutpostConnected(ctx, a, gw, status, in.Name)
 		if err != nil {
-			return nil, huma.Error500InternalServerError("load simulator catalog")
+			return nil, err
 		}
-		if _, _, ok := store.ForProduct(in.Body.Product); !ok {
-			return nil, huma.Error422UnprocessableEntity(fmt.Sprintf("no simulator profile simulates the product %q", in.Body.Product))
-		}
-		products, err := gw.ListProducts(ctx)
+		planOne, err := simComponentPlanner(ctx, a, gw, in.Body.Product, st.Capabilities.PortOffset)
 		if err != nil {
-			return nil, huma.Error500InternalServerError("list products")
+			return nil, err
 		}
-		drivers := simDrivers(products)
 		use := a.secretBind(ctx)
-		attachable := simAttachable(ctx, a, gw)
 		// Planning and creating hold the address lock, so two adds at once
 		// cannot be handed the same address.
 		var c *storage.Component
-		var plan []simfleet.Device
+		var plan simfleet.Device
 		err = gw.WithSimAddressLock(ctx, func() error {
 			used, err := gw.SimAddressesInUse(ctx)
 			if err != nil {
@@ -500,15 +563,7 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 			if err != nil {
 				return mapComponentErr(err)
 			}
-			plan, err = simfleet.Plan([]simfleet.Component{{ID: c.ID, Product: product}}, used, simfleet.Catalog{
-				ProfileFor: func(p string) (*profile.DeviceProfile, bool) {
-					name, _, ok := store.ForProduct(p)
-					return store.Devices[name], ok
-				},
-				DriverOf:   func(p string) string { return drivers[p] },
-				Attachable: attachable,
-				PortOffset: st.Capabilities.PortOffset,
-			})
+			plan, err = planOne(c.ID, used)
 			// The component stands only with its endpoints: a plan or endpoint
 			// that fails takes the new component back out. Both address it by
 			// id, since a name may repeat in another location. A component that
@@ -522,16 +577,12 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 				}
 				_ = gw.DeleteComponent(context.WithoutCancel(ctx), actorID(ctx), c.ID, all, all)
 			}
-			if err != nil || len(plan) != 1 {
+			if err != nil {
 				undo()
-				return huma.Error409Conflict("no address is free in the simulated block")
-			}
-			if len(plan[0].Endpoints) == 0 {
-				undo()
-				return huma.Error409Conflict(fmt.Sprintf("the collector has no way to reach a simulated %s: its profile serves no HTTP or TCP surface to probe", product))
+				return err
 			}
 			outpost, id := in.Name, c.ID
-			for _, spec := range simEndpointSpecs(plan[0].Endpoints) {
+			for _, spec := range simEndpointSpecs(plan.Endpoints) {
 				spec.Component, spec.Outpost, spec.SecretRead, spec.SecretBind, spec.CanAdmin = &id, &outpost, use.Read, use.Bind, use.CanAdmin
 				ep, err := gw.CreateEndpoint(ctx, actorID(ctx), spec, a.scopeFor(ctx, "endpoint", "create"))
 				if err != nil {
@@ -546,7 +597,39 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 			return nil, err
 		}
 		out := &addSimComponentOutput{}
-		out.Body.Component, out.Body.Outpost, out.Body.Address, out.Body.Endpoints = c.Name, in.Name, plan[0].Address, len(plan[0].Endpoints)
+		out.Body.Component, out.Body.Outpost, out.Body.Address, out.Body.Endpoints = c.Name, in.Name, plan.Address, len(plan.Endpoints)
+		return out, nil
+	})
+
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "plan-outpost-simulation-component",
+		Method:      http.MethodGet,
+		Path:        "/outposts/{name}/simulation/components:plan",
+		Summary:     "Plan a simulated component",
+		Description: "Previews what adding a simulated component of a product would create (see add-outpost-simulation-component): the lowest free address in the simulated block (127.60.0.0/16) and the endpoints the collector would reach it through, a driver attach with its inputs (a secret input names the platform secret, never its value) or a reachability probe with its target, planned exactly as the add plans them. Creates nothing and reserves nothing: the address is not held, so an add or another plan in between may take it, and an add made after this plan then lands on the next free address instead. Gated by simulation:read, and needs outpost:read on the outpost. An outpost that does not exist is a 404, one with no simulator connected a 409, a product no profile simulates a 422, and a full block or a profile with no surface the collector can reach a 409.",
+	}, "simulation", "read"), func(ctx context.Context, in *planSimComponentInput) (*planSimComponentOutput, error) {
+		st, err := simOutpostConnected(ctx, a, gw, status, in.Name)
+		if err != nil {
+			return nil, err
+		}
+		planOne, err := simComponentPlanner(ctx, a, gw, in.Product, st.Capabilities.PortOffset)
+		if err != nil {
+			return nil, err
+		}
+		used, err := gw.SimAddressesInUse(ctx)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("plan simulated component")
+		}
+		plan, err := planOne("planned", used)
+		if err != nil {
+			return nil, err
+		}
+		out := &planSimComponentOutput{}
+		out.Body.Outpost, out.Body.Product, out.Body.Address = in.Name, in.Product, plan.Address
+		out.Body.Endpoints = make([]simPlannedEndpointBody, 0, len(plan.Endpoints))
+		for _, e := range plan.Endpoints {
+			out.Body.Endpoints = append(out.Body.Endpoints, simPlannedEndpointBody{Driver: e.Driver, Inputs: e.Inputs, Transport: e.Transport, Target: e.Target})
+		}
 		return out, nil
 	})
 }

@@ -18,7 +18,7 @@ const OWNER_KINDS: OwnerKind[] = ["platform", "location", "component"];
 // CreateSecretForm: pick a type and a scope, then fill the type's operator
 // fields. Shared by the secrets directory and omnibot's credential field
 // (#1167), which hands omnibot only the new secret's name. Secret fields use a password input; the values are sealed server-side.
-export default function CreateSecretForm(p: { onCreated: (s: Secret) => void }): JSX.Element {
+export default function CreateSecretForm(p: { onCreated: (s: Secret) => void; type?: string; label?: string }): JSX.Element {
   const qc = useQueryClient();
   const me = useMe();
   const types = useQuery(() => ({ queryKey: SECRET_TYPES_KEY, queryFn: listSecretTypes }));
@@ -27,7 +27,10 @@ export default function CreateSecretForm(p: { onCreated: (s: Secret) => void }):
   // The operator types the label and the cascade name follows it, until they
   // take the name over by hand (createIdentity, the catalog-page affordance).
   const { display, setDisplay, name, setName, nameDerived } = createIdentity();
-  const [typeId, setTypeId] = createSignal("");
+  // A caller that knows the kind it needs (a driver input of the add-a-component
+  // flow, #2460) presets the type, and the label the operator typed in its picker.
+  if (p.label) setDisplay(p.label);
+  const [typeId, setTypeId] = createSignal(p.type ?? "");
   const [ownerKind, setOwnerKind] = createSignal<OwnerKind>("platform");
   const [owner, setOwner] = createSignal("");
   const [fields, setFields] = createSignal<Record<string, string>>({});

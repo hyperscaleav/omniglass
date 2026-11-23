@@ -6357,6 +6357,38 @@ export type OwnerStruct = {
   ref: string;
 };
 
+/**
+ * The driver's inputs the attach would send; a secret input holds the secret's NAME, never its value.
+ */
+export type SimPlannedEndpointBodyInputs = {[key: string]: string};
+
+export type SimPlannedEndpointBody = {
+  /** The driver the endpoint would attach; empty for a reachability probe. */
+  driver?: string;
+  /** The driver's inputs the attach would send; a secret input holds the secret's NAME, never its value. */
+  inputs?: SimPlannedEndpointBodyInputs;
+  /** The host:port a reachability probe would reach; empty for a driver attach. */
+  target?: string;
+  /** The transport a reachability probe would speak; empty for a driver attach. */
+  transport?: string;
+};
+
+export type PlanSimComponentOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** The loopback address the simulated component would answer on. */
+  address: string;
+  /**
+     * The endpoints an add would create for the collector to reach it.
+     * @nullable
+     */
+  endpoints: SimPlannedEndpointBody[] | null;
+  /** The outpost whose simulator would serve the component. */
+  outpost: string;
+  /** The simulated product planned. */
+  product: string;
+};
+
 export type PlatformAlarmBody = {
   /** The key the raising rule samples, which names the panel the alarm flags; absent for a hand-raised alarm */
   key?: string;
@@ -9682,6 +9714,14 @@ export const ListNotificationStatus = {
   suppressed: 'suppressed',
   '': '',
 } as const;
+
+export type PlanOutpostSimulationComponentParams = {
+  /**
+   * A product a simulator profile simulates
+   * @minLength 1
+   */
+  product: string;
+};
 
 /**
  * an RFC 7386 JSON Merge Patch for the namespace; null on a key restores it
@@ -19682,6 +19722,59 @@ export const addOutpostSimulationComponent = async (name: string,
     method: 'POST',
     headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(addSimComponentInputBody)
+  }
+);}
+
+
+
+export type planOutpostSimulationComponentResponse200 = {
+  data: PlanSimComponentOutputBody
+  status: 200
+}
+
+export type planOutpostSimulationComponentResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type planOutpostSimulationComponentResponseSuccess = (planOutpostSimulationComponentResponse200) & {
+  headers: Headers;
+};
+export type planOutpostSimulationComponentResponseError = (planOutpostSimulationComponentResponseDefault) & {
+  headers: Headers;
+};
+
+export type planOutpostSimulationComponentResponse = (planOutpostSimulationComponentResponseSuccess | planOutpostSimulationComponentResponseError)
+
+export const getPlanOutpostSimulationComponentUrl = (name: string,
+    params: PlanOutpostSimulationComponentParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/outposts/${name}/simulation/components:plan?${stringifiedParams}` : `/outposts/${name}/simulation/components:plan`
+}
+
+/**
+ * Previews what adding a simulated component of a product would create (see add-outpost-simulation-component): the lowest free address in the simulated block (127.60.0.0/16) and the endpoints the collector would reach it through, a driver attach with its inputs (a secret input names the platform secret, never its value) or a reachability probe with its target, planned exactly as the add plans them. Creates nothing and reserves nothing: the address is not held, so an add or another plan in between may take it, and an add made after this plan then lands on the next free address instead. Gated by simulation:read, and needs outpost:read on the outpost. An outpost that does not exist is a 404, one with no simulator connected a 409, a product no profile simulates a 422, and a full block or a profile with no surface the collector can reach a 409.
+ * @summary Plan a simulated component
+ */
+export const planOutpostSimulationComponent = async (name: string,
+    params: PlanOutpostSimulationComponentParams, options?: Parameters<typeof ogFetch>[1]): Promise<planOutpostSimulationComponentResponse> => {
+
+  return ogFetch<planOutpostSimulationComponentResponse>(getPlanOutpostSimulationComponentUrl(name,params),
+  {
+    ...options,
+    method: 'GET'
+
+
   }
 );}
 

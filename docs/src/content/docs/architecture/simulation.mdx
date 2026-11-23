@@ -639,7 +639,12 @@ collector reaches it through, placed on the outpost. The plan is the dev seed's,
 attach where the driver's inputs are known (only when the platform secret it references, the
 community or the credential its face demands, exists), otherwise a reachability probe on a port the profile serves, lifted
 as that outpost's simulator lifts its ports. The simulator serves it from its next pull, with no
-restart. Changing its product among the products its profile simulates keeps its endpoints valid
+restart. `GET /outposts/{name}/simulation/components:plan?product=<product>` (`omniglass simulation
+plan-component <outpost> --product newtron-panel-7`) previews that add without creating anything: the
+address and the endpoints, with the driver's inputs (a secret input by the secret's name), planned
+exactly as the add plans them. It reserves nothing, so the console's guided add can show the operator
+what it will make before they commit, and an add in between may take the previewed address.
+Changing its product among the products its profile simulates keeps its endpoints valid
 (they share a driver), and deleting the component removes it from the simulation.
 
 ## Adding a simulated system
