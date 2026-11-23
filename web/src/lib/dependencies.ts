@@ -23,7 +23,10 @@ export const DEPENDENCY_KINDS: { kind: DependencyKind; label: string; hint: stri
   { kind: "path", label: "Path", hint: "Reached through the upstream, so while the upstream's gate is closed this component's in-band endpoints are held." },
 ];
 
-export const kindLabel = (k: string) => DEPENDENCY_KINDS.find((d) => d.kind === k)?.label ?? k;
+export function kindLabel(k: string): string {
+  const hit = DEPENDENCY_KINDS.find((d) => d.kind === k);
+  return hit ? hit.label : k;
+}
 
 export const dependenciesKey = (component: string) => ["component-dependencies", component] as const;
 

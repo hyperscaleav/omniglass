@@ -215,7 +215,6 @@ export default function DependenciesPanel(props: { component: string; canUpdate:
                   class="input input-bordered input-sm w-24 font-data"
                   placeholder="Outlet"
                   aria-label="Outlet"
-                  maxLength={64}
                   value={outlet()}
                   onInput={(e) => setOutlet(e.currentTarget.value)}
                 />
