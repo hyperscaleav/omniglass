@@ -17383,7 +17383,7 @@ paths:
       x-omniglass-permission: component:update
   /components/{name}/alarms:
     get:
-      description: What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set, and since/until to keep only the alarms raised during a range (still raised at since or later, raised by until). since after until is a 400. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+      description: What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set, and since/until to keep only the alarms raised during a range (still raised at since or later, raised by until), newest first and capped at 500. since after until is a 400. Gated by component:read; an out-of-scope component is a non-disclosing 404.
       operationId: list-component-alarms
       parameters:
         - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)

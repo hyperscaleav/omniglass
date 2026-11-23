@@ -133,6 +133,16 @@ type systemAlarmsInput struct {
 	Until time.Time `query:"until" doc:"The range's end, with since; defaults to now and must not be earlier than since" example:"2026-11-23T12:00:00Z"`
 }
 
+// componentRangeLimit caps a component's ranged read at the system read's
+// 500 (#2425): a flapping alarm over a long range could otherwise answer
+// tens of thousands of rows. The unranged read stays uncapped, as it was.
+func componentRangeLimit(since, until time.Time) int {
+	if since.IsZero() && until.IsZero() {
+		return 0
+	}
+	return systemAlarmLimit
+}
+
 // alarmRangeErr refuses an inverted range.
 func alarmRangeErr(since, until time.Time) error {
 	if !since.IsZero() && !until.IsZero() && since.After(until) {
@@ -286,7 +296,7 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/alarms",
 		Summary:     "List a component's alarms",
-		Description: "What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set, and since/until to keep only the alarms raised during a range (still raised at since or later, raised by until). since after until is a 400. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+		Description: "What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set, and since/until to keep only the alarms raised during a range (still raised at since or later, raised by until), newest first and capped at 500. since after until is a 400. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
 	}, "component", "read"), func(ctx context.Context, in *listAlarmsInput) (*listAlarmsOutput, error) {
 		if err := alarmRangeErr(in.Since, in.Until); err != nil {
 			return nil, err
@@ -300,6 +310,7 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 			Unacknowledged: in.Unacknowledged,
 			Since:          in.Since,
 			Until:          in.Until,
+			Limit:          componentRangeLimit(in.Since, in.Until),
 		})
 		if err != nil {
 			return nil, mapAlarmErr(err)

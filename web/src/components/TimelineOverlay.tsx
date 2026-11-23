@@ -1,7 +1,7 @@
 import { For, Show, createMemo, createSignal, onCleanup, type JSX } from "solid-js";
 import { A } from "@solidjs/router";
 import { Popover } from "@kobalte/core/popover";
-import { useQueries, useQuery } from "@tanstack/solid-query";
+import { keepPreviousData, useQueries, useQuery } from "@tanstack/solid-query";
 import Button from "./Button";
 import Eyebrow from "./Eyebrow";
 import AlarmTimeline from "./AlarmTimeline";
@@ -123,6 +123,9 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
     equals: (a, b) => a.from === b.from && a.to === b.to,
   });
   const isComponent = () => props.kind === "components";
+  // A range still running past now (an absolute one ending later today) has
+  // no sliding key to re-read it, so it polls; a range wholly past holds.
+  const tail = () => (props.range.kind === "absolute" && win().to > now() ? 60_000 : false);
   const scale = useSeverity();
 
   // The plot's width, measured, so a drawer and a page draw at 1:1.
@@ -140,10 +143,14 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
   const healthQ = useQuery(() => ({
     queryKey: healthOverKey(props.kind, props.id, win().from, win().to),
     queryFn: () => healthOver(props.kind, props.id, win().from, win().to),
+    placeholderData: keepPreviousData,
+    refetchInterval: tail(),
   }));
   const alarmsQ = useQuery(() => ({
     queryKey: alarmsOverKey(props.kind, props.id, win().from, win().to),
     queryFn: () => alarmsOver(props.kind, props.id, win().from, win().to),
+    placeholderData: keepPreviousData,
+    refetchInterval: tail(),
   }));
   const membersQ = useQuery(() => ({
     queryKey: systemMembersKey(props.id),
@@ -155,6 +162,8 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
     queries: members().map((m) => ({
       queryKey: healthOverKey("components", m.component_id, win().from, win().to),
       queryFn: () => healthOver("components", m.component_id, win().from, win().to),
+      placeholderData: keepPreviousData,
+      refetchInterval: tail(),
       })),
   }));
   // A component's own commands; a system's are its members'.
@@ -163,16 +172,22 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
     queries: commandOwners().map((c) => ({
       queryKey: commandsOverKey(c, win().from, win().to),
       queryFn: () => commandsOver(c, win().from, win().to),
+      placeholderData: keepPreviousData,
+      refetchInterval: tail(),
       })),
   }));
   const eventsQ = useQuery(() => ({
     queryKey: eventsOverKey(props.kind, props.id, win().from, win().to),
     queryFn: () => eventsOver(props.kind, props.id, win().from, win().to),
+    placeholderData: keepPreviousData,
+    refetchInterval: tail(),
   }));
   const [logSeverity, setLogSeverity] = createSignal<LogSeverity>("warning");
   const logsQ = useQuery(() => ({
     queryKey: logsOverKey(props.kind, props.id, win().from, win().to, logSeverity()),
     queryFn: () => logsOver(props.kind, props.id, win().from, win().to, logSeverity()),
+    placeholderData: keepPreviousData,
+    refetchInterval: tail(),
   }));
   const rulesQ = useQuery(() => ({ queryKey: EVENT_RULES_KEY, queryFn: listEventRules, staleTime: 60_000 }));
   const propsListQ = useQuery(() => ({
@@ -186,15 +201,15 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
 
   // ---- lanes ---------------------------------------------------------------
   const health = createMemo(() =>
-    healthSpans(healthQ.data?.transitions ?? [], win(), { carriedIn: healthQ.data?.carriedIn, current: healthQ.data?.health, now: Date.now() }),
+    healthSpans(healthQ.data?.transitions ?? [], win(), { carriedIn: healthQ.data?.carriedIn, current: healthQ.data?.health, now: now() }),
   );
   const memberRows = createMemo(() =>
     members().map((m, i) => {
       const d = memberHealthQ[i]?.data;
-      return { name: m.component, id: m.component_id, spans: healthSpans(d?.transitions ?? [], win(), { carriedIn: d?.carriedIn, current: d?.health ?? m.component_health, now: Date.now() }) };
+      return { name: m.component, id: m.component_id, spans: healthSpans(d?.transitions ?? [], win(), { carriedIn: d?.carriedIn, current: d?.health ?? m.component_health, now: now() }) };
     }),
   );
-  const alarms = createMemo(() => alarmSpans(alarmsQ.data?.alarms ?? [], win(), Date.now()));
+  const alarms = createMemo(() => alarmSpans(alarmsQ.data?.alarms ?? [], win(), now()));
   const [allAlarms, setAllAlarms] = createSignal(false);
   const shownAlarms = () => (allAlarms() ? alarms() : alarms().slice(-ALARM_ROWS_SHOWN));
   const inputs = createMemo(() =>
@@ -206,12 +221,15 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
 
   // The effective properties, and whatever an alarming rule watches even when
   // it is no declared property (a per-endpoint signal such as reachability).
-  const propertyKeys = createMemo(() => [...new Set([...(propsListQ.data ?? []).map((p) => p.property_type_name), ...inputs().properties])].sort().slice(0, PROPERTY_KEYS_MAX), [], {
+  // The rule inputs go first, so the 50-key cap never drops one.
+  const propertyKeys = createMemo(() => [...new Set([...inputs().properties, ...(propsListQ.data ?? []).map((p) => p.property_type_name).sort()])].slice(0, PROPERTY_KEYS_MAX), [], {
     equals: (a, b) => a.join() === b.join(),
   });
   const propsQ = useQuery(() => ({
     queryKey: propertiesOverKey(props.kind, props.id, propertyKeys(), win().from, win().to),
     queryFn: () => propertiesOver(props.kind, props.id, propertyKeys(), win().from, win().to),
+    placeholderData: keepPreviousData,
+    refetchInterval: tail(),
     enabled: propertyKeys().length > 0,
   }));
 
@@ -229,7 +247,7 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
         .map((s) => ({
           key,
           label: s.instance ? `${key} [${s.instance}]` : key,
-          bands: propertyBands(s.points ?? [], s.carried_in, win(), Date.now()),
+          bands: propertyBands(s.points ?? [], s.carried_in, win(), now()),
         })),
     ),
   );
@@ -246,6 +264,8 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
     queries: shownMetrics().map((m) => ({
       queryKey: metricBucketsBetweenKey(props.kind, props.id, m, win().from, win().to, stepS()),
       queryFn: () => metricBucketsBetween(props.kind, props.id, m, win().from, win().to, stepS()),
+      placeholderData: keepPreviousData,
+      refetchInterval: tail(),
       })),
   }));
   const METRIC_H = 36;
@@ -303,7 +323,7 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
     cursor.set(cursorStep(cursor.at(), win(), dir));
   };
   const fmt = (iso: string) => fmtTime(iso);
-  const spanTip = (s: ValueSpan) => valueSpanTip(s, fmt, Date.now());
+  const spanTip = (s: ValueSpan) => valueSpanTip(s, fmt, now());
   const clusterTip = (c: Cluster<unknown>, noun: string, one: (item: never) => string) =>
     c.items.length === 1 ? one(c.items[0] as never) : `${c.items.length} ${noun} from ${fmt(new Date(c.from).toISOString())} to ${fmt(new Date(c.to).toISOString())}`;
   const eventTip = (e: TimelineEvent) => `${e.key} · ${e.message || "event"} · ${fmt(e.ts)}`;

@@ -165,6 +165,10 @@ describe("TimelineOverlay", () => {
     const from = Date.UTC(2026, 10, 1);
     const to = Date.UTC(2026, 10, 2);
     reads.length = 0;
+    // The lanes keep what they hold while a new range reads, never blanking.
+    setRange({ kind: "preset", preset: "6h" });
+    expect(screen.queryByTestId("timeline-alarm-span")).toBeTruthy();
+    reads.length = 0;
     setRange({ kind: "absolute", from, to });
     const since = new Date(from).toISOString();
     await waitFor(() => {

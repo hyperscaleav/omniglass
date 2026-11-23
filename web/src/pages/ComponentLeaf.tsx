@@ -296,7 +296,8 @@ export default function ComponentLeaf() {
             <Show when={leafTab() === "timeline"}>
               <CursorProvider>
                 <div data-testid="timeline-tab" class="flex min-w-0 flex-col gap-5 p-4">
-                  <TimelineOverlay kind="components" id={id()} range={range()} />
+                  {/* Keyed on the id: another component is another timeline, its picks and its open detail left behind. */}
+                  <Show when={id()} keyed>{(oid) => <TimelineOverlay kind="components" id={oid} range={range()} />}</Show>
                   <MetricsGrid kind="components" id={id()} range={range()} />
                 </div>
               </CursorProvider>

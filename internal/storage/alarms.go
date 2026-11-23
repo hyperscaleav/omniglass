@@ -99,6 +99,8 @@ type AlarmFilter struct {
 	// the whole range is kept. A zero value is no bound on that side.
 	Since time.Time
 	Until time.Time
+	// Limit caps the list, newest first; zero is no cap.
+	Limit int
 
 	// The fleet queue's filters (#2333), read by ListFleetAlarms alone.
 	// Severities keeps the named levels; Location keeps the alarms whose
@@ -450,7 +452,8 @@ func (p *PG) ListAlarms(ctx context.Context, componentName string, filter AlarmF
 		  and (not $3 or a.acknowledged_at is null)
 		  and ($4::timestamptz is null or a.cleared_at is null or a.cleared_at >= $4)
 		  and ($5::timestamptz is null or a.raised_at <= $5)
-		order by a.raised_at desc, a.id desc`, component.ID, filter.IncludeCleared, filter.Unacknowledged, optTime(filter.Since), optTime(filter.Until))
+		order by a.raised_at desc, a.id desc
+		limit $6::int`, component.ID, filter.IncludeCleared, filter.Unacknowledged, optTime(filter.Since), optTime(filter.Until), optLimit(filter.Limit))
 	if err != nil {
 		return nil, fmt.Errorf("storage: list alarms %q: %w", componentName, err)
 	}
@@ -476,6 +479,14 @@ type AlarmRange struct {
 	Window time.Duration
 	Since  time.Time
 	Until  time.Time
+}
+
+// optLimit is a cap as a nullable query argument: zero is SQL null, no limit.
+func optLimit(n int) any {
+	if n <= 0 {
+		return nil
+	}
+	return n
 }
 
 // optTime is a time as a nullable query argument: zero is SQL null.

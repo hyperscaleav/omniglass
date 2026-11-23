@@ -1263,7 +1263,7 @@ List a component's alarms
 omniglass component alarm list <name> [flags]
 ```
 
-What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set, and since/until to keep only the alarms raised during a range (still raised at since or later, raised by until). since after until is a 400. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set, and since/until to keep only the alarms raised during a range (still raised at since or later, raised by until), newest first and capped at 500. since after until is a 400. Gated by component:read; an out-of-scope component is a non-disclosing 404.
 
 Arguments:
   <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.

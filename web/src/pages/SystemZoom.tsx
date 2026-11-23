@@ -368,7 +368,8 @@ export default function SystemZoom() {
         <Show when={tab() === "timeline"}>
           <CursorProvider>
             <div data-testid="timeline-tab" class="flex min-w-0 flex-col gap-5 p-4">
-              <TimelineOverlay kind="systems" id={id()} range={range()} />
+              {/* Keyed on the id: another system is another timeline, its picks and its open detail left behind. */}
+                  <Show when={id()} keyed>{(oid) => <TimelineOverlay kind="systems" id={oid} range={range()} />}</Show>
               <MetricsGrid kind="systems" id={id()} range={range()} />
             </div>
           </CursorProvider>

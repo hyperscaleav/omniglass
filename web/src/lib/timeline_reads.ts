@@ -32,19 +32,20 @@ export async function healthOver(kind: TimelineKind, id: string, from: number, t
 
 export const alarmsOverKey = (kind: TimelineKind, id: string, from: number, to: number) => ["timeline-alarms", kind, id, from, to] as const;
 
-// The system read caps at 500 alarms; a component's is the component's own.
-export const SYSTEM_ALARM_CAP = 500;
+// Both ranged alarm reads cap at 500, newest first.
+export const ALARM_CAP = 500;
 
 export async function alarmsOver(kind: TimelineKind, id: string, from: number, to: number): Promise<{ alarms: Alarm[]; more: boolean }> {
   if (kind === "components") {
     const res = await api.GET("/components/{name}/alarms", { params: { path: { name: id }, query: { include_cleared: true, since: iso(from), until: iso(to) } } });
     if (res.error) throw res.error;
-    return { alarms: (res.data?.alarms ?? []) as Alarm[], more: false };
+    const alarms = (res.data?.alarms ?? []) as Alarm[];
+    return { alarms, more: alarms.length >= ALARM_CAP };
   }
   const res = await api.GET("/systems/{name}/alarms", { params: { path: { name: id }, query: { since: iso(from), until: iso(to) } } });
   if (res.error) throw res.error;
   const alarms = (res.data?.alarms ?? []) as Alarm[];
-  return { alarms, more: alarms.length >= SYSTEM_ALARM_CAP };
+  return { alarms, more: alarms.length >= ALARM_CAP };
 }
 
 export const COMMAND_CAP = 500;
