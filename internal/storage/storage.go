@@ -465,6 +465,9 @@ type Gateway interface {
 
 	UpsertProduct(ctx context.Context, m Product) error
 	ListProducts(ctx context.Context) ([]Product, error)
+	// ListProductsDeclaring is ListProducts narrowed to the products whose contract
+	// declares the named metric (lane "metric") or property (lane "property").
+	ListProductsDeclaring(ctx context.Context, lane, name string) ([]Product, error)
 	GetProduct(ctx context.Context, id string) (*Product, error)
 	CreateProduct(ctx context.Context, actorID string, m Product) (*Product, error)
 	UpdateProduct(ctx context.Context, actorID, id string, patch ProductPatch) (*Product, error)
