@@ -651,7 +651,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
             {(pid) => (
               <section data-testid="beneath" class="flex flex-col gap-2">
                 <Eyebrow label={`Beneath ${location() ? entityLabel(location()!) : "this location"}`} hint="The locations inside this one, as Explore draws them, counted by the systems they hold." />
-                <OutlineWorkspace rootId={pid()} />
+                <OutlineWorkspace rootId={pid()} host={props.host} />
               </section>
             )}
           </Show>

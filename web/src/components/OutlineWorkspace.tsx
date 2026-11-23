@@ -48,11 +48,18 @@ function readOpen(): Set<string> {
   } catch { return new Set(); }
 }
 
-export default function OutlineWorkspace(props: { rootId?: string }) {
+// `host` "blade" (#2423): a rooted outline inside a blade keeps its filter in
+// a signal of its own, so filtering it never rewrites (or reads) the page's
+// address, the Explore outline beneath it included.
+export default function OutlineWorkspace(props: { rootId?: string; host?: "page" | "blade" }) {
   const navigate = useNavigate();
   const me = useMe();
-  const [search, setSearch] = useSearchParams();
-  const param = (k: string) => { const v = search[k]; return Array.isArray(v) ? v[0] : v; };
+  const [urlSearch, setUrlSearch] = useSearchParams();
+  const [local, setLocal] = createSignal<Record<string, string | undefined>>({});
+  const inBlade = props.host === "blade";
+  const search = (): Record<string, string | string[] | undefined> => (inBlade ? local() : urlSearch);
+  const setSearch = (next: Record<string, string | undefined>) => (inBlade ? setLocal((p) => ({ ...p, ...next })) : setUrlSearch(next));
+  const param = (k: string) => { const v = search()[k]; return Array.isArray(v) ? v[0] : v; };
 
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents, enabled: can(me.data, "component", "read") }));
