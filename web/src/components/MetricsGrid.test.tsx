@@ -190,6 +190,23 @@ await waitFor(() => expect(read(reads, "/systems/room-1/metrics/rtt/samples?hour
     expect(within(card).queryByRole("button", { name: "Retry" })).toBeNull();
   });
 
+  it("a preset range's 403 is not blamed on view:read: it reads as a failed series with Retry", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const u = new URL((input instanceof Request ? input : new Request(String(input))).url);
+        const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "content-type": "application/json" } });
+        if (u.pathname.endsWith("/samples")) return json({ status: 403, title: "Forbidden" }, 403);
+        return json({ metrics: [metrics[1]] });
+      }),
+    );
+    mount("systems", "room-1", () => ({ kind: "preset", preset: "6h" }));
+    const card = await screen.findByTestId("metric-card-rtt");
+    expect(await within(card).findByText("Could not read this series.")).toBeTruthy();
+    expect(within(card).queryByText(/view:read/)).toBeNull();
+    expect(within(card).getByRole("button", { name: "Retry" })).toBeTruthy();
+  });
+
   it("draws nothing when the entity has no metrics", async () => {
     vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify({ metrics: [] }), { status: 200, headers: { "content-type": "application/json" } }))));
     mount("components", "cam-1", () => ({ kind: "preset", preset: "6h" }));

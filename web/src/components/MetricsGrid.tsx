@@ -110,7 +110,7 @@ export default function MetricsGrid(props: { kind: "components" | "systems"; id:
                         <div class="flex h-[170px] flex-col items-center justify-center gap-2 text-xs text-base-content/45">
                           <Show when={q()?.isError} fallback="Reading…">
                             <Show
-                              when={!refused(q()?.error)}
+                              when={!(props.range.kind === "absolute" && refused(q()?.error))}
                               // A custom range reads through the views binding, which
                               // needs view:read; a link can carry one to a caller the
                               // picker offers none to, and no Retry would help them.
