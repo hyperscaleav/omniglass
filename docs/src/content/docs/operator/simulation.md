@@ -96,8 +96,9 @@ omniglass component simulation fire panel-1 --surface nvp --command "GET INPUT" 
 ## Add a component
 
 **Add simulated component** on the Simulation page (with `simulation:update`, `component:create` and
-`endpoint:create`) asks for an outpost with a simulator, a product the simulator has a profile for (the
-form lists them by profile), a name, and optionally a location. It creates the component and the
+`endpoint:create`) asks for an outpost with a simulator, a product the simulator has a profile for (type
+part of the product or its profile to narrow the list; each match shows the profile under it), a name,
+and optionally a location. It creates the component and the
 endpoint the outpost reaches it through, at the next free address in `127.60.0.0/16`; the simulator
 serves it from its next pull. From a terminal:
 

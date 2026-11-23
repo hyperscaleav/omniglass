@@ -16,7 +16,8 @@ export async function pickInPicker(input: HTMLElement, label: string): Promise<v
   await typeInPicker(input, label);
   const list = await screen.findByRole("listbox");
   const hit = await waitFor(() => {
-    const o = within(list).getAllByRole("option").find((el) => el.querySelector("[id$=label]")?.textContent === label || el.firstElementChild?.textContent === label);
+    // An option's first child is its label; the detail follows it.
+    const o = within(list).getAllByRole("option").find((el) => el.firstElementChild?.textContent === label);
     if (!o) throw new Error(`no picker option ${label}`);
     return o;
   });
