@@ -59,8 +59,8 @@ reacts to the `run:demo` label, recording the [demos](/contributing/demos/) the 
 (each on a runner of its own) to the PR's evidence ref, keeping one comment listing every demo and
 writing each demo's clip into the PR body (see [Labels](/contributing/labels/)); nightly, the same
 workflow re-records every demo on main and opens an issue when one fails. **`demo-tag.yml`** lints
-the PR body's demo tag on every PR. **`regression-test.yml`** fails a PR that closes a Bug-typed
-issue without changing a test or carrying a reasoned `regression-test: none (<reason>)` line.
+the PR body's demo tag on every PR. **`regression-test.yml`** fails a PR that closes a bug or flaky-test
+issue (label or Bug type) without changing a test or carrying a reasoned `regression-test: none (<reason>)` line.
 **`demo-prune.yml`** deletes an evidence ref 30 days after its
 PR closes.
 

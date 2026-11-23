@@ -49,7 +49,14 @@ describe("check", () => {
     expect(v.ok).toBe(false);
     expect(v.message).toContain("no reason");
   });
-  it("gates only the Bug type", () => expect(check({ body: "", changed: [], closed: [{ number: 3, type: "Task" }] }).ok).toBe(true));
+  it("gates a label-only bug or flaky-test (no type)", () => {
+    for (const l of ["bug", "flaky-test"])
+      expect(check({ body: "Closes #3", changed: ["a.go"], closed: [{ number: 3, type: "", labels: [l, "area:x"] }] }).ok).toBe(false);
+  });
+  it("gates a type-only Bug (no labels)", () =>
+    expect(check({ body: "Closes #3", changed: ["a.go"], closed: [{ number: 3, type: "Bug", labels: [] }] }).ok).toBe(false));
+  it("does not gate neither signal", () =>
+    expect(check({ body: "Closes #3", changed: ["a.go"], closed: [{ number: 3, type: "Task", labels: ["area:ci"] }] }).ok).toBe(true));
   it("passes non-bug or no closes", () => {
     expect(check({ body: "", changed: ["a.go"], closed: [{ number: 1, type: "Feature" }] }).ok).toBe(true);
     expect(check({ body: "", changed: ["a.go"], closed: [] }).ok).toBe(true);

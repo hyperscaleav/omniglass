@@ -67,7 +67,7 @@ Not a vibe at each gate, a check:
   test-only or docs-only change). A demo is a test too: a command that fails or a result that never
   appears fails it. How to write and record either is [demos](/contributing/demos/).
 - **A bug or flake fix ships its regression test.** The `regression-test` check fails a PR that closes a
-  Bug-typed issue unless its diff adds or changes a test file (`*_test.go`, `*.test.ts(x)`,
+  bug or flaky-test issue (label or Bug type) unless its diff adds or changes a test file (`*_test.go`, `*.test.ts(x)`,
   `*.spec.*`, or a file under `web/e2e/`), or its body carries a line of its own,
   `regression-test: none (<reason>)`, with a non-empty reason. The reviewer treats that reason as a claim
   to refute: a bug a test can reproduce is a blocking finding. The check only sees that a test changed,
