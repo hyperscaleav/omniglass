@@ -215,6 +215,15 @@
       "setup": []
     },
     {
+      "id": "send-a-command-from-an-alarm",
+      "title": "Send a command from an alarm",
+      "description": "Switch a simulated display off, and when its rule opens an alarm send the power-on command from the alarm's own row, picking the value from the list the command accepts.",
+      "lab": [],
+      "setup": [
+        "omniglass event-rule create --clear-event-type rule-cleared --fire-criteria 'map[expr:value == \"off\"]' --fire-event-type rule-fired --fire-sustain 0s --label 'Display is off' --name walkthrough-display-off --sample-key power-state --selector 'map[components:[hq.west.level-2.boardroom-a.$comp.display-1]]' --severity high"
+      ]
+    },
+    {
       "id": "send-alarms-to-a-chat-channel",
       "title": "Send alarms to a chat channel",
       "description": "Make a webhook target, test it and read the receiver's answer, then write the action rule that sends high alarms to it.",

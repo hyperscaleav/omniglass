@@ -1,8 +1,10 @@
 import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, afterEach } from "vitest";
 import { render, cleanup } from "@solidjs/testing-library";
+import { Show, createSignal } from "solid-js";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import AlarmActions from "./AlarmActions";
+import { SendCommandHost } from "./SendCommandButton";
 import { ME_KEY, type Me } from "../lib/auth";
 import { ENDPOINTS_KEY, type Endpoint } from "../lib/endpoints";
 import { DRIVERS_KEY, type Driver } from "../lib/drivers";
@@ -31,7 +33,7 @@ function mount(who: Me, show: Parameters<typeof AlarmActions>[0]["show"], driver
   return render(() => (
     <QueryClientProvider client={qc}>
       <Router>
-        <Route path="*" component={() => <AlarmActions componentId="u-1" alarm={alarm} show={show} />} />
+        <Route path="*" component={() => <><AlarmActions componentId="u-1" alarm={alarm} show={show} /><SendCommandHost /></>} />
       </Router>
     </QueryClientProvider>
   ));
@@ -64,6 +66,30 @@ describe("AlarmActions", () => {
     // One command is bound, so it is chosen, and its value is the select.
     const value = (await screen.findByLabelText("Value")) as HTMLSelectElement;
     expect([...value.options].map((o) => o.value).filter(Boolean)).toEqual(["on", "off", "standby"]);
+  });
+
+  // A list re-keys its rows on each poll; the form is not in the row, so it
+  // (and what was typed in it) outlives the row that opened it.
+  it("keeps the form open when the row that opened it is gone", async () => {
+    const [shown, setShown] = createSignal(true);
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+    qc.setQueryData([...ME_KEY], me(["command:issue"]));
+    qc.setQueryData([...ENDPOINTS_KEY], endpoints);
+    qc.setQueryData([...DRIVERS_KEY], driver(["set-power"]));
+    qc.setQueryData([...COMMAND_TYPES_KEY], [{ name: "set-power", settle_window_seconds: 15, target_property_type: "power-state", official: true }]);
+    qc.setQueryData([...PROPERTIES_KEY], []);
+    qc.setQueryData([...METRICS_KEY], []);
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router>
+          <Route path="*" component={() => <><Show when={shown()}><AlarmActions componentId="u-1" alarm={alarm} show={{ command: true }} /></Show><SendCommandHost /></>} />
+        </Router>
+      </QueryClientProvider>
+    ));
+    fireEvent.click(await screen.findByRole("button", { name: "Send command" }));
+    await screen.findByRole("dialog");
+    setShown(false);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
   it("draws no Send command without the permission or without a command to send", () => {
