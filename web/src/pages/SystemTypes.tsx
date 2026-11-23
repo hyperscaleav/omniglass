@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
+import IdentityFields from "../components/IdentityFields";
 import BladeField, { EMPTY_VALUE } from "../components/BladeField";
 import InheritedField from "../components/InheritedField";
 import InheritedCell from "../components/InheritedCell";
@@ -296,7 +297,8 @@ function SystemTypeBladeBody(p: { id: string }): JSX.Element {
 export function CreateSystemTypeForm(p: { onCreated: (t: SystemType) => void }): JSX.Element {
   const qc = useQueryClient();
   const types = useQuery(() => ({ queryKey: SYSTEM_TYPES_KEY, queryFn: listSystemTypes }));
-  const { display, setDisplay, name, setName, nameDerived } = createIdentity();
+  const identity = createIdentity();
+  const { display, name } = identity;
   const [parentId, setParentId] = createSignal("");
   const [stem, setStem] = createSignal("");
   const [abbrev, setAbbrev] = createSignal("");
@@ -338,12 +340,7 @@ export function CreateSystemTypeForm(p: { onCreated: (t: SystemType) => void }):
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow bind="label" hint="What an operator reads.">
-        <input class="input input-bordered w-full" value={display()} placeholder="Huddle" onInput={(e) => setDisplay(e.currentTarget.value)} />
-      </FieldRow>
-      <FieldRow bind="name" hint={nameDerived() ? "Derived from the label. Edit to set your own." : "Globally unique address, used by the API and CLI."}>
-        <input class="input input-bordered w-full font-data" value={name()} placeholder="huddle" onInput={(e) => setName(e.currentTarget.value)} />
-      </FieldRow>
+      <IdentityFields identity={identity} labelPlaceholder="Huddle" namePlaceholder="huddle" />
       <FieldRow label="Parent" hint={TYPE_PARENT_HINT}>
         <SystemTypeSelect types={types.data ?? []} value={parentId()} onChange={setParentId} emptyLabel="Root (no parent)" />
       </FieldRow>

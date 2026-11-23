@@ -532,16 +532,6 @@ export function TargetForm(p: { mode: "create" | "edit"; target?: NotificationTa
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm" data-testid="target-form-error"><span>{formErr()}</span></div>
       </Show>
-      <Show
-        when={!editing}
-        fallback={<KVStacked label="Kind" hint={TARGET_HINTS.kind} value={KIND_WORDS[p.target!.kind]} />}
-      >
-        <FieldRow label="Kind" info={TARGET_HINTS.kind}>
-          <select class="select select-bordered w-full" value={kind()} onChange={(e) => setKind(e.currentTarget.value as TargetKind)} data-testid="target-kind-select">
-            <For each={TARGET_KINDS}>{(k) => <option value={k}>{KIND_WORDS[k]}</option>}</For>
-          </select>
-        </FieldRow>
-      </Show>
       <div class="grid gap-3 sm:grid-cols-2">
         <FieldRow bind="label" info="A friendly name for this target; optional.">
           <input class="input input-bordered w-full" value={ident.display()} onInput={(e) => ident.setDisplay(e.currentTarget.value)} placeholder="Ops chat" />
@@ -559,6 +549,16 @@ export function TargetForm(p: { mode: "create" | "edit"; target?: NotificationTa
         </Show>
       </div>
 
+      <Show
+        when={!editing}
+        fallback={<KVStacked label="Kind" hint={TARGET_HINTS.kind} value={KIND_WORDS[p.target!.kind]} />}
+      >
+        <FieldRow label="Kind" info={TARGET_HINTS.kind}>
+          <select class="select select-bordered w-full" value={kind()} onChange={(e) => setKind(e.currentTarget.value as TargetKind)} data-testid="target-kind-select">
+            <For each={TARGET_KINDS}>{(k) => <option value={k}>{KIND_WORDS[k]}</option>}</For>
+          </select>
+        </FieldRow>
+      </Show>
       <Switch>
         <Match when={kind() === "webhook"}>
           <div class="flex flex-col gap-1">

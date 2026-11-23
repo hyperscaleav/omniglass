@@ -817,6 +817,9 @@ export function CalcRuleForm(p: { mode: "create" | "edit"; rule?: CalcRule; onSa
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
+      <FieldRow bind="label">
+        <input class="input input-bordered w-full" value={d.label} placeholder="Busy" onInput={(e) => setD("label", e.currentTarget.value)} />
+      </FieldRow>
       <FieldRow bind="name" info={CALC_HINTS.name}>
         <input
           class="input input-bordered w-full font-data"
@@ -828,9 +831,6 @@ export function CalcRuleForm(p: { mode: "create" | "edit"; rule?: CalcRule; onSa
           onBlur={() => setNameTouched(true)}
         />
         <Show when={nameErr()}>{(m) => <p class="text-[11px] text-error">{m()}</p>}</Show>
-      </FieldRow>
-      <FieldRow bind="label">
-        <input class="input input-bordered w-full" value={d.label} placeholder="Busy" onInput={(e) => setD("label", e.currentTarget.value)} />
       </FieldRow>
 
       <FieldRow label="Derives on" info={CALC_HINTS.owner}>

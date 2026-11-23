@@ -1,9 +1,10 @@
-import { entityLabel } from "../lib/entities";
+import { createIdentity, entityLabel } from "../lib/entities";
 import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
+import IdentityFields from "../components/IdentityFields";
 import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
@@ -346,8 +347,8 @@ function CommandTypeBladeBody(p: { name: string }): JSX.Element {
 // settleable one cannot be created until its window is stated.
 export function CreateCommandTypeForm(p: { onCreated: (r: CommandTypeRow) => void }): JSX.Element {
   const qc = useQueryClient();
-  const [name, setName] = createSignal("");
-  const [label, setLabel] = createSignal("");
+  const identity = createIdentity();
+  const { display, name } = identity;
   const [description, setDescription] = createSignal("");
   const [target, setTarget] = createSignal("");
   const [settle, setSettle] = createSignal("");
@@ -374,7 +375,7 @@ export function CreateCommandTypeForm(p: { onCreated: (r: CommandTypeRow) => voi
       const arms = splitTarget(target());
       const created = await createCommandType({
         name: name().trim(),
-        label: label().trim() || undefined,
+        label: display().trim() || undefined,
         description: description().trim() || undefined,
         target_property_type: arms.target_property_type || undefined,
         target_metric_type: arms.target_metric_type || undefined,
@@ -394,12 +395,7 @@ export function CreateCommandTypeForm(p: { onCreated: (r: CommandTypeRow) => voi
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow bind="name" hint="A lowercase kebab name, e.g. set-input or reboot.">
-        <input class="input input-bordered w-full font-data" value={name()} placeholder="set-input" onInput={(e) => setName(e.currentTarget.value)} />
-      </FieldRow>
-      <FieldRow bind="label">
-        <input class="input input-bordered w-full" value={label()} placeholder="Set input" onInput={(e) => setLabel(e.currentTarget.value)} />
-      </FieldRow>
+      <IdentityFields identity={identity} labelPlaceholder="Set input" namePlaceholder="set-input" />
       <FieldRow label="Description">
         <input class="input input-bordered w-full" value={description()} onInput={(e) => setDescription(e.currentTarget.value)} />
       </FieldRow>

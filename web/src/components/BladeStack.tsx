@@ -3,6 +3,7 @@ import { Dynamic, Portal } from "solid-js/web";
 import { Ban, ChevronLeft, MoreHorizontal, Pencil, RotateCcw, Save, Trash, X } from "./icons";
 import Button from "./Button";
 import PanelFooter from "./PanelFooter";
+import { OFFICIAL_LOCK } from "../lib/catalog";
 import SaveError from "./SaveError";
 import { type BladeController, type BladeDef, BladeEditContext, createEditSlot } from "../lib/blades";
 
@@ -184,9 +185,16 @@ export default function BladeStack(props: {
                     <Show when={edit.editable() || !!edit.destructive() || edit.secondary().length > 0 || !!edit.primary() || editLock() != null || deleteLock() != null}>
                       <PanelFooter dimmed={!isTop()} notice={<SaveError slot={edit} />}>
                         <Show
-                          when={deleteLock()}
+                          when={!lockAll() && deleteLock()}
                           fallback={
-                            <Show when={edit.destructive()}>
+                            <Show
+                              when={!lockAll() && edit.destructive()}
+                              fallback={
+                                <Show when={lockAll() ?? (deleteLock() === OFFICIAL_LOCK ? deleteLock() : null)}>
+                                  {(reason) => <FooterNote reason={reason()} />}
+                                </Show>
+                              }
+                            >
                               {(dst) => (
                                 <Button
                                   intent={dst().tone === "warn" ? "warn" : dst().tone === "ok" ? "ok" : "danger"}
@@ -200,9 +208,14 @@ export default function BladeStack(props: {
                           }
                         >
                           {(reason) => (
-                            <span class="tooltip tooltip-right" data-tip={reason()} aria-label={reason()} tabindex={0}>
-                              <Button intent="danger" icon={Trash} label="Delete" disabled>Delete</Button>
-                            </span>
+                            <Show
+                              when={reason() !== OFFICIAL_LOCK}
+                              fallback={<FooterNote reason={reason()} />}
+                            >
+                              <span class="tooltip tooltip-right" data-tip={reason()} aria-label={reason()} tabindex={0}>
+                                <Button intent="danger" icon={Trash} label="Delete" disabled>Delete</Button>
+                              </span>
+                            </Show>
                           )}
                         </Show>
                         <div class="ml-auto flex items-center gap-2">
@@ -229,9 +242,9 @@ export default function BladeStack(props: {
                             </Show>
                           </Show>
                           <Show
-                            when={editLock()}
+                            when={!lockAll() && editLock()}
                             fallback={
-                              <Show when={edit.editable()}>
+                              <Show when={!lockAll() && edit.editable()}>
                                 <Show
                                   when={edit.editing()}
                                   fallback={<Button intent="action" icon={Pencil} label="Edit" onClick={() => edit.begin()}>Edit</Button>}
@@ -265,5 +278,26 @@ export default function BladeStack(props: {
       </For>
       </Portal>
     </Show>
+  );
+}
+
+// FooterNote is the footer's one word for a locked row: a single quiet note at
+// the left in place of a pair of greyed buttons that can never be used. The
+// official sentence reads "Official, read-only"; any other reason (a read-only
+// kind says why in its own words) reads as itself. The full reason rides the
+// tooltip and the accessible name, on a focusable wrapper like the buttons it
+// replaces, so the keyboard path to the reason survives.
+function FooterNote(props: { reason: string }): JSX.Element {
+  const text = () => (props.reason === OFFICIAL_LOCK ? "Official, read-only" : props.reason);
+  return (
+    <span
+      class="tooltip tooltip-right text-sm text-base-content/55"
+      data-testid="footer-note"
+      data-tip={props.reason}
+      aria-label={props.reason}
+      tabindex={0}
+    >
+      {text()}
+    </span>
   );
 }

@@ -29,7 +29,7 @@ export default function CatalogOverview() {
       title="Catalog"
       subtitle="The authored model behind the fleet: what each group's catalogs hold, counted live from this install."
     >
-      <div class="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
+      <div class="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] items-start gap-4">
         <For each={groups()}>{(g) => <GroupCard group={g} />}</For>
       </div>
     </Page>
@@ -41,7 +41,9 @@ function GroupCard(props: { group: CatalogGroup }) {
     <section class="card border border-base-300 bg-base-200" data-card={props.group.header}>
       <div class="card-body gap-2 p-5">
         <h2 class="card-title text-base">{props.group.header}</h2>
-        <p class="text-sm text-base-content/60">{props.group.copy}</p>
+        {/* grow-0: daisyUI gives a card-body paragraph flex-grow, which would hand the
+            card's surplus height to the copy and push the counts to the bottom. */}
+        <p class="grow-0 text-sm text-base-content/60">{props.group.copy}</p>
         <ul class="mt-1 flex flex-col gap-0.5">
           <For each={props.group.entries}>
             {(e) => (

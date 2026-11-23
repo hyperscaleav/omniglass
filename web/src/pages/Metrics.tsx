@@ -1,9 +1,10 @@
-import { entityLabel } from "../lib/entities";
+import { createIdentity, entityLabel } from "../lib/entities";
 import { For, Show, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
+import IdentityFields from "../components/IdentityFields";
 import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
@@ -240,9 +241,9 @@ function MetricBladeBody(p: { name: string }): JSX.Element {
 // property).
 export function CreateMetricForm(p: { onCreated: (r: MetricRow) => void }): JSX.Element {
   const qc = useQueryClient();
-  const [name, setName] = createSignal("");
+  const identity = createIdentity();
+  const { display, name } = identity;
   const [dataType, setDataType] = createSignal<MetricDataType>("float");
-  const [label, setLabel] = createSignal("");
   const [description, setDescription] = createSignal("");
   const [unit, setUnit] = createSignal("");
   const [precision, setPrecision] = createSignal("");
@@ -269,7 +270,7 @@ export function CreateMetricForm(p: { onCreated: (r: MetricRow) => void }): JSX.
       const created = await createMetricType({
         name: name().trim(),
         data_type: dataType(),
-        label: label().trim() || undefined,
+        label: display().trim() || undefined,
         description: description().trim() || undefined,
         unit: unit().trim() || undefined,
         precision: prec.value,
@@ -288,16 +289,11 @@ export function CreateMetricForm(p: { onCreated: (r: MetricRow) => void }): JSX.
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow bind="name" hint="A lowercase kebab name, e.g. icmp-rtt-avg or cpu-load.">
-        <input class="input input-bordered w-full font-data" value={name()} placeholder="icmp-rtt-avg" onInput={(e) => setName(e.currentTarget.value)} />
-      </FieldRow>
+      <IdentityFields identity={identity} labelPlaceholder="ICMP RTT (avg)" namePlaceholder="icmp-rtt-avg" />
       <FieldRow label="Data type">
         <select class="select select-bordered w-full" value={dataType()} onChange={(e) => setDataType(e.currentTarget.value as MetricDataType)}>
           <For each={METRIC_DATA_TYPES}>{(t) => <option value={t}>{t}</option>}</For>
         </select>
-      </FieldRow>
-      <FieldRow bind="label">
-        <input class="input input-bordered w-full" value={label()} placeholder="ICMP RTT (avg)" onInput={(e) => setLabel(e.currentTarget.value)} />
       </FieldRow>
       <FieldRow label="Description">
         <input class="input input-bordered w-full" value={description()} onInput={(e) => setDescription(e.currentTarget.value)} />

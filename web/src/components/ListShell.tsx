@@ -36,6 +36,9 @@ export default function ListShell<T>(props: {
   // The `?open=` address the list could not resolve (lib/drawer_address): shows a
   // non-disclosing not-found notice above the list. The same words for a row that
   // does not exist and one the caller may not see; `onDismiss` clears the param.
+  // Show "n of m" in the filter bar while chips filter. Opt-in: a body that
+  // filters for itself (the tree) cannot report the shell's filtered count.
+  counted?: boolean;
   missing?: { noun: string; address: string; onDismiss: () => void };
   children: (filtered: Accessor<T[]>, chips: Accessor<Chip[]>) => JSX.Element;
 }) {
@@ -45,6 +48,7 @@ export default function ListShell<T>(props: {
   // Lazy: a controlled body that filters itself never reads `filtered`, so this
   // memo never runs for it (Solid memos are pull-based).
   const filtered = createMemo(() => props.rows.filter(buildPredicate(props.filterKeys, chips())));
+  const count = () => (props.counted && chips().length > 0 ? { shown: filtered().length, total: props.rows.length } : undefined);
   return (
     <div class="og-stack flex flex-col" classList={{ "h-full min-h-0": props.fill }}>
       <Show when={props.error}>
@@ -70,6 +74,7 @@ export default function ListShell<T>(props: {
             bare
             clearable
             trailing={props.trailing}
+            count={count()}
             placeholder={props.placeholder}
           />
         </div>

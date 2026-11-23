@@ -1,9 +1,10 @@
-import { entityLabel } from "../lib/entities";
+import { createIdentity, entityLabel } from "../lib/entities";
 import { For, Show, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
+import IdentityFields from "../components/IdentityFields";
 import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
@@ -209,9 +210,9 @@ function PropertyBladeBody(p: { name: string }): JSX.Element {
 // the data types are the non-numeric lane (a numeric signal is a metric type).
 export function CreatePropertyForm(p: { onCreated: (r: PropertyRow) => void }): JSX.Element {
   const qc = useQueryClient();
-  const [name, setName] = createSignal("");
+  const identity = createIdentity();
+  const { display, name } = identity;
   const [dataType, setDataType] = createSignal<PropertyDataType>("string");
-  const [label, setLabel] = createSignal("");
   const [description, setDescription] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
@@ -231,7 +232,7 @@ export function CreatePropertyForm(p: { onCreated: (r: PropertyRow) => void }): 
       const created = await createProperty({
         name: name().trim(),
         data_type: dataType(),
-        label: label().trim() || undefined,
+        label: display().trim() || undefined,
         description: description().trim() || undefined,
       });
       await qc.invalidateQueries({ queryKey: PROPERTIES_KEY });
@@ -248,16 +249,11 @@ export function CreatePropertyForm(p: { onCreated: (r: PropertyRow) => void }): 
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow bind="name" hint="A lowercase kebab name, e.g. serial-number or interface-reachable.">
-        <input class="input input-bordered w-full font-data" value={name()} placeholder="serial-number" onInput={(e) => setName(e.currentTarget.value)} />
-      </FieldRow>
+      <IdentityFields identity={identity} labelPlaceholder="Serial number" namePlaceholder="serial-number" />
       <FieldRow label="Data type">
         <select class="select select-bordered w-full" value={dataType()} onChange={(e) => setDataType(e.currentTarget.value as PropertyDataType)}>
           <For each={PROPERTY_DATA_TYPES}>{(t) => <option value={t}>{t}</option>}</For>
         </select>
-      </FieldRow>
-      <FieldRow bind="label">
-        <input class="input input-bordered w-full" value={label()} placeholder="Serial number" onInput={(e) => setLabel(e.currentTarget.value)} />
       </FieldRow>
       <FieldRow label="Description">
         <input class="input input-bordered w-full" value={description()} onInput={(e) => setDescription(e.currentTarget.value)} />

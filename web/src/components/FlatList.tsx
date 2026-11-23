@@ -217,6 +217,7 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
         chips={cfg.chips}
         onChips={cfg.onChips}
         fill={cfg.fill}
+        counted
         error={cfg.error?.()}
         errorLabel={`Could not load ${cfg.entity.plural.toLowerCase()}`}
         trailing={trailing}
@@ -245,12 +246,17 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
                       <Show when={openable}><col style={{ width: "40px" }} /></Show>
                     </colgroup>
                   </Show>
+                  {/* A list with nothing in it has no columns to head: the empty state
+                      stands alone (#2431). Loading keeps the head (the rows land
+                      under it), and a filter that matches nothing keeps it too. */}
+                  <Show when={cfg.loading?.() || cfg.rows().length > 0}>
                   <thead>
                     <tr>
                       <For each={cfg.columns}>{(c) => <Th col={c} />}</For>
                       <Show when={openable}><th /></Show>
                     </tr>
                   </thead>
+                  </Show>
                   <tbody>
                     <For
                       each={shown()}
