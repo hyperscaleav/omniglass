@@ -1,7 +1,8 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, screen, within } from "@solidjs/testing-library";
+import { render, screen, within, fireEvent, waitFor } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
-import Tags from "./Tags";
+import Tags, { CreateTagForm } from "./Tags";
+import Drawer from "../components/Drawer";
 import { TAGS_KEY, type Tag } from "../lib/tags";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
@@ -116,5 +117,35 @@ describe("Tags page", () => {
   it("hides New tag from a read-only viewer", () => {
     mount(viewer);
     expect(screen.queryByText("New tag")).toBeNull();
+  });
+});
+
+// Whether a key cascades is an on/off state, so it is a Switch (#2485): a
+// named role=switch the form reads, on by default, off when flipped.
+describe("CreateTagForm binding", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("posts propagates from the switch, cascading by default", async () => {
+    const bodies: unknown[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL) => {
+      const req = input as Request;
+      if (req.method === "POST") bodies.push(await req.clone().json());
+      return new Response(JSON.stringify({ id: uuidFor("tag-new"), name: "cost-center", applies_to: [], propagates: false, allowed_values: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Drawer open onClose={() => {}} title="New tag">
+          <CreateTagForm onCreated={() => {}} initialName="cost-center" />
+        </Drawer>
+      </QueryClientProvider>
+    ));
+    const sw = screen.getByRole("switch", { name: /Cascades to descendants/ }) as HTMLInputElement;
+    expect(sw.checked).toBe(true);
+    fireEvent.click(sw);
+    await waitFor(() => expect(sw.checked).toBe(false));
+    fireEvent.click(screen.getByRole("button", { name: "Create tag" }));
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(bodies[0]).toMatchObject({ name: "cost-center", propagates: false });
   });
 });
