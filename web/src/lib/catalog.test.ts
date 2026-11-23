@@ -1,29 +1,16 @@
 import { describe, it, expect } from "vitest";
-import { CATALOG_GROUPS, CATALOG_STUB_PATHS, OFFICIAL_LOCK, entryActive, entryCount, entryHref, catalogLock, catalogOrigin, visibleGroups } from "./catalog";
+import { CATALOG_GROUPS, OFFICIAL_LOCK, entryActive, entryCount, entryHref, catalogLock, catalogOrigin, visibleGroups } from "./catalog";
 import { type Me } from "./auth";
-import { navByPath, routeTokens, STUBS } from "./nav";
+import { routeTokens } from "./nav";
 
 const entry = (header: string, label: string) =>
   CATALOG_GROUPS.find((g) => g.header === header)!.entries.find((e) => e.label === label)!;
 
 // The catalog group table is data; these pin the facts the shell and the
 // Overview render from it, and the no-bare-TODO rule on its pending slots.
-describe("the catalog table's soon slots", () => {
-  it("holds no pending slot: every one went live", () => {
-    // None is pending any more: every slot went live (#921, #618, #1329).
-    for (const g of CATALOG_GROUPS) for (const e of g.entries) expect(e.soon, e.label).toBeFalsy();
-  });
-
-  it("mirrors nav.ts on every routed soon slot, so the stub page shows the number the table names", () => {
-    // A routed soon slot renders SectionStub, which resolves its issue through
-    // navByPath: the two tables must agree.
-    for (const g of CATALOG_GROUPS)
-      for (const e of g.entries)
-        if (e.soon && e.path) expect(navByPath[e.path]?.issue, e.path).toBe(e.issue);
-  });
-
-  it("registers every routed soon slot as a stub route", () => {
-    for (const p of CATALOG_STUB_PATHS) expect(STUBS, `${p} routes to SectionStub`).toContain(p);
+describe("the catalog table", () => {
+  it("holds no pending slot: every entry names a built page (#2445)", () => {
+    for (const g of CATALOG_GROUPS) for (const e of g.entries) expect(e.path, e.label).toBeTruthy();
   });
 });
 
@@ -39,7 +26,7 @@ describe("the catalog table's Templates slots", () => {
     expect(entryHref(entry("Components", "Templates"))).toBe("/templates?kind=component_template");
     expect(entryHref(entry("Systems", "Templates"))).toBe("/templates?kind=standard_template,system_template");
     expect(entryHref(entry("Locations", "Templates"))).toBe("/templates?kind=location_template");
-    for (const g of ["Components", "Systems", "Locations"]) expect(entry(g, "Templates").soon).toBeFalsy();
+    for (const g of ["Components", "Systems", "Locations"]) expect(entry(g, "Templates").path).toBe("/templates");
   });
 
   it("counts each slot's own kinds of the one shared list", () => {
@@ -101,7 +88,6 @@ describe("shell route nesting", () => {
       "/location-types", "/secret-types", "/tags", "/templates",
     ];
     for (const p of paths) expect(shellOf.get(p), `${p} escaped the catalog shell`).toBe("catalog");
-    for (const p of CATALOG_STUB_PATHS) expect(shellOf.get(p), `${p} escaped the catalog shell`).toBe("catalog");
   });
 
   it("mounts the manifest's catalog entries inside the CatalogShell route block", async () => {
