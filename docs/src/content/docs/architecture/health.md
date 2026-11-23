@@ -306,8 +306,14 @@ down** (nobody assigned, or fewer assigned than the quorum wants) names no alarm
 **A location's report** is the health plus every system beneath it with its own health, a map
 rather than a duplicated explanation.
 
-Both reports carry the **recorded transitions** over the last 30 days, oldest first, one entry per
-change, never a sample: the availability strip's data and the answer to "since when".
+**A component's report** (`GET /components/{name}/health`) is the same envelope with no slots and no
+systems: the component's own verdict, from its active alarms, beside the edges that got it there.
+`omniglass component health list <name>` reads it from the CLI.
+
+All three reports carry the **recorded transitions**, oldest first, one entry per change, never a
+sample: the availability strip's data and the answer to "since when". The range is `since` and
+`until` (RFC 3339) on each route, defaulting to the last 30 days, so a range picker can drive them;
+`since` after `until` is a 400.
 
 ## The alarm: what is wrong with one component
 
