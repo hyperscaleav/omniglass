@@ -27,15 +27,20 @@ let calls: Call[];
 let runReply: (body: Record<string, unknown>) => Response;
 // What the server says omnibot answers from (#2443); a live model by default.
 let facts: Record<string, unknown>;
+let factReads = 0;
 
 beforeEach(() => {
   calls = [];
   runReply = () => sse(fixture("run.sse"));
   facts = { conversations: [], omnibot: { mode: "live", prompts: [] } };
+  factReads = 0;
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     const req = input as Request;
     // The facts read is the panel's own, apart from the calls a run makes.
-    if (req.url.endsWith("/assistant/conversations") && req.method === "GET") return json(facts);
+    if (req.url.endsWith("/assistant/conversations") && req.method === "GET") {
+      factReads++;
+      return json(facts);
+    }
     const text = await req.text();
     const body = text ? JSON.parse(text) : {};
     calls.push({ url: req.url, method: req.method, body });
@@ -377,6 +382,27 @@ describe("the omnibot panel", () => {
       await waitFor(() => expect(screen.queryByTestId("omnibot-ask")).toBeNull());
       expect(screen.queryByTestId("omnibot-status")).toBeNull();
     });
+  });
+
+  it("reads the mode again each time it opens, so a model configured meanwhile ends the demo", async () => {
+    facts = { conversations: [], omnibot: { mode: "replay", prompts: ["Tag it"] } };
+    const [isOpen, setOpen] = createSignal(true);
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router>
+          <Route path="*" component={() => <OmnibotPanel open={isOpen()} onClose={() => {}} />} />
+        </Router>
+      </QueryClientProvider>
+    ));
+    await screen.findByTestId("omnibot-replay");
+    expect(factReads).toBe(1);
+    setOpen(false);
+    facts = { conversations: [], omnibot: { mode: "live", prompts: [] } };
+    setOpen(true);
+    await waitFor(() => expect(screen.queryByTestId("omnibot-replay")).toBeNull());
+    expect(screen.queryByTestId("omnibot-prompts")).toBeNull();
+    expect(factReads).toBe(2);
   });
 
   describe("the empty panel", () => {
