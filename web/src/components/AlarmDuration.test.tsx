@@ -20,6 +20,11 @@ describe("AlarmDuration", () => {
     expect(screen.getByTestId("alarm-duration")).toHaveTextContent("12m");
   });
 
+  it("starts no timer for a cleared alarm, so a long history costs nothing per second", () => {
+    render(() => <AlarmDuration alarm={{ raised_at: "2026-11-23T09:00:00Z", cleared_at: "2026-11-23T09:12:00Z" }} />);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it("ticks for an open alarm", () => {
     render(() => <AlarmDuration alarm={{ raised_at: "2026-11-23T10:00:00Z" }} />);
     expect(screen.getByTestId("alarm-duration")).toHaveTextContent("45s");
