@@ -208,6 +208,11 @@ the two in one migration. Three buckets, never conflated:
   assignment that binds a non-member) takes the label lock, then the component's membership lock, and
   only then inserts, because the insert's foreign key shares the system's row. Holding that row while
   waiting for the label lock deadlocks against every cascade (#1214).
+  A move into a location takes the same lock before it writes (#2552): the move's foreign key takes
+  only KEY SHARE on the location, which a relabel's NO KEY UPDATE does not conflict with, so without
+  the lock the stamp read the pre-edit label while the cascade's scan snapshot predated the mover and
+  neither restamped it. Queued on the label lock, the move either lands before the cascade's scan or
+  reads the committed label (`MoveComponent` and `MoveSystem`).
 
 - **One-time data backfills** (dbmate, data-only): transforming existing operator rows to match a new
   constraint, run once, and idempotent on a second run (a repeat changes nothing, proven by a test that

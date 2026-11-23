@@ -223,3 +223,133 @@ func TestALabelRecomputeWaitingOnARowLockRendersTheNamesCommittedDuringTheWait(t
 		prevProduct, prevRoom = newProduct, newRoom
 	}
 }
+
+// A component moved into a location while that location's label is being edited
+// must read the label as it reads after both writes commit (#2552). The two
+// writers share no row lock: the move's foreign key takes KEY SHARE on the
+// location, which the relabel's NO KEY UPDATE does not conflict with, and the
+// cascade's scan snapshot predates the move, so without a lock the mover is
+// stamped from the uncommitted-edit label and the cascade never sees it.
+//
+// The interleaving is forced: a raw transaction holds a pin component's row lock
+// at room-a so the cascade blocks mid-scan, then the move runs. With the fix the
+// move queues behind the cascade on the label lock; without it the move commits
+// inside the window. Either way the holder then commits and everyone finishes.
+func TestAComponentMovedIntoALocationDuringItsRelabelReadsTheCommittedLabel(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	t.Cleanup(gw.Close)
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "building"}, all); err != nil {
+		t.Fatalf("create building: %v", err)
+	}
+	for _, n := range []string{"room-a", "room-b"} {
+		if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: n, LocationType: "room", ParentName: strptr("hq")}, all); err != nil {
+			t.Fatalf("create %s: %v", n, err)
+		}
+	}
+	product := storagetest.MintProduct(t, ctx, gw, "display")
+	mk := func(loc string) *storage.Component {
+		c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
+			ProductName: strptr(product.Name), LocationName: strptr(loc),
+		}, all, all, all, all)
+		if err != nil {
+			t.Fatalf("create component: %v", err)
+		}
+		return c
+	}
+	pin, mover := mk("room-a"), mk("room-b")
+	if _, err := gw.SetLabelRule(ctx, "", "component", "at {{.LocationLabel}}"); err != nil {
+		t.Fatalf("set rule: %v", err)
+	}
+	if _, err := gw.RecomputeLabels(ctx, "", "component", all, all); err != nil {
+		t.Fatalf("settle the rule: %v", err)
+	}
+
+	holder, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(func() { _ = holder.Close(context.Background()) })
+	watcher, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(func() { _ = watcher.Close(context.Background()) })
+	blocked := func() int {
+		var n int
+		if err := watcher.QueryRow(ctx, `select count(*) from pg_stat_activity
+			where datname = current_database() and wait_event_type = 'Lock'`).Scan(&n); err != nil {
+			t.Fatalf("watch locks: %v", err)
+		}
+		return n
+	}
+	waitFor := func(what string, ok func() bool) {
+		t.Helper()
+		deadline := time.Now().Add(15 * time.Second)
+		for !ok() {
+			if time.Now().After(deadline) {
+				t.Fatalf("%s never happened: the interleaving this test forces did not occur", what)
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
+
+	tx, err := holder.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin holder: %v", err)
+	}
+	if _, err := tx.Exec(ctx, `update component set updated_at = now() where id = $1`, pin.ID); err != nil {
+		t.Fatalf("hold the pin row: %v", err)
+	}
+
+	newRoom := "Renamed Room"
+	var wg sync.WaitGroup
+	var cascadeErr, moveErr error
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, cascadeErr = gw.UpdateLocation(ctx, "", "room-a", storage.LocationPatch{Label: &newRoom}, all, all)
+	}()
+	waitFor("the cascade blocking mid-scan", func() bool { return blocked() >= 1 })
+
+	moved := make(chan struct{})
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer close(moved)
+		_, moveErr = gw.MoveComponent(ctx, "", mover.ID, storage.ComponentMove{LocationName: strptr("room-a")}, all, all, all)
+	}()
+	// The move either commits inside the window (the bug) or queues behind the
+	// cascade (the fix); both leave this wait satisfied.
+	waitFor("the move committing or queueing", func() bool {
+		select {
+		case <-moved:
+			return true
+		default:
+			return blocked() >= 2
+		}
+	})
+
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatalf("commit holder: %v", err)
+	}
+	wg.Wait()
+	if cascadeErr != nil || moveErr != nil {
+		t.Fatalf("cascade err=%v move err=%v", cascadeErr, moveErr)
+	}
+	after, err := gw.GetComponent(ctx, mover.ID, all)
+	if err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	if want := "at " + newRoom; after.Label != want {
+		t.Fatalf("STALE: mover label %q, want %q", after.Label, want)
+	}
+}
