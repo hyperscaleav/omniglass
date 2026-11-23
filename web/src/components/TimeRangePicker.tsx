@@ -68,19 +68,13 @@ export default function TimeRangePicker(props: { range: TimeRange; onChange: (r:
       }}
       data-testid="time-range-trigger"
       aria-label={`Time range: ${rangeLabel(props.range)}`}
-      contentTestId="time-range-panel"
+      contentLabel="Time range"
+      contentClass="z-50 w-72 max-w-[calc(100vw-1rem)] rounded-box border border-base-300 bg-base-100 p-2 text-sm shadow-2xl focus:outline-none"
       // Focus lands on the range in force, not the first preset, so the
       // ring never reads as a second selection.
-      onOpenAutoFocus={(e) => {
-        const checked = (e.currentTarget as HTMLElement | null)?.querySelector<HTMLElement>('[aria-checked="true"]');
-        if (checked) {
-          e.preventDefault();
-          checked.focus();
-        }
-      }}
-      contentClass="z-50 flex w-72 max-w-[calc(100vw-1rem)] flex-col gap-2 rounded-box border border-base-300 bg-base-100 p-2 text-sm shadow-2xl focus:outline-none"
+      initialFocus={(panel) => panel.querySelector<HTMLElement>('[aria-checked="true"]')}
       content={
-        <>
+        <div data-testid="time-range-panel" class="flex flex-col gap-2">
           <p class="menu-title px-2 pt-1 pb-0 text-[10.5px]">Time range · every chart on this page</p>
           <div role="radiogroup" aria-label="Preset ranges" class="flex flex-col">
             <For each={PRESETS}>
@@ -123,7 +117,7 @@ export default function TimeRangePicker(props: { range: TimeRange; onChange: (r:
               <Button type="submit" intent="action" size="xs" class="self-end" disabled={!customOk()}>Apply</Button>
             </form>
           </Show>
-        </>
+        </div>
       }
     >
       <Clock size={13} />

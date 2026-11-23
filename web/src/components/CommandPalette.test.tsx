@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildCommands, matches, withAsk } from "./CommandPalette";
+import { buildCommands, matches, withAsk, commandPath } from "./CommandPalette";
 
 // The palette flattens every destination the caller may reach to one searchable
 // list: the nav IA plus the catalogs, which left the rail for the
@@ -104,5 +104,12 @@ describe("asking omnibot from the palette", () => {
 
   it("is not offered to someone who may not run omnibot", () => {
     expect(withAsk(found, "x", false)).toEqual(found);
+  });
+});
+
+describe("a catalog result opens at its address (#2429)", () => {
+  it("routes an entity result to its drawer, and any other result to its path", () => {
+    expect(commandPath({ label: "av-offline", path: "/event-rules", entity: { kind: "event_rule", address: "av-offline" } })).toBe("/event-rules?open=av-offline");
+    expect(commandPath({ label: "Drivers", path: "/drivers" })).toBe("/drivers");
   });
 });

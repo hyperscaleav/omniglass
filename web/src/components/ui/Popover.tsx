@@ -12,7 +12,8 @@ import type { Placement } from "./placement";
 // aria-label, title, disabled) lands on the trigger, a <button>. content is
 // the panel; contentClass styles it (the house menu card by default) and
 // contentLabel names it. open/onOpenChange control it, so a choice in the
-// panel can close it.
+// panel can close it. initialFocus picks what takes the focus as the panel
+// opens (the choice already made, #2304), else Kobalte's first focusable.
 export const POPOVER_CLASS = "z-50 rounded-box border border-base-300 bg-base-100 p-1 shadow-2xl focus:outline-none";
 
 export type PopoverProps = Omit<JSX.ButtonHTMLAttributes<HTMLButtonElement>, "content"> & {
@@ -23,10 +24,7 @@ export type PopoverProps = Omit<JSX.ButtonHTMLAttributes<HTMLButtonElement>, "co
   onOpenChange?: (open: boolean) => void;
   contentClass?: string;
   contentLabel?: string;
-  // The panel's test hook, and where focus lands as it opens (a choice
-  // group's current item rather than its first, #2304).
-  contentTestId?: string;
-  onOpenAutoFocus?: (e: Event) => void;
+  initialFocus?: (panel: HTMLElement) => HTMLElement | null | undefined;
   children: JSX.Element;
 };
 
@@ -34,13 +32,23 @@ export default function Popover(props: PopoverProps) {
   const [root, own, trigger] = splitProps(
     props,
     ["placement", "gutter", "open", "onOpenChange"],
-    ["content", "contentClass", "contentLabel", "contentTestId", "onOpenAutoFocus", "children"],
+    ["content", "contentClass", "contentLabel", "initialFocus", "children"],
   );
   return (
     <K placement={root.placement ?? "bottom-end"} gutter={root.gutter ?? 4} open={root.open} onOpenChange={root.onOpenChange}>
       <K.Trigger {...trigger}>{own.children}</K.Trigger>
       <K.Portal>
-        <K.Content class={own.contentClass ?? POPOVER_CLASS} aria-label={own.contentLabel} data-testid={own.contentTestId} onOpenAutoFocus={own.onOpenAutoFocus}>
+        <K.Content
+          class={own.contentClass ?? POPOVER_CLASS}
+          aria-label={own.contentLabel}
+          onOpenAutoFocus={(e) => {
+            const target = own.initialFocus?.(e.currentTarget as HTMLElement);
+            if (target) {
+              e.preventDefault();
+              target.focus();
+            }
+          }}
+        >
           {own.content}
         </K.Content>
       </K.Portal>
