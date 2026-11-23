@@ -16,6 +16,7 @@ import (
 // operator's row of the same name shadows it (#1433), on every lane; a bare
 // sample still lands on the operator's. Each lane's x is held in both tiers.
 func TestAQualifiedSampleLandsOnItsNamespacesRow(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -118,6 +119,7 @@ func TestAQualifiedSampleLandsOnItsNamespacesRow(t *testing.T) {
 // A sample naming a namespace that holds no row of its key lands nothing: the
 // batch is refused rather than falling back along the search path.
 func TestAQualifiedSampleNeverFallsBackAlongTheSearchPath(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -150,6 +152,7 @@ func TestAQualifiedSampleNeverFallsBackAlongTheSearchPath(t *testing.T) {
 // rule owns the operator's calc-out, so a push of the bare name is refused,
 // while a push naming og/calc-out, a collected row no rule outputs, lands.
 func TestAQualifiedSampleIsHeldToItsOwnRowsWriter(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -193,6 +196,7 @@ func TestAQualifiedSampleIsHeldToItsOwnRowsWriter(t *testing.T) {
 // reads calc-in by its bare name, the operator's row, so og/calc-in landing
 // on the platform's row leaves it un-pending, while a bare calc-in marks it.
 func TestALandedQualifiedSampleMarksNoCalcRule(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}

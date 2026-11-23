@@ -7159,6 +7159,11 @@ export type PushEvent = {
      * @minLength 1
      */
   name: string;
+  /**
+     * The catalog namespace the name is read in: og for the platform's type, local for the operator's, or another the operator named. Omit to walk the search path, the operator's type first, then the platform's. Set, the name is read in that namespace only, reaching an og type the operator's type of the same name shadows; a namespace holding no such type rejects the item
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  namespace?: string;
   /** The occurrence's structured payload, validated against the event_type's payload schema */
   payload?: unknown;
   /** When this occurred; defaults to the batch timestamp, then to ingest time */
@@ -7191,6 +7196,11 @@ export type PushMetric = {
      * @minLength 1
      */
   name: string;
+  /**
+     * The catalog namespace the name is read in: og for the platform's type, local for the operator's, or another the operator named. Omit to walk the search path, the operator's type first, then the platform's. Set, the name is read in that namespace only, reaching an og type the operator's type of the same name shadows; a namespace holding no such type rejects the item
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  namespace?: string;
   /** When this was observed; defaults to the batch timestamp, then to ingest time */
   ts?: string;
   /** The numeric observation */
@@ -7205,6 +7215,11 @@ export type PushProperty = {
      * @minLength 1
      */
   name: string;
+  /**
+     * The catalog namespace the name is read in: og for the platform's type, local for the operator's, or another the operator named. Omit to walk the search path, the operator's type first, then the platform's. Set, the name is read in that namespace only, reaching an og type the operator's type of the same name shadows; a namespace holding no such type rejects the item
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  namespace?: string;
   /** When this was observed; defaults to the batch timestamp, then to ingest time */
   ts?: string;
   /** The observed value, shaped by the type's data_type and validated against its validation schema */
@@ -7244,6 +7259,7 @@ export type PushInputBody = {
 
 export type PushRejection = {
   name: string;
+  namespace?: string;
   reason: string;
 };
 

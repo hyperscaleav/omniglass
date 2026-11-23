@@ -23,6 +23,7 @@ import (
 // push-ns shadows it, a bare push-ns lands on the operator's, and a
 // namespace holding no push-ns is rejected by name and namespace.
 func TestAPushNamingItsNamespaceLandsThere(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server")
 	}

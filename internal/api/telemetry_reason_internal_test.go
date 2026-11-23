@@ -32,6 +32,7 @@ func TestAPushOfAShadowedNameSaysWhyItIsRefused(t *testing.T) {
 // A shadowed name's reason teaches the way to the official row (#1433), and
 // a qualified name no namespace row holds says which namespace was searched.
 func TestAPushRejectionNamesTheNamespace(t *testing.T) {
+	t.Parallel()
 	reg := collection.NewCatalog([]storage.MetricType{{Name: "x", Official: true}}, []storage.PropertyType{{Name: "x"}}, nil)
 	if got := unregisteredReason(reg, "", "x", "metric"); !strings.Contains(got, `namespace "og"`) {
 		t.Errorf("a shadowed name's reason = %q, want it to say naming namespace og reaches the official row", got)
