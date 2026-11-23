@@ -7,6 +7,7 @@ import Eyebrow from "./Eyebrow";
 import DetailGate from "./DetailGate";
 import LocationCard from "./LocationCard";
 import MemberRows from "./MemberRows";
+import SystemEmpty from "./SystemEmpty";
 import OutlineWorkspace from "./OutlineWorkspace";
 import { FLEET_VIEW_KEY, fleetView, childrenIndex } from "../lib/fleet";
 import { systemHealth, systemHealthKey, healthOf } from "../lib/health";
@@ -277,6 +278,8 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
     const b = bodyOf();
     return b ? memberModel(b, memberCtx()) : { rows: [], groups: [] };
   });
+  // Nothing staffs any slot and no component sits loose: the empty state's cue (#2464).
+  const noMembers = createMemo(() => !!bodyOf() && members().rows.length === 0 && members().groups.every((g) => g.members.length === 0));
   const componentCount = () => (system()?.dots ?? []).length;
 
   // The ambient stack (the page's own, or the stack this blade sits on):
@@ -585,7 +588,13 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                   </Show>
                   <section class="flex flex-col gap-2">
                     <Eyebrow label="Components" hint="The pieces of this system, each with the slot it fills. A slot gets its own header only where it says something a column cannot: more than one wanted, a shortfall, or nobody staffing it yet." />
-                    <MemberRows rows={members().rows} groups={members().groups} onOpen={openComponent} />
+                    <Show when={!membersQ.isPending && noMembers()}>
+                      <SystemEmpty systemId={id()} hasStandard={!!standard()} onStandard={() => tabState.select("configure")} />
+                    </Show>
+                    {/* The standard's slots still show, empty, beneath the words. */}
+                    <Show when={members().rows.length > 0 || members().groups.length > 0}>
+                      <MemberRows rows={members().rows} groups={members().groups} onOpen={openComponent} />
+                    </Show>
                   </section>
                   <Show when={mapDecl()}>
                     {(decl) => (

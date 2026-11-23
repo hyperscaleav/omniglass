@@ -528,6 +528,8 @@ export function EntityCreateForm(props: {
   kind: EntityKind;
   // A location uuid to prefill placement with: the explorer's create-where-you-stand.
   under?: string;
+  // A component created from a system's page starts in that system (#2464).
+  system?: string;
   onCreated: (created: { id: string }) => void;
   onCancel: () => void;
 }) {
@@ -568,7 +570,7 @@ export function EntityCreateForm(props: {
   const [locationType, setLocationType] = createSignal("");
   const [location, setLocation] = createSignal(isLocation() ? "" : (props.under ?? ""));
   const [parent, setParent] = createSignal(isLocation() ? (props.under ?? "") : "");
-  const [system, setSystem] = createSignal("");
+  const [system, setSystem] = createSignal(props.system ?? "");
   const [product, setProduct] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);

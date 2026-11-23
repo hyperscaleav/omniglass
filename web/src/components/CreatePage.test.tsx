@@ -70,13 +70,13 @@ function api(answers: Record<string, unknown>) {
   return posts;
 }
 
-function mount(path: string, me: Me = admin, standards: Standard[] = []) {
+function mount(path: string, me: Me = admin, standards: Standard[] = [], systems: unknown[] = []) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...TEMPLATES_KEY], catalog);
   qc.setQueryData([...ME_KEY], me);
   qc.setQueryData([...LOCATIONS_KEY], [hq, west]);
   qc.setQueryData([...LOCATION_TYPES_KEY], []);
-  qc.setQueryData([...SYSTEMS_KEY], []);
+  qc.setQueryData([...SYSTEMS_KEY], systems);
   qc.setQueryData([...SYSTEM_TYPES_KEY], []);
   qc.setQueryData([...COMPONENTS_KEY], []);
   qc.setQueryData([...OUTPOSTS_KEY], [{ name: "lab-outpost", enrolled: true, tags: {} }]);
@@ -133,6 +133,14 @@ describe("CreatePage's From a template", () => {
     // none, so the one write is the create.
     expect(posts.filter((p) => p.url.includes(":renderLabel"))).toEqual([]);
     expect(posts.filter((p) => p.url.includes("FromTemplate"))).toEqual([{ url: expect.stringMatching(/\/systems:createFromTemplate$/), body: { template: "mr55-system", location: "hq.west" } }]);
+  });
+
+  it("starts a component in the system carried by ?system= (#2464)", async () => {
+    api({});
+    const blank = { id: uuidFor("sys-blank"), name: "blank", label: "Blank Room", actions: ["update"] };
+    mount(`/components/create?system=${blank.id}`, admin, [], [blank]);
+    const form = await screen.findByTestId("entity-create-form");
+    expect(treeValue(within(form).getByLabelText("System"))).toBe("Blank Room");
   });
 
   it("creates locations from a location template under the carried parent", async () => {

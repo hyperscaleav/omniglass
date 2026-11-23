@@ -10,7 +10,7 @@ import { CREATE_KIND } from "../lib/templates";
 // CreatePage is /<kind>s/create for the fleet kinds: the one form, empty, on
 // its own address (#826), with Explore as the way back since the outline is
 // where every location, system and component is listed (#861). ?under= prefills
-// placement, which is how a row's + creates where the operator stands. Saving
+// placement, ?system= (a component) the system it joins (#2464), which is how a row's + creates where the operator stands. Saving
 // hands off to the new row's workspace, already editing.
 //
 // The page offers two ways in (#1329): from scratch, the default, or from a
@@ -21,6 +21,7 @@ export default function CreatePage(props: { kind: "location" | "system" | "compo
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const under = () => (Array.isArray(params.under) ? params.under[0] : params.under) || undefined;
+  const system = () => (Array.isArray(params.system) ? params.system[0] : params.system) || undefined;
   const back = () => navigate("/explore");
   const choice = useTemplateChoice();
   const actions = createFormActions();
@@ -37,6 +38,7 @@ export default function CreatePage(props: { kind: "location" | "system" | "compo
             <EntityCreateForm
               kind={props.kind}
               under={under()}
+              system={system()}
               onCreated={(created) => navigate(`/${props.kind}s/${encodeURIComponent(created.id)}?edit=1`)}
               onCancel={back}
             />

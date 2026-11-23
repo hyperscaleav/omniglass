@@ -283,6 +283,23 @@ describe("a location with nothing beneath", () => {
     expect(within(row("Quiet Room")).queryByRole("button", { name: "Expand Quiet Room" })).toBeNull();
     expect(row("Quiet Room").getAttribute("aria-expanded")).toBeNull();
   });
+
+  it("says 'no components yet' on the row, not Empty, so the system is seen to exist (#2464)", async () => {
+    const fleet = { locations: [loc("quiet", "Quiet Room", "room")], systems: [sys("s-quiet", "Quiet", "quiet", "healthy")] } as unknown as FleetView;
+    mount("/web/explore", owner, fleet, false, []);
+    await screen.findByRole("tree");
+    expect(row("Quiet Room").textContent).toContain("no components yet");
+    expect(row("Quiet Room").textContent).not.toContain("Empty");
+  });
+
+  it("heads an empty system among two with its own 'no components yet' row", async () => {
+    const fleet = { locations: [loc("two", "Two Systems", "room")], systems: [sys("s-a", "Alpha", "two", "healthy", [dot("a-1")]), sys("s-b", "Blank", "two", "healthy")] } as unknown as FleetView;
+    mount("/web/explore", owner, fleet, false, []);
+    await screen.findByRole("tree");
+    expand("Two Systems");
+    expect(rowLabels()).toContain("Blank");
+    expect(row("Blank").textContent).toContain("no components yet");
+  });
 });
 
 describe("an empty fleet", () => {

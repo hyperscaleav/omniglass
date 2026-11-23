@@ -118,6 +118,28 @@ describe("a location wears its system", () => {
   });
 });
 
+describe("a system with no components (#2464)", () => {
+  const view = {
+    locations: [loc("c", "Campus One", "campus"), loc("b", "Hall", "building", "c"), loc("b2", "Annex", "building", "c")],
+    systems: [sys("s-empty", "Blank", "b", "healthy"), sys("s-a", "A", "b2", "healthy"), sys("s-b", "B", "b2", "healthy", [dot("x")])],
+  };
+  it("reads 'no components yet' on the place that wears it, never Empty", () => {
+    const o = buildOutline(input(view));
+    const hall = child(o.roots[0], "Hall");
+    expect(hall.systems.map((s) => s.label)).toEqual(["Blank"]);
+    expect(hall.contents).toBe("no components yet");
+  });
+  it("keeps an empty system in a multi-system place as its own group and entry", () => {
+    const annex = child(buildOutline(input(view)).roots[0], "Annex");
+    expect(annex.groups.map((g) => g.system?.label)).toEqual(["A", "B"]);
+    expect(annex.contents).toBe("2 systems, 1 component");
+  });
+  it("lists an empty system placed nowhere", () => {
+    const o = buildOutline(input({ locations: [], systems: [sys("s-lost", "Lost", "", "healthy")] }));
+    expect(o.unplaced?.contents).toBe("1 system, no components yet");
+  });
+});
+
 describe("two systems, shared components, and components in no system", () => {
   const view = {
     locations: [loc("lab", "Media Lab", "room"), loc("b", "Boardroom B", "room")],

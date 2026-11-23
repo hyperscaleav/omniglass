@@ -160,7 +160,7 @@ both, marked **also in** the other; a component in no system sits directly under
 catalog's own words (**2 buildings, 1 floor**, **19 components**, **Empty**), and the Health
 column counts the systems beneath it by health, each with its count and packed to the left in
 that order (healthy, incomplete, degraded, outage), so a lone warning is the first thing in the
-column, never a gap and then a glyph. A long Detail wraps to a second line and carries a
+column, never a gap and then a glyph. A place that holds a system with nothing in its slots reads **no components yet**, never Empty: **Empty** means no system lives there, and a system whose last component was deleted stays on its row (a place holding several lists it under its own header with the same words). Opening that system, in its page or its drawer, shows what a system and a slot are and offers **Add component** (the create form with this system filled in) and **Start from a standard** (the Configure tab, where the standard is chosen). A long Detail wraps to a second line and carries a
 tooltip with the whole of it. Healthy is a muted green and each kind of trouble wears its full colour, so a
 red count stands out down the page without being read. The counts include everything beneath the row, so a
 collapsed branch cannot hide an outage. They are counts rather than one worst-case colour

@@ -191,6 +191,37 @@ describe("one body in two hosts", () => {
   });
 });
 
+describe("a system with no components (#2464)", () => {
+  const blank = () => {
+    const qc = seed();
+    qc.setQueryData([...FLEET_VIEW_KEY], { ...view, systems: [{ ...view.systems![0], dots: [] }] });
+    qc.setQueryData([...systemHealthKey(SID)], { ...health, slots: [], alarms: [] });
+    qc.setQueryData([...systemSlotsKey(SID)], []);
+    qc.setQueryData([...SYSTEMS_KEY], [{ id: SID, name: "boardroom", label: "Boardroom", location_id: uuidFor("sd-room"), actions: ["update"] }]);
+    return qc;
+  };
+  it("the page and the blade teach and offer Add component and Start from a standard", async () => {
+    mountPage(undefined, blank());
+    const page = await screen.findByTestId("system-empty");
+    expect(within(page).getByRole("button", { name: "Add component" })).toBeTruthy();
+    expect(within(page).getByRole("button", { name: "Start from a standard" })).toBeTruthy();
+    cleanup();
+    mountBlade(undefined, blank());
+    const blade = await screen.findByRole("dialog");
+    expect(await within(blade).findByTestId("system-empty")).toBeTruthy();
+  });
+  it("Start from a standard lands on Configure", async () => {
+    mountPage(undefined, blank());
+    fireEvent.click(await screen.findByRole("button", { name: "Start from a standard" }));
+    expect(await screen.findByTestId("configure-face")).toBeTruthy();
+  });
+  it("a system with members shows no empty state", async () => {
+    mountPage(undefined, seed());
+    await screen.findByTestId("system-detail");
+    expect(screen.queryByTestId("system-empty")).toBeNull();
+  });
+});
+
 describe("the blade's tab and edit are its own", () => {
   it("switching tabs in a blade leaves the page's address untouched", async () => {
     mountBlade("/web/explore?node=x");
