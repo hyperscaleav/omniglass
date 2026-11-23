@@ -359,7 +359,7 @@ Uptime is the healthy share of the time the system has been recorded inside the 
 days, never of days it did not exist for. A system recorded minutes ago reads over those
 minutes and the card names its window ("since Nov 23, 01:56 PM"); with no health recorded
 yet it says so instead of showing a percentage. The timeline is labelled at both ends and each
-segment's hover gives its verdict, from, to and duration; the red and amber triangles under it
+segment's hover gives its health, from, to and duration; the red and amber triangles under it
 are alarm raises on that same axis.
 
 ::screenshot{#fleet-history}
