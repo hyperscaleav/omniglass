@@ -1,8 +1,9 @@
-import { type JSX, Show } from "solid-js";
+import { type JSX, Show, useContext } from "solid-js";
 import ModalDialog, { DialogClose, DialogHeading } from "./ui/ModalDialog";
 import { X } from "./icons";
 import FormActionBar from "./FormActionBar";
 import { FormActionsContext, createFormActions } from "../lib/formactions";
+import { BladeEditContext } from "../lib/blades";
 
 // Drawer: a right slide-over on Kobalte Dialog. Kobalte owns focus-trap, focus
 // restore, Esc, scroll-lock, and the ARIA wiring; this styles the shell and owns
@@ -29,7 +30,10 @@ export default function Drawer(props: {
   above?: boolean;
   children: JSX.Element;
 }) {
-  const layer = () => (props.above ? { "z-index": 1000 } : undefined);
+  // A Drawer opened from inside a blade (a detail body's Issue command or
+  // Open simulation, #2423) rises over the stack too, or it opens behind it.
+  const inBlade = useContext(BladeEditContext) !== undefined;
+  const layer = () => (props.above || inBlade ? { "z-index": 1000 } : undefined);
   const actions = createFormActions();
   return (
     <ModalDialog

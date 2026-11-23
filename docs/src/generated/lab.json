@@ -227,6 +227,15 @@
       "setup": []
     },
     {
+      "id": "read-an-entity-in-its-blade",
+      "title": "Read an entity in its blade",
+      "description": "Open a system from Explore, open one of its components over it, and read the component's whole detail without leaving the outline.",
+      "lab": [],
+      "setup": [
+        "omniglass component alarm create 'hq.west.level-4.meeting-405.$comp.videobar-1' --dedup-key walkthrough-blade-detail --message 'Video feed lost' --severity high"
+      ]
+    },
+    {
       "id": "read-every-metric-at-one-instant",
       "title": "Read every metric at one instant",
       "description": "Open a boardroom's system over the last hour, rest the pointer on one metric's chart, and read the crosshair and value every other chart draws at the same instant.",
