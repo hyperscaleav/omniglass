@@ -6,7 +6,9 @@
 // The hub is in-process: it sees the commits of the server it runs in. A
 // commit publishes only after it succeeds, and Mark fences commits out while
 // a reader takes its snapshot, so every commit is either inside the snapshot
-// (at or below the cursor Mark returns) or after it (above the cursor).
+// (at or below the cursor Mark returns) or after it (above the cursor). Mark
+// holds no lock over the snapshot: it counts commits begun and in flight, and
+// retries (after the in-flight ones publish) when one overlapped the snapshot.
 package tail
 
 import (
@@ -77,6 +79,10 @@ var ErrMarkBusy = errors.New("tail: mark busy")
 // snapshot before giving up and returning ErrMarkBusy.
 const markMaxRetries = 3
 
+// markSettleWait bounds how long Mark waits for in-flight commits to publish
+// before its next attempt.
+const markSettleWait = 100 * time.Millisecond
+
 // Hub is the published tail. A nil Hub is a store with no tail: Commit
 // commits through and Mark marks nothing.
 type Hub struct {
@@ -87,7 +93,10 @@ type Hub struct {
 	// failed): a commit is durable before it is published, and Mark must not
 	// mark between the two.
 	begun, inflight uint64
-	ring            []Commit
+	// idle is closed when inflight returns to zero; Mark waits on it between
+	// attempts instead of retrying back to back.
+	idle chan struct{}
+	ring []Commit
 	// sizes is each held commit's RowBytes total, slotted as ring is; held
 	// is their sum, and oldest the sequence of the oldest commit held.
 	sizes    []int
@@ -119,14 +128,18 @@ func RowBytes(r Row) int {
 
 // Commit runs commit and, when it succeeds, publishes rows as the next
 // commit. No lock is held across the database I/O so a concurrent Mark
-// never stalls ingest; the optimistic seq check in Mark detects any commit
-// that raced its snapshot and retries.
+// never stalls ingest; Commit counts itself begun and in flight until it has
+// published (or failed), and Mark's begun/inflight check detects any commit
+// that raced its snapshot and retries once those have published.
 func (h *Hub) Commit(commit func() error, rows []Row) error {
 	if h == nil {
 		return commit()
 	}
 	h.mu.Lock()
 	h.begun++
+	if h.inflight == 0 {
+		h.idle = make(chan struct{})
+	}
 	h.inflight++
 	h.mu.Unlock()
 	if err := commit(); err != nil {
@@ -142,7 +155,7 @@ func (h *Hub) Commit(commit func() error, rows []Row) error {
 		size += RowBytes(r)
 	}
 	h.mu.Lock()
-	h.inflight--
+	h.settle()
 	h.seq++
 	slots := uint64(len(h.ring))
 	if h.seq-h.oldest >= slots {
@@ -164,8 +177,17 @@ func (h *Hub) Commit(commit func() error, rows []Row) error {
 // finish ends a commit that publishes nothing.
 func (h *Hub) finish() {
 	h.mu.Lock()
-	h.inflight--
+	h.settle()
 	h.mu.Unlock()
+}
+
+// settle ends one in-flight commit, releasing Mark's waiters when it was the
+// last. The caller holds mu.
+func (h *Hub) settle() {
+	h.inflight--
+	if h.inflight == 0 {
+		close(h.idle)
+	}
 }
 
 // drop lets the oldest held commit go. The caller holds mu.
@@ -209,8 +231,26 @@ func (h *Hub) Mark(open func() error) (string, error) {
 		if clear && !moved {
 			return cur, nil
 		}
+		h.awaitIdle()
 	}
 	return "", ErrMarkBusy
+}
+
+// awaitIdle waits, bounded by markSettleWait, for the commits in flight to
+// publish, so a retry does not race steady ingest back to back.
+func (h *Hub) awaitIdle() {
+	h.mu.Lock()
+	idle, busy := h.idle, h.inflight > 0
+	h.mu.Unlock()
+	if !busy {
+		return
+	}
+	t := time.NewTimer(markSettleWait)
+	defer t.Stop()
+	select {
+	case <-idle:
+	case <-t.C:
+	}
 }
 
 // Cursor is the hub's newest cursor.

@@ -358,3 +358,33 @@ func TestMarkWaitsOutACommitDurableButNotPublished(t *testing.T) {
 		t.Fatalf("the tail after the mark holds %d commits the snapshot already has", len(commits))
 	}
 }
+
+// Steady concurrent ingest does not turn Mark into ErrMarkBusy: between
+// attempts it waits for the in-flight commits to publish.
+func TestMarkSucceedsUnderConcurrentCommits(t *testing.T) {
+	h := tail.New(64, 0)
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+	for range 3 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				_ = h.Commit(func() error { time.Sleep(time.Millisecond); return nil }, []tail.Row{metric("k", 1)})
+				time.Sleep(5 * time.Millisecond)
+			}
+		}()
+	}
+	defer func() { close(stop); wg.Wait() }()
+	for i := 0; i < 20; i++ {
+		if _, err := h.Mark(func() error { return nil }); err != nil {
+			t.Fatalf("mark %d under concurrent commits: %v", i, err)
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+}
