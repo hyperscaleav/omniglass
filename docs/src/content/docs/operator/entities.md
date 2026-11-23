@@ -110,7 +110,7 @@ location's address lands on the system's Configure with the location's own form 
 (`?edit=location`). The console uses these links for its handoffs, for example a user's
 `?u=<id>&edit=1` deep link on the identity pages. Creating a location, system or component does not:
 it lands on the new row's **Overview** with a "created" notice (#2465), since what you want next is to
-see it. The **back** link above a create form names the place you pressed **+** on (`← West Building`)
+see it. The **back** link above a create form names the location you pressed **+** on (`← West Building`)
 and goes there; opened from nowhere in particular it is `← Explore`.
 
 ::screenshot{#entity-edit-face}

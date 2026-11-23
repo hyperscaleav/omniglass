@@ -12,7 +12,7 @@ keeps its refusal.
 
 Creating a location, system or component now lands on the new row's Overview with a "created" notice
 instead of its editor (`?edit=1` stays the deep link for editing). The create page's back link names the
-place it was opened from. The label field's hint says the label is rendered and keeps the raw template behind
+location it was opened from. The label field's hint says the label is rendered and keeps the raw template behind
 the field's (i). The start-from-template form gained Cancel, and a system template list says how many of
 the standards ship a system template. A system's map crops to the positions it holds, so a system with a
 few members is a small map.
