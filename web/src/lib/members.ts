@@ -2,6 +2,7 @@ import { api } from "../api/client";
 import type { SystemMemberBody } from "../api/api.gen";
 import { entityLabel } from "./entities";
 import type { TreeNode } from "./treeselect";
+import { assignSlot, unassignSlot } from "./system_slots";
 
 // The membership data layer: thin typed wrappers over the generated client.
 //
@@ -79,7 +80,9 @@ export async function setPrimaryMember(system: string, component: string): Promi
 }
 
 // One step of a membership change, in the order it must run.
-export type MembershipStep = { op: "add" | "setPrimary" | "remove"; system: string };
+export type MembershipStep =
+  | { op: "add" | "setPrimary" | "remove"; system: string }
+  | { op: "assign" | "unassign"; system: string; slot: string };
 
 // planMembershipChanges turns what the operator asked for into the calls that
 // make it so, as data, so the ordering rules are testable without a network.
@@ -91,23 +94,52 @@ export type MembershipStep = { op: "add" | "setPrimary" | "remove"; system: stri
 // removals run last, so a refusal partway leaves the component in a system
 // rather than in none. A system being promoted is never removed, even if its
 // chip was staged for removal first.
-export function planMembershipChanges(current: Member[], wantPrimary: string | undefined, removed: ReadonlySet<string>): MembershipStep[] {
+//
+// `added` are the "Also serves..." systems: memberships the operator staged
+// without touching the primary. They are adds only (a system also being
+// promoted is added once, ahead of its setPrimary).
+export function planMembershipChanges(current: Member[], wantPrimary: string | undefined, removed: ReadonlySet<string>, added: ReadonlySet<string> = new Set()): MembershipStep[] {
   const steps: MembershipStep[] = [];
   const currentPrimary = current.find((m) => m.primary)?.system_id ?? "";
   const isMember = (id: string) => current.some((m) => m.system_id === id);
   let promoted = "";
+  for (const id of added) {
+    if (!isMember(id)) steps.push({ op: "add", system: id });
+  }
+  const gone = new Set<string>();
   if (wantPrimary !== undefined && wantPrimary !== currentPrimary) {
     if (wantPrimary === "") {
-      steps.push({ op: "remove", system: currentPrimary });
+      if (currentPrimary) { steps.push({ op: "remove", system: currentPrimary }); gone.add(currentPrimary); }
     } else {
       promoted = wantPrimary;
-      if (!isMember(wantPrimary)) steps.push({ op: "add", system: wantPrimary });
+      if (!isMember(wantPrimary) && !added.has(wantPrimary)) steps.push({ op: "add", system: wantPrimary });
       steps.push({ op: "setPrimary", system: wantPrimary });
     }
   }
   for (const id of removed) {
-    if (id === promoted || id === currentPrimary || !isMember(id)) continue;
+    if (id === promoted || gone.has(id) || !isMember(id)) continue;
     steps.push({ op: "remove", system: id });
+  }
+  return steps;
+}
+
+// planSystemMove: "Move to..." another system, as data. A move is the whole
+// relocation of the component's primary membership: join the destination
+// (staffing a slot there when one was chosen, which creates the membership),
+// make it primary, then leave the system it was in, freeing the slots it held
+// there first since a held slot refuses the leave. Memberships other than the
+// primary are not touched: a shared device that serves two rooms and is moved
+// out of one keeps the other. `fromSlots` are the slots the component fills in
+// the system it leaves, read by the caller from that system.
+export function planSystemMove(a: { members: Member[]; to: string; toSlot?: string; fromSlots: string[] }): MembershipStep[] {
+  const from = a.members.find((m) => m.primary)?.system_id ?? "";
+  const steps: MembershipStep[] = [];
+  if (a.toSlot) steps.push({ op: "assign", system: a.to, slot: a.toSlot });
+  else if (!a.members.some((m) => m.system_id === a.to)) steps.push({ op: "add", system: a.to });
+  steps.push({ op: "setPrimary", system: a.to });
+  if (from && from !== a.to) {
+    for (const slot of a.fromSlots) steps.push({ op: "unassign", system: from, slot });
+    steps.push({ op: "remove", system: from });
   }
   return steps;
 }
@@ -116,7 +148,9 @@ export function planMembershipChanges(current: Member[], wantPrimary: string | u
 // the first refusal (the thrown error is the server's problem body).
 export async function applyMembershipSteps(component: string, steps: MembershipStep[]): Promise<void> {
   for (const s of steps) {
-    if (s.op === "add") await addSystemMember(s.system, component);
+    if (s.op === "assign") await assignSlot(s.system, s.slot, component);
+    else if (s.op === "unassign") await unassignSlot(s.system, s.slot, component);
+    else if (s.op === "add") await addSystemMember(s.system, component);
     else if (s.op === "setPrimary") await setPrimaryMember(s.system, component);
     else await removeSystemMember(s.system, component);
   }

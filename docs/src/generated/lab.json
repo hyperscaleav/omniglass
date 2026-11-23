@@ -147,6 +147,15 @@
       "setup": []
     },
     {
+      "id": "move-a-device-to-another-room",
+      "title": "Move a device to another room",
+      "description": "Open a spare microphone's Configure, press Move to, choose Bay 4 from the places, and watch the breadcrumb follow the device without leaving its page.",
+      "lab": [],
+      "setup": [
+        "omniglass component create --label 'Spare Mic' --location bay-2 --name spare-mic --product lyra-arc-a2"
+      ]
+    },
+    {
       "id": "move-a-location",
       "title": "Move a location to another building",
       "description": "Open a room's Configure, pick its new parent from the location tree, and save. The tree shows the nesting, and rooms (which a room may not sit under) stay in place but cannot be picked.",
