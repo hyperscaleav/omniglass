@@ -68,7 +68,7 @@ shots:
         zoom: 1.8
         hold: 500
       - wait: { text: Regional Office 06 }
-        focus: '[role=tree]'
+        focus: 'ul[role=list]:has-text("Regional Office 06")'
         zoom: 1.3
         hold: 1800
       - click: { role: button, name: Clear }

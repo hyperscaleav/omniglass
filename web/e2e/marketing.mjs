@@ -437,7 +437,11 @@ async function play(page, base, step, cursor, loop, cam) {
       const el = locate(page, step.target);
       await el.waitFor({ state: 'visible', timeout: ACT_TIMEOUT });
       await el.scrollIntoViewIfNeeded({ timeout: ACT_TIMEOUT });
-      await logFocus(page, step, cam, el);
+      // A focus on the step's own target lands as the cursor does. A focus on
+      // another selector is what the step reveals (an edit form opening), so it
+      // is looked for once the step has acted.
+      const later = step.focus !== undefined && step.focus !== 'here' && step.focus !== 'out';
+      if (!later) await logFocus(page, step, cam, el);
       const box = await el.boundingBox();
       if (!box) throw new Error('the target has no box on screen');
       const x = step.kind === 'click' || step.kind === 'hover' ? box.x + box.width / 2 : Math.min(box.x + 24, box.x + box.width / 2);
@@ -452,6 +456,7 @@ async function play(page, base, step, cursor, loop, cam) {
         await el.pressSequentially(/** @type {string} */ (step.text), { delay: PACE.key });
       } else if (step.kind === 'select') await el.selectOption(/** @type {string} */ (step.value), { timeout: ACT_TIMEOUT });
       // a hover is the move itself
+      if (later) await logFocus(page, step, cam, el);
     }
   }
   if (step.hold) await page.waitForTimeout(step.hold);
