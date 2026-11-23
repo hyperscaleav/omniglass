@@ -23,7 +23,7 @@ const ago = (m: number) => new Date(now - m * MIN).toISOString();
 
 type Read = { path: string; search: URLSearchParams; body?: { bindings: { primitive: string; from?: string; to?: string; keys?: string[] }[] } };
 
-function stub(reads: Read[]) {
+function stub(reads: Read[], permissions: string[] = ["*:*"]) {
   const json = (b: unknown) => new Response(JSON.stringify(b), { status: 200, headers: { "content-type": "application/json" } });
   vi.stubGlobal(
     "fetch",
@@ -46,6 +46,7 @@ function stub(reads: Read[]) {
       if (path === "/components/disp/commands")
         return json({ commands: [{ id: 7, command_type: "power", component: "disp", component_id: "disp", status: "settled", phase: "settled", issued_at: ago(30), deadline: ago(29), delivery_count: 1 }] });
       if (path === "/components/disp/alarms/a1:timeline") return json({ entries: [{ at: ago(40), kind: "audit", what: "raised" }] });
+      if (path === "/auth/me") return json({ username: "dev", permissions });
       if (path === "/event-rules") return json({ event_rules: [{ id: uuidFor("tl-rule-1"), name: "reachability-lost", sample_lane: "property", sample_key: "endpoint-reachable" }] });
       if (path === "/components/disp/properties") return json({ properties: [{ property_type_name: "power", property_type_id: "p", data_type: "string", from_contract: true, is_set: false, required: false }] });
       if (path === "/components/disp/metrics") return json({ metrics: [] });
@@ -179,5 +180,15 @@ describe("TimelineOverlay", () => {
         expect(reads.some((r) => r.body?.bindings[0].primitive === prim && r.body.bindings[0].from === since)).toBe(true);
       }
     });
+  });
+
+  it("leaves the views-backed lanes unread, and says why, for a caller without view:read", async () => {
+    const reads: Read[] = [];
+    stub(reads, ["component:read"]);
+    mount(() => hour);
+    await screen.findByTestId("timeline-alarm-span");
+    await waitFor(() => expect(screen.getByTestId("timeline-events-row").textContent).toContain("needs view:read"));
+    expect(screen.getByTestId("timeline-logs-row").textContent).toContain("needs view:read");
+    expect(reads.some((r) => r.path === "/views:run")).toBe(false);
   });
 });

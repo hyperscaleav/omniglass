@@ -41,7 +41,7 @@ import MetricsGrid from "./MetricsGrid";
 import TimelineOverlay from "./TimelineOverlay";
 import TimeRangePicker from "./TimeRangePicker";
 import { CursorProvider } from "../lib/cursor";
-import { useTimeRange } from "../lib/time_range";
+import { DEFAULT_RANGE, useTimeRange, type TimeRange } from "../lib/time_range";
 import { getOutpost, outpostKey } from "../lib/outposts";
 import { PRODUCTS_KEY, listProducts } from "../lib/products";
 import { LEAF_OUTPOST_POLL_MS, LEAF_POLL_MS, collectionState, dotHealth, identityRows, instanceName, leafAlarmSince, membershipRows, spreadSummary, vitalRows, vitalValueText } from "../lib/component_leaf";
@@ -109,7 +109,13 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
   const leafTab = tabState.active;
   // The time range (#2304): the metrics grid and the timeline read over it. A
   // blade shares its page's range.
-  const { range, setRange } = useTimeRange();
+  const { range: asked, setRange } = useTimeRange();
+  // An absolute range reads through the views read, which needs view:read: a
+  // shared link opened by a caller without it reads the default instead, and
+  // the host says why rather than drawing empty charts (#2304).
+  const canViews = () => can(me.data, "view", "read");
+  const rangeDenied = () => asked().kind === "absolute" && !!me.data && !canViews();
+  const range = (): TimeRange => (rangeDenied() ? DEFAULT_RANGE : asked());
   // A command asked for by address (an issue's toast opens its row): a page's
   // fact; a blade has no address of its own.
   const openCommand = props.host === "page" ? useCommandParam() : () => undefined;
@@ -278,8 +284,13 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
               state={tabState}
               guard={leave}
               // The range governs Overview's metrics grid (#2424) and the Timeline.
-              end={leafTab() === "overview" || leafTab() === "timeline" ? <TimeRangePicker range={range()} onChange={setRange} allowCustom={can(me.data, "view", "read")} /> : undefined}
+              end={leafTab() === "overview" || leafTab() === "timeline" ? <TimeRangePicker range={range()} onChange={setRange} allowCustom={canViews()} /> : undefined}
             />
+            <Show when={rangeDenied()}>
+              <p data-testid="range-denied" role="status" class="px-4 pt-2 text-xs text-warning">
+                This link's custom range is read through views, which needs view:read. Showing the last 24 hours instead.
+              </p>
+            </Show>
             <Show when={leafTab() === "configure"}>
               {/* The host keys the body on the id, so another component is
                   another face, never this one's drafts (#854). */}

@@ -43,7 +43,7 @@ import TimeRangePicker from "./TimeRangePicker";
 import MetricsGrid from "./MetricsGrid";
 import TimelineOverlay from "./TimelineOverlay";
 import { CursorProvider } from "../lib/cursor";
-import { useTimeRange } from "../lib/time_range";
+import { DEFAULT_RANGE, useTimeRange, type TimeRange } from "../lib/time_range";
 import { memberModel, systemsAtLocation, type MemberContext } from "../lib/detail";
 import { systemMembers, systemMembersKey } from "../lib/members";
 import { LEAF_POLL_MS } from "../lib/component_leaf";
@@ -171,7 +171,13 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
   // The one time range (#2304), held in the address: the metrics grid and the
   // timeline read over it, and the picker on the tab rail writes it. A blade
   // shares its page's range.
-  const { range, setRange } = useTimeRange();
+  const { range: asked, setRange } = useTimeRange();
+  // An absolute range reads through the views read, which needs view:read: a
+  // shared link opened by a caller without it reads the default instead, and
+  // the host says why rather than drawing empty charts (#2304).
+  const canViews = () => can(me.data, "view", "read");
+  const rangeDenied = () => asked().kind === "absolute" && !!me.data && !canViews();
+  const range = (): TimeRange => (rangeDenied() ? DEFAULT_RANGE : asked());
   const eventsQ = useQuery(() => ({ queryKey: systemEventsKey(id()), queryFn: () => systemEvents(id()), enabled: tab() === "activity", refetchInterval: LEAF_POLL_MS }));
   // The members' lines under the Logs filter (#1145): a severity threshold
   // and a source, applied by the read.
@@ -318,8 +324,13 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
               guard={leave}
               // The range governs Overview's metrics and the Timeline; Activity
               // keeps its own fixed windows, so the control is not offered there.
-              end={tab() === "overview" || tab() === "timeline" ? <TimeRangePicker range={range()} onChange={setRange} allowCustom={can(me.data, "view", "read")} /> : undefined}
+              end={tab() === "overview" || tab() === "timeline" ? <TimeRangePicker range={range()} onChange={setRange} allowCustom={canViews()} /> : undefined}
             />
+            <Show when={rangeDenied()}>
+              <p data-testid="range-denied" role="status" class="px-4 pt-2 text-xs text-warning">
+                This link's custom range is read through views, which needs view:read. Showing the last 24 hours instead.
+              </p>
+            </Show>
             <Show when={tab() === "configure"}>
               {/* A sole system's location has no page of its own: it configures
                   here, first, as the page reads (its card sits above the

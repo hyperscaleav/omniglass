@@ -13,6 +13,7 @@ import { durationText } from "../lib/timeline";
 import { nearestByTime } from "../lib/chart";
 import { rangeLabel, rangeStepSeconds, resolveRange, type TimeRange } from "../lib/time_range";
 import { useSeverity } from "../lib/severity";
+import { can, useMe } from "../lib/auth";
 import { EVENT_RULES_KEY, listEventRules } from "../lib/event_rules";
 import { effectiveMetrics, effectiveMetricsKey } from "../lib/component_metrics";
 import { systemMetrics, systemMetricsKey } from "../lib/system_metrics";
@@ -127,6 +128,10 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
   // no sliding key to re-read it, so it polls; a range wholly past holds.
   const tail = () => (props.range.kind === "absolute" && win().to > now() ? 60_000 : false);
   const scale = useSeverity();
+  // Events, logs, property changes and metric lines read through the views
+  // read, which needs view:read; without it those lanes say so instead.
+  const me = useMe();
+  const views = () => can(me.data, "view", "read");
 
   // The plot's width, measured, so a drawer and a page draw at 1:1.
   const [width, setWidth] = createSignal(FRAME.width);
@@ -179,6 +184,7 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
   const eventsQ = useQuery(() => ({
     queryKey: eventsOverKey(props.kind, props.id, win().from, win().to),
     queryFn: () => eventsOver(props.kind, props.id, win().from, win().to),
+    enabled: views(),
     placeholderData: keepPreviousData,
     refetchInterval: tail(),
   }));
@@ -186,6 +192,7 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
   const logsQ = useQuery(() => ({
     queryKey: logsOverKey(props.kind, props.id, win().from, win().to, logSeverity()),
     queryFn: () => logsOver(props.kind, props.id, win().from, win().to, logSeverity()),
+    enabled: views(),
     placeholderData: keepPreviousData,
     refetchInterval: tail(),
   }));
@@ -230,7 +237,7 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
     queryFn: () => propertiesOver(props.kind, props.id, propertyKeys(), win().from, win().to),
     placeholderData: keepPreviousData,
     refetchInterval: tail(),
-    enabled: propertyKeys().length > 0,
+    enabled: views() && propertyKeys().length > 0,
   }));
 
   const propertySeries = createMemo(() => propsQ.data ?? []);
@@ -264,6 +271,7 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
     queries: shownMetrics().map((m) => ({
       queryKey: metricBucketsBetweenKey(props.kind, props.id, m, win().from, win().to, stepS()),
       queryFn: () => metricBucketsBetween(props.kind, props.id, m, win().from, win().to, stepS()),
+      enabled: views(),
       placeholderData: keepPreviousData,
       refetchInterval: tail(),
       })),
@@ -644,7 +652,7 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
 
         <Header group="events" label="Events" count={count(eventClusters())} hint="Each event recorded in range; a crowd of them is one marker with its count." />
         <Show when={isOpen("events")}>
-          <Row label={<span class="text-base-content/50">{eventsQ.isLoading ? "Reading…" : eventsQ.data?.more ? "newest 3000" : ""}</span>} height={20} testid="timeline-events-row">
+          <Row label={<span class="text-base-content/50">{!views() ? "needs view:read" : eventsQ.isLoading ? "Reading…" : eventsQ.data?.more ? "newest 3000" : ""}</span>} height={20} testid="timeline-events-row">
             <Markers
               clusters={eventClusters()}
               height={20}
@@ -673,7 +681,7 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
           }
         />
         <Show when={isOpen("logs")}>
-          <Row label={<span class="text-base-content/50">{logsQ.isLoading ? "Reading…" : logsQ.data?.more ? "newest 3000" : ""}</span>} height={20} testid="timeline-logs-row">
+          <Row label={<span class="text-base-content/50">{!views() ? "needs view:read" : logsQ.isLoading ? "Reading…" : logsQ.data?.more ? "newest 3000" : ""}</span>} height={20} testid="timeline-logs-row">
             <Markers
               clusters={logClusters()}
               height={20}
