@@ -1,10 +1,10 @@
 ---
-title: "A steady sim fleet no longer reads loss while the node and the sim disagree on it (#1962)"
+title: "A steady sim fleet no longer reads loss while the outpost and the sim disagree on it (#1962)"
 date: 2026-11-23
 refs: [1962, 1895]
 ---
 
-The node rebuilds its worklist on its own clock and the simulator re-pulls its device list on
+the outpost rebuilds its worklist on its own clock and the simulator re-pulls its device list on
 another, so a window with no change to the sim's served fleet could still count polls sent to a
 device the sim had not bound yet (or had stopped serving) as SNMP loss. The sim's observation now
 names the devices it serves (`served_ids`, capped at 2000, `served_truncated` past that), and

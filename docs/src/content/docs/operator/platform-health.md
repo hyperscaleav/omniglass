@@ -473,9 +473,9 @@ server that restarts starts it over, and nothing of it is stored.
   received, and is no loss of the path. No figure from that window means anything, so the card says
   so and shows none until the window slides past the restart or the change. That is the ring's span
   plus two brackets (a window of sliding brackets, so a few minutes at the defaults), which is the
-  stretch with no measured verdict after a real fleet change.
-- **a target the simulator does not serve**: the node's worklist and the simulator's device list move
-  on their own clocks (the simulator re-pulls every 10 seconds), so for a moment the node polls a device
+  stretch with no measured reading after a real fleet change.
+- **a target the simulator does not serve**: the outpost's worklist and the simulator's device list move
+  on their own clocks (the simulator re-pulls every 10 seconds), so for a moment the outpost polls a device
   the simulator has not bound yet, or one it has stopped serving, with no change to the served fleet
   inside the window. The simulator names the devices it serves, and the polls sent to any other target
   print as masked on the gap, never as loss. A real loss on a served device still reads loss. A fleet
