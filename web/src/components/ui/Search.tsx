@@ -128,7 +128,7 @@ export default function Search(props: SearchProps) {
           </Show>
           <Listbox
             class={
-              (props.listClass ?? "max-h-80 overflow-y-auto p-2 focus:outline-none") +
+              (props.listClass ?? "max-h-[28rem] overflow-y-auto p-2 focus:outline-none") +
               " [&:not(:has([data-highlighted]))_[data-first]>div]:bg-primary/15 [&:not(:has([data-highlighted]))_[data-first]>div]:text-primary"
             }
           />
