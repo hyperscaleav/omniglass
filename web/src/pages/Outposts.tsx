@@ -37,6 +37,7 @@ import { useMe, can } from "../lib/auth";
 import { describeError, rel } from "../lib/format";
 import { pushToast } from "../lib/toast";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
+import { confirmDelete } from "../lib/confirm";
 
 // Outposts: the collection-daemon inventory, a config over the shared FlatList (the
 // flat sibling of the inventory TreeList). A row per outpost with its liveness pill
@@ -172,7 +173,7 @@ function OutpostBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput)
   async function removeOutpost() {
     const outpost = n();
     if (!outpost) return;
-    if (!confirm(`Delete outpost "${outpostLabel(outpost)}"? Its endpoints, tasks, and enrollment are removed. This cannot be undone.`)) return;
+    if (!(await confirmDelete({ kind: "outpost", name: outpostLabel(outpost), consequence: "Its endpoints, tasks, and enrollment are removed. This cannot be undone." }))) return;
     setErr(null);
     try {
       await deleteOutpost(outpost.name);

@@ -8,6 +8,7 @@ import { GROUPS_KEY } from "../lib/groups";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 import { userIdentityLinksKey } from "../lib/identityLinks";
+import { answerConfirms } from "../lib/confirm.testkit";
 
 // The Users page is a config over the shared FlatList: a directory row per
 // user, a row opening the detail blade (facts, the groups it belongs to, grants,
@@ -220,7 +221,7 @@ describe("Users page", () => {
       // The Sessions section's per-user list fetch: no rows needed here.
       return new Response(JSON.stringify({ sessions: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
     });
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    answerConfirms(true);
 
     mount();
     fireEvent.click(screen.getByText("Alice Ng"));
@@ -311,7 +312,7 @@ describe("Users page", () => {
     // Archive hides the user from the directory, so its blade closes (the account
     // still exists and is restorable, unlike a purge). The POST 204s and the refetch
     // returns the directory without her.
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    answerConfirms(true);
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       const url = typeof input === "string" ? input : req.url;
@@ -337,7 +338,7 @@ describe("Users page", () => {
     // The blade must close, and the now-dead detail query must not be refetched (an
     // orphan 404 that would keep the blade in a broken state).
     let detailRefetched = false;
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    answerConfirms(true);
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       const url = typeof input === "string" ? input : req.url;
