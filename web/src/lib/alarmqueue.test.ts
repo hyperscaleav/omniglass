@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { alarmFilterKeys, chipsFromParams, paramsFromChips, queryFromChips } from "./alarmqueue";
+import { alarmFilterKeys, chipsFromParams, paramsFromChips, queryFromChips, stateFromParams } from "./alarmqueue";
 import { buildPredicate } from "./predicate";
 import type { Alarm } from "./alarms";
 
@@ -37,5 +37,22 @@ describe("the alarm queue's filter, in the address", () => {
     const other = { location: "annex", location_path: "annex" } as Alarm;
     expect(keep(room)).toBe(true);
     expect(keep(other)).toBe(false);
+  });
+});
+
+describe("the alarm queue's state, in the address (#2426)", () => {
+  it("reads the state, defaulting to the active queue", () => {
+    expect(stateFromParams({})).toBe("active");
+    expect(stateFromParams({ state: "cleared" })).toBe("cleared");
+    expect(stateFromParams({ state: "all" })).toBe("all");
+    expect(stateFromParams({ state: "bogus" })).toBe("active");
+  });
+
+  it("writes the state back and asks the server for it only when it is not the default", () => {
+    expect(paramsFromChips([], "cleared").state).toBe("cleared");
+    expect(paramsFromChips([]).state).toBe("active");
+    expect(queryFromChips([], "cleared")).toEqual({ state: "cleared" });
+    expect(queryFromChips([], "all")).toEqual({ state: "all" });
+    expect(queryFromChips([])).toEqual({});
   });
 });

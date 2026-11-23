@@ -10,6 +10,7 @@ import { SYSTEM_HEALTHS_KEY, locationHealthKey, systemHealthKey } from "../lib/h
 import { FLEET_VIEW_KEY } from "../lib/fleet";
 import { COMPONENTS_KEY } from "../lib/components";
 import { EVENT_RULES_KEY } from "../lib/event_rules";
+import { answerConfirms } from "../lib/confirm.testkit";
 
 // The severity levels page (#921, authored since #930): the catalog an event
 // rule raises at, beside the rules. Each level shows its rank, its label in its
@@ -237,7 +238,7 @@ describe("Severity levels page", () => {
 
   it("deletes an operator level after a confirmation", async () => {
     const writes = catchWrites();
-    const ask = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const ask = answerConfirms(true);
     mount();
     openLevel("major");
     const b = await blade();
@@ -250,7 +251,7 @@ describe("Severity levels page", () => {
 
   it("says why the server refused a delete: a level in use stays", async () => {
     catchWrites({ status: 409, detail: "an alarm or an event rule still names this severity level" });
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    answerConfirms(true);
     mount();
     openLevel("major");
     const b = await blade();
