@@ -353,6 +353,16 @@ describe("the leaf's dispatch facts (#786)", () => {
     expect(await within(card).findByTestId("timeseries-chart")).toBeTruthy();
   });
 
+  it("the range picker on the tab rail re-reads the metrics grid over the picked range", async () => {
+    mount();
+    expect(await screen.findByTestId("metrics-grid")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("time-range-trigger"));
+    fireEvent.click(await screen.findByTestId("time-range-preset-7d"));
+    await waitFor(() => expect(window.location.search).toContain("range=7d"));
+    await waitFor(() => expect(within(screen.getByTestId("metrics-grid")).getByText("Last 7 days")).toBeTruthy());
+    await waitFor(() => expect(leafClient!.getQueryCache().find({ queryKey: [...metricBucketsKey("components", uuidFor("cf-c-bar"), "icmp-rtt-avg", 168, 3600)] })).toBeTruthy());
+  });
+
   // #1550: a metric's unit rides after its value in the muted style, and a
   // float is rounded to a sane precision with the raw value in the title.
   it("a vitals value carries its unit, rounded, with the raw value in the title", () => {

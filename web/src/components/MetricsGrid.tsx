@@ -7,7 +7,7 @@ import { CalcRuleLink } from "./RuleLink";
 import { CursorProvider } from "../lib/cursor";
 import { effectiveMetrics, effectiveMetricsKey } from "../lib/component_metrics";
 import { systemMetrics, systemMetricsKey } from "../lib/system_metrics";
-import { SERIES_POLL_MS, metricBuckets, metricBucketsKey } from "../lib/series";
+import { SERIES_POLL_MS, metricBuckets, metricBucketsBetween, metricBucketsBetweenKey, metricBucketsKey } from "../lib/series";
 import { rangeLabel, type TimeRange } from "../lib/time_range";
 import { createClock } from "../lib/clock";
 import { LEAF_POLL_MS, vitalValueText } from "../lib/component_leaf";
@@ -41,9 +41,18 @@ export default function MetricsGrid(props: { kind: "components" | "systems"; id:
       // The chart is the series whose current value sits beside it: a bucket
       // is one instance (#1485), so a sampled metric names the instance shown.
       const instance = m.is_sampled ? m.instance : undefined;
+      const w = win();
+      if (w.hours === undefined) {
+        // An absolute range holds still, so it is read once, never polled.
+        return {
+          queryKey: metricBucketsBetweenKey(props.kind, props.id, m.metric_type_name, w.from, w.to, w.stepSeconds, instance),
+          queryFn: () => metricBucketsBetween(props.kind, props.id, m.metric_type_name, w.from, w.to, w.stepSeconds, instance),
+        };
+      }
+      const hours = w.hours;
       return {
-        queryKey: metricBucketsKey(props.kind, props.id, m.metric_type_name, win().hours, win().stepSeconds, instance),
-        queryFn: () => metricBuckets(props.kind, props.id, m.metric_type_name, win().hours, win().stepSeconds, instance),
+        queryKey: metricBucketsKey(props.kind, props.id, m.metric_type_name, hours, w.stepSeconds, instance),
+        queryFn: () => metricBuckets(props.kind, props.id, m.metric_type_name, hours, w.stepSeconds, instance),
         refetchInterval: SERIES_POLL_MS,
       };
     }),
@@ -61,17 +70,7 @@ export default function MetricsGrid(props: { kind: "components" | "systems"; id:
             <For each={metrics()}>
               {(m, i) => {
                 const q = () => seriesQ[i()];
-                // An absolute range keeps only its own window (the read
-                // reaches back from now); a preset's window ends now, so a
-                // bucket newer than the clock's last tick still draws.
-                const buckets = () => {
-                  const all = q()?.data?.buckets ?? [];
-                  if (props.range.kind !== "absolute") return all;
-                  return all.filter((b) => {
-                    const t = Date.parse(b.ts);
-                    return t >= win().from && t < win().to;
-                  });
-                };
+                const buckets = () => q()?.data?.buckets ?? [];
                 return (
                   <article data-testid={`metric-card-${m.metric_type_name}`} class="flex min-w-0 flex-col gap-1 rounded-box border border-base-300 bg-base-100 p-3">
                     <header class="flex items-baseline gap-2">

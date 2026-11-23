@@ -13,14 +13,9 @@ describe("gridWindow", () => {
     expect(gridWindow({ kind: "preset", preset: "1h" }, now)).toEqual({ from: now - HOUR, to: now, hours: 1, stepSeconds: 60 });
   });
 
-  it("an absolute range draws its own window and reads back far enough to cover its start", () => {
-    const w = gridWindow({ kind: "absolute", from: now - 5 * HOUR - 1, to: now - 2 * HOUR }, now);
-    expect(w).toEqual({ from: now - 5 * HOUR - 1, to: now - 2 * HOUR, hours: 6, stepSeconds: 60 });
-  });
-
-  it("the read stays inside the route's 1 to 720 hours", () => {
-    expect(gridWindow({ kind: "absolute", from: now - 60_000, to: now }, now).hours).toBe(1);
-    expect(gridWindow({ kind: "absolute", from: now - 900 * HOUR, to: now - 800 * HOUR }, now).hours).toBe(720);
+  it("an absolute range draws its own window and names no hours: it reads its own from and to", () => {
+    const w = gridWindow({ kind: "absolute", from: now - 5 * HOUR, to: now - 2 * HOUR }, now);
+    expect(w).toEqual({ from: now - 5 * HOUR, to: now - 2 * HOUR, hours: undefined, stepSeconds: 60 });
   });
 });
 

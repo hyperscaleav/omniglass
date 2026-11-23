@@ -37,6 +37,7 @@ import { lifecycleRows } from "../lib/lifecycle";
 import { effectiveProperties, effectivePropertiesKey } from "../lib/component_properties";
 import { effectiveMetrics, effectiveMetricsKey } from "../lib/component_metrics";
 import MetricsGrid from "../components/MetricsGrid";
+import TimeRangePicker from "../components/TimeRangePicker";
 import { useTimeRange } from "../lib/time_range";
 import { CalcRuleLink } from "../components/RuleLink";
 import { durationText } from "../lib/timeline";
@@ -176,7 +177,7 @@ export default function ComponentLeaf() {
   const lifecycle = createMemo(() => lifecycleRows(propsQ.data ?? [], metricsQ.data ?? []));
   const vitals = createMemo(() => vitalRows(metricsQ.data ?? []));
   // The page's time range (#2304): the metrics grid charts over it.
-  const { range } = useTimeRange();
+  const { range, setRange } = useTimeRange();
   // The vitals rows are kept by metric name, never by the objects a poll
   // hands back (each poll is fresh), so an opened row and its tooltip survive
   // the next poll, the rule the collection rows below follow (#1059).
@@ -277,7 +278,13 @@ export default function ComponentLeaf() {
               <span class="text-base-content/30">·</span>
               <span class="font-data text-xs text-base-content/60">{component()?.name}</span>
             </div>
-            <TabRail tabs={leafTabs()} activeKey={leafTab} guard={leave} />
+            <TabRail
+              tabs={leafTabs()}
+              activeKey={leafTab}
+              guard={leave}
+              // The range governs Overview's metrics grid (#2424), as on a system.
+              end={leafTab() === "overview" ? <TimeRangePicker range={range()} onChange={setRange} allowCustom={can(me.data, "view", "read")} /> : undefined}
+            />
             <Show when={leafTab() === "configure"}>
               {/* Keyed on the id: another component is another face (#854). */}
               <Show when={id()} keyed>{(cid) => <ConfigureFace kind="component" id={cid} guard={leave} />}</Show>

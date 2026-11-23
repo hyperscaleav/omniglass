@@ -93,13 +93,28 @@ await waitFor(() => expect(read(reads, "/systems/room-1/metrics/rtt/samples?hour
     await waitFor(() => expect(read(reads, "/systems/room-1/metrics/fan-speed/samples?hours=1&resolution=60")).toBe(true));
   });
 
-  it("an absolute range reads back to its start and draws only its own window", async () => {
-    const reads: string[] = [];
-    stub(reads);
+  it("an absolute range reads its own from and to through the views binding, and draws that window", async () => {
+    const bodies: { bindings: { keys: string[]; from: string; to: string; step_seconds: number }[] }[] = [];
     const to = Date.now() - 2 * HOUR;
-    mount("systems", "room-1", () => ({ kind: "absolute", from: to - 3 * HOUR, to }));
-    await waitFor(() => expect(reads.some((r) => /rtt\/samples\?hours=[56]&resolution=60&/.test(r))).toBe(true));
-    await waitFor(() => expect(screen.getAllByTestId("timeseries-chart")).toHaveLength(2));
+    const from = to - 3 * HOUR;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const req = input instanceof Request ? input : new Request(String(input));
+        const json = (b: unknown) => new Response(JSON.stringify(b), { status: 200, headers: { "content-type": "application/json" } });
+        if (req.method === "POST") {
+          const body = await req.clone().json();
+          bodies.push(body);
+          const v = 5;
+          const series = [{ instance: "", buckets: [{ ts: new Date(from + HOUR).toISOString(), count: 1, min: v, max: v, avg: v, last: v }] }];
+          return json({ results: [{ metric: series, cursor: "b.1", covered_from: "", entities: [], from: "", to: "" }], cursor: "b.1" });
+        }
+        return json({ metrics: [metrics[1]] });
+      }),
+    );
+    mount("systems", "room-1", () => ({ kind: "absolute", from, to }));
+    await waitFor(() => expect(screen.getAllByTestId("timeseries-chart")).toHaveLength(1));
+    expect(bodies[0].bindings[0]).toMatchObject({ keys: ["rtt"], from: new Date(from).toISOString(), to: new Date(to).toISOString(), step_seconds: 60 });
   });
 
   it("hovering one chart puts the crosshair at the same instant on every chart in the grid; leaving clears all", async () => {

@@ -4,20 +4,16 @@
 import type { ChartBucket } from "./chart";
 import { rangeHours, rangeStepSeconds, resolveRange, type TimeRange } from "./time_range";
 
-const HOUR = 3600_000;
-// The series routes count `hours` back from now, 1 to 720 (30 days).
-const MAX_HOURS = 720;
+export type GridWindow = { from: number; to: number; hours?: number; stepSeconds: number };
 
-export type GridWindow = { from: number; to: number; hours: number; stepSeconds: number };
-
-// gridWindow is what a chart draws ([from, to) in epoch ms) and what it reads
-// (`hours` back from now at `stepSeconds` a bucket). An absolute range has no
-// width of its own on those routes, so it reads back far enough to cover its
-// start (capped at 720) and the chart keeps only its own window.
+// gridWindow is what a chart draws ([from, to) in epoch ms) and how it reads
+// it: a preset reads `hours` back from now on the series route; an absolute
+// range has no `hours` and reads its own [from, to) through the views
+// binding (metricBucketsBetween, #2304). The step keeps either a few hundred
+// buckets wide.
 export function gridWindow(range: TimeRange, now: number): GridWindow {
   const { from, to } = resolveRange(range, now);
-  const hours = rangeHours(range) ?? Math.min(Math.max(Math.ceil((now - from) / HOUR), 1), MAX_HOURS);
-  return { from, to, hours, stepSeconds: rangeStepSeconds(to - from) };
+  return { from, to, hours: rangeHours(range), stepSeconds: rangeStepSeconds(to - from) };
 }
 
 // hasData is whether any bucket in the window holds a sample: a metric

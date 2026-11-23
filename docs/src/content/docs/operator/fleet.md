@@ -425,7 +425,7 @@ on its label's tooltip.
 
 ::screenshot{#fleet-component}
 
-Below Vitals, the **metrics** grid charts the same metrics over the page's time range, a card per
+Below Vitals, the **metrics** grid charts the same metrics over the page's time range (the picker on the tab rail, as on a system), a card per
 metric, every chart on one shared cursor: it is the system view's grid, described there, for one
 component.
 

@@ -723,7 +723,7 @@ describe("the metrics grid on the system page (#794, #2424)", () => {
     const grid = await screen.findByTestId("metrics-grid");
     const temp = within(grid).getByTestId("metric-card-room-temperature");
     expect(within(temp).getByText("Room Temperature")).toBeTruthy();
-    expect(within(temp).getByText("23.5")).toBeTruthy();
+    expect(within(temp).getByTestId("metric-current").textContent).toBe("23.5");
     const occ = within(grid).getByTestId("metric-card-occupancy-count");
     expect(within(occ).getByText(/contract default/)).toBeTruthy();
   });
