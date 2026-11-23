@@ -63,7 +63,7 @@ $ make test
 
 demo: 
 
-<!-- A PR that closes a bug or flaky-test issue changes a test, or says why not on a line of its own (optional otherwise):
+<!-- A PR that closes a Bug-typed issue changes a test, or says why not on a line of its own (optional otherwise):
 regression-test: none (reason)
 -->
 

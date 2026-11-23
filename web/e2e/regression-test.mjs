@@ -2,7 +2,7 @@
 //
 //   node web/e2e/regression-test.mjs
 //       env PR_BODY, PR_NUMBER, GH_TOKEN, GITHUB_REPOSITORY; reads the PR's
-//       changed files and each closed issue's labels through the gh CLI,
+//       changed files and each closed issue's type through the gh CLI,
 //       prints the verdict, exits 1 on a failure.
 import { execFileSync } from 'node:child_process';
 import { check, closedIssues } from './regressiontest.mjs';
@@ -22,9 +22,13 @@ function main() {
     try {
       const r = gh(['api', `repos/${repo}/issues/${number}`]);
       // A pull request number in a closing keyword is not a ticket.
-      return { number, labels: r.pull_request ? [] : (r.labels ?? []).map((/** @type {{name: string}} */ l) => l.name) };
-    } catch {
-      return { number, labels: [] };
+      return { number, type: r.pull_request ? '' : (r.type?.name ?? '') };
+    } catch (e) {
+      // Only a 404 is "not a ticket"; any other failure must not open the gate.
+      const msg = String(/** @type {any} */ (e)?.stderr ?? e);
+      if (/HTTP 404|Not Found/i.test(msg)) return { number, type: '' };
+      console.error(`regression-test: could not read issue #${number}: ${msg}`);
+      process.exit(1);
     }
   });
   const files = gh(['api', '--paginate', '--slurp', `repos/${repo}/pulls/${process.env.PR_NUMBER}/files?per_page=100`])

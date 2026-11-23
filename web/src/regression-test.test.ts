@@ -34,7 +34,7 @@ describe("isTestFile", () => {
 });
 
 describe("check", () => {
-  const bug = [{ number: 9, labels: ["bug", "area:x"] }];
+  const bug = [{ number: 9, type: "Bug" }];
   it("fails a bug close with no test, naming the issue and both ways out", () => {
     const v = check({ body: "Closes #9", changed: ["a.go"], closed: bug });
     expect(v.ok).toBe(false);
@@ -49,9 +49,9 @@ describe("check", () => {
     expect(v.ok).toBe(false);
     expect(v.message).toContain("no reason");
   });
-  it("gates flaky-test too", () => expect(check({ body: "", changed: [], closed: [{ number: 3, labels: ["flaky-test"] }] }).ok).toBe(false));
+  it("gates only the Bug type", () => expect(check({ body: "", changed: [], closed: [{ number: 3, type: "Task" }] }).ok).toBe(true));
   it("passes non-bug or no closes", () => {
-    expect(check({ body: "", changed: ["a.go"], closed: [{ number: 1, labels: ["area:x"] }] }).ok).toBe(true);
+    expect(check({ body: "", changed: ["a.go"], closed: [{ number: 1, type: "Feature" }] }).ok).toBe(true);
     expect(check({ body: "", changed: ["a.go"], closed: [] }).ok).toBe(true);
   });
 });
