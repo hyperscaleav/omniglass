@@ -1,0 +1,2 @@
+shot alarm-outage: step 1's frame does not show "degraded", "Reachability lost"; it shows: Display 1 | outage | since | Nov 23, 04:17 AM | · | 5s | Why | High | by rule | reachability-lost | Acknowledge | Serves
+shot alarm-outage: step 4's frame does not show "outage"; it shows: Why | High | Reachability lost | 8s | · | unacknowledged | Acknowledge | Snooze | What it is | Product | Boreal Edge 86 | boreal-edge-86
