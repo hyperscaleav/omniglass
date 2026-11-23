@@ -1,6 +1,7 @@
 import { Show, For, createSignal, createEffect } from "solid-js";
 import Button from "../components/Button";
 import KVRow from "../components/KVRow";
+import { toast } from "../components/ui/Toast";
 import { RotateCcw, Save, Pencil, Check } from "../components/icons";
 import { useMe, can } from "../lib/auth";
 import {
@@ -254,7 +255,10 @@ function SettingRow(props: {
     setBusy(true);
     setRowErr(null);
     const r = await props.onPatch(props.namespace, { [props.settingKey]: wireValue(constraint(), draft(), props.value) });
-    if (!r.ok) setRowErr(r.message);
+    // The row shows the new value; the toast says the save landed, and a
+    // refusal stays on the row, beside the field it is about.
+    if (r.ok) toast.success(`${props.namespace}.${props.settingKey} saved`);
+    else setRowErr(r.message);
     setBusy(false);
   }
 

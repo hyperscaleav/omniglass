@@ -6,6 +6,7 @@ import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import BladeTitle from "../components/BladeTitle";
 import Button from "../components/Button";
+import Switch from "../components/ui/Switch";
 import { useFormActions } from "../lib/formactions";
 import { Plus, X } from "../components/icons";
 import {
@@ -223,10 +224,12 @@ function AppliesToPicker(p: { value: EntityKind[]; onChange: (v: EntityKind[]) =
 
 function PropagatesToggle(p: { value: boolean; onChange: (v: boolean) => void }): JSX.Element {
   return (
-    <label class="flex items-center gap-2">
-      <input type="checkbox" class="toggle toggle-sm" checked={p.value} onChange={(e) => p.onChange(e.currentTarget.checked)} />
-      <span class="font-data text-sm">{p.value ? "cascades to descendants" : "flat (own entity only)"}</span>
-    </label>
+    <Switch
+      label="Cascades to descendants"
+      description={p.value ? "Every descendant of a tagged entity carries it too." : "Flat: only the tagged entity carries it."}
+      checked={p.value}
+      onChange={p.onChange}
+    />
   );
 }
 
