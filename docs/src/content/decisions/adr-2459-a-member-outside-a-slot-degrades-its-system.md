@@ -3,7 +3,7 @@ title: "A member outside a slot degrades its system, and an occupant still to at
 date: 2026-11-23
 status: Accepted
 summary: "Any open alarm on a member that fills no slot makes its system degraded, whatever the alarm's severity, never outage: slots alone decide outage. A slot whose occupants are still to attach (a driver product with no endpoint) reads incomplete. The place roll-up is unchanged and carries the new system health."
-refs: [2459]
+refs: [2459, 2489]
 ---
 
 - **Date:** 2026-11-23 | **Status:** Accepted | **Pages:** [the model](/start/the-model/#judging), [health](/architecture/health/#the-chain-a-components-own-health-is-the-routing-key), [glossary](/architecture/glossary/), [alarms and actions](/architecture/alarms-actions/), [Explore](/operator/fleet/)
@@ -43,7 +43,7 @@ refs: [2459]
   while one of them holds an open alarm. The alarm write path costs one more statement per system it
   touches (the members outside a slot, read in one statement however many). A product's driver being
   added or removed in the catalog does not recompute the components of that product; the reads stay
-  right, and the history catches up at the next write to each system.
+  right, and the history catches up at the next write to each system (#2489).
 - **Not chosen:**
   - **Display only.** Listing the alarm on the system while its health stayed healthy would have left
     places, Explore and Home reading healthy over a broken box.
