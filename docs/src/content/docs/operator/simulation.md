@@ -165,6 +165,30 @@ out, as the slot's impact says). **Catalog > Actions > Event rules** shows the r
 lasts. Repair it and the next `up` reading clears the alarm and the health recovers. The
 [rules guide](/admin/rules/) walks the same loop with a rule of your own.
 
+### Two faults the lab starts with
+
+The dev fleet comes up with two of these already set, so its first alarms are true ones a presenter
+can lift live. The seed sets each impairment once, as it wires the device, and never again, so a
+fault you repair stays repaired across a lab restart (`omniglass lab run --fresh` puts both back).
+
+- **DSP 1 in the auditorium is unplugged.** The official reachability rule opens a **High** alarm
+  after its sustain: the DSP goes to outage and the auditorium reads degraded. Its Reachability panel
+  reads `down`, its activity shows the rule's `rule-fired` event, and the drawer shows **Unplugged**.
+- **Display 1 in bay 1 answers 400 ms late.** Its **SNMP Response Time** sits at about 400 ms, so the
+  fleet's own `response-slow` rule (an operator's rule the seed adds beside the official ones; more
+  than 250 ms, held 15 s) opens a **Warning**: the display reads degraded and keeps its slot, so the
+  room above it stays healthy.
+
+The fleet also carries a rule for a fault it does not start with: `display-powered-off` opens a
+**Warning** on a display whose own power report reads `off` (standby pages no one, and a projector is
+not a display), and clears when it reads on again. Power a display off and the alarm raises; send
+it `set-power` `on` from its Commands panel and the alarm clears.
+
+**Repair** either one and the next healthy reading clears its alarm, with the clear event beside the
+fire on the component's activity. Neither the seed nor anyone else writes an alarm row: each is raised
+and cleared by its rule. The lab's readiness line counts an impaired device's endpoints as broken on
+purpose, so it never waits for them.
+
 Loss shows from the far end too. [Platform health](/operator/platform-health/#with-a-simulator)
 sets what each simulated device saw beside what the outpost sent and the server collected: drop an snmp
 device's packets and the outpost's **sent, not received** gap for snmp opens, read as impaired rather than
