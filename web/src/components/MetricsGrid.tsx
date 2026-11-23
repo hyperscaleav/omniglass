@@ -32,6 +32,13 @@ export default function MetricsGrid(props: { kind: "components" | "systems"; id:
   }));
   // Every metric declared or reporting, sampled or not.
   const metrics = createMemo(() => (metricsQ.data ?? []).filter((m) => m.from_contract || m.is_sampled));
+  // Cards are kept by metric name, never by the objects a poll hands back
+  // (each poll is fresh): a card, its chart and a focused chart's focus
+  // survive the next poll, as the leaf's vitals rows do (#1059).
+  const names = createMemo(() => metrics().map((m) => m.metric_type_name), [], {
+    equals: (a, b) => a.length === b.length && a.every((n, i) => n === b[i]),
+  });
+  const byName = createMemo(() => new Map(metrics().map((m) => [m.metric_type_name, m])));
   // A minute's tick: a chart over an hour or more moves too little in a second
   // to redraw on every one, and the series polls on its own slower clock.
   const now = createClock(60_000);
@@ -67,26 +74,30 @@ export default function MetricsGrid(props: { kind: "components" | "systems"; id:
         />
         <div class="grid grid-cols-1 gap-3 @2xl:grid-cols-2 @6xl:grid-cols-3">
           <CursorProvider>
-            <For each={metrics()}>
-              {(m, i) => {
+            <For each={names()}>
+              {(name, i) => {
+                // The last row read under this name: a dropped metric's card
+                // may read once more before it is disposed.
+                let last = byName().get(name)!;
+                const m = () => (last = byName().get(name) ?? last);
                 const q = () => seriesQ[i()];
                 const buckets = () => q()?.data?.buckets ?? [];
                 return (
-                  <article data-testid={`metric-card-${m.metric_type_name}`} class="flex min-w-0 flex-col gap-1 rounded-box border border-base-300 bg-base-100 p-3">
+                  <article data-testid={`metric-card-${name}`} class="flex min-w-0 flex-col gap-1 rounded-box border border-base-300 bg-base-100 p-3">
                     <header class="flex items-baseline gap-2">
-                      <h3 class="min-w-0 truncate text-sm font-medium" title={m.metric_type_name}>{entityLabel({ name: m.metric_type_name, label: m.label })}</h3>
-                      <Show when={m.unit}>
-                        <span class="text-xs text-base-content/50">{m.unit}</span>
+                      <h3 class="min-w-0 truncate text-sm font-medium" title={name}>{entityLabel({ name: name, label: m().label })}</h3>
+                      <Show when={m().unit}>
+                        <span class="text-xs text-base-content/50">{m().unit}</span>
                       </Show>
                       <span class="ml-auto flex items-baseline gap-1.5">
-                        <Show when={m.source_rule && m.source_rule_id}>
-                          <CalcRuleLink name={m.source_rule!} id={m.source_rule_id!} />
+                        <Show when={m().source_rule && m().source_rule_id}>
+                          <CalcRuleLink name={m().source_rule!} id={m().source_rule_id!} />
                         </Show>
-                        <Show when={!m.is_sampled}>
+                        <Show when={!m().is_sampled}>
                           <span class="text-[10px] text-base-content/45">contract default</span>
                         </Show>
-                        <Show when={m.value !== null && m.value !== undefined}>
-                          <span data-testid="metric-current" class="font-mono text-sm tabular-nums">{vitalValueText(m.value)}</span>
+                        <Show when={m().value !== null && m().value !== undefined}>
+                          <span data-testid="metric-current" class="font-mono text-sm tabular-nums">{vitalValueText(m().value)}</span>
                         </Show>
                       </span>
                     </header>
@@ -115,7 +126,7 @@ export default function MetricsGrid(props: { kind: "components" | "systems"; id:
                           resolutionMs={win().stepSeconds * 1000}
                           now={win().to}
                           windowMs={win().to - win().from}
-                          unit={m.unit ? ` ${m.unit}` : ""}
+                          unit={m().unit ? ` ${m().unit}` : ""}
                         />
                       </Show>
                     </Show>

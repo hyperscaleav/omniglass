@@ -142,6 +142,16 @@ describe("TimeseriesChart on a shared cursor (#2424)", () => {
     expect(queryAllByTestId("chart-crosshair")).toHaveLength(0);
   });
 
+  it("moving focus from one chart to another keeps the pointer's instant rather than jumping to the newest point", () => {
+    const { getAllByTestId } = grid();
+    const [svgA, svgB] = getAllByTestId("timeseries-chart").map(sized);
+    fireEvent.focus(svgA);
+    fireEvent.mouseMove(svgB, { clientX: x1400 });
+    fireEvent.blur(svgA, { relatedTarget: svgB });
+    fireEvent.focus(svgB);
+    expect(getAllByTestId("chart-crosshair")[0].textContent).toContain("20.0");
+  });
+
   it("a chart with no point near the cursor draws the line but no value", () => {
     const buckets = [{ ts: "2026-08-20T16:00:00Z", count: 2, min: 1, max: 2, avg: 1.5, last: 2 }];
     const { getAllByTestId } = render(() => (

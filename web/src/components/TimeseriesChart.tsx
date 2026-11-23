@@ -130,7 +130,13 @@ export default function TimeseriesChart(props: {
         onMouseMove={onMove}
         onMouseLeave={() => cursor.set(undefined)}
         onFocus={onFocus}
-        onBlur={() => cursor.set(undefined)}
+        // Focus moving to another chart (a click on it) keeps the instant the
+        // pointer set there; leaving the charts clears it.
+        onBlur={(e) => {
+          const next = e.relatedTarget as Element | null;
+          if (!next?.closest?.("[data-testid=timeseries-chart]")) cursor.set(undefined);
+        }}
+        aria-keyshortcuts={props.spark ? undefined : "ArrowLeft ArrowRight Home End Escape"}
         onKeyDown={onKey}
       >
         <Show when={!props.spark}>

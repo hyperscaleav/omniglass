@@ -54,8 +54,11 @@ function stub(reads: string[]) {
   );
 }
 
+let lastClient: QueryClient | undefined;
+
 function mount(kind: "components" | "systems", id: string, range: () => TimeRange) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  lastClient = qc;
   return render(() => (
     <QueryClientProvider client={qc}>
       <MetricsGrid kind={kind} id={id} range={range()} />
@@ -151,6 +154,20 @@ await waitFor(() => expect(read(reads, "/systems/room-1/metrics/rtt/samples?hour
     fail = false;
     fireEvent.click(within(card).getByRole("button", { name: "Retry" }));
     expect(await within(card).findByTestId("timeseries-chart")).toBeTruthy();
+  });
+
+  // The metrics list polls, and each poll hands back fresh objects: a card is
+  // kept by its metric's name, so a focused chart survives the poll.
+  it("keeps each card, and a focused chart's focus, across a poll of the metric list", async () => {
+    stub([]);
+    mount("components", "cam-1", () => ({ kind: "preset", preset: "6h" }));
+    await waitFor(() => expect(screen.getAllByTestId("timeseries-chart")).toHaveLength(2));
+    const [chart] = screen.getAllByTestId("timeseries-chart");
+    (chart as unknown as SVGSVGElement).focus();
+    expect(document.activeElement).toBe(chart);
+    await lastClient!.refetchQueries({ queryKey: ["component-metrics", "cam-1"] });
+    expect(screen.getAllByTestId("timeseries-chart")[0]).toBe(chart);
+    expect(document.activeElement).toBe(chart);
   });
 
   it("draws nothing when the entity has no metrics", async () => {
