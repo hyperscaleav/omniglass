@@ -21,7 +21,7 @@ const MIN = 60_000;
 const now = Date.now();
 const ago = (m: number) => new Date(now - m * MIN).toISOString();
 
-type Read = { path: string; search: URLSearchParams; body?: { bindings: { primitive: string; from?: string; to?: string }[] } };
+type Read = { path: string; search: URLSearchParams; body?: { bindings: { primitive: string; from?: string; to?: string; keys?: string[] }[] } };
 
 function stub(reads: Read[]) {
   const json = (b: unknown) => new Response(JSON.stringify(b), { status: 200, headers: { "content-type": "application/json" } });
@@ -46,7 +46,7 @@ function stub(reads: Read[]) {
       if (path === "/components/disp/commands")
         return json({ commands: [{ id: 7, command_type: "power", component: "disp", component_id: "disp", status: "settled", phase: "settled", issued_at: ago(30), deadline: ago(29), delivery_count: 1 }] });
       if (path === "/components/disp/alarms/a1:timeline") return json({ entries: [{ at: ago(40), kind: "audit", what: "raised" }] });
-      if (path === "/event-rules") return json({ event_rules: [{ id: uuidFor("tl-rule-1"), name: "reachability-lost", sample_lane: "property", sample_key: "power" }] });
+      if (path === "/event-rules") return json({ event_rules: [{ id: uuidFor("tl-rule-1"), name: "reachability-lost", sample_lane: "property", sample_key: "endpoint-reachable" }] });
       if (path === "/components/disp/properties") return json({ properties: [{ property_type_name: "power", property_type_id: "p", data_type: "string", from_contract: true, is_set: false, required: false }] });
       if (path === "/components/disp/metrics") return json({ metrics: [] });
       if (path === "/severity-levels") return json({ severity_levels: [{ name: "high", label: "High", color: "red", rank: 4, outage: true }] });
@@ -55,7 +55,11 @@ function stub(reads: Read[]) {
         const result = { covered_from: ago(10000), cursor: "b.1", entities: [], from: b.from, to: b.to } as Record<string, unknown>;
         if (b.primitive === "event") result.events = [{ id: 1, entity: "disp", key: "power-changed", message: "power off", origin: "caught", ts: ago(41) }];
         if (b.primitive === "log") result.logs = [{ id: 2, entity: "disp", message: "link down", severity: "error", ts: ago(39) }];
-        if (b.primitive === "property") result.property = [{ entity: "disp", key: "power", instance: "", carried_in: "on", points: [{ ts: ago(41), value: "off" }, { ts: ago(28), value: "on" }] }];
+        const series: Record<string, unknown> = {
+          power: { entity: "disp", key: "power", instance: "", carried_in: "on", points: [{ ts: ago(41), value: "off" }, { ts: ago(28), value: "on" }] },
+          "endpoint-reachable": { entity: "disp", key: "endpoint-reachable", instance: "snmp", carried_in: "up", points: [{ ts: ago(40), value: "down" }, { ts: ago(26), value: "up" }] },
+        };
+        if (b.primitive === "property") result.property = (b.keys ?? []).map((k) => series[k]).filter(Boolean);
         return json({ cursor: "b.1", now: new Date(now).toISOString(), results: [result] });
       }
       return json({});
@@ -109,9 +113,13 @@ describe("TimelineOverlay", () => {
     expect(screen.getByTestId("timeline-commands-row").querySelector("[role=button]")!.getAttribute("aria-label")).toContain("power on disp · settled");
     await waitFor(() => expect(screen.getByTestId("timeline-events-row").querySelector("[role=button]")?.getAttribute("aria-label")).toContain("power off"));
     await waitFor(() => expect(screen.getByTestId("timeline-logs-row").querySelector("[role=button]")?.getAttribute("aria-label")).toContain("link down"));
-    // The alarming rule watches power, so power's bands are shown unasked.
-    const prop = await screen.findByTestId("timeline-property-row");
-    expect([...prop.querySelectorAll("title")].map((t) => t.textContent?.split(" ")[0])).toEqual(["on", "off", "on"]);
+    // The alarming rule watches endpoint-reachable (no declared property, but
+    // read all the same), and power changed: both are shown unasked.
+    await waitFor(() => expect(screen.getAllByTestId("timeline-property-row")).toHaveLength(2));
+    const [reach, power] = screen.getAllByTestId("timeline-property-row");
+    expect(reach.textContent).toContain("endpoint-reachable [snmp]");
+    expect([...reach.querySelectorAll("title")].map((t) => t.textContent?.split(" ")[0])).toEqual(["up", "down", "up"]);
+    expect([...power.querySelectorAll("title")].map((t) => t.textContent?.split(" ")[0])).toEqual(["on", "off", "on"]);
   });
 
   it("opens a command's arc and an alarm's history from their marks", async () => {
@@ -131,7 +139,7 @@ describe("TimelineOverlay", () => {
       () => <TimeseriesChart samples={[{ ts: ago(30), value: 1 }, { ts: ago(10), value: 2 }]} now={now} windowMs={60 * MIN} />,
     );
     await screen.findByTestId("timeline-alarm-span");
-    await screen.findByTestId("timeline-property-row");
+    await waitFor(() => expect(screen.getAllByTestId("timeline-property-row")).toHaveLength(2));
     cursor.set(now - 33 * MIN);
     await waitFor(() => expect(screen.getAllByTestId("timeline-cursor").length).toBeGreaterThanOrEqual(5));
     expect(screen.getByTestId("cursor-line")).toBeTruthy();

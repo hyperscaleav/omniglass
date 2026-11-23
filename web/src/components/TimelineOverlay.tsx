@@ -183,14 +183,6 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
     queryKey: isComponent() ? effectiveMetricsKey(props.id) : systemMetricsKey(props.id),
     queryFn: () => (isComponent() ? effectiveMetrics(props.id) : systemMetrics(props.id)),
   }));
-  const propertyKeys = createMemo(() => (propsListQ.data ?? []).map((p) => p.property_type_name).sort().slice(0, PROPERTY_KEYS_MAX), [], {
-    equals: (a, b) => a.join() === b.join(),
-  });
-  const propsQ = useQuery(() => ({
-    queryKey: propertiesOverKey(props.kind, props.id, propertyKeys(), win().from, win().to),
-    queryFn: () => propertiesOver(props.kind, props.id, propertyKeys(), win().from, win().to),
-    enabled: propertyKeys().length > 0,
-  }));
 
   // ---- lanes ---------------------------------------------------------------
   const health = createMemo(() =>
@@ -212,6 +204,17 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
     ),
   );
 
+  // The effective properties, and whatever an alarming rule watches even when
+  // it is no declared property (a per-endpoint signal such as reachability).
+  const propertyKeys = createMemo(() => [...new Set([...(propsListQ.data ?? []).map((p) => p.property_type_name), ...inputs().properties])].sort().slice(0, PROPERTY_KEYS_MAX), [], {
+    equals: (a, b) => a.join() === b.join(),
+  });
+  const propsQ = useQuery(() => ({
+    queryKey: propertiesOverKey(props.kind, props.id, propertyKeys(), win().from, win().to),
+    queryFn: () => propertiesOver(props.kind, props.id, propertyKeys(), win().from, win().to),
+    enabled: propertyKeys().length > 0,
+  }));
+
   const propertySeries = createMemo(() => propsQ.data ?? []);
   const [pickedProps, setPickedProps] = createSignal<string[] | undefined>(undefined);
   const shownProps = createMemo(() => {
@@ -231,7 +234,7 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
     ),
   );
 
-  const metricNames = createMemo(() => (metricsListQ.data ?? []).filter((m) => m.from_contract || m.is_sampled).map((m) => m.metric_type_name));
+  const metricNames = createMemo(() => [...new Set([...(metricsListQ.data ?? []).filter((m) => m.from_contract || m.is_sampled).map((m) => m.metric_type_name), ...inputs().metrics])]);
   const [pickedMetrics, setPickedMetrics] = createSignal<string[] | undefined>(undefined);
   const shownMetrics = createMemo(() => pickedMetrics() ?? inputs().metrics.filter((k) => metricNames().includes(k)), [], {
     equals: (a, b) => a.join() === b.join(),
