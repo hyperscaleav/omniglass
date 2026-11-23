@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/sim/simtest"
 )
 
 // A session holds its connection (#816), proven against the simulator's line
@@ -23,7 +24,7 @@ func TestPanelHeldSessionSurvivesItsListenerDying(t *testing.T) {
 		t.Skip("real-wire session test")
 	}
 	e := newCatalogEngine(t)
-	ip := "127.88.9.3"
+	ip := simtest.ClaimLoopback(t)
 	if err := e.Sync([]DeviceSnapshot{{DeviceID: "panel", Hostname: "panel", LoopbackIP: ip,
 		ProfileName: "newtron-panel-7", Version: 1}}); err != nil {
 		t.Fatal(err)

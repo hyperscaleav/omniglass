@@ -89,7 +89,7 @@ func registerProductPropertyRoutes(api huma.API, a *authenticator, gw storage.Ga
 		Method:      http.MethodPut,
 		Path:        "/products/{id}/properties/{property}",
 		Summary:     "Declare a property on a product",
-		Description: "Declares a catalog property on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422); an unknown product is a 404 and a property the catalog does not know is a 422. Gated by product:update.",
+		Description: "Declares a catalog property on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422); an unknown product is a 404 and a property the catalog does not know is a 422, as is a default its property type refuses. Gated by product:update.",
 	}, "product", "update"), func(ctx context.Context, in *setProductPropertyInput) (*productPropertyOutput, error) {
 		def, err := encodePropertyJSON(in.Body.DefaultValue, "default_value")
 		if err != nil {
@@ -144,6 +144,9 @@ func encodePropertyJSON(v any, field string) (json.RawMessage, error) {
 func mapProductPropertyErr(err error) error {
 	if errors.Is(err, storage.ErrPropertyTypeNotFound) {
 		return huma.Error422UnprocessableEntity("unknown property")
+	}
+	if errors.Is(err, storage.ErrPropertyValueInvalid) {
+		return huma.Error422UnprocessableEntity(err.Error())
 	}
 	return mapTypeErr(err, "product property")
 }
