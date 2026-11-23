@@ -15,6 +15,6 @@ An address with no page now lands on its own Not found face (not a placeholder w
 address that was asked for, links to Home and Explore, and the command-palette hint.
 
 A guard (`web/src/no-soon.test.ts`) fails any rendered "soon" word, or "not built yet" / "not wired
-yet", under `web/src`, comments aside. One line is allowlisted: Platform health's `NOT_WIRED` string,
-owned by #2446. The route smoke (`web/e2e/routes.spec.ts`) now asserts no route, the not-found
+yet", under `web/src`, comments aside. Its allowlist is empty: Platform health's unreported figures (#2446)
+now read "outpost does not report". The route smoke (`web/e2e/routes.spec.ts`) now asserts no route, the not-found
 address included, and no outpost drawer renders the word.
