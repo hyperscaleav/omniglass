@@ -242,4 +242,4 @@ shots:
       - wait: { text: Next step, timeout: 30000 }
         focus: here
         zoom: 1.4
-        hold: 2400
+        hold: 2000
