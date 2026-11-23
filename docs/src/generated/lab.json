@@ -66,6 +66,13 @@
   ],
   "walkthroughs": [
     {
+      "id": "break-a-device-in-one-click",
+      "title": "Break a device in one click",
+      "description": "Unplug a simulated panel from its row's Break menu, watch the fault chip and the reachability alarm it causes, then clear the fault from the chip.",
+      "lab": [],
+      "setup": []
+    },
+    {
       "id": "declare-a-first-slot",
       "title": "Declare a first slot",
       "description": "Give a one-off system its first slot from the console, name it, say what it accepts, and see the slot it opens.",

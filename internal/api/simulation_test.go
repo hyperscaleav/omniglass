@@ -10,6 +10,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/docslint"
 	"github.com/hyperscaleav/omniglass/internal/sim/impair"
+	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 	"github.com/hyperscaleav/omniglass/internal/simhub"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
@@ -143,13 +144,12 @@ func TestSimulationBodyCarriesFaultsAndImpairmentAge(t *testing.T) {
 // path, so the console offers each value without parsing a template (#2462).
 func TestSimSurfaceCarriesTheRoutesQuickSets(t *testing.T) {
 	t.Parallel()
-	store, err := simCatalog()
-	if err != nil {
-		t.Fatal(err)
-	}
-	p := store.Devices["boreal-edge-86"]
-	if p == nil {
-		t.Skip("no boreal-edge-86 profile")
+	p := &profile.DeviceProfile{
+		Defaults: map[string]any{"status": map[string]any{"device": map[string]any{"power": "on"}}},
+		Interfaces: []profile.Interface{{Name: "web", Protocol: "http", Port: 80, Routes: []profile.Route{{
+			Match:     "POST /api/display/power",
+			Mutations: []profile.Mutation{{Path: "status.device.power", Value: "{{ .Request.Body.power }}", Enum: []string{"on", "off", "standby"}}},
+		}}}},
 	}
 	var power *simRouteBody
 	for _, s := range simSurface(p, 0) {
