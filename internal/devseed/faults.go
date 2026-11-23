@@ -177,6 +177,13 @@ func seedSubscriptions(ctx context.Context, gw storage.Gateway, actorID string, 
 		if err != nil {
 			return fmt.Errorf("devseed: subscription owner %q: %w", s.User, err)
 		}
+		// Looked up first, so a person at the personal-rule cap who already
+		// holds this one is no failure on a re-run.
+		if _, err := gw.GetPersonalRule(ctx, owner, s.Name); err == nil {
+			continue
+		} else if !errors.Is(err, storage.ErrActionRuleNotFound) {
+			return fmt.Errorf("devseed: subscription %s for %q: %w", s.Name, s.User, err)
+		}
 		if _, err := gw.CreatePersonalRule(ctx, actorID, owner, storage.PersonalRuleSpec{
 			Name: s.Name, Label: s.Label, On: s.On, When: s.When, Channels: s.Channels,
 		}); err != nil && !errors.Is(err, storage.ErrActionRuleExists) {

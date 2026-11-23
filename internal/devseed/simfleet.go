@@ -140,6 +140,13 @@ func seedSimFleet(ctx context.Context, gw storage.Gateway, actorID string, portO
 	outpost := reachOutpost
 	for _, dev := range plan {
 		comp := dev.ComponentID
+		// Impaired before its first endpoint, so a run cut short between
+		// endpoints cannot leave it wired with its fault never set.
+		if imp, ok := faults[comp]; ok {
+			if _, err := gw.SetSimImpairment(ctx, actorID, comp, imp); err != nil {
+				return fmt.Errorf("devseed: impair %s: %w", comp, err)
+			}
+		}
 		for _, e := range dev.Endpoints {
 			spec := storage.EndpointSpec{Component: &comp, Outpost: &outpost, SecretRead: all, SecretBind: all, CanAdmin: true}
 			if e.Driver != "" {
@@ -150,11 +157,6 @@ func seedSimFleet(ctx context.Context, gw storage.Gateway, actorID string, portO
 			}
 			if _, err := gw.CreateEndpoint(ctx, actorID, spec, all); err != nil {
 				return fmt.Errorf("devseed: create simulated endpoint on %s: %w", dev.ComponentID, err)
-			}
-		}
-		if imp, ok := faults[comp]; ok {
-			if _, err := gw.SetSimImpairment(ctx, actorID, comp, imp); err != nil {
-				return fmt.Errorf("devseed: impair %s: %w", comp, err)
 			}
 		}
 	}
