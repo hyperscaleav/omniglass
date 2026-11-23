@@ -115,8 +115,11 @@ type HealthMember struct {
 	ID          string
 	Health      string
 	OutsideSlot bool
-	ToAttach    bool
-	Alarms      []Alarm
+	// Slot is the name of the slot the member fills here; empty when
+	// OutsideSlot.
+	Slot     string
+	ToAttach bool
+	Alarms   []Alarm
 }
 
 // HealthSlot is one contributing slot, with the causing chain when it is
@@ -1069,6 +1072,7 @@ func (p *PG) resolveComponent(ctx context.Context, q txQuerier, id, name string)
 type systemMember struct {
 	id, name string
 	slotted  bool
+	slot     string // the name of the slot it fills here; empty when none
 }
 
 // systemMembers lists a system's members, ordered by name, each with whether
@@ -1076,7 +1080,10 @@ type systemMember struct {
 func systemMembersOf(ctx context.Context, q txQuerier, systemID string) ([]systemMember, error) {
 	rows, err := q.Query(ctx, `
 		select c.id, c.name, exists (select 1 from system_slot_assignment ra
-		                             where ra.system_id = m.system_id and ra.component_id = m.component_id)
+		                             where ra.system_id = m.system_id and ra.component_id = m.component_id),
+		       coalesce((select r.name from system_slot_assignment ra join system_slot r on r.id = ra.slot_id
+		                 where ra.system_id = m.system_id and ra.component_id = m.component_id
+		                 order by r.name limit 1), '')
 		from system_member m join component c on c.id = m.component_id
 		where m.system_id = $1::uuid order by c.name, c.id`, systemID)
 	if err != nil {
@@ -1086,7 +1093,7 @@ func systemMembersOf(ctx context.Context, q txQuerier, systemID string) ([]syste
 	var out []systemMember
 	for rows.Next() {
 		var m systemMember
-		if err := rows.Scan(&m.id, &m.name, &m.slotted); err != nil {
+		if err := rows.Scan(&m.id, &m.name, &m.slotted, &m.slot); err != nil {
 			return nil, fmt.Errorf("storage: scan system member: %w", err)
 		}
 		out = append(out, m)
@@ -1360,7 +1367,7 @@ func (p *PG) healthMembers(ctx context.Context, q txQuerier, systemID string) ([
 		if alarms == nil {
 			alarms = []Alarm{}
 		}
-		out = append(out, HealthMember{Name: m.name, ID: m.id, Health: h, OutsideSlot: !m.slotted, ToAttach: c.ToAttach, Alarms: alarms})
+		out = append(out, HealthMember{Name: m.name, ID: m.id, Health: h, OutsideSlot: !m.slotted, Slot: m.slot, ToAttach: c.ToAttach, Alarms: alarms})
 	}
 	return out, nil
 }

@@ -5616,6 +5616,9 @@ components:
         outside_slot:
           description: "True when the member fills no slot in this system. An open alarm on such a member makes the system degraded, never outage: only a slot says what losing a component costs (ADR-2459)"
           type: boolean
+        slot:
+          description: The name of the slot the member fills in this system (as slots[].name); absent when outside_slot
+          type: string
         to_attach:
           description: True when the member's product is collected through a driver and it has no endpoint yet
           type: boolean

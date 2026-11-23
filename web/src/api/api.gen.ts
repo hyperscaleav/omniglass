@@ -4214,6 +4214,8 @@ export type HealthMemberBody = {
   name: string;
   /** True when the member fills no slot in this system. An open alarm on such a member makes the system degraded, never outage: only a slot says what losing a component costs (ADR-2459) */
   outside_slot: boolean;
+  /** The name of the slot the member fills in this system (as slots[].name); absent when outside_slot */
+  slot?: string;
   /** True when the member's product is collected through a driver and it has no endpoint yet */
   to_attach: boolean;
 };

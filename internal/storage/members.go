@@ -117,7 +117,7 @@ func (p *PG) AddMember(ctx context.Context, actorID, systemName, componentName s
 	}
 	// A member outside a slot moves its system's verdict (ADR-2459), so a bind
 	// is a health write: an alarmed component joining degrades the system.
-	if err := p.recomputeChain(ctx, tx, nil, []ownerRef{{ID: systemID, Name: systemName}}, nil); err != nil {
+	if err := p.recomputeChain(ctx, tx, []ownerRef{{ID: componentID, Name: componentName}}, []ownerRef{{ID: systemID, Name: systemName}}, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -240,7 +240,7 @@ func (p *PG) RemoveMember(ctx context.Context, actorID, systemName, componentNam
 		return err
 	}
 	// The unbound member no longer counts against the system (ADR-2459).
-	if err := p.recomputeChain(ctx, tx, nil, []ownerRef{{ID: systemID, Name: systemName}}, nil); err != nil {
+	if err := p.recomputeChain(ctx, tx, []ownerRef{{ID: componentID, Name: componentName}}, []ownerRef{{ID: systemID, Name: systemName}}, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {

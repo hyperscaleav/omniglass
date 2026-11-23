@@ -154,7 +154,7 @@ func TestSlottedOutageStillDecidesOverAnOutsideAlarm(t *testing.T) {
 	if rep.Verdict != "outage" {
 		t.Fatalf("both kinds: %q, want outage (the worse)", rep.Verdict)
 	}
-	if m := member(rep, "disp-1"); m == nil || m.OutsideSlot {
+	if m := member(rep, "disp-1"); m == nil || m.OutsideSlot || m.Slot != "display" {
 		t.Errorf("disp-1 = %+v, want a slotted member", m)
 	}
 	if !strings.HasPrefix(rep.Reason, "slot display is impaired") || !strings.Contains(rep.Reason, "(amp-2)") {

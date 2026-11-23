@@ -220,7 +220,9 @@ export function alarmRows(health: FleetHealth, levels?: SeverityLevel[] | null):
   // that sits only in a build not in use stays out, for the reason above.
   const activeSlots = (health.slots ?? []).filter((r) => r.active);
   for (const m of health.members ?? []) {
-    const slot = activeSlots.find((r) => (r.assigned_to ?? []).includes(m.name));
+    // By the slot's name the member carries, never the member's own name:
+    // names repeat across placements (#627).
+    const slot = m.slot ? activeSlots.find((r) => r.name === m.slot) : undefined;
     if (!m.outside_slot && !slot) continue;
     for (const a of m.alarms ?? []) {
       rows.push({

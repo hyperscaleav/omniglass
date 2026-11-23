@@ -128,6 +128,7 @@ type healthMemberBody struct {
 	ID          string            `json:"id" doc:"The component's uuid"`
 	Health      string            `json:"health" doc:"The component's own health: healthy, degraded or outage from its open alarms, or unknown when nothing has ever observed it"`
 	OutsideSlot bool              `json:"outside_slot" doc:"True when the member fills no slot in this system. An open alarm on such a member makes the system degraded, never outage: only a slot says what losing a component costs (ADR-2459)"`
+	Slot        string            `json:"slot,omitempty" doc:"The name of the slot the member fills in this system (as slots[].name); absent when outside_slot"`
 	ToAttach    bool              `json:"to_attach" doc:"True when the member's product is collected through a driver and it has no endpoint yet"`
 	Alarms      []healthAlarmBody `json:"alarms" doc:"The member's open alarms, newest first"`
 }
@@ -168,7 +169,7 @@ func toHealthOutput(rep *storage.HealthReport) *fleetHealthOutput {
 	out.Body.Members = make([]healthMemberBody, 0, len(rep.Members))
 	for _, m := range rep.Members {
 		out.Body.Members = append(out.Body.Members, healthMemberBody{
-			Name: m.Name, ID: m.ID, Health: m.Health, OutsideSlot: m.OutsideSlot, ToAttach: m.ToAttach,
+			Name: m.Name, ID: m.ID, Health: m.Health, OutsideSlot: m.OutsideSlot, Slot: m.Slot, ToAttach: m.ToAttach,
 			Alarms: toHealthAlarmBodies(m.Alarms),
 		})
 	}

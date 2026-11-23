@@ -183,13 +183,13 @@ describe("alarmRows", () => {
     const withMembers = {
       ...health,
       members: [
-        { name: "mic-1", id: uuidFor("sz-c-mic"), health: "outage", outside_slot: false, to_attach: false,
+        { name: "mic-1", id: uuidFor("sz-c-mic"), health: "outage", outside_slot: false, slot: "room-mic", to_attach: false,
           alarms: [{ id: "al-1", component: "mic-1", component_id: uuidFor("sz-c-mic"), severity: "high", message: "No route to host", raised_at: "2026-08-15T14:20:00Z" }] },
-        { name: "videobar-1", id: uuidFor("sz-c-bar"), health: "degraded", outside_slot: false, to_attach: false,
+        { name: "videobar-1", id: uuidFor("sz-c-bar"), health: "degraded", outside_slot: false, slot: "room-mic", to_attach: false,
           alarms: [{ id: "al-bar", component: "videobar-1", component_id: uuidFor("sz-c-bar"), severity: "warning", message: "Fan", raised_at: "2026-08-15T12:00:00Z" }] },
         { name: "amp-1", id: uuidFor("sz-c-amp"), health: "outage", outside_slot: true, to_attach: false,
           alarms: [{ id: "al-amp", component: "amp-1", component_id: uuidFor("sz-c-amp"), severity: "high", message: "Powered off", raised_at: "2026-08-15T15:00:00Z" }] },
-        { name: "ghost-1", id: uuidFor("sz-c-ghost"), health: "outage", outside_slot: false, to_attach: false,
+        { name: "ghost-1", id: uuidFor("sz-c-ghost"), health: "outage", outside_slot: false, slot: "conf-codec", to_attach: false,
           alarms: [{ id: "al-ghost", component: "ghost-1", component_id: uuidFor("sz-c-ghost"), severity: "high", message: "From the build not in use", raised_at: "2026-08-10T00:00:00Z" }] },
       ],
     } as never;
