@@ -349,22 +349,13 @@ func TestRunCreatesAPulledImageFromItsID(t *testing.T) {
 func TestRunHoldsUntilStoppedThenTearsDownKeepingTheData(t *testing.T) {
 	srv := fakeServer(t)
 	eng := newFakeEngine(strings.TrimPrefix(srv.URL, "http://"))
-	var out bytes.Buffer
+	var out syncBuffer
 	cfg := testConfig()
 	cfg.Hold = true
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { _, err := testRunner(eng, &out).Run(ctx, cfg); done <- err }()
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		eng.mu.Lock()
-		n := len(eng.containers)
-		eng.mu.Unlock()
-		if n == 3 || time.Now().After(deadline) {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	waitHolding(t, &out)
 	cancel()
 	if err := <-done; err != nil {
 		t.Fatalf("a stopped lab: %v", err)
