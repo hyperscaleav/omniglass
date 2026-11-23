@@ -101,7 +101,7 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
   const leafTabs = createMemo(() => [
     { key: "overview", label: "Overview" },
     { key: "activity", label: "Activity" },
-    ...(can(me.data, "component", "update") ? [{ key: "configure", label: "Configure" }] : []),
+    ...(can(me.data, "component", "update") || can(me.data, "component", "delete") ? [{ key: "configure", label: "Configure" }] : []),
   ]);
   const tabState = createTabState(props.host, leafTabs, { legacy: { events: "activity" } });
   const leafTab = tabState.active;

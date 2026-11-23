@@ -158,7 +158,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
   const tabs = createMemo(() => [
     { key: "overview", label: "Overview" },
     { key: "activity", label: "Activity" },
-    ...(can(me.data, "system", "update") ? [{ key: "configure", label: "Configure" }] : []),
+    ...(can(me.data, "system", "update") || can(me.data, "system", "delete") ? [{ key: "configure", label: "Configure" }] : []),
   ]);
   const tabState = createTabState(props.host, tabs, { legacy: { map: "overview", data: "overview", history: "activity", events: "activity", logs: "activity" } });
   const tab = tabState.active;

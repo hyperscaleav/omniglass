@@ -235,6 +235,17 @@ describe("one edit model", () => {
 });
 
 describe("Delete, by the host's way out", () => {
+  // Delete sits in the Configure face's footer, so a caller who may delete
+  // but not update still gets the tab, read-only, with its Delete (#2463).
+  it("a caller with delete but not update still reaches Delete", async () => {
+    const qc = seed(["delete"]);
+    qc.setQueryData([...ME_KEY], { ...me, permissions: ["*:read", "component:delete"] });
+    mountPage(`/web/components/${CID}?tab=configure`, qc);
+    const face = await screen.findByTestId("configure-face");
+    expect(await within(face).findByRole("button", { name: "Delete" })).toBeTruthy();
+    expect(within(face).queryByRole("button", { name: "Edit" })).toBeNull();
+  });
+
   it("in a blade, refreshes the slots and health reads and closes the stack", async () => {
     answerConfirms(true);
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(null, { status: 204 }));
