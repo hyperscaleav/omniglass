@@ -80,12 +80,12 @@ test.describe("operator console", () => {
     const row = page.getByRole("treeitem").filter({ has: page.locator("[data-label]", { hasText: label }) });
     await expect(row).toBeVisible();
 
-    // Confirm-delete it from its blade: a row opens the blade (#799), whose
-    // footer carries Delete behind a confirm.
+    // Confirm-delete it from its blade: a row opens the blade (#799), the
+    // location's detail body (#2423), whose Configure footer carries Delete
+    // behind a confirm.
     page.on("dialog", (d) => d.accept());
     await row.click();
     await expect(page.locator("aside[data-blade]")).toBeVisible();
-    // The blade is the detail body (#2423): Delete sits with Configure.
     await page.locator("aside[data-blade]").getByRole("tab", { name: "Configure" }).click();
     await expect(page.locator('aside[data-blade] button:text-is("Delete")')).toBeVisible();
     await page.locator('aside[data-blade] button:text-is("Delete")').click();
@@ -357,6 +357,7 @@ test.describe("operator console", () => {
     page.on("dialog", (d) => d.accept());
     await page.goto(`/web/explore?node=${buildingId}`);
     await rowOf(buildingLabel).click();
+    await page.locator("aside[data-blade]").getByRole("tab", { name: "Configure" }).click();
     await page.locator('aside[data-blade] button:text-is("Delete")').click();
     await expect(page.locator("aside[data-blade]")).toHaveCount(0);
     await expect.poll(async () => (await page.request.get(`/api/v1/systems/${systemId}`)).status()).toBe(404);
