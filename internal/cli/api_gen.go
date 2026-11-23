@@ -6226,6 +6226,56 @@ func generatedCommands() []*cobra.Command {
 	}())
 	roots = append(roots, func() *cobra.Command {
 		parent := &cobra.Command{
+			Use:   "plan",
+			Short: "Commands for the plan resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fComponents string
+				var fLocations string
+				var fStandards string
+				var fSystems string
+				var fValidateOnly bool
+				cmd := &cobra.Command{
+					Use:     "apply",
+					Short:   "Create a plan of locations, systems and components in one write",
+					Long:    "Lands a plan you built in one transaction: standards created from their templates (with any parent, unless you hold one of that name), locations parents first (a parent_key names an earlier location of the plan, a parent an existing one), systems at a location of the plan or an existing one with the components that staff their slots, standalone components, and the values declared on each. Every piece is the ordinary create in your own scope with its own audit row, and every row carries the one import_id the response returns, under from_import. A refused piece refuses the whole plan, mapped as its own route maps it, with its path in the plan (systems[3].components[1]) leading the detail; nothing lands. validate_only runs the same transaction and rolls it back, returning the counts and the names the apply would mint (200, no ids). A plan carries at most 1000 rows (each standard, location, system, component and declared value is one); a bigger one is a 413 naming the limit, so chunk an import (by building), one plan each. Gated by location:read, and each piece needs what its own create needs: location:create for locations, system:create for systems, component:create for components, system:read, system:update, component:read and component:update for a slot assignment, the update permission of what a value is declared on, and standard:create when a standard is created from its template. A location outside your scope for the piece there refuses that piece (404 when you cannot read it, 403 when you cannot create in it).",
+					Example: "  omniglass plan apply",
+					Args:    pathArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/plans:apply")
+						body := map[string]any{}
+						if cmd.Flags().Changed("components") {
+							body["components"] = jsonOrString(fComponents)
+						}
+						if cmd.Flags().Changed("locations") {
+							body["locations"] = jsonOrString(fLocations)
+						}
+						if cmd.Flags().Changed("standards") {
+							body["standards"] = jsonOrString(fStandards)
+						}
+						if cmd.Flags().Changed("systems") {
+							body["systems"] = jsonOrString(fSystems)
+						}
+						if cmd.Flags().Changed("validate-only") {
+							body["validate_only"] = fValidateOnly
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fComponents, "components", "", "Standalone components, in no system")
+				cmd.Flags().StringVar(&fLocations, "locations", "", "The locations to create, in order: a parent before its children")
+				cmd.Flags().StringVar(&fStandards, "standards", "", "Standard templates to create standards from, by name, each with any parent it hangs off; one the fleet already holds is used as it is")
+				cmd.Flags().StringVar(&fSystems, "systems", "", "The systems to create, each with the components that staff it")
+				cmd.Flags().BoolVar(&fValidateOnly, "validate-only", false, "Run the whole plan and roll it back: the response says what an apply would create, or the piece that would refuse it, and nothing is written")
+				return cmd
+			}()
+			return cmd
+		}())
+		return parent
+	}())
+	roots = append(roots, func() *cobra.Command {
+		parent := &cobra.Command{
 			Use:   "product",
 			Short: "Commands for the product resource",
 		}

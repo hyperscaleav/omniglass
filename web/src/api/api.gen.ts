@@ -641,6 +641,210 @@ export type AppendAssistantConversationInputBody = {
   usage?: AssistantUsage;
 };
 
+export type AppliedComponentBody = {
+  /** The component's name */
+  component: string;
+  /** The component's id; omitted on a dry run */
+  component_id?: string;
+  /** Its product */
+  product: string;
+  /** The slot it fills in its system */
+  slot?: string;
+};
+
+export type AppliedLocationBody = {
+  /** The plan's key for it */
+  key: string;
+  /** The location's name */
+  location: string;
+  /** The location's id; omitted on a dry run, which keeps nothing */
+  location_id?: string;
+  /** The location it sits under */
+  parent?: string;
+};
+
+export type AppliedSystemBody = {
+  /**
+     * The components that staff it, in plan order
+     * @nullable
+     */
+  components: AppliedComponentBody[] | null;
+  /** The standard it is built to */
+  standard?: string;
+  /** The system's name */
+  system: string;
+  /** The system's id; omitted on a dry run */
+  system_id?: string;
+};
+
+export type PlanValueBody = {
+  /**
+     * The property, by name
+     * @minLength 1
+     */
+  name: string;
+  /** The declared value, shaped by the property's data type */
+  value: unknown;
+};
+
+export type PlanComponentBody = {
+  /** The component's label */
+  label?: string;
+  /** An existing location the component sits in, by name, dotted path or id */
+  location?: string;
+  /** The key of a location of this plan the component sits in */
+  location_key?: string;
+  /** The component's name; minted when empty */
+  name?: string;
+  /**
+     * Its product, by name
+     * @minLength 1
+     */
+  product: string;
+  /**
+     * Values declared on the component
+     * @nullable
+     */
+  properties?: PlanValueBody[] | null;
+};
+
+export type PlanLocationBody = {
+  /**
+     * The plan's own handle for this location, which a later location's parent_key or a system's or component's location_key names; never stored
+     * @minLength 1
+     */
+  key: string;
+  /** The location's label */
+  label?: string;
+  /** The location's name; minted by its type's name rule when empty */
+  name?: string;
+  /** An existing location this one sits under, by name, dotted path or id; omitted with parent_key makes it a new top */
+  parent?: string;
+  /** The key of an earlier location of this plan this one sits under */
+  parent_key?: string;
+  /**
+     * Its location type
+     * @minLength 1
+     */
+  type: string;
+};
+
+export type PlanSlotComponentBody = {
+  /** The component's label */
+  label?: string;
+  /** The component's name; minted when empty */
+  name?: string;
+  /**
+     * Its product, by name
+     * @minLength 1
+     */
+  product: string;
+  /**
+     * Values declared on the component
+     * @nullable
+     */
+  properties?: PlanValueBody[] | null;
+  /**
+     * The slot of the system it fills; a component in no system is a standalone component
+     * @minLength 1
+     */
+  slot: string;
+};
+
+export type PlanSystemBody = {
+  /**
+     * The components that staff it; each sits where the system sits
+     * @nullable
+     */
+  components?: PlanSlotComponentBody[] | null;
+  /** The system's label */
+  label?: string;
+  /** An existing location the system sits in, by name, dotted path or id */
+  location?: string;
+  /** The key of a location of this plan the system sits in */
+  location_key?: string;
+  /** The system's name; minted from its type when empty */
+  name?: string;
+  /**
+     * Values declared on the system
+     * @nullable
+     */
+  properties?: PlanValueBody[] | null;
+  /** The standard it is built to, by name: one the fleet holds or one this plan's standards create */
+  standard?: string;
+  /** Its system type, by name */
+  type?: string;
+};
+
+export type ApplyPlanInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * Standalone components, in no system
+     * @nullable
+     */
+  components?: PlanComponentBody[] | null;
+  /**
+     * The locations to create, in order: a parent before its children
+     * @nullable
+     */
+  locations?: PlanLocationBody[] | null;
+  /**
+     * Standard templates to create standards from, by name, each with any parent it hangs off; one the fleet already holds is used as it is
+     * @nullable
+     */
+  standards?: string[] | null;
+  /**
+     * The systems to create, each with the components that staff it
+     * @nullable
+     */
+  systems?: PlanSystemBody[] | null;
+  /** Run the whole plan and roll it back: the response says what an apply would create, or the piece that would refuse it, and nothing is written */
+  validate_only?: boolean;
+};
+
+export type PlanCountsBody = {
+  /** Components created, in systems and standalone */
+  components: number;
+  /** Locations created */
+  locations: number;
+  /** Standards created from their templates */
+  standards_created: number;
+  /** Systems created */
+  systems: number;
+};
+
+export type ApplyPlanOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The standalone components, in plan order
+     * @nullable
+     */
+  components: AppliedComponentBody[] | null;
+  /** How many of each piece the plan created (or would create) */
+  counts: PlanCountsBody;
+  /** The import every audit row of this apply carries as from_import; omitted on a dry run */
+  import_id?: string;
+  /**
+     * The locations, in plan order
+     * @nullable
+     */
+  locations: AppliedLocationBody[] | null;
+  /**
+     * The standards created from their templates, parents first
+     * @nullable
+     */
+  standards_created: string[] | null;
+  /**
+     * The systems, in plan order
+     * @nullable
+     */
+  systems: AppliedSystemBody[] | null;
+  /** Whether this was a dry run that wrote nothing */
+  validate_only: boolean;
+};
+
 export type AssistantConversation = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -19443,6 +19647,50 @@ export const claimOutpost = async (claimOutpostInputBody: NonReadonly<ClaimOutpo
     method: 'POST',
     headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(claimOutpostInputBody)
+  }
+);}
+
+
+
+export type applyPlanResponse201 = {
+  data: ApplyPlanOutputBody
+  status: 201
+}
+
+export type applyPlanResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 201>
+}
+
+export type applyPlanResponseSuccess = (applyPlanResponse201) & {
+  headers: Headers;
+};
+export type applyPlanResponseError = (applyPlanResponseDefault) & {
+  headers: Headers;
+};
+
+export type applyPlanResponse = (applyPlanResponseSuccess | applyPlanResponseError)
+
+export const getApplyPlanUrl = () => {
+
+
+
+
+  return `/plans:apply`
+}
+
+/**
+ * Lands a plan you built in one transaction: standards created from their templates (with any parent, unless you hold one of that name), locations parents first (a parent_key names an earlier location of the plan, a parent an existing one), systems at a location of the plan or an existing one with the components that staff their slots, standalone components, and the values declared on each. Every piece is the ordinary create in your own scope with its own audit row, and every row carries the one import_id the response returns, under from_import. A refused piece refuses the whole plan, mapped as its own route maps it, with its path in the plan (systems[3].components[1]) leading the detail; nothing lands. validate_only runs the same transaction and rolls it back, returning the counts and the names the apply would mint (200, no ids). A plan carries at most 1000 rows (each standard, location, system, component and declared value is one); a bigger one is a 413 naming the limit, so chunk an import (by building), one plan each. Gated by location:read, and each piece needs what its own create needs: location:create for locations, system:create for systems, component:create for components, system:read, system:update, component:read and component:update for a slot assignment, the update permission of what a value is declared on, and standard:create when a standard is created from its template. A location outside your scope for the piece there refuses that piece (404 when you cannot read it, 403 when you cannot create in it).
+ * @summary Create a plan of locations, systems and components in one write
+ */
+export const applyPlan = async (applyPlanInputBody: NonReadonly<ApplyPlanInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<applyPlanResponse> => {
+
+  return ogFetch<applyPlanResponse>(getApplyPlanUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
+    body: JSON.stringify(applyPlanInputBody)
   }
 );}
 

@@ -425,6 +425,19 @@ func contains(xs []string, x string) bool {
 	return false
 }
 
+// PlanStandards is the standards creating the standard template name needs,
+// parents first: the template and each ancestor template the fleet holds no
+// standard of that name for. A plan submitted whole (POST /plans:apply, #2368)
+// names standard templates this way; CreatePlan skips any the fleet holds by
+// the time it reaches them.
+func PlanStandards(ctx context.Context, gw storage.Gateway, c *Catalog, name string) ([]storage.StandardFromTemplate, error) {
+	st, err := c.GetKind(name, KindStandard)
+	if err != nil {
+		return nil, err
+	}
+	return standardChain(ctx, gw, c, st)
+}
+
 // standardChain is the standards a system template's own standard needs, parents
 // first: the standard template, and each ancestor template the fleet holds
 // no standard of that name for. A variant's chain lands with it, since a

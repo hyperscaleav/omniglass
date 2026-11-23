@@ -2054,6 +2054,16 @@ export interface paths {
       error: og.claimOutpostResponseError["data"];
     };
   };
+  "/plans:apply": {
+    post: {
+      path: never;
+      query: never;
+      body: NonNullable<Parameters<typeof og.applyPlan>[0]>;
+      bodyRequired: true;
+      data: og.applyPlanResponseSuccess["data"];
+      error: og.applyPlanResponseError["data"];
+    };
+  };
   "/products": {
     get: {
       path: never;

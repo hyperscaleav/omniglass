@@ -157,32 +157,72 @@ func templateFrom(ctx context.Context) string {
 	return name
 }
 
+// importKey carries the import id a plan applied through POST /plans:apply
+// came from (#2368).
+type importKey struct{}
+
+// WithImport marks every audit row written under ctx with the import that
+// wrote it, under from_import: like the template, provenance lives in the
+// audit detail only (ADR-0071), so the id is the one handle that finds every
+// row one applied plan wrote. An empty id leaves ctx as it is.
+func WithImport(ctx context.Context, id string) context.Context {
+	if id == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, importKey{}, id)
+}
+
+func importFrom(ctx context.Context) string {
+	id, _ := ctx.Value(importKey{}).(string)
+	return id
+}
+
 // templateDetailKey is the audit image key the plan's template lands under:
 // the one provenance key every row created from a template carries. A row
 // whose image already names its own template under it (a standard created
 // from a standard template inside a system's plan) keeps its own.
 const templateDetailKey = "from_template"
 
-// withTemplateDetail adds the template to an audit image (a JSON object), so
-// the detail names where the row came from. A nil image, or one that is not
-// an object, is left as it is.
-func withTemplateDetail(ctx context.Context, image any) any {
-	name := templateFrom(ctx)
+// importDetailKey is the audit image key an applied plan's import id lands
+// under (#2368).
+const importDetailKey = "from_import"
+
+// withProvenanceDetail adds the provenance the context carries (the template
+// under from_template, the import under from_import) to an audit image (a
+// JSON object), so the detail names where the row came from. A key the image
+// already holds is kept; a nil image, or one that is not an object, is left as
+// it is.
+func withProvenanceDetail(ctx context.Context, image any) any {
+	marks := provenanceMarks(templateFrom(ctx), importFrom(ctx))
 	b, ok := image.([]byte)
-	if name == "" || !ok || len(b) < 2 || b[0] != '{' {
+	if len(marks) == 0 || !ok || len(b) < 2 || b[0] != '{' {
 		return image
 	}
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(b, &m); err != nil {
 		return image
 	}
-	if _, has := m[templateDetailKey]; has {
-		return image
+	for _, mk := range marks {
+		if _, has := m[mk[0]]; !has {
+			m[mk[0]], _ = json.Marshal(mk[1])
+		}
 	}
-	m[templateDetailKey], _ = json.Marshal(name)
 	out, err := json.Marshal(m)
 	if err != nil {
 		return image
+	}
+	return out
+}
+
+// provenanceMarks is the key and value of each provenance mark set: the
+// template, then the import. Pure.
+func provenanceMarks(template, importID string) [][2]string {
+	var out [][2]string
+	if template != "" {
+		out = append(out, [2]string{templateDetailKey, template})
+	}
+	if importID != "" {
+		out = append(out, [2]string{importDetailKey, importID})
 	}
 	return out
 }
