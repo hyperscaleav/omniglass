@@ -365,7 +365,8 @@ address (`?range=7d`, or `?from=` and `?to=` for a custom range), so a link you 
 the same window for whoever follows it, and an address with a range it cannot read opens on the
 default rather than failing. A custom range is read through the [views](/architecture/views/)
 read, so it is offered only to a caller who holds `view:read`; a preset needs only the
-system's own read. Activity keeps its fixed windows for now (30 days of health history, 24 hours
+system's own read. A link carrying a custom range, opened by someone without `view:read`, shows the
+last 24 hours and says why. Activity keeps its fixed windows for now (30 days of health history, 24 hours
 of events and logs), so the control is not on that tab.
 
 ## Activity: the history, the events, the logs

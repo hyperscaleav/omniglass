@@ -807,6 +807,20 @@ describe("the metrics grid on the system page (#794, #2424)", () => {
       });
     });
 
+    // A shared link's custom range reads through the views read: a caller
+    // without view:read reads the default instead, and is told why.
+    it("a custom range link opened without view:read reads the default and says so", async () => {
+      const reads = stubReads();
+      const to = Date.now() - 3600_000;
+      mount(`/web/systems/${uuidFor("szp-sys")}?from=${new Date(to - 7200_000).toISOString()}&to=${new Date(to).toISOString()}`, health, METRICS, [], { ...me, permissions: ["system:read"] });
+      await waitFor(() =>
+        expect(reads.some((x) => x.url.includes("/metrics/room-temperature/samples") && x.url.includes("hours=24&") && x.url.includes("resolution=300"))).toBe(true),
+      );
+      expect(reads.some((x) => x.url.endsWith("/views:run"))).toBe(false);
+      expect(screen.getByTestId("time-range-trigger").textContent).toContain("Last 24 hours");
+      expect(screen.getByTestId("range-denied").textContent).toMatch(/view:read/);
+    });
+
     it("offers no custom range to a caller who may not read views", async () => {
       mount(`/web/systems/${uuidFor("szp-sys")}`, health, METRICS, [], { ...me, permissions: ["system:read"] });
       fireEvent.click(screen.getByTestId("time-range-trigger"));
