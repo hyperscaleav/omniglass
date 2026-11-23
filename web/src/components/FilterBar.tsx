@@ -38,16 +38,24 @@ export default function FilterBar<T>(props: {
   bare?: boolean;
   clearable?: boolean;
   trailing?: JSX.Element;
-  // The text being typed, as it changes ("" once a chip commits or it is
-  // cleared): a body that narrows as you type reads it before Enter.
-  onDraft?: (text: string) => void;
+  // Live filtering (#2462): bare text typed with no key prefix narrows the rows
+  // as it is typed, as a draft chip handed to onDraft (null when there is none).
+  // Enter still commits it as a chip. Off, the text only counts on Enter.
+  onDraft?: (draft: Chip | null) => void;
 }) {
   const [text, setText] = createSignal("");
-  createEffect(() => props.onDraft?.(text()));
   const [open, setOpen] = createSignal(false);
   const [sel, setSel] = createSignal(-1);
   const listId = createUniqueId();
   let inputRef: HTMLInputElement | undefined;
+
+  // The draft follows the text: bare words only, since "key:" is still being
+  // staged into a chip and a half-typed key would match nothing.
+  createEffect(() => {
+    if (!props.onDraft) return;
+    const t = text();
+    props.onDraft(t.trim() && !t.includes(":") ? tokenToChip(t, props.keys, fallbackKey()) : null);
+  });
 
   const fallbackKey = () => (props.keys.find((k) => k.hint === "substring") ?? props.keys[0])?.key ?? "";
   const keyOf = (k: string) => props.keys.find((s) => s.key === k);

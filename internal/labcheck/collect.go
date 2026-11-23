@@ -163,6 +163,37 @@ func (r reader) shapeOf(name string, cache map[string]transport.DriverShape) (tr
 	return s, nil
 }
 
+// impaired is the ids of the components an outpost's simulator holds an
+// impairment for, read from each outpost's simulation report.
+func (r reader) impaired() (map[string]bool, error) {
+	var outposts struct {
+		Outposts []struct {
+			Name string `json:"name"`
+		} `json:"outposts"`
+	}
+	if err := r.get("/outposts"+listQuery, &outposts); err != nil {
+		return nil, err
+	}
+	out := map[string]bool{}
+	for _, o := range outposts.Outposts {
+		var sim struct {
+			Devices []struct {
+				ComponentID string          `json:"component_id"`
+				Impairment  json.RawMessage `json:"impairment"`
+			} `json:"devices"`
+		}
+		if err := r.get("/outposts/"+url.PathEscape(o.Name)+"/simulation", &sim); err != nil {
+			return nil, err
+		}
+		for _, d := range sim.Devices {
+			if len(d.Impairment) > 0 && string(d.Impairment) != "null" {
+				out[d.ComponentID] = true
+			}
+		}
+	}
+	return out, nil
+}
+
 // Collect reads the lab at base into a Snapshot: each component's endpoints
 // (answered or not, and the built-in keys landed under each), each owner's
 // values with their writer class, and each driver's shape; an endpoint whose
@@ -197,10 +228,14 @@ func Collect(ctx context.Context, c *http.Client, base string, planted []string)
 	if err := r.get("/endpoints"+listQuery, &eps); err != nil {
 		return Snapshot{}, err
 	}
+	impaired, err := r.impaired()
+	if err != nil {
+		return Snapshot{}, err
+	}
 	shapes := map[string]transport.DriverShape{}
 	var snap Snapshot
 	for _, comp := range comps.Components {
-		cc := Component{Name: comp.Name, Product: comp.Product, Location: comp.Location}
+		cc := Component{Name: comp.Name, Product: comp.Product, Location: comp.Location, Impaired: impaired[comp.ID]}
 		var reach struct {
 			Endpoints []struct {
 				ID       string  `json:"id"`

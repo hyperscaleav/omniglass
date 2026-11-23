@@ -165,15 +165,15 @@ func TestReplicateCopiesWholeRoomsOnly(t *testing.T) {
 	}
 }
 
-// The degraded fleet raises only the severities and messages the example
-// fleet's own alarms use, at most one per component, so it can never name a
+// The degraded fleet raises only the severities and messages of the
+// fixture's alarm templates, at most one per component, so it can never name a
 // severity the boot seed does not ship or stack two conditions on one device.
 func TestDegradeRaisesKnownConditionsOncePerComponent(t *testing.T) {
 	t.Parallel()
 	base := fixturesDoc(t)
 	doc := degradeShipped(t)
 	known := map[string]bool{}
-	for _, a := range base.Alarms {
+	for _, a := range base.AlarmTemplates {
 		known[a.Severity+"|"+a.Message] = true
 	}
 	added := doc.Alarms[len(base.Alarms):]
@@ -186,7 +186,7 @@ func TestDegradeRaisesKnownConditionsOncePerComponent(t *testing.T) {
 	}
 	for _, a := range added {
 		if !known[a.Severity+"|"+a.Message] {
-			t.Errorf("degraded alarm %+v is not one the example fleet uses", a)
+			t.Errorf("degraded alarm %+v is not one of the fixture's templates", a)
 		}
 		if per[a.Component] != 1 {
 			t.Errorf("component %q carries %d alarms", a.Component, per[a.Component])
@@ -250,10 +250,13 @@ func TestDegradeFitsAlarmsToTheDeviceClass(t *testing.T) {
 	t.Parallel()
 	products := map[string]string{"beam": "projector", "panel": "interactive-display", "mic": "microphone", "dsp": "dsp"}
 	parents := map[string]string{"projector": "display-device", "interactive-display": "display", "display": "display-device"}
-	base := devseed.Doc{Alarms: []devseed.Alarm{
-		{Component: "seeded", Severity: "warning", Message: "Lamp hours approaching end of life", DedupKey: "lamp-hours", AppliesTo: []string{"projector", "display"}},
-		{Component: "seeded", Severity: "high", Message: "No route to host", DedupKey: "unreachable"},
-	}}
+	base := devseed.Doc{
+		Alarms: []devseed.Alarm{{Component: "seeded", Severity: "high", Message: "Standing", DedupKey: "standing"}},
+		AlarmTemplates: []devseed.Alarm{
+			{Severity: "warning", Message: "Lamp hours approaching end of life", DedupKey: "lamp-hours", AppliesTo: []string{"projector", "display"}},
+			{Severity: "high", Message: "No route to host", DedupKey: "unreachable"},
+		},
+	}
 	// Component 0 is alarmed already; every one of the rest is picked (n=1).
 	base.Components = []devseed.Component{{Key: "seeded", Product: "dsp"}}
 	for i, p := range []string{"mic", "beam", "mic", "panel", "dsp", "mic", "beam", "panel", "unknown-product"} {

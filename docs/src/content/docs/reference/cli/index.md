@@ -5964,6 +5964,26 @@ Example:
 omniglass simulation get
 ```
 
+### `omniglass simulation plan-component`
+
+Plan a simulated component
+
+```
+omniglass simulation plan-component <name> [flags]
+```
+
+Previews what adding a simulated component of a product would create (see add-outpost-simulation-component): the lowest free address in the simulated block (127.60.0.0/16) and the endpoints the collector would reach it through, a driver attach with its inputs (a secret input names the platform secret, never its value) or a reachability probe with its target, planned exactly as the add plans them. Creates nothing and reserves nothing: the address is not held, so an add or another plan in between may take it, and an add made after this plan then lands on the next free address instead. Gated by simulation:read, and needs outpost:read on the outpost. An outpost that does not exist is a 404, one with no simulator connected a 409, a product no profile simulates a 422, and a full block or a profile with no surface the collector can reach a 409.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--product` | string | (none) | A product a simulator profile simulates |
+
+Example:
+
+```sh
+omniglass simulation plan-component <name>
+```
+
 ### `omniglass simulation plan-system`
 
 Plan a simulated system to a standard
