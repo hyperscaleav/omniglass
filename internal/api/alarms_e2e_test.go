@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
@@ -189,5 +190,27 @@ func TestFleetAlarmQueueFiltersPagesAndStaysInScope(t *testing.T) {
 	}
 	if got := comps(read(narrow, "", http.StatusOK)); got != "cam-2 " {
 		t.Errorf("a cam-2-only reader got %q, want its one alarm", got)
+	}
+
+	// Reading a component never names a system the caller may not read: a
+	// cam-1-only reader sees cam-1's alarm with no systems, and one who may
+	// also read boardroom sees it named.
+	cam1ID := entityID(t, c, owner, "/components", "cam-1")
+	boardroomID := entityID(t, c, owner, "/systems", "boardroom")
+	for _, tc := range []struct {
+		user    string
+		grants  []grant
+		systems string
+	}{
+		{"cam1only", []grant{{role: "viewer", scopeKind: "component", scopeID: cam1ID}}, ""},
+		{"cam1room", []grant{{role: "viewer", scopeKind: "component", scopeID: cam1ID}, {role: "viewer", scopeKind: "system", scopeID: boardroomID}}, "boardroom"},
+	} {
+		p := read(userWithGrants(t, ctx, dsn, tc.user, tc.grants), "", http.StatusOK)
+		if len(p.Alarms) != 1 || p.Alarms[0].Component != "cam-1" {
+			t.Fatalf("%s: queue = %q, want cam-1's alarm alone", tc.user, comps(p))
+		}
+		if got := strings.Join(p.Alarms[0].Systems, ","); got != tc.systems {
+			t.Errorf("%s: cam-1's systems = %q, want %q", tc.user, got, tc.systems)
+		}
 	}
 }

@@ -505,7 +505,7 @@ func (p *PG) ListSystemAlarms(ctx context.Context, systemID string, window time.
 // The cursor is keyset, on the same (rank, raised_at, id) the list orders by,
 // so a page costs the same however deep it is and an alarm raised mid-walk
 // never shifts the pages.
-func (p *PG) ListFleetAlarms(ctx context.Context, read scope.Set, filter AlarmFilter, limit int) ([]Alarm, string, error) {
+func (p *PG) ListFleetAlarms(ctx context.Context, read, systemRead scope.Set, filter AlarmFilter, limit int) ([]Alarm, string, error) {
 	cur, err := decodeAlarmCursor(filter.PageToken)
 	if err != nil {
 		return nil, "", err
@@ -517,12 +517,19 @@ func (p *PG) ListFleetAlarms(ctx context.Context, read scope.Set, filter AlarmFi
 	if !ok {
 		return []Alarm{}, "", nil
 	}
+	ctes := ""
+	// A row names only the systems inside the caller's system read: reading a
+	// component never discloses the systems it belongs to.
+	sf := newNamedReadFilter(systemTable, systemRead, len(args)+1, "vis_sys")
+	args = append(args, sf.Args...)
+	if sf.cte != "" {
+		ctes += ", " + sf.cte
+	}
 	bind := func(v any) string {
 		args = append(args, v)
 		return "$" + strconv.Itoa(len(args))
 	}
 	where := []string{"a.cleared_at is null", "a.component_id in (select id from comp)"}
-	ctes := ""
 	if filter.Unacknowledged {
 		where = append(where, "a.acknowledged_at is null")
 	}
@@ -556,7 +563,7 @@ func (p *PG) ListFleetAlarms(ctx context.Context, read scope.Set, filter AlarmFi
 		with recursive comp as (`+scopedListSQL(componentTable, "id", read)+`)`+ctes+`
 		select `+alarmCols+`, coalesce(l.rank, 0),
 			coalesce((select array_agg(s.name order by s.name) from system_member m join system s on s.id = m.system_id
-				where m.component_id = a.component_id), '{}')
+				where m.component_id = a.component_id and `+sf.Pred("s.id")+`), '{}')
 		from alarm a
 		left join severity_level l on l.name = a.severity
 		where `+strings.Join(where, " and ")+`

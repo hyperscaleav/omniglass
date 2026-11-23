@@ -135,7 +135,7 @@ component set; the surfaces below are where they are mounted.
 
 ## Every page
 
-Each of the 51 files under `pages/` is either a surface with entries or checked and without one.
+Each of the 52 files under `pages/` is either a surface with entries or checked and without one.
 The four fleet routes (`/explore`, `/locations/<id>`, `/systems/<id>`, `/components/<id>`) also host the
 blade entries V17, V26, V28, V29, V30, V32, V33 and V37 through `fleetRegistry`; the rows below list
 what each page draws itself.
@@ -216,7 +216,7 @@ what each page draws itself.
 
 ## Widget types
 
-Deduplicated by widget, with the number of call sites (entries above; the 49 entries sum to 49). A `new:` row is a widget the
+Deduplicated by widget, with the number of call sites (entries above; the 50 entries sum to 50). A `new:` row is a widget the
 epic's vocabulary does not yet name; the count says how much of the console it would carry.
 
 | Widget | Call sites | Entries |
@@ -243,3 +243,4 @@ epic's vocabulary does not yet name; the count says how much of the console it w
 | new: command list | 1 | V47 |
 | new: pipeline flow | 1 | V48 |
 | new: floor map | 1 | V49 |
+| new: alarm queue | 1 | V50 |

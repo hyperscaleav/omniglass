@@ -205,13 +205,13 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/alarms",
 		Summary:     "List the fleet's active alarms",
-		Description: "What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Each row names its component's location and systems. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.",
+		Description: "What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Each row names its component's location and the systems it belongs to that the caller may read. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.",
 	}, "component", "read"), func(ctx context.Context, in *listFleetAlarmsInput) (*listFleetAlarmsOutput, error) {
 		limit := in.Limit
 		if limit <= 0 {
 			limit = fleetAlarmDefault
 		}
-		alarms, next, err := gw.ListFleetAlarms(ctx, a.scopeFor(ctx, "component", "read"), storage.AlarmFilter{
+		alarms, next, err := gw.ListFleetAlarms(ctx, a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "system", "read"), storage.AlarmFilter{
 			Unacknowledged: in.Unacknowledged, Severities: in.Severity, Location: in.Location,
 			Acknowledged: optBool(in.Acknowledged), Snoozed: optBool(in.Snoozed), PageToken: in.PageToken,
 		}, min(limit, fleetAlarmMax))
