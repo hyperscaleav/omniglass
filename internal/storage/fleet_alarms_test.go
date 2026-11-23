@@ -297,7 +297,7 @@ func TestFleetAlarmLocationFallsBackToTheSystemsLocation(t *testing.T) {
 		{Name: "fb-hq", LocationType: "campus"},
 		{Name: "fb-r1", LocationType: "room", ParentName: strptr("fb-hq")},
 	} {
-		if _, err := gw.CreateLocation(ctx, "", l, all); err != nil {
+		if _, err := gw.CreateLocation(ctx, "", l, all, all); err != nil {
 			t.Fatalf("location %s: %v", l.Name, err)
 		}
 	}
@@ -333,7 +333,7 @@ func TestFleetAlarmLocationFallbackIgnoresHiddenSameNamedSystems(t *testing.T) {
 	gw, dsn := secretGateway(t)
 	ctx := context.Background()
 	all := scope.Set{All: true}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hid-vault", LocationType: "campus"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hid-vault", LocationType: "campus"}, all, all); err != nil {
 		t.Fatalf("location: %v", err)
 	}
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "hid-comp"}, all, all, all, all); err != nil {
@@ -381,7 +381,7 @@ func TestFleetAlarmSystemsAndIDsStayAlignedForSameNamedSystems(t *testing.T) {
 	ctx := context.Background()
 	all := scope.Set{All: true}
 	for _, l := range []string{"al-a", "al-b", "al-c"} {
-		if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: l, LocationType: "campus"}, all); err != nil {
+		if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: l, LocationType: "campus"}, all, all); err != nil {
 			t.Fatalf("location: %v", err)
 		}
 	}
