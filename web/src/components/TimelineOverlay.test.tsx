@@ -54,12 +54,16 @@ function stub(reads: Read[]) {
         const b = body!.bindings[0];
         const result = { covered_from: ago(10000), cursor: "b.1", entities: [], from: b.from, to: b.to } as Record<string, unknown>;
         if (b.primitive === "event") result.events = [{ id: 1, entity: "disp", key: "power-changed", message: "power off", origin: "caught", ts: ago(41) }];
-        if (b.primitive === "log") result.logs = [{ id: 2, entity: "disp", message: "link down", severity: "error", ts: ago(39) }];
+        if (b.primitive === "log") result.logs = [
+            { id: 2, entity: "disp", message: "link down", severity: "error", ts: ago(39) },
+            // A device clock hours behind: read by arrival, so it sits at its arrival.
+            { id: 3, entity: "disp", message: "ntp drift", severity: "warning", ts: ago(500), received_at: ago(20) },
+          ];
         const series: Record<string, unknown> = {
           power: { entity: "disp", key: "power", instance: "", carried_in: "on", points: [{ ts: ago(41), value: "off" }, { ts: ago(28), value: "on" }] },
           "endpoint-reachable": { entity: "disp", key: "endpoint-reachable", instance: "snmp", carried_in: "up", points: [{ ts: ago(40), value: "down" }, { ts: ago(26), value: "up" }] },
         };
-        if (b.primitive === "property") result.property = (b.keys ?? []).map((k) => series[k]).filter(Boolean);
+        if (b.primitive === "property") result.property = (b.keys ?? []).map((k: string) => series[k]).filter(Boolean);
         return json({ cursor: "b.1", now: new Date(now).toISOString(), results: [result] });
       }
       return json({});
@@ -112,7 +116,10 @@ describe("TimelineOverlay", () => {
     await waitFor(() => expect(screen.getByTestId("timeline-commands-row").querySelector("[role=button]")).toBeTruthy());
     expect(screen.getByTestId("timeline-commands-row").querySelector("[role=button]")!.getAttribute("aria-label")).toContain("power on disp · settled");
     await waitFor(() => expect(screen.getByTestId("timeline-events-row").querySelector("[role=button]")?.getAttribute("aria-label")).toContain("power off"));
-    await waitFor(() => expect(screen.getByTestId("timeline-logs-row").querySelector("[role=button]")?.getAttribute("aria-label")).toContain("link down"));
+    await waitFor(() => expect(screen.getByTestId("timeline-logs-row").querySelectorAll("[role=button]")).toHaveLength(2));
+    const logs = [...screen.getByTestId("timeline-logs-row").querySelectorAll("[role=button]")].map((b) => b.getAttribute("aria-label"));
+    expect(logs[0]).toContain("link down");
+    expect(logs[1]).toMatch(/ntp drift · .*, arrived /);
     // The alarming rule watches endpoint-reachable (no declared property, but
     // read all the same), and power changed: both are shown unasked.
     await waitFor(() => expect(screen.getAllByTestId("timeline-property-row")).toHaveLength(2));

@@ -260,7 +260,14 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
   const commands = createMemo(() => commandsQ.flatMap((q) => q.data?.commands ?? []));
   const commandsMore = () => commandsQ.some((q) => q.data?.more);
   const eventClusters = createMemo(() => clusterMarkers(markersInRange(eventsQ.data?.events ?? [], (e) => e.ts, win()), win(), frame(), CLUSTER_GAP_PX));
-  const logClusters = createMemo(() => clusterMarkers(markersInRange(logsQ.data?.logs ?? [], (l) => l.ts, win()), win(), frame(), CLUSTER_GAP_PX));
+  // A log line sits at the time it carried; one whose device clock puts it
+  // outside the range (the range reads by arrival) sits at its arrival.
+  const logAt = (l: TimelineLog) => {
+    const t = Date.parse(l.ts);
+    return t >= win().from && t <= win().to ? l.ts : (l.received_at ?? l.ts);
+  };
+  const logClusters = createMemo(() => clusterMarkers(markersInRange(logsQ.data?.logs ?? [], logAt, win()), win(), frame(), CLUSTER_GAP_PX));
+  const count = <T,>(cs: Cluster<T>[]) => cs.reduce((n, c) => n + c.items.length, 0);
   const commandClusters = createMemo(() => clusterMarkers(markersInRange(commands(), (c) => c.issued_at, win()), win(), frame(), CLUSTER_GAP_PX));
 
   // ---- interaction ---------------------------------------------------------
@@ -300,7 +307,7 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
   const clusterTip = (c: Cluster<unknown>, noun: string, one: (item: never) => string) =>
     c.items.length === 1 ? one(c.items[0] as never) : `${c.items.length} ${noun} from ${fmt(new Date(c.from).toISOString())} to ${fmt(new Date(c.to).toISOString())}`;
   const eventTip = (e: TimelineEvent) => `${e.key} · ${e.message || "event"} · ${fmt(e.ts)}`;
-  const logTip = (l: TimelineLog) => `${l.severity ?? "log"} · ${l.message} · ${fmt(l.ts)}`;
+  const logTip = (l: TimelineLog) => `${l.severity ?? "log"} · ${l.message} · ${fmt(l.ts)}${logAt(l) !== l.ts ? `, arrived ${fmt(logAt(l))}` : ""}`;
   const commandTip = (c: Command) => `${c.command_type} on ${c.component} · ${c.status} · issued ${fmt(c.issued_at)}${c.issuer ? ` by ${c.issuer}` : ""}`;
 
   // What every lane reads at the cursor: the instant, the health in force, the
@@ -333,7 +340,7 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
   // A lane row: its label, and a plot strip that carries the crosshair.
   const Row = (p: { label: JSX.Element; height: number; testid?: string; children?: JSX.Element; title?: string }) => (
     <div class="flex items-stretch" data-testid={p.testid}>
-      <div class="flex w-36 shrink-0 items-center gap-1 truncate pr-2 text-[11px] text-base-content/70" title={p.title} style={{ height: `${p.height}px` }}>
+      <div class="flex w-24 shrink-0 @lg:w-36 items-center gap-1 truncate pr-2 text-[11px] text-base-content/70" title={p.title} style={{ height: `${p.height}px` }}>
         {p.label}
       </div>
       <svg class="block min-w-0 flex-1 overflow-visible" height={p.height} viewBox={`0 0 ${width()} ${p.height}`} preserveAspectRatio="none" onMouseMove={onMove}>
@@ -461,7 +468,7 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
       <Eyebrow
         label="Timeline"
         hint="Everything this recorded over the page's time range on one axis: health, each alarm from raise to clear, the properties and metrics you pick, events, log lines and commands. Hover a lane, or focus the lanes and use the arrow keys, to read every lane at one instant; click a mark to open it."
-        right={<span class="text-xs text-base-content/50">{rangeLabel(props.range)}</span>}
+        right={<span class="hidden text-xs text-base-content/50 @lg:inline">{rangeLabel(props.range)}</span>}
       />
       <p data-testid="timeline-readout" class="min-h-[1.25rem] truncate text-[11.5px] tabular-nums text-base-content/75" aria-live="polite" title={hovered() ?? readout()}>
         {hovered() ?? readout() ?? <span class="text-base-content/45">Hover the lanes to read them at one instant.</span>}
@@ -488,7 +495,7 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
       >
         {/* The measured plot column: an empty row the width of every strip. */}
         <div class="flex">
-          <div class="w-36 shrink-0" />
+          <div class="w-24 shrink-0 @lg:w-36" />
           <div class="min-w-0 flex-1" ref={measure} />
         </div>
 
@@ -505,7 +512,7 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
             )}
           </For>
           <Show when={!loading() && health().length === 0}>
-            <p class="pl-36 text-[11px] text-base-content/45">No health recorded in this range.</p>
+            <p class="pl-24 @lg:pl-36 text-[11px] text-base-content/45">No health recorded in this range.</p>
           </Show>
         </Show>
 
@@ -523,7 +530,7 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
           }
         />
         <Show when={isOpen("alarms")}>
-          <Show when={alarms().length > 0} fallback={<p class="pl-36 text-[11px] text-base-content/45">{loading() ? "Reading…" : "No alarm raised in this range."}</p>}>
+          <Show when={alarms().length > 0} fallback={<p class="pl-24 @lg:pl-36 text-[11px] text-base-content/45">{loading() ? "Reading…" : "No alarm raised in this range."}</p>}>
             <For each={shownAlarms()}>
               {(a) => {
                 const tip = () => alarmTip(a, fmt);
@@ -568,7 +575,7 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
             </For>
           </Show>
           <Show when={alarmsQ.data?.more}>
-            <p class="pl-36 text-[11px] text-warning">The read stops at 500 alarms; narrow the range to see the rest.</p>
+            <p class="pl-24 @lg:pl-36 text-[11px] text-warning">The read stops at 500 alarms; narrow the range to see the rest.</p>
           </Show>
         </Show>
 
@@ -580,7 +587,7 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
           right={<KeyPicker label="Properties" all={propertyKeys()} shown={shownProps()} onChange={setPickedProps} />}
         />
         <Show when={isOpen("properties")}>
-          <For each={propertyRows()} fallback={<p class="pl-36 text-[11px] text-base-content/45">No property changed in this range; pick one to show it.</p>}>
+          <For each={propertyRows()} fallback={<p class="pl-24 @lg:pl-36 text-[11px] text-base-content/45">No property changed in this range; pick one to show it.</p>}>
             {(r) => (
               <Row label={<span class="truncate font-data">{r.label}</span>} title={r.label} height={16} testid="timeline-property-row">
                 <Spans
@@ -602,7 +609,7 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
           right={<KeyPicker label="Metrics" all={metricNames()} shown={shownMetrics()} onChange={setPickedMetrics} />}
         />
         <Show when={isOpen("metrics")}>
-          <For each={metricLines()} fallback={<p class="pl-36 text-[11px] text-base-content/45">No metric picked; pick one to lay it on the timeline.</p>}>
+          <For each={metricLines()} fallback={<p class="pl-24 @lg:pl-36 text-[11px] text-base-content/45">No metric picked; pick one to lay it on the timeline.</p>}>
             {(m) => (
               <Row label={<span class="truncate font-data">{m.name}{m.unit ? ` (${m.unit})` : ""}</span>} title={m.name} height={METRIC_H} testid="timeline-metric-row">
                 <path d={m.layout.bandPath} class="fill-primary/20" />
@@ -615,7 +622,7 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
           </For>
         </Show>
 
-        <Header group="events" label="Events" count={eventsQ.data?.events.length} hint="Each event recorded in range; a crowd of them is one marker with its count." />
+        <Header group="events" label="Events" count={count(eventClusters())} hint="Each event recorded in range; a crowd of them is one marker with its count." />
         <Show when={isOpen("events")}>
           <Row label={<span class="text-base-content/50">{eventsQ.isLoading ? "Reading…" : eventsQ.data?.more ? "newest 3000" : ""}</span>} height={20} testid="timeline-events-row">
             <Markers
@@ -632,7 +639,7 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
         <Header
           group="logs"
           label="Logs"
-          count={logsQ.data?.logs.length}
+          count={count(logClusters())}
           hint="Each log line at or above the severity picked here, colored by its severity."
           right={
             <select
@@ -658,7 +665,7 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
           </Row>
         </Show>
 
-        <Header group="commands" label="Commands" count={commands().length} hint="Each command issued in range; open one to follow its arc from issue to settle." />
+        <Header group="commands" label="Commands" count={count(commandClusters())} hint="Each command issued in range; open one to follow its arc from issue to settle." />
         <Show when={isOpen("commands")}>
           <Row label={<span class="text-base-content/50">{commandsMore() ? "newest 500 each" : ""}</span>} height={20} testid="timeline-commands-row">
             <Markers
@@ -673,7 +680,7 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
         </Show>
 
         <div class="mt-1 flex">
-          <div class="w-36 shrink-0" />
+          <div class="w-24 shrink-0 @lg:w-36" />
           <svg class="block min-w-0 flex-1 overflow-visible" height="14" viewBox={`0 0 ${width()} 14`} preserveAspectRatio="none">
             <line x1="0" x2={width()} y1="0.5" y2="0.5" class="stroke-base-content/15" />
             <For each={axisTicks()}>
