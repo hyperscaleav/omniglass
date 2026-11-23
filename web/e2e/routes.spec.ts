@@ -66,7 +66,7 @@ test.describe("console routes", () => {
     await gotoSettled(page, `/web/outposts?n=${encodeURIComponent(first as string)}`);
     const drawer = page.getByRole("dialog");
     await expect(drawer).toBeVisible();
-    await expect(drawer.getByText("Tasks")).toBeVisible();
+    await expect(drawer.getByText("Tasks", { exact: true })).toBeVisible();
     expect(await drawer.innerText()).not.toMatch(/\bsoon\b/i);
   });
 });
