@@ -41,12 +41,6 @@ screenshots:
       - "[data-testid=platform-uptime] >> xpath=ancestor::div[3]"
       - "[data-testid=section-pipeline] [data-testid=section-summary]"
       - "[data-testid=server-panels-server] .grid"
-      # Where work is lost reads the server's own delivery windows, which land
-      # once a report window (60s here) passes, so whether its kinds and figures
-      # show yet moves with when the capture reaches the page. Its tab row and
-      # its hop row are full width and one line tall whatever they hold.
-      - "[data-testid=pipeline] [role=group] >> xpath=.."
-      - "[data-testid=pipeline] ol >> xpath=.."
   # The Requests panel's database rows sit below its ranked routes, past the
   # viewport, so this shot hovers the last row's figure: the hover scrolls the
   # rows into view and, the figure not being a tooltip trigger, covers none of

@@ -479,7 +479,7 @@ test.describe("operator console", () => {
     type Pipeline = {
       hops: { id: string; label: string; kinds: { kind: string; last_hour: Figure }[] | null; total: { last_hour: Figure }; by_component: { name: string }[] | null }[] | null;
     };
-    await page.goto("/web/platform");
+    await page.goto("/web/platform?open=pipeline");
     const flow = page.getByTestId("pipeline");
     await expect(flow).toBeVisible();
 
@@ -554,7 +554,9 @@ test.describe("operator console", () => {
 
     await page.goto("/web/platform");
     const set = page.locator("[data-testid^=server-panels-]").first();
-    await expect(set).toHaveAttribute("open", "");
+    // The server's section opens on demand (#2446), and says so in the address.
+    await set.getByRole("button", { expanded: false }).click();
+    await expect(page).toHaveURL(/open=server-/);
     for (const panel of ["requests", "ingest", "queues", "retention"]) {
       const rows = set.getByTestId(`server-panel-${panel}`).locator("tr[data-testid^=panel-row-]");
       await expect(rows.filter({ hasNotText: /not reported/ }).first()).toBeVisible();
