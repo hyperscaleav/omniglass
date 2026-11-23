@@ -393,7 +393,7 @@ func (p *PG) SignInByIdentity(ctx context.Context, in SSOSignIn) (*User, time.Ti
 	// does), so a sign-in that brings none keeps the one the link holds.
 	var holdsRefresh bool
 	if err := tx.QueryRow(ctx, `update credential set refresh_sealed = coalesce($2, refresh_sealed),
-			refresh_accepted_at = case when $2::bytea is null then refresh_accepted_at else now() end,
+			refresh_accepted_at = case when $2::jsonb is null then refresh_accepted_at else now() end,
 			recheck_grace_until = now() + make_interval(secs => $3), last_used_at = now() where id = $1
 			returning refresh_sealed is not null`,
 		linkID, sealed, in.Grace.Seconds()).Scan(&holdsRefresh); err != nil {
