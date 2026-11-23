@@ -159,9 +159,9 @@ omniglass component impairment set panel-1                   # repaired
 
 Unplugging closes the monitoring loop with nobody in between. Once the component's endpoint has
 read `down` for the official reachability rule's fire sustain ([the shipped rules](/admin/rules/#the-rules-that-ship)),
-the rule opens an alarm at its severity on it, the component goes to outage and stops filling its slots, and its system's verdict follows (degraded or
+the rule opens an alarm at its severity on it, the component goes to outage and stops filling its slots, and its system's health follows (degraded or
 out, as the slot's impact says). **Catalog > Actions > Event rules** shows the rule's open alarm while it
-lasts. Repair it and the next `up` reading clears the alarm and the verdict recovers. The
+lasts. Repair it and the next `up` reading clears the alarm and the health recovers. The
 [rules guide](/admin/rules/) walks the same loop with a rule of your own.
 
 Loss shows from the far end too. [Platform health](/operator/platform-health/#with-a-simulator)

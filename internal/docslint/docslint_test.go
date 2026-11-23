@@ -797,3 +797,41 @@ func TestScanClaudeMdFiresOnHeading(t *testing.T) {
 		t.Error("a prose mention of the retired section fired")
 	}
 }
+
+// TestADR2086VerdictRetires proves the health term bans verdict as the name of
+// health's result and keeps it where it is a judgment of a test (soak, perf and
+// footprint gates, a subscription test, a target test send).
+func TestADR2086VerdictRetires(t *testing.T) {
+	fires := func(line string) bool {
+		for _, msg := range scanLine(line) {
+			if strings.Contains(msg, "ADR-2086") {
+				return true
+			}
+		}
+		return false
+	}
+	for _, line := range []string{
+		"the system's verdict is degraded",
+		"the location's verdict, worst-wins over its systems",
+		"an endpoint with no up verdict by then reopens anyway",
+		"Verdicts here are a read of your scope",
+	} {
+		if !fires(line) {
+			t.Errorf("verdict as health's result passed: %q", line)
+		}
+	}
+	for _, line := range []string{
+		"the soak verdict passed",
+		"a failing soak verdict exits 1 and names every reason",
+		"omniglass lab soak verdict --since 2026-11-20T08:00:00Z",
+		"the perf gate's verdict is pass or fail",
+		"the footprint verdict",
+		"a subscription's test verdict says matched or missed",
+		"the test send verdict",
+		"the system's health is degraded",
+	} {
+		if fires(line) {
+			t.Errorf("a kept sense of verdict fired: %q", line)
+		}
+	}
+}

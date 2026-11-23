@@ -21,7 +21,7 @@ screenshots:
       # walk to the component view this shot teaches.
       - action: click
         selector: "aside[data-blade] button[aria-label=Expand]"
-    alt: "A component's view: its location as a card saying the location is its own, the verdict with its since-line, why, what it is, the systems it serves with its slot in each, and collection."
+    alt: "A component's view: its location as a card saying the location is its own, the health with its since-line, why, what it is, the systems it serves with its slot in each, and collection."
     # The since-line and the alarm ages count from the capture's own clock.
     #
     # A mask is painted at the size of what it resolves to, and a since-line
@@ -45,7 +45,7 @@ screenshots:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
   - id: fleet-system
     path: /web/systems/huddle
-    alt: "A system's view: the location as a card of context, the system's header (verdict, since, standard, size), then Overview: its components as rows naming each one's slot, slots grouped only where they say something."
+    alt: "A system's view: the location as a card of context, the system's header (health, since, standard, size), then Overview: its components as rows naming each one's slot, slots grouped only where they say something."
     # The since-line ages with the capture; the history strip is Activity's
     # now (#872), so nothing else on Overview moves.
     mask:
@@ -97,7 +97,7 @@ screenshots:
   # system.
   - id: fleet-location-systems
     path: /web/locations/media-lab
-    alt: "A room holding two systems: its card, then a brief card per system with its verdict, standard and size, each opening that system's view."
+    alt: "A room holding two systems: its card, then a brief card per system with its health, standard and size, each opening that system's view."
     # Each card's since line ages with the capture. The mask DECLARES its
     # box (`width`): painted at the since span's top-left, as tall as the span
     # and 208px wide, whatever the line reads. A mask on the span alone is the
@@ -105,7 +105,7 @@ screenshots:
     # the month, a bare day and AM or PM; the age reads 9s or 17s), so the box
     # moved with it (#1081). The card's header row holds still (the grid
     # track pins its width, and the since line always wraps to its second
-    # line) but also holds the system's name and verdict, which the baseline
+    # line) but also holds the system's name and health, which the baseline
     # keeps gating. The widest line a capture renders ("since May 28, 12:59 AM
     # · 59m") is 186px in the console's face; a line wider than 208px fails
     # the capture by name.
@@ -144,7 +144,7 @@ screen is the whole fleet in a handful of lines. You open what you want to look 
 
 **A location wears its system.** An operator thinks of a location that holds one system as that
 system, so a location where one system sits shows that system on its own row: the **Standard** column names the
-[standard](/admin/standards/) it conforms to, and **Health** its verdict. Open it and
+[standard](/admin/standards/) it conforms to, and **Health** its health. Open it and
 the system's components are directly beneath, each with its product and health, and a
 component's active alarm reads in the **Detail** column. A location holding two systems lists a
 row per system, with its components under each. A component two systems share appears under
@@ -152,7 +152,7 @@ both, marked **also in** the other; a component in no system sits directly under
 
 **A collapsed row says what it holds.** The Detail column counts what is inside in your
 catalog's own words (**2 buildings, 1 floor**, **19 components**, **Empty**), and the Health
-column counts the systems beneath it by verdict, in four fixed slots: healthy, incomplete,
+column counts the systems beneath it by health, in four fixed slots: healthy, incomplete,
 degraded, outage. Healthy is a muted green and each kind of trouble wears its full colour, so a
 red count stands out down the page without being read. The counts include everything beneath the row, so a
 collapsed branch cannot hide an outage. They are counts rather than one worst-case colour
@@ -196,7 +196,7 @@ value; each commit becomes a chip.
   **AND** (match all). Click a chip's operator to cycle it, its value to re-edit it, and the
   **x** to remove it.
 - A bare term matches a name, or any fragment of the path above it, so typing a location's
-  name finds everything in it. `verdict:`, `type:`, `standard:`, `product:` and
+  name finds everything in it. `health:`, `type:`, `standard:`, `product:` and
   `path:` narrow precisely.
 - Every [tag](/architecture/tags/) in use is a field too: choose the tag's key, then a value,
   to match its **effective** value (a component matches a tag it inherits from its system or
@@ -207,10 +207,10 @@ While a filter is on, the outline becomes a flat list of matches, each with the 
 it. **Enter** on a match shows it in the tree, opened down to it and selected, with the filter
 cleared; **Space** or a click opens its side panel. The counts line's **need attention** is
 itself the filter: it keeps what is in outage, degraded or incomplete, and it is the same
-verdict chip the bar shows, so the two can never disagree.
+health chip the bar shows, so the two can never disagree.
 
 What the filter bar does **not** offer is a location facet. Filtering on live state (a
-verdict, a standard, a type, a name) is exploring; naming the part of your fleet to include
+health, a standard, a type, a name) is exploring; naming the part of your fleet to include
 is choosing a scope, which is a different job.
 
 The address carries what you were looking at. `?chips=` carries the filter, so a link hands
@@ -223,7 +223,7 @@ a system or a component: the same create [form](/operator/entities/), with the
 placement already filled in, or the same thing [from a template](/operator/templates/). It offers a location only where your location types let one
 sit, and only what you hold the create permission for.
 
-Everything on the page is already filtered to [your scope](#scope). Verdicts here are a
+Everything on the page is already filtered to [your scope](#scope). Health values here are a
 glance; monitoring lives on the detail views.
 
 :::design[Target design, tracked in #1833 and #1830]
@@ -249,7 +249,7 @@ The view reads top-down:
   does not name it again, and the breadcrumb ends at the location's parent: the location is named
   once. The breadcrumb's **Explore** goes back up to where you were: the outline, opened down
   to this row and selected.
-- **The system card**: the verdict and **since when** (the last recorded change and its
+- **The system card**: the health and **since when** (the last recorded change and its
   age), the standard it is built to, how many components it holds, and slot arithmetic only
   while hardware is missing. Each fact is said once; there is no counts line above it.
 - **Three tabs.** **Overview** is the system itself. **Activity** is what happened to it.
@@ -258,10 +258,10 @@ The view reads top-down:
 A location holding a system and locations beneath it lists those locations under the system, as the
 outline rooted there.
 
-The system's view refreshes on its own while it is open, every 5 seconds: its verdict, **Why**,
+The system's view refreshes on its own while it is open, every 5 seconds: its health, **Why**,
 the slots and who is staffing them, each component's health light, and the data section's latest
 values (the 24 hour sparklines every 30), and on **Activity** the health history, events and logs. A component going down shows up as the system's new
-verdict and the alarm in Why without a reload, and every age on the page (since when, how long an
+health and the alarm in Why without a reload, and every age on the page (since when, how long an
 alarm has been raised) keeps counting. It reads only this system and its members, never the whole
 fleet, and stops while the browser tab is hidden.
 
@@ -279,7 +279,7 @@ its own. Its card is the subject, with its own **Overview** and **Configure** ta
 Overview lists what is beneath the location as the outline rooted there: the same columns,
 contents lines, health counts, chip filter, **need attention** and **+** as Explore, counted
 over this subtree. A location holding two or more systems shows a brief card per system first
-(verdict, since when, standard, size, why), each opening that system's view.
+(health, since when, standard, size, why), each opening that system's view.
 
 ::screenshot{#fleet-location-systems}
 
@@ -345,7 +345,7 @@ nothing to chart yet, and says so.
 **Activity** reads the way a status page reads: the window's **uptime** up top (the
 health KPI over time), the timeline beside it with one marker per alarm raise, then
 the **health history**: one entry per contiguous stretch away from healthy, ongoing first, each
-expanding to the verdict changes inside it and the alarms that explain them. An alarm the
+expanding to the health changes inside it and the alarms that explain them. An alarm the
 system absorbed without going unhealthy lists under **other alarms**. A system that flaps
 weekly and a system that failed once look different here, which is the point.
 
@@ -384,7 +384,7 @@ view, the location's own section under Configure, and the new label read everywh
 
 A component is a piece of a system, so its view opens with its **location card** too, saying
 whether the location is the component's own (**set here**) or its system's standing in for one
-it does not have (**from its system**). Then the component card: the verdict and since when
+it does not have (**from its system**). Then the component card: the health and since when
 (a component has no recorded edges, so since-when is what took it down: the worst active
 alarm and its age), its product, and its tabs.
 
@@ -412,7 +412,7 @@ rejected, and both keys with **Trust this key** when what changed was the compon
 it was last seen: when the server last
 received anything the endpoint's task delivered, not its last up/down change (hours old on an
 endpoint that never stopped answering) and not a time the outpost wrote on a sample. Every
-endpoint whose transport can probe has a reachability verdict, a driver's included: an SNMP
+endpoint whose transport can probe has a reachability, a driver's included: an SNMP
 endpoint's is its standard get answered, and a udp endpoint's its driver's request answered (a bare
 udp or snmp endpoint has nothing to send, so it needs a driver). A stale sample under a
 healthy outpost points at the component or the network path, not at collection. An offline outpost
@@ -443,7 +443,7 @@ The X on a bound row unbinds it after a confirm, and its next value waits under 
 again. The CLI does the same with `omniglass component identity-binding` (`list`, `update`, `delete`) and `omniglass component unbound-identity list`.
 
 The component's view refreshes on its own while it is open: its Collection, Vitals, and its alarms
-with the verdict they make every 5 seconds, the outpost behind Collection every 10, so an endpoint you
+with the health they make every 5 seconds, the outpost behind Collection every 10, so an endpoint you
 just added, or a component going down, shows up without a reload. It reads only this component and
 its outpost, never the whole fleet, and stops while the browser tab is hidden.
 

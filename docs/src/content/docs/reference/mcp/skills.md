@@ -33,7 +33,7 @@ Work out whether a component's alarm is real, what caused it, and what the opera
 
 ### Triage an alarm
 
-An alarm is the component's own verdict that something is wrong. Triage answers
+An alarm says something is wrong with the component. Triage answers
 three questions in order: is it still true, what caused it, and what should
 happen now. Read everything first; change nothing until the operator agrees.
 
@@ -120,7 +120,7 @@ component may be one symptom of a wider fault.
 
 Read [`get-component-reachability`](/reference/mcp/#get-component-reachability). If it is unreachable:
 
-- the reachability answer is per endpoint: its verdict and the probe layers
+- the reachability answer is per endpoint: its reachability and the probe layers
   under it say whether the path failed (no answer to a ping or a port) or the
   endpoint answered and was refused. Read that endpoint with [`get-endpoint`](/reference/mcp/#get-endpoint)
   for the outpost it is placed on and the driver it is attached through;

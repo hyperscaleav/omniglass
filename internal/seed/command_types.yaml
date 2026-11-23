@@ -26,7 +26,7 @@ command_types:
       one: its delivery closes the gates of its hold set on that
       outpost (the component's in-band endpoints and those of what it hosts), the
       outpost runs nothing against them for the quiet period, then each reopens
-      on its own first up verdict, with the hold as the backstop for one that
+      on its own first up reading, with the hold as the backstop for one that
       never reads up.
     settle_window_seconds: 0
     disruptive: true
@@ -45,7 +45,7 @@ command_types:
       outlet, its out-of-band ones included, and the in-band endpoints of what
       those host), never the PDU's own, so the outpost sends nothing to a
       component while its power is cut. Each reopens on its own first up
-      verdict after the quiet period, with the hold as the backstop for one
+      reading after the quiet period, with the hold as the backstop for one
       that stays dark.
     params_schema:
       type: object
