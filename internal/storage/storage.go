@@ -1008,6 +1008,7 @@ type Gateway interface {
 	// OutpostCheckins reads every claimed outpost's platform component and the time
 	// it last spoke, the check-in age's input (#1625).
 	OutpostCheckins(ctx context.Context) ([]OutpostCheckin, error)
+	PlatformMetricInstancesAt(ctx context.Context, componentID, key string, value float64) ([]string, error)
 	// StampRuleSweep records a completed event rule sweep on the server's
 	// platform component, MarkServerSeen that the server is alive,
 	// ReleaseRuleSweep clears both on a clean stop, and ServerSweepAges reads

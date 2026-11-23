@@ -566,7 +566,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                               </Show>
                               <span data-testid="alarm-controls" class="ml-auto flex shrink-0 items-center gap-1">
                                 <AlarmActions
-                                  componentId={a.componentId ?? a.component}
+                                  componentId={a.componentId ?? ""}
                                   alarm={{ id: a.id, message: a.message, component: a.component, raised_at: a.raisedAt, acknowledged: a.acknowledged }}
                                   show={{ ack: !!a.componentId, troubleshoot: true, timeline: a.componentId ? timelines : undefined }}
                                 />

@@ -708,6 +708,9 @@ carried one (the sample's push lane has pushed no log line).
   consumer never empty. A note under the table gives the floor and the last sequence it had not
   reached, or which gauge was never read, when the stream was the cause. At the platform's 60s report
   window the settle can take four windows, so `--settle-timeout` defaults to 5 minutes.
+  The settle polls the stream's gauges every 5 s but re-reads the receipts only when the ack floor has
+  moved, and the receipts read is bounded to the window by indexes, so a lab that cannot settle does
+  not load its database for the whole bound.
 
 - **unshipped** names an outpost boot that will never settle because its outpost started again while its spool
   still held batches: the spool is memory, so they went with the process. The boot is read as far as

@@ -74,7 +74,7 @@ func TestRetentionSamplesMapAPassToItsRows(t *testing.T) {
 		},
 		TableBytes: map[string]int64{"metric": 81920, "metric_trend": 16384, "log_line": 8192},
 	}
-	got := rowsByKey(t, retentionSamples("srv", rep, status, now), "srv", now)
+	got := rowsByKey(t, retentionSamples("srv", rep, nil, status, now), "srv", now)
 	want := map[string]float64{
 		writerclass.RetentionDeletedCount + "|metric":            120,
 		writerclass.RetentionDeletedCount + "|property":          0,
@@ -110,7 +110,7 @@ func TestRetentionSamplesMapAPassToItsRows(t *testing.T) {
 func TestRetentionSamplesOmitWhatThePassDidNotDo(t *testing.T) {
 	now := time.Date(2026, 11, 9, 12, 30, 0, 0, time.UTC)
 	rep := retentionReport{Deleted: map[string]int64{"metric": 4}, Failures: 1, Duration: time.Second}
-	got := rowsByKey(t, retentionSamples("srv", rep, nil, now), "srv", now)
+	got := rowsByKey(t, retentionSamples("srv", rep, nil, nil, now), "srv", now)
 	diffRows(t, got, map[string]float64{
 		writerclass.RetentionDeletedCount + "|metric": 4,
 		writerclass.RetentionBehind + "|metric":       0,
@@ -122,7 +122,7 @@ func TestRetentionSamplesOmitWhatThePassDidNotDo(t *testing.T) {
 
 	// The compactions ran but neither has a mark: their flags, no lags.
 	rep = retentionReport{Deleted: map[string]int64{}, Compacted: true, MetricDays: 7}
-	got = rowsByKey(t, retentionSamples("srv", rep, &storage.RetentionStatus{}, now), "srv", now)
+	got = rowsByKey(t, retentionSamples("srv", rep, nil, &storage.RetentionStatus{}, now), "srv", now)
 	for _, k := range []string{writerclass.MetricTrendMarkLag, writerclass.MetricBlockMarkLag, writerclass.MetricOldestDayAge} {
 		if _, ok := got[k+"|"]; ok {
 			t.Errorf("%s written with no mark or partition to read it from", k)
@@ -132,7 +132,7 @@ func TestRetentionSamplesOmitWhatThePassDidNotDo(t *testing.T) {
 		t.Errorf("an empty status read %v, want a partition count of 0 and the 7-day window", got)
 	}
 
-	if rows := retentionSamples("", rep, &storage.RetentionStatus{}, now); rows != nil {
+	if rows := retentionSamples("", rep, nil, &storage.RetentionStatus{}, now); rows != nil {
 		t.Errorf("with no platform component the pass wrote %v, want nothing", rows)
 	}
 }
@@ -147,7 +147,7 @@ func TestRetentionSamplesKeyEveryLaneByItsName(t *testing.T) {
 	for i, l := range lanes {
 		rep.Deleted[l] = int64(i + 1)
 	}
-	got := rowsByKey(t, retentionSamples("srv", rep, nil, now), "srv", now)
+	got := rowsByKey(t, retentionSamples("srv", rep, nil, nil, now), "srv", now)
 	for i, l := range lanes {
 		if v, ok := got[writerclass.RetentionDeletedCount+"|"+l]; !ok || v != float64(i+1) {
 			t.Errorf("deleted count for %s = %v (%v), want %d", l, v, ok, i+1)
@@ -209,7 +209,7 @@ func (stuckRecorder) RecordPlatformMetrics(ctx context.Context, _ []storage.Plat
 func TestRecordRetentionGivesUpAtItsDeadline(t *testing.T) {
 	done := make(chan error, 1)
 	go func() {
-		done <- recordRetention(context.Background(), stuckRecorder{}, "srv", retentionReport{}, time.Now(), 50*time.Millisecond)
+		done <- recordRetention(context.Background(), stuckRecorder{}, "srv", retentionReport{}, nil, time.Now(), 50*time.Millisecond)
 	}()
 	select {
 	case err := <-done:
@@ -218,5 +218,38 @@ func TestRecordRetentionGivesUpAtItsDeadline(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("recording a pass against a hung store never returned")
+	}
+}
+
+// TestRetentionSamplesClearALaneThatStoppedReporting (#1673): a lane flagged
+// behind last pass that this pass did not report (an override removed, a
+// window out of range) reads 0, so its warning clears; a lane still reported
+// keeps its own flag, and the metric window out of range after a compaction
+// read behind zeroes both compaction flags.
+func TestRetentionSamplesClearALaneThatStoppedReporting(t *testing.T) {
+	now := time.Date(2026, 11, 9, 12, 30, 0, 0, time.UTC)
+	rep := retentionReport{Deleted: map[string]int64{"metric": 4}, Behind: []string{"metric"}}
+	prior := []string{"metric", "metric/held", "metric_trend compaction", "metric_block compaction"}
+	got := rowsByKey(t, retentionSamples("srv", rep, prior, nil, now), "srv", now)
+	for k, v := range map[string]float64{
+		writerclass.RetentionBehind + "|metric":                  1,
+		writerclass.RetentionBehind + "|metric/held":             0,
+		writerclass.RetentionBehind + "|metric_trend compaction": 0,
+		writerclass.RetentionBehind + "|metric_block compaction": 0,
+	} {
+		if g, ok := got[k]; !ok || g != v {
+			t.Errorf("%s = %v (present %v), want %v", k, g, ok, v)
+		}
+	}
+	// A lane that reports this pass is not written twice.
+	rep = retentionReport{Deleted: map[string]int64{"metric/held": 0}, Compacted: true}
+	n := 0
+	for _, r := range retentionSamples("srv", rep, prior, nil, now) {
+		if r.Key == writerclass.RetentionBehind && r.Instance == "metric/held" {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("a reported lane written %d times, want once", n)
 	}
 }
