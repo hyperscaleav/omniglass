@@ -3717,6 +3717,9 @@ export type SimObservation = {
   outpost: string;
   /** @nullable */
   protocols: SimProtocolObservation[] | null;
+  /** @nullable */
+  served_ids?: string[] | null;
+  served_truncated?: boolean;
   started: string;
 };
 
