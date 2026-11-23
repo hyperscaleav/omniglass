@@ -26,14 +26,21 @@ type MetricSampleWrite struct {
 	// Namespace is the catalog namespace Key is read in (#1433): empty walks
 	// the search path (the operator's row, then the platform's); set, Key is
 	// read in that namespace only, and no such row there refuses the write.
-	// A row so qualified is judged by no event rule and marks no calc rule:
-	// both address a key by its bare name, which reaches another row.
+	// A row so qualified is judged by no event rule and marks no calc rule
+	// (both address a key by its bare name, which reaches another row) unless
+	// BareInEffect says the bare name reaches it too.
 	Namespace string
-	Key       string
-	Instance  string
-	Value     float64
-	Source    string
-	TS        time.Time
+	// BareInEffect says the row Namespace names is also the one the bare Key
+	// reaches (#1457), so the rules reading Key judge the sample as a bare
+	// one, while the write still reads Key in Namespace exactly: a row
+	// deleted since the caller looked refuses the sample instead of the
+	// search path landing it on another namespace's row.
+	BareInEffect bool
+	Key          string
+	Instance     string
+	Value        float64
+	Source       string
+	TS           time.Time
 }
 
 // MetricSample is a stored observed/derived metric row (read side).
@@ -256,7 +263,7 @@ func (p *PG) writeMetricSets(ctx context.Context, tx pgx.Tx, sets []metricSet) e
 			}
 			arcs = append(arcs, arc)
 			rows[i] = keyedWrite{namespace: ev.Namespace, key: ev.Key, instance: ev.Instance, ownerKind: ev.OwnerKind, owner: arc}
-			if ev.Namespace == "" {
+			if ev.judgedBare() {
 				marks.add(ev.OwnerKind, arc, rules.LaneMetric, ev.Key)
 			}
 		}
@@ -265,7 +272,7 @@ func (p *PG) writeMetricSets(ctx context.Context, tx pgx.Tx, sets []metricSet) e
 		}
 		evs = append(evs, setEvs...)
 	}
-	keys := sampleKeys(bareWrites(evs, func(e MetricSampleWrite) string { return e.Namespace }), func(e MetricSampleWrite) string { return e.Key })
+	keys := sampleKeys(bareWrites(evs), func(e MetricSampleWrite) string { return e.Key })
 	eval, err := p.newRuleEvaluator(ctx, tx, keys)
 	if err != nil {
 		return err
@@ -459,7 +466,7 @@ func (p *PG) writeMetricSets(ctx context.Context, tx pgx.Tx, sets []metricSet) e
 		}
 		// A qualified row is one no rule addresses: each reads the key by its
 		// bare name, which reaches another row (#1433).
-		if ev.Namespace == "" {
+		if ev.judgedBare() {
 			if err := eval.observe(ctx, tx, rules.LaneMetric, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, ts, ev.Value); err != nil {
 				return err
 			}
@@ -708,3 +715,7 @@ func (p *PG) ListMetricSeries(ctx context.Context, ownerKind, ownerRef, key stri
 func metricSeriesKey(ev MetricSampleWrite, arc string) string {
 	return ev.OwnerKind + "\x00" + arc + "\x00" + ev.Namespace + "\x00" + ev.Key + "\x00" + ev.Instance
 }
+
+// judgedBare reports whether the rules addressing the sample's key by its
+// bare name judge it: a bare sample, or one flagged BareInEffect (#1457).
+func (w MetricSampleWrite) judgedBare() bool { return w.Namespace == "" || w.BareInEffect }

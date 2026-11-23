@@ -466,13 +466,13 @@ func (p *PG) lockGroups(ctx context.Context, tx *batchTx, live []landGroup) erro
 	// A qualified row marks nothing: a calc rule reads a key by its bare
 	// name, which reaches another row (#1433). Its event rule rows are only
 	// over-locked, a superset taken first.
-	mark := func(w KeyWriter, ownerKind, ownerID string, lane rules.Lane, namespace, key string) (string, error) {
+	mark := func(w KeyWriter, ownerKind, ownerID string, lane rules.Lane, judged bool, key string) (string, error) {
 		arc, err := p.ownerArcValue(ctx, tx, ownerKind, ownerID)
 		if err != nil {
 			return "", fmt.Errorf("storage: land batch: owner %s/%s: %w", ownerKind, ownerID, err)
 		}
 		keys[key] = true
-		if namespace != "" {
+		if !judged {
 			return arc, nil
 		}
 		m := marks[w.rule()]
@@ -485,14 +485,14 @@ func (p *PG) lockGroups(ctx context.Context, tx *batchTx, live []landGroup) erro
 	}
 	lane := func(w KeyWriter, ps []PropertySampleWrite, ms []MetricSampleWrite) error {
 		for _, ev := range cleanPropertyWrites(ps) {
-			arc, err := mark(w, ev.OwnerKind, ev.OwnerID, rules.LaneProperty, ev.Namespace, ev.Key)
+			arc, err := mark(w, ev.OwnerKind, ev.OwnerID, rules.LaneProperty, ev.judgedBare(), ev.Key)
 			if err != nil {
 				return err
 			}
 			props, propArcs = append(props, ev), append(propArcs, arc)
 		}
 		for _, ev := range ms {
-			if _, err := mark(w, ev.OwnerKind, ev.OwnerID, rules.LaneMetric, ev.Namespace, ev.Key); err != nil {
+			if _, err := mark(w, ev.OwnerKind, ev.OwnerID, rules.LaneMetric, ev.judgedBare(), ev.Key); err != nil {
 				return err
 			}
 		}

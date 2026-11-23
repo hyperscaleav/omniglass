@@ -23,13 +23,14 @@ import (
 type PropertySampleWrite struct {
 	OwnerKind string
 	OwnerID   string
-	// Namespace is read as MetricSampleWrite.Namespace.
-	Namespace string
-	Key       string
-	Instance  string
-	Value     string
-	Source    string
-	TS        time.Time
+	// Namespace and BareInEffect are read as MetricSampleWrite's.
+	Namespace    string
+	BareInEffect bool
+	Key          string
+	Instance     string
+	Value        string
+	Source       string
+	TS           time.Time
 }
 
 // PropertySample is a stored observed/derived property row (read side). Value
@@ -125,7 +126,7 @@ func (p *PG) writePropertySets(ctx context.Context, tx pgx.Tx, sets []propertySe
 			}
 			arcs = append(arcs, arc)
 			rows[i] = keyedWrite{namespace: ev.Namespace, key: ev.Key, instance: ev.Instance, ownerKind: ev.OwnerKind, owner: arc}
-			if ev.Namespace == "" {
+			if ev.judgedBare() {
 				marks.add(ev.OwnerKind, arc, rules.LaneProperty, ev.Key)
 			}
 		}
@@ -156,7 +157,7 @@ func (p *PG) writePropertySets(ctx context.Context, tx pgx.Tx, sets []propertySe
 	}
 	// The event rules reading this batch's keys judge each sample as it lands
 	// (#919), in this transaction.
-	eval, err := p.newRuleEvaluator(ctx, tx, sampleKeys(bareWrites(evs, func(e PropertySampleWrite) string { return e.Namespace }), func(e PropertySampleWrite) string { return e.Key }))
+	eval, err := p.newRuleEvaluator(ctx, tx, sampleKeys(bareWrites(evs), func(e PropertySampleWrite) string { return e.Key }))
 	if err != nil {
 		return 0, err
 	}
@@ -274,7 +275,7 @@ func (p *PG) writePropertySets(ctx context.Context, tx pgx.Tx, sets []propertySe
 		var kinds, owners []string
 		var at []int
 		for i, ev := range evs {
-			if targeted[ev.Key] && ev.Namespace == "" {
+			if targeted[ev.Key] && ev.judgedBare() {
 				kinds, owners, at = append(kinds, ev.OwnerKind), append(owners, arcs[i]), append(at, i)
 			}
 		}
@@ -316,7 +317,7 @@ func (p *PG) writePropertySets(ctx context.Context, tx pgx.Tx, sets []propertySe
 		}
 		// A qualified row is one no rule and no command type addresses: each
 		// reads the key by its bare name, which reaches another row (#1433).
-		if ev.Namespace == "" {
+		if ev.judgedBare() {
 			if err := eval.observe(ctx, tx, rules.LaneProperty, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, stamps[i], ev.Value); err != nil {
 				return 0, err
 			}
@@ -496,3 +497,6 @@ func (p *PG) ListPropertySeries(ctx context.Context, ownerKind, ownerRef, key st
 	}
 	return out, rows.Err()
 }
+
+// judgedBare is MetricSampleWrite.judgedBare on the property lane.
+func (w PropertySampleWrite) judgedBare() bool { return w.Namespace == "" || w.BareInEffect }

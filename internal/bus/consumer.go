@@ -1149,14 +1149,15 @@ func deriveMetrics(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwn
 		}
 		bare, _ := reg.Metric(dp.GetName())
 		out = append(out, storage.MetricSampleWrite{
-			OwnerKind: arc.Kind,
-			OwnerID:   arc.ID,
-			Namespace: writeNamespace(mt.Namespace, bare.Namespace),
-			Key:       dp.GetName(),
-			Instance:  instance,
-			Value:     dp.GetValue(),
-			Source:    laneSource(ev, owner),
-			TS:        sampleTime(ev, dp.GetTs()),
+			OwnerKind:    arc.Kind,
+			OwnerID:      arc.ID,
+			Namespace:    dp.GetNamespace(),
+			BareInEffect: bareInEffect(dp.GetNamespace(), mt.Namespace, bare.Namespace),
+			Key:          dp.GetName(),
+			Instance:     instance,
+			Value:        dp.GetValue(),
+			Source:       laneSource(ev, owner),
+			TS:           sampleTime(ev, dp.GetTs()),
 		})
 	}
 	return out
@@ -1188,14 +1189,15 @@ func deriveProperties(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.Task
 		}
 		bare, _ := reg.Property(dp.GetName())
 		out = append(out, storage.PropertySampleWrite{
-			OwnerKind: arc.Kind,
-			OwnerID:   arc.ID,
-			Namespace: writeNamespace(pt.Namespace, bare.Namespace),
-			Key:       dp.GetName(),
-			Instance:  instance,
-			Value:     propertyText(raw),
-			Source:    laneSource(ev, owner),
-			TS:        sampleTime(ev, dp.GetTs()),
+			OwnerKind:    arc.Kind,
+			OwnerID:      arc.ID,
+			Namespace:    dp.GetNamespace(),
+			BareInEffect: bareInEffect(dp.GetNamespace(), pt.Namespace, bare.Namespace),
+			Key:          dp.GetName(),
+			Instance:     instance,
+			Value:        propertyText(raw),
+			Source:       laneSource(ev, owner),
+			TS:           sampleTime(ev, dp.GetTs()),
 		})
 	}
 	return out
@@ -1236,11 +1238,10 @@ func deriveEvents(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwne
 				continue
 			}
 		}
-		bare, _ := reg.Event(dp.GetName())
 		out = append(out, storage.EventWrite{
 			OwnerKind:  arc.Kind,
 			OwnerID:    arc.ID,
-			Namespace:  writeNamespace(et.Namespace, bare.Namespace),
+			Namespace:  dp.GetNamespace(),
 			Key:        dp.GetName(),
 			Instance:   instance,
 			Origin:     "caught",
@@ -1253,16 +1254,14 @@ func deriveEvents(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwne
 	return out
 }
 
-// writeNamespace is the namespace a sample's write names (#1433): none when
-// the row the sample resolved to is the one its bare name reaches on the lane,
-// so the write stays bare and the event and calc rules reading the key judge
-// it; otherwise the row's own, which no rule addresses. bare is the namespace
-// of the lane's bare-name row, empty when the bare name reaches none there.
-func writeNamespace(resolved, bare string) string {
-	if resolved == bare {
-		return ""
-	}
-	return resolved
+// bareInEffect reports whether a sample naming namespace resolved to the row
+// its bare name reaches on the lane, so the event and calc rules reading the
+// key judge it (#1433). The write still names the namespace, which the Gateway
+// reads exactly: a row deleted since this catalog was read refuses the sample
+// rather than the bare name landing it elsewhere (#1457). bare is the
+// namespace of the lane's bare-name row, empty when the bare name reaches none.
+func bareInEffect(namespace, resolved, bare string) bool {
+	return namespace != "" && resolved == bare
 }
 
 // laneInstance resolves a sample's instance discriminator, or refuses the

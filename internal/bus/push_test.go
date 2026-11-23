@@ -243,8 +243,9 @@ func TestOutpostLogWritesStampTheOutpost(t *testing.T) {
 
 // A sample naming its namespace lands there (#1433): og/x while the operator's
 // x shadows it carries og to the write; a namespace that is the one the bare
-// name resolves to writes bare, so the rules reading the key still see it; a
-// namespace holding no x drops the sample.
+// name resolves to still names it (#1457), so the write reads x there exactly,
+// and is flagged as the bare row so the rules reading the key still judge it;
+// a bare sample walks the search path; a namespace holding no x drops it.
 func TestDerivedSamplesCarryTheirNamespace(t *testing.T) {
 	reg := collection.NewCatalog(
 		[]storage.MetricType{{Name: "x", Official: true}, {Name: "x"}},
@@ -262,13 +263,16 @@ func TestDerivedSamplesCarryTheirNamespace(t *testing.T) {
 	arc := sampleArc{Kind: "component", ID: "disp-1"}
 	w := storage.PushWriter()
 	m := deriveMetrics(ev, arc, storage.TaskOwner{}, reg, w, nil)
-	want := []string{"og", "", ""}
+	want := []struct {
+		ns   string
+		bare bool
+	}{{"og", false}, {"local", true}, {"", false}}
 	if len(m) != len(want) {
 		t.Fatalf("metrics = %+v, want %d: acme holds no x", m, len(want))
 	}
-	for i, ns := range want {
-		if m[i].Namespace != ns {
-			t.Errorf("metric %v carries namespace %q, want %q", m[i].Value, m[i].Namespace, ns)
+	for i, w := range want {
+		if m[i].Namespace != w.ns || m[i].BareInEffect != w.bare {
+			t.Errorf("metric %v carries namespace %q bare %v, want %q bare %v", m[i].Value, m[i].Namespace, m[i].BareInEffect, w.ns, w.bare)
 		}
 	}
 	if p := deriveProperties(ev, arc, storage.TaskOwner{}, reg, w, nil); len(p) != 1 || p[0].Namespace != "og" {

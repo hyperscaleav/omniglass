@@ -1108,13 +1108,13 @@ func sampleKeys[T any](evs []T, key func(T) string) []string {
 	return out
 }
 
-// bareWrites is the writes of evs whose key walks the search path (an empty
-// namespace): the rows an event or calc rule, addressing a key by its bare
-// name, can judge (#1433).
-func bareWrites[T any](evs []T, namespace func(T) string) []T {
+// bareWrites is the writes of evs a rule addressing a key by its bare name
+// judges (#1433, #1457): those whose key walks the search path, and those
+// written in a namespace the caller found to be the one the bare name reaches.
+func bareWrites[T interface{ judgedBare() bool }](evs []T) []T {
 	out := make([]T, 0, len(evs))
 	for _, ev := range evs {
-		if namespace(ev) == "" {
+		if ev.judgedBare() {
 			out = append(out, ev)
 		}
 	}
