@@ -87,7 +87,7 @@ const bladeRow = (value: string) => `
   <div style="display: flex; flex-direction: column; gap: 16px">
     <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
       <span class="badge">healthy</span>
-      <span data-testid="blade-since" class="num" style="font-size: 12px; line-height: 16px">${value}</span>
+      <span data-testid="since-line" class="num" style="font-size: 12px; line-height: 16px">${value}</span>
     </div>
     <div>2 buildings</div>
   </div>
@@ -147,7 +147,7 @@ const cases: {
     name: "the entity blade's since-line",
     page: "operator/entities.md",
     shot: "entity-blade",
-    value: "[data-testid=blade-since]",
+    value: "[data-testid=since-line]",
     markup: bladeRow,
     narrow: "since Oct 4, 06:59 PM · 9s",
     wide: "since Oct 24, 01:57 AM · 17s",
@@ -235,10 +235,10 @@ test.describe("docs screenshot masks", () => {
   // refuses it by name instead of writing a baseline that moves.
   test("a value wider than its declared box fails the capture by name", async ({ page }) => {
     await page.setContent(bladeRow("since Oct 24, 01:57 AM · 17s"));
-    const value = await valueBox(page, "[data-testid=blade-since]");
-    const tight = { selector: "[data-testid=blade-since]", width: Math.floor(value.width) - 1 };
+    const value = await valueBox(page, "[data-testid=since-line]");
+    const tight = { selector: "[data-testid=since-line]", width: Math.floor(value.width) - 1 };
     await expect(planMasks(page, [tight])).rejects.toThrow(
-      `[data-testid=blade-since] renders ${Math.ceil(value.width)}px wide, wider than its declared ${tight.width}px box`,
+      `[data-testid=since-line] renders ${Math.ceil(value.width)}px wide, wider than its declared ${tight.width}px box`,
     );
   });
 
@@ -247,7 +247,7 @@ test.describe("docs screenshot masks", () => {
   // baseline; a declared box must too, or it lands where the value was and leaves
   // the value's tail live.
   test("a declared box is measured when the baseline is shot, not when it was planned", async ({ page }) => {
-    const entry = { selector: "[data-testid=blade-since]", width: 184 };
+    const entry = { selector: "[data-testid=since-line]", width: 184 };
     const moveValue = () => page.evaluate(() => ((document.querySelector(".badge") as HTMLElement).style.width = "120px"));
 
     await page.setContent(bladeRow("since Oct 24, 01:57 AM · 17s"));
@@ -326,7 +326,7 @@ test.describe("docs screenshot masks", () => {
   // browser dropping its one capture, the failure the CI run hit, and still paints
   // the masks (the retried raster is the one a clean run writes).
   test("a baseline whose capture the browser drops once is shot on the retry", async ({ page }) => {
-    const entry = { selector: "[data-testid=blade-since]", width: 184 };
+    const entry = { selector: "[data-testid=since-line]", width: 184 };
     await page.setContent(bladeRow("since Oct 24, 01:57 AM · 17s"));
     const clean = await shootBaseline(page, await planMasks(page, [entry]));
 
@@ -345,10 +345,10 @@ test.describe("docs screenshot masks", () => {
 
   test("a value that outgrows its declared box after planning still fails by name", async ({ page }) => {
     await page.setContent(bladeRow("since Oct 24, 01:57 AM · 17s"));
-    const value = await valueBox(page, "[data-testid=blade-since]");
-    const entry = { selector: "[data-testid=blade-since]", width: Math.ceil(value.width) + 2 };
+    const value = await valueBox(page, "[data-testid=since-line]");
+    const entry = { selector: "[data-testid=since-line]", width: Math.ceil(value.width) + 2 };
     const plan = await planMasks(page, [entry]);
-    await page.evaluate(() => (document.querySelector("[data-testid=blade-since]")!.textContent = "since Oct 24, 01:57 AM · 23h 59m"));
+    await page.evaluate(() => (document.querySelector("[data-testid=since-line]")!.textContent = "since Oct 24, 01:57 AM · 23h 59m"));
     await expect(shootBaseline(page, plan)).rejects.toThrow(`wider than its declared ${entry.width}px box`);
   });
 
