@@ -8,6 +8,7 @@ import { ME_KEY, type Me } from "../lib/auth";
 import { SETTINGS_ME_KEY } from "../lib/settings";
 import { SIMULATION_KEY, type SimFleet } from "../lib/simulation";
 import { LESSONS } from "../lib/lessons";
+import { uuidFor } from "../lib/testids";
 
 // The Learn page (#2450): the six lessons as cards in lifecycle order, each
 // saying whether this person finished it (their own learn.done setting), and a
@@ -23,8 +24,8 @@ const fleet: SimFleet = {
       outpost: "edge",
       connected: true,
       components: [
-        { component: "projector-1", component_id: "c-proj", serving: true },
-        { component: "dsp", component_id: "c-dsp", serving: true },
+        { component: "projector-1", component_id: uuidFor("projector-1"), serving: true },
+        { component: "dsp", component_id: uuidFor("dsp"), serving: true },
         { component: "gone", serving: false },
       ],
     },
@@ -41,7 +42,7 @@ function mount(opts: { path?: string; done?: string[]; sim?: SimFleet | null } =
     <QueryClientProvider client={qc}>
       <Router>
         <Route path="/learn" component={Learn} />
-        <Route path="/learn/:lesson" component={LessonPage} />
+        <Route path="/learn/:id" component={LessonPage} />
       </Router>
     </QueryClientProvider>
   ));
@@ -65,7 +66,7 @@ function quietFetch(onPatch?: (url: string, body: unknown) => void) {
 
 describe("lessonComponent", () => {
   it("is the first served simulated component by name", () => {
-    expect(lessonComponent(fleet)).toEqual({ id: "c-dsp", name: "dsp" });
+    expect(lessonComponent(fleet)).toEqual({ id: uuidFor("dsp"), name: "dsp" });
   });
   it("is undefined with nothing served", () => {
     expect(lessonComponent(undefined)).toBeUndefined();
@@ -102,7 +103,7 @@ describe("LessonPage", () => {
     quietFetch();
     mount({ path: "/learn/reading-the-history" });
     const links = screen.getAllByTestId("lesson-do-it").map((a) => a.getAttribute("href"));
-    expect(links).toEqual(["/components/c-dsp?tab=activity", "/explore"]);
+    expect(links).toEqual([`/components/${uuidFor("dsp")}?tab=activity`, "/explore"]);
     expect(screen.queryByTestId("lesson-next")).toBeNull();
   });
 

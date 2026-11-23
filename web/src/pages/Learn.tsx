@@ -105,7 +105,7 @@ function NoSimulator(): JSX.Element {
 
 export function LessonPage(): JSX.Element {
   const params = useParams();
-  const lesson = () => lessonBySlug(params.lesson ?? "");
+  const lesson = () => lessonBySlug(params.id ?? "");
   return (
     <Show
       when={lesson()}
@@ -180,7 +180,7 @@ function LessonBody(props: { lesson: Lesson }): JSX.Element {
                     <Show
                       when={to()}
                       fallback={
-                        <a href={LAB_DOCS} target="_blank" rel="noopener" class="btn btn-quiet btn-sm">Needs a simulator: lab instructions</a>
+                        <a href={LAB_DOCS} target="_blank" rel="noopener" class="link text-sm">Needs a simulator: lab instructions</a>
                       }
                     >
                       {(href) => (

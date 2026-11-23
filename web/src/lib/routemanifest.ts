@@ -76,10 +76,10 @@ export const ROUTE_MANIFEST: RouteEntry[] = [
   { path: "/alarms", shell: "protected", page: "Alarms", smoke: "/alarms" },
   { path: "/audit", shell: "protected", page: "Audit", smoke: "/audit" },
   { path: "/settings", shell: "protected", page: "Settings", smoke: "/settings" },
-  // Learn (#2450): the lessons, and one lesson by slug (an unknown slug smokes
-  // its no-such-lesson face).
+  // Learn (#2450): the lessons, and one lesson by its slug as :id (a slug has
+  // no dot, like a name).
   { path: "/learn", shell: "protected", page: "Learn", smoke: "/learn" },
-  { path: "/learn/:lesson", shell: "protected", page: "LessonPage", smoke: "/learn/rules-and-alarms" },
+  { path: "/learn/:id", shell: "protected", page: "LessonPage", smoke: "/learn/rules-and-alarms" },
   // Stubbed sections outside the catalog (nav.ts's STUBS minus the catalog's
   // routed soon slots); the guard test pins this list to nav.ts, so a stub
   // added there without a row here fails the suite.

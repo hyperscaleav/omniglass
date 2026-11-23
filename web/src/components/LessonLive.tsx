@@ -11,6 +11,7 @@ import HealthBadge from "./HealthBadge";
 import RulePreviewPanel from "./RulePreviewPanel";
 import Eyebrow from "./Eyebrow";
 import { can, useMe } from "../lib/auth";
+import { entityLabel } from "../lib/entities";
 import { effectiveMetrics, effectiveMetricsKey } from "../lib/component_metrics";
 import { componentSystems, componentSystemsKey } from "../lib/members";
 import { PLATFORM_VIEW_KEY, platformRefusal, platformView, retryPlatformView } from "../lib/platformhealth";
@@ -96,7 +97,7 @@ function Samples(props: { componentId: string }): JSX.Element {
             <For each={sampled().slice(0, 10)}>
               {(m) => (
                 <>
-                  <dt class="truncate text-base-content/70">{m.label || m.metric_type_name}</dt>
+                  <dt class="truncate text-base-content/70">{entityLabel({ name: m.metric_type_name, label: m.label })}</dt>
                   <dd data-testid="lesson-sample" class="font-data tnum">
                     {sampleText(m.value ?? m.sample_value)}
                     <Show when={m.unit}><span class="ml-1 text-base-content/50">{m.unit}</span></Show>
