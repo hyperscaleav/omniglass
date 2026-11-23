@@ -6,7 +6,7 @@ import { can, useMe } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { pushToast } from "../lib/toast";
 import { applyFaultSteps, activeFaults, age, restoreSteps, type HeldFault } from "../lib/simfaults";
-import { componentSimKey, getComponentSim, toImpairment, type SimComponent } from "../lib/simulation";
+import { componentSimKey, getComponentSim, componentSimPollMs, toImpairment, type SimComponent } from "../lib/simulation";
 
 // SimFaultChip: what an operator has broken on a simulated device, as one chip
 // with how long it has been so and a one-click clear (#2462). It reads the
@@ -97,7 +97,7 @@ export function SimFaultChipFor(props: { componentId: string; name?: string }): 
     queryKey: componentSimKey(props.componentId),
     queryFn: () => getComponentSim(props.componentId),
     enabled: can(me.data, "simulation", "read"),
-    refetchInterval: 5_000,
+    refetchInterval: (q) => componentSimPollMs(q.state.data),
     retry: false,
   }));
   return (

@@ -87,6 +87,11 @@ export async function listSimProfiles(): Promise<SimProfile[]> {
   return data?.profiles ?? [];
 }
 
+// componentSimPollMs: a component's page refreshes its simulation while it is
+// simulated; a component that is not is read once and left alone, since the
+// chip and the section mount on every component page.
+export const componentSimPollMs = (d: Pick<ComponentSim, "simulated"> | undefined): number | false => (d?.simulated ? 5_000 : false);
+
 export async function getComponentSim(id: string): Promise<ComponentSim> {
   const { data, error } = await api.GET("/components/{name}/simulation", { params: { path: { name: id } } });
   if (error) throw error;
