@@ -848,6 +848,9 @@ func (UnimplementedGateway) AgentSettings(context.Context) (settings.AgentSettin
 func (UnimplementedGateway) RecordPlatformMetrics(context.Context, []PlatformMetric) error {
 	return nil
 }
+func (UnimplementedGateway) PlatformMetricInstancesAt(context.Context, string, string, float64) ([]string, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) StampRuleSweep(context.Context, string) error   { return nil }
 func (UnimplementedGateway) MarkServerSeen(context.Context, string) error   { return nil }
 func (UnimplementedGateway) ReleaseRuleSweep(context.Context, string) error { return nil }
