@@ -58,10 +58,11 @@ export default function TimeseriesChart(props: {
     if (props.buckets) return bucketLayout(props.buckets, { ...frame(), resolutionMs: props.resolutionMs ?? 3600_000 });
     return chartLayout(props.samples ?? [], { ...frame(), mode: props.mode, carriedIn: props.carriedIn });
   });
+  const endNearEdge = () => layout().endLabel.x > W() - 60;
   const last = () => (layout().linePath ? layout().endDot : undefined);
   const tip = (p: ChartPoint) =>
     p.min !== undefined && p.max !== undefined
-      ? `${fmtV(p.value)}${props.unit ?? ""} avg, ${fmtV(p.min)} to ${fmtV(p.max)} (${p.count} samples) · ${fmtTime(p.ts)}`
+      ? `${fmtV(p.value)}${props.unit ?? ""} avg, ${fmtV(p.min)} to ${fmtV(p.max)} (${p.count} sample${p.count === 1 ? "" : "s"}) · ${fmtTime(p.ts)}`
       : `${fmtV(p.value)}${props.unit ?? ""} · ${fmtTime(p.ts)}`;
   const fmtV = (v: number) => (Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(1));
   const fmtClock = (ts: string) => new Date(ts).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
@@ -211,11 +212,13 @@ export default function TimeseriesChart(props: {
               <circle cx={p().x} cy={p().y} r={props.spark ? "2.5" : "3.5"} class="fill-primary stroke-base-100" stroke-width={props.spark ? "1" : "2"} />
               <Show when={!props.spark}>
                 <text
-                  x={layout().endLabel.x}
+                  // Near the right edge the label ends at the frame rather
+                  // than centering past it, so a unit is never cut off.
+                  x={endNearEdge() ? W() - 2 : layout().endLabel.x}
                   y={layout().endLabel.y}
                   class="fill-base-content"
                   font-size="11"
-                  text-anchor="middle"
+                  text-anchor={endNearEdge() ? "end" : "middle"}
                   style={{ "font-variant-numeric": "tabular-nums" }}
                 >
                   {fmtV(layout().endValue ?? 0)}

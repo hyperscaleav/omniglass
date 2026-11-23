@@ -38,6 +38,8 @@ screenshots:
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
       - "[data-testid=leaf-alarms]"
+      # The metrics grid's charts (#2424) move with the clock like any chart.
+      - "[data-testid=timeseries-chart]"
   - id: fleet-configure
     path: /web/systems/huddle?tab=configure
     alt: "A sole system's Configure tab: the room's own form first (identity, type, parent, properties, tags, its own Edit), then the system's (identity with the label pen and the name precheck, classification, slots, properties, tags)."
@@ -47,9 +49,11 @@ screenshots:
     path: /web/systems/huddle
     alt: "A system's view: the location as a card of context, the system's header (health, since, standard, size), then Overview: its components as rows naming each one's slot, slots grouped only where they say something."
     # The since-line ages with the capture; the history strip is Activity's
-    # now (#872), so nothing else on Overview moves.
+    # now (#872), so nothing else on Overview moves but the metrics grid's
+    # charts (#2424), when they reach the frame.
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
+      - "[data-testid=timeseries-chart]"
   - id: fleet-map
     path: /web/systems/huddle
     alt: "The map inside Overview: the standard's declared layout rendered top-down, one marker per slot position, each the type icon of the component holding it, in its health colour, with its label under it."
@@ -78,17 +82,17 @@ screenshots:
   - id: fleet-data
     path: /web/systems/huddle
     steps:
-      - action: click
-        selector: "[data-testid=metric-row-room-temperature]"
-    alt: "The data section inside Overview: every declared metric stacked with a sparkline and its latest value, the temperature row expanded to the full chart."
+      - action: hover
+        selector: "[data-testid=metrics-grid] [data-testid=timeseries-chart]"
+    alt: "The metrics grid inside Overview: a card per declared metric with its latest value and its chart over the page's range, the pointer on one chart and the crosshair standing at the same instant on every other."
     # The since-line ages with the capture, and every chart x-position
     # divides seed-to-shoot latency by the window (CI proved it crosses a
     # pixel boundary), so the plots mask in the BASELINE while the docs
-    # embed them live (the two-render pipeline).
+    # embed them live (the two-render pipeline). The crosshair's readout
+    # sits inside the chart, so the same mask covers its clock time.
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
       - "[data-testid=timeseries-chart]"
-      - "[data-testid=sparkline]"
   - id: fleet-location
     path: /web/locations/east
     alt: "A location holding no system of its own: its card with its type and tags, its tabs, and the outline of what is beneath it, counted by systems."
@@ -259,8 +263,8 @@ A location holding a system and locations beneath it lists those locations under
 outline rooted there.
 
 The system's view refreshes on its own while it is open, every 5 seconds: its health, **Why**,
-the slots and who is staffing them, each component's health light, and the data section's latest
-values (a preset range's sparklines every 30), and on **Activity** the health history, events and logs. A component going down shows up as the system's new
+the slots and who is staffing them, each component's health light, and the metrics grid's latest
+values (a preset range's charts every 30), and on **Activity** the health history, events and logs. A component going down shows up as the system's new
 health and the alarm in Why without a reload, and every age on the page (since when, how long an
 alarm has been raised) keeps counting. It reads only this system and its members, never the whole
 fleet, and stops while the browser tab is hidden.
@@ -329,15 +333,21 @@ and health as any other marker.
 
 ::screenshot{#fleet-map}
 
-Below the map, when the standard declares metrics, the **data** section stacks every one
-of them, the only place a metric's latest value is said: a sparkline of the page's time range beside the latest value, one row per series, so
-the system's numbers read together. Click a row for the full chart, newest at the right,
-the newest bucket's last value floating on its dot. The range is drawn in a few hundred buckets
-(a day in five-minute buckets, a week or a month in hours), so however busy the metric the whole
-range is there: the line is each bucket's average and the shaded band
-behind it runs from its lowest to its highest reading, so a one-sample spike shows at any zoom. Hover a
-point for the bucket's average, range and sample count. A series still on its contract default has
-nothing to chart yet, and says so.
+Below the map, when the standard declares metrics, the **metrics** grid charts every one of
+them over the page's time range (the picker on the tab rail; the last 24 hours unless it names another), one card
+per metric: its name, unit and latest value above its chart, newest at the right. Each chart is
+drawn in buckets sized to the range (a minute for an hour, five minutes for a day, hours for a week or a month), so however busy
+the metric the whole range is there: the line is each bucket's average and the shaded band behind it
+runs from its lowest to its highest reading, so a one-sample spike shows at any zoom. A metric with no
+sample in the range keeps its card, marked **No data in range**; a series still on its contract
+default says so beside its value. The grid answers its own width: one column in a drawer, two or
+three on a wide page.
+
+Every chart in the grid shares one cursor. Hover a chart and a crosshair stands at that instant on
+every chart at once, each reading its own bucket there (average, range and sample count), so the
+system's numbers compare at a moment without lining them up by eye. A chart with no bucket at that
+instant draws the line and no value: a gap is a gap. The keyboard does the same: Tab to a chart,
+and the arrow keys step its buckets (Home and End jump to the ends, Escape clears).
 
 ::screenshot{#fleet-data}
 
@@ -414,6 +424,10 @@ component. Each section's explainer is
 on its label's tooltip.
 
 ::screenshot{#fleet-component}
+
+Below Vitals, the **metrics** grid charts the same metrics over the page's time range, a card per
+metric, every chart on one shared cursor: it is the system view's grid, described there, for one
+component.
 
 **Collection** shows each endpoint with its reachability ladder (the ping answers the path, the
 transport answers the service, the login answers the credential; each rung teaches itself on

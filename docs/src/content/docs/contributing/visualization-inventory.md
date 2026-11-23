@@ -47,14 +47,16 @@ and not given entries.
 
 `TimeseriesChart` (`components/TimeseriesChart.tsx`) is the only chart in the console, drawn from the
 pure geometry in `lib/chart.ts`. Full mode is 640 by 170 with axes, crosshair and a min/max band over
-the average line; spark mode is 160 by 36 with no chrome. It is imported by exactly two pages.
+the average line (`fluid` lays it out at its measured width instead); spark mode is 160 by 36 with no
+chrome. Its crosshair rides the shared cursor (`lib/cursor.tsx`, #2424): under one `CursorProvider`
+every chart reads the same instant. It is imported by `/platform` and by `MetricsGrid`.
 
 | ID | Component | Pages | Primitive | Source | Live behavior | Widget |
 |---|---|---|---|---|---|---|
 | V01 | `TimeseriesChart spark` in the server panel `Row` (`pages/PlatformHealth.tsx`) | `/platform` | metric | `metricBuckets("components", server, key, 1 h, 60 s)` via `panelSeriesRequest` (`lib/platformhealth.ts`, `lib/series.ts`) | poll 30 s, only while the server's disclosure is open and the key is reported | sparkline row |
 | V02 | `TimeseriesChart` full, the expanded panel row (`pages/PlatformHealth.tsx`) | `/platform` | metric | the same series query as V01 | poll 30 s, shares V01's query | metric chart |
-| V03 | `TimeseriesChart spark` in the data table (`pages/SystemZoom.tsx`, `data-testid="data-tab"`) | `/systems/<id>` | metric | `metricBuckets("systems", id, metric, 24 h, 300 s, instance)` per KPI metric, over `systemMetrics` (`lib/series.ts`) | poll 30 s; the metric list polls 5 s | sparkline row |
-| V04 | `TimeseriesChart` full, the expanded data row (`pages/SystemZoom.tsx`) | `/systems/<id>` | metric | the same series query as V03 | poll 30 s, shares V03's query | metric chart |
+| V03 | `MetricsGrid` card per metric, a fluid `TimeseriesChart` on the shared cursor (`components/MetricsGrid.tsx`, `lib/cursor.tsx`), on the system view | `/systems/<id>` | metric | `metricBuckets("systems", id, metric, hours, step, instance)` per effective metric over the page range (`lib/metrics_grid.ts`, `lib/time_range.ts`) | poll 30 s; the metric list polls 5 s | metric chart |
+| V04 | the same `MetricsGrid` on the component view (`pages/ComponentLeaf.tsx`) | `/components/<id>` | metric | `metricBuckets("components", ...)` per effective metric, as V03 | poll 30 s; the metric list polls 5 s | metric chart |
 
 ## Metric cards and figures
 
@@ -63,7 +65,7 @@ the average line; spark mode is 160 by 36 with no chrome. It is imported by exac
 | V05 | `Header` `Fact` cards: platform health, version, up for (`pages/PlatformHealth.tsx`) | `/platform` | derived | `platformView` (`lib/platformhealth.ts`, `GET /views/platform`) | poll 5 s | metric card |
 | V06 | `Stat` tiles: locations, open alarms, systems, collectors, platform health (`pages/Home.tsx`) | `/` | derived | `fleetView`, `listLocations`, `listOutposts`, `platformView` | mount+focus | metric card |
 | V07 | `uptime-kpi` card, uptime over 30 days (`pages/SystemZoom.tsx`) | `/systems/<id>` | derived | `systemHealth` transitions (`lib/health.ts`) | poll 5 s | metric card |
-| V08 | `leaf-vitals` list, the latest value per effective metric with a live dot and per-endpoint spread (`pages/ComponentLeaf.tsx`) | `/components/<id>` | metric | `effectiveMetrics` (`lib/component_leaf.ts`) | poll 5 s | metric card (no series; the only metric surface with no chart or sparkline) |
+| V08 | `leaf-vitals` list, the latest value per effective metric with a live dot and per-endpoint spread (`pages/ComponentLeaf.tsx`) | `/components/<id>` | metric | `effectiveMetrics` (`lib/component_leaf.ts`) | poll 5 s | metric card (no series; V04 charts the same metrics below it) |
 | V09 | `Count` per catalog row (`pages/CatalogOverview.tsx`) | `/catalog` | derived | each catalog's own list read, on the list page's query key | mount+focus | metric card |
 | V10 | `explore-counts` line and the "need attention" count (`components/OutlineWorkspace.tsx`) | `/explore`, `/locations/<id>`, `/systems/<id>` | derived | `fleetView`, plus `systemHealth` per troubled system (stale 30 s) | mount+focus | metric card |
 | V11 | `InboxIndicator` unread count on the top bar (`components/InboxIndicator.tsx`) | every page in the shell | event | `useUnreadCount` (`lib/inbox.ts`) | poll 30 s, and at once when an entry is marked read | metric card |
@@ -198,14 +200,13 @@ what each page draws itself.
 
 ## What the survey shows
 
-- **One chart, two pages.** `TimeseriesChart` backs every chart and sparkline, on `/platform` and
-  `/systems/<id>` only, and only for `metric` buckets. `lib/series.ts` also exports `metricSeries`
+- **One chart, three pages.** `TimeseriesChart` backs every chart and sparkline, on `/platform`,
+  `/systems/<id>` and `/components/<id>`, and only for `metric` buckets. `lib/series.ts` also exports `metricSeries`
   (raw samples), `propertySeries` and `propertyBuckets`, and no page calls them: the property
   distribution and property timeline widgets have **no existing call site** to migrate, and the
   `step` mode the chart supports for them is unused today.
-- **A component has no history.** `/components/<id>` shows the latest value of each metric (V08) and
-  never a chart or sparkline, though the series endpoints take `components` as an owner (V01 already
-  charts a component's metrics on `/platform`).
+- **A component has its history.** `/components/<id>` charts each effective metric in the metrics
+  grid (V04, #2424) below the latest values (V08).
 - **Liveness is uneven.** Entries on `/platform` and `/systems/<id>` poll every 5 s and their series
   every 30 s. The component's events and logs (V40, V42), the Home tiles (V06), the outline counts
   (V10, V19) and the Inbox list (V44) read on mount and on focus only, so they go stale on a wall
@@ -225,8 +226,8 @@ epic's vocabulary does not yet name; the count says how much of the console it w
 | event list | 4 | V39, V40, V44, V45 |
 | log list | 3 | V41, V42, V43 |
 | timeline | 3 | V31, V32, V33 |
-| sparkline row | 2 | V01, V03 |
-| metric chart | 2 | V02, V04 |
+| sparkline row | 1 | V01 |
+| metric chart | 3 | V02, V03, V04 |
 | property distribution | 0 | none (`propertyBuckets` exists and is unused) |
 | property timeline | 0 | none (`propertySeries` exists and is unused) |
 | new: health badge | 5 | V14, V15, V16, V17, V20 |
