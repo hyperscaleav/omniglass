@@ -81,7 +81,7 @@ func (l *fakeLab) routes() map[string]any {
 		}},
 		"/components":                 map[string]any{"components": []any{map[string]any{"id": "c1", "name": "Display 1", "product": "test-panel-1"}}},
 		"/endpoints":                  map[string]any{"endpoints": endpoints},
-		"/drivers/boreal-edge":        map[string]any{"spec": map[string]any{"polls": []any{map[string]any{}}, "session": map[string]any{}}},
+		"/drivers/og/boreal-edge":     map[string]any{"spec": map[string]any{"polls": []any{map[string]any{}}, "session": map[string]any{}}},
 		"/components/c1/reachability": map[string]any{"endpoints": reach},
 		"/components/c1/metrics":      map[string]any{"metrics": metrics},
 		"/components/c1/properties":   map[string]any{"properties": props},

@@ -13,9 +13,9 @@ import { ME_KEY, type Me } from "../lib/auth";
 // resource the API stamps. Data is seeded into the query cache so no server is
 // needed.
 const seed: PropertyRow[] = [
-  { name: "serial-number", data_type: "string", label: "Serial number", official: true },
-  { name: "interface-reachable", data_type: "string", label: "Interface Reachable", official: true },
-  { name: "rack-unit", written_by: { rule: "rack-unit-calc", rule_id: "11111111-1111-7111-8111-111111111111" }, data_type: "string", label: "Rack unit", official: false },
+  { name: "serial-number", data_type: "string", label: "Serial number", namespace: "og", official: true },
+  { name: "interface-reachable", data_type: "string", label: "Interface Reachable", namespace: "og", official: true },
+  { name: "rack-unit", written_by: { rule: "rack-unit-calc", rule_id: "11111111-1111-7111-8111-111111111111" }, data_type: "string", label: "Rack unit", namespace: "local", official: false },
 ];
 
 const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };

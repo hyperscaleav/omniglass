@@ -69,7 +69,7 @@ func registerStandardPropertyRoutes(api huma.API, a *authenticator, gw storage.G
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-standard-properties",
 		Method:      http.MethodGet,
-		Path:        "/standards/{id}/properties",
+		Path:        "/standards/{namespace}/{id}/properties",
 		Summary:     "List a standard's declared properties",
 		Description: "Lists the standard's declared-property contract (what every system conforming to it exposes), ordered by property name, each with its optional default and required flag. Gated by standard:read.",
 	}, "standard", "read"), func(ctx context.Context, in *standardPathInput) (*listStandardPropertiesOutput, error) {
@@ -88,7 +88,7 @@ func registerStandardPropertyRoutes(api huma.API, a *authenticator, gw storage.G
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "set-standard-property",
 		Method:      http.MethodPut,
-		Path:        "/standards/{id}/properties/{property}",
+		Path:        "/standards/{namespace}/{id}/properties/{property_namespace}/{property}",
 		Summary:     "Declare a property on a standard",
 		Description: "Declares a catalog property on a custom standard, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official standards are read-only (422); an unknown standard is a 404 and a property the catalog does not know is a 422, as is a default its property type refuses. Gated by standard:update.",
 	}, "standard", "update"), func(ctx context.Context, in *setStandardPropertyInput) (*standardPropertyOutput, error) {
@@ -110,7 +110,7 @@ func registerStandardPropertyRoutes(api huma.API, a *authenticator, gw storage.G
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-standard-property",
 		Method:        http.MethodDelete,
-		Path:          "/standards/{id}/properties/{property}",
+		Path:          "/standards/{namespace}/{id}/properties/{property_namespace}/{property}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Withdraw a property from a standard",
 		Description:   "Removes one line from a custom standard's contract; conforming systems keep any value they set for it, now off-contract. A property the standard does not declare is a 404, and an official standard is read-only (422). Gated by standard:delete.",

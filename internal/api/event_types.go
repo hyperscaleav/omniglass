@@ -19,13 +19,14 @@ type eventTypeBody struct {
 	Label         string          `json:"label,omitempty"`
 	Description   string          `json:"description,omitempty"`
 	PayloadSchema json.RawMessage `json:"payload_schema,omitempty" doc:"A JSON Schema fragment for the occurrence payload"`
+	Namespace     string          `json:"namespace" doc:"The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"`
 	Official      bool            `json:"official"`
 	WriterClass   string          `json:"writer_class" enum:"outpost-probe,platform,command-lifecycle,calc,collected" doc:"Who may write this key (ADR-0161): outpost-probe (an outpost's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), command-lifecycle (a command's own issue: command-issued), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit"`
 }
 
 func toEventTypeBody(et *storage.EventType) eventTypeBody {
 	b := eventTypeBody{
-		ID: et.ID, Name: et.Name, Label: et.Label, Description: et.Description, Official: et.Official,
+		ID: et.ID, Name: et.Name, Label: et.Label, Description: et.Description, Official: et.Official, Namespace: catalogNamespaceOf(et.Official),
 		WriterClass: string(et.WriterClass),
 	}
 	if len(et.PayloadSchema) > 0 {
@@ -48,6 +49,7 @@ type eventTypeNameInput struct {
 
 type createEventTypeInput struct {
 	Body struct {
+		CatalogCreateNamespace
 		Name          string `json:"name" minLength:"1" doc:"The event type name (lowercase kebab)"`
 		Label         string `json:"label,omitempty" doc:"A human label"`
 		Description   string `json:"description,omitempty" doc:"What the occurrence means"`
@@ -94,7 +96,7 @@ func registerEventTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-event-type",
 		Method:      http.MethodGet,
-		Path:        "/event-types/{name}",
+		Path:        "/event-types/{namespace}/{name}",
 		Summary:     "Get an event type",
 		Description: "Returns one event type by name. Gated by event_type:read.",
 	}, "event_type", "read"), func(ctx context.Context, in *eventTypeNameInput) (*eventTypeOutput, error) {
@@ -132,7 +134,7 @@ func registerEventTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "update-event-type",
 		Method:      http.MethodPatch,
-		Path:        "/event-types/{name}",
+		Path:        "/event-types/{namespace}/{name}",
 		Summary:     "Update an event type",
 		Description: "Patches a custom event type's label, description, or payload schema. Partial by default: the fields present in the body change and the rest are left alone. payload_schema is a nullable object with no empty value, so it clears by being named in update_mask with no value in the body; label and description clear with an explicit empty string. A mask naming a field this resource does not patch is a 422. The name is fixed at creation. Official event types are read-only. Gated by event_type:update.",
 	}, "event_type", "update"), func(ctx context.Context, in *updateEventTypeInput) (*eventTypeOutput, error) {
@@ -160,7 +162,7 @@ func registerEventTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-event-type",
 		Method:        http.MethodDelete,
-		Path:          "/event-types/{name}",
+		Path:          "/event-types/{namespace}/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete an event type",
 		Description:   "Removes a custom event type by name. Official event types are read-only (409), and so is a type still in use: one that recorded events or an event rule's fire or clear event type names is a 409 until nothing names it. Gated by event_type:delete.",

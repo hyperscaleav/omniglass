@@ -180,7 +180,7 @@ func TestCalcRuleStateAndPreviewAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	var st calcStateBody
-	if err := json.Unmarshal(c.do(eastViewer, http.MethodGet, "/calc-rules/av-mean/state", nil, http.StatusOK), &st); err != nil {
+	if err := json.Unmarshal(c.do(eastViewer, http.MethodGet, "/calc-rules/local/av-mean/state", nil, http.StatusOK), &st); err != nil {
 		t.Fatal(err)
 	}
 	if len(st.Owners) != 1 || st.Owners[0].Owner != "sys-e" || string(st.Owners[0].Value) != "20" || st.Owners[0].RuleVersion != 1 ||
@@ -188,7 +188,7 @@ func TestCalcRuleStateAndPreviewAPI(t *testing.T) {
 		t.Fatalf("the east state %+v, want sys-e alone at 20 with w1 hidden", st)
 	}
 	st = calcStateBody{}
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/calc-rules/av-mean/state", nil, http.StatusOK), &st); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/calc-rules/local/av-mean/state", nil, http.StatusOK), &st); err != nil {
 		t.Fatal(err)
 	}
 	if len(st.Owners) != 2 || st.Total != 2 {
@@ -196,13 +196,13 @@ func TestCalcRuleStateAndPreviewAPI(t *testing.T) {
 	}
 	// The route lists at most limit owners and says how many there are.
 	one := calcStateBody{}
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/calc-rules/av-mean/state?limit=1", nil, http.StatusOK), &one); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/calc-rules/local/av-mean/state?limit=1", nil, http.StatusOK), &one); err != nil {
 		t.Fatal(err)
 	}
 	if len(one.Owners) != 1 || one.Total != 2 {
 		t.Fatalf("the state at limit=1 %+v, want one owner of two", one)
 	}
-	c.do(ownerTok, http.MethodGet, "/calc-rules/av-mean/state?limit=0", nil, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodGet, "/calc-rules/local/av-mean/state?limit=0", nil, http.StatusUnprocessableEntity)
 	for _, o := range st.Owners {
 		if o.Owner == "sys-e" && (len(o.Skipped) != 1 || o.Skipped[0].Component != "w1") {
 			t.Fatalf("the fleet names w1 as skipped: %+v", o)
@@ -217,7 +217,7 @@ func TestCalcRuleStateAndPreviewAPI(t *testing.T) {
 	if !strings.Contains(p.Detail+string(errorsJSON(p.Errors)), "av-mean") {
 		t.Fatalf("a second writer's preview: %+v, want av-mean named", p)
 	}
-	c.do(ownerTok, http.MethodGet, "/calc-rules/nobody/state", nil, http.StatusNotFound)
+	c.do(ownerTok, http.MethodGet, "/calc-rules/local/nobody/state", nil, http.StatusNotFound)
 }
 
 func errorsJSON(v any) []byte { b, _ := json.Marshal(v); return b }

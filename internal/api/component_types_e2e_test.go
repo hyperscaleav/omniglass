@@ -140,19 +140,19 @@ func TestComponentTypesAPI(t *testing.T) {
 		map[string]any{"name": "orphan", "label": "Orphan", "parent_id": "no-such-type"}, http.StatusUnprocessableEntity)
 
 	// The custom row is mutable.
-	c.do(ownerTok, http.MethodPatch, "/component-types/custom-mic",
+	c.do(ownerTok, http.MethodPatch, "/component-types/local/custom-mic",
 		map[string]any{"label": "Custom Mic Pro"}, http.StatusOK)
 
 	// The seeded official row (mic) is not writable but is no longer a dead
 	// end: a patch forks it (#655, ADR-0095), covered end to end by
 	// TestComponentTypeForkAndRestoreAPI below. Delete still refuses it (still
 	// official, independent of its children and of any fork).
-	c.do(ownerTok, http.MethodDelete, "/component-types/mic", nil, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodDelete, "/component-types/og/mic", nil, http.StatusUnprocessableEntity)
 
 	// A row still parenting another cannot be deleted (409): custom-mic has no
 	// children, so it deletes cleanly; a seeded parent like mic would 409 on
 	// its children if it were not already refused for being official first.
-	c.do(ownerTok, http.MethodDelete, "/component-types/custom-mic", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/component-types/local/custom-mic", nil, http.StatusNoContent)
 	c.do(ownerTok, http.MethodGet, "/component-types", nil, http.StatusOK)
 }
 
@@ -192,7 +192,7 @@ func TestComponentTypeStemRejectsBadNames(t *testing.T) {
 	}
 
 	// The same guard applies to an update of an existing row.
-	c.do(ownerTok, http.MethodPatch, "/component-types/stem-ok",
+	c.do(ownerTok, http.MethodPatch, "/component-types/local/stem-ok",
 		map[string]any{"stem": "also bad"}, http.StatusUnprocessableEntity)
 }
 
@@ -244,9 +244,9 @@ func TestComponentTypeForkAndRestoreAPI(t *testing.T) {
 	// A viewer holds component_type:read but not :update, so they cannot fork
 	// a row they could not have written either.
 	viewerTok := userWithGrants(t, ctx, dsn, "fork-viewer", []grant{{role: "viewer", scopeKind: "all"}})
-	c.do(viewerTok, http.MethodPatch, "/component-types/mic",
+	c.do(viewerTok, http.MethodPatch, "/component-types/og/mic",
 		map[string]any{"label": "Viewer Mic"}, http.StatusForbidden)
-	c.do(viewerTok, http.MethodPost, "/component-types/mic:restore", nil, http.StatusForbidden)
+	c.do(viewerTok, http.MethodPost, "/component-types/og/mic:restore", nil, http.StatusForbidden)
 	if again := find(ownerTok, "mic"); again.Forked || again.Label != shipped.Label {
 		t.Fatalf("mic = %+v after the refused viewer patch, want untouched", again)
 	}
@@ -254,7 +254,7 @@ func TestComponentTypeForkAndRestoreAPI(t *testing.T) {
 	// The owner's patch forks: 200, the same id, the operator's values, and
 	// forked=true beside a still-true official.
 	var forked componentTypeWire
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/component-types/mic",
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/component-types/og/mic",
 		map[string]any{"label": "House Microphone", "abbrev": "hm"}, http.StatusOK), &forked); err != nil {
 		t.Fatalf("decode fork: %v", err)
 	}
@@ -271,10 +271,10 @@ func TestComponentTypeForkAndRestoreAPI(t *testing.T) {
 		t.Fatalf("relisted mic = %+v, want the forked values", listed)
 	}
 
-	// Addressing by uuid resolves the same logical row: no namespace in the
-	// URL, no second handle for the operator's copy.
+	// Addressing by uuid resolves the same logical row: the fork stays the
+	// shipped og row, so there is no second handle for the operator's copy.
 	var byUUID componentTypeWire
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/component-types/"+shipped.ID,
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/component-types/og/"+shipped.ID,
 		map[string]any{"icon": "mic-house"}, http.StatusOK), &byUUID); err != nil {
 		t.Fatalf("decode fork by uuid: %v", err)
 	}
@@ -283,11 +283,11 @@ func TestComponentTypeForkAndRestoreAPI(t *testing.T) {
 	}
 
 	// Delete is still refused on a shipped row, forked or not.
-	c.do(ownerTok, http.MethodDelete, "/component-types/mic", nil, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodDelete, "/component-types/og/mic", nil, http.StatusUnprocessableEntity)
 
 	// Restore discards the fork and the shipped values come back.
 	var restored componentTypeWire
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/component-types/mic:restore", nil, http.StatusOK), &restored); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/component-types/og/mic:restore", nil, http.StatusOK), &restored); err != nil {
 		t.Fatalf("decode restore: %v", err)
 	}
 	if restored.Forked || restored.Label != shipped.Label || restored.Abbrev != shipped.Abbrev || restored.Icon != shipped.Icon {
@@ -298,8 +298,8 @@ func TestComponentTypeForkAndRestoreAPI(t *testing.T) {
 	}
 
 	// Restoring again has nothing to discard.
-	c.do(ownerTok, http.MethodPost, "/component-types/mic:restore", nil, http.StatusConflict)
-	c.do(ownerTok, http.MethodPost, "/component-types/no-such-type:restore", nil, http.StatusNotFound)
+	c.do(ownerTok, http.MethodPost, "/component-types/og/mic:restore", nil, http.StatusConflict)
+	c.do(ownerTok, http.MethodPost, "/component-types/local/no-such-type:restore", nil, http.StatusNotFound)
 }
 
 // TestLabelRuleIsRefusedAtEditTime drives the acceptance behavior that decides
@@ -328,7 +328,7 @@ func TestLabelRuleIsRefusedAtEditTime(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	good := c.do(ownerTok, http.MethodPatch, "/component-types/display",
+	good := c.do(ownerTok, http.MethodPatch, "/component-types/og/display",
 		map[string]any{"label_rule": "{{.TypeName}} {{.Ordinal}}"}, http.StatusOK)
 	var forked componentTypeWire
 	if err := json.Unmarshal(good, &forked); err != nil {
@@ -343,7 +343,7 @@ func TestLabelRuleIsRefusedAtEditTime(t *testing.T) {
 	}
 
 	for _, bad := range []string{"{{.TypeName", "{{if .Ordinal}}{{.Ordinal}}", "{{.TypeName | exec}}"} {
-		c.do(ownerTok, http.MethodPatch, "/component-types/display",
+		c.do(ownerTok, http.MethodPatch, "/component-types/og/display",
 			map[string]any{"label_rule": bad}, http.StatusUnprocessableEntity)
 	}
 

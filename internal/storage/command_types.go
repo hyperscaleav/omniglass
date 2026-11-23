@@ -148,7 +148,7 @@ func (p *PG) GetCommandType(ctx context.Context, name string) (*CommandType, err
 	if err := RejectAddressForm("command_type", name); err != nil {
 		return nil, err
 	}
-	ct, err := scanCommandType(p.pool.QueryRow(ctx, `select `+commandTypeCols+` from command_type_in_effect() command_type where name = $1`, name))
+	ct, err := scanCommandType(p.pool.QueryRow(ctx, `select `+commandTypeCols+` from `+refRows("command_type", name)+` command_type where `+catalogRefCol(name)+` = $1`, name))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrCommandTypeNotFound
 	}
@@ -274,7 +274,7 @@ func guardCommandTypeMutable(ctx context.Context, q querier, name string) error 
 		return err
 	}
 	var official bool
-	err := q.QueryRow(ctx, `select official from command_type_in_effect() command_type where name = $1`, name).Scan(&official)
+	err := q.QueryRow(ctx, `select official from `+refRows("command_type", name)+` command_type where `+catalogRefCol(name)+` = $1`, name).Scan(&official)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrCommandTypeNotFound
 	}
@@ -487,7 +487,7 @@ func (p *PG) UpdateCommandType(ctx context.Context, actorID, name string, patch 
 		var disruptive bool
 		var quiet, hold int
 		var powerParam string
-		if err := tx.QueryRow(ctx, `select disruptive, quiet_seconds, hold_seconds, coalesce(power_outlet_param, '') from command_type_in_effect() command_type where name = $1`, name).
+		if err := tx.QueryRow(ctx, `select disruptive, quiet_seconds, hold_seconds, coalesce(power_outlet_param, '') from `+refRows("command_type", name)+` command_type where `+catalogRefCol(name)+` = $1`, name).
 			Scan(&disruptive, &quiet, &hold, &powerParam); err != nil {
 			return nil, fmt.Errorf("storage: load command type %q: %w", name, err)
 		}
@@ -550,14 +550,14 @@ func (p *PG) UpdateCommandType(ctx context.Context, actorID, name string, patch 
 			quiet_seconds = coalesce($12, quiet_seconds),
 			hold_seconds  = coalesce($13, hold_seconds),
 			power_outlet_param = case when $14::text is null then power_outlet_param else nullif($14, '') end
-		where id = (select id from command_type_in_effect() command_type where name = $1)`,
+		where id = (select id from `+refRows("command_type", name)+` command_type where `+catalogRefCol(name)+` = $1)`,
 		name, labelVal, patch.Description, schemaArg(patch.ParamsSchema), patch.SettleWindowSeconds,
 		patch.TargetPropertyType != nil, propTarget, patch.TargetMetricType != nil, metricTarget, setLabel,
 		patch.Disruptive, patch.QuietSeconds, patch.HoldSeconds, patch.PowerOutletParam,
 		patch.Write.Has(CommandTypeFieldParamsSchema)); err != nil {
 		return nil, fmt.Errorf("storage: update command type %q: %w", name, err)
 	}
-	ct, err := scanCommandType(tx.QueryRow(ctx, `select `+commandTypeCols+` from command_type_in_effect() command_type where name = $1`, name))
+	ct, err := scanCommandType(tx.QueryRow(ctx, `select `+commandTypeCols+` from `+refRows("command_type", name)+` command_type where `+catalogRefCol(name)+` = $1`, name))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrCommandTypeNotFound
@@ -595,7 +595,7 @@ func (p *PG) DeleteCommandType(ctx context.Context, actorID, name string) error 
 		}
 		return fmt.Errorf("storage: audit image command_type %q: %w", name, err)
 	}
-	if _, err := tx.Exec(ctx, `delete from command_type where id = (select id from command_type_in_effect() command_type where name = $1)`, name); err != nil {
+	if _, err := tx.Exec(ctx, `delete from command_type where id = (select id from `+refRows("command_type", name)+` command_type where `+catalogRefCol(name)+` = $1)`, name); err != nil {
 		return fmt.Errorf("storage: delete command type %q: %w", name, err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "delete", "command_type", auditImageID(before), before, nil); err != nil {

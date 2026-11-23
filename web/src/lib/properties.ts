@@ -1,4 +1,5 @@
 import { api } from "../api/client";
+import type { CatalogNameRef } from "./catalog_key";
 
 // The Properties catalog data layer: thin typed wrappers over the /property-types
 // surface. A property is a canonical, typed, non-numeric signal named by a key
@@ -12,6 +13,8 @@ export type PropertyDataType = "string" | "bool" | "json";
 export const PROPERTY_DATA_TYPES: PropertyDataType[] = ["string", "bool", "json"];
 
 export type PropertyRow = {
+  // The namespace the row lives in (ADR-0318): og shipped, local the operator's.
+  namespace: string;
   name: string;
   data_type: string;
   label?: string;
@@ -50,12 +53,12 @@ export type UpdateProperty = {
   validation?: unknown;
 };
 
-export async function updateProperty(name: string, body: UpdateProperty): Promise<void> {
-  const { error } = await api.PATCH("/property-types/{name}", { params: { path: { name } }, body });
+export async function updateProperty(ref: CatalogNameRef, body: UpdateProperty): Promise<void> {
+  const { error } = await api.PATCH("/property-types/{namespace}/{name}", { params: { path: { namespace: ref.namespace, name: ref.name } }, body });
   if (error) throw error;
 }
 
-export async function deleteProperty(name: string): Promise<void> {
-  const { error } = await api.DELETE("/property-types/{name}", { params: { path: { name } } });
+export async function deleteProperty(ref: CatalogNameRef): Promise<void> {
+  const { error } = await api.DELETE("/property-types/{namespace}/{name}", { params: { path: { namespace: ref.namespace, name: ref.name } } });
   if (error) throw error;
 }

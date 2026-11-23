@@ -166,6 +166,32 @@ A name is a lookup, so it lands on whatever the one row you can see by that name
 answers with the row it reached (a secret's `owner_kind` and `owner_name`), and a script that must
 never drift, a credential rotation above all, addresses `<owner>/<name>` or stores the uuid.
 
+### A catalog key is `ns/key` or a bare name
+
+A catalog row's positional is one argument naming its namespace and key, `og/icmp-rtt-avg` or
+`local/pump-speed`, the two segments its route takes
+([the API's catalog address](/architecture/api/#a-catalog-key-is-a-namespace-and-a-key)). A bare name
+follows the search path: the CLI looks the name up in `local` first, then `og`, and calls the route for
+the row it found. Name the namespace whenever the platform's row matters, since your `local` row of
+the same name wins the bare lookup:
+
+```sh
+omniglass metric-type get og/icmp-rtt-avg
+omniglass calc-rule rename local/temp-mean --name temp-peak   # needs rule:rename
+```
+
+### A pushed sample may name its namespace
+
+A `telemetry push` item may name the catalog namespace its name is read in. Omitted, the name walks the
+search path (your `local` type first, then the platform's `og` one); `"namespace":"og"` reaches the
+platform's type even where a type of yours of the same name shadows it, and a namespace holding no such
+type comes back under `rejected`, naming the namespace:
+
+```sh
+omniglass telemetry push --owner '{"kind":"component","ref":"codec-1"}' \
+  --metrics '[{"namespace":"og","name":"room-temperature","value":21.5}]'   # needs telemetry:push
+```
+
 ### An unknown verb is a failure
 
 A group (`component`, `component alarm`, `sim`) only routes to its subcommands. Run bare it prints

@@ -905,7 +905,7 @@ func resolveSystemSelector(ctx context.Context, q querier, sel *CalcRuleSelector
 			continue
 		}
 		var ok bool
-		if err := q.QueryRow(ctx, `select exists (select 1 from system_type_in_effect() system_type where name = $1)`, t).Scan(&ok); err != nil {
+		if err := q.QueryRow(ctx, `select exists (select 1 from `+refRows("system_type", t)+` system_type where `+catalogRefCol(t)+` = $1)`, t).Scan(&ok); err != nil {
 			return fmt.Errorf("storage: check rule system type: %w", err)
 		}
 		if !ok {

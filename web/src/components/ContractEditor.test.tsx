@@ -26,9 +26,9 @@ const contract: ClassifierProperty[] = [
 ];
 
 const catalog: PropertyRow[] = [
-  { name: "seat_count", data_type: "int", label: "Seat count", official: true },
-  { name: "display_count", data_type: "int", label: "Display count", official: true },
-  { name: "has_camera", data_type: "bool", label: "Has camera", official: true },
+  { name: "seat_count", data_type: "int", label: "Seat count", namespace: "og", official: true },
+  { name: "display_count", data_type: "int", label: "Display count", namespace: "og", official: true },
+  { name: "has_camera", data_type: "bool", label: "Has camera", namespace: "og", official: true },
 ];
 
 const owner: Me = { user: { id: "p", kind: "person" }, permissions: [">"], grants: [] };
@@ -49,7 +49,7 @@ function mount(kind: ClassifierKind, opts: { me?: Me; official?: boolean; lines?
   const result = render(() => (
     <QueryClientProvider client={qc}>
       <BladeEditContext.Provider value={edit}>
-        <ContractEditor classifier={kind} id="meeting-room" official={opts.official ?? false} />
+        <ContractEditor namespace="local" classifier={kind} id="meeting-room" official={opts.official ?? false} />
       </BladeEditContext.Provider>
     </QueryClientProvider>
   ));
@@ -225,9 +225,9 @@ const metricContract: ClassifierMetric[] = [
 ];
 
 const metricCatalog: MetricRow[] = [
-  { name: "icmp-rtt-avg", data_type: "float", label: "ICMP RTT (avg)", official: true },
-  { name: "ssh-handshake-time", data_type: "float", label: "SSH Handshake Time", official: true },
-  { name: "tcp-connect-time", data_type: "float", label: "TCP Connect Time", official: true },
+  { name: "icmp-rtt-avg", data_type: "float", label: "ICMP RTT (avg)", namespace: "og", official: true },
+  { name: "ssh-handshake-time", data_type: "float", label: "SSH Handshake Time", namespace: "og", official: true },
+  { name: "tcp-connect-time", data_type: "float", label: "TCP Connect Time", namespace: "og", official: true },
 ];
 
 function mountMetric(kind: ClassifierKind, opts: { me?: Me; official?: boolean; lines?: ClassifierMetric[]; editing?: boolean } = {}) {
@@ -240,7 +240,7 @@ function mountMetric(kind: ClassifierKind, opts: { me?: Me; official?: boolean; 
   return render(() => (
     <QueryClientProvider client={qc}>
       <BladeEditContext.Provider value={edit}>
-        <ContractEditor classifier={kind} lane="metric" id="meeting-room" official={opts.official ?? false} />
+        <ContractEditor namespace="local" classifier={kind} lane="metric" id="meeting-room" official={opts.official ?? false} />
       </BladeEditContext.Provider>
     </QueryClientProvider>
   ));

@@ -662,7 +662,7 @@ keeps itself and drops the link (`event.source_log_line_id` is `on delete set nu
   stray word.
 
 **A type can keep a window of its own**, overriding its lane's: a metric or property type's
-`retention_days`, set through `POST /metric-types/{name}:setRetention` (and the property-type twin)
+`retention_days`, set through `POST /metric-types/{namespace}/{name}:setRetention` (and the property-type twin)
 on an official type too, since a shipped type's definition is the seed's but how long an install keeps
 its samples is the install's. The boot seed never writes it. The lane's own prune skips every
 overridden type, and the pass gives each one a lane of its own, pruned to its window with the same

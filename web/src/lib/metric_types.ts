@@ -1,4 +1,5 @@
 import { api } from "../api/client";
+import type { CatalogNameRef } from "./catalog_key";
 
 // The Metrics catalog data layer: thin typed wrappers over the /metric-types
 // surface, the numeric lane of the signal catalog and the twin of
@@ -12,6 +13,8 @@ export type MetricDataType = "int" | "float";
 export const METRIC_DATA_TYPES: MetricDataType[] = ["int", "float"];
 
 export type MetricRow = {
+  // The namespace the row lives in (ADR-0318): og shipped, local the operator's.
+  namespace: string;
   name: string;
   data_type: string;
   label?: string;
@@ -57,12 +60,12 @@ export type UpdateMetricType = {
   precision?: number;
 };
 
-export async function updateMetricType(name: string, body: UpdateMetricType): Promise<void> {
-  const { error } = await api.PATCH("/metric-types/{name}", { params: { path: { name } }, body });
+export async function updateMetricType(ref: CatalogNameRef, body: UpdateMetricType): Promise<void> {
+  const { error } = await api.PATCH("/metric-types/{namespace}/{name}", { params: { path: { namespace: ref.namespace, name: ref.name } }, body });
   if (error) throw error;
 }
 
-export async function deleteMetricType(name: string): Promise<void> {
-  const { error } = await api.DELETE("/metric-types/{name}", { params: { path: { name } } });
+export async function deleteMetricType(ref: CatalogNameRef): Promise<void> {
+  const { error } = await api.DELETE("/metric-types/{namespace}/{name}", { params: { path: { namespace: ref.namespace, name: ref.name } } });
   if (error) throw error;
 }

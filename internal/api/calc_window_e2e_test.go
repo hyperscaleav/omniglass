@@ -53,7 +53,7 @@ func TestCalcRuleWindowAPI(t *testing.T) {
 	if len(made.Inputs) != 1 || made.Inputs[0].WindowSeconds != 300 {
 		t.Fatalf("made inputs %+v, want the 300s window", made.Inputs)
 	}
-	if got := string(c.do(tok, http.MethodGet, "/calc-rules/temp-mean-5m", nil, http.StatusOK)); !strings.Contains(got, `"window_seconds":300`) {
+	if got := string(c.do(tok, http.MethodGet, "/calc-rules/local/temp-mean-5m", nil, http.StatusOK)); !strings.Contains(got, `"window_seconds":300`) {
 		t.Fatalf("read back %s, want window_seconds 300", got)
 	}
 

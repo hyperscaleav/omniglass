@@ -21,16 +21,16 @@ const viewer: Me = { user: { id: uuidFor("u-view"), kind: "person" }, person: { 
 
 const pageOps: ActionRule = {
   id: uuidFor("r-1"), name: "page-ops", label: "Page ops", on: ["raised", "cleared"], when: "severity_rank >= 40", targets: ["ops-chat"],
-  official: false, opt_out_allowed: false, enabled: true, created_at: at, updated_at: at,
+  namespace: "local", official: false, opt_out_allowed: false, enabled: true, created_at: at, updated_at: at,
 };
 const quiet: ActionRule = {
-  id: uuidFor("r-2"), name: "everything", on: ["raised"], targets: ["ops-mailbox"], official: false, opt_out_allowed: true, enabled: false,
+  id: uuidFor("r-2"), name: "everything", on: ["raised"], targets: ["ops-mailbox"], namespace: "local", official: false, opt_out_allowed: true, enabled: false,
   created_at: at, updated_at: at,
 };
 // The shipped rule (#1987): official, so its enabled switch is the only part an operator edits here.
 const shipped: ActionRule = {
   id: uuidFor("r-3"), name: "platform-alarms-to-admins", label: "Platform alarms to admins", on: ["raised", "cleared"], when: "platform",
-  targets: ["platform-admins", "platform-owners"], official: true, opt_out_allowed: false, enabled: true, created_at: at, updated_at: at,
+  targets: ["platform-admins", "platform-owners"], namespace: "og", official: true, opt_out_allowed: false, enabled: true, created_at: at, updated_at: at,
 };
 const target = (name: string): NotificationTarget => ({ id: uuidFor(name), name, kind: "webhook", auth: "none", official: false, enabled: true, created_at: at, updated_at: at });
 const note = (over: Partial<Notification>): Notification => ({

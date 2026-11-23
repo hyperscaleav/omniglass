@@ -1,4 +1,5 @@
 import { api } from "../api/client";
+import type { CatalogNameRef } from "./catalog_key";
 
 // The Command Types catalog data layer: thin typed wrappers over the /command-types
 // surface, the "do" twin of the Properties and Event Types catalogs. A command type
@@ -8,6 +9,8 @@ import { api } from "../api/client";
 // sets (at most one set, both empty for fire-and-forget). Official types are read-only.
 
 export type CommandTypeRow = {
+  // The namespace the row lives in (ADR-0318): og shipped, local the operator's.
+  namespace: string;
   name: string;
   label?: string;
   description?: string;
@@ -103,12 +106,12 @@ export type UpdateCommandType = {
   target_metric_type?: string;
 };
 
-export async function updateCommandType(name: string, body: UpdateCommandType): Promise<void> {
-  const { error } = await api.PATCH("/command-types/{name}", { params: { path: { name } }, body });
+export async function updateCommandType(ref: CatalogNameRef, body: UpdateCommandType): Promise<void> {
+  const { error } = await api.PATCH("/command-types/{namespace}/{name}", { params: { path: { namespace: ref.namespace, name: ref.name } }, body });
   if (error) throw error;
 }
 
-export async function deleteCommandType(name: string): Promise<void> {
-  const { error } = await api.DELETE("/command-types/{name}", { params: { path: { name } } });
+export async function deleteCommandType(ref: CatalogNameRef): Promise<void> {
+  const { error } = await api.DELETE("/command-types/{namespace}/{name}", { params: { path: { namespace: ref.namespace, name: ref.name } } });
   if (error) throw error;
 }

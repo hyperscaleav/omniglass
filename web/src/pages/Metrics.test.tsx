@@ -14,9 +14,9 @@ import { ME_KEY, type Me } from "../lib/auth";
 // custom rows are writable only when the caller holds metric_type:*. Data is
 // seeded into the query cache so no server is needed.
 const seed: MetricRow[] = [
-  { name: "icmp-rtt-avg", data_type: "float", label: "ICMP RTT (avg)", unit: "ms", precision: 1, official: true },
-  { name: "cpu-load", data_type: "float", label: "CPU load", unit: "percent", official: true },
-  { name: "boot-count", written_by: { rule: "boot-count-calc", rule_id: "11111111-1111-7111-8111-111111111111" }, data_type: "int", official: false },
+  { name: "icmp-rtt-avg", data_type: "float", label: "ICMP RTT (avg)", unit: "ms", precision: 1, namespace: "og", official: true },
+  { name: "cpu-load", data_type: "float", label: "CPU load", unit: "percent", namespace: "og", official: true },
+  { name: "boot-count", written_by: { rule: "boot-count-calc", rule_id: "11111111-1111-7111-8111-111111111111" }, data_type: "int", namespace: "local", official: false },
 ];
 
 const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };

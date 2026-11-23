@@ -12,18 +12,19 @@ import (
 )
 
 type severityLevelBody struct {
-	ID       string `json:"id" doc:"The level's uuid, the stable form of name"`
-	Name     string `json:"name" doc:"The level's name; alarms and rules name it"`
-	Label    string `json:"label,omitempty"`
-	Color    string `json:"color" enum:"gray,blue,green,yellow,orange,red,darkred" doc:"The hue the console renders the level in"`
-	Rank     int    `json:"rank" doc:"Compares levels: higher is more severe"`
-	Official bool   `json:"official" doc:"Shipped with the platform and read-only"`
-	Outage   bool   `json:"outage" doc:"Whether an active alarm at this level puts its component in outage (at or above the high level's rank); below it, an alarm degrades"`
+	ID        string `json:"id" doc:"The level's uuid, the stable form of name"`
+	Name      string `json:"name" doc:"The level's name; alarms and rules name it"`
+	Label     string `json:"label,omitempty"`
+	Color     string `json:"color" enum:"gray,blue,green,yellow,orange,red,darkred" doc:"The hue the console renders the level in"`
+	Rank      int    `json:"rank" doc:"Compares levels: higher is more severe"`
+	Namespace string `json:"namespace" doc:"The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"`
+	Official  bool   `json:"official" doc:"Shipped with the platform and read-only"`
+	Outage    bool   `json:"outage" doc:"Whether an active alarm at this level puts its component in outage (at or above the high level's rank); below it, an alarm degrades"`
 }
 
 func toSeverityLevelBody(l *storage.SeverityLevel) severityLevelBody {
 	return severityLevelBody{ID: l.ID, Name: l.Name, Label: l.Label, Color: l.Color, Rank: l.Rank,
-		Official: l.Official, Outage: l.Rank >= health.OutageRank}
+		Official: l.Official, Namespace: catalogNamespaceOf(l.Official), Outage: l.Rank >= health.OutageRank}
 }
 
 type listSeverityLevelsOutput struct {
@@ -40,6 +41,7 @@ type severityLevelNameInput struct {
 
 type createSeverityLevelInput struct {
 	Body struct {
+		CatalogCreateNamespace
 		Name  string `json:"name" minLength:"1" doc:"The level's name (lowercase kebab)"`
 		Label string `json:"label,omitempty" required:"false" doc:"A human label"`
 		Color string `json:"color" doc:"One of gray, blue, green, yellow, orange, red, darkred"`
@@ -85,7 +87,7 @@ func registerSeverityLevelRoutes(api huma.API, a *authenticator, gw storage.Gate
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-severity-level",
 		Method:      http.MethodGet,
-		Path:        "/severity-levels/{name}",
+		Path:        "/severity-levels/{namespace}/{name}",
 		Summary:     "Get a severity level",
 		Description: "Returns one severity level by name. Gated by severity_level:read.",
 	}, "severity_level", "read"), func(ctx context.Context, in *severityLevelNameInput) (*severityLevelOutput, error) {
@@ -115,7 +117,7 @@ func registerSeverityLevelRoutes(api huma.API, a *authenticator, gw storage.Gate
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "update-severity-level",
 		Method:      http.MethodPatch,
-		Path:        "/severity-levels/{name}",
+		Path:        "/severity-levels/{namespace}/{name}",
 		Summary:     "Update a severity level",
 		Description: "Patches an operator level's name, label, color or rank (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update, with an all-scope grant.",
 	}, "severity_level", "update"), func(ctx context.Context, in *updateSeverityLevelInput) (*severityLevelOutput, error) {
@@ -130,7 +132,7 @@ func registerSeverityLevelRoutes(api huma.API, a *authenticator, gw storage.Gate
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-severity-level",
 		Method:        http.MethodDelete,
-		Path:          "/severity-levels/{name}",
+		Path:          "/severity-levels/{namespace}/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a severity level",
 		Description:   "Removes an operator level no alarm or event rule names; an official level or one in use is a 409. Audited. Gated by severity_level:delete, with an all-scope grant.",

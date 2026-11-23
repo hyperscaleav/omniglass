@@ -434,7 +434,7 @@ func resolveSelector(ctx context.Context, q querier, sel *EventRuleSelector, kep
 			continue
 		}
 		var ok bool
-		if err := q.QueryRow(ctx, `select exists (select 1 from component_type_in_effect() component_type where name = $1)`, t).Scan(&ok); err != nil {
+		if err := q.QueryRow(ctx, `select exists (select 1 from `+refRows("component_type", t)+` component_type where `+catalogRefCol(t)+` = $1)`, t).Scan(&ok); err != nil {
 			return fmt.Errorf("storage: check rule component type: %w", err)
 		}
 		if !ok {

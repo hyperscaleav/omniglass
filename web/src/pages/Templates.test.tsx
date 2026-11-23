@@ -49,7 +49,7 @@ const catalog: Template[] = [
 // Locations are offered and posted by dotted path; the create flows carry a uuid.
 const hq: Location = { id: uuidFor("l-hq"), name: "hq", label: "HQ", location_type: "campus", path: "hq" };
 const west: Location = { id: uuidFor("l-west"), name: "west", label: "West", location_type: "building", parent_id: hq.id, path: "hq.west" };
-const standards: Standard[] = [{ id: uuidFor("std-mr"), name: "meeting-room", label: "Meeting room", official: false }];
+const standards: Standard[] = [{ id: uuidFor("std-mr"), name: "meeting-room", label: "Meeting room", namespace: "local", official: false }];
 
 const SYS_ID = uuidFor("sys-meeting-1");
 const LVL_ID = uuidFor("l-level-9");
@@ -74,7 +74,7 @@ const deploy: Me = {
 };
 
 // The fleet's own mr55, whose slots differ from the template's copy.
-const mr55: Standard = { id: uuidFor("std-mr55"), name: "mr55", label: "Meeting Room 55", official: false };
+const mr55: Standard = { id: uuidFor("std-mr55"), name: "mr55", label: "Meeting Room 55", namespace: "local", official: false };
 
 function mount(path: string, me: Me = admin, held: Standard[] = standards, slots: Record<string, unknown[]> = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });

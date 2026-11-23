@@ -1,4 +1,5 @@
 import { api } from "../api/client";
+import type { CatalogNameRef } from "./catalog_key";
 
 // The Event Types catalog data layer: thin typed wrappers over the /event-types
 // surface, the twin of the Properties catalog. An event type is a registered
@@ -7,6 +8,8 @@ import { api } from "../api/client";
 // payload_schema is an optional JSON Schema fragment for the occurrence payload.
 
 export type EventTypeRow = {
+  // The namespace the row lives in (ADR-0318): og shipped, local the operator's.
+  namespace: string;
   name: string;
   label?: string;
   description?: string;
@@ -41,12 +44,12 @@ export type UpdateEventType = {
   payload_schema?: unknown;
 };
 
-export async function updateEventType(name: string, body: UpdateEventType): Promise<void> {
-  const { error } = await api.PATCH("/event-types/{name}", { params: { path: { name } }, body });
+export async function updateEventType(ref: CatalogNameRef, body: UpdateEventType): Promise<void> {
+  const { error } = await api.PATCH("/event-types/{namespace}/{name}", { params: { path: { namespace: ref.namespace, name: ref.name } }, body });
   if (error) throw error;
 }
 
-export async function deleteEventType(name: string): Promise<void> {
-  const { error } = await api.DELETE("/event-types/{name}", { params: { path: { name } } });
+export async function deleteEventType(ref: CatalogNameRef): Promise<void> {
+  const { error } = await api.DELETE("/event-types/{namespace}/{name}", { params: { path: { namespace: ref.namespace, name: ref.name } } });
   if (error) throw error;
 }

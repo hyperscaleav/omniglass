@@ -57,7 +57,7 @@ func TestMetricTypeAPI(t *testing.T) {
 	}
 
 	// Get it back.
-	c.do(ownerTok, http.MethodGet, "/metric-types/pump-speed", nil, http.StatusOK)
+	c.do(ownerTok, http.MethodGet, "/metric-types/local/pump-speed", nil, http.StatusOK)
 
 	// List includes the custom type and the seeded official ones.
 	var listed struct {
@@ -75,7 +75,7 @@ func TestMetricTypeAPI(t *testing.T) {
 	}
 
 	// Update a mutable field.
-	c.do(ownerTok, http.MethodPatch, "/metric-types/pump-speed", map[string]any{"label": "Pump Speed (RPM)"}, http.StatusOK)
+	c.do(ownerTok, http.MethodPatch, "/metric-types/local/pump-speed", map[string]any{"label": "Pump Speed (RPM)"}, http.StatusOK)
 
 	// A malformed name is a 422, and so is a non-numeric data type (the enum).
 	c.do(ownerTok, http.MethodPost, "/metric-types", map[string]any{"name": "Bad-Name", "data_type": "int"}, http.StatusUnprocessableEntity)
@@ -85,14 +85,14 @@ func TestMetricTypeAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/metric-types", map[string]any{"name": "pump-speed", "data_type": "int"}, http.StatusConflict)
 
 	// An official (seeded) metric type is read-only (409).
-	c.do(ownerTok, http.MethodPatch, "/metric-types/tcp-connect-time", map[string]any{"label": "x"}, http.StatusConflict)
-	c.do(ownerTok, http.MethodDelete, "/metric-types/tcp-connect-time", nil, http.StatusConflict)
+	c.do(ownerTok, http.MethodPatch, "/metric-types/og/tcp-connect-time", map[string]any{"label": "x"}, http.StatusConflict)
+	c.do(ownerTok, http.MethodDelete, "/metric-types/og/tcp-connect-time", nil, http.StatusConflict)
 
 	// An unknown metric type is a 404.
-	c.do(ownerTok, http.MethodGet, "/metric-types/nope", nil, http.StatusNotFound)
+	c.do(ownerTok, http.MethodGet, "/metric-types/local/nope", nil, http.StatusNotFound)
 
 	// Delete the custom type.
-	c.do(ownerTok, http.MethodDelete, "/metric-types/pump-speed", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/metric-types/local/pump-speed", nil, http.StatusNoContent)
 
 	// An ungranted user is forbidden to create.
 	noneTok := userWithGrants(t, ctx, dsn, "nometrics", nil)
@@ -126,7 +126,7 @@ func TestMetricTypePrecisionClearsUnderUpdateMask(t *testing.T) {
 		var mt struct {
 			Precision *int `json:"precision"`
 		}
-		if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/metric-types/blower-rpm", body, http.StatusOK), &mt); err != nil {
+		if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/metric-types/local/blower-rpm", body, http.StatusOK), &mt); err != nil {
 			t.Fatalf("decode patch: %v", err)
 		}
 		return mt.Precision
@@ -149,11 +149,11 @@ func TestMetricTypePrecisionClearsUnderUpdateMask(t *testing.T) {
 	var reread struct {
 		Precision *int `json:"precision"`
 	}
-	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/metric-types/blower-rpm", nil, http.StatusOK), &reread)
+	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/metric-types/local/blower-rpm", nil, http.StatusOK), &reread)
 	if reread.Precision != nil {
 		t.Fatalf("reread: precision = %d, want none", *reread.Precision)
 	}
 	// A mask naming a field the route does not patch is a 422, never a no-op.
-	c.do(ownerTok, http.MethodPatch, "/metric-types/blower-rpm",
+	c.do(ownerTok, http.MethodPatch, "/metric-types/local/blower-rpm",
 		map[string]any{"update_mask": []string{"data_type"}}, http.StatusUnprocessableEntity)
 }

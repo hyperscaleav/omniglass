@@ -29,8 +29,8 @@ form: bullet
   grounds in the same class as the location placement constraint, and named for the same reason. Capabilities became a **resolved** set precisely to make that
   strictness survivable: `product` is optional on a component, so a guard over a product-only fact would have
   locked every productless component out of every role. Eight routes ship, regenerated into the OpenAPI
-  document, the cobra CLI, and the typed SPA client: `GET /standards/{id}/roles` plus
-  `PUT` / `DELETE /standards/{id}/roles/{role}` (gated `standard:read` / `:update` / `:delete`);
+  document, the cobra CLI, and the typed SPA client: `GET /standards/{namespace}/{id}/roles` plus
+  `PUT` / `DELETE /standards/{namespace}/{id}/roles/{role}` (gated `standard:read` / `:update` / `:delete`);
   `GET /systems/{name}/roles` (the resolved read) plus `PUT` / `DELETE /systems/{name}/roles/{role}` and
   `PUT` / `DELETE /systems/{name}/roles/{role}/assignments/{component}` (gated `system:read` / `:update`); and
   `GET /components/{name}/capabilities` plus `PUT` / `DELETE /components/{name}/capabilities/{capability}`

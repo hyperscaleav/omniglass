@@ -549,7 +549,7 @@ func TestThePreconditionBindsTheNameTheFormShowed(t *testing.T) {
 	// The stem moves under the open form. Nothing about the placement bucket
 	// changes, so the ordinal the form is holding is still the one this create
 	// allocates: the claim is met and the name is not.
-	c.do(owner, http.MethodPatch, "/component-types/display", map[string]any{"stem": "monitor"}, http.StatusOK)
+	c.do(owner, http.MethodPatch, "/component-types/og/display", map[string]any{"stem": "monitor"}, http.StatusOK)
 
 	status, raw := c.send(owner, http.MethodPost, "/components", withDraftedName(body, drafted.Name))
 	if status != http.StatusConflict {

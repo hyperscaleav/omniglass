@@ -1,4 +1,5 @@
 import { api } from "../api/client";
+import type { CatalogNameRef } from "./catalog_key";
 import type { CreateEventRuleInputBody, CriteriaBody, CriteriaInput, EventRuleBody, EventRuleStateOutputBody, RuleFiringBody, RuleOpenAlarmBody, RuleStreakBody, UpdateEventRuleInputBody } from "../api/api.gen";
 import type { SeverityLevel } from "./severity";
 import type { PreviewEventRule } from "./expressions";
@@ -43,8 +44,8 @@ export async function listEventRules(): Promise<EventRule[]> {
   return (data?.event_rules ?? []) as EventRule[];
 }
 
-export async function getRuleState(name: string): Promise<{ firings: RuleFiring[]; open: RuleOpenAlarm[]; pending: RuleStreak[]; last_judged_at?: string }> {
-  const { data, error } = await api.GET("/event-rules/{name}/state", { params: { path: { name } } });
+export async function getRuleState(ref: CatalogNameRef): Promise<{ firings: RuleFiring[]; open: RuleOpenAlarm[]; pending: RuleStreak[]; last_judged_at?: string }> {
+  const { data, error } = await api.GET("/event-rules/{namespace}/{name}/state", { params: { path: { namespace: ref.namespace, name: ref.name } } });
   if (error) throw error;
   return { firings: data?.firings ?? [], open: data?.open ?? [], pending: data?.pending ?? [], last_judged_at: data?.last_judged_at };
 }
@@ -62,8 +63,8 @@ export async function createEventRule(body: CreateEventRule): Promise<EventRule>
   return data as EventRule;
 }
 
-export async function updateEventRule(name: string, body: UpdateEventRule): Promise<EventRule> {
-  const { data, error } = await api.PATCH("/event-rules/{name}", { params: { path: { name } }, body });
+export async function updateEventRule(ref: CatalogNameRef, body: UpdateEventRule): Promise<EventRule> {
+  const { data, error } = await api.PATCH("/event-rules/{namespace}/{name}", { params: { path: { namespace: ref.namespace, name: ref.name } }, body });
   if (error) throw error;
   return data as EventRule;
 }
@@ -72,14 +73,14 @@ export async function updateEventRule(name: string, body: UpdateEventRule): Prom
 // not a PATCH field: the name is the address an operator types, and every
 // reference inside the platform holds the rule's uuid, so nothing there moves
 // with it. The answer carries the uuid.
-export async function renameEventRule(name: string, to: string): Promise<EventRule> {
-  const { data, error } = await api.POST("/event-rules/{name}:rename", { params: { path: { name } }, body: { name: to } });
+export async function renameEventRule(ref: CatalogNameRef, to: string): Promise<EventRule> {
+  const { data, error } = await api.POST("/event-rules/{namespace}/{name}:rename", { params: { path: { namespace: ref.namespace, name: ref.name } }, body: { name: to } });
   if (error) throw error;
   return data as EventRule;
 }
 
-export async function deleteEventRule(name: string): Promise<void> {
-  const { error } = await api.DELETE("/event-rules/{name}", { params: { path: { name } } });
+export async function deleteEventRule(ref: CatalogNameRef): Promise<void> {
+  const { error } = await api.DELETE("/event-rules/{namespace}/{name}", { params: { path: { namespace: ref.namespace, name: ref.name } } });
   if (error) throw error;
 }
 

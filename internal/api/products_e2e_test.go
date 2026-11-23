@@ -105,10 +105,10 @@ func TestProductsAPI(t *testing.T) {
 		map[string]any{"id": "bad-kind", "label": "Bad", "kind": "gizmo", "component_type": "video-bar"}, http.StatusUnprocessableEntity)
 
 	// The custom row is mutable.
-	c.do(ownerTok, http.MethodPatch, "/products/acme-bar",
+	c.do(ownerTok, http.MethodPatch, "/products/local/acme-bar",
 		map[string]any{"label": "Acme Bar Pro", "kind": "app"}, http.StatusOK)
 	var reread productBodyWire
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/products/acme-bar", nil, http.StatusOK), &reread); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/products/local/acme-bar", nil, http.StatusOK), &reread); err != nil {
 		t.Fatalf("decode get: %v", err)
 	}
 	if reread.Kind != "app" {
@@ -126,7 +126,7 @@ func TestProductsAPI(t *testing.T) {
 	// Each decode is into a fresh value: a cleared reference is an omitted wire
 	// field, which Unmarshal would leave holding whatever a reused struct had.
 	var cleared productBodyWire
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/products/acme-bar",
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/products/local/acme-bar",
 		map[string]any{"vendor_id": "", "driver_id": ""}, http.StatusOK), &cleared); err != nil {
 		t.Fatalf("decode clear: %v", err)
 	}
@@ -134,32 +134,32 @@ func TestProductsAPI(t *testing.T) {
 		t.Fatalf("refs after an explicit clear = %+v, want vendor and driver gone", cleared)
 	}
 	var clearedReread productBodyWire
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/products/acme-bar", nil, http.StatusOK), &clearedReread); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/products/local/acme-bar", nil, http.StatusOK), &clearedReread); err != nil {
 		t.Fatalf("decode get after clear: %v", err)
 	}
 	if clearedReread.Vendor != "" || clearedReread.Driver != "" {
 		t.Fatalf("refs on reread after clear = %q/%q, want none (the clear persisted)", clearedReread.Vendor, clearedReread.Driver)
 	}
 	// A value sets it again, and an unknown one is still the 422 it was.
-	c.do(ownerTok, http.MethodPatch, "/products/acme-bar",
+	c.do(ownerTok, http.MethodPatch, "/products/local/acme-bar",
 		map[string]any{"vendor_id": "kestrel"}, http.StatusOK)
-	c.do(ownerTok, http.MethodPatch, "/products/acme-bar",
+	c.do(ownerTok, http.MethodPatch, "/products/local/acme-bar",
 		map[string]any{"vendor_id": "no-such-vendor"}, http.StatusUnprocessableEntity)
 	// component_type is required, so "" is still refused rather than a clear.
-	c.do(ownerTok, http.MethodPatch, "/products/acme-bar",
+	c.do(ownerTok, http.MethodPatch, "/products/local/acme-bar",
 		map[string]any{"component_type": ""}, http.StatusUnprocessableEntity)
 
 	// The seeded official row (generic-device) is read-only: 422 on patch and delete.
-	c.do(ownerTok, http.MethodPatch, "/products/generic-device",
+	c.do(ownerTok, http.MethodPatch, "/products/og/generic-device",
 		map[string]any{"label": "X"}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodDelete, "/products/generic-device", nil, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodDelete, "/products/og/generic-device", nil, http.StatusUnprocessableEntity)
 
 	// Admin deletes the custom row.
-	c.do(ownerTok, http.MethodDelete, "/products/acme-bar", nil, http.StatusNoContent)
-	c.do(ownerTok, http.MethodGet, "/products/acme-bar", nil, http.StatusNotFound)
+	c.do(ownerTok, http.MethodDelete, "/products/local/acme-bar", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodGet, "/products/local/acme-bar", nil, http.StatusNotFound)
 
 	// Unknown id is a 404.
-	c.do(ownerTok, http.MethodDelete, "/products/nope", nil, http.StatusNotFound)
+	c.do(ownerTok, http.MethodDelete, "/products/local/nope", nil, http.StatusNotFound)
 }
 
 // TestProductRequiresTypeAndKind drives the #614 product floor over HTTP: kind

@@ -198,7 +198,7 @@ function ActionRuleBladeBody(p: { name: string }): JSX.Element {
   async function toggleEnabled(r: ActionRule) {
     setErr(null);
     try {
-      await updateActionRule(r.name, { enabled: !r.enabled });
+      await updateActionRule(r, { enabled: !r.enabled });
       await qc.invalidateQueries({ queryKey: ACTION_RULES_KEY });
     } catch (e) {
       setErr(describeError(e));
@@ -209,7 +209,7 @@ function ActionRuleBladeBody(p: { name: string }): JSX.Element {
     if (!confirm(`Delete action rule "${r.name}"? What it already queued still delivers, and keeps its name.`)) return;
     setErr(null);
     try {
-      await deleteActionRule(r.name);
+      await deleteActionRule(r);
       blades.close();
       await qc.invalidateQueries({ queryKey: ACTION_RULES_KEY });
     } catch (e) {
@@ -371,7 +371,7 @@ export function ActionRuleForm(p: { mode: "create" | "edit"; rule?: ActionRule; 
     setWhenRefused(null);
     try {
       const saved = editing
-        ? await updateActionRule(p.rule!.name, updateActionRuleBody(draft(), p.rule!))
+        ? await updateActionRule(p.rule!, updateActionRuleBody(draft(), p.rule!))
         : await createActionRule(createActionRuleBody(draft()));
       await qc.invalidateQueries({ queryKey: ACTION_RULES_KEY });
       p.onSaved(saved);

@@ -54,7 +54,7 @@ func TestEventTypeAPI(t *testing.T) {
 	}
 
 	// Get it back.
-	c.do(ownerTok, http.MethodGet, "/event-types/cable-unplugged", nil, http.StatusOK)
+	c.do(ownerTok, http.MethodGet, "/event-types/local/cable-unplugged", nil, http.StatusOK)
 
 	// List includes the custom event type and the seeded official ones.
 	var listed struct {
@@ -72,7 +72,7 @@ func TestEventTypeAPI(t *testing.T) {
 	}
 
 	// Update a mutable field.
-	c.do(ownerTok, http.MethodPatch, "/event-types/cable-unplugged", map[string]any{"label": "Cable Unplugged"}, http.StatusOK)
+	c.do(ownerTok, http.MethodPatch, "/event-types/local/cable-unplugged", map[string]any{"label": "Cable Unplugged"}, http.StatusOK)
 
 	// A malformed name is a 422.
 	c.do(ownerTok, http.MethodPost, "/event-types", map[string]any{"name": "Bad-Name"}, http.StatusUnprocessableEntity)
@@ -81,23 +81,23 @@ func TestEventTypeAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/event-types", map[string]any{"name": "cable-unplugged"}, http.StatusConflict)
 
 	// An official (seeded) event type is read-only (409).
-	c.do(ownerTok, http.MethodPatch, "/event-types/call-started", map[string]any{"label": "x"}, http.StatusConflict)
-	c.do(ownerTok, http.MethodDelete, "/event-types/call-started", nil, http.StatusConflict)
+	c.do(ownerTok, http.MethodPatch, "/event-types/og/call-started", map[string]any{"label": "x"}, http.StatusConflict)
+	c.do(ownerTok, http.MethodDelete, "/event-types/og/call-started", nil, http.StatusConflict)
 
 	// An unknown event type is a 404.
-	c.do(ownerTok, http.MethodGet, "/event-types/nope", nil, http.StatusNotFound)
+	c.do(ownerTok, http.MethodGet, "/event-types/local/nope", nil, http.StatusNotFound)
 
 	// A type an event rule names is in use (409) until the rule lets go of it.
 	c.do(ownerTok, http.MethodPost, "/event-rules", map[string]any{"name": "unplug-watch", "sample_key": "endpoint-reachable",
 		"fire_criteria": map[string]any{"op": "eq", "value": "down"}, "fire_event_type": "rule-fired",
 		"clear_event_type": "cable-unplugged"}, http.StatusCreated)
-	if body := string(c.do(ownerTok, http.MethodDelete, "/event-types/cable-unplugged", nil, http.StatusConflict)); !strings.Contains(body, "in use") {
+	if body := string(c.do(ownerTok, http.MethodDelete, "/event-types/local/cable-unplugged", nil, http.StatusConflict)); !strings.Contains(body, "in use") {
 		t.Fatalf("deleting a type a rule names: %s, want a 409 saying it is in use", body)
 	}
-	c.do(ownerTok, http.MethodDelete, "/event-rules/unplug-watch", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/event-rules/local/unplug-watch", nil, http.StatusNoContent)
 
 	// Delete the custom event type.
-	c.do(ownerTok, http.MethodDelete, "/event-types/cable-unplugged", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/event-types/local/cable-unplugged", nil, http.StatusNoContent)
 
 	// An ungranted user is forbidden to create.
 	noneTok := userWithGrants(t, ctx, dsn, "noevents", nil)
@@ -130,7 +130,7 @@ func TestEventTypePayloadSchemaClearsUnderUpdateMask(t *testing.T) {
 	patch := func(body map[string]any) map[string]json.RawMessage {
 		t.Helper()
 		var got map[string]json.RawMessage
-		if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/event-types/cable-pulled", body, http.StatusOK), &got); err != nil {
+		if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/event-types/local/cable-pulled", body, http.StatusOK), &got); err != nil {
 			t.Fatalf("decode patch: %v", err)
 		}
 		return got
@@ -156,9 +156,9 @@ func TestEventTypePayloadSchemaClearsUnderUpdateMask(t *testing.T) {
 	// Naming the field with no value clears it, on the response and on a re-read.
 	hasSchema("cleared", patch(map[string]any{"update_mask": []string{"payload_schema"}}), "")
 	var reread map[string]json.RawMessage
-	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/event-types/cable-pulled", nil, http.StatusOK), &reread)
+	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/event-types/local/cable-pulled", nil, http.StatusOK), &reread)
 	hasSchema("reread", reread, "")
 	// A mask naming a field the route does not patch is a 422, never a no-op.
-	c.do(ownerTok, http.MethodPatch, "/event-types/cable-pulled",
+	c.do(ownerTok, http.MethodPatch, "/event-types/local/cable-pulled",
 		map[string]any{"update_mask": []string{"name"}}, http.StatusUnprocessableEntity)
 }

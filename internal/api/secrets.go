@@ -30,6 +30,7 @@ type secretTypeBody struct {
 	ID                    string                `json:"id" doc:"The secret type's uuid, the stable handle that survives a rename"`
 	Name                  string                `json:"name" doc:"The name an operator reads and types; renameable"`
 	Label                 string                `json:"label"`
+	Namespace             string                `json:"namespace" doc:"The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"`
 	Official              bool                  `json:"official"`
 	DefaultAdminSensitive bool                  `json:"default_admin_sensitive" doc:"The admin_sensitive value the create form seeds for this type"`
 	Fields                []secretTypeFieldBody `json:"fields"`
@@ -232,7 +233,7 @@ func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		out := &listSecretTypesOutput{}
 		out.Body.SecretTypes = make([]secretTypeBody, 0, len(types))
 		for _, st := range types {
-			b := secretTypeBody{ID: st.ID, Name: st.Name, Label: st.Label, Official: st.Official, DefaultAdminSensitive: st.DefaultAdminSensitive}
+			b := secretTypeBody{ID: st.ID, Name: st.Name, Label: st.Label, Official: st.Official, Namespace: catalogNamespaceOf(st.Official), DefaultAdminSensitive: st.DefaultAdminSensitive}
 			for _, f := range st.Fields {
 				b.Fields = append(b.Fields, secretTypeFieldBody{Name: f.Name, Type: f.Type, Secret: f.Secret, Origin: string(f.Origin)})
 			}

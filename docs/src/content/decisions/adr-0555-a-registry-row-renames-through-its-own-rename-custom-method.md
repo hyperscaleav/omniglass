@@ -8,9 +8,9 @@ refs: [555, 825, 827, 1188]
 
 - **Date:** 2026-10-26 | **Status:** Accepted | **Pages:** [API](/architecture/api/), [core entities](/architecture/core-entities/), [CLI](/developer/cli/), [standards](/admin/standards/)
 - **Decision:** (#555, pre-tag hygiene for 0.1.0, #825.)
-  1. **The rename is a custom method, not a patch field.** `POST /vendors/{id}:rename`,
-     `/drivers/{id}:rename`, `/products/{id}:rename`, `/standards/{id}:rename`, and
-     `/location-types/{id}:rename` take `{"name": "<new>"}` and answer the row as its `GET` reads it.
+  1. **The rename is a custom method, not a patch field.** `POST /vendors/{namespace}/{id}:rename`,
+     `/drivers/{namespace}/{id}:rename`, `/products/{namespace}/{id}:rename`, `/standards/{namespace}/{id}:rename`, and
+     `/location-types/{namespace}/{id}:rename` take `{"name": "<new>"}` and answer the row as its `GET` reads it.
      The issue proposed a name field on each registry's patch struct, which
      [ADR-0076](#adr-0076-a-renameable-human-typed-identifier-stays-in-the-url-and-the-write-returns-the-uuid)
      had already ruled out for every renameable name (a rename is a custom method gated by

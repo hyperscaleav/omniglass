@@ -10,8 +10,8 @@ import { ME_KEY, type Me } from "../lib/auth";
 // the caller holds event_type:create / event_type:update. Data is seeded into the
 // query cache so no server is needed.
 const seed: EventTypeRow[] = [
-  { name: "call-started", label: "Call Started", official: true },
-  { name: "cable-unplugged", label: "Cable unplugged", official: false },
+  { name: "call-started", label: "Call Started", namespace: "og", official: true },
+  { name: "cable-unplugged", label: "Cable unplugged", namespace: "local", official: false },
 ];
 
 const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };

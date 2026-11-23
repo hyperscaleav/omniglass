@@ -1137,7 +1137,7 @@ func lineSource(ev *ogv1.TelemetryBatch, l *ogv1.LogLine) string {
 func deriveMetrics(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwner, reg collection.Catalog, w storage.KeyWriter, t *delivery.Tally) []storage.MetricSampleWrite {
 	var out []storage.MetricSampleWrite
 	for _, dp := range ev.GetMetrics() {
-		mt, ok := reg.Metric(dp.GetName())
+		mt, ok := reg.MetricIn(dp.GetNamespace(), dp.GetName())
 		if !ok {
 			t.Add(delivery.Metric, delivery.RefusedUnregistered, 1)
 			continue // reject-not-project: not a metric_type name
@@ -1147,14 +1147,17 @@ func deriveMetrics(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwn
 			t.Add(delivery.Metric, refused, 1)
 			continue
 		}
+		bare, _ := reg.Metric(dp.GetName())
 		out = append(out, storage.MetricSampleWrite{
-			OwnerKind: arc.Kind,
-			OwnerID:   arc.ID,
-			Key:       dp.GetName(),
-			Instance:  instance,
-			Value:     dp.GetValue(),
-			Source:    laneSource(ev, owner),
-			TS:        sampleTime(ev, dp.GetTs()),
+			OwnerKind:    arc.Kind,
+			OwnerID:      arc.ID,
+			Namespace:    dp.GetNamespace(),
+			BareInEffect: bareInEffect(dp.GetNamespace(), mt.Namespace, bare.Namespace),
+			Key:          dp.GetName(),
+			Instance:     instance,
+			Value:        dp.GetValue(),
+			Source:       laneSource(ev, owner),
+			TS:           sampleTime(ev, dp.GetTs()),
 		})
 	}
 	return out
@@ -1167,7 +1170,7 @@ func deriveMetrics(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwn
 func deriveProperties(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwner, reg collection.Catalog, w storage.KeyWriter, t *delivery.Tally) []storage.PropertySampleWrite {
 	var out []storage.PropertySampleWrite
 	for _, dp := range ev.GetProperties() {
-		pt, ok := reg.Property(dp.GetName())
+		pt, ok := reg.PropertyIn(dp.GetNamespace(), dp.GetName())
 		if !ok {
 			t.Add(delivery.Property, delivery.RefusedUnregistered, 1)
 			continue // reject-not-project: not a property_type name
@@ -1184,14 +1187,17 @@ func deriveProperties(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.Task
 			t.Add(delivery.Property, delivery.RefusedInvalid, 1)
 			continue
 		}
+		bare, _ := reg.Property(dp.GetName())
 		out = append(out, storage.PropertySampleWrite{
-			OwnerKind: arc.Kind,
-			OwnerID:   arc.ID,
-			Key:       dp.GetName(),
-			Instance:  instance,
-			Value:     propertyText(raw),
-			Source:    laneSource(ev, owner),
-			TS:        sampleTime(ev, dp.GetTs()),
+			OwnerKind:    arc.Kind,
+			OwnerID:      arc.ID,
+			Namespace:    dp.GetNamespace(),
+			BareInEffect: bareInEffect(dp.GetNamespace(), pt.Namespace, bare.Namespace),
+			Key:          dp.GetName(),
+			Instance:     instance,
+			Value:        propertyText(raw),
+			Source:       laneSource(ev, owner),
+			TS:           sampleTime(ev, dp.GetTs()),
 		})
 	}
 	return out
@@ -1207,7 +1213,7 @@ func deriveProperties(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.Task
 func deriveEvents(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwner, reg collection.Catalog, w storage.KeyWriter, t *delivery.Tally) []storage.EventWrite {
 	var out []storage.EventWrite
 	for _, dp := range ev.GetEvents() {
-		et, ok := reg.Event(dp.GetName())
+		et, ok := reg.EventIn(dp.GetNamespace(), dp.GetName())
 		if !ok {
 			t.Add(delivery.Event, delivery.RefusedUnregistered, 1)
 			continue // reject-not-project: not an event_type name
@@ -1235,6 +1241,7 @@ func deriveEvents(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwne
 		out = append(out, storage.EventWrite{
 			OwnerKind:  arc.Kind,
 			OwnerID:    arc.ID,
+			Namespace:  dp.GetNamespace(),
 			Key:        dp.GetName(),
 			Instance:   instance,
 			Origin:     "caught",
@@ -1245,6 +1252,16 @@ func deriveEvents(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwne
 		})
 	}
 	return out
+}
+
+// bareInEffect reports whether a sample naming namespace resolved to the row
+// its bare name reaches on the lane, so the event and calc rules reading the
+// key judge it (#1433). The write still names the namespace, which the Gateway
+// reads exactly: a row deleted since this catalog was read refuses the sample
+// rather than the bare name landing it elsewhere (#1457). bare is the
+// namespace of the lane's bare-name row, empty when the bare name reaches none.
+func bareInEffect(namespace, resolved, bare string) bool {
+	return namespace != "" && resolved == bare
 }
 
 // laneInstance resolves a sample's instance discriminator, or refuses the

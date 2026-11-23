@@ -20,7 +20,7 @@ func TestASlotNameAddressesOneSlotPerSystem(t *testing.T) {
 	c, owner := f.c, f.owner
 
 	c.do(owner, http.MethodPost, "/standards", map[string]any{"name": "shadow-std", "label": "Shadow"}, http.StatusCreated)
-	c.do(owner, http.MethodPatch, "/standards/shadow-std/slots/table-mic", map[string]any{
+	c.do(owner, http.MethodPatch, "/standards/local/shadow-std/slots/table-mic", map[string]any{
 		"label": "Table mic", "accepted_types": []string{"video-bar"},
 	}, http.StatusOK)
 	c.do(owner, http.MethodPost, "/systems", map[string]any{"name": "shadow-sys", "standard_id": "shadow-std"}, http.StatusCreated)
@@ -45,7 +45,7 @@ func TestASlotNameAddressesOneSlotPerSystem(t *testing.T) {
 	// The standard declaring a name a conforming system already declares
 	// itself is refused, naming that system.
 	c.do(owner, http.MethodPatch, "/systems/shadow-sys/slots/ceiling-mic", map[string]any{"label": "Ceiling mic"}, http.StatusOK)
-	st, raw = c.send(owner, http.MethodPatch, "/standards/shadow-std/slots/ceiling-mic", map[string]any{"label": "Ceiling mic"})
+	st, raw = c.send(owner, http.MethodPatch, "/standards/local/shadow-std/slots/ceiling-mic", map[string]any{"label": "Ceiling mic"})
 	if st != http.StatusConflict || !strings.Contains(string(raw), "shadow-sys") {
 		t.Fatalf("a standard slot shadowed by a conforming system's own = %d %s, want 409 naming the system", st, raw)
 	}
@@ -90,14 +90,14 @@ func TestASlotCollisionNamesOnlyAReadableSystem(t *testing.T) {
 	})
 	c.do(narrow, http.MethodGet, "/systems/secret-boardroom", nil, http.StatusNotFound)
 
-	st, raw := c.send(narrow, http.MethodPatch, "/standards/redact-std/slots/lectern-mic", map[string]any{"label": "Lectern mic"})
+	st, raw := c.send(narrow, http.MethodPatch, "/standards/local/redact-std/slots/lectern-mic", map[string]any{"label": "Lectern mic"})
 	if st != http.StatusConflict {
 		t.Fatalf("a colliding standard slot by a caller who reads no system = %d %s, want 409", st, raw)
 	}
 	if strings.Contains(string(raw), "secret-boardroom") {
 		t.Fatalf("the refusal names a system the caller cannot read: %s", raw)
 	}
-	st, raw = c.send(owner, http.MethodPatch, "/standards/redact-std/slots/lectern-mic", map[string]any{"label": "Lectern mic"})
+	st, raw = c.send(owner, http.MethodPatch, "/standards/local/redact-std/slots/lectern-mic", map[string]any{"label": "Lectern mic"})
 	if st != http.StatusConflict || !strings.Contains(string(raw), "secret-boardroom") {
 		t.Fatalf("the same refusal to a caller who reads the system = %d %s, want 409 naming it", st, raw)
 	}
@@ -113,7 +113,7 @@ func TestACapacityRefusalNamesOnlyAReadableSystem(t *testing.T) {
 	f := newStaffingFixture(t)
 	c, owner := f.c, f.owner
 	c.do(owner, http.MethodPost, "/standards", map[string]any{"name": "cap-std", "label": "Cap"}, http.StatusCreated)
-	c.do(owner, http.MethodPatch, "/standards/cap-std/slots/table-mic", map[string]any{
+	c.do(owner, http.MethodPatch, "/standards/local/cap-std/slots/table-mic", map[string]any{
 		"label": "Table mic", "accepted_types": []string{"video-bar"},
 	}, http.StatusOK)
 	c.do(owner, http.MethodPost, "/systems", map[string]any{"name": "hidden-boardroom", "standard_id": "cap-std"}, http.StatusCreated)
@@ -137,7 +137,7 @@ func TestACapacityRefusalNamesOnlyAReadableSystem(t *testing.T) {
 
 	// Both systems exceed a cap of 1; the worst is one the caller cannot read,
 	// so the refusal names the one it can.
-	st, raw := c.send(narrow, http.MethodPatch, "/standards/cap-std/slots/table-mic", map[string]any{"capacity": 1})
+	st, raw := c.send(narrow, http.MethodPatch, "/standards/local/cap-std/slots/table-mic", map[string]any{"capacity": 1})
 	if st != http.StatusConflict || !strings.Contains(string(raw), "site-huddle") {
 		t.Fatalf("a capacity below a readable system's staffing = %d %s, want 409 naming site-huddle", st, raw)
 	}
@@ -147,7 +147,7 @@ func TestACapacityRefusalNamesOnlyAReadableSystem(t *testing.T) {
 
 	// Only the unreadable system exceeds a cap of 2: no name, no staffing
 	// count, and no tally of how many such systems there are.
-	st, raw = c.send(narrow, http.MethodPatch, "/standards/cap-std/slots/table-mic", map[string]any{"capacity": 2})
+	st, raw = c.send(narrow, http.MethodPatch, "/standards/local/cap-std/slots/table-mic", map[string]any{"capacity": 2})
 	if st != http.StatusConflict {
 		t.Fatalf("a capacity below an unreadable system's staffing = %d %s, want 409", st, raw)
 	}
@@ -160,7 +160,7 @@ func TestACapacityRefusalNamesOnlyAReadableSystem(t *testing.T) {
 	}
 
 	// The same refusal to a caller who reads the system names it.
-	st, raw = c.send(owner, http.MethodPatch, "/standards/cap-std/slots/table-mic", map[string]any{"capacity": 2})
+	st, raw = c.send(owner, http.MethodPatch, "/standards/local/cap-std/slots/table-mic", map[string]any{"capacity": 2})
 	if st != http.StatusConflict || !strings.Contains(string(raw), "hidden-boardroom") {
 		t.Fatalf("the same refusal to a caller who reads the system = %d %s, want 409 naming it", st, raw)
 	}

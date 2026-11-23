@@ -50,7 +50,7 @@ sibling table of `event_rule` (ADR-0144 ruling 1), with typed columns rather tha
 
 Rules read like a catalog, gated `rule:read` on any grant, and are written with `rule:*` on an
 all-scope grant, as event rules are; every write is audited on the rule's uuid and returns it. A rule
-is addressed by its name or its uuid, and `POST /calc-rules/{name}:rename` moves the name
+is addressed by its name or its uuid, and `POST /calc-rules/{namespace}/{name}:rename` moves the name
 ([ADR-0076](/architecture/decisions/#adr-0076-a-renameable-human-typed-identifier-stays-in-the-url-and-the-write-returns-the-uuid)):
 nothing inside the platform holds it, so a rename bumps no version. The routes are on
 [the API](/architecture/api/).
@@ -256,7 +256,7 @@ it yet: the evaluator judges component samples only (#1002).
 
 ### State and preview
 
-A rule's **state** is what it last did on each owner, read at `GET /calc-rules/{name}/state`: the value,
+A rule's **state** is what it last did on each owner, read at `GET /calc-rules/{namespace}/{name}/state`: the value,
 when and at which version, the inputs with no value, the members skipped and the instances left out as
 stale, an error, since when a system has had no members, and whether the owner is pending (and when a
 deferred mark is due). It lists the owners in the order an operator reads them, failing first, then

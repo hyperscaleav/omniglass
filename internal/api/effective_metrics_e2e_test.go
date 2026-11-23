@@ -68,7 +68,7 @@ func TestComponentMetricsAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/products", map[string]any{
 		"name": "acme-dsp", "label": "Acme DSP", "kind": "device", "component_type": "generic-device",
 	}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPut, "/products/acme-dsp/metrics/room-temperature",
+	c.do(ownerTok, http.MethodPut, "/products/local/acme-dsp/metrics/og/room-temperature",
 		map[string]any{"default_value": 10.5, "required": true}, http.StatusOK)
 	c.do(ownerTok, http.MethodPost, "/components", map[string]any{
 		"name": "dsp-1", "product": "acme-dsp",

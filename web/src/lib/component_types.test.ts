@@ -23,7 +23,7 @@ describe("component_types data layer", () => {
   it("lists the catalog and normalizes a missing default_tags to empty", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse({
-        component_types: [{ id: uuidFor("ct-display"), name: "display", label: "Display", official: true, stem: "display", icon: "monitor", abbrev: "fp" }],
+        component_types: [{ id: uuidFor("ct-display"), name: "display", label: "Display", namespace: "og", official: true, stem: "display", icon: "monitor", abbrev: "fp" }],
       }),
     );
     const rows = await listComponentTypes();
@@ -35,7 +35,7 @@ describe("component_types data layer", () => {
 
   it("creates a custom type under a parent via the typed literal path", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ id: uuidFor("ct-ceiling-mic"), name: "ceiling-mic", label: "Ceiling Mic", official: false, parent: "mic", parent_id: uuidFor("ct-mic") }, 201),
+      jsonResponse({ id: uuidFor("ct-ceiling-mic"), name: "ceiling-mic", label: "Ceiling Mic", namespace: "local", official: false, parent: "mic", parent_id: uuidFor("ct-mic") }, 201),
     );
     await createComponentType({ name: "ceiling-mic", label: "Ceiling Mic", parent_id: "mic" });
     const req = fetchMock.mock.calls[0][0] as Request;
@@ -47,7 +47,7 @@ describe("component_types data layer", () => {
 
   it("updates a type's facts by id, never its parent", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({}));
-    await updateComponentType(uuidFor("ct-mic"), { icon: "mic-2" });
+    await updateComponentType({ namespace: "local", id: uuidFor("ct-mic") }, { icon: "mic-2" });
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("PATCH");
     expect(req.url).toContain(`/api/v1/component-types/${uuidFor("ct-mic")}`);
@@ -65,12 +65,12 @@ describe("component_types data layer", () => {
 // where it has one, its nearest ancestor's where it does not. It is written out
 // per row rather than computed, because computing it in the fixture would
 // reintroduce the very walk this stopped being the console's job.
-const mic: ComponentType = { id: uuidFor("ct-mic"), name: "mic", label: "Microphone", official: true, forked: false, stem: "mic", abbrev: "mic", icon: "mic", resolved_icon: "mic", default_tags: [] };
-const wirelessMic: ComponentType = { id: uuidFor("ct-wireless-mic"), name: "wireless-mic", label: "Wireless Microphone", official: true, forked: false, parent: "mic", parent_id: uuidFor("ct-mic"), resolved_icon: "mic", default_tags: [] };
-const ceilingMic: ComponentType = { id: uuidFor("ct-ceiling-mic"), name: "ceiling-mic", label: "Ceiling Microphone", official: true, forked: false, parent: "mic", parent_id: uuidFor("ct-mic"), resolved_icon: "mic", default_tags: [] };
-const display: ComponentType = { id: uuidFor("ct-display"), name: "display", label: "Display", official: true, forked: false, stem: "display", abbrev: "fp", icon: "monitor", resolved_icon: "monitor", default_tags: [] };
-const interactiveDisplay: ComponentType = { id: uuidFor("ct-interactive-display"), name: "interactive-display", label: "Interactive Display", official: true, forked: false, parent: "display", parent_id: uuidFor("ct-display"), resolved_icon: "monitor", default_tags: [] };
-const genericDevice: ComponentType = { id: uuidFor("ct-generic-device"), name: "generic-device", label: "Generic Device", official: true, forked: false, stem: "device", abbrev: "dev", icon: "box", resolved_icon: "box", default_tags: [] };
+const mic: ComponentType = { id: uuidFor("ct-mic"), name: "mic", label: "Microphone", namespace: "og", official: true, forked: false, stem: "mic", abbrev: "mic", icon: "mic", resolved_icon: "mic", default_tags: [] };
+const wirelessMic: ComponentType = { id: uuidFor("ct-wireless-mic"), name: "wireless-mic", label: "Wireless Microphone", namespace: "og", official: true, forked: false, parent: "mic", parent_id: uuidFor("ct-mic"), resolved_icon: "mic", default_tags: [] };
+const ceilingMic: ComponentType = { id: uuidFor("ct-ceiling-mic"), name: "ceiling-mic", label: "Ceiling Microphone", namespace: "og", official: true, forked: false, parent: "mic", parent_id: uuidFor("ct-mic"), resolved_icon: "mic", default_tags: [] };
+const display: ComponentType = { id: uuidFor("ct-display"), name: "display", label: "Display", namespace: "og", official: true, forked: false, stem: "display", abbrev: "fp", icon: "monitor", resolved_icon: "monitor", default_tags: [] };
+const interactiveDisplay: ComponentType = { id: uuidFor("ct-interactive-display"), name: "interactive-display", label: "Interactive Display", namespace: "og", official: true, forked: false, parent: "display", parent_id: uuidFor("ct-display"), resolved_icon: "monitor", default_tags: [] };
+const genericDevice: ComponentType = { id: uuidFor("ct-generic-device"), name: "generic-device", label: "Generic Device", namespace: "og", official: true, forked: false, stem: "device", abbrev: "dev", icon: "box", resolved_icon: "box", default_tags: [] };
 
 // In the order ListComponentTypes serves: by label (#757). The tree builder
 // groups without sorting, so each level below keeps this order.

@@ -23,11 +23,14 @@ import (
 type PropertySampleWrite struct {
 	OwnerKind string
 	OwnerID   string
-	Key       string
-	Instance  string
-	Value     string
-	Source    string
-	TS        time.Time
+	// Namespace and BareInEffect are read as MetricSampleWrite's.
+	Namespace    string
+	BareInEffect bool
+	Key          string
+	Instance     string
+	Value        string
+	Source       string
+	TS           time.Time
 }
 
 // PropertySample is a stored observed/derived property row (read side). Value
@@ -122,8 +125,10 @@ func (p *PG) writePropertySets(ctx context.Context, tx pgx.Tx, sets []propertySe
 				return 0, fmt.Errorf("storage: property sample %s/%s: %w", ev.OwnerID, ev.Key, err)
 			}
 			arcs = append(arcs, arc)
-			rows[i] = keyedWrite{key: ev.Key, instance: ev.Instance, ownerKind: ev.OwnerKind, owner: arc}
-			marks.add(ev.OwnerKind, arc, rules.LaneProperty, ev.Key)
+			rows[i] = keyedWrite{namespace: ev.Namespace, key: ev.Key, instance: ev.Instance, ownerKind: ev.OwnerKind, owner: arc}
+			if ev.judgedBare() {
+				marks.add(ev.OwnerKind, arc, rules.LaneProperty, ev.Key)
+			}
 		}
 		// Every row is held to its key's writer class, and to the owner it will
 		// land on, before anything lands.
@@ -152,7 +157,7 @@ func (p *PG) writePropertySets(ctx context.Context, tx pgx.Tx, sets []propertySe
 	}
 	// The event rules reading this batch's keys judge each sample as it lands
 	// (#919), in this transaction.
-	eval, err := p.newRuleEvaluator(ctx, tx, sampleKeys(evs, func(e PropertySampleWrite) string { return e.Key }))
+	eval, err := p.newRuleEvaluator(ctx, tx, sampleKeys(bareWrites(evs), func(e PropertySampleWrite) string { return e.Key }))
 	if err != nil {
 		return 0, err
 	}
@@ -203,9 +208,11 @@ func (p *PG) writePropertySets(ctx context.Context, tx pgx.Tx, sets []propertySe
 		}
 		sql := fmt.Sprintf(`with u as (
 				select u.ts, u.owner::uuid as owner, pt.id as type_id, u.instance, u.value, u.source, u.ord
-				from unnest($1::timestamptz[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[])
-					with ordinality as u(ts, owner, key, instance, value, source, ord)
-				left join property_type_in_effect() pt on pt.name = u.key
+				from unnest($1::timestamptz[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $13::text[])
+					with ordinality as u(ts, owner, key, instance, value, source, ns, ord)
+				left join property_type_in_effect() it on it.name = u.key and u.ns = ''
+				left join property_type qt on qt.namespace = u.ns and qt.name = u.key and u.ns <> ''
+				cross join lateral (select coalesce(it.id, qt.id) as id) pt
 			),
 			ins as (
 				insert into property (ts, owner_kind, %[1]s, property_type_id, instance, value, provenance, source, source_rule, source_rule_version, source_rule_id, source_conduit_id)
@@ -221,11 +228,12 @@ func (p *PG) writePropertySets(ctx context.Context, tx pgx.Tx, sets []propertySe
 		instances := make([]string, len(idx))
 		values := make([]string, len(idx))
 		sources := make([]string, len(idx))
+		namespaces := make([]string, len(idx))
 		for j, i := range idx {
 			ts[j], owners[j], keys[j] = stamps[i], arcs[i], evs[i].Key
-			instances[j], values[j], sources[j] = evs[i].Instance, evs[i].Value, evs[i].Source
+			instances[j], values[j], sources[j], namespaces[j] = evs[i].Instance, evs[i].Value, evs[i].Source, evs[i].Namespace
 		}
-		rows, err := tx.Query(ctx, sql, ts, owners, keys, instances, values, sources, kind, provenance, sourceRule, sourceVersion, sourceRuleID, w.sourceConduit())
+		rows, err := tx.Query(ctx, sql, ts, owners, keys, instances, values, sources, kind, provenance, sourceRule, sourceVersion, sourceRuleID, w.sourceConduit(), namespaces)
 		if err == nil {
 			for rows.Next() {
 				var ord int64
@@ -267,7 +275,7 @@ func (p *PG) writePropertySets(ctx context.Context, tx pgx.Tx, sets []propertySe
 		var kinds, owners []string
 		var at []int
 		for i, ev := range evs {
-			if targeted[ev.Key] {
+			if targeted[ev.Key] && ev.judgedBare() {
 				kinds, owners, at = append(kinds, ev.OwnerKind), append(owners, arcs[i]), append(at, i)
 			}
 		}
@@ -307,8 +315,12 @@ func (p *PG) writePropertySets(ctx context.Context, tx pgx.Tx, sets []propertySe
 				return 0, err
 			}
 		}
-		if err := eval.observe(ctx, tx, rules.LaneProperty, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, stamps[i], ev.Value); err != nil {
-			return 0, err
+		// A qualified row is one no rule and no command type addresses: each
+		// reads the key by its bare name, which reaches another row (#1433).
+		if ev.judgedBare() {
+			if err := eval.observe(ctx, tx, rules.LaneProperty, ev.OwnerKind, arcs[i], ev.Key, ev.Instance, stamps[i], ev.Value); err != nil {
+				return 0, err
+			}
 		}
 		landedRows(ctx, tail.Row{Lane: tail.LaneProperty, OwnerKind: ev.OwnerKind, OwnerID: arcs[i], Key: ev.Key, Instance: ev.Instance, TS: stamps[i], Text: ev.Value})
 	}
@@ -485,3 +497,6 @@ func (p *PG) ListPropertySeries(ctx context.Context, ownerKind, ownerRef, key st
 	}
 	return out, rows.Err()
 }
+
+// judgedBare is MetricSampleWrite.judgedBare on the property lane.
+func (w PropertySampleWrite) judgedBare() bool { return w.Namespace == "" || w.BareInEffect }

@@ -33,7 +33,8 @@ func methodsExercised(ctx context.Context, c *http.Client, base string, planted 
 
 	var drivers struct {
 		Drivers []struct {
-			Name string `json:"name"`
+			Namespace string `json:"namespace"`
+			Name      string `json:"name"`
 		} `json:"drivers"`
 	}
 	if err := get("/drivers", &drivers); err != nil {
@@ -47,7 +48,7 @@ func methodsExercised(ctx context.Context, c *http.Client, base string, planted 
 				Listeners []struct{ Emits []struct{ Name string } } `json:"listeners"`
 			} `json:"spec"`
 		}
-		if err := get("/drivers/"+url.PathEscape(d.Name), &one); err != nil {
+		if err := get("/drivers/"+url.PathEscape(d.Namespace)+"/"+url.PathEscape(d.Name), &one); err != nil {
 			return nil, err
 		}
 		if one.Spec == nil {

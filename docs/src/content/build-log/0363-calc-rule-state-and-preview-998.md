@@ -4,7 +4,7 @@ date: 2026-10-22
 refs: [998]
 ---
 
-The fourth slice of epic #525. `GET /calc-rules/{name}/state` reads `calc_rule_state` and `calc_pending`
+The fourth slice of epic #525. `GET /calc-rules/{namespace}/{name}/state` reads `calc_rule_state` and `calc_pending`
 for one rule, fenced in SQL to the owners the component and system read scopes admit, the owner named at
 read time; skipped members and stale instances, stored by component id since #997's review, are named
 only when the caller may read that component and otherwise counted (`skipped_hidden`, `stale_hidden`);

@@ -25,8 +25,8 @@ form: bullet
   `coalesce(the instance's value, the contract default)` with `from_contract` true, UNION the ad-hoc arm), so
   three classifier/instance pairs cannot drift apart. `guardOwnerScope` now scope-checks **every** owner arc on a
   value write, not just the component one. The routes ship regenerated into the OpenAPI document, the cobra
-  CLI, and the typed SPA client: the `/standards` CRUD; `GET /standards/{id}/properties` plus
-  `PUT` / `DELETE .../{property}` (gated `standard:read|update|delete`); `GET /location-types/{id}/properties`
+  CLI, and the typed SPA client: the `/standards` CRUD; `GET /standards/{namespace}/{id}/properties` plus
+  `PUT` / `DELETE .../{property}` (gated `standard:read|update|delete`); `GET /location-types/{namespace}/{id}/properties`
   plus `PUT` / `DELETE .../{property}` (gated `type:*`, the registry CRUD staying at `/types/location`); and the
   value sides `GET /systems/{name}/properties` and `GET /locations/{name}/properties` plus their
   `PUT` / `DELETE .../{property}` (gated `system:*` / `location:*`, ABAC-scoped with a non-disclosing 404 out of

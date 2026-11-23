@@ -142,7 +142,7 @@ function MetricBladeBody(p: { name: string }): JSX.Element {
     if (!confirm(`Delete metric "${r.name}"?`)) return;
     setErr(null);
     try {
-      await deleteMetricType(r.name);
+      await deleteMetricType(r);
       blades.close();
       await qc.invalidateQueries({ queryKey: METRICS_KEY });
     } catch (e) {
@@ -160,7 +160,7 @@ function MetricBladeBody(p: { name: string }): JSX.Element {
       throw new Error("invalid precision"); // keep the blade in edit mode
     }
     try {
-      await updateMetricType(r.name, {
+      await updateMetricType(r, {
         label: label(),
         description: description(),
         unit: unit().trim() || undefined,

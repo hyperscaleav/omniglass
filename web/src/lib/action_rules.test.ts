@@ -19,7 +19,7 @@ import {
 const at = "2026-10-29T00:00:00Z";
 const rule: ActionRule = {
   id: uuidFor("r1"), name: "page-ops", label: "Page ops", on: ["raised", "cleared"], when: "severity_rank >= 40", targets: ["ops-chat"],
-  official: false, opt_out_allowed: false, enabled: true, created_at: at, updated_at: at,
+  namespace: "local", official: false, opt_out_allowed: false, enabled: true, created_at: at, updated_at: at,
 };
 const note = (over: Partial<Notification>): Notification => ({
   id: uuidFor("n"), alarm: "a", attempts: 1, channel: "webhook", component: "display-1", component_id: "c", created_at: at,

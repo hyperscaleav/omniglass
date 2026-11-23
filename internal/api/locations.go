@@ -64,6 +64,7 @@ type locationTypeBody struct {
 	AllowedParentTypes []string          `json:"allowed_parent_types"`
 	LabelRule          string            `json:"label_rule,omitempty" doc:"The label rule locations of this type get; empty falls back to the global rule for locations"`
 	NameRule           *nameRuleReadBody `json:"name_rule,omitempty" doc:"How the platform NAMES locations of this type; absent means an operator names every one of them"`
+	Namespace          string            `json:"namespace" doc:"The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"`
 	Official           bool              `json:"official" doc:"True for a row this release ships. A shipped row is never written by an operator: an edit forks it"`
 	Forked             bool              `json:"forked" doc:"True when this shipped row carries changes of yours overriding it. Restore discards them"`
 }
@@ -107,7 +108,7 @@ func toLocationTypeBody(lt *storage.LocationType) locationTypeBody {
 	return locationTypeBody{
 		ID: lt.ID, Name: lt.Name, Label: lt.Label, Icon: lt.Icon,
 		AllowedParentTypes: lt.AllowedParentTypes, LabelRule: derefStr(lt.LabelRule),
-		NameRule: toNameRuleBody(lt.NameRule), Official: lt.Official, Forked: lt.Forked,
+		NameRule: toNameRuleBody(lt.NameRule), Official: lt.Official, Namespace: catalogNamespaceOf(lt.Official), Forked: lt.Forked,
 	}
 }
 
@@ -137,6 +138,7 @@ type locationTypePathInput struct {
 
 type createLocationTypeInput struct {
 	Body struct {
+		CatalogCreateNamespace
 		Name               string   `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The globally unique name (e.g. wing); \"root\" is reserved"`
 		Label              string   `json:"label" minLength:"1" doc:"What an operator reads in pickers and lists"`
 		Icon               string   `json:"icon,omitempty" doc:"A glyph key; the console falls back to map-pin when empty"`
@@ -317,7 +319,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "update-location-type",
 		Method:      http.MethodPatch,
-		Path:        "/location-types/{id}",
+		Path:        "/location-types/{namespace}/{id}",
 		Summary:     "Update a location type",
 		Description: "Patches a location_type's label, icon, allowed parents, label_rule or name_rule. An unparseable label_rule (or a name_rule that cannot mint a legal name) is a 422 at rule-edit time, never a broken row at create time, and setting a label rule restamps nothing on its own: apply it with /locations:recomputeLabels after seeing the blast radius with :previewLabels. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by location_type:update.",
 	}, "location_type", "update"), func(ctx context.Context, in *updateLocationTypeInput) (*locationTypeOutput, error) {
@@ -345,7 +347,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "restore-location-type",
 		Method:      http.MethodPost,
-		Path:        "/location-types/{id}:restore",
+		Path:        "/location-types/{namespace}/{id}:restore",
 		Summary:     "Restore a location type's shipped values",
 		Description: "Discards your fork of a shipped location_type, so reads return the values this release ships, including a rule a later release WITHDREW. 409 when the row carries no fork of yours. Gated by location_type:update, the same permission that took the fork: restoring is undoing your own edit, not deleting a row.",
 	}, "location_type", "update"), func(ctx context.Context, in *locationTypePathInput) (*locationTypeOutput, error) {
@@ -359,7 +361,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-location-type",
 		Method:        http.MethodDelete,
-		Path:          "/location-types/{id}",
+		Path:          "/location-types/{namespace}/{id}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a location type",
 		Description:   "Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by location_type:delete.",

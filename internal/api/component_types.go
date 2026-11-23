@@ -37,6 +37,7 @@ type componentTypeBody struct {
 	Abbrev       string   `json:"abbrev,omitempty" doc:"A compact form of label; empty inherits the nearest ancestor's"`
 	LabelRule    string   `json:"label_rule,omitempty" doc:"The label rule instances of this type get; empty inherits the nearest ancestor's, then the global rule for components"`
 	DefaultTags  []string `json:"default_tags" doc:"Tags every instance of this type (or a descendant that does not set its own) starts with"`
+	Namespace    string   `json:"namespace" doc:"The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"`
 	Official     bool     `json:"official" doc:"True for a row this release ships. A shipped row is never written by an operator: an edit forks it"`
 	Forked       bool     `json:"forked" doc:"True when this shipped row carries changes of yours overriding it. Restore discards them"`
 	ParentID     *string  `json:"parent_id,omitempty" doc:"The parent component_type's id, the canonical handle; absent for a root type"`
@@ -65,7 +66,7 @@ func toComponentTypeBody(ct *storage.ComponentType, parentName *string) componen
 	b := componentTypeBody{
 		ID: ct.ID.String(), Name: ct.Name, Label: ct.Label,
 		Stem: derefStr(ct.Stem), Icon: derefStr(ct.Icon), Abbrev: derefStr(ct.Abbrev), LabelRule: derefStr(ct.LabelRule),
-		DefaultTags: ct.DefaultTags, Official: ct.Official, Forked: ct.Forked,
+		DefaultTags: ct.DefaultTags, Official: ct.Official, Namespace: catalogNamespaceOf(ct.Official), Forked: ct.Forked,
 	}
 	if ct.ParentID != nil {
 		pid := ct.ParentID.String()
@@ -87,6 +88,7 @@ type componentTypePathInput struct {
 
 type createComponentTypeInput struct {
 	Body struct {
+		CatalogCreateNamespace
 		Name  string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The globally unique name"`
 		Label string `json:"label" minLength:"1" doc:"What an operator reads in pickers and lists"`
 		// A stem is a name prefix (#627 Task 14 mints it straight into
@@ -234,7 +236,7 @@ func registerComponentTypeRoutes(api huma.API, a *authenticator, gw storage.Gate
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "update-component-type",
 		Method:      http.MethodPatch,
-		Path:        "/component-types/{id}",
+		Path:        "/component-types/{namespace}/{id}",
 		Summary:     "Update a component type",
 		Description: "Patches a component_type's label, stem, icon, abbrev, label_rule, or default_tags. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by component_type:update.",
 	}, "component_type", "update"), func(ctx context.Context, in *updateComponentTypeInput) (*componentTypeOutput, error) {
@@ -258,7 +260,7 @@ func registerComponentTypeRoutes(api huma.API, a *authenticator, gw storage.Gate
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "restore-component-type",
 		Method:      http.MethodPost,
-		Path:        "/component-types/{id}:restore",
+		Path:        "/component-types/{namespace}/{id}:restore",
 		Summary:     "Restore a component type's shipped values",
 		Description: "Discards your fork of a shipped component_type, so reads return the values this release ships and later releases can improve them again. 409 when the row carries no fork of yours. Gated by component_type:update, the same permission that took the fork: restoring is undoing your own edit, not deleting a row.",
 	}, "component_type", "update"), func(ctx context.Context, in *componentTypePathInput) (*componentTypeOutput, error) {
@@ -278,7 +280,7 @@ func registerComponentTypeRoutes(api huma.API, a *authenticator, gw storage.Gate
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-component-type",
 		Method:        http.MethodDelete,
-		Path:          "/component-types/{id}",
+		Path:          "/component-types/{namespace}/{id}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a component type",
 		Description:   "Deletes a custom component_type, refused if official (422, forked or not: a fork is an overlay, not ownership) or still a parent of another component_type (409). `:restore` is the only removal a shipped row admits, and it removes your fork, not the row. Gated by component_type:delete.",

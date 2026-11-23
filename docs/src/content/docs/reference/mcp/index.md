@@ -235,7 +235,7 @@ Get a calc rule
 
 Returns one calc rule by name (or uuid). Gated by rule:read.
 
-- Route: `GET /api/v1/calc-rules/{name}`
+- Route: `GET /api/v1/calc-rules/{namespace}/{name}`
 - Gate: `rule:read`
 - Assume: read-only, idempotent
 - Agent class: read
@@ -243,6 +243,7 @@ Returns one calc rule by name (or uuid). Gated by rule:read.
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | yes | The rule's name (its uuid is accepted too) |
+| `namespace` | string | yes | The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318) |
 
 ## `get-calc-rule-state`
 
@@ -250,7 +251,7 @@ Get a calc rule's live state
 
 What a calc rule last did on each owner the caller may read (components by the component read scope, systems by the system read scope), each owner named now: the value it computed, when and at which version, the inputs it found no value of, a system's members that held none and the instances it left out as stale (named when the caller may read the component, else counted), an error, since when a system has had no members, and whether the owner is pending (with when a deferred mark is due). Ordered on the server, failing owners first, then pending, then those it wrote nothing for, then those holding a value, each by name, and at most limit of them; total and the pending depth count every owner the caller may read, listed or not. Gated by rule:read.
 
-- Route: `GET /api/v1/calc-rules/{name}/state`
+- Route: `GET /api/v1/calc-rules/{namespace}/{name}/state`
 - Gate: `rule:read`
 - Assume: read-only, idempotent
 - Agent class: read
@@ -259,6 +260,7 @@ What a calc rule last did on each owner the caller may read (components by the c
 |---|---|---|---|
 | `limit` | integer | no | The most owners to list, in state order: failing, pending, missing an input (or with no members), valued, each by name |
 | `name` | string | yes | The rule's name (its uuid is accepted too) |
+| `namespace` | string | yes | The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318) |
 
 ## `preview-calc-rule`
 
@@ -855,6 +857,7 @@ Creates a custom (non-official) driver. Gated by driver:create.
 |---|---|---|---|
 | `label` | string | yes | What an operator reads in pickers and lists |
 | `name` | string | yes | The globally unique name; renameable |
+| `namespace` | string | no | The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows |
 | `spec` | any | no | The declarative spec body; validated against the catalogs, and a spec that fails validation refuses the write (422) |
 | `version` | string | no | A free-form version string, e.g. 1.0.0 |
 
@@ -864,7 +867,7 @@ Get a driver
 
 Fetches a driver by id. Gated by driver:read.
 
-- Route: `GET /api/v1/drivers/{id}`
+- Route: `GET /api/v1/drivers/{namespace}/{id}`
 - Gate: `driver:read`
 - Assume: read-only, idempotent
 - Agent class: read
@@ -872,6 +875,7 @@ Fetches a driver by id. Gated by driver:read.
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `id` | string | yes | The driver, by name or uuid |
+| `namespace` | string | yes | The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318) |
 
 ## `update-driver`
 
@@ -879,7 +883,7 @@ Update a driver
 
 Patches a custom driver's label or version. Official drivers are read-only (422). Gated by driver:update.
 
-- Route: `PATCH /api/v1/drivers/{id}`
+- Route: `PATCH /api/v1/drivers/{namespace}/{id}`
 - Gate: `driver:update`
 - Assume: destructive
 - Agent class: destructive
@@ -888,6 +892,7 @@ Patches a custom driver's label or version. Official drivers are read-only (422)
 |---|---|---|---|
 | `id` | string | yes | The driver, by name or uuid |
 | `label` | string | no | A new operator-facing label |
+| `namespace` | string | yes | The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318) |
 | `spec` | any | no | A replacement spec body; validated like the create's, refused with a 422 when it cannot be interpreted |
 | `version` | string | no | A new version string, e.g. 1.0.1 |
 
@@ -1078,7 +1083,7 @@ Get an event rule
 
 Returns one event rule by name, with its live state as counts over the components the caller may read. Gated by rule:read.
 
-- Route: `GET /api/v1/event-rules/{name}`
+- Route: `GET /api/v1/event-rules/{namespace}/{name}`
 - Gate: `rule:read`
 - Assume: read-only, idempotent
 - Agent class: read
@@ -1086,6 +1091,7 @@ Returns one event rule by name, with its live state as counts over the component
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | yes | The rule's name |
+| `namespace` | string | yes | The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318) |
 
 ## `get-event-rule-state`
 
@@ -1093,7 +1099,7 @@ Get an event rule's live state
 
 What a rule holds right now: its firings (one per component and instance, whether or not it raises an alarm), the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only firings, alarms and streaks on components the caller may read are listed. Gated by rule:read.
 
-- Route: `GET /api/v1/event-rules/{name}/state`
+- Route: `GET /api/v1/event-rules/{namespace}/{name}/state`
 - Gate: `rule:read`
 - Assume: read-only, idempotent
 - Agent class: read
@@ -1101,6 +1107,7 @@ What a rule holds right now: its firings (one per component and instance, whethe
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | yes | The rule's name |
+| `namespace` | string | yes | The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318) |
 
 ## `preview-event-rule`
 
@@ -1301,7 +1308,7 @@ Preview a notification type against an alarm
 
 Renders the type's subject and text (or a draft of either, sent in the body) against one real alarm, exactly as a delivery of that alarm's transition would carry them, with the facts they read. Writes nothing. The alarm is named by its component and id; without an id, the component's most recently raised alarm. A draft the sandbox refuses is a 422, one that fails to render (its output past the cap) a 422 naming it. Gated by notification_type:read; the component is resolved in the caller's component read scope, so a component outside it is a non-disclosing 404.
 
-- Route: `POST /api/v1/notification-types/{name}:preview`
+- Route: `POST /api/v1/notification-types/{namespace}/{name}:preview`
 - Gate: `notification_type:read`
 - Assume: read-only, idempotent
 - Agent class: read
@@ -1311,6 +1318,7 @@ Renders the type's subject and text (or a draft of either, sent in the body) aga
 | `alarm` | string | no | The alarm's id; absent previews the component's most recently raised alarm |
 | `component` | string | yes | The component the alarm is on, by name or dotted address |
 | `name` | string | yes | The notification type's name or uuid |
+| `namespace` | string | yes | The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318) |
 | `subject` | string | no | A draft subject to render instead of the stored one, so an editor previews before it saves |
 | `text` | string | no | A draft text to render instead of the stored one |
 | `transition` | string | no | The edge to render for; absent reads the alarm's own state (cleared when it is, raised otherwise) |
@@ -1393,7 +1401,7 @@ Get a product
 
 Fetches a product by its name or its uuid. Either form resolves, so `omniglass product get acme-soundbar` and the uuid are interchangeable. Gated by product:read.
 
-- Route: `GET /api/v1/products/{id}`
+- Route: `GET /api/v1/products/{namespace}/{id}`
 - Gate: `product:read`
 - Assume: read-only, idempotent
 - Agent class: read
@@ -1401,6 +1409,7 @@ Fetches a product by its name or its uuid. Either form resolves, so `omniglass p
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `id` | string | yes | The product, by name or uuid |
+| `namespace` | string | yes | The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318) |
 
 ## `list-secret-types`
 

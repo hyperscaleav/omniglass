@@ -26,7 +26,7 @@ const mean: CalcRule = {
   id: uuidFor("calc-room-mean"), name: "room-mean", label: "Room mean", owner_kind: "system",
   selector: { system_types: ["av"] }, inputs: [{ alias: "t", key: "room-temperature", key_id: uuidFor("mt-room-temperature"), lane: "metric" }],
   reduce: { expr: "avg(t)" },
-  output_key: "avg-temp", output_lane: "metric", enabled: true, official: false, version: 2,
+  output_key: "avg-temp", output_lane: "metric", enabled: true, namespace: "local", official: false, version: 2,
   created_at: "2026-10-21T00:00:00Z", updated_at: "2026-10-21T00:00:00Z",
   owners_computed: 2, owners_pending: 1, owners_unsupported: 1, owners_failed: 0,
 };
@@ -34,7 +34,7 @@ const busy: CalcRule = {
   id: uuidFor("calc-busy"), name: "busy", label: "Busy", owner_kind: "component",
   selector: { component_types: [], components: [] },
   inputs: [{ alias: "call", key: "in-call", key_id: uuidFor("pt-in-call"), lane: "property" }, { alias: "n", key: "occupancy-count", key_id: uuidFor("mt-occupancy-count"), lane: "metric" }],
-  reduce: { expr: "any(call) || max(n) > 0" }, output_key: "busy-flag", output_lane: "property", enabled: false, official: false, version: 1,
+  reduce: { expr: "any(call) || max(n) > 0" }, output_key: "busy-flag", output_lane: "property", enabled: false, namespace: "local", official: false, version: 1,
   created_at: "2026-10-21T00:00:00Z", updated_at: "2026-10-21T00:00:00Z",
   owners_computed: 0, owners_pending: 0, owners_unsupported: 0, owners_failed: 0,
   calc_error: { field: "reduce.expr", line: 1, column: 6, message: "unknown name call" },
@@ -53,13 +53,13 @@ const state: CalcRuleState = {
 };
 
 const properties: PropertyRow[] = [
-  { name: "in-call", data_type: "bool", label: "In call", official: false },
-  { name: "busy-flag", data_type: "bool", label: "Busy", official: false },
+  { name: "in-call", data_type: "bool", label: "In call", namespace: "local", official: false },
+  { name: "busy-flag", data_type: "bool", label: "Busy", namespace: "local", official: false },
 ];
 const metrics: MetricRow[] = [
-  { name: "room-temperature", data_type: "float", label: "Room temperature", unit: "C", official: true },
-  { name: "occupancy-count", data_type: "int", label: "Occupancy", official: true },
-  { name: "avg-temp", data_type: "float", label: "Average temperature", official: false },
+  { name: "room-temperature", data_type: "float", label: "Room temperature", unit: "C", namespace: "og", official: true },
+  { name: "occupancy-count", data_type: "int", label: "Occupancy", namespace: "og", official: true },
+  { name: "avg-temp", data_type: "float", label: "Average temperature", namespace: "local", official: false },
 ];
 
 const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], fleet_permissions: [">"], grants: [{ role: "owner", scope_kind: "all" }] };

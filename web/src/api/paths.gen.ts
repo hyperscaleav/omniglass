@@ -20,9 +20,9 @@ export interface paths {
       error: og.createActionRuleResponseError["data"];
     };
   };
-  "/action-rules/{name}": {
+  "/action-rules/{namespace}/{name}": {
     get: {
-      path: { "name": string };
+      path: { "namespace": string; "name": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -30,7 +30,7 @@ export interface paths {
       error: og.getActionRuleResponseError["data"];
     };
     delete: {
-      path: { "name": string };
+      path: { "namespace": string; "name": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -38,17 +38,17 @@ export interface paths {
       error: og.deleteActionRuleResponseError["data"];
     };
     patch: {
-      path: { "name": string };
+      path: { "namespace": string; "name": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.updateActionRule>[1]>;
+      body: NonNullable<Parameters<typeof og.updateActionRule>[2]>;
       bodyRequired: true;
       data: og.updateActionRuleResponseSuccess["data"];
       error: og.updateActionRuleResponseError["data"];
     };
   };
-  "/action-rules/{name}:optIn": {
+  "/action-rules/{namespace}/{name}:optIn": {
     post: {
-      path: { "name": string };
+      path: { "namespace": string; "name": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -56,9 +56,9 @@ export interface paths {
       error: og.optInActionRuleResponseError["data"];
     };
   };
-  "/action-rules/{name}:optOut": {
+  "/action-rules/{namespace}/{name}:optOut": {
     post: {
-      path: { "name": string };
+      path: { "namespace": string; "name": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -452,9 +452,9 @@ export interface paths {
       error: og.createCalcRuleResponseError["data"];
     };
   };
-  "/calc-rules/{name}": {
+  "/calc-rules/{namespace}/{name}": {
     get: {
-      path: { "name": string };
+      path: { "namespace": string; "name": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -462,7 +462,7 @@ export interface paths {
       error: og.getCalcRuleResponseError["data"];
     };
     delete: {
-      path: { "name": string };
+      path: { "namespace": string; "name": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -470,29 +470,29 @@ export interface paths {
       error: og.deleteCalcRuleResponseError["data"];
     };
     patch: {
-      path: { "name": string };
+      path: { "namespace": string; "name": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.updateCalcRule>[1]>;
+      body: NonNullable<Parameters<typeof og.updateCalcRule>[2]>;
       bodyRequired: true;
       data: og.updateCalcRuleResponseSuccess["data"];
       error: og.updateCalcRuleResponseError["data"];
     };
   };
-  "/calc-rules/{name}/state": {
+  "/calc-rules/{namespace}/{name}/state": {
     get: {
-      path: { "name": string };
-      query: NonNullable<Parameters<typeof og.getCalcRuleState>[1]>;
+      path: { "namespace": string; "name": string };
+      query: NonNullable<Parameters<typeof og.getCalcRuleState>[2]>;
       body: never;
       bodyRequired: false;
       data: og.getCalcRuleStateResponseSuccess["data"];
       error: og.getCalcRuleStateResponseError["data"];
     };
   };
-  "/calc-rules/{name}:rename": {
+  "/calc-rules/{namespace}/{name}:rename": {
     post: {
-      path: { "name": string };
+      path: { "namespace": string; "name": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.renameCalcRule>[1]>;
+      body: NonNullable<Parameters<typeof og.renameCalcRule>[2]>;
       bodyRequired: true;
       data: og.renameCalcRuleResponseSuccess["data"];
       error: og.renameCalcRuleResponseError["data"];
@@ -526,9 +526,9 @@ export interface paths {
       error: og.createCommandTypeResponseError["data"];
     };
   };
-  "/command-types/{name}": {
+  "/command-types/{namespace}/{name}": {
     get: {
-      path: { "name": string };
+      path: { "namespace": string; "name": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -536,7 +536,7 @@ export interface paths {
       error: og.getCommandTypeResponseError["data"];
     };
     delete: {
-      path: { "name": string };
+      path: { "namespace": string; "name": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -544,9 +544,9 @@ export interface paths {
       error: og.deleteCommandTypeResponseError["data"];
     };
     patch: {
-      path: { "name": string };
+      path: { "namespace": string; "name": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.updateCommandType>[1]>;
+      body: NonNullable<Parameters<typeof og.updateCommandType>[2]>;
       bodyRequired: true;
       data: og.updateCommandTypeResponseSuccess["data"];
       error: og.updateCommandTypeResponseError["data"];
@@ -570,9 +570,9 @@ export interface paths {
       error: og.createComponentTypeResponseError["data"];
     };
   };
-  "/component-types/{id}": {
+  "/component-types/{namespace}/{id}": {
     delete: {
-      path: { "id": string };
+      path: { "namespace": string; "id": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -580,17 +580,17 @@ export interface paths {
       error: og.deleteComponentTypeResponseError["data"];
     };
     patch: {
-      path: { "id": string };
+      path: { "namespace": string; "id": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.updateComponentType>[1]>;
+      body: NonNullable<Parameters<typeof og.updateComponentType>[2]>;
       bodyRequired: true;
       data: og.updateComponentTypeResponseSuccess["data"];
       error: og.updateComponentTypeResponseError["data"];
     };
   };
-  "/component-types/{id}:restore": {
+  "/component-types/{namespace}/{id}:restore": {
     post: {
-      path: { "id": string };
+      path: { "namespace": string; "id": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -1110,9 +1110,9 @@ export interface paths {
       error: og.createDriverResponseError["data"];
     };
   };
-  "/drivers/{id}": {
+  "/drivers/{namespace}/{id}": {
     get: {
-      path: { "id": string };
+      path: { "namespace": string; "id": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -1120,7 +1120,7 @@ export interface paths {
       error: og.getDriverResponseError["data"];
     };
     delete: {
-      path: { "id": string };
+      path: { "namespace": string; "id": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -1128,19 +1128,19 @@ export interface paths {
       error: og.deleteDriverResponseError["data"];
     };
     patch: {
-      path: { "id": string };
+      path: { "namespace": string; "id": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.updateDriver>[1]>;
+      body: NonNullable<Parameters<typeof og.updateDriver>[2]>;
       bodyRequired: true;
       data: og.updateDriverResponseSuccess["data"];
       error: og.updateDriverResponseError["data"];
     };
   };
-  "/drivers/{id}:rename": {
+  "/drivers/{namespace}/{id}:rename": {
     post: {
-      path: { "id": string };
+      path: { "namespace": string; "id": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.renameDriver>[1]>;
+      body: NonNullable<Parameters<typeof og.renameDriver>[2]>;
       bodyRequired: true;
       data: og.renameDriverResponseSuccess["data"];
       error: og.renameDriverResponseError["data"];
@@ -1258,9 +1258,9 @@ export interface paths {
       error: og.createEventRuleResponseError["data"];
     };
   };
-  "/event-rules/{name}": {
+  "/event-rules/{namespace}/{name}": {
     get: {
-      path: { "name": string };
+      path: { "namespace": string; "name": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -1268,7 +1268,7 @@ export interface paths {
       error: og.getEventRuleResponseError["data"];
     };
     delete: {
-      path: { "name": string };
+      path: { "namespace": string; "name": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -1276,17 +1276,17 @@ export interface paths {
       error: og.deleteEventRuleResponseError["data"];
     };
     patch: {
-      path: { "name": string };
+      path: { "namespace": string; "name": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.updateEventRule>[1]>;
+      body: NonNullable<Parameters<typeof og.updateEventRule>[2]>;
       bodyRequired: true;
       data: og.updateEventRuleResponseSuccess["data"];
       error: og.updateEventRuleResponseError["data"];
     };
   };
-  "/event-rules/{name}/state": {
+  "/event-rules/{namespace}/{name}/state": {
     get: {
-      path: { "name": string };
+      path: { "namespace": string; "name": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -1294,11 +1294,11 @@ export interface paths {
       error: og.getEventRuleStateResponseError["data"];
     };
   };
-  "/event-rules/{name}:rename": {
+  "/event-rules/{namespace}/{name}:rename": {
     post: {
-      path: { "name": string };
+      path: { "namespace": string; "name": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.renameEventRule>[1]>;
+      body: NonNullable<Parameters<typeof og.renameEventRule>[2]>;
       bodyRequired: true;
       data: og.renameEventRuleResponseSuccess["data"];
       error: og.renameEventRuleResponseError["data"];
@@ -1332,9 +1332,9 @@ export interface paths {
       error: og.createEventTypeResponseError["data"];
     };
   };
-  "/event-types/{name}": {
+  "/event-types/{namespace}/{name}": {
     get: {
-      path: { "name": string };
+      path: { "namespace": string; "name": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -1342,7 +1342,7 @@ export interface paths {
       error: og.getEventTypeResponseError["data"];
     };
     delete: {
-      path: { "name": string };
+      path: { "namespace": string; "name": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -1350,9 +1350,9 @@ export interface paths {
       error: og.deleteEventTypeResponseError["data"];
     };
     patch: {
-      path: { "name": string };
+      path: { "namespace": string; "name": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.updateEventType>[1]>;
+      body: NonNullable<Parameters<typeof og.updateEventType>[2]>;
       bodyRequired: true;
       data: og.updateEventTypeResponseSuccess["data"];
       error: og.updateEventTypeResponseError["data"];
@@ -1442,9 +1442,9 @@ export interface paths {
       error: og.createLocationTypeResponseError["data"];
     };
   };
-  "/location-types/{id}": {
+  "/location-types/{namespace}/{id}": {
     delete: {
-      path: { "id": string };
+      path: { "namespace": string; "id": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -1452,17 +1452,17 @@ export interface paths {
       error: og.deleteLocationTypeResponseError["data"];
     };
     patch: {
-      path: { "id": string };
+      path: { "namespace": string; "id": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.updateLocationType>[1]>;
+      body: NonNullable<Parameters<typeof og.updateLocationType>[2]>;
       bodyRequired: true;
       data: og.updateLocationTypeResponseSuccess["data"];
       error: og.updateLocationTypeResponseError["data"];
     };
   };
-  "/location-types/{id}/metrics": {
+  "/location-types/{namespace}/{id}/metrics": {
     get: {
-      path: { "id": string };
+      path: { "namespace": string; "id": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -1470,17 +1470,17 @@ export interface paths {
       error: og.listLocationTypeMetricsResponseError["data"];
     };
   };
-  "/location-types/{id}/metrics/{metric}": {
+  "/location-types/{namespace}/{id}/metrics/{metric_namespace}/{metric}": {
     put: {
-      path: { "id": string; "metric": string };
+      path: { "namespace": string; "metric_namespace": string; "id": string; "metric": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.setLocationTypeMetric>[2]>;
+      body: NonNullable<Parameters<typeof og.setLocationTypeMetric>[4]>;
       bodyRequired: true;
       data: og.setLocationTypeMetricResponseSuccess["data"];
       error: og.setLocationTypeMetricResponseError["data"];
     };
     delete: {
-      path: { "id": string; "metric": string };
+      path: { "namespace": string; "metric_namespace": string; "id": string; "metric": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -1488,9 +1488,9 @@ export interface paths {
       error: og.deleteLocationTypeMetricResponseError["data"];
     };
   };
-  "/location-types/{id}/properties": {
+  "/location-types/{namespace}/{id}/properties": {
     get: {
-      path: { "id": string };
+      path: { "namespace": string; "id": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -1498,17 +1498,17 @@ export interface paths {
       error: og.listLocationTypePropertiesResponseError["data"];
     };
   };
-  "/location-types/{id}/properties/{property}": {
+  "/location-types/{namespace}/{id}/properties/{property_namespace}/{property}": {
     put: {
-      path: { "id": string; "property": string };
+      path: { "namespace": string; "property_namespace": string; "id": string; "property": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.setLocationTypeProperty>[2]>;
+      body: NonNullable<Parameters<typeof og.setLocationTypeProperty>[4]>;
       bodyRequired: true;
       data: og.setLocationTypePropertyResponseSuccess["data"];
       error: og.setLocationTypePropertyResponseError["data"];
     };
     delete: {
-      path: { "id": string; "property": string };
+      path: { "namespace": string; "property_namespace": string; "id": string; "property": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -1516,19 +1516,19 @@ export interface paths {
       error: og.deleteLocationTypePropertyResponseError["data"];
     };
   };
-  "/location-types/{id}:rename": {
+  "/location-types/{namespace}/{id}:rename": {
     post: {
-      path: { "id": string };
+      path: { "namespace": string; "id": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.renameLocationType>[1]>;
+      body: NonNullable<Parameters<typeof og.renameLocationType>[2]>;
       bodyRequired: true;
       data: og.renameLocationTypeResponseSuccess["data"];
       error: og.renameLocationTypeResponseError["data"];
     };
   };
-  "/location-types/{id}:restore": {
+  "/location-types/{namespace}/{id}:restore": {
     post: {
-      path: { "id": string };
+      path: { "namespace": string; "id": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -1766,9 +1766,9 @@ export interface paths {
       error: og.createMetricTypeResponseError["data"];
     };
   };
-  "/metric-types/{name}": {
+  "/metric-types/{namespace}/{name}": {
     get: {
-      path: { "name": string };
+      path: { "namespace": string; "name": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -1776,7 +1776,7 @@ export interface paths {
       error: og.getMetricTypeResponseError["data"];
     };
     delete: {
-      path: { "name": string };
+      path: { "namespace": string; "name": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -1784,19 +1784,19 @@ export interface paths {
       error: og.deleteMetricTypeResponseError["data"];
     };
     patch: {
-      path: { "name": string };
+      path: { "namespace": string; "name": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.updateMetricType>[1]>;
+      body: NonNullable<Parameters<typeof og.updateMetricType>[2]>;
       bodyRequired: true;
       data: og.updateMetricTypeResponseSuccess["data"];
       error: og.updateMetricTypeResponseError["data"];
     };
   };
-  "/metric-types/{name}:setRetention": {
+  "/metric-types/{namespace}/{name}:setRetention": {
     post: {
-      path: { "name": string };
+      path: { "namespace": string; "name": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.setMetricTypeRetention>[1]>;
+      body: NonNullable<Parameters<typeof og.setMetricTypeRetention>[2]>;
       bodyRequired: true;
       data: og.setMetricTypeRetentionResponseSuccess["data"];
       error: og.setMetricTypeRetentionResponseError["data"];
@@ -1884,19 +1884,19 @@ export interface paths {
       error: og.createNotificationTypeResponseError["data"];
     };
   };
-  "/notification-types/{id}:rename": {
+  "/notification-types/{namespace}/{id}:rename": {
     post: {
-      path: { "id": string };
+      path: { "namespace": string; "id": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.renameNotificationType>[1]>;
+      body: NonNullable<Parameters<typeof og.renameNotificationType>[2]>;
       bodyRequired: true;
       data: og.renameNotificationTypeResponseSuccess["data"];
       error: og.renameNotificationTypeResponseError["data"];
     };
   };
-  "/notification-types/{name}": {
+  "/notification-types/{namespace}/{name}": {
     get: {
-      path: { "name": string };
+      path: { "namespace": string; "name": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -1904,7 +1904,7 @@ export interface paths {
       error: og.getNotificationTypeResponseError["data"];
     };
     delete: {
-      path: { "name": string };
+      path: { "namespace": string; "name": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -1912,19 +1912,19 @@ export interface paths {
       error: og.deleteNotificationTypeResponseError["data"];
     };
     patch: {
-      path: { "name": string };
+      path: { "namespace": string; "name": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.updateNotificationType>[1]>;
+      body: NonNullable<Parameters<typeof og.updateNotificationType>[2]>;
       bodyRequired: true;
       data: og.updateNotificationTypeResponseSuccess["data"];
       error: og.updateNotificationTypeResponseError["data"];
     };
   };
-  "/notification-types/{name}:preview": {
+  "/notification-types/{namespace}/{name}:preview": {
     post: {
-      path: { "name": string };
+      path: { "namespace": string; "name": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.previewNotificationType>[1]>;
+      body: NonNullable<Parameters<typeof og.previewNotificationType>[2]>;
       bodyRequired: true;
       data: og.previewNotificationTypeResponseSuccess["data"];
       error: og.previewNotificationTypeResponseError["data"];
@@ -2122,9 +2122,9 @@ export interface paths {
       error: og.createProductResponseError["data"];
     };
   };
-  "/products/{id}": {
+  "/products/{namespace}/{id}": {
     get: {
-      path: { "id": string };
+      path: { "namespace": string; "id": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -2132,7 +2132,7 @@ export interface paths {
       error: og.getProductResponseError["data"];
     };
     delete: {
-      path: { "id": string };
+      path: { "namespace": string; "id": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -2140,17 +2140,17 @@ export interface paths {
       error: og.deleteProductResponseError["data"];
     };
     patch: {
-      path: { "id": string };
+      path: { "namespace": string; "id": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.updateProduct>[1]>;
+      body: NonNullable<Parameters<typeof og.updateProduct>[2]>;
       bodyRequired: true;
       data: og.updateProductResponseSuccess["data"];
       error: og.updateProductResponseError["data"];
     };
   };
-  "/products/{id}/metrics": {
+  "/products/{namespace}/{id}/metrics": {
     get: {
-      path: { "id": string };
+      path: { "namespace": string; "id": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -2158,17 +2158,17 @@ export interface paths {
       error: og.listProductMetricsResponseError["data"];
     };
   };
-  "/products/{id}/metrics/{metric}": {
+  "/products/{namespace}/{id}/metrics/{metric_namespace}/{metric}": {
     put: {
-      path: { "id": string; "metric": string };
+      path: { "namespace": string; "metric_namespace": string; "id": string; "metric": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.setProductMetric>[2]>;
+      body: NonNullable<Parameters<typeof og.setProductMetric>[4]>;
       bodyRequired: true;
       data: og.setProductMetricResponseSuccess["data"];
       error: og.setProductMetricResponseError["data"];
     };
     delete: {
-      path: { "id": string; "metric": string };
+      path: { "namespace": string; "metric_namespace": string; "id": string; "metric": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -2176,9 +2176,9 @@ export interface paths {
       error: og.deleteProductMetricResponseError["data"];
     };
   };
-  "/products/{id}/properties": {
+  "/products/{namespace}/{id}/properties": {
     get: {
-      path: { "id": string };
+      path: { "namespace": string; "id": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -2186,17 +2186,17 @@ export interface paths {
       error: og.listProductPropertiesResponseError["data"];
     };
   };
-  "/products/{id}/properties/{property}": {
+  "/products/{namespace}/{id}/properties/{property_namespace}/{property}": {
     put: {
-      path: { "id": string; "property": string };
+      path: { "namespace": string; "property_namespace": string; "id": string; "property": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.setProductProperty>[2]>;
+      body: NonNullable<Parameters<typeof og.setProductProperty>[4]>;
       bodyRequired: true;
       data: og.setProductPropertyResponseSuccess["data"];
       error: og.setProductPropertyResponseError["data"];
     };
     delete: {
-      path: { "id": string; "property": string };
+      path: { "namespace": string; "property_namespace": string; "id": string; "property": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -2204,11 +2204,11 @@ export interface paths {
       error: og.deleteProductPropertyResponseError["data"];
     };
   };
-  "/products/{id}:rename": {
+  "/products/{namespace}/{id}:rename": {
     post: {
-      path: { "id": string };
+      path: { "namespace": string; "id": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.renameProduct>[1]>;
+      body: NonNullable<Parameters<typeof og.renameProduct>[2]>;
       bodyRequired: true;
       data: og.renameProductResponseSuccess["data"];
       error: og.renameProductResponseError["data"];
@@ -2232,9 +2232,9 @@ export interface paths {
       error: og.createPropertyTypeResponseError["data"];
     };
   };
-  "/property-types/{name}": {
+  "/property-types/{namespace}/{name}": {
     get: {
-      path: { "name": string };
+      path: { "namespace": string; "name": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -2242,7 +2242,7 @@ export interface paths {
       error: og.getPropertyTypeResponseError["data"];
     };
     delete: {
-      path: { "name": string };
+      path: { "namespace": string; "name": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -2250,19 +2250,19 @@ export interface paths {
       error: og.deletePropertyTypeResponseError["data"];
     };
     patch: {
-      path: { "name": string };
+      path: { "namespace": string; "name": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.updatePropertyType>[1]>;
+      body: NonNullable<Parameters<typeof og.updatePropertyType>[2]>;
       bodyRequired: true;
       data: og.updatePropertyTypeResponseSuccess["data"];
       error: og.updatePropertyTypeResponseError["data"];
     };
   };
-  "/property-types/{name}:setRetention": {
+  "/property-types/{namespace}/{name}:setRetention": {
     post: {
-      path: { "name": string };
+      path: { "namespace": string; "name": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.setPropertyTypeRetention>[1]>;
+      body: NonNullable<Parameters<typeof og.setPropertyTypeRetention>[2]>;
       bodyRequired: true;
       data: og.setPropertyTypeRetentionResponseSuccess["data"];
       error: og.setPropertyTypeRetentionResponseError["data"];
@@ -2410,9 +2410,9 @@ export interface paths {
       error: og.createSeverityLevelResponseError["data"];
     };
   };
-  "/severity-levels/{name}": {
+  "/severity-levels/{namespace}/{name}": {
     get: {
-      path: { "name": string };
+      path: { "namespace": string; "name": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -2420,7 +2420,7 @@ export interface paths {
       error: og.getSeverityLevelResponseError["data"];
     };
     delete: {
-      path: { "name": string };
+      path: { "namespace": string; "name": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -2428,9 +2428,9 @@ export interface paths {
       error: og.deleteSeverityLevelResponseError["data"];
     };
     patch: {
-      path: { "name": string };
+      path: { "namespace": string; "name": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.updateSeverityLevel>[1]>;
+      body: NonNullable<Parameters<typeof og.updateSeverityLevel>[2]>;
       bodyRequired: true;
       data: og.updateSeverityLevelResponseSuccess["data"];
       error: og.updateSeverityLevelResponseError["data"];
@@ -2484,9 +2484,9 @@ export interface paths {
       error: og.createStandardResponseError["data"];
     };
   };
-  "/standards/{id}": {
+  "/standards/{namespace}/{id}": {
     get: {
-      path: { "id": string };
+      path: { "namespace": string; "id": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -2494,7 +2494,7 @@ export interface paths {
       error: og.getStandardResponseError["data"];
     };
     delete: {
-      path: { "id": string };
+      path: { "namespace": string; "id": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -2502,17 +2502,17 @@ export interface paths {
       error: og.deleteStandardResponseError["data"];
     };
     patch: {
-      path: { "id": string };
+      path: { "namespace": string; "id": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.updateStandard>[1]>;
+      body: NonNullable<Parameters<typeof og.updateStandard>[2]>;
       bodyRequired: true;
       data: og.updateStandardResponseSuccess["data"];
       error: og.updateStandardResponseError["data"];
     };
   };
-  "/standards/{id}/metrics": {
+  "/standards/{namespace}/{id}/metrics": {
     get: {
-      path: { "id": string };
+      path: { "namespace": string; "id": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -2520,17 +2520,17 @@ export interface paths {
       error: og.listStandardMetricsResponseError["data"];
     };
   };
-  "/standards/{id}/metrics/{metric}": {
+  "/standards/{namespace}/{id}/metrics/{metric_namespace}/{metric}": {
     put: {
-      path: { "id": string; "metric": string };
+      path: { "namespace": string; "metric_namespace": string; "id": string; "metric": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.setStandardMetric>[2]>;
+      body: NonNullable<Parameters<typeof og.setStandardMetric>[4]>;
       bodyRequired: true;
       data: og.setStandardMetricResponseSuccess["data"];
       error: og.setStandardMetricResponseError["data"];
     };
     delete: {
-      path: { "id": string; "metric": string };
+      path: { "namespace": string; "metric_namespace": string; "id": string; "metric": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -2538,9 +2538,9 @@ export interface paths {
       error: og.deleteStandardMetricResponseError["data"];
     };
   };
-  "/standards/{id}/properties": {
+  "/standards/{namespace}/{id}/properties": {
     get: {
-      path: { "id": string };
+      path: { "namespace": string; "id": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -2548,17 +2548,17 @@ export interface paths {
       error: og.listStandardPropertiesResponseError["data"];
     };
   };
-  "/standards/{id}/properties/{property}": {
+  "/standards/{namespace}/{id}/properties/{property_namespace}/{property}": {
     put: {
-      path: { "id": string; "property": string };
+      path: { "namespace": string; "property_namespace": string; "id": string; "property": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.setStandardProperty>[2]>;
+      body: NonNullable<Parameters<typeof og.setStandardProperty>[4]>;
       bodyRequired: true;
       data: og.setStandardPropertyResponseSuccess["data"];
       error: og.setStandardPropertyResponseError["data"];
     };
     delete: {
-      path: { "id": string; "property": string };
+      path: { "namespace": string; "property_namespace": string; "id": string; "property": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -2566,9 +2566,9 @@ export interface paths {
       error: og.deleteStandardPropertyResponseError["data"];
     };
   };
-  "/standards/{id}/slots": {
+  "/standards/{namespace}/{id}/slots": {
     get: {
-      path: { "id": string };
+      path: { "namespace": string; "id": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -2576,9 +2576,9 @@ export interface paths {
       error: og.listStandardSlotsResponseError["data"];
     };
   };
-  "/standards/{id}/slots/{slot}": {
+  "/standards/{namespace}/{id}/slots/{slot}": {
     delete: {
-      path: { "id": string; "slot": string };
+      path: { "namespace": string; "id": string; "slot": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -2586,19 +2586,19 @@ export interface paths {
       error: og.deleteStandardSlotResponseError["data"];
     };
     patch: {
-      path: { "id": string; "slot": string };
+      path: { "namespace": string; "id": string; "slot": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.setStandardSlot>[2]>;
+      body: NonNullable<Parameters<typeof og.setStandardSlot>[3]>;
       bodyRequired: true;
       data: og.setStandardSlotResponseSuccess["data"];
       error: og.setStandardSlotResponseError["data"];
     };
   };
-  "/standards/{id}:rename": {
+  "/standards/{namespace}/{id}:rename": {
     post: {
-      path: { "id": string };
+      path: { "namespace": string; "id": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.renameStandard>[1]>;
+      body: NonNullable<Parameters<typeof og.renameStandard>[2]>;
       bodyRequired: true;
       data: og.renameStandardResponseSuccess["data"];
       error: og.renameStandardResponseError["data"];
@@ -2632,9 +2632,9 @@ export interface paths {
       error: og.createSystemTypeResponseError["data"];
     };
   };
-  "/system-types/{id}": {
+  "/system-types/{namespace}/{id}": {
     delete: {
-      path: { "id": string };
+      path: { "namespace": string; "id": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -2642,9 +2642,9 @@ export interface paths {
       error: og.deleteSystemTypeResponseError["data"];
     };
     patch: {
-      path: { "id": string };
+      path: { "namespace": string; "id": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.updateSystemType>[1]>;
+      body: NonNullable<Parameters<typeof og.updateSystemType>[2]>;
       bodyRequired: true;
       data: og.updateSystemTypeResponseSuccess["data"];
       error: og.updateSystemTypeResponseError["data"];
@@ -3530,9 +3530,9 @@ export interface paths {
       error: og.createVendorResponseError["data"];
     };
   };
-  "/vendors/{id}": {
+  "/vendors/{namespace}/{id}": {
     get: {
-      path: { "id": string };
+      path: { "namespace": string; "id": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -3540,7 +3540,7 @@ export interface paths {
       error: og.getVendorResponseError["data"];
     };
     delete: {
-      path: { "id": string };
+      path: { "namespace": string; "id": string };
       query: never;
       body: never;
       bodyRequired: false;
@@ -3548,19 +3548,19 @@ export interface paths {
       error: og.deleteVendorResponseError["data"];
     };
     patch: {
-      path: { "id": string };
+      path: { "namespace": string; "id": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.updateVendor>[1]>;
+      body: NonNullable<Parameters<typeof og.updateVendor>[2]>;
       bodyRequired: true;
       data: og.updateVendorResponseSuccess["data"];
       error: og.updateVendorResponseError["data"];
     };
   };
-  "/vendors/{id}:rename": {
+  "/vendors/{namespace}/{id}:rename": {
     post: {
-      path: { "id": string };
+      path: { "namespace": string; "id": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.renameVendor>[1]>;
+      body: NonNullable<Parameters<typeof og.renameVendor>[2]>;
       bodyRequired: true;
       data: og.renameVendorResponseSuccess["data"];
       error: og.renameVendorResponseError["data"];

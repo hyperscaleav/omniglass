@@ -14,9 +14,9 @@ import { uuidFor } from "../lib/testids";
 // against a real alarm through the server, drafts included while editing.
 const at = "2026-10-28T00:00:00Z";
 const seed: NotificationTypeRow[] = [
-  { id: uuidFor("alarm-raised"), name: "alarm-raised", label: "Alarm raised", subject: "[{{.SeverityLabel}}] {{.ComponentLabel}}", text: "{{.Message}}", official: true, created_at: at, updated_at: at },
-  { id: uuidFor("alarm-cleared"), name: "alarm-cleared", label: "Alarm cleared", subject: "[Cleared] {{.ComponentLabel}}", text: "{{.Message}}", official: true, created_at: at, updated_at: at },
-  { id: uuidFor("page-oncall"), name: "page-oncall", label: "Page on-call", subject: "{{.Severity | upper}} {{.Component}}", text: "{{.Message}}", official: false, created_at: at, updated_at: at },
+  { id: uuidFor("alarm-raised"), name: "alarm-raised", label: "Alarm raised", subject: "[{{.SeverityLabel}}] {{.ComponentLabel}}", text: "{{.Message}}", namespace: "og", official: true, created_at: at, updated_at: at },
+  { id: uuidFor("alarm-cleared"), name: "alarm-cleared", label: "Alarm cleared", subject: "[Cleared] {{.ComponentLabel}}", text: "{{.Message}}", namespace: "og", official: true, created_at: at, updated_at: at },
+  { id: uuidFor("page-oncall"), name: "page-oncall", label: "Page on-call", subject: "{{.Severity | upper}} {{.Component}}", text: "{{.Message}}", namespace: "local", official: false, created_at: at, updated_at: at },
 ];
 const comps = [{ id: uuidFor("display-1"), name: "display-1", label: "Lobby display", system_count: 0 }] as Component[];
 

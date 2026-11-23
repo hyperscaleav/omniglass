@@ -46,6 +46,9 @@ components:
           type: string
         name:
           type: string
+        namespace:
+          description: "The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"
+          type: string
         notification_type:
           description: The notification type it sends, by name; absent sends the official one for the transition (alarm-raised, alarm-cleared)
           type: string
@@ -85,6 +88,7 @@ components:
         - targets
         - opt_out_allowed
         - enabled
+        - namespace
         - official
         - created_at
         - updated_at
@@ -1572,6 +1576,9 @@ components:
         name:
           description: The rule's name, the address an operator types; renameable
           type: string
+        namespace:
+          description: "The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"
+          type: string
         official:
           description: Shipped with the platform and read-only
           type: boolean
@@ -1630,6 +1637,7 @@ components:
         - output_key
         - output_lane
         - enabled
+        - namespace
         - official
         - version
         - created_at
@@ -2066,6 +2074,9 @@ components:
           type: string
         name:
           type: string
+        namespace:
+          description: "The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"
+          type: string
         official:
           type: boolean
         params_schema:
@@ -2094,6 +2105,7 @@ components:
         - disruptive
         - quiet_seconds
         - hold_seconds
+        - namespace
         - official
       type: object
     ComponentBody:
@@ -2402,6 +2414,9 @@ components:
         name:
           description: The name an operator reads and types; renameable
           type: string
+        namespace:
+          description: "The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"
+          type: string
         official:
           description: "True for a row this release ships. A shipped row is never written by an operator: an edit forks it"
           type: boolean
@@ -2422,6 +2437,7 @@ components:
         - name
         - label
         - default_tags
+        - namespace
         - official
         - forked
       type: object
@@ -2447,6 +2463,10 @@ components:
         name:
           description: The rule's name (lowercase kebab)
           minLength: 1
+          type: string
+        namespace:
+          description: The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows
+          pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
         notification_type:
           description: The notification type to send, by name or uuid; absent sends the official one for the transition
@@ -2526,6 +2546,10 @@ components:
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
+        namespace:
+          description: The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
         output_key:
           description: "The property or metric the rule writes: its type pins the reduce's result. Not a reserved key (a native probe key, health), not a key a driver's emits or a command type write, and not one another enabled rule writes"
           minLength: 1
@@ -2576,6 +2600,10 @@ components:
         name:
           description: The command type name (lowercase kebab)
           minLength: 1
+          type: string
+        namespace:
+          description: The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows
+          pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
         params_schema:
           description: A JSON Schema fragment for the params
@@ -2779,6 +2807,10 @@ components:
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
+        namespace:
+          description: The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
         parent_id:
           description: The parent component_type, by name or uuid; omit for a root type
           type: string
@@ -2810,6 +2842,10 @@ components:
           description: The globally unique name; renameable
           maxLength: 100
           minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
+        namespace:
+          description: The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows
           pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
         spec:
@@ -2905,6 +2941,10 @@ components:
           description: The rule's name (lowercase kebab)
           minLength: 1
           type: string
+        namespace:
+          description: The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
         sample_key:
           description: The property or metric the rule reads
           minLength: 1
@@ -2943,6 +2983,10 @@ components:
         name:
           description: The event type name (lowercase kebab)
           minLength: 1
+          type: string
+        namespace:
+          description: The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows
+          pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
         payload_schema:
           description: A JSON Schema fragment for the payload
@@ -3166,6 +3210,10 @@ components:
         name_rule:
           $ref: "#/components/schemas/NameRuleBody"
           description: How the platform NAMES locations of this type; omit to have an operator name every one of them. Refused (422) if it cannot mint a legal name
+        namespace:
+          description: The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
       required:
         - name
         - label
@@ -3367,6 +3415,10 @@ components:
           description: The metric type name (lowercase kebab)
           minLength: 1
           type: string
+        namespace:
+          description: The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
         precision:
           description: Decimal places a rendered value keeps
           format: int64
@@ -3459,6 +3511,10 @@ components:
         name:
           description: The type's name (lowercase kebab)
           minLength: 1
+          type: string
+        namespace:
+          description: The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows
+          pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
         subject:
           description: The one-line subject, written in the rule language
@@ -3596,6 +3652,10 @@ components:
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
+        namespace:
+          description: The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
         parent_product_id:
           description: The parent product, by handle or uuid
           type: string
@@ -3634,6 +3694,10 @@ components:
         name:
           description: The property name (lowercase kebab)
           minLength: 1
+          type: string
+        namespace:
+          description: The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows
+          pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
         validation:
           description: A JSON Schema fragment constraining the value
@@ -3709,6 +3773,10 @@ components:
           description: The level's name (lowercase kebab)
           minLength: 1
           type: string
+        namespace:
+          description: The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
         rank:
           description: "Its position among the levels: higher is more severe; unique"
           format: int64
@@ -3764,6 +3832,10 @@ components:
           description: The globally unique name; renameable
           maxLength: 100
           minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
+        namespace:
+          description: The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows
           pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
         parent_standard_id:
@@ -3937,6 +4009,10 @@ components:
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
+        namespace:
+          description: The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
         parent_id:
           description: The parent system_type, by name or uuid; omit for a root type
           type: string
@@ -4100,6 +4176,10 @@ components:
           description: The globally unique name; renameable
           maxLength: 100
           minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
+        namespace:
+          description: The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows
           pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
         support_phone:
@@ -4313,6 +4393,9 @@ components:
         name:
           description: The name an operator reads and types; renameable
           type: string
+        namespace:
+          description: "The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"
+          type: string
         official:
           type: boolean
         spec:
@@ -4323,6 +4406,7 @@ components:
         - id
         - name
         - label
+        - namespace
         - official
       type: object
     EffectiveMetricBody:
@@ -4939,6 +5023,9 @@ components:
           type: string
         name:
           type: string
+        namespace:
+          description: "The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"
+          type: string
         official:
           description: Shipped with the platform and read-only
           type: boolean
@@ -4984,6 +5071,7 @@ components:
         - sample_window
         - fire_event_type
         - enabled
+        - namespace
         - official
         - version
         - open_alarms
@@ -5053,6 +5141,9 @@ components:
           type: string
         name:
           type: string
+        namespace:
+          description: "The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"
+          type: string
         official:
           type: boolean
         payload_schema:
@@ -5069,6 +5160,7 @@ components:
       required:
         - id
         - name
+        - namespace
         - official
         - writer_class
       type: object
@@ -7355,6 +7447,9 @@ components:
         name_rule:
           $ref: "#/components/schemas/NameRuleReadBody"
           description: How the platform NAMES locations of this type; absent means an operator names every one of them
+        namespace:
+          description: "The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"
+          type: string
         official:
           description: "True for a row this release ships. A shipped row is never written by an operator: an edit forks it"
           type: boolean
@@ -7364,6 +7459,7 @@ components:
         - label
         - icon
         - allowed_parent_types
+        - namespace
         - official
         - forked
       type: object
@@ -7745,6 +7841,9 @@ components:
           type: string
         name:
           type: string
+        namespace:
+          description: "The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"
+          type: string
         official:
           type: boolean
         precision:
@@ -7773,6 +7872,7 @@ components:
         - id
         - name
         - data_type
+        - namespace
         - official
         - writer_class
       type: object
@@ -8121,6 +8221,9 @@ components:
           type: string
         name:
           type: string
+        namespace:
+          description: "The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"
+          type: string
         official:
           description: Shipped with the platform and read-only
           type: boolean
@@ -8138,6 +8241,7 @@ components:
         - name
         - subject
         - text
+        - namespace
         - official
         - created_at
         - updated_at
@@ -9541,6 +9645,9 @@ components:
         name:
           description: The name an operator reads and types; renameable
           type: string
+        namespace:
+          description: "The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"
+          type: string
         official:
           type: boolean
         parent_product:
@@ -9562,6 +9669,7 @@ components:
         - kind
         - component_type
         - component_type_id
+        - namespace
         - official
       type: object
     ProductMetricBody:
@@ -9638,6 +9746,9 @@ components:
           type: string
         name:
           type: string
+        namespace:
+          description: "The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"
+          type: string
         official:
           type: boolean
         retention_days:
@@ -9661,6 +9772,7 @@ components:
         - id
         - name
         - data_type
+        - namespace
         - official
         - writer_class
       type: object
@@ -9775,6 +9887,10 @@ components:
           description: A registered event_type name
           minLength: 1
           type: string
+        namespace:
+          description: "The catalog namespace the name is read in: og for the platform's type, local for the operator's, or another the operator named. Omit to walk the search path, the operator's type first, then the platform's. Set, the name is read in that namespace only, reaching an og type the operator's type of the same name shadows; a namespace holding no such type rejects the item"
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
         payload:
           description: The occurrence's structured payload, validated against the event_type's payload schema
         ts:
@@ -9871,6 +9987,10 @@ components:
           description: A registered metric_type name
           minLength: 1
           type: string
+        namespace:
+          description: "The catalog namespace the name is read in: og for the platform's type, local for the operator's, or another the operator named. Omit to walk the search path, the operator's type first, then the platform's. Set, the name is read in that namespace only, reaching an og type the operator's type of the same name shadows; a namespace holding no such type rejects the item"
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
         ts:
           description: When this was observed; defaults to the batch timestamp, then to ingest time
           format: date-time
@@ -9915,6 +10035,10 @@ components:
           description: A registered property_type name
           minLength: 1
           type: string
+        namespace:
+          description: "The catalog namespace the name is read in: og for the platform's type, local for the operator's, or another the operator named. Omit to walk the search path, the operator's type first, then the platform's. Set, the name is read in that namespace only, reaching an og type the operator's type of the same name shadows; a namespace holding no such type rejects the item"
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
         ts:
           description: When this was observed; defaults to the batch timestamp, then to ingest time
           format: date-time
@@ -9929,6 +10053,8 @@ components:
       additionalProperties: false
       properties:
         name:
+          type: string
+        namespace:
           type: string
         reason:
           type: string
@@ -10922,6 +11048,9 @@ components:
           type: string
         name:
           type: string
+        namespace:
+          description: "The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"
+          type: string
         official:
           type: boolean
         permissions:
@@ -10933,6 +11062,7 @@ components:
       required:
         - id
         - name
+        - namespace
         - official
         - permissions
         - inherits
@@ -11401,12 +11531,16 @@ components:
         name:
           description: The name an operator reads and types; renameable
           type: string
+        namespace:
+          description: "The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"
+          type: string
         official:
           type: boolean
       required:
         - id
         - name
         - label
+        - namespace
         - official
         - default_admin_sensitive
         - fields
@@ -11813,6 +11947,9 @@ components:
         name:
           description: The level's name; alarms and rules name it
           type: string
+        namespace:
+          description: "The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"
+          type: string
         official:
           description: Shipped with the platform and read-only
           type: boolean
@@ -11828,6 +11965,7 @@ components:
         - name
         - color
         - rank
+        - namespace
         - official
         - outage
       type: object
@@ -12488,6 +12626,9 @@ components:
         name:
           description: The name an operator reads and types; renameable
           type: string
+        namespace:
+          description: "The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"
+          type: string
         official:
           type: boolean
         parent_standard:
@@ -12500,6 +12641,7 @@ components:
         - id
         - name
         - label
+        - namespace
         - official
       type: object
     StandardMetricBody:
@@ -13117,6 +13259,9 @@ components:
         name:
           description: The name an operator reads and types; renameable
           type: string
+        namespace:
+          description: "The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"
+          type: string
         official:
           type: boolean
         parent:
@@ -13135,6 +13280,7 @@ components:
         - id
         - name
         - label
+        - namespace
         - official
       type: object
     TagBindingBody:
@@ -14951,6 +15097,9 @@ components:
         name:
           description: The name an operator reads and types; renameable
           type: string
+        namespace:
+          description: "The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"
+          type: string
         official:
           type: boolean
         support_phone:
@@ -14962,6 +15111,7 @@ components:
         - name
         - label
         - kind
+        - namespace
         - official
       type: object
     ViewBindingBody:
@@ -15506,11 +15656,18 @@ paths:
           description: Error
       summary: Create an action rule
       x-omniglass-permission: rule:create
-  /action-rules/{name}:
+  /action-rules/{namespace}/{name}:
     delete:
       description: "Removes a rule; the notifications it queued keep its name. A shipped (official) rule is a 409: disable it instead. Audited. Gated by rule:delete, with an all-scope grant."
       operationId: delete-action-rule
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The rule's name or uuid
           in: path
           name: name
@@ -15533,6 +15690,13 @@ paths:
       description: Returns one action rule by name or uuid. Gated by rule:read.
       operationId: get-action-rule
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The rule's name or uuid
           in: path
           name: name
@@ -15559,6 +15723,13 @@ paths:
       description: Patches a rule (an absent field is unchanged; on and targets replace their sets). It acts on transitions from the next one; a notification already queued is not re-rendered. A shipped (official) rule takes only enabled, opt_out_allowed and targets that keep the shipped ones; anything else is a 409. Audited. Gated by rule:update, with an all-scope grant.
       operationId: update-action-rule
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The rule's name or uuid
           in: path
           name: name
@@ -15587,11 +15758,18 @@ paths:
           description: Error
       summary: Update an action rule
       x-omniglass-permission: rule:update
-  /action-rules/{name}:optIn:
+  /action-rules/{namespace}/{name}:optIn:
     post:
       description: Undoes your opt-out of a platform action rule; always allowed. Idempotent and audited. Gated by notification:subscribe.
       operationId: opt-in-action-rule
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The rule's name or uuid
           in: path
           name: name
@@ -15614,11 +15792,18 @@ paths:
           description: Error
       summary: Opt yourself back in to a group notification
       x-omniglass-permission: notification:subscribe
-  /action-rules/{name}:optOut:
+  /action-rules/{namespace}/{name}:optOut:
     post:
       description: Stops a platform action rule telling you through a group it targets, for you alone. Only a rule an admin marked opt_out_allowed (a 409 otherwise); a rule that names you directly still tells you. Idempotent and audited. Gated by notification:subscribe.
       operationId: opt-out-action-rule
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The rule's name or uuid
           in: path
           name: name
@@ -16809,11 +16994,18 @@ paths:
           description: Error
       summary: Create a calc rule
       x-omniglass-permission: rule:create
-  /calc-rules/{name}:
+  /calc-rules/{namespace}/{name}:
     delete:
       description: Removes an operator rule; an official rule is read-only (409). Audited. Gated by rule:delete, with an all-scope grant.
       operationId: delete-calc-rule
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The rule's name (its uuid is accepted too)
           in: path
           name: name
@@ -16836,6 +17028,13 @@ paths:
       description: Returns one calc rule by name (or uuid). Gated by rule:read.
       operationId: get-calc-rule
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The rule's name (its uuid is accepted too)
           in: path
           name: name
@@ -16863,6 +17062,13 @@ paths:
       description: "Patches a rule (an absent field is unchanged), bumping its version; a patch that changes nothing writes nothing. What changed is checked as on create: changed inputs, reduce or output recompile, a changed output must be one no collection writes, and an enabled rule may not close a cycle or share its output with another enabled rule. Enabling a disabled rule recompiles it and checks both, so a rule carrying calc_error cannot be enabled (422). The owner kind is fixed at create. Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant."
       operationId: update-calc-rule
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The rule's name (its uuid is accepted too)
           in: path
           name: name
@@ -16891,11 +17097,18 @@ paths:
           description: Error
       summary: Update a calc rule
       x-omniglass-permission: rule:update
-  /calc-rules/{name}/state:
+  /calc-rules/{namespace}/{name}/state:
     get:
       description: "What a calc rule last did on each owner the caller may read (components by the component read scope, systems by the system read scope), each owner named now: the value it computed, when and at which version, the inputs it found no value of, a system's members that held none and the instances it left out as stale (named when the caller may read the component, else counted), an error, since when a system has had no members, and whether the owner is pending (with when a deferred mark is due). Ordered on the server, failing owners first, then pending, then those it wrote nothing for, then those holding a value, each by name, and at most limit of them; total and the pending depth count every owner the caller may read, listed or not. Gated by rule:read."
       operationId: get-calc-rule-state
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The rule's name (its uuid is accepted too)
           in: path
           name: name
@@ -16930,11 +17143,18 @@ paths:
       summary: Get a calc rule's live state
       x-omniglass-mcp: {}
       x-omniglass-permission: rule:read
-  /calc-rules/{name}:rename:
+  /calc-rules/{namespace}/{name}:rename:
     post:
       description: "Moves an operator rule's name, the address an operator types. A separate act from an update, because it breaks bookmarks and integration config outside this system; inside it nothing breaks, since the audit rows hold the rule's uuid and the key graph is of keys, not rule names. Not a material change: no version bump. An official rule keeps its name (409), a taken name is a 409, an illegal or uuid-shaped one a 422. Returns the rule with its uuid. Audited. Gated by rule:update, with an all-scope grant."
       operationId: rename-calc-rule
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The rule's current name (its uuid is accepted too)
           in: path
           name: name
@@ -17032,11 +17252,18 @@ paths:
           description: Error
       summary: Create a command type
       x-omniglass-permission: command_type:create
-  /command-types/{name}:
+  /command-types/{namespace}/{name}:
     delete:
       description: Removes a custom command type by name. Official types are read-only. Gated by command_type:delete.
       operationId: delete-command-type
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The command type's name
           in: path
           name: name
@@ -17059,6 +17286,13 @@ paths:
       description: Returns one command type by name. Gated by command_type:read.
       operationId: get-command-type
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The command type's name
           in: path
           name: name
@@ -17085,6 +17319,13 @@ paths:
       description: "Patches a custom command type's label, description, params schema, settle window, disruption (disruptive, quiet_seconds, hold_seconds, power_outlet_param, checked together on the merged row), or target on either arm. Partial by default: the fields present in the body change and the rest are left alone (an empty target clears it; a non-empty arm clears the other). params_schema is a nullable object with no empty value, so it clears by being named in update_mask with no value in the body; a mask naming a field this resource does not patch is a 422. The name is fixed at creation. Official types are read-only. Gated by command_type:update."
       operationId: update-command-type
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The command type's name
           in: path
           name: name
@@ -17157,11 +17398,18 @@ paths:
           description: Error
       summary: Create a component type
       x-omniglass-permission: component_type:create
-  /component-types/{id}:
+  /component-types/{namespace}/{id}:
     delete:
       description: "Deletes a custom component_type, refused if official (422, forked or not: a fork is an overlay, not ownership) or still a parent of another component_type (409). `:restore` is the only removal a shipped row admits, and it removes your fork, not the row. Gated by component_type:delete."
       operationId: delete-component-type
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The component type, by name or uuid
           in: path
           name: id
@@ -17186,6 +17434,13 @@ paths:
       description: "Patches a component_type's label, stem, icon, abbrev, label_rule, or default_tags. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by component_type:update."
       operationId: update-component-type
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The component type, by name or uuid
           in: path
           name: id
@@ -17216,11 +17471,18 @@ paths:
           description: Error
       summary: Update a component type
       x-omniglass-permission: component_type:update
-  /component-types/{id}:restore:
+  /component-types/{namespace}/{id}:restore:
     post:
       description: "Discards your fork of a shipped component_type, so reads return the values this release ships and later releases can improve them again. 409 when the row carries no fork of yours. Gated by component_type:update, the same permission that took the fork: restoring is undoing your own edit, not deleting a row."
       operationId: restore-component-type
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The component type, by name or uuid
           in: path
           name: id
@@ -19053,11 +19315,18 @@ paths:
       summary: Create a driver
       x-omniglass-mcp: {}
       x-omniglass-permission: driver:create
-  /drivers/{id}:
+  /drivers/{namespace}/{id}:
     delete:
       description: Deletes a custom driver, refused if official (422). Gated by driver:delete.
       operationId: delete-driver
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The driver, by name or uuid
           in: path
           name: id
@@ -19082,6 +19351,13 @@ paths:
       description: Fetches a driver by id. Gated by driver:read.
       operationId: get-driver
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The driver, by name or uuid
           in: path
           name: id
@@ -19111,6 +19387,13 @@ paths:
       description: Patches a custom driver's label or version. Official drivers are read-only (422). Gated by driver:update.
       operationId: update-driver
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The driver, by name or uuid
           in: path
           name: id
@@ -19142,11 +19425,18 @@ paths:
       summary: Update a driver
       x-omniglass-mcp: {}
       x-omniglass-permission: driver:update
-  /drivers/{id}:rename:
+  /drivers/{namespace}/{id}:rename:
     post:
       description: Moves a custom driver's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official driver keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by driver:rename.
       operationId: rename-driver
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The row, by its current name or its uuid
           in: path
           name: id
@@ -19531,11 +19821,18 @@ paths:
           description: Error
       summary: Create an event rule
       x-omniglass-permission: rule:create
-  /event-rules/{name}:
+  /event-rules/{namespace}/{name}:
     delete:
       description: Removes an operator rule; an official rule is read-only (409). Audited. Gated by rule:delete, with an all-scope grant.
       operationId: delete-event-rule
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The rule's name
           in: path
           name: name
@@ -19558,6 +19855,13 @@ paths:
       description: Returns one event rule by name, with its live state as counts over the components the caller may read. Gated by rule:read.
       operationId: get-event-rule
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The rule's name
           in: path
           name: name
@@ -19585,6 +19889,13 @@ paths:
       description: Patches a rule (an absent field is unchanged), bumping its version; disabling it stops new opens. Criteria take {expr} or the short form {op, value}, compiled as on create (a 422 names the criteria, line and column). An empty severity makes the rule informational and an empty clear_event_type drops its clear event; the fire event type cannot be emptied (422). Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.
       operationId: update-event-rule
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The rule's name
           in: path
           name: name
@@ -19613,11 +19924,18 @@ paths:
           description: Error
       summary: Update an event rule
       x-omniglass-permission: rule:update
-  /event-rules/{name}/state:
+  /event-rules/{namespace}/{name}/state:
     get:
       description: "What a rule holds right now: its firings (one per component and instance, whether or not it raises an alarm), the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only firings, alarms and streaks on components the caller may read are listed. Gated by rule:read."
       operationId: get-event-rule-state
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The rule's name
           in: path
           name: name
@@ -19641,11 +19959,18 @@ paths:
       summary: Get an event rule's live state
       x-omniglass-mcp: {}
       x-omniglass-permission: rule:read
-  /event-rules/{name}:rename:
+  /event-rules/{namespace}/{name}:rename:
     post:
       description: "Moves an operator rule's name, the address an operator types. A separate act from an update, because it breaks bookmarks and integration config outside this system; inside it nothing breaks, since every reference holds the rule's uuid (an alarm's raised_by_rule_id and dedup key, a firing, a streak, an event's derived_by_rule_id). Not a material change: no version bump, streaks keep running and firings stay. An event keeps the name it was written under (derived_by_rule); the rule's next events carry the new one. An official rule keeps its name (409), a taken name is a 409, an illegal or uuid-shaped one a 422. Returns the rule with its uuid. Audited. Gated by rule:update, with an all-scope grant."
       operationId: rename-event-rule
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The rule's current name
           in: path
           name: name
@@ -19744,11 +20069,18 @@ paths:
           description: Error
       summary: Create an event type
       x-omniglass-permission: event_type:create
-  /event-types/{name}:
+  /event-types/{namespace}/{name}:
     delete:
       description: "Removes a custom event type by name. Official event types are read-only (409), and so is a type still in use: one that recorded events or an event rule's fire or clear event type names is a 409 until nothing names it. Gated by event_type:delete."
       operationId: delete-event-type
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The event type's name
           in: path
           name: name
@@ -19771,6 +20103,13 @@ paths:
       description: Returns one event type by name. Gated by event_type:read.
       operationId: get-event-type
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The event type's name
           in: path
           name: name
@@ -19797,6 +20136,13 @@ paths:
       description: "Patches a custom event type's label, description, or payload schema. Partial by default: the fields present in the body change and the rest are left alone. payload_schema is a nullable object with no empty value, so it clears by being named in update_mask with no value in the body; label and description clear with an explicit empty string. A mask naming a field this resource does not patch is a 422. The name is fixed at creation. Official event types are read-only. Gated by event_type:update."
       operationId: update-event-type
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The event type's name
           in: path
           name: name
@@ -20037,11 +20383,18 @@ paths:
           description: Error
       summary: Create a location type
       x-omniglass-permission: location_type:create
-  /location-types/{id}:
+  /location-types/{namespace}/{id}:
     delete:
       description: Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by location_type:delete.
       operationId: delete-location-type
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The location type, by name or uuid
           in: path
           name: id
@@ -20066,6 +20419,13 @@ paths:
       description: "Patches a location_type's label, icon, allowed parents, label_rule or name_rule. An unparseable label_rule (or a name_rule that cannot mint a legal name) is a 422 at rule-edit time, never a broken row at create time, and setting a label rule restamps nothing on its own: apply it with /locations:recomputeLabels after seeing the blast radius with :previewLabels. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by location_type:update."
       operationId: update-location-type
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The location type, by name or uuid
           in: path
           name: id
@@ -20096,11 +20456,18 @@ paths:
           description: Error
       summary: Update a location type
       x-omniglass-permission: location_type:update
-  /location-types/{id}/metrics:
+  /location-types/{namespace}/{id}/metrics:
     get:
       description: Lists the location type's declared-metric contract (which metrics every location of the type carries), ordered by metric name, each with its optional default and required flag. Gated by location_type:read.
       operationId: list-location-type-metrics
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The location type, by name or uuid
           in: path
           name: id
@@ -20125,11 +20492,25 @@ paths:
           description: Error
       summary: List a location type's declared metrics
       x-omniglass-permission: location_type:read
-  /location-types/{id}/metrics/{metric}:
+  /location-types/{namespace}/{id}/metrics/{metric_namespace}/{metric}:
     delete:
       description: Removes one line from a location type's contract, a shipped (official) type's included, since nothing seeds a contract line; locations of the type keep any samples the series already holds, now off-contract. A metric the type does not declare is a 404, and so is an unknown type. Gated by location_type:delete.
       operationId: delete-location-type-metric
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: metric_namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The location type, by name or uuid
           in: path
           name: id
@@ -20161,6 +20542,20 @@ paths:
       description: "Declares a catalog metric on a location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). A shipped (official) type's contract is writable too: a contract line is a row in its own table and nothing seeds one, so every line is an operator's. An unknown type is a 404 and a metric the catalog does not know is a 422. Gated by location_type:update."
       operationId: set-location-type-metric
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: metric_namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The location type, by name or uuid
           in: path
           name: id
@@ -20198,11 +20593,18 @@ paths:
           description: Error
       summary: Declare a metric on a location type
       x-omniglass-permission: location_type:update
-  /location-types/{id}/properties:
+  /location-types/{namespace}/{id}/properties:
     get:
       description: Lists the location type's declared-property contract (what every location of the type exposes), ordered by property name, each with its optional default and required flag. Gated by location_type:read.
       operationId: list-location-type-properties
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The location type, by name or uuid
           in: path
           name: id
@@ -20227,11 +20629,25 @@ paths:
           description: Error
       summary: List a location type's declared properties
       x-omniglass-permission: location_type:read
-  /location-types/{id}/properties/{property}:
+  /location-types/{namespace}/{id}/properties/{property_namespace}/{property}:
     delete:
       description: Removes one line from a location type's contract, a shipped (official) type's included, since nothing seeds a contract line; locations of the type keep any value they set for it, now off-contract. A property the type does not declare is a 404, and so is an unknown type. Gated by location_type:delete.
       operationId: delete-location-type-property
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: property_namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The location type, by name or uuid
           in: path
           name: id
@@ -20263,6 +20679,20 @@ paths:
       description: "Declares a catalog property on a location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). A shipped (official) type's contract is writable too: a contract line is a row in its own table and nothing seeds one, so every line is an operator's. An unknown type is a 404 and a property the catalog does not know is a 422, as is a default its property type refuses. Gated by location_type:update."
       operationId: set-location-type-property
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: property_namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The location type, by name or uuid
           in: path
           name: id
@@ -20300,11 +20730,18 @@ paths:
           description: Error
       summary: Declare a property on a location type
       x-omniglass-permission: location_type:update
-  /location-types/{id}:rename:
+  /location-types/{namespace}/{id}:rename:
     post:
       description: Moves a custom location type's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official location type keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by location_type:rename.
       operationId: rename-location-type
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The row, by its current name or its uuid
           in: path
           name: id
@@ -20333,11 +20770,18 @@ paths:
           description: Error
       summary: Rename a location type
       x-omniglass-permission: location_type:rename
-  /location-types/{id}:restore:
+  /location-types/{namespace}/{id}:restore:
     post:
       description: "Discards your fork of a shipped location_type, so reads return the values this release ships, including a rule a later release WITHDREW. 409 when the row carries no fork of yours. Gated by location_type:update, the same permission that took the fork: restoring is undoing your own edit, not deleting a row."
       operationId: restore-location-type
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The location type, by name or uuid
           in: path
           name: id
@@ -21014,11 +21458,18 @@ paths:
           description: Error
       summary: Create a metric type
       x-omniglass-permission: metric_type:create
-  /metric-types/{name}:
+  /metric-types/{namespace}/{name}:
     delete:
       description: Removes a custom metric type by name. Official metric types are read-only. A metric type a calc rule writes is a 409 naming the rule. Gated by metric_type:delete.
       operationId: delete-metric-type
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The metric type's name
           in: path
           name: name
@@ -21041,6 +21492,13 @@ paths:
       description: Returns one metric type by name. Gated by metric_type:read.
       operationId: get-metric-type
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The metric type's name
           in: path
           name: name
@@ -21067,6 +21525,13 @@ paths:
       description: "Patches a custom metric type's label, description, unit, or precision. Partial by default: the fields present in the body change and the rest are left alone. precision is a nullable integer with no empty value, so it clears by being named in update_mask with no value in the body; label, description and unit clear with an explicit empty string. A mask naming a field this resource does not patch is a 422. Data type is fixed at creation. Official metric types are read-only. Gated by metric_type:update."
       operationId: update-metric-type
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The metric type's name
           in: path
           name: name
@@ -21095,11 +21560,18 @@ paths:
           description: Error
       summary: Update a metric type
       x-omniglass-permission: metric_type:update
-  /metric-types/{name}:setRetention:
+  /metric-types/{namespace}/{name}:setRetention:
     post:
       description: "Sets how many days this type's samples are kept, overriding the metric lane's window (retention.metric_days), or with null returns it to the lane's. Works on an official type: a shipped type's definition is read-only, but how long an install keeps its samples is the install's, and the boot seed never resets it. A command's intended values are never removed; a series with no sample inside the window reads as no reading within retention (ADR-1275). 1 to 36,500 days. Audited as set_retention. Gated by metric_type:update and platform:update."
       operationId: set-metric-type-retention
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The metric type's name
           in: path
           name: name
@@ -21355,11 +21827,18 @@ paths:
           description: Error
       summary: Create a notification type
       x-omniglass-permission: notification_type:create
-  /notification-types/{id}:rename:
+  /notification-types/{namespace}/{id}:rename:
     post:
       description: Moves a custom notification type's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official notification type keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by notification_type:rename.
       operationId: rename-notification-type
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The row, by its current name or its uuid
           in: path
           name: id
@@ -21388,11 +21867,18 @@ paths:
           description: Error
       summary: Rename a notification type
       x-omniglass-permission: notification_type:rename
-  /notification-types/{name}:
+  /notification-types/{namespace}/{name}:
     delete:
       description: Removes an operator notification type. An official type, or one an action rule still sends, is a 409. Audited. Gated by notification_type:delete.
       operationId: delete-notification-type
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The notification type's name or uuid
           in: path
           name: name
@@ -21415,6 +21901,13 @@ paths:
       description: Returns one notification type by name or uuid. Gated by notification_type:read.
       operationId: get-notification-type
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The notification type's name or uuid
           in: path
           name: name
@@ -21441,6 +21934,13 @@ paths:
       description: Patches an operator type's label, description, subject or text (an absent field is unchanged). Subject and text are written in the rule language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Location, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.
       operationId: update-notification-type
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The notification type's name or uuid
           in: path
           name: name
@@ -21469,11 +21969,18 @@ paths:
           description: Error
       summary: Update a notification type
       x-omniglass-permission: notification_type:update
-  /notification-types/{name}:preview:
+  /notification-types/{namespace}/{name}:preview:
     post:
       description: Renders the type's subject and text (or a draft of either, sent in the body) against one real alarm, exactly as a delivery of that alarm's transition would carry them, with the facts they read. Writes nothing. The alarm is named by its component and id; without an id, the component's most recently raised alarm. A draft the sandbox refuses is a 422, one that fails to render (its output past the cap) a 422 naming it. Gated by notification_type:read; the component is resolved in the caller's component read scope, so a component outside it is a non-disclosing 404.
       operationId: preview-notification-type
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The notification type's name or uuid
           in: path
           name: name
@@ -22087,11 +22594,18 @@ paths:
           description: Error
       summary: Create a product
       x-omniglass-permission: product:create
-  /products/{id}:
+  /products/{namespace}/{id}:
     delete:
       description: Deletes a custom product, refused if official (422) or still referenced by a component (409). Gated by product:delete.
       operationId: delete-product
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The product, by name or uuid
           in: path
           name: id
@@ -22116,6 +22630,13 @@ paths:
       description: Fetches a product by its name or its uuid. Either form resolves, so `omniglass product get acme-soundbar` and the uuid are interchangeable. Gated by product:read.
       operationId: get-product
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The product, by name or uuid
           in: path
           name: id
@@ -22145,6 +22666,13 @@ paths:
       description: "Patches a custom product's label, vendor, driver, kind, component_type, icon, label rule, or parent. Each optional field follows the three-state string: omitted is unchanged, an empty string clears it, a value sets it, so a vendor, driver, parent, icon or label rule can be unset as well as changed. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update."
       operationId: update-product
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The product, by name or uuid
           in: path
           name: id
@@ -22175,11 +22703,18 @@ paths:
           description: Error
       summary: Update a product
       x-omniglass-permission: product:update
-  /products/{id}/metrics:
+  /products/{namespace}/{id}/metrics:
     get:
       description: Lists the product's declared-metric contract (which metrics every instance of the product carries), ordered by metric name, each with its optional default and required flag. Gated by product:read.
       operationId: list-product-metrics
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The product, by name or uuid
           in: path
           name: id
@@ -22204,11 +22739,25 @@ paths:
           description: Error
       summary: List a product's declared metrics
       x-omniglass-permission: product:read
-  /products/{id}/metrics/{metric}:
+  /products/{namespace}/{id}/metrics/{metric_namespace}/{metric}:
     delete:
       description: Removes one line from a custom product's contract; instances keep any samples the series already holds, now off-contract. A metric the product does not declare is a 404, and an official product is read-only (422). Gated by product:delete.
       operationId: delete-product-metric
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: metric_namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The product, by name or uuid
           in: path
           name: id
@@ -22240,6 +22789,20 @@ paths:
       description: Declares a catalog metric on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422); an unknown product is a 404 and a metric the catalog does not know is a 422. Gated by product:update.
       operationId: set-product-metric
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: metric_namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The product, by name or uuid
           in: path
           name: id
@@ -22277,11 +22840,18 @@ paths:
           description: Error
       summary: Declare a metric on a product
       x-omniglass-permission: product:update
-  /products/{id}/properties:
+  /products/{namespace}/{id}/properties:
     get:
       description: Lists the product's declared-property contract (what every instance of the product exposes), ordered by property name, each with its optional default and required flag. Gated by product:read.
       operationId: list-product-properties
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The product, by name or uuid
           in: path
           name: id
@@ -22306,11 +22876,25 @@ paths:
           description: Error
       summary: List a product's declared properties
       x-omniglass-permission: product:read
-  /products/{id}/properties/{property}:
+  /products/{namespace}/{id}/properties/{property_namespace}/{property}:
     delete:
       description: Removes one line from a custom product's contract; instances keep any value they set for it, now off-contract. A property the product does not declare is a 404, and an official product is read-only (422). Gated by product:delete.
       operationId: delete-product-property
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: property_namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The product, by name or uuid
           in: path
           name: id
@@ -22342,6 +22926,20 @@ paths:
       description: Declares a catalog property on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422); an unknown product is a 404 and a property the catalog does not know is a 422, as is a default its property type refuses. Gated by product:update.
       operationId: set-product-property
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: property_namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The product, by name or uuid
           in: path
           name: id
@@ -22379,11 +22977,18 @@ paths:
           description: Error
       summary: Declare a property on a product
       x-omniglass-permission: product:update
-  /products/{id}:rename:
+  /products/{namespace}/{id}:rename:
     post:
       description: Moves a custom product's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official product keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by product:rename.
       operationId: rename-product
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The row, by its current name or its uuid
           in: path
           name: id
@@ -22455,11 +23060,18 @@ paths:
           description: Error
       summary: Create a property
       x-omniglass-permission: property_type:create
-  /property-types/{name}:
+  /property-types/{namespace}/{name}:
     delete:
       description: Removes a custom property by name. Official properties are read-only. A property a calc rule writes is a 409 naming the rule, and one identity bindings use as their match key is a 409 counting them. Gated by property_type:delete.
       operationId: delete-property-type
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The property's name
           in: path
           name: name
@@ -22482,6 +23094,13 @@ paths:
       description: Returns one property by name. Gated by property_type:read.
       operationId: get-property-type
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The property's name
           in: path
           name: name
@@ -22508,6 +23127,13 @@ paths:
       description: "Patches a custom property's label, description, or validation. Partial by default: the fields present in the body change and the rest are left alone. validation is a nullable object with no empty value, so it clears by being named in update_mask with no value in the body; label and description clear with an explicit empty string. A mask naming a field this resource does not patch is a 422. Data type is fixed at creation. Official properties are read-only. Gated by property_type:update."
       operationId: update-property-type
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The property's name
           in: path
           name: name
@@ -22536,11 +23162,18 @@ paths:
           description: Error
       summary: Update a property
       x-omniglass-permission: property_type:update
-  /property-types/{name}:setRetention:
+  /property-types/{namespace}/{name}:setRetention:
     post:
       description: "Sets how many days this type's transitions are kept, overriding the property lane's window (retention.property_days), or with null returns it to the lane's. Works on an official type: a shipped type's definition is read-only, but how long an install keeps its samples is the install's, and the boot seed never resets it. The retention floor still holds: a declared value and a series' latest value are never removed. 1 to 36,500 days. Audited as set_retention. Gated by property_type:update and platform:update."
       operationId: set-property-type-retention
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The property type's name
           in: path
           name: name
@@ -22938,11 +23571,18 @@ paths:
           description: Error
       summary: Create a severity level
       x-omniglass-permission: severity_level:create
-  /severity-levels/{name}:
+  /severity-levels/{namespace}/{name}:
     delete:
       description: Removes an operator level no alarm or event rule names; an official level or one in use is a 409. Audited. Gated by severity_level:delete, with an all-scope grant.
       operationId: delete-severity-level
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The level's name
           in: path
           name: name
@@ -22965,6 +23605,13 @@ paths:
       description: Returns one severity level by name. Gated by severity_level:read.
       operationId: get-severity-level
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The level's name
           in: path
           name: name
@@ -22991,6 +23638,13 @@ paths:
       description: Patches an operator level's name, label, color or rank (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update, with an all-scope grant.
       operationId: update-severity-level
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The level's name
           in: path
           name: name
@@ -23127,11 +23781,18 @@ paths:
           description: Error
       summary: Create a standard
       x-omniglass-permission: standard:create
-  /standards/{id}:
+  /standards/{namespace}/{id}:
     delete:
       description: Deletes a custom standard, refused if official (422) or still referenced by a system (409). Gated by standard:delete.
       operationId: delete-standard
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The standard, by name or uuid
           in: path
           name: id
@@ -23156,6 +23817,13 @@ paths:
       description: Fetches a standard by id. Gated by standard:read.
       operationId: get-standard
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The standard, by name or uuid
           in: path
           name: id
@@ -23184,6 +23852,13 @@ paths:
       description: "Patches a custom standard's label, parent, label rule or map. The parent_standard_id field follows the three-state convention: an omitted field is unchanged, an explicit empty string clears it (a standalone standard), a handle or uuid sets it, and an unknown parent is a 422. Official standards are read-only (422). Gated by standard:update."
       operationId: update-standard
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The standard, by name or uuid
           in: path
           name: id
@@ -23214,11 +23889,18 @@ paths:
           description: Error
       summary: Update a standard
       x-omniglass-permission: standard:update
-  /standards/{id}/metrics:
+  /standards/{namespace}/{id}/metrics:
     get:
       description: Lists the standard's declared-metric contract (which metrics every system conforming to it carries), ordered by metric name, each with its optional default and required flag. Gated by standard:read.
       operationId: list-standard-metrics
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The standard, by name or uuid
           in: path
           name: id
@@ -23243,11 +23925,25 @@ paths:
           description: Error
       summary: List a standard's declared metrics
       x-omniglass-permission: standard:read
-  /standards/{id}/metrics/{metric}:
+  /standards/{namespace}/{id}/metrics/{metric_namespace}/{metric}:
     delete:
       description: Removes one line from a custom standard's contract; conforming systems keep any samples the series already holds, now off-contract. A metric the standard does not declare is a 404, and an official standard is read-only (422). Gated by standard:delete.
       operationId: delete-standard-metric
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: metric_namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The standard, by name or uuid
           in: path
           name: id
@@ -23279,6 +23975,20 @@ paths:
       description: Declares a catalog metric on a custom standard, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official standards are read-only (422); an unknown standard is a 404 and a metric the catalog does not know is a 422. Gated by standard:update.
       operationId: set-standard-metric
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: metric_namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The standard, by name or uuid
           in: path
           name: id
@@ -23316,11 +24026,18 @@ paths:
           description: Error
       summary: Declare a metric on a standard
       x-omniglass-permission: standard:update
-  /standards/{id}/properties:
+  /standards/{namespace}/{id}/properties:
     get:
       description: Lists the standard's declared-property contract (what every system conforming to it exposes), ordered by property name, each with its optional default and required flag. Gated by standard:read.
       operationId: list-standard-properties
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The standard, by name or uuid
           in: path
           name: id
@@ -23345,11 +24062,25 @@ paths:
           description: Error
       summary: List a standard's declared properties
       x-omniglass-permission: standard:read
-  /standards/{id}/properties/{property}:
+  /standards/{namespace}/{id}/properties/{property_namespace}/{property}:
     delete:
       description: Removes one line from a custom standard's contract; conforming systems keep any value they set for it, now off-contract. A property the standard does not declare is a 404, and an official standard is read-only (422). Gated by standard:delete.
       operationId: delete-standard-property
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: property_namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The standard, by name or uuid
           in: path
           name: id
@@ -23381,6 +24112,20 @@ paths:
       description: Declares a catalog property on a custom standard, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official standards are read-only (422); an unknown standard is a 404 and a property the catalog does not know is a 422, as is a default its property type refuses. Gated by standard:update.
       operationId: set-standard-property
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: property_namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The standard, by name or uuid
           in: path
           name: id
@@ -23418,11 +24163,18 @@ paths:
           description: Error
       summary: Declare a property on a standard
       x-omniglass-permission: standard:update
-  /standards/{id}/slots:
+  /standards/{namespace}/{id}/slots:
     get:
       description: Lists the slots this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the component_types (accepted_types) and, if pinned, the products a filling component must match. An unknown standard is a 404, never an empty list. Gated by standard:read.
       operationId: list-standard-slots
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The standard, by name or uuid
           in: path
           name: id
@@ -23447,11 +24199,18 @@ paths:
           description: Error
       summary: List a standard's declared slots
       x-omniglass-permission: standard:read
-  /standards/{id}/slots/{slot}:
+  /standards/{namespace}/{id}/slots/{slot}:
     delete:
       description: Removes the slot from the standard, and with it every assignment conforming systems made to it. A slot the standard does not declare is a 404. Gated by standard:delete.
       operationId: delete-standard-slot
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The standard, by name or uuid
           in: path
           name: id
@@ -23483,6 +24242,13 @@ paths:
       description: "Declares a slot every conforming system needs filled, or revises it in place (the slot is addressed by name, so the write is idempotent and declaring is this same route). Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and [\"*\"] replaces the whole declaration. An unknown standard, type, or product is a 422, as is a mask naming a field this resource does not patch. A name a conforming system already declares itself is a 409, since a slot name must mean one slot in a system, and so is a capacity below what a conforming system already holds; either names the conflicting system only if the caller may read it. Gated by standard:update."
       operationId: set-standard-slot
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The standard, by name or uuid
           in: path
           name: id
@@ -23520,11 +24286,18 @@ paths:
           description: Error
       summary: Declare a slot on a standard
       x-omniglass-permission: standard:update
-  /standards/{id}:rename:
+  /standards/{namespace}/{id}:rename:
     post:
       description: Moves a custom standard's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official standard keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by standard:rename.
       operationId: rename-standard
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The row, by its current name or its uuid
           in: path
           name: id
@@ -23622,11 +24395,18 @@ paths:
           description: Error
       summary: Create a system type
       x-omniglass-permission: system_type:create
-  /system-types/{id}:
+  /system-types/{namespace}/{id}:
     delete:
       description: Deletes a custom system_type, refused if official (422), still a parent of another system_type (409), or still classifying a system (409). Gated by system_type:delete.
       operationId: delete-system-type
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The system type, by name or uuid
           in: path
           name: id
@@ -23651,6 +24431,13 @@ paths:
       description: "Patches a custom system_type's label, stem, icon, abbrev, or label_rule. An unparseable label_rule is a 422 at rule-edit time, never a broken row at create time, and setting one restamps nothing on its own: apply it with /systems:recomputeLabels after seeing the blast radius with :previewLabels. Official types are read-only (422). Gated by system_type:update."
       operationId: update-system-type
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The system type, by name or uuid
           in: path
           name: id
@@ -26478,11 +27265,18 @@ paths:
           description: Error
       summary: Create a vendor
       x-omniglass-permission: vendor:create
-  /vendors/{id}:
+  /vendors/{namespace}/{id}:
     delete:
       description: Deletes a custom vendor, refused if official (422). Gated by vendor:delete.
       operationId: delete-vendor
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The vendor, by name or uuid
           in: path
           name: id
@@ -26507,6 +27301,13 @@ paths:
       description: Fetches a vendor by id. Gated by vendor:read.
       operationId: get-vendor
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The vendor, by name or uuid
           in: path
           name: id
@@ -26535,6 +27336,13 @@ paths:
       description: Patches a custom vendor's label, kind, icon, support_phone, or website. Official vendors are read-only (422). Gated by vendor:update.
       operationId: update-vendor
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The vendor, by name or uuid
           in: path
           name: id
@@ -26565,11 +27373,18 @@ paths:
           description: Error
       summary: Update a vendor
       x-omniglass-permission: vendor:update
-  /vendors/{id}:rename:
+  /vendors/{namespace}/{id}:rename:
     post:
       description: Moves a custom vendor's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official vendor keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by vendor:rename.
       operationId: rename-vendor
       parameters:
+        - description: "The namespace the key is read in: og for the platform's shipped rows, local for the operator's (ADR-0318)"
+          in: path
+          name: namespace
+          required: true
+          schema:
+            pattern: ^[a-z0-9][a-z0-9-]*$
+            type: string
         - description: The row, by its current name or its uuid
           in: path
           name: id

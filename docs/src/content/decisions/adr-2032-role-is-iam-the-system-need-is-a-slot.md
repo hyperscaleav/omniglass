@@ -13,7 +13,7 @@ refs: [2032, 2028, 2061]
   principal (`/roles`, the `role` table, `role:read:admin`, the Admin Roles page), unchanged. The
   place in a system that a component fills is a **system slot**, on every surface: the schema
   (`system_slot`, `system_slot_assignment`, `system_slot_type`, `system_slot_product`,
-  `slot_choice`), the API (`/standards/{id}/slots`, `/systems/{name}/slots`, the assignment and
+  `slot_choice`), the API (`/standards/{namespace}/{id}/slots`, `/systems/{name}/slots`, the assignment and
   `:swapPositions` routes under them), the CLI subgroups, the expression accessor (`$slot`), the
   Go names and the console and docs. The name is owner-qualified, as `system_role` was: a slot of
   a system, which a component fills. Prose says **slot** where the system is already in view

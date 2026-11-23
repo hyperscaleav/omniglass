@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -178,4 +179,28 @@ func pathArgs(n int) cobra.PositionalArgs {
 		}
 		return nil
 	}
+}
+
+// catalogAddress reads a catalog key positional into the namespace and key
+// path segments its route takes (#1434, ADR-0318): "ns/key" names both, and a
+// bare name follows the search path, the operator's local row first, then the
+// platform's og one, by one lookup on the catalog's collection.
+func catalogAddress(cmd *cobra.Command, collection, arg string) (string, string, error) {
+	if ns, key, ok := strings.Cut(arg, "/"); ok {
+		for _, s := range []string{ns, key} {
+			if s == "" || s == "." || s == ".." || strings.Contains(s, "/") {
+				return "", "", fmt.Errorf("argument %q is not a namespace/key address", arg)
+			}
+		}
+		return pathSegment(ns), pathSegment(key), nil
+	}
+	key := pathSegment(arg)
+	res, err := clientFromCmd(cmd).Do(cmd.Context(), http.MethodGet, "/api/v1/"+collection+"/local/"+key, nil)
+	if err != nil {
+		return "", "", err
+	}
+	if res.Status == http.StatusNotFound {
+		return "og", key, nil
+	}
+	return "local", key, nil
 }

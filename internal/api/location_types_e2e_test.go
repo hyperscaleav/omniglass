@@ -118,13 +118,13 @@ func TestLocationTypeCRUDAPI(t *testing.T) {
 		map[string]any{"name": "wing", "label": "Wing", "icon": "layers"}, http.StatusCreated)
 
 	// Update it (200).
-	c.do(ownerTok, http.MethodPatch, "/location-types/wing",
+	c.do(ownerTok, http.MethodPatch, "/location-types/local/wing",
 		map[string]any{"label": "West Wing"}, http.StatusOK)
 
 	// A shipped type is editable: the fleet shapes its own place vocabulary,
 	// through a fork since #703. TestLocationTypeForkAndClearAPI holds what the
 	// fork does on the wire.
-	c.do(ownerTok, http.MethodPatch, "/location-types/campus",
+	c.do(ownerTok, http.MethodPatch, "/location-types/og/campus",
 		map[string]any{"label": "Campus"}, http.StatusOK)
 
 	// "root" is reserved: creating a type with that id is refused (422).
@@ -157,17 +157,17 @@ func TestLocationTypeCRUDAPI(t *testing.T) {
 	if !found {
 		t.Fatal("annex type not in list")
 	}
-	c.do(ownerTok, http.MethodPatch, "/location-types/annex",
+	c.do(ownerTok, http.MethodPatch, "/location-types/local/annex",
 		map[string]any{"allowed_parent_types": []string{}}, http.StatusOK)
 
 	// In use: place a location of type wing, delete is refused (409).
 	c.do(ownerTok, http.MethodPost, "/locations",
 		map[string]any{"name": "w1", "location_type": "wing"}, http.StatusCreated)
-	c.do(ownerTok, http.MethodDelete, "/location-types/wing", nil, http.StatusConflict)
+	c.do(ownerTok, http.MethodDelete, "/location-types/local/wing", nil, http.StatusConflict)
 
 	// Remove the location, then the type deletes (204).
 	c.do(ownerTok, http.MethodDelete, "/locations/w1", nil, http.StatusNoContent)
-	c.do(ownerTok, http.MethodDelete, "/location-types/wing", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/location-types/local/wing", nil, http.StatusNoContent)
 }
 
 // TestLocationTypeForkAndClearAPI drives the two halves of this slice as an
@@ -212,7 +212,7 @@ func TestLocationTypeForkAndClearAPI(t *testing.T) {
 
 	// Editing a shipped type answers 200 with the SAME id, marked forked: the
 	// namespace never reaches the URL or the response.
-	shipped := decode(c.do(ownerTok, http.MethodPatch, "/location-types/campus",
+	shipped := decode(c.do(ownerTok, http.MethodPatch, "/location-types/og/campus",
 		map[string]any{"label": "Site", "name_rule": map[string]any{"stem": "site"}}, http.StatusOK))
 	if shipped.Label != "Site" || !shipped.Official || !shipped.Forked {
 		t.Fatalf("the forked shipped type = %+v, want Site with official and forked both true", shipped)
@@ -222,14 +222,14 @@ func TestLocationTypeForkAndClearAPI(t *testing.T) {
 	}
 
 	// An omitted key is still unchanged: only the mask clears.
-	kept := decode(c.do(ownerTok, http.MethodPatch, "/location-types/campus",
+	kept := decode(c.do(ownerTok, http.MethodPatch, "/location-types/og/campus",
 		map[string]any{"label": "Site 2"}, http.StatusOK))
 	if kept.NameRule == nil {
 		t.Fatal("an unrelated patch cleared the rule; an omitted key means unchanged")
 	}
 
 	// The mask plus no rule is the clear, and it is the ONLY spelling of it.
-	cleared := decode(c.do(ownerTok, http.MethodPatch, "/location-types/campus",
+	cleared := decode(c.do(ownerTok, http.MethodPatch, "/location-types/og/campus",
 		map[string]any{"update_mask": []string{"name_rule"}}, http.StatusOK))
 	if cleared.NameRule != nil {
 		t.Fatalf("the rule after a masked clear = %+v, want absent (operator-named)", cleared.NameRule)
@@ -240,23 +240,23 @@ func TestLocationTypeForkAndClearAPI(t *testing.T) {
 
 	// A mask naming a field this resource does not patch is a 422 naming it,
 	// never a silent no-op (ADR-0091).
-	c.do(ownerTok, http.MethodPatch, "/location-types/campus",
+	c.do(ownerTok, http.MethodPatch, "/location-types/og/campus",
 		map[string]any{"update_mask": []string{"official"}}, http.StatusUnprocessableEntity)
 
 	// :restore discards the whole fork, rule included.
-	restored := decode(c.do(ownerTok, http.MethodPost, "/location-types/campus:restore", nil, http.StatusOK))
+	restored := decode(c.do(ownerTok, http.MethodPost, "/location-types/og/campus:restore", nil, http.StatusOK))
 	if restored.Label != "Campus" || restored.Forked || restored.ID != shipped.ID {
 		t.Fatalf("the restored type = %+v, want the shipped Campus under the same id, unforked", restored)
 	}
 	// Nothing left to discard is a 409 rather than a silent success.
-	c.do(ownerTok, http.MethodPost, "/location-types/campus:restore", nil, http.StatusConflict)
-	c.do(ownerTok, http.MethodPost, "/location-types/no-such-type:restore", nil, http.StatusNotFound)
+	c.do(ownerTok, http.MethodPost, "/location-types/og/campus:restore", nil, http.StatusConflict)
+	c.do(ownerTok, http.MethodPost, "/location-types/local/no-such-type:restore", nil, http.StatusNotFound)
 
 	// The same clear on an operator's OWN type is a plain write of null, and
 	// reads the same from here: two paths, one operator-visible behavior.
 	c.do(ownerTok, http.MethodPost, "/location-types",
 		map[string]any{"name": "deck", "label": "Deck", "name_rule": map[string]any{"stem": ""}}, http.StatusCreated)
-	own := decode(c.do(ownerTok, http.MethodPatch, "/location-types/deck",
+	own := decode(c.do(ownerTok, http.MethodPatch, "/location-types/local/deck",
 		map[string]any{"update_mask": []string{"name_rule"}}, http.StatusOK))
 	if own.NameRule != nil || own.Official || own.Forked {
 		t.Fatalf("the operator's own type after a masked clear = %+v, want no rule and neither flag", own)

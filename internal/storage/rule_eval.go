@@ -154,7 +154,7 @@ func (e *ruleEvaluator) typeID(ctx context.Context, tx pgx.Tx, name string) (uui
 		return id, true
 	}
 	var s string
-	if err := tx.QueryRow(ctx, `select id::text from component_type_in_effect() component_type where name = $1`, name).Scan(&s); err != nil {
+	if err := tx.QueryRow(ctx, `select id::text from `+refRows("component_type", name)+` component_type where `+catalogRefCol(name)+` = $1`, name).Scan(&s); err != nil {
 		return uuid.UUID{}, false
 	}
 	id, err := uuid.Parse(s)
@@ -1103,6 +1103,19 @@ func sampleKeys[T any](evs []T, key func(T) string) []string {
 		if !seen[k] {
 			seen[k] = true
 			out = append(out, k)
+		}
+	}
+	return out
+}
+
+// bareWrites is the writes of evs a rule addressing a key by its bare name
+// judges (#1433, #1457): those whose key walks the search path, and those
+// written in a namespace the caller found to be the one the bare name reaches.
+func bareWrites[T interface{ judgedBare() bool }](evs []T) []T {
+	out := make([]T, 0, len(evs))
+	for _, ev := range evs {
+		if ev.judgedBare() {
+			out = append(out, ev)
 		}
 	}
 	return out

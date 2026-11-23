@@ -26,7 +26,7 @@ summary: "`location_type` adopts the **registry fork** (ADR-0095) rather than gr
   `ON CONFLICT DO UPDATE` and a withdrawal is just another write. An operator still shapes their own
   place vocabulary: an edit of a shipped type stores their whole version of its mutable columns as a
   shadow keyed on the row's own uuid, every read resolves the shadow over the row, and
-  `POST /location-types/{id}:restore` discards it. One uuid and one name per logical row either way,
+  `POST /location-types/{namespace}/{id}:restore` discards it. One uuid and one name per logical row either way,
   so no foreign key, no URL and no audit row learns about the fork. The rejected alternative was the
   `default_template` / `template` column pair the global label rules use, which is right for a table
   of three rows with no operator-created siblings and wrong here: it doubles every future column on a

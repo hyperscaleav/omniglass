@@ -158,7 +158,7 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
     if (!confirm(`Delete product "${r.name}"?`)) return;
     setErr(null);
     try {
-      await deleteProduct(r.name);
+      await deleteProduct(r);
       blades.close();
       await qc.invalidateQueries({ queryKey: PRODUCTS_KEY });
     } catch (e) {
@@ -174,7 +174,7 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
       // An emptied picker ("None") and an emptied icon ride as "", the
       // three-state string's clear (#260), never as an omitted field, which the
       // patch reads as "unchanged" and the refetch would revert.
-      await updateProduct(r.name, {
+      await updateProduct(r, {
         label: label(),
         kind: kind(),
         component_type: componentType(),
@@ -238,9 +238,9 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
           <BladeField label="Driver" mono value={() => r().driver ?? ""}>
             <DriverSelect value={driverId()} onChange={setDriverId} />
           </BladeField>
-          <ProductLifecycle productId={r().name} />
-          <ProductContractEditor productId={r().name} official={r().official} />
-          <ProductContractEditor productId={r().name} official={r().official} lane="metric" />
+          <ProductLifecycle namespace={r().namespace} productId={r().name} />
+          <ProductContractEditor namespace={r().namespace} productId={r().name} official={r().official} />
+          <ProductContractEditor namespace={r().namespace} productId={r().name} official={r().official} lane="metric" />
         </div>
       )}
     </Show>
@@ -407,9 +407,9 @@ function IconOverrideField(p: { componentType: string; value: string; onChange: 
 // ProductLifecycle is the product's lifecycle group (#2366): the contract defaults
 // for the six lifecycle fields, formatted, which every component of the product
 // inherits unless it overrides the dates.
-function ProductLifecycle(props: { productId: string }): JSX.Element {
-  const propsQ = useQuery(() => ({ queryKey: classifierPropertiesKey("product", props.productId), queryFn: () => classifierProperties("product", props.productId) }));
-  const metricsQ = useQuery(() => ({ queryKey: classifierMetricsKey("product", props.productId), queryFn: () => classifierMetrics("product", props.productId) }));
+function ProductLifecycle(props: { namespace: string; productId: string }): JSX.Element {
+  const propsQ = useQuery(() => ({ queryKey: classifierPropertiesKey("product", props.productId), queryFn: () => classifierProperties("product", { namespace: props.namespace, id: props.productId }) }));
+  const metricsQ = useQuery(() => ({ queryKey: classifierMetricsKey("product", props.productId), queryFn: () => classifierMetrics("product", { namespace: props.namespace, id: props.productId }) }));
   const rows = createMemo(() => lifecycleRows(propsQ.data ?? [], metricsQ.data ?? []));
   return (
     <Show when={rows().length > 0}>

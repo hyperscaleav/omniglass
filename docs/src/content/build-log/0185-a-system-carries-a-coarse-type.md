@@ -42,7 +42,7 @@ form: bullet
   both come back as the registry's clean in-use 409 rather than whichever raw foreign-key error fired
   first; `deleteTypeRow` became variadic to allow it.
 
-  Surfaces: `GET/POST /system-types` and `PATCH/DELETE /system-types/{id}` under
+  Surfaces: `GET/POST /system-types` and `PATCH/DELETE /system-types/{namespace}/{id}` under
   `system_type:read|create|update|delete`, the generated CLI verbs, a **System Types** console page
   under Catalog > Systems beside Standards, and a tree-indented type picker on the system create form
   and edit blade. `system.system_type_id` follows the house three-state patch convention, so an

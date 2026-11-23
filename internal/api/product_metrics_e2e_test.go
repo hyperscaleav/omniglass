@@ -57,7 +57,7 @@ func TestProductMetricsAPI(t *testing.T) {
 	// PUT declares the line. The metric must already exist in the catalog
 	// (room-temperature is seeded); the contract only names it.
 	var set productMetricWire
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/products/acme-panel/metrics/room-temperature",
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/products/local/acme-panel/metrics/og/room-temperature",
 		map[string]any{"default_value": 10.5, "required": true}, http.StatusOK), &set); err != nil {
 		t.Fatalf("decode set: %v", err)
 	}
@@ -67,7 +67,7 @@ func TestProductMetricsAPI(t *testing.T) {
 
 	// GET lists the contract.
 	var listed productMetricsWire
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/products/acme-panel/metrics", nil, http.StatusOK), &listed); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/products/local/acme-panel/metrics", nil, http.StatusOK), &listed); err != nil {
 		t.Fatalf("decode list: %v", err)
 	}
 	if len(listed.Metrics) != 1 || listed.Metrics[0].MetricTypeName != "room-temperature" {
@@ -75,14 +75,14 @@ func TestProductMetricsAPI(t *testing.T) {
 	}
 
 	// A second PUT revises the same line rather than adding another.
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/products/acme-panel/metrics/room-temperature",
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/products/local/acme-panel/metrics/og/room-temperature",
 		map[string]any{"default_value": 20}, http.StatusOK), &set); err != nil {
 		t.Fatalf("decode revise: %v", err)
 	}
 	if set.Required || string(set.DefaultValue) != `20` {
 		t.Fatalf("revised = %+v, want required=false with default 20", set)
 	}
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/products/acme-panel/metrics", nil, http.StatusOK), &listed); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/products/local/acme-panel/metrics", nil, http.StatusOK), &listed); err != nil {
 		t.Fatalf("decode list after revise: %v", err)
 	}
 	if len(listed.Metrics) != 1 || string(listed.Metrics[0].DefaultValue) != `20` {
@@ -90,25 +90,25 @@ func TestProductMetricsAPI(t *testing.T) {
 	}
 
 	// DELETE withdraws the line; withdrawing it twice is an explicit miss.
-	c.do(ownerTok, http.MethodDelete, "/products/acme-panel/metrics/room-temperature", nil, http.StatusNoContent)
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/products/acme-panel/metrics", nil, http.StatusOK), &listed); err != nil {
+	c.do(ownerTok, http.MethodDelete, "/products/local/acme-panel/metrics/og/room-temperature", nil, http.StatusNoContent)
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/products/local/acme-panel/metrics", nil, http.StatusOK), &listed); err != nil {
 		t.Fatalf("decode list after delete: %v", err)
 	}
 	if len(listed.Metrics) != 0 {
 		t.Fatalf("contract after delete = %+v, want empty", listed.Metrics)
 	}
-	c.do(ownerTok, http.MethodDelete, "/products/acme-panel/metrics/room-temperature", nil, http.StatusNotFound)
+	c.do(ownerTok, http.MethodDelete, "/products/local/acme-panel/metrics/og/room-temperature", nil, http.StatusNotFound)
 
 	// The seeded official product ships its contract with the release, so both
 	// writes are refused (the official read-only rule, not a permission fault).
-	c.do(ownerTok, http.MethodPut, "/products/generic-device/metrics/room-temperature",
+	c.do(ownerTok, http.MethodPut, "/products/og/generic-device/metrics/og/room-temperature",
 		map[string]any{"required": true}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodDelete, "/products/generic-device/metrics/room-temperature", nil, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodDelete, "/products/og/generic-device/metrics/og/room-temperature", nil, http.StatusUnprocessableEntity)
 
 	// A metric the catalog does not know is a request fault, not a 500, and an
 	// unknown product is a 404.
-	c.do(ownerTok, http.MethodPut, "/products/acme-panel/metrics/not-a-metric",
+	c.do(ownerTok, http.MethodPut, "/products/local/acme-panel/metrics/local/not-a-metric",
 		map[string]any{"required": true}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodPut, "/products/no-such-product/metrics/room-temperature",
+	c.do(ownerTok, http.MethodPut, "/products/local/no-such-product/metrics/og/room-temperature",
 		map[string]any{"required": true}, http.StatusNotFound)
 }

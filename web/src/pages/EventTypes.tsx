@@ -118,7 +118,7 @@ function EventTypeBladeBody(p: { name: string }): JSX.Element {
     if (!confirm(`Delete event type "${r.name}"?`)) return;
     setErr(null);
     try {
-      await deleteEventType(r.name);
+      await deleteEventType(r);
       blades.close();
       await qc.invalidateQueries({ queryKey: EVENT_TYPES_KEY });
     } catch (e) {
@@ -131,7 +131,7 @@ function EventTypeBladeBody(p: { name: string }): JSX.Element {
     if (!r) return;
     setErr(null);
     try {
-      await updateEventType(r.name, { label: label(), description: description() });
+      await updateEventType(r, { label: label(), description: description() });
       await qc.invalidateQueries({ queryKey: EVENT_TYPES_KEY });
     } catch (e) {
       setErr(describeError(e));

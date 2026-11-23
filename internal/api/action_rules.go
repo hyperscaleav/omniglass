@@ -30,6 +30,7 @@ type actionRuleBody struct {
 	Targets            []string  `json:"targets" doc:"The notification targets it sends to, by name"`
 	OptOutAllowed      bool      `json:"opt_out_allowed" doc:"Whether a member of a group it targets may opt out of it for themselves (:optOut); false by default, so an on-call page cannot be opted out of unless an admin allows it"`
 	Enabled            bool      `json:"enabled"`
+	Namespace          string    `json:"namespace" doc:"The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"`
 	Official           bool      `json:"official" doc:"Shipped with Omniglass by the boot seed: only its enabled switch, its opt-out allowance and the targets added to it are the operator's, and it cannot be deleted"`
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`
@@ -42,7 +43,7 @@ func toActionRuleBody(r *storage.ActionRule) actionRuleBody {
 	}
 	return actionRuleBody{ID: r.ID, Name: r.Name, Label: r.Label, Description: r.Description, On: r.On, When: r.When,
 		NotificationType: r.NotificationType, NotificationTypeID: r.NotificationTypeID, Targets: targets,
-		OptOutAllowed: r.OptOutAllowed, Enabled: r.Enabled, Official: r.Official, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
+		OptOutAllowed: r.OptOutAllowed, Enabled: r.Enabled, Official: r.Official, Namespace: catalogNamespaceOf(r.Official), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
 }
 
 type listActionRulesOutput struct {
@@ -59,6 +60,7 @@ type actionRuleRefInput struct {
 
 type createActionRuleInput struct {
 	Body struct {
+		CatalogCreateNamespace
 		Name             string   `json:"name" minLength:"1" doc:"The rule's name (lowercase kebab)"`
 		Label            string   `json:"label,omitempty" required:"false" doc:"A human label"`
 		Description      string   `json:"description,omitempty" required:"false" doc:"What it is for"`
@@ -108,7 +110,7 @@ func registerActionRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-action-rule",
 		Method:      http.MethodGet,
-		Path:        "/action-rules/{name}",
+		Path:        "/action-rules/{namespace}/{name}",
 		Summary:     "Get an action rule",
 		Description: "Returns one action rule by name or uuid. Gated by rule:read.",
 	}, "rule", "read"), func(ctx context.Context, in *actionRuleRefInput) (*actionRuleOutput, error) {
@@ -140,7 +142,7 @@ func registerActionRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "update-action-rule",
 		Method:      http.MethodPatch,
-		Path:        "/action-rules/{name}",
+		Path:        "/action-rules/{namespace}/{name}",
 		Summary:     "Update an action rule",
 		Description: "Patches a rule (an absent field is unchanged; on and targets replace their sets). It acts on transitions from the next one; a notification already queued is not re-rendered. A shipped (official) rule takes only enabled, opt_out_allowed and targets that keep the shipped ones; anything else is a 409. Audited. Gated by rule:update, with an all-scope grant.",
 	}, "rule", "update"), func(ctx context.Context, in *updateActionRuleInput) (*actionRuleOutput, error) {
@@ -157,7 +159,7 @@ func registerActionRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-action-rule",
 		Method:        http.MethodDelete,
-		Path:          "/action-rules/{name}",
+		Path:          "/action-rules/{namespace}/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete an action rule",
 		Description:   "Removes a rule; the notifications it queued keep its name. A shipped (official) rule is a 409: disable it instead. Audited. Gated by rule:delete, with an all-scope grant.",

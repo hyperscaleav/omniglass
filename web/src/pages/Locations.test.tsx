@@ -27,15 +27,15 @@ const hqB1: Location = { id: uuidFor("l-b1"), name: "hq-b1", label: "HQ B1", loc
 // type, so a fixture with the handle in the id slot would hide a uuid-vs-name
 // join bug (that is how #466 shipped).
 const types: LocationType[] = [
-  { id: uuidFor("lt-campus"), name: "campus", label: "Campus", icon: "landmark", official: true, forked: false, allowed_parent_types: ["root"] },
-  { id: uuidFor("lt-building"), name: "building", label: "Building", icon: "building", official: true, forked: false, allowed_parent_types: ["root", "campus"] },
+  { id: uuidFor("lt-campus"), name: "campus", label: "Campus", icon: "landmark", namespace: "og", official: true, forked: false, allowed_parent_types: ["root"] },
+  { id: uuidFor("lt-building"), name: "building", label: "Building", icon: "building", namespace: "og", official: true, forked: false, allowed_parent_types: ["root", "campus"] },
   // Unconstrained: any parent. Exists so the self-exclusion test below cannot
   // lean on the allowed-parents filter to hide the node's own subtree.
-  { id: uuidFor("lt-area"), name: "area", label: "Area", icon: "map-pin", official: false, forked: false, allowed_parent_types: [] },
+  { id: uuidFor("lt-area"), name: "area", label: "Area", icon: "map-pin", namespace: "local", official: false, forked: false, allowed_parent_types: [] },
   // The one type here that NAMES its own rows (#687): its rule is what the
   // create form previews, and its absence on the three above is what makes them
   // the operator-named case in the same fixture.
-  { id: uuidFor("lt-room"), name: "room", label: "Room", icon: "door-open", official: false, forked: false, allowed_parent_types: [], name_rule: { stem: "room", bare_first: true, examples: ["room", "room-2"] } },
+  { id: uuidFor("lt-room"), name: "room", label: "Room", icon: "door-open", namespace: "local", official: false, forked: false, allowed_parent_types: [], name_rule: { stem: "room", bare_first: true, examples: ["room", "room-2"] } },
 ];
 // The campus type's contract, resolved against hq: one inherited default, plus one
 // value hq sets that no contract declares.

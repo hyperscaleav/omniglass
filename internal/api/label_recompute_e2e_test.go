@@ -94,7 +94,7 @@ func TestRuleChangePreviewsThenAppliesOverHTTP(t *testing.T) {
 
 	// The rule edit itself is a component_type edit, the tier an operator
 	// actually reaches: it forks the shipped row rather than writing it.
-	c.do(tok, http.MethodPatch, "/component-types/display",
+	c.do(tok, http.MethodPatch, "/component-types/og/display",
 		map[string]any{"label_rule": "{{.LocationLabel}} {{.TypeName}} {{.Ordinal}}"}, http.StatusOK)
 
 	// Nothing has moved yet: editing a rule does not silently rewrite the fleet.
@@ -163,10 +163,10 @@ func TestALocationRecomputeReportsWhatItStales(t *testing.T) {
 		map[string]any{"name": "room-a", "location_type": "room", "parent": "hq"}, http.StatusCreated)
 	c.do(tok, http.MethodPost, "/components",
 		map[string]any{"product": disp.Name, "location": "room-a"}, http.StatusCreated)
-	c.do(tok, http.MethodPatch, "/component-types/display",
+	c.do(tok, http.MethodPatch, "/component-types/og/display",
 		map[string]any{"label_rule": "{{.LocationLabel}} {{.TypeName}}"}, http.StatusOK)
 	c.do(tok, http.MethodPost, "/components:recomputeLabels", nil, http.StatusOK)
-	c.do(tok, http.MethodPatch, "/location-types/room",
+	c.do(tok, http.MethodPatch, "/location-types/og/room",
 		map[string]any{"label_rule": "{{.TypeName}} {{.Name}}"}, http.StatusOK)
 
 	preview := decodeRecompute(t, "location preview", c.do(tok, http.MethodPost, "/locations:previewLabels", nil, http.StatusOK))
@@ -241,7 +241,7 @@ func TestAPreviewIsBoundedByTheUpdateScopeJustAsTheApplyIs(t *testing.T) {
 	_ = theirs
 
 	// A rule everything drifts against.
-	c.do(tok, http.MethodPatch, "/component-types/display",
+	c.do(tok, http.MethodPatch, "/component-types/og/display",
 		map[string]any{"label_rule": "{{.LocationLabel}} {{.TypeName}}"}, http.StatusOK)
 
 	// Reads the whole fleet, may update exactly one component.

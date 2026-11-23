@@ -1,4 +1,5 @@
 import { api } from "../api/client";
+import type { CatalogNameRef } from "./catalog_key";
 import type { CalcInputBody, CalcInputReadBody, CalcOwnerStateBody, CalcPreviewInputBody, CalcPreviewOutputBody, CalcPreviewOwnerBody, CalcReduceBody, CalcRuleBody, CalcSelectorBody, CreateCalcRuleInputBody, UpdateCalcRuleInputBody } from "../api/api.gen";
 import { entityNameError } from "./names";
 import { CALC_ALIAS_MAX, CALC_RESERVED_NAMES } from "./calc_names.gen";
@@ -57,8 +58,8 @@ function lists<T extends { missing?: string[] | null; skipped?: unknown[] | null
 // getCalcState reads a rule's state on the owners the caller may read, at
 // most limit of them in the server's order (failing, pending, missing,
 // valued), with how many there are in all.
-export async function getCalcState(name: string, limit?: number): Promise<CalcRuleState> {
-  const { data, error } = await api.GET("/calc-rules/{name}/state", { params: { path: { name }, query: limit ? { limit } : {} } });
+export async function getCalcState(ref: CatalogNameRef, limit?: number): Promise<CalcRuleState> {
+  const { data, error } = await api.GET("/calc-rules/{namespace}/{name}/state", { params: { path: { namespace: ref.namespace, name: ref.name }, query: limit ? { limit } : {} } });
   if (error) throw error;
   return {
     owners: (data?.owners ?? []).map((o) => lists(o) as CalcOwnerState),
@@ -73,22 +74,22 @@ export async function createCalcRule(body: CreateCalcRule): Promise<CalcRule> {
   return normalizeRule(data as CalcRuleBody);
 }
 
-export async function updateCalcRule(name: string, body: UpdateCalcRule): Promise<CalcRule> {
-  const { data, error } = await api.PATCH("/calc-rules/{name}", { params: { path: { name } }, body });
+export async function updateCalcRule(ref: CatalogNameRef, body: UpdateCalcRule): Promise<CalcRule> {
+  const { data, error } = await api.PATCH("/calc-rules/{namespace}/{name}", { params: { path: { namespace: ref.namespace, name: ref.name } }, body });
   if (error) throw error;
   return normalizeRule(data as CalcRuleBody);
 }
 
 // renameCalcRule moves a rule's name: its own custom method, as for event
 // rules (#977); nothing inside the platform holds the name.
-export async function renameCalcRule(name: string, to: string): Promise<CalcRule> {
-  const { data, error } = await api.POST("/calc-rules/{name}:rename", { params: { path: { name } }, body: { name: to } });
+export async function renameCalcRule(ref: CatalogNameRef, to: string): Promise<CalcRule> {
+  const { data, error } = await api.POST("/calc-rules/{namespace}/{name}:rename", { params: { path: { namespace: ref.namespace, name: ref.name } }, body: { name: to } });
   if (error) throw error;
   return normalizeRule(data as CalcRuleBody);
 }
 
-export async function deleteCalcRule(name: string): Promise<void> {
-  const { error } = await api.DELETE("/calc-rules/{name}", { params: { path: { name } } });
+export async function deleteCalcRule(ref: CatalogNameRef): Promise<void> {
+  const { error } = await api.DELETE("/calc-rules/{namespace}/{name}", { params: { path: { namespace: ref.namespace, name: ref.name } } });
   if (error) throw error;
 }
 

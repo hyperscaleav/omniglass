@@ -23,14 +23,14 @@ const declared: DeclaredSlot[] = [
 ];
 
 const typeCatalog: ComponentType[] = [
-  { id: uuidFor("t-video-bar"), name: "video-bar", label: "Video Bar", official: true, forked: false, default_tags: [] },
-  { id: uuidFor("t-display"), name: "display", label: "Display", official: true, forked: false, default_tags: [] },
-  { id: uuidFor("t-mic"), name: "mic", label: "Mic", official: true, forked: false, default_tags: [] },
+  { id: uuidFor("t-video-bar"), name: "video-bar", label: "Video Bar", namespace: "og", official: true, forked: false, default_tags: [] },
+  { id: uuidFor("t-display"), name: "display", label: "Display", namespace: "og", official: true, forked: false, default_tags: [] },
+  { id: uuidFor("t-mic"), name: "mic", label: "Mic", namespace: "og", official: true, forked: false, default_tags: [] },
 ];
 
 const productCatalog: Product[] = [
-  { id: uuidFor("p-qm55"), name: "samsung-qm55", label: "Samsung QM55", kind: "device", component_type: "display", component_type_id: uuidFor("t-display"), official: true },
-  { id: uuidFor("p-bar"), name: "cisco-room-bar", label: "Cisco Room Bar", kind: "device", component_type: "video-bar", component_type_id: uuidFor("t-video-bar"), official: true },
+  { id: uuidFor("p-qm55"), name: "samsung-qm55", label: "Samsung QM55", kind: "device", component_type: "display", component_type_id: uuidFor("t-display"), namespace: "og", official: true },
+  { id: uuidFor("p-bar"), name: "cisco-room-bar", label: "Cisco Room Bar", kind: "device", component_type: "video-bar", component_type_id: uuidFor("t-video-bar"), namespace: "og", official: true },
 ];
 
 const owner: Me = { user: { id: "p", kind: "person" }, permissions: [">"], grants: [] };
@@ -52,7 +52,7 @@ function mount(opts: { me?: Me; official?: boolean; rows?: DeclaredSlot[]; editi
   const result = render(() => (
     <QueryClientProvider client={qc}>
       <BladeEditContext.Provider value={edit}>
-        <SlotEditor id="meeting-room" official={opts.official ?? false} />
+        <SlotEditor namespace="local" id="meeting-room" official={opts.official ?? false} />
       </BladeEditContext.Provider>
     </QueryClientProvider>
   ));
@@ -235,7 +235,7 @@ describe("SlotEditor on a standard", () => {
   });
 
   it("renders an official standard's slots read-only", () => {
-    const { getByText, queryByLabelText } = mount({ official: true });
+    const { getByText, queryByLabelText } = mount({ namespace: "og", official: true });
     expect(getByText("table-mic")).toBeTruthy(); // the list still renders
     expect(getByText("official slots, read-only")).toBeTruthy();
     expect(queryByLabelText("Slot name")).toBeNull();

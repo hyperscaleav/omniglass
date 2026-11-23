@@ -73,7 +73,7 @@ func registerLocationTypeMetricRoutes(api huma.API, a *authenticator, gw storage
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-location-type-metrics",
 		Method:      http.MethodGet,
-		Path:        "/location-types/{id}/metrics",
+		Path:        "/location-types/{namespace}/{id}/metrics",
 		Summary:     "List a location type's declared metrics",
 		Description: "Lists the location type's declared-metric contract (which metrics every location of the type carries), ordered by metric name, each with its optional default and required flag. Gated by location_type:read.",
 	}, "location_type", "read"), func(ctx context.Context, in *locationTypePathInput) (*listLocationTypeMetricsOutput, error) {
@@ -92,7 +92,7 @@ func registerLocationTypeMetricRoutes(api huma.API, a *authenticator, gw storage
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "set-location-type-metric",
 		Method:      http.MethodPut,
-		Path:        "/location-types/{id}/metrics/{metric}",
+		Path:        "/location-types/{namespace}/{id}/metrics/{metric_namespace}/{metric}",
 		Summary:     "Declare a metric on a location type",
 		Description: "Declares a catalog metric on a location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). A shipped (official) type's contract is writable too: a contract line is a row in its own table and nothing seeds one, so every line is an operator's. An unknown type is a 404 and a metric the catalog does not know is a 422. Gated by location_type:update.",
 	}, "location_type", "update"), func(ctx context.Context, in *setLocationTypeMetricInput) (*locationTypeMetricOutput, error) {
@@ -114,7 +114,7 @@ func registerLocationTypeMetricRoutes(api huma.API, a *authenticator, gw storage
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-location-type-metric",
 		Method:        http.MethodDelete,
-		Path:          "/location-types/{id}/metrics/{metric}",
+		Path:          "/location-types/{namespace}/{id}/metrics/{metric_namespace}/{metric}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Withdraw a metric from a location type",
 		Description:   "Removes one line from a location type's contract, a shipped (official) type's included, since nothing seeds a contract line; locations of the type keep any samples the series already holds, now off-contract. A metric the type does not declare is a 404, and so is an unknown type. Gated by location_type:delete.",

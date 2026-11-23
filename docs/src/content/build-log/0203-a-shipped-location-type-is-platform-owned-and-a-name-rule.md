@@ -18,7 +18,7 @@ form: bullet
   re-seed would have stomped their edits. So the ownership model is the fix rather than the seed
   statement: `location_type` becomes the second adopter of the registry fork (ADR-0095), shipped rows
   seed official, an operator's edit stores their whole version of the mutable columns in
-  `registry_shadow` under the row's own uuid, and `POST /location-types/{id}:restore` discards it.
+  `registry_shadow` under the row's own uuid, and `POST /location-types/{namespace}/{id}:restore` discards it.
   Every read resolves the shadow over the row, the placement check and the label and name generators
   included, so a fork reaches the surfaces it exists to change.
 

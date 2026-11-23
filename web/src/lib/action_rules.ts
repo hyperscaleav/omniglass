@@ -1,4 +1,5 @@
 import { api } from "../api/client";
+import type { CatalogNameRef } from "./catalog_key";
 import type { ActionRuleBody, CreateActionRuleInputBody, NotificationBody, UpdateActionRuleInputBody } from "../api/api.gen";
 import { entityNameError } from "./names";
 import { TRANSITIONS, type Transition } from "./subscriptions";
@@ -109,14 +110,14 @@ export async function createActionRule(body: CreateActionRule): Promise<ActionRu
   return data as ActionRule;
 }
 
-export async function updateActionRule(name: string, body: UpdateActionRule): Promise<ActionRule> {
-  const { data, error } = await api.PATCH("/action-rules/{name}", { params: { path: { name } }, body });
+export async function updateActionRule(ref: CatalogNameRef, body: UpdateActionRule): Promise<ActionRule> {
+  const { data, error } = await api.PATCH("/action-rules/{namespace}/{name}", { params: { path: { namespace: ref.namespace, name: ref.name } }, body });
   if (error) throw error;
   return data as ActionRule;
 }
 
-export async function deleteActionRule(name: string): Promise<void> {
-  const { error } = await api.DELETE("/action-rules/{name}", { params: { path: { name } } });
+export async function deleteActionRule(ref: CatalogNameRef): Promise<void> {
+  const { error } = await api.DELETE("/action-rules/{namespace}/{name}", { params: { path: { namespace: ref.namespace, name: ref.name } } });
   if (error) throw error;
 }
 

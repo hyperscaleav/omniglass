@@ -5,7 +5,7 @@ refs: [819, 921]
 ---
 
 `/rules` went from a stub to the event rule registry: each rule's key, its criteria in words, its
-severity in the level's color and its live state, read from `GET /event-rules/{name}/state` (the alarms
+severity in the level's color and its live state, read from `GET /event-rules/{namespace}/{name}/state` (the alarms
 it holds open and its streaks waiting out a sustain), with a blade listing both linked to their
 components and create, edit, disable and delete in a drawer, validated in TypeScript; official rules are
 read-only. **Catalog > Actions > Severity** sits

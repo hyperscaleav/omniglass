@@ -1,4 +1,5 @@
 import { api } from "../api/client";
+import type { CatalogIdRef } from "./catalog_key";
 import type { EffectiveSlotBody, SlotSpecBody, SystemSlotBody } from "../api/api.gen";
 
 // The system-slots data layer: thin typed wrappers over the generated client.
@@ -48,8 +49,8 @@ export async function systemSlots(name: string): Promise<EffectiveSlot[]> {
 
 // standardSlots reads what the standard declares; every conforming system
 // inherits these live.
-export async function standardSlots(id: string): Promise<DeclaredSlot[]> {
-  const { data, error } = await api.GET("/standards/{id}/slots", { params: { path: { id } } });
+export async function standardSlots(ref: CatalogIdRef): Promise<DeclaredSlot[]> {
+  const { data, error } = await api.GET("/standards/{namespace}/{id}/slots", { params: { path: { namespace: ref.namespace, id: ref.id } } });
   if (error) throw error;
   return (data?.slots ?? []) as DeclaredSlot[];
 }
@@ -58,16 +59,16 @@ export async function standardSlots(id: string): Promise<DeclaredSlot[]> {
 // slot is addressed by name, so the write is idempotent. A PATCH, and partial:
 // what the body carries changes, what it omits is left alone, and what its
 // update_mask names is written whether the body carries it or not (#666).
-export async function setStandardSlot(id: string, slot: string, body: SlotSpec): Promise<DeclaredSlot> {
-  const { data, error } = await api.PATCH("/standards/{id}/slots/{slot}", { params: { path: { id, slot } }, body });
+export async function setStandardSlot(ref: CatalogIdRef, slot: string, body: SlotSpec): Promise<DeclaredSlot> {
+  const { data, error } = await api.PATCH("/standards/{namespace}/{id}/slots/{slot}", { params: { path: { namespace: ref.namespace, id: ref.id, slot } }, body });
   if (error) throw error;
   return data as DeclaredSlot;
 }
 
 // deleteStandardSlot withdraws the slot from the standard, and with it every
 // assignment conforming systems made to it.
-export async function deleteStandardSlot(id: string, slot: string): Promise<void> {
-  const { error } = await api.DELETE("/standards/{id}/slots/{slot}", { params: { path: { id, slot } } });
+export async function deleteStandardSlot(ref: CatalogIdRef, slot: string): Promise<void> {
+  const { error } = await api.DELETE("/standards/{namespace}/{id}/slots/{slot}", { params: { path: { namespace: ref.namespace, id: ref.id, slot } } });
   if (error) throw error;
 }
 

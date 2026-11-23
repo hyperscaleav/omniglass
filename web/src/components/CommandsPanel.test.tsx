@@ -91,7 +91,7 @@ const endpoints = [{ id: uuidFor("cmd-ep"), name: "wss", transport: "wss", compo
 const drivers = [
   { id: uuidFor("cmd-drv"), name: "kestrel-ws", label: "Kestrel Control Socket", official: true, spec: { version: 1, transport: "wss", commands: [{ command_type: "set-volume", request: {} }] } },
 ] as Driver[];
-const catalog: CommandTypeRow[] = [{ name: "set-volume", label: "Set Volume", settle_window_seconds: 15, target_metric_type: "volume", official: true }];
+const catalog: CommandTypeRow[] = [{ name: "set-volume", label: "Set Volume", settle_window_seconds: 15, target_metric_type: "volume", namespace: "og", official: true }];
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });

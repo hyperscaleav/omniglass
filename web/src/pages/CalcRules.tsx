@@ -415,7 +415,7 @@ function CalcBladeBody(p: { name: string }): JSX.Element {
   const [stateLimit, setStateLimit] = createSignal(STATE_ROWS);
   const state = useQuery(() => ({
     queryKey: calcStateKey(ruleName(), stateLimit()),
-    queryFn: () => getCalcState(ruleName(), stateLimit()),
+    queryFn: () => getCalcState({ namespace: row()?.namespace ?? "local", name: ruleName() }, stateLimit()),
     refetchInterval: DETAIL_POLL_MS,
     enabled: !!row(),
     // Asking for more keeps the owners shown until the longer answer lands.
@@ -427,7 +427,7 @@ function CalcBladeBody(p: { name: string }): JSX.Element {
   async function toggleEnabled(r: CalcRule) {
     setErr(null);
     try {
-      await updateCalcRule(r.name, { enabled: !r.enabled });
+      await updateCalcRule(r, { enabled: !r.enabled });
       await qc.invalidateQueries({ queryKey: CALC_RULES_KEY });
     } catch (e) {
       setErr(describeError(e));
@@ -438,7 +438,7 @@ function CalcBladeBody(p: { name: string }): JSX.Element {
     if (!confirm(`Delete calc rule "${r.name}"? The values it wrote stay on their owners, as history naming it.`)) return;
     setErr(null);
     try {
-      await deleteCalcRule(r.name);
+      await deleteCalcRule(r);
       blades.close();
       await qc.invalidateQueries({ queryKey: CALC_RULES_KEY });
     } catch (e) {
@@ -779,8 +779,8 @@ export function CalcRuleForm(p: { mode: "create" | "edit"; rule?: CalcRule; onSa
       const to = d.name.trim();
       const body = updateCalcBody(d, was);
       let saved = was;
-      if (to === was.name || Object.keys(body).length > 0) saved = await updateCalcRule(was.name, body);
-      if (to !== was.name) saved = await renameCalcRule(was.name, to);
+      if (to === was.name || Object.keys(body).length > 0) saved = await updateCalcRule(was, body);
+      if (to !== was.name) saved = await renameCalcRule(was, to);
       await qc.invalidateQueries({ queryKey: CALC_RULES_KEY });
       p.onSaved(saved);
     } catch (e) {

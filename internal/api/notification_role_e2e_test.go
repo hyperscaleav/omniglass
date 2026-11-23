@@ -77,7 +77,7 @@ func TestARoleTargetReachesItsHoldersOverHTTP(t *testing.T) {
 		Official bool     `json:"official"`
 		Enabled  bool     `json:"enabled"`
 	}
-	if err := json.Unmarshal(p.c.do(p.owner, http.MethodGet, "/action-rules/platform-alarms-to-admins", nil, http.StatusOK), &rule); err != nil {
+	if err := json.Unmarshal(p.c.do(p.owner, http.MethodGet, "/action-rules/og/platform-alarms-to-admins", nil, http.StatusOK), &rule); err != nil {
 		t.Fatal(err)
 	}
 	if rule.When != "platform" || fmt.Sprint(rule.Targets) != "[platform-admins platform-owners]" || !rule.Official || !rule.Enabled {
@@ -91,8 +91,8 @@ func TestARoleTargetReachesItsHoldersOverHTTP(t *testing.T) {
 	}
 
 	// What the seed owns is a 409; the enabled switch is the operator's.
-	p.c.do(p.owner, http.MethodDelete, "/action-rules/platform-alarms-to-admins", nil, http.StatusConflict)
-	p.c.do(p.owner, http.MethodPatch, "/action-rules/platform-alarms-to-admins", map[string]any{"when": "true"}, http.StatusConflict)
+	p.c.do(p.owner, http.MethodDelete, "/action-rules/og/platform-alarms-to-admins", nil, http.StatusConflict)
+	p.c.do(p.owner, http.MethodPatch, "/action-rules/og/platform-alarms-to-admins", map[string]any{"when": "true"}, http.StatusConflict)
 	p.c.do(p.owner, http.MethodDelete, "/notification-targets/platform-admins", nil, http.StatusConflict)
 	p.c.do(p.owner, http.MethodPatch, "/notification-targets/platform-admins", map[string]any{"channels": []string{"inbox", "email"}}, http.StatusConflict)
 	p.c.do(p.owner, http.MethodPatch, "/notification-targets/platform-admins", map[string]any{"enabled": false}, http.StatusOK)

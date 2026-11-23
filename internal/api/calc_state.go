@@ -117,7 +117,7 @@ func registerCalcRuleStateRoutes(api huma.API, a *authenticator, gw storage.Gate
 		OperationID: "get-calc-rule-state",
 		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
-		Path:        "/calc-rules/{name}/state",
+		Path:        "/calc-rules/{namespace}/{name}/state",
 		Summary:     "Get a calc rule's live state",
 		Description: "What a calc rule last did on each owner the caller may read (components by the component read scope, systems by the system read scope), each owner named now: the value it computed, when and at which version, the inputs it found no value of, a system's members that held none and the instances it left out as stale (named when the caller may read the component, else counted), an error, since when a system has had no members, and whether the owner is pending (with when a deferred mark is due). Ordered on the server, failing owners first, then pending, then those it wrote nothing for, then those holding a value, each by name, and at most limit of them; total and the pending depth count every owner the caller may read, listed or not. Gated by rule:read.",
 	}, "rule", "read"), func(ctx context.Context, in *calcRuleStateInput) (*calcRuleStateOutput, error) {

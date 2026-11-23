@@ -52,7 +52,7 @@ describe("location_types data layer", () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse({ id: uuidFor("lt-wing"), name: "wing", label: "Wing v2", official: false }),
     );
-    await updateLocationType("wing", { label: "Wing v2" });
+    await updateLocationType({ namespace: "local", id: "wing" }, { label: "Wing v2" });
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("PATCH");
     expect(req.url).toContain("/api/v1/location-types/wing");
@@ -64,7 +64,7 @@ describe("location_types data layer", () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse({ id: uuidFor("lt-wing"), name: "wing", label: "Wing", official: false, allowed_parent_types: [] }),
     );
-    await updateLocationType("wing", { allowed_parent_types: [] });
+    await updateLocationType({ namespace: "local", id: "wing" }, { allowed_parent_types: [] });
     const req = fetchMock.mock.calls[0][0] as Request;
     const sent = await req.json();
     expect(sent).toHaveProperty("allowed_parent_types");
@@ -75,7 +75,7 @@ describe("location_types data layer", () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse({ id: uuidFor("lt-wing"), name: "wing", label: "X", official: false, allowed_parent_types: ["campus"] }),
     );
-    await updateLocationType("wing", { label: "X" });
+    await updateLocationType({ namespace: "local", id: "wing" }, { label: "X" });
     const req = fetchMock.mock.calls[0][0] as Request;
     const sent = await req.json();
     expect(sent).not.toHaveProperty("allowed_parent_types");
@@ -83,7 +83,7 @@ describe("location_types data layer", () => {
 
   it("deletes a location type by name", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
-    await deleteLocationType("wing");
+    await deleteLocationType({ namespace: "local", id: "wing" });
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("DELETE");
     expect(req.url).toContain("/api/v1/location-types/wing");

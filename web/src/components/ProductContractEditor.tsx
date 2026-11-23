@@ -6,6 +6,6 @@ import ContractEditor, { type ContractLane } from "./ContractEditor";
 // itself is classifier-generic (one component serves product, standard, and
 // location type) and lane-generic (properties by default, metrics on the metric
 // lane); this keeps the product call site reading as what it addresses.
-export default function ProductContractEditor(props: { productId: string; official: boolean; lane?: ContractLane }): JSX.Element {
-  return <ContractEditor classifier="product" lane={props.lane} id={props.productId} official={props.official} />;
+export default function ProductContractEditor(props: { namespace: string; productId: string; official: boolean; lane?: ContractLane }): JSX.Element {
+  return <ContractEditor classifier="product" lane={props.lane} namespace={props.namespace} id={props.productId} official={props.official} />;
 }

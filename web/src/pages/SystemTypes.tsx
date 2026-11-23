@@ -178,7 +178,7 @@ function SystemTypeBladeBody(p: { id: string }): JSX.Element {
     if (!confirm(`Delete system type "${r.name}"?`)) return;
     setErr(null);
     try {
-      await deleteSystemType(r.id);
+      await deleteSystemType(r);
       blades.close();
       await qc.invalidateQueries({ queryKey: SYSTEM_TYPES_KEY });
     } catch (e) {
@@ -203,7 +203,7 @@ function SystemTypeBladeBody(p: { id: string }): JSX.Element {
       // nullable OBJECT fields, and ADR-0091 keeps the sentinel for strings.
       // Emptying a ROOT type's stem is refused (422), since a root has no
       // ancestor to inherit one from.
-      await updateSystemType(r.id, {
+      await updateSystemType(r, {
         label: label(),
         stem: stem().trim(),
         abbrev: abbrev().trim(),

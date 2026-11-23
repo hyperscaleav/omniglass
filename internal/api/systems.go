@@ -69,6 +69,7 @@ type standardBody struct {
 	Label            string `json:"label"`
 	ParentStandard   string `json:"parent_standard,omitempty" doc:"The parent standard's handle"`
 	ParentStandardID string `json:"parent_standard_id,omitempty" doc:"The parent standard's uuid; the stable form of parent_standard"`
+	Namespace        string `json:"namespace" doc:"The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"`
 	Official         bool   `json:"official"`
 	// The room-layout declaration (#791, ADR-0128): {aspect, positions:[{slot,
 	// position, x, y}]}, coordinates normalized to [0, 1] against the aspect.
@@ -80,7 +81,7 @@ type standardBody struct {
 func toStandardBody(st *storage.Standard) standardBody {
 	return standardBody{
 		ID: st.ID, Label: st.Label,
-		Name: st.Name, ParentStandard: derefStr(st.ParentStandardName), ParentStandardID: derefStr(st.ParentStandardID), Official: st.Official,
+		Name: st.Name, ParentStandard: derefStr(st.ParentStandardName), ParentStandardID: derefStr(st.ParentStandardID), Official: st.Official, Namespace: catalogNamespaceOf(st.Official),
 		Map: st.Map,
 	}
 }
@@ -97,6 +98,7 @@ type standardPathInput struct {
 
 type createStandardInput struct {
 	Body struct {
+		CatalogCreateNamespace
 		Name             string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The globally unique name; renameable"`
 		Label            string `json:"label" minLength:"1" doc:"What an operator reads in pickers and lists"`
 		ParentStandardID string `json:"parent_standard_id,omitempty" doc:"A standard this one is a variant of, by handle or uuid"`
@@ -535,7 +537,7 @@ func registerStandardRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-standard",
 		Method:      http.MethodGet,
-		Path:        "/standards/{id}",
+		Path:        "/standards/{namespace}/{id}",
 		Summary:     "Get a standard",
 		Description: "Fetches a standard by id. Gated by standard:read.",
 	}, "standard", "read"), func(ctx context.Context, in *standardPathInput) (*standardOutput, error) {
@@ -549,7 +551,7 @@ func registerStandardRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "update-standard",
 		Method:      http.MethodPatch,
-		Path:        "/standards/{id}",
+		Path:        "/standards/{namespace}/{id}",
 		Summary:     "Update a standard",
 		Description: "Patches a custom standard's label, parent, label rule or map. The parent_standard_id field follows the three-state convention: an omitted field is unchanged, an explicit empty string clears it (a standalone standard), a handle or uuid sets it, and an unknown parent is a 422. Official standards are read-only (422). Gated by standard:update.",
 	}, "standard", "update"), func(ctx context.Context, in *updateStandardInput) (*standardOutput, error) {
@@ -572,7 +574,7 @@ func registerStandardRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-standard",
 		Method:        http.MethodDelete,
-		Path:          "/standards/{id}",
+		Path:          "/standards/{namespace}/{id}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a standard",
 		Description:   "Deletes a custom standard, refused if official (422) or still referenced by a system (409). Gated by standard:delete.",

@@ -19,9 +19,9 @@ const contract: ClassifierProperty[] = [
 ];
 
 const catalog: PropertyRow[] = [
-  { name: "serial-number", data_type: "string", label: "Serial number", official: true },
-  { name: "firmware-version", data_type: "string", label: "Firmware version", official: true },
-  { name: "port_count", data_type: "int", label: "Port count", official: true },
+  { name: "serial-number", data_type: "string", label: "Serial number", namespace: "og", official: true },
+  { name: "firmware-version", data_type: "string", label: "Firmware version", namespace: "og", official: true },
+  { name: "port_count", data_type: "int", label: "Port count", namespace: "og", official: true },
 ];
 
 const owner: Me = { user: { id: "p", kind: "person" }, permissions: [">"], grants: [] };
@@ -41,7 +41,7 @@ function mount(opts: { me?: Me; official?: boolean; lines?: ClassifierProperty[]
   return render(() => (
     <QueryClientProvider client={qc}>
       <BladeEditContext.Provider value={edit}>
-        <ProductContractEditor productId="tsw-1070" official={opts.official ?? false} />
+        <ProductContractEditor namespace="local" productId="tsw-1070" official={opts.official ?? false} />
       </BladeEditContext.Provider>
     </QueryClientProvider>
   ));

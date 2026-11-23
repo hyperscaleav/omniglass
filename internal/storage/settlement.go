@@ -352,7 +352,7 @@ func (p *PG) settleOnObservation(ctx context.Context, q txQuerier, ownerKind, ar
 	}
 	rows.Close()
 	for _, name := range types {
-		ct, err := scanCommandType(q.QueryRow(ctx, `select `+commandTypeCols+` from command_type_in_effect() command_type where name = $1`, name))
+		ct, err := scanCommandType(q.QueryRow(ctx, `select `+commandTypeCols+` from `+refRows("command_type", name)+` command_type where `+catalogRefCol(name)+` = $1`, name))
 		if err != nil {
 			return fmt.Errorf("storage: command type %s: %w", name, err)
 		}

@@ -60,7 +60,7 @@ func TestSystemPropertiesAPI(t *testing.T) {
 	// The shipped standards are operator-owned, so huddle-room can carry the
 	// contract under test directly; the system conforming to it is what resolves
 	// against that contract.
-	c.do(ownerTok, http.MethodPut, "/standards/huddle-room/properties/serial-number",
+	c.do(ownerTok, http.MethodPut, "/standards/local/huddle-room/properties/og/serial-number",
 		map[string]any{"default_value": "SN-DEFAULT", "required": true}, http.StatusOK)
 	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{
 		"name": "huddle-1", "standard_id": "huddle-room",

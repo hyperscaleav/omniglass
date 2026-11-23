@@ -177,7 +177,7 @@ function SeverityLevelBladeBody(p: { name: string }): JSX.Element {
     if (!confirm(`Delete severity level "${l.name}"? The server refuses it while an alarm or a rule still names it.`)) return;
     setErr(null);
     try {
-      await deleteSeverityLevel(l.name);
+      await deleteSeverityLevel(l);
       blades.close();
       await qc.invalidateQueries({ queryKey: severityLevelsKey });
     } catch (e) {
@@ -296,7 +296,7 @@ function LevelForm(p: { mode: "create" | "edit"; level?: SeverityLevel; onSaved:
     setBusy(true);
     setFormErr(null);
     try {
-      const saved = p.mode === "create" ? await createSeverityLevel(levelCreateBody(d)) : await updateSeverityLevel(p.level!.name, levelUpdateBody(d, p.level!));
+      const saved = p.mode === "create" ? await createSeverityLevel(levelCreateBody(d)) : await updateSeverityLevel(p.level!, levelUpdateBody(d, p.level!));
       // A rename moves the name every alarm chip and rule reads, and a re-rank
       // can move a component across the outage line (the server recomputes
       // its health): every view that caches either is stale now.

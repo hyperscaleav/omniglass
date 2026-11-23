@@ -116,7 +116,7 @@ function DriverBladeBody(p: { id: string }): JSX.Element {
     if (!confirm(`Delete driver "${r.name}"?`)) return;
     setErr(null);
     try {
-      await deleteDriver(r.name);
+      await deleteDriver(r);
       blades.close();
       await qc.invalidateQueries({ queryKey: DRIVERS_KEY });
     } catch (e) {
@@ -129,7 +129,7 @@ function DriverBladeBody(p: { id: string }): JSX.Element {
     if (!r) return;
     setErr(null);
     try {
-      await updateDriver(r.name, {
+      await updateDriver(r, {
         label: label(),
         version: version(),
       });

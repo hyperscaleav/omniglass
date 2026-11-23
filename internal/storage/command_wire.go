@@ -608,7 +608,7 @@ func (p *PG) settleFromResponse(ctx context.Context, tx pgx.Tx, commandID int64,
 	if !verdict.HasValue {
 		return &settlementOutcome{status: "settled", by: SettledByReply, reason: "the reply confirmed it"}, nil
 	}
-	ct, err := scanCommandType(tx.QueryRow(ctx, `select `+commandTypeCols+` from command_type_in_effect() command_type where name = $1`, commandType))
+	ct, err := scanCommandType(tx.QueryRow(ctx, `select `+commandTypeCols+` from `+refRows("command_type", commandType)+` command_type where `+catalogRefCol(commandType)+` = $1`, commandType))
 	if err != nil {
 		return nil, fmt.Errorf("storage: command type %s: %w", commandType, err)
 	}

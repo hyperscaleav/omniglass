@@ -57,7 +57,7 @@ func TestCommandTypeAPI(t *testing.T) {
 	}
 
 	// Get it back; list includes the custom + the seeded official ones.
-	c.do(ownerTok, http.MethodGet, "/command-types/set-dimmer", nil, http.StatusOK)
+	c.do(ownerTok, http.MethodGet, "/command-types/local/set-dimmer", nil, http.StatusOK)
 	var listed struct {
 		CommandTypes []struct {
 			Name string `json:"name"`
@@ -73,7 +73,7 @@ func TestCommandTypeAPI(t *testing.T) {
 	}
 
 	// Update the settle window.
-	c.do(ownerTok, http.MethodPatch, "/command-types/set-dimmer", map[string]any{"settle_window_seconds": 10}, http.StatusOK)
+	c.do(ownerTok, http.MethodPatch, "/command-types/local/set-dimmer", map[string]any{"settle_window_seconds": 10}, http.StatusOK)
 
 	// A malformed name is a 422; an unknown target property is a 422.
 	c.do(ownerTok, http.MethodPost, "/command-types", map[string]any{"name": "Bad-Name"}, http.StatusUnprocessableEntity)
@@ -86,12 +86,12 @@ func TestCommandTypeAPI(t *testing.T) {
 	// the SCHEMA, so the generated client and CLI carry it too, and in the
 	// gateway, so a direct-gateway caller cannot write one either.
 	c.do(ownerTok, http.MethodPost, "/command-types", map[string]any{"name": "neg-window", "settle_window_seconds": -5}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodPatch, "/command-types/set-dimmer", map[string]any{"settle_window_seconds": -1}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPatch, "/command-types/local/set-dimmer", map[string]any{"settle_window_seconds": -1}, http.StatusUnprocessableEntity)
 	// The refused patch changed nothing: the window is still the 10 set above.
 	var kept struct {
 		SettleWindowSeconds int `json:"settle_window_seconds"`
 	}
-	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/command-types/set-dimmer", nil, http.StatusOK), &kept)
+	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/command-types/local/set-dimmer", nil, http.StatusOK), &kept)
 	if kept.SettleWindowSeconds != 10 {
 		t.Fatalf("window after the refused patch = %d, want the 10 the accepted patch set", kept.SettleWindowSeconds)
 	}
@@ -118,7 +118,7 @@ func TestCommandTypeAPI(t *testing.T) {
 		QuietSeconds int  `json:"quiet_seconds"`
 		HoldSeconds  int  `json:"hold_seconds"`
 	}{}
-	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/command-types/reboot", nil, http.StatusOK), &disrupt)
+	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/command-types/og/reboot", nil, http.StatusOK), &disrupt)
 	if !disrupt.Disruptive || disrupt.QuietSeconds != 15 || disrupt.HoldSeconds != 300 {
 		t.Fatalf("shipped reboot = %+v, want disruptive with quiet 15 and hold 300", disrupt)
 	}
@@ -128,8 +128,8 @@ func TestCommandTypeAPI(t *testing.T) {
 		t.Fatalf("hold not over quiet = %s, want a 422 naming hold_seconds", body)
 	}
 	c.do(ownerTok, http.MethodPost, "/command-types", map[string]any{"name": "quiet-only", "quiet_seconds": 5}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodPatch, "/command-types/power-cycle", map[string]any{"hold_seconds": 10}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodPatch, "/command-types/power-cycle", map[string]any{"quiet_seconds": -1}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPatch, "/command-types/local/power-cycle", map[string]any{"hold_seconds": 10}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPatch, "/command-types/local/power-cycle", map[string]any{"quiet_seconds": -1}, http.StatusUnprocessableEntity)
 
 	// A duplicate name is a 409.
 	c.do(ownerTok, http.MethodPost, "/command-types", map[string]any{"name": "set-dimmer"}, http.StatusConflict)
@@ -146,7 +146,7 @@ func TestCommandTypeAPI(t *testing.T) {
 	if armed.TargetMetricType != "uptime" || armed.TargetPropertyType != "" {
 		t.Fatalf("metric-targeted create = %+v, want the metric arm carried", armed)
 	}
-	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/command-types/set-gain", nil, http.StatusOK), &armed)
+	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/command-types/local/set-gain", nil, http.StatusOK), &armed)
 	if armed.TargetMetricType != "uptime" {
 		t.Fatalf("read dropped the metric arm: %+v", armed)
 	}
@@ -155,13 +155,13 @@ func TestCommandTypeAPI(t *testing.T) {
 	// two forms), and an empty arm clears it outright. The struct is zeroed
 	// between decodes because a cleared arm is omitted from the body entirely.
 	armed.TargetPropertyType, armed.TargetMetricType = "", ""
-	json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/command-types/set-gain",
+	json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/command-types/local/set-gain",
 		map[string]any{"target_property_type": "video-input"}, http.StatusOK), &armed)
 	if armed.TargetPropertyType != "video-input" || armed.TargetMetricType != "" {
 		t.Fatalf("arm switch = %+v, want the property arm set and the metric arm cleared", armed)
 	}
 	armed.TargetPropertyType, armed.TargetMetricType = "", ""
-	json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/command-types/set-gain",
+	json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/command-types/local/set-gain",
 		map[string]any{"target_property_type": ""}, http.StatusOK), &armed)
 	if armed.TargetPropertyType != "" || armed.TargetMetricType != "" {
 		t.Fatalf("cleared target = %+v, want fire-and-forget", armed)
@@ -184,14 +184,14 @@ func TestCommandTypeAPI(t *testing.T) {
 	}
 
 	// An official (seeded) command type is read-only.
-	c.do(ownerTok, http.MethodPatch, "/command-types/set-input", map[string]any{"label": "x"}, http.StatusConflict)
-	c.do(ownerTok, http.MethodDelete, "/command-types/reboot", nil, http.StatusConflict)
+	c.do(ownerTok, http.MethodPatch, "/command-types/og/set-input", map[string]any{"label": "x"}, http.StatusConflict)
+	c.do(ownerTok, http.MethodDelete, "/command-types/og/reboot", nil, http.StatusConflict)
 
 	// An unknown command type is a 404.
-	c.do(ownerTok, http.MethodGet, "/command-types/nope", nil, http.StatusNotFound)
+	c.do(ownerTok, http.MethodGet, "/command-types/local/nope", nil, http.StatusNotFound)
 
 	// Delete the custom command type.
-	c.do(ownerTok, http.MethodDelete, "/command-types/set-dimmer", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/command-types/local/set-dimmer", nil, http.StatusNoContent)
 
 	// An ungranted user is forbidden to create.
 	noneTok := userWithGrants(t, ctx, dsn, "nocmds", nil)
@@ -224,7 +224,7 @@ func TestCommandTypeParamsSchemaClearsUnderUpdateMask(t *testing.T) {
 	patch := func(body map[string]any) map[string]json.RawMessage {
 		t.Helper()
 		var got map[string]json.RawMessage
-		if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/command-types/reboot-now", body, http.StatusOK), &got); err != nil {
+		if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/command-types/local/reboot-now", body, http.StatusOK), &got); err != nil {
 			t.Fatalf("decode patch: %v", err)
 		}
 		return got
@@ -250,9 +250,9 @@ func TestCommandTypeParamsSchemaClearsUnderUpdateMask(t *testing.T) {
 	// Naming the field with no value clears it, on the response and on a re-read.
 	hasSchema("cleared", patch(map[string]any{"update_mask": []string{"params_schema"}}), "")
 	var reread map[string]json.RawMessage
-	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/command-types/reboot-now", nil, http.StatusOK), &reread)
+	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/command-types/local/reboot-now", nil, http.StatusOK), &reread)
 	hasSchema("reread", reread, "")
 	// A mask naming a field the route does not patch is a 422, never a no-op.
-	c.do(ownerTok, http.MethodPatch, "/command-types/reboot-now",
+	c.do(ownerTok, http.MethodPatch, "/command-types/local/reboot-now",
 		map[string]any{"update_mask": []string{"name"}}, http.StatusUnprocessableEntity)
 }

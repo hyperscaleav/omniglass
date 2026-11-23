@@ -52,6 +52,8 @@ export type ActionRuleBody = {
   id: string;
   label?: string;
   name: string;
+  /** The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name} */
+  namespace: string;
   /** The notification type it sends, by name; absent sends the official one for the transition (alarm-raised, alarm-cleared) */
   notification_type?: string;
   /** That type's uuid */
@@ -1459,6 +1461,8 @@ export type CalcRuleBody = {
   label?: string;
   /** The rule's name, the address an operator types; renameable */
   name: string;
+  /** The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name} */
+  namespace: string;
   /** Shipped with the platform and read-only */
   official: boolean;
   /** The property or metric the rule writes */
@@ -1752,6 +1756,8 @@ export type CommandTypeBody = {
   id: string;
   label?: string;
   name: string;
+  /** The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name} */
+  namespace: string;
   official: boolean;
   /** A JSON Schema fragment for the invocation params */
   params_schema?: unknown;
@@ -2103,6 +2109,8 @@ export type ComponentTypeBody = {
   label_rule?: string;
   /** The name an operator reads and types; renameable */
   name: string;
+  /** The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name} */
+  namespace: string;
   /** True for a row this release ships. A shipped row is never written by an operator: an edit forks it */
   official: boolean;
   /** The parent component_type's name, for display; absent for a root type */
@@ -2129,6 +2137,11 @@ export type CreateActionRuleInputBody = {
      * @minLength 1
      */
   name: string;
+  /**
+     * The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  namespace?: string;
   /** The notification type to send, by name or uuid; absent sends the official one for the transition */
   notification_type?: string;
   /**
@@ -2191,6 +2204,11 @@ export type CreateCalcRuleInputBody = {
      */
   name: string;
   /**
+     * The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  namespace?: string;
+  /**
      * The property or metric the rule writes: its type pins the reduce's result. Not a reserved key (a native probe key, health), not a key a driver's emits or a command type write, and not one another enabled rule writes
      * @minLength 1
      */
@@ -2222,6 +2240,11 @@ export type CreateCommandTypeInputBody = {
      * @minLength 1
      */
   name: string;
+  /**
+     * The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  namespace?: string;
   /** A JSON Schema fragment for the params */
   params_schema?: unknown;
   /**
@@ -2340,6 +2363,11 @@ export type CreateComponentTypeInputBody = {
      * @pattern ^[a-z0-9][a-z0-9-]*$
      */
   name: string;
+  /**
+     * The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  namespace?: string;
   /** The parent component_type, by name or uuid; omit for a root type */
   parent_id?: string;
   /**
@@ -2366,6 +2394,11 @@ export type CreateDriverInputBody = {
      * @pattern ^[a-z0-9][a-z0-9-]*$
      */
   name: string;
+  /**
+     * The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  namespace?: string;
   /** The declarative spec body; validated against the catalogs, and a spec that fails validation refuses the write (422) */
   spec?: unknown;
   /** A free-form version string, e.g. 1.0.0 */
@@ -2470,6 +2503,11 @@ export type CreateEventRuleInputBody = {
      */
   name: string;
   /**
+     * The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  namespace?: string;
+  /**
      * The property or metric the rule reads
      * @minLength 1
      */
@@ -2494,6 +2532,11 @@ export type CreateEventTypeInputBody = {
      * @minLength 1
      */
   name: string;
+  /**
+     * The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  namespace?: string;
   /** A JSON Schema fragment for the payload */
   payload_schema?: unknown;
 };
@@ -2669,6 +2712,11 @@ export type CreateLocationTypeInputBody = {
   name: string;
   /** How the platform NAMES locations of this type; omit to have an operator name every one of them. Refused (422) if it cannot mint a legal name */
   name_rule?: NameRuleBody;
+  /**
+     * The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  namespace?: string;
 };
 
 export type CreateLocationsFromTemplateInputBody = {
@@ -2830,6 +2878,11 @@ export type CreateMetricTypeInputBody = {
      * @minLength 1
      */
   name: string;
+  /**
+     * The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  namespace?: string;
   /** Decimal places a rendered value keeps */
   precision?: number;
   /** The display unit of the series (ms, dB, percent) */
@@ -2898,6 +2951,11 @@ export type CreateNotificationTypeInputBody = {
      * @minLength 1
      */
   name: string;
+  /**
+     * The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  namespace?: string;
   /** The one-line subject, written in the rule language */
   subject: string;
   /** The body text, written in the rule language */
@@ -2999,6 +3057,11 @@ export type CreateProductInputBody = {
      * @pattern ^[a-z0-9][a-z0-9-]*$
      */
   name: string;
+  /**
+     * The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  namespace?: string;
   /** The parent product, by handle or uuid */
   parent_product_id?: string;
   /** The vendor, by handle or uuid */
@@ -3031,6 +3094,11 @@ export type CreatePropertyInputBody = {
      * @minLength 1
      */
   name: string;
+  /**
+     * The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  namespace?: string;
   /** A JSON Schema fragment constraining the value */
   validation?: unknown;
 };
@@ -3094,6 +3162,11 @@ export type CreateSeverityLevelInputBody = {
      * @minLength 1
      */
   name: string;
+  /**
+     * The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  namespace?: string;
   /** Its position among the levels: higher is more severe; unique */
   rank: number;
 };
@@ -3129,6 +3202,11 @@ export type CreateStandardInputBody = {
      * @pattern ^[a-z0-9][a-z0-9-]*$
      */
   name: string;
+  /**
+     * The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  namespace?: string;
   /** A standard this one is a variant of, by handle or uuid */
   parent_standard_id?: string;
 };
@@ -3224,6 +3302,11 @@ export type CreateSystemTypeInputBody = {
      * @pattern ^[a-z0-9][a-z0-9-]*$
      */
   name: string;
+  /**
+     * The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  namespace?: string;
   /** The parent system_type, by name or uuid; omit for a root type */
   parent_id?: string;
   /**
@@ -3375,6 +3458,11 @@ export type CreateVendorInputBody = {
      * @pattern ^[a-z0-9][a-z0-9-]*$
      */
   name: string;
+  /**
+     * The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  namespace?: string;
   /** The vendor's support line */
   support_phone?: string;
   /** The vendor's website (http or https) */
@@ -3451,6 +3539,8 @@ export type DriverBody = {
   label: string;
   /** The name an operator reads and types; renameable */
   name: string;
+  /** The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name} */
+  namespace: string;
   official: boolean;
   /** The declarative spec body (#813): transports, inputs, poll functions, listeners, command bindings. Absent on a stub that cannot be attached yet */
   spec?: unknown;
@@ -3902,6 +3992,8 @@ export type EventRuleBody = {
   /** The alarm's message; empty uses the rule's label or name */
   message?: string;
   name: string;
+  /** The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name} */
+  namespace: string;
   /** Shipped with the platform and read-only */
   official: boolean;
   /** How many alarms the rule raised are still open right now (its live state; GET /event-rules/{name}/state lists them) */
@@ -4017,6 +4109,8 @@ export type EventTypeBody = {
   id: string;
   label?: string;
   name: string;
+  /** The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name} */
+  namespace: string;
   official: boolean;
   /** A JSON Schema fragment for the occurrence payload */
   payload_schema?: unknown;
@@ -4882,6 +4976,8 @@ export type LocationTypeBody = {
   name: string;
   /** How the platform NAMES locations of this type; absent means an operator names every one of them */
   name_rule?: NameRuleReadBody;
+  /** The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name} */
+  namespace: string;
   /** True for a row this release ships. A shipped row is never written by an operator: an edit forks it */
   official: boolean;
 };
@@ -4995,6 +5091,8 @@ export type MetricTypeBody = {
   id: string;
   label?: string;
   name: string;
+  /** The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name} */
+  namespace: string;
   official: boolean;
   /** Decimal places a rendered value keeps */
   precision?: number;
@@ -5110,6 +5208,8 @@ export type NotificationTypeBody = {
   id: string;
   label?: string;
   name: string;
+  /** The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name} */
+  namespace: string;
   /** Shipped with the platform and read-only */
   official: boolean;
   /** The one-line subject, written in the rule language */
@@ -5280,6 +5380,8 @@ export type ProductBody = {
   label_rule?: string;
   /** The name an operator reads and types; renameable */
   name: string;
+  /** The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name} */
+  namespace: string;
   official: boolean;
   /** The parent product's handle */
   parent_product?: string;
@@ -5323,6 +5425,8 @@ export type PropertyBody = {
   id: string;
   label?: string;
   name: string;
+  /** The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name} */
+  namespace: string;
   official: boolean;
   /** The type's own retention window in days, overriding its lane's; absent when the lane's applies (#417) */
   retention_days?: number;
@@ -5362,6 +5466,8 @@ export type SecretTypeBody = {
   label: string;
   /** The name an operator reads and types; renameable */
   name: string;
+  /** The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name} */
+  namespace: string;
   official: boolean;
 };
 
@@ -5450,6 +5556,8 @@ export type SeverityLevelBody = {
   label?: string;
   /** The level's name; alarms and rules name it */
   name: string;
+  /** The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name} */
+  namespace: string;
   /** Shipped with the platform and read-only */
   official: boolean;
   /** Whether an active alarm at this level puts its component in outage (at or above the high level's rank); below it, an alarm degrades */
@@ -5557,6 +5665,8 @@ export type StandardBody = {
   map?: unknown;
   /** The name an operator reads and types; renameable */
   name: string;
+  /** The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name} */
+  namespace: string;
   official: boolean;
   /** The parent standard's handle */
   parent_standard?: string;
@@ -5616,6 +5726,8 @@ export type SystemTypeBody = {
   label_rule?: string;
   /** The name an operator reads and types; renameable */
   name: string;
+  /** The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name} */
+  namespace: string;
   official: boolean;
   /** The parent system_type's name, for display; absent for a root type */
   parent?: string;
@@ -6072,6 +6184,8 @@ export type VendorBody = {
   label: string;
   /** The name an operator reads and types; renameable */
   name: string;
+  /** The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name} */
+  namespace: string;
   official: boolean;
   support_phone?: string;
   website?: string;
@@ -7159,6 +7273,11 @@ export type PushEvent = {
      * @minLength 1
      */
   name: string;
+  /**
+     * The catalog namespace the name is read in: og for the platform's type, local for the operator's, or another the operator named. Omit to walk the search path, the operator's type first, then the platform's. Set, the name is read in that namespace only, reaching an og type the operator's type of the same name shadows; a namespace holding no such type rejects the item
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  namespace?: string;
   /** The occurrence's structured payload, validated against the event_type's payload schema */
   payload?: unknown;
   /** When this occurred; defaults to the batch timestamp, then to ingest time */
@@ -7191,6 +7310,11 @@ export type PushMetric = {
      * @minLength 1
      */
   name: string;
+  /**
+     * The catalog namespace the name is read in: og for the platform's type, local for the operator's, or another the operator named. Omit to walk the search path, the operator's type first, then the platform's. Set, the name is read in that namespace only, reaching an og type the operator's type of the same name shadows; a namespace holding no such type rejects the item
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  namespace?: string;
   /** When this was observed; defaults to the batch timestamp, then to ingest time */
   ts?: string;
   /** The numeric observation */
@@ -7205,6 +7329,11 @@ export type PushProperty = {
      * @minLength 1
      */
   name: string;
+  /**
+     * The catalog namespace the name is read in: og for the platform's type, local for the operator's, or another the operator named. Omit to walk the search path, the operator's type first, then the platform's. Set, the name is read in that namespace only, reaching an og type the operator's type of the same name shadows; a namespace holding no such type rejects the item
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  namespace?: string;
   /** When this was observed; defaults to the batch timestamp, then to ingest time */
   ts?: string;
   /** The observed value, shaped by the type's data_type and validated against its validation schema */
@@ -7244,6 +7373,7 @@ export type PushInputBody = {
 
 export type PushRejection = {
   name: string;
+  namespace?: string;
   reason: string;
 };
 
@@ -7759,6 +7889,8 @@ export type RoleBody = {
   inherits: string[] | null;
   label?: string;
   name: string;
+  /** The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name} */
+  namespace: string;
   official: boolean;
   /** @nullable */
   permissions: string[] | null;
@@ -9938,21 +10070,23 @@ export type deleteActionRuleResponseError = (deleteActionRuleResponseDefault) & 
 
 export type deleteActionRuleResponse = (deleteActionRuleResponseSuccess | deleteActionRuleResponseError)
 
-export const getDeleteActionRuleUrl = (name: string,) => {
+export const getDeleteActionRuleUrl = (namespace: string,
+    name: string,) => {
 
 
 
 
-  return `/action-rules/${name}`
+  return `/action-rules/${namespace}/${name}`
 }
 
 /**
  * Removes a rule; the notifications it queued keep its name. A shipped (official) rule is a 409: disable it instead. Audited. Gated by rule:delete, with an all-scope grant.
  * @summary Delete an action rule
  */
-export const deleteActionRule = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteActionRuleResponse> => {
+export const deleteActionRule = async (namespace: string,
+    name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteActionRuleResponse> => {
 
-  return ogFetch<deleteActionRuleResponse>(getDeleteActionRuleUrl(name),
+  return ogFetch<deleteActionRuleResponse>(getDeleteActionRuleUrl(namespace,name),
   {
     ...options,
     method: 'DELETE'
@@ -9982,21 +10116,23 @@ export type getActionRuleResponseError = (getActionRuleResponseDefault) & {
 
 export type getActionRuleResponse = (getActionRuleResponseSuccess | getActionRuleResponseError)
 
-export const getGetActionRuleUrl = (name: string,) => {
+export const getGetActionRuleUrl = (namespace: string,
+    name: string,) => {
 
 
 
 
-  return `/action-rules/${name}`
+  return `/action-rules/${namespace}/${name}`
 }
 
 /**
  * Returns one action rule by name or uuid. Gated by rule:read.
  * @summary Get an action rule
  */
-export const getActionRule = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getActionRuleResponse> => {
+export const getActionRule = async (namespace: string,
+    name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getActionRuleResponse> => {
 
-  return ogFetch<getActionRuleResponse>(getGetActionRuleUrl(name),
+  return ogFetch<getActionRuleResponse>(getGetActionRuleUrl(namespace,name),
   {
     ...options,
     method: 'GET'
@@ -10026,22 +10162,24 @@ export type updateActionRuleResponseError = (updateActionRuleResponseDefault) & 
 
 export type updateActionRuleResponse = (updateActionRuleResponseSuccess | updateActionRuleResponseError)
 
-export const getUpdateActionRuleUrl = (name: string,) => {
+export const getUpdateActionRuleUrl = (namespace: string,
+    name: string,) => {
 
 
 
 
-  return `/action-rules/${name}`
+  return `/action-rules/${namespace}/${name}`
 }
 
 /**
  * Patches a rule (an absent field is unchanged; on and targets replace their sets). It acts on transitions from the next one; a notification already queued is not re-rendered. A shipped (official) rule takes only enabled, opt_out_allowed and targets that keep the shipped ones; anything else is a 409. Audited. Gated by rule:update, with an all-scope grant.
  * @summary Update an action rule
  */
-export const updateActionRule = async (name: string,
+export const updateActionRule = async (namespace: string,
+    name: string,
     updateActionRuleInputBody: NonReadonly<UpdateActionRuleInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateActionRuleResponse> => {
 
-  return ogFetch<updateActionRuleResponse>(getUpdateActionRuleUrl(name),
+  return ogFetch<updateActionRuleResponse>(getUpdateActionRuleUrl(namespace,name),
   {
     ...options,
     method: 'PATCH',
@@ -10071,21 +10209,23 @@ export type optInActionRuleResponseError = (optInActionRuleResponseDefault) & {
 
 export type optInActionRuleResponse = (optInActionRuleResponseSuccess | optInActionRuleResponseError)
 
-export const getOptInActionRuleUrl = (name: string,) => {
+export const getOptInActionRuleUrl = (namespace: string,
+    name: string,) => {
 
 
 
 
-  return `/action-rules/${name}:optIn`
+  return `/action-rules/${namespace}/${name}:optIn`
 }
 
 /**
  * Undoes your opt-out of a platform action rule; always allowed. Idempotent and audited. Gated by notification:subscribe.
  * @summary Opt yourself back in to a group notification
  */
-export const optInActionRule = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<optInActionRuleResponse> => {
+export const optInActionRule = async (namespace: string,
+    name: string, options?: Parameters<typeof ogFetch>[1]): Promise<optInActionRuleResponse> => {
 
-  return ogFetch<optInActionRuleResponse>(getOptInActionRuleUrl(name),
+  return ogFetch<optInActionRuleResponse>(getOptInActionRuleUrl(namespace,name),
   {
     ...options,
     method: 'POST'
@@ -10115,21 +10255,23 @@ export type optOutActionRuleResponseError = (optOutActionRuleResponseDefault) & 
 
 export type optOutActionRuleResponse = (optOutActionRuleResponseSuccess | optOutActionRuleResponseError)
 
-export const getOptOutActionRuleUrl = (name: string,) => {
+export const getOptOutActionRuleUrl = (namespace: string,
+    name: string,) => {
 
 
 
 
-  return `/action-rules/${name}:optOut`
+  return `/action-rules/${namespace}/${name}:optOut`
 }
 
 /**
  * Stops a platform action rule telling you through a group it targets, for you alone. Only a rule an admin marked opt_out_allowed (a 409 otherwise); a rule that names you directly still tells you. Idempotent and audited. Gated by notification:subscribe.
  * @summary Opt yourself out of a group notification
  */
-export const optOutActionRule = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<optOutActionRuleResponse> => {
+export const optOutActionRule = async (namespace: string,
+    name: string, options?: Parameters<typeof ogFetch>[1]): Promise<optOutActionRuleResponse> => {
 
-  return ogFetch<optOutActionRuleResponse>(getOptOutActionRuleUrl(name),
+  return ogFetch<optOutActionRuleResponse>(getOptOutActionRuleUrl(namespace,name),
   {
     ...options,
     method: 'POST'
@@ -12041,21 +12183,23 @@ export type deleteCalcRuleResponseError = (deleteCalcRuleResponseDefault) & {
 
 export type deleteCalcRuleResponse = (deleteCalcRuleResponseSuccess | deleteCalcRuleResponseError)
 
-export const getDeleteCalcRuleUrl = (name: string,) => {
+export const getDeleteCalcRuleUrl = (namespace: string,
+    name: string,) => {
 
 
 
 
-  return `/calc-rules/${name}`
+  return `/calc-rules/${namespace}/${name}`
 }
 
 /**
  * Removes an operator rule; an official rule is read-only (409). Audited. Gated by rule:delete, with an all-scope grant.
  * @summary Delete a calc rule
  */
-export const deleteCalcRule = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteCalcRuleResponse> => {
+export const deleteCalcRule = async (namespace: string,
+    name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteCalcRuleResponse> => {
 
-  return ogFetch<deleteCalcRuleResponse>(getDeleteCalcRuleUrl(name),
+  return ogFetch<deleteCalcRuleResponse>(getDeleteCalcRuleUrl(namespace,name),
   {
     ...options,
     method: 'DELETE'
@@ -12085,21 +12229,23 @@ export type getCalcRuleResponseError = (getCalcRuleResponseDefault) & {
 
 export type getCalcRuleResponse = (getCalcRuleResponseSuccess | getCalcRuleResponseError)
 
-export const getGetCalcRuleUrl = (name: string,) => {
+export const getGetCalcRuleUrl = (namespace: string,
+    name: string,) => {
 
 
 
 
-  return `/calc-rules/${name}`
+  return `/calc-rules/${namespace}/${name}`
 }
 
 /**
  * Returns one calc rule by name (or uuid). Gated by rule:read.
  * @summary Get a calc rule
  */
-export const getCalcRule = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getCalcRuleResponse> => {
+export const getCalcRule = async (namespace: string,
+    name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getCalcRuleResponse> => {
 
-  return ogFetch<getCalcRuleResponse>(getGetCalcRuleUrl(name),
+  return ogFetch<getCalcRuleResponse>(getGetCalcRuleUrl(namespace,name),
   {
     ...options,
     method: 'GET'
@@ -12129,22 +12275,24 @@ export type updateCalcRuleResponseError = (updateCalcRuleResponseDefault) & {
 
 export type updateCalcRuleResponse = (updateCalcRuleResponseSuccess | updateCalcRuleResponseError)
 
-export const getUpdateCalcRuleUrl = (name: string,) => {
+export const getUpdateCalcRuleUrl = (namespace: string,
+    name: string,) => {
 
 
 
 
-  return `/calc-rules/${name}`
+  return `/calc-rules/${namespace}/${name}`
 }
 
 /**
  * Patches a rule (an absent field is unchanged), bumping its version; a patch that changes nothing writes nothing. What changed is checked as on create: changed inputs, reduce or output recompile, a changed output must be one no collection writes, and an enabled rule may not close a cycle or share its output with another enabled rule. Enabling a disabled rule recompiles it and checks both, so a rule carrying calc_error cannot be enabled (422). The owner kind is fixed at create. Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.
  * @summary Update a calc rule
  */
-export const updateCalcRule = async (name: string,
+export const updateCalcRule = async (namespace: string,
+    name: string,
     updateCalcRuleInputBody: NonReadonly<UpdateCalcRuleInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateCalcRuleResponse> => {
 
-  return ogFetch<updateCalcRuleResponse>(getUpdateCalcRuleUrl(name),
+  return ogFetch<updateCalcRuleResponse>(getUpdateCalcRuleUrl(namespace,name),
   {
     ...options,
     method: 'PATCH',
@@ -12174,7 +12322,8 @@ export type getCalcRuleStateResponseError = (getCalcRuleStateResponseDefault) & 
 
 export type getCalcRuleStateResponse = (getCalcRuleStateResponseSuccess | getCalcRuleStateResponseError)
 
-export const getGetCalcRuleStateUrl = (name: string,
+export const getGetCalcRuleStateUrl = (namespace: string,
+    name: string,
     params?: GetCalcRuleStateParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -12187,17 +12336,18 @@ export const getGetCalcRuleStateUrl = (name: string,
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/calc-rules/${name}/state?${stringifiedParams}` : `/calc-rules/${name}/state`
+  return stringifiedParams.length > 0 ? `/calc-rules/${namespace}/${name}/state?${stringifiedParams}` : `/calc-rules/${namespace}/${name}/state`
 }
 
 /**
  * What a calc rule last did on each owner the caller may read (components by the component read scope, systems by the system read scope), each owner named now: the value it computed, when and at which version, the inputs it found no value of, a system's members that held none and the instances it left out as stale (named when the caller may read the component, else counted), an error, since when a system has had no members, and whether the owner is pending (with when a deferred mark is due). Ordered on the server, failing owners first, then pending, then those it wrote nothing for, then those holding a value, each by name, and at most limit of them; total and the pending depth count every owner the caller may read, listed or not. Gated by rule:read.
  * @summary Get a calc rule's live state
  */
-export const getCalcRuleState = async (name: string,
+export const getCalcRuleState = async (namespace: string,
+    name: string,
     params?: GetCalcRuleStateParams, options?: Parameters<typeof ogFetch>[1]): Promise<getCalcRuleStateResponse> => {
 
-  return ogFetch<getCalcRuleStateResponse>(getGetCalcRuleStateUrl(name,params),
+  return ogFetch<getCalcRuleStateResponse>(getGetCalcRuleStateUrl(namespace,name,params),
   {
     ...options,
     method: 'GET'
@@ -12227,22 +12377,24 @@ export type renameCalcRuleResponseError = (renameCalcRuleResponseDefault) & {
 
 export type renameCalcRuleResponse = (renameCalcRuleResponseSuccess | renameCalcRuleResponseError)
 
-export const getRenameCalcRuleUrl = (name: string,) => {
+export const getRenameCalcRuleUrl = (namespace: string,
+    name: string,) => {
 
 
 
 
-  return `/calc-rules/${name}:rename`
+  return `/calc-rules/${namespace}/${name}:rename`
 }
 
 /**
  * Moves an operator rule's name, the address an operator types. A separate act from an update, because it breaks bookmarks and integration config outside this system; inside it nothing breaks, since the audit rows hold the rule's uuid and the key graph is of keys, not rule names. Not a material change: no version bump. An official rule keeps its name (409), a taken name is a 409, an illegal or uuid-shaped one a 422. Returns the rule with its uuid. Audited. Gated by rule:update, with an all-scope grant.
  * @summary Rename a calc rule
  */
-export const renameCalcRule = async (name: string,
+export const renameCalcRule = async (namespace: string,
+    name: string,
     renameCalcRuleInputBody: NonReadonly<RenameCalcRuleInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameCalcRuleResponse> => {
 
-  return ogFetch<renameCalcRuleResponse>(getRenameCalcRuleUrl(name),
+  return ogFetch<renameCalcRuleResponse>(getRenameCalcRuleUrl(namespace,name),
   {
     ...options,
     method: 'POST',
@@ -12404,21 +12556,23 @@ export type deleteCommandTypeResponseError = (deleteCommandTypeResponseDefault) 
 
 export type deleteCommandTypeResponse = (deleteCommandTypeResponseSuccess | deleteCommandTypeResponseError)
 
-export const getDeleteCommandTypeUrl = (name: string,) => {
+export const getDeleteCommandTypeUrl = (namespace: string,
+    name: string,) => {
 
 
 
 
-  return `/command-types/${name}`
+  return `/command-types/${namespace}/${name}`
 }
 
 /**
  * Removes a custom command type by name. Official types are read-only. Gated by command_type:delete.
  * @summary Delete a command type
  */
-export const deleteCommandType = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteCommandTypeResponse> => {
+export const deleteCommandType = async (namespace: string,
+    name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteCommandTypeResponse> => {
 
-  return ogFetch<deleteCommandTypeResponse>(getDeleteCommandTypeUrl(name),
+  return ogFetch<deleteCommandTypeResponse>(getDeleteCommandTypeUrl(namespace,name),
   {
     ...options,
     method: 'DELETE'
@@ -12448,21 +12602,23 @@ export type getCommandTypeResponseError = (getCommandTypeResponseDefault) & {
 
 export type getCommandTypeResponse = (getCommandTypeResponseSuccess | getCommandTypeResponseError)
 
-export const getGetCommandTypeUrl = (name: string,) => {
+export const getGetCommandTypeUrl = (namespace: string,
+    name: string,) => {
 
 
 
 
-  return `/command-types/${name}`
+  return `/command-types/${namespace}/${name}`
 }
 
 /**
  * Returns one command type by name. Gated by command_type:read.
  * @summary Get a command type
  */
-export const getCommandType = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getCommandTypeResponse> => {
+export const getCommandType = async (namespace: string,
+    name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getCommandTypeResponse> => {
 
-  return ogFetch<getCommandTypeResponse>(getGetCommandTypeUrl(name),
+  return ogFetch<getCommandTypeResponse>(getGetCommandTypeUrl(namespace,name),
   {
     ...options,
     method: 'GET'
@@ -12492,22 +12648,24 @@ export type updateCommandTypeResponseError = (updateCommandTypeResponseDefault) 
 
 export type updateCommandTypeResponse = (updateCommandTypeResponseSuccess | updateCommandTypeResponseError)
 
-export const getUpdateCommandTypeUrl = (name: string,) => {
+export const getUpdateCommandTypeUrl = (namespace: string,
+    name: string,) => {
 
 
 
 
-  return `/command-types/${name}`
+  return `/command-types/${namespace}/${name}`
 }
 
 /**
  * Patches a custom command type's label, description, params schema, settle window, disruption (disruptive, quiet_seconds, hold_seconds, power_outlet_param, checked together on the merged row), or target on either arm. Partial by default: the fields present in the body change and the rest are left alone (an empty target clears it; a non-empty arm clears the other). params_schema is a nullable object with no empty value, so it clears by being named in update_mask with no value in the body; a mask naming a field this resource does not patch is a 422. The name is fixed at creation. Official types are read-only. Gated by command_type:update.
  * @summary Update a command type
  */
-export const updateCommandType = async (name: string,
+export const updateCommandType = async (namespace: string,
+    name: string,
     updateCommandTypeInputBody: NonReadonly<UpdateCommandTypeInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateCommandTypeResponse> => {
 
-  return ogFetch<updateCommandTypeResponse>(getUpdateCommandTypeUrl(name),
+  return ogFetch<updateCommandTypeResponse>(getUpdateCommandTypeUrl(namespace,name),
   {
     ...options,
     method: 'PATCH',
@@ -12625,21 +12783,23 @@ export type deleteComponentTypeResponseError = (deleteComponentTypeResponseDefau
 
 export type deleteComponentTypeResponse = (deleteComponentTypeResponseSuccess | deleteComponentTypeResponseError)
 
-export const getDeleteComponentTypeUrl = (id: string,) => {
+export const getDeleteComponentTypeUrl = (namespace: string,
+    id: string,) => {
 
 
 
 
-  return `/component-types/${id}`
+  return `/component-types/${namespace}/${id}`
 }
 
 /**
  * Deletes a custom component_type, refused if official (422, forked or not: a fork is an overlay, not ownership) or still a parent of another component_type (409). `:restore` is the only removal a shipped row admits, and it removes your fork, not the row. Gated by component_type:delete.
  * @summary Delete a component type
  */
-export const deleteComponentType = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteComponentTypeResponse> => {
+export const deleteComponentType = async (namespace: string,
+    id: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteComponentTypeResponse> => {
 
-  return ogFetch<deleteComponentTypeResponse>(getDeleteComponentTypeUrl(id),
+  return ogFetch<deleteComponentTypeResponse>(getDeleteComponentTypeUrl(namespace,id),
   {
     ...options,
     method: 'DELETE'
@@ -12669,22 +12829,24 @@ export type updateComponentTypeResponseError = (updateComponentTypeResponseDefau
 
 export type updateComponentTypeResponse = (updateComponentTypeResponseSuccess | updateComponentTypeResponseError)
 
-export const getUpdateComponentTypeUrl = (id: string,) => {
+export const getUpdateComponentTypeUrl = (namespace: string,
+    id: string,) => {
 
 
 
 
-  return `/component-types/${id}`
+  return `/component-types/${namespace}/${id}`
 }
 
 /**
  * Patches a component_type's label, stem, icon, abbrev, label_rule, or default_tags. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by component_type:update.
  * @summary Update a component type
  */
-export const updateComponentType = async (id: string,
+export const updateComponentType = async (namespace: string,
+    id: string,
     updateComponentTypeInputBody: NonReadonly<UpdateComponentTypeInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateComponentTypeResponse> => {
 
-  return ogFetch<updateComponentTypeResponse>(getUpdateComponentTypeUrl(id),
+  return ogFetch<updateComponentTypeResponse>(getUpdateComponentTypeUrl(namespace,id),
   {
     ...options,
     method: 'PATCH',
@@ -12714,21 +12876,23 @@ export type restoreComponentTypeResponseError = (restoreComponentTypeResponseDef
 
 export type restoreComponentTypeResponse = (restoreComponentTypeResponseSuccess | restoreComponentTypeResponseError)
 
-export const getRestoreComponentTypeUrl = (id: string,) => {
+export const getRestoreComponentTypeUrl = (namespace: string,
+    id: string,) => {
 
 
 
 
-  return `/component-types/${id}:restore`
+  return `/component-types/${namespace}/${id}:restore`
 }
 
 /**
  * Discards your fork of a shipped component_type, so reads return the values this release ships and later releases can improve them again. 409 when the row carries no fork of yours. Gated by component_type:update, the same permission that took the fork: restoring is undoing your own edit, not deleting a row.
  * @summary Restore a component type's shipped values
  */
-export const restoreComponentType = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<restoreComponentTypeResponse> => {
+export const restoreComponentType = async (namespace: string,
+    id: string, options?: Parameters<typeof ogFetch>[1]): Promise<restoreComponentTypeResponse> => {
 
-  return ogFetch<restoreComponentTypeResponse>(getRestoreComponentTypeUrl(id),
+  return ogFetch<restoreComponentTypeResponse>(getRestoreComponentTypeUrl(namespace,id),
   {
     ...options,
     method: 'POST'
@@ -15203,21 +15367,23 @@ export type deleteDriverResponseError = (deleteDriverResponseDefault) & {
 
 export type deleteDriverResponse = (deleteDriverResponseSuccess | deleteDriverResponseError)
 
-export const getDeleteDriverUrl = (id: string,) => {
+export const getDeleteDriverUrl = (namespace: string,
+    id: string,) => {
 
 
 
 
-  return `/drivers/${id}`
+  return `/drivers/${namespace}/${id}`
 }
 
 /**
  * Deletes a custom driver, refused if official (422). Gated by driver:delete.
  * @summary Delete a driver
  */
-export const deleteDriver = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteDriverResponse> => {
+export const deleteDriver = async (namespace: string,
+    id: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteDriverResponse> => {
 
-  return ogFetch<deleteDriverResponse>(getDeleteDriverUrl(id),
+  return ogFetch<deleteDriverResponse>(getDeleteDriverUrl(namespace,id),
   {
     ...options,
     method: 'DELETE'
@@ -15247,21 +15413,23 @@ export type getDriverResponseError = (getDriverResponseDefault) & {
 
 export type getDriverResponse = (getDriverResponseSuccess | getDriverResponseError)
 
-export const getGetDriverUrl = (id: string,) => {
+export const getGetDriverUrl = (namespace: string,
+    id: string,) => {
 
 
 
 
-  return `/drivers/${id}`
+  return `/drivers/${namespace}/${id}`
 }
 
 /**
  * Fetches a driver by id. Gated by driver:read.
  * @summary Get a driver
  */
-export const getDriver = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<getDriverResponse> => {
+export const getDriver = async (namespace: string,
+    id: string, options?: Parameters<typeof ogFetch>[1]): Promise<getDriverResponse> => {
 
-  return ogFetch<getDriverResponse>(getGetDriverUrl(id),
+  return ogFetch<getDriverResponse>(getGetDriverUrl(namespace,id),
   {
     ...options,
     method: 'GET'
@@ -15291,22 +15459,24 @@ export type updateDriverResponseError = (updateDriverResponseDefault) & {
 
 export type updateDriverResponse = (updateDriverResponseSuccess | updateDriverResponseError)
 
-export const getUpdateDriverUrl = (id: string,) => {
+export const getUpdateDriverUrl = (namespace: string,
+    id: string,) => {
 
 
 
 
-  return `/drivers/${id}`
+  return `/drivers/${namespace}/${id}`
 }
 
 /**
  * Patches a custom driver's label or version. Official drivers are read-only (422). Gated by driver:update.
  * @summary Update a driver
  */
-export const updateDriver = async (id: string,
+export const updateDriver = async (namespace: string,
+    id: string,
     updateDriverInputBody: NonReadonly<UpdateDriverInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateDriverResponse> => {
 
-  return ogFetch<updateDriverResponse>(getUpdateDriverUrl(id),
+  return ogFetch<updateDriverResponse>(getUpdateDriverUrl(namespace,id),
   {
     ...options,
     method: 'PATCH',
@@ -15336,22 +15506,24 @@ export type renameDriverResponseError = (renameDriverResponseDefault) & {
 
 export type renameDriverResponse = (renameDriverResponseSuccess | renameDriverResponseError)
 
-export const getRenameDriverUrl = (id: string,) => {
+export const getRenameDriverUrl = (namespace: string,
+    id: string,) => {
 
 
 
 
-  return `/drivers/${id}:rename`
+  return `/drivers/${namespace}/${id}:rename`
 }
 
 /**
  * Moves a custom driver's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official driver keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by driver:rename.
  * @summary Rename a driver
  */
-export const renameDriver = async (id: string,
+export const renameDriver = async (namespace: string,
+    id: string,
     renameCatalogInputBody: NonReadonly<RenameCatalogInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameDriverResponse> => {
 
-  return ogFetch<renameDriverResponse>(getRenameDriverUrl(id),
+  return ogFetch<renameDriverResponse>(getRenameDriverUrl(namespace,id),
   {
     ...options,
     method: 'POST',
@@ -15922,21 +16094,23 @@ export type deleteEventRuleResponseError = (deleteEventRuleResponseDefault) & {
 
 export type deleteEventRuleResponse = (deleteEventRuleResponseSuccess | deleteEventRuleResponseError)
 
-export const getDeleteEventRuleUrl = (name: string,) => {
+export const getDeleteEventRuleUrl = (namespace: string,
+    name: string,) => {
 
 
 
 
-  return `/event-rules/${name}`
+  return `/event-rules/${namespace}/${name}`
 }
 
 /**
  * Removes an operator rule; an official rule is read-only (409). Audited. Gated by rule:delete, with an all-scope grant.
  * @summary Delete an event rule
  */
-export const deleteEventRule = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteEventRuleResponse> => {
+export const deleteEventRule = async (namespace: string,
+    name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteEventRuleResponse> => {
 
-  return ogFetch<deleteEventRuleResponse>(getDeleteEventRuleUrl(name),
+  return ogFetch<deleteEventRuleResponse>(getDeleteEventRuleUrl(namespace,name),
   {
     ...options,
     method: 'DELETE'
@@ -15966,21 +16140,23 @@ export type getEventRuleResponseError = (getEventRuleResponseDefault) & {
 
 export type getEventRuleResponse = (getEventRuleResponseSuccess | getEventRuleResponseError)
 
-export const getGetEventRuleUrl = (name: string,) => {
+export const getGetEventRuleUrl = (namespace: string,
+    name: string,) => {
 
 
 
 
-  return `/event-rules/${name}`
+  return `/event-rules/${namespace}/${name}`
 }
 
 /**
  * Returns one event rule by name, with its live state as counts over the components the caller may read. Gated by rule:read.
  * @summary Get an event rule
  */
-export const getEventRule = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getEventRuleResponse> => {
+export const getEventRule = async (namespace: string,
+    name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getEventRuleResponse> => {
 
-  return ogFetch<getEventRuleResponse>(getGetEventRuleUrl(name),
+  return ogFetch<getEventRuleResponse>(getGetEventRuleUrl(namespace,name),
   {
     ...options,
     method: 'GET'
@@ -16010,22 +16186,24 @@ export type updateEventRuleResponseError = (updateEventRuleResponseDefault) & {
 
 export type updateEventRuleResponse = (updateEventRuleResponseSuccess | updateEventRuleResponseError)
 
-export const getUpdateEventRuleUrl = (name: string,) => {
+export const getUpdateEventRuleUrl = (namespace: string,
+    name: string,) => {
 
 
 
 
-  return `/event-rules/${name}`
+  return `/event-rules/${namespace}/${name}`
 }
 
 /**
  * Patches a rule (an absent field is unchanged), bumping its version; disabling it stops new opens. Criteria take {expr} or the short form {op, value}, compiled as on create (a 422 names the criteria, line and column). An empty severity makes the rule informational and an empty clear_event_type drops its clear event; the fire event type cannot be emptied (422). Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.
  * @summary Update an event rule
  */
-export const updateEventRule = async (name: string,
+export const updateEventRule = async (namespace: string,
+    name: string,
     updateEventRuleInputBody: NonReadonly<UpdateEventRuleInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateEventRuleResponse> => {
 
-  return ogFetch<updateEventRuleResponse>(getUpdateEventRuleUrl(name),
+  return ogFetch<updateEventRuleResponse>(getUpdateEventRuleUrl(namespace,name),
   {
     ...options,
     method: 'PATCH',
@@ -16055,21 +16233,23 @@ export type getEventRuleStateResponseError = (getEventRuleStateResponseDefault) 
 
 export type getEventRuleStateResponse = (getEventRuleStateResponseSuccess | getEventRuleStateResponseError)
 
-export const getGetEventRuleStateUrl = (name: string,) => {
+export const getGetEventRuleStateUrl = (namespace: string,
+    name: string,) => {
 
 
 
 
-  return `/event-rules/${name}/state`
+  return `/event-rules/${namespace}/${name}/state`
 }
 
 /**
  * What a rule holds right now: its firings (one per component and instance, whether or not it raises an alarm), the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only firings, alarms and streaks on components the caller may read are listed. Gated by rule:read.
  * @summary Get an event rule's live state
  */
-export const getEventRuleState = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getEventRuleStateResponse> => {
+export const getEventRuleState = async (namespace: string,
+    name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getEventRuleStateResponse> => {
 
-  return ogFetch<getEventRuleStateResponse>(getGetEventRuleStateUrl(name),
+  return ogFetch<getEventRuleStateResponse>(getGetEventRuleStateUrl(namespace,name),
   {
     ...options,
     method: 'GET'
@@ -16099,22 +16279,24 @@ export type renameEventRuleResponseError = (renameEventRuleResponseDefault) & {
 
 export type renameEventRuleResponse = (renameEventRuleResponseSuccess | renameEventRuleResponseError)
 
-export const getRenameEventRuleUrl = (name: string,) => {
+export const getRenameEventRuleUrl = (namespace: string,
+    name: string,) => {
 
 
 
 
-  return `/event-rules/${name}:rename`
+  return `/event-rules/${namespace}/${name}:rename`
 }
 
 /**
  * Moves an operator rule's name, the address an operator types. A separate act from an update, because it breaks bookmarks and integration config outside this system; inside it nothing breaks, since every reference holds the rule's uuid (an alarm's raised_by_rule_id and dedup key, a firing, a streak, an event's derived_by_rule_id). Not a material change: no version bump, streaks keep running and firings stay. An event keeps the name it was written under (derived_by_rule); the rule's next events carry the new one. An official rule keeps its name (409), a taken name is a 409, an illegal or uuid-shaped one a 422. Returns the rule with its uuid. Audited. Gated by rule:update, with an all-scope grant.
  * @summary Rename an event rule
  */
-export const renameEventRule = async (name: string,
+export const renameEventRule = async (namespace: string,
+    name: string,
     renameEventRuleInputBody: NonReadonly<RenameEventRuleInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameEventRuleResponse> => {
 
-  return ogFetch<renameEventRuleResponse>(getRenameEventRuleUrl(name),
+  return ogFetch<renameEventRuleResponse>(getRenameEventRuleUrl(namespace,name),
   {
     ...options,
     method: 'POST',
@@ -16276,21 +16458,23 @@ export type deleteEventTypeResponseError = (deleteEventTypeResponseDefault) & {
 
 export type deleteEventTypeResponse = (deleteEventTypeResponseSuccess | deleteEventTypeResponseError)
 
-export const getDeleteEventTypeUrl = (name: string,) => {
+export const getDeleteEventTypeUrl = (namespace: string,
+    name: string,) => {
 
 
 
 
-  return `/event-types/${name}`
+  return `/event-types/${namespace}/${name}`
 }
 
 /**
  * Removes a custom event type by name. Official event types are read-only (409), and so is a type still in use: one that recorded events or an event rule's fire or clear event type names is a 409 until nothing names it. Gated by event_type:delete.
  * @summary Delete an event type
  */
-export const deleteEventType = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteEventTypeResponse> => {
+export const deleteEventType = async (namespace: string,
+    name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteEventTypeResponse> => {
 
-  return ogFetch<deleteEventTypeResponse>(getDeleteEventTypeUrl(name),
+  return ogFetch<deleteEventTypeResponse>(getDeleteEventTypeUrl(namespace,name),
   {
     ...options,
     method: 'DELETE'
@@ -16320,21 +16504,23 @@ export type getEventTypeResponseError = (getEventTypeResponseDefault) & {
 
 export type getEventTypeResponse = (getEventTypeResponseSuccess | getEventTypeResponseError)
 
-export const getGetEventTypeUrl = (name: string,) => {
+export const getGetEventTypeUrl = (namespace: string,
+    name: string,) => {
 
 
 
 
-  return `/event-types/${name}`
+  return `/event-types/${namespace}/${name}`
 }
 
 /**
  * Returns one event type by name. Gated by event_type:read.
  * @summary Get an event type
  */
-export const getEventType = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getEventTypeResponse> => {
+export const getEventType = async (namespace: string,
+    name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getEventTypeResponse> => {
 
-  return ogFetch<getEventTypeResponse>(getGetEventTypeUrl(name),
+  return ogFetch<getEventTypeResponse>(getGetEventTypeUrl(namespace,name),
   {
     ...options,
     method: 'GET'
@@ -16364,22 +16550,24 @@ export type updateEventTypeResponseError = (updateEventTypeResponseDefault) & {
 
 export type updateEventTypeResponse = (updateEventTypeResponseSuccess | updateEventTypeResponseError)
 
-export const getUpdateEventTypeUrl = (name: string,) => {
+export const getUpdateEventTypeUrl = (namespace: string,
+    name: string,) => {
 
 
 
 
-  return `/event-types/${name}`
+  return `/event-types/${namespace}/${name}`
 }
 
 /**
  * Patches a custom event type's label, description, or payload schema. Partial by default: the fields present in the body change and the rest are left alone. payload_schema is a nullable object with no empty value, so it clears by being named in update_mask with no value in the body; label and description clear with an explicit empty string. A mask naming a field this resource does not patch is a 422. The name is fixed at creation. Official event types are read-only. Gated by event_type:update.
  * @summary Update an event type
  */
-export const updateEventType = async (name: string,
+export const updateEventType = async (namespace: string,
+    name: string,
     updateEventTypeInputBody: NonReadonly<UpdateEventTypeInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateEventTypeResponse> => {
 
-  return ogFetch<updateEventTypeResponse>(getUpdateEventTypeUrl(name),
+  return ogFetch<updateEventTypeResponse>(getUpdateEventTypeUrl(namespace,name),
   {
     ...options,
     method: 'PATCH',
@@ -16805,21 +16993,23 @@ export type deleteLocationTypeResponseError = (deleteLocationTypeResponseDefault
 
 export type deleteLocationTypeResponse = (deleteLocationTypeResponseSuccess | deleteLocationTypeResponseError)
 
-export const getDeleteLocationTypeUrl = (id: string,) => {
+export const getDeleteLocationTypeUrl = (namespace: string,
+    id: string,) => {
 
 
 
 
-  return `/location-types/${id}`
+  return `/location-types/${namespace}/${id}`
 }
 
 /**
  * Deletes a custom location_type, refused if official (422) or still referenced by a location (409). Gated by location_type:delete.
  * @summary Delete a location type
  */
-export const deleteLocationType = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteLocationTypeResponse> => {
+export const deleteLocationType = async (namespace: string,
+    id: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteLocationTypeResponse> => {
 
-  return ogFetch<deleteLocationTypeResponse>(getDeleteLocationTypeUrl(id),
+  return ogFetch<deleteLocationTypeResponse>(getDeleteLocationTypeUrl(namespace,id),
   {
     ...options,
     method: 'DELETE'
@@ -16849,22 +17039,24 @@ export type updateLocationTypeResponseError = (updateLocationTypeResponseDefault
 
 export type updateLocationTypeResponse = (updateLocationTypeResponseSuccess | updateLocationTypeResponseError)
 
-export const getUpdateLocationTypeUrl = (id: string,) => {
+export const getUpdateLocationTypeUrl = (namespace: string,
+    id: string,) => {
 
 
 
 
-  return `/location-types/${id}`
+  return `/location-types/${namespace}/${id}`
 }
 
 /**
  * Patches a location_type's label, icon, allowed parents, label_rule or name_rule. An unparseable label_rule (or a name_rule that cannot mint a legal name) is a 422 at rule-edit time, never a broken row at create time, and setting a label rule restamps nothing on its own: apply it with /locations:recomputeLabels after seeing the blast radius with :previewLabels. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by location_type:update.
  * @summary Update a location type
  */
-export const updateLocationType = async (id: string,
+export const updateLocationType = async (namespace: string,
+    id: string,
     updateLocationTypeInputBody: NonReadonly<UpdateLocationTypeInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateLocationTypeResponse> => {
 
-  return ogFetch<updateLocationTypeResponse>(getUpdateLocationTypeUrl(id),
+  return ogFetch<updateLocationTypeResponse>(getUpdateLocationTypeUrl(namespace,id),
   {
     ...options,
     method: 'PATCH',
@@ -16894,21 +17086,23 @@ export type listLocationTypeMetricsResponseError = (listLocationTypeMetricsRespo
 
 export type listLocationTypeMetricsResponse = (listLocationTypeMetricsResponseSuccess | listLocationTypeMetricsResponseError)
 
-export const getListLocationTypeMetricsUrl = (id: string,) => {
+export const getListLocationTypeMetricsUrl = (namespace: string,
+    id: string,) => {
 
 
 
 
-  return `/location-types/${id}/metrics`
+  return `/location-types/${namespace}/${id}/metrics`
 }
 
 /**
  * Lists the location type's declared-metric contract (which metrics every location of the type carries), ordered by metric name, each with its optional default and required flag. Gated by location_type:read.
  * @summary List a location type's declared metrics
  */
-export const listLocationTypeMetrics = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<listLocationTypeMetricsResponse> => {
+export const listLocationTypeMetrics = async (namespace: string,
+    id: string, options?: Parameters<typeof ogFetch>[1]): Promise<listLocationTypeMetricsResponse> => {
 
-  return ogFetch<listLocationTypeMetricsResponse>(getListLocationTypeMetricsUrl(id),
+  return ogFetch<listLocationTypeMetricsResponse>(getListLocationTypeMetricsUrl(namespace,id),
   {
     ...options,
     method: 'GET'
@@ -16938,23 +17132,27 @@ export type deleteLocationTypeMetricResponseError = (deleteLocationTypeMetricRes
 
 export type deleteLocationTypeMetricResponse = (deleteLocationTypeMetricResponseSuccess | deleteLocationTypeMetricResponseError)
 
-export const getDeleteLocationTypeMetricUrl = (id: string,
+export const getDeleteLocationTypeMetricUrl = (namespace: string,
+    id: string,
+    metricNamespace: string,
     metric: string,) => {
 
 
 
 
-  return `/location-types/${id}/metrics/${metric}`
+  return `/location-types/${namespace}/${id}/metrics/${metricNamespace}/${metric}`
 }
 
 /**
  * Removes one line from a location type's contract, a shipped (official) type's included, since nothing seeds a contract line; locations of the type keep any samples the series already holds, now off-contract. A metric the type does not declare is a 404, and so is an unknown type. Gated by location_type:delete.
  * @summary Withdraw a metric from a location type
  */
-export const deleteLocationTypeMetric = async (id: string,
+export const deleteLocationTypeMetric = async (namespace: string,
+    id: string,
+    metricNamespace: string,
     metric: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteLocationTypeMetricResponse> => {
 
-  return ogFetch<deleteLocationTypeMetricResponse>(getDeleteLocationTypeMetricUrl(id,metric),
+  return ogFetch<deleteLocationTypeMetricResponse>(getDeleteLocationTypeMetricUrl(namespace,id,metricNamespace,metric),
   {
     ...options,
     method: 'DELETE'
@@ -16984,24 +17182,28 @@ export type setLocationTypeMetricResponseError = (setLocationTypeMetricResponseD
 
 export type setLocationTypeMetricResponse = (setLocationTypeMetricResponseSuccess | setLocationTypeMetricResponseError)
 
-export const getSetLocationTypeMetricUrl = (id: string,
+export const getSetLocationTypeMetricUrl = (namespace: string,
+    id: string,
+    metricNamespace: string,
     metric: string,) => {
 
 
 
 
-  return `/location-types/${id}/metrics/${metric}`
+  return `/location-types/${namespace}/${id}/metrics/${metricNamespace}/${metric}`
 }
 
 /**
  * Declares a catalog metric on a location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). A shipped (official) type's contract is writable too: a contract line is a row in its own table and nothing seeds one, so every line is an operator's. An unknown type is a 404 and a metric the catalog does not know is a 422. Gated by location_type:update.
  * @summary Declare a metric on a location type
  */
-export const setLocationTypeMetric = async (id: string,
+export const setLocationTypeMetric = async (namespace: string,
+    id: string,
+    metricNamespace: string,
     metric: string,
     setLocationTypeMetricInputBody: NonReadonly<SetLocationTypeMetricInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setLocationTypeMetricResponse> => {
 
-  return ogFetch<setLocationTypeMetricResponse>(getSetLocationTypeMetricUrl(id,metric),
+  return ogFetch<setLocationTypeMetricResponse>(getSetLocationTypeMetricUrl(namespace,id,metricNamespace,metric),
   {
     ...options,
     method: 'PUT',
@@ -17031,21 +17233,23 @@ export type listLocationTypePropertiesResponseError = (listLocationTypePropertie
 
 export type listLocationTypePropertiesResponse = (listLocationTypePropertiesResponseSuccess | listLocationTypePropertiesResponseError)
 
-export const getListLocationTypePropertiesUrl = (id: string,) => {
+export const getListLocationTypePropertiesUrl = (namespace: string,
+    id: string,) => {
 
 
 
 
-  return `/location-types/${id}/properties`
+  return `/location-types/${namespace}/${id}/properties`
 }
 
 /**
  * Lists the location type's declared-property contract (what every location of the type exposes), ordered by property name, each with its optional default and required flag. Gated by location_type:read.
  * @summary List a location type's declared properties
  */
-export const listLocationTypeProperties = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<listLocationTypePropertiesResponse> => {
+export const listLocationTypeProperties = async (namespace: string,
+    id: string, options?: Parameters<typeof ogFetch>[1]): Promise<listLocationTypePropertiesResponse> => {
 
-  return ogFetch<listLocationTypePropertiesResponse>(getListLocationTypePropertiesUrl(id),
+  return ogFetch<listLocationTypePropertiesResponse>(getListLocationTypePropertiesUrl(namespace,id),
   {
     ...options,
     method: 'GET'
@@ -17075,23 +17279,27 @@ export type deleteLocationTypePropertyResponseError = (deleteLocationTypePropert
 
 export type deleteLocationTypePropertyResponse = (deleteLocationTypePropertyResponseSuccess | deleteLocationTypePropertyResponseError)
 
-export const getDeleteLocationTypePropertyUrl = (id: string,
+export const getDeleteLocationTypePropertyUrl = (namespace: string,
+    id: string,
+    propertyNamespace: string,
     property: string,) => {
 
 
 
 
-  return `/location-types/${id}/properties/${property}`
+  return `/location-types/${namespace}/${id}/properties/${propertyNamespace}/${property}`
 }
 
 /**
  * Removes one line from a location type's contract, a shipped (official) type's included, since nothing seeds a contract line; locations of the type keep any value they set for it, now off-contract. A property the type does not declare is a 404, and so is an unknown type. Gated by location_type:delete.
  * @summary Withdraw a property from a location type
  */
-export const deleteLocationTypeProperty = async (id: string,
+export const deleteLocationTypeProperty = async (namespace: string,
+    id: string,
+    propertyNamespace: string,
     property: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteLocationTypePropertyResponse> => {
 
-  return ogFetch<deleteLocationTypePropertyResponse>(getDeleteLocationTypePropertyUrl(id,property),
+  return ogFetch<deleteLocationTypePropertyResponse>(getDeleteLocationTypePropertyUrl(namespace,id,propertyNamespace,property),
   {
     ...options,
     method: 'DELETE'
@@ -17121,24 +17329,28 @@ export type setLocationTypePropertyResponseError = (setLocationTypePropertyRespo
 
 export type setLocationTypePropertyResponse = (setLocationTypePropertyResponseSuccess | setLocationTypePropertyResponseError)
 
-export const getSetLocationTypePropertyUrl = (id: string,
+export const getSetLocationTypePropertyUrl = (namespace: string,
+    id: string,
+    propertyNamespace: string,
     property: string,) => {
 
 
 
 
-  return `/location-types/${id}/properties/${property}`
+  return `/location-types/${namespace}/${id}/properties/${propertyNamespace}/${property}`
 }
 
 /**
  * Declares a catalog property on a location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). A shipped (official) type's contract is writable too: a contract line is a row in its own table and nothing seeds one, so every line is an operator's. An unknown type is a 404 and a property the catalog does not know is a 422, as is a default its property type refuses. Gated by location_type:update.
  * @summary Declare a property on a location type
  */
-export const setLocationTypeProperty = async (id: string,
+export const setLocationTypeProperty = async (namespace: string,
+    id: string,
+    propertyNamespace: string,
     property: string,
     setLocationTypePropertyInputBody: NonReadonly<SetLocationTypePropertyInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setLocationTypePropertyResponse> => {
 
-  return ogFetch<setLocationTypePropertyResponse>(getSetLocationTypePropertyUrl(id,property),
+  return ogFetch<setLocationTypePropertyResponse>(getSetLocationTypePropertyUrl(namespace,id,propertyNamespace,property),
   {
     ...options,
     method: 'PUT',
@@ -17168,22 +17380,24 @@ export type renameLocationTypeResponseError = (renameLocationTypeResponseDefault
 
 export type renameLocationTypeResponse = (renameLocationTypeResponseSuccess | renameLocationTypeResponseError)
 
-export const getRenameLocationTypeUrl = (id: string,) => {
+export const getRenameLocationTypeUrl = (namespace: string,
+    id: string,) => {
 
 
 
 
-  return `/location-types/${id}:rename`
+  return `/location-types/${namespace}/${id}:rename`
 }
 
 /**
  * Moves a custom location type's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official location type keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by location_type:rename.
  * @summary Rename a location type
  */
-export const renameLocationType = async (id: string,
+export const renameLocationType = async (namespace: string,
+    id: string,
     renameCatalogInputBody: NonReadonly<RenameCatalogInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameLocationTypeResponse> => {
 
-  return ogFetch<renameLocationTypeResponse>(getRenameLocationTypeUrl(id),
+  return ogFetch<renameLocationTypeResponse>(getRenameLocationTypeUrl(namespace,id),
   {
     ...options,
     method: 'POST',
@@ -17213,21 +17427,23 @@ export type restoreLocationTypeResponseError = (restoreLocationTypeResponseDefau
 
 export type restoreLocationTypeResponse = (restoreLocationTypeResponseSuccess | restoreLocationTypeResponseError)
 
-export const getRestoreLocationTypeUrl = (id: string,) => {
+export const getRestoreLocationTypeUrl = (namespace: string,
+    id: string,) => {
 
 
 
 
-  return `/location-types/${id}:restore`
+  return `/location-types/${namespace}/${id}:restore`
 }
 
 /**
  * Discards your fork of a shipped location_type, so reads return the values this release ships, including a rule a later release WITHDREW. 409 when the row carries no fork of yours. Gated by location_type:update, the same permission that took the fork: restoring is undoing your own edit, not deleting a row.
  * @summary Restore a location type's shipped values
  */
-export const restoreLocationType = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<restoreLocationTypeResponse> => {
+export const restoreLocationType = async (namespace: string,
+    id: string, options?: Parameters<typeof ogFetch>[1]): Promise<restoreLocationTypeResponse> => {
 
-  return ogFetch<restoreLocationTypeResponse>(getRestoreLocationTypeUrl(id),
+  return ogFetch<restoreLocationTypeResponse>(getRestoreLocationTypeUrl(namespace,id),
   {
     ...options,
     method: 'POST'
@@ -18328,21 +18544,23 @@ export type deleteMetricTypeResponseError = (deleteMetricTypeResponseDefault) & 
 
 export type deleteMetricTypeResponse = (deleteMetricTypeResponseSuccess | deleteMetricTypeResponseError)
 
-export const getDeleteMetricTypeUrl = (name: string,) => {
+export const getDeleteMetricTypeUrl = (namespace: string,
+    name: string,) => {
 
 
 
 
-  return `/metric-types/${name}`
+  return `/metric-types/${namespace}/${name}`
 }
 
 /**
  * Removes a custom metric type by name. Official metric types are read-only. A metric type a calc rule writes is a 409 naming the rule. Gated by metric_type:delete.
  * @summary Delete a metric type
  */
-export const deleteMetricType = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteMetricTypeResponse> => {
+export const deleteMetricType = async (namespace: string,
+    name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteMetricTypeResponse> => {
 
-  return ogFetch<deleteMetricTypeResponse>(getDeleteMetricTypeUrl(name),
+  return ogFetch<deleteMetricTypeResponse>(getDeleteMetricTypeUrl(namespace,name),
   {
     ...options,
     method: 'DELETE'
@@ -18372,21 +18590,23 @@ export type getMetricTypeResponseError = (getMetricTypeResponseDefault) & {
 
 export type getMetricTypeResponse = (getMetricTypeResponseSuccess | getMetricTypeResponseError)
 
-export const getGetMetricTypeUrl = (name: string,) => {
+export const getGetMetricTypeUrl = (namespace: string,
+    name: string,) => {
 
 
 
 
-  return `/metric-types/${name}`
+  return `/metric-types/${namespace}/${name}`
 }
 
 /**
  * Returns one metric type by name. Gated by metric_type:read.
  * @summary Get a metric type
  */
-export const getMetricType = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getMetricTypeResponse> => {
+export const getMetricType = async (namespace: string,
+    name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getMetricTypeResponse> => {
 
-  return ogFetch<getMetricTypeResponse>(getGetMetricTypeUrl(name),
+  return ogFetch<getMetricTypeResponse>(getGetMetricTypeUrl(namespace,name),
   {
     ...options,
     method: 'GET'
@@ -18416,22 +18636,24 @@ export type updateMetricTypeResponseError = (updateMetricTypeResponseDefault) & 
 
 export type updateMetricTypeResponse = (updateMetricTypeResponseSuccess | updateMetricTypeResponseError)
 
-export const getUpdateMetricTypeUrl = (name: string,) => {
+export const getUpdateMetricTypeUrl = (namespace: string,
+    name: string,) => {
 
 
 
 
-  return `/metric-types/${name}`
+  return `/metric-types/${namespace}/${name}`
 }
 
 /**
  * Patches a custom metric type's label, description, unit, or precision. Partial by default: the fields present in the body change and the rest are left alone. precision is a nullable integer with no empty value, so it clears by being named in update_mask with no value in the body; label, description and unit clear with an explicit empty string. A mask naming a field this resource does not patch is a 422. Data type is fixed at creation. Official metric types are read-only. Gated by metric_type:update.
  * @summary Update a metric type
  */
-export const updateMetricType = async (name: string,
+export const updateMetricType = async (namespace: string,
+    name: string,
     updateMetricTypeInputBody: NonReadonly<UpdateMetricTypeInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateMetricTypeResponse> => {
 
-  return ogFetch<updateMetricTypeResponse>(getUpdateMetricTypeUrl(name),
+  return ogFetch<updateMetricTypeResponse>(getUpdateMetricTypeUrl(namespace,name),
   {
     ...options,
     method: 'PATCH',
@@ -18461,22 +18683,24 @@ export type setMetricTypeRetentionResponseError = (setMetricTypeRetentionRespons
 
 export type setMetricTypeRetentionResponse = (setMetricTypeRetentionResponseSuccess | setMetricTypeRetentionResponseError)
 
-export const getSetMetricTypeRetentionUrl = (name: string,) => {
+export const getSetMetricTypeRetentionUrl = (namespace: string,
+    name: string,) => {
 
 
 
 
-  return `/metric-types/${name}:setRetention`
+  return `/metric-types/${namespace}/${name}:setRetention`
 }
 
 /**
  * Sets how many days this type's samples are kept, overriding the metric lane's window (retention.metric_days), or with null returns it to the lane's. Works on an official type: a shipped type's definition is read-only, but how long an install keeps its samples is the install's, and the boot seed never resets it. A command's intended values are never removed; a series with no sample inside the window reads as no reading within retention (ADR-1275). 1 to 36,500 days. Audited as set_retention. Gated by metric_type:update and platform:update.
  * @summary Set a metric type's retention window
  */
-export const setMetricTypeRetention = async (name: string,
+export const setMetricTypeRetention = async (namespace: string,
+    name: string,
     setTypeRetentionBody: NonReadonly<SetTypeRetentionBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setMetricTypeRetentionResponse> => {
 
-  return ogFetch<setMetricTypeRetentionResponse>(getSetMetricTypeRetentionUrl(name),
+  return ogFetch<setMetricTypeRetentionResponse>(getSetMetricTypeRetentionUrl(namespace,name),
   {
     ...options,
     method: 'POST',
@@ -18903,22 +19127,24 @@ export type renameNotificationTypeResponseError = (renameNotificationTypeRespons
 
 export type renameNotificationTypeResponse = (renameNotificationTypeResponseSuccess | renameNotificationTypeResponseError)
 
-export const getRenameNotificationTypeUrl = (id: string,) => {
+export const getRenameNotificationTypeUrl = (namespace: string,
+    id: string,) => {
 
 
 
 
-  return `/notification-types/${id}:rename`
+  return `/notification-types/${namespace}/${id}:rename`
 }
 
 /**
  * Moves a custom notification type's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official notification type keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by notification_type:rename.
  * @summary Rename a notification type
  */
-export const renameNotificationType = async (id: string,
+export const renameNotificationType = async (namespace: string,
+    id: string,
     renameCatalogInputBody: NonReadonly<RenameCatalogInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameNotificationTypeResponse> => {
 
-  return ogFetch<renameNotificationTypeResponse>(getRenameNotificationTypeUrl(id),
+  return ogFetch<renameNotificationTypeResponse>(getRenameNotificationTypeUrl(namespace,id),
   {
     ...options,
     method: 'POST',
@@ -18948,21 +19174,23 @@ export type deleteNotificationTypeResponseError = (deleteNotificationTypeRespons
 
 export type deleteNotificationTypeResponse = (deleteNotificationTypeResponseSuccess | deleteNotificationTypeResponseError)
 
-export const getDeleteNotificationTypeUrl = (name: string,) => {
+export const getDeleteNotificationTypeUrl = (namespace: string,
+    name: string,) => {
 
 
 
 
-  return `/notification-types/${name}`
+  return `/notification-types/${namespace}/${name}`
 }
 
 /**
  * Removes an operator notification type. An official type, or one an action rule still sends, is a 409. Audited. Gated by notification_type:delete.
  * @summary Delete a notification type
  */
-export const deleteNotificationType = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteNotificationTypeResponse> => {
+export const deleteNotificationType = async (namespace: string,
+    name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteNotificationTypeResponse> => {
 
-  return ogFetch<deleteNotificationTypeResponse>(getDeleteNotificationTypeUrl(name),
+  return ogFetch<deleteNotificationTypeResponse>(getDeleteNotificationTypeUrl(namespace,name),
   {
     ...options,
     method: 'DELETE'
@@ -18992,21 +19220,23 @@ export type getNotificationTypeResponseError = (getNotificationTypeResponseDefau
 
 export type getNotificationTypeResponse = (getNotificationTypeResponseSuccess | getNotificationTypeResponseError)
 
-export const getGetNotificationTypeUrl = (name: string,) => {
+export const getGetNotificationTypeUrl = (namespace: string,
+    name: string,) => {
 
 
 
 
-  return `/notification-types/${name}`
+  return `/notification-types/${namespace}/${name}`
 }
 
 /**
  * Returns one notification type by name or uuid. Gated by notification_type:read.
  * @summary Get a notification type
  */
-export const getNotificationType = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getNotificationTypeResponse> => {
+export const getNotificationType = async (namespace: string,
+    name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getNotificationTypeResponse> => {
 
-  return ogFetch<getNotificationTypeResponse>(getGetNotificationTypeUrl(name),
+  return ogFetch<getNotificationTypeResponse>(getGetNotificationTypeUrl(namespace,name),
   {
     ...options,
     method: 'GET'
@@ -19036,22 +19266,24 @@ export type updateNotificationTypeResponseError = (updateNotificationTypeRespons
 
 export type updateNotificationTypeResponse = (updateNotificationTypeResponseSuccess | updateNotificationTypeResponseError)
 
-export const getUpdateNotificationTypeUrl = (name: string,) => {
+export const getUpdateNotificationTypeUrl = (namespace: string,
+    name: string,) => {
 
 
 
 
-  return `/notification-types/${name}`
+  return `/notification-types/${namespace}/${name}`
 }
 
 /**
  * Patches an operator type's label, description, subject or text (an absent field is unchanged). Subject and text are written in the rule language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Location, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.
  * @summary Update a notification type
  */
-export const updateNotificationType = async (name: string,
+export const updateNotificationType = async (namespace: string,
+    name: string,
     updateNotificationTypeInputBody: NonReadonly<UpdateNotificationTypeInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateNotificationTypeResponse> => {
 
-  return ogFetch<updateNotificationTypeResponse>(getUpdateNotificationTypeUrl(name),
+  return ogFetch<updateNotificationTypeResponse>(getUpdateNotificationTypeUrl(namespace,name),
   {
     ...options,
     method: 'PATCH',
@@ -19081,22 +19313,24 @@ export type previewNotificationTypeResponseError = (previewNotificationTypeRespo
 
 export type previewNotificationTypeResponse = (previewNotificationTypeResponseSuccess | previewNotificationTypeResponseError)
 
-export const getPreviewNotificationTypeUrl = (name: string,) => {
+export const getPreviewNotificationTypeUrl = (namespace: string,
+    name: string,) => {
 
 
 
 
-  return `/notification-types/${name}:preview`
+  return `/notification-types/${namespace}/${name}:preview`
 }
 
 /**
  * Renders the type's subject and text (or a draft of either, sent in the body) against one real alarm, exactly as a delivery of that alarm's transition would carry them, with the facts they read. Writes nothing. The alarm is named by its component and id; without an id, the component's most recently raised alarm. A draft the sandbox refuses is a 422, one that fails to render (its output past the cap) a 422 naming it. Gated by notification_type:read; the component is resolved in the caller's component read scope, so a component outside it is a non-disclosing 404.
  * @summary Preview a notification type against an alarm
  */
-export const previewNotificationType = async (name: string,
+export const previewNotificationType = async (namespace: string,
+    name: string,
     previewNotificationTypeInputBody: NonReadonly<PreviewNotificationTypeInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<previewNotificationTypeResponse> => {
 
-  return ogFetch<previewNotificationTypeResponse>(getPreviewNotificationTypeUrl(name),
+  return ogFetch<previewNotificationTypeResponse>(getPreviewNotificationTypeUrl(namespace,name),
   {
     ...options,
     method: 'POST',
@@ -20028,21 +20262,23 @@ export type deleteProductResponseError = (deleteProductResponseDefault) & {
 
 export type deleteProductResponse = (deleteProductResponseSuccess | deleteProductResponseError)
 
-export const getDeleteProductUrl = (id: string,) => {
+export const getDeleteProductUrl = (namespace: string,
+    id: string,) => {
 
 
 
 
-  return `/products/${id}`
+  return `/products/${namespace}/${id}`
 }
 
 /**
  * Deletes a custom product, refused if official (422) or still referenced by a component (409). Gated by product:delete.
  * @summary Delete a product
  */
-export const deleteProduct = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteProductResponse> => {
+export const deleteProduct = async (namespace: string,
+    id: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteProductResponse> => {
 
-  return ogFetch<deleteProductResponse>(getDeleteProductUrl(id),
+  return ogFetch<deleteProductResponse>(getDeleteProductUrl(namespace,id),
   {
     ...options,
     method: 'DELETE'
@@ -20072,21 +20308,23 @@ export type getProductResponseError = (getProductResponseDefault) & {
 
 export type getProductResponse = (getProductResponseSuccess | getProductResponseError)
 
-export const getGetProductUrl = (id: string,) => {
+export const getGetProductUrl = (namespace: string,
+    id: string,) => {
 
 
 
 
-  return `/products/${id}`
+  return `/products/${namespace}/${id}`
 }
 
 /**
  * Fetches a product by its name or its uuid. Either form resolves, so `omniglass product get acme-soundbar` and the uuid are interchangeable. Gated by product:read.
  * @summary Get a product
  */
-export const getProduct = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<getProductResponse> => {
+export const getProduct = async (namespace: string,
+    id: string, options?: Parameters<typeof ogFetch>[1]): Promise<getProductResponse> => {
 
-  return ogFetch<getProductResponse>(getGetProductUrl(id),
+  return ogFetch<getProductResponse>(getGetProductUrl(namespace,id),
   {
     ...options,
     method: 'GET'
@@ -20116,22 +20354,24 @@ export type updateProductResponseError = (updateProductResponseDefault) & {
 
 export type updateProductResponse = (updateProductResponseSuccess | updateProductResponseError)
 
-export const getUpdateProductUrl = (id: string,) => {
+export const getUpdateProductUrl = (namespace: string,
+    id: string,) => {
 
 
 
 
-  return `/products/${id}`
+  return `/products/${namespace}/${id}`
 }
 
 /**
  * Patches a custom product's label, vendor, driver, kind, component_type, icon, label rule, or parent. Each optional field follows the three-state string: omitted is unchanged, an empty string clears it, a value sets it, so a vendor, driver, parent, icon or label rule can be unset as well as changed. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.
  * @summary Update a product
  */
-export const updateProduct = async (id: string,
+export const updateProduct = async (namespace: string,
+    id: string,
     updateProductInputBody: NonReadonly<UpdateProductInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateProductResponse> => {
 
-  return ogFetch<updateProductResponse>(getUpdateProductUrl(id),
+  return ogFetch<updateProductResponse>(getUpdateProductUrl(namespace,id),
   {
     ...options,
     method: 'PATCH',
@@ -20161,21 +20401,23 @@ export type listProductMetricsResponseError = (listProductMetricsResponseDefault
 
 export type listProductMetricsResponse = (listProductMetricsResponseSuccess | listProductMetricsResponseError)
 
-export const getListProductMetricsUrl = (id: string,) => {
+export const getListProductMetricsUrl = (namespace: string,
+    id: string,) => {
 
 
 
 
-  return `/products/${id}/metrics`
+  return `/products/${namespace}/${id}/metrics`
 }
 
 /**
  * Lists the product's declared-metric contract (which metrics every instance of the product carries), ordered by metric name, each with its optional default and required flag. Gated by product:read.
  * @summary List a product's declared metrics
  */
-export const listProductMetrics = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<listProductMetricsResponse> => {
+export const listProductMetrics = async (namespace: string,
+    id: string, options?: Parameters<typeof ogFetch>[1]): Promise<listProductMetricsResponse> => {
 
-  return ogFetch<listProductMetricsResponse>(getListProductMetricsUrl(id),
+  return ogFetch<listProductMetricsResponse>(getListProductMetricsUrl(namespace,id),
   {
     ...options,
     method: 'GET'
@@ -20205,23 +20447,27 @@ export type deleteProductMetricResponseError = (deleteProductMetricResponseDefau
 
 export type deleteProductMetricResponse = (deleteProductMetricResponseSuccess | deleteProductMetricResponseError)
 
-export const getDeleteProductMetricUrl = (id: string,
+export const getDeleteProductMetricUrl = (namespace: string,
+    id: string,
+    metricNamespace: string,
     metric: string,) => {
 
 
 
 
-  return `/products/${id}/metrics/${metric}`
+  return `/products/${namespace}/${id}/metrics/${metricNamespace}/${metric}`
 }
 
 /**
  * Removes one line from a custom product's contract; instances keep any samples the series already holds, now off-contract. A metric the product does not declare is a 404, and an official product is read-only (422). Gated by product:delete.
  * @summary Withdraw a metric from a product
  */
-export const deleteProductMetric = async (id: string,
+export const deleteProductMetric = async (namespace: string,
+    id: string,
+    metricNamespace: string,
     metric: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteProductMetricResponse> => {
 
-  return ogFetch<deleteProductMetricResponse>(getDeleteProductMetricUrl(id,metric),
+  return ogFetch<deleteProductMetricResponse>(getDeleteProductMetricUrl(namespace,id,metricNamespace,metric),
   {
     ...options,
     method: 'DELETE'
@@ -20251,24 +20497,28 @@ export type setProductMetricResponseError = (setProductMetricResponseDefault) & 
 
 export type setProductMetricResponse = (setProductMetricResponseSuccess | setProductMetricResponseError)
 
-export const getSetProductMetricUrl = (id: string,
+export const getSetProductMetricUrl = (namespace: string,
+    id: string,
+    metricNamespace: string,
     metric: string,) => {
 
 
 
 
-  return `/products/${id}/metrics/${metric}`
+  return `/products/${namespace}/${id}/metrics/${metricNamespace}/${metric}`
 }
 
 /**
  * Declares a catalog metric on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422); an unknown product is a 404 and a metric the catalog does not know is a 422. Gated by product:update.
  * @summary Declare a metric on a product
  */
-export const setProductMetric = async (id: string,
+export const setProductMetric = async (namespace: string,
+    id: string,
+    metricNamespace: string,
     metric: string,
     setProductMetricInputBody: NonReadonly<SetProductMetricInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setProductMetricResponse> => {
 
-  return ogFetch<setProductMetricResponse>(getSetProductMetricUrl(id,metric),
+  return ogFetch<setProductMetricResponse>(getSetProductMetricUrl(namespace,id,metricNamespace,metric),
   {
     ...options,
     method: 'PUT',
@@ -20298,21 +20548,23 @@ export type listProductPropertiesResponseError = (listProductPropertiesResponseD
 
 export type listProductPropertiesResponse = (listProductPropertiesResponseSuccess | listProductPropertiesResponseError)
 
-export const getListProductPropertiesUrl = (id: string,) => {
+export const getListProductPropertiesUrl = (namespace: string,
+    id: string,) => {
 
 
 
 
-  return `/products/${id}/properties`
+  return `/products/${namespace}/${id}/properties`
 }
 
 /**
  * Lists the product's declared-property contract (what every instance of the product exposes), ordered by property name, each with its optional default and required flag. Gated by product:read.
  * @summary List a product's declared properties
  */
-export const listProductProperties = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<listProductPropertiesResponse> => {
+export const listProductProperties = async (namespace: string,
+    id: string, options?: Parameters<typeof ogFetch>[1]): Promise<listProductPropertiesResponse> => {
 
-  return ogFetch<listProductPropertiesResponse>(getListProductPropertiesUrl(id),
+  return ogFetch<listProductPropertiesResponse>(getListProductPropertiesUrl(namespace,id),
   {
     ...options,
     method: 'GET'
@@ -20342,23 +20594,27 @@ export type deleteProductPropertyResponseError = (deleteProductPropertyResponseD
 
 export type deleteProductPropertyResponse = (deleteProductPropertyResponseSuccess | deleteProductPropertyResponseError)
 
-export const getDeleteProductPropertyUrl = (id: string,
+export const getDeleteProductPropertyUrl = (namespace: string,
+    id: string,
+    propertyNamespace: string,
     property: string,) => {
 
 
 
 
-  return `/products/${id}/properties/${property}`
+  return `/products/${namespace}/${id}/properties/${propertyNamespace}/${property}`
 }
 
 /**
  * Removes one line from a custom product's contract; instances keep any value they set for it, now off-contract. A property the product does not declare is a 404, and an official product is read-only (422). Gated by product:delete.
  * @summary Withdraw a property from a product
  */
-export const deleteProductProperty = async (id: string,
+export const deleteProductProperty = async (namespace: string,
+    id: string,
+    propertyNamespace: string,
     property: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteProductPropertyResponse> => {
 
-  return ogFetch<deleteProductPropertyResponse>(getDeleteProductPropertyUrl(id,property),
+  return ogFetch<deleteProductPropertyResponse>(getDeleteProductPropertyUrl(namespace,id,propertyNamespace,property),
   {
     ...options,
     method: 'DELETE'
@@ -20388,24 +20644,28 @@ export type setProductPropertyResponseError = (setProductPropertyResponseDefault
 
 export type setProductPropertyResponse = (setProductPropertyResponseSuccess | setProductPropertyResponseError)
 
-export const getSetProductPropertyUrl = (id: string,
+export const getSetProductPropertyUrl = (namespace: string,
+    id: string,
+    propertyNamespace: string,
     property: string,) => {
 
 
 
 
-  return `/products/${id}/properties/${property}`
+  return `/products/${namespace}/${id}/properties/${propertyNamespace}/${property}`
 }
 
 /**
  * Declares a catalog property on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422); an unknown product is a 404 and a property the catalog does not know is a 422, as is a default its property type refuses. Gated by product:update.
  * @summary Declare a property on a product
  */
-export const setProductProperty = async (id: string,
+export const setProductProperty = async (namespace: string,
+    id: string,
+    propertyNamespace: string,
     property: string,
     setProductPropertyInputBody: NonReadonly<SetProductPropertyInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setProductPropertyResponse> => {
 
-  return ogFetch<setProductPropertyResponse>(getSetProductPropertyUrl(id,property),
+  return ogFetch<setProductPropertyResponse>(getSetProductPropertyUrl(namespace,id,propertyNamespace,property),
   {
     ...options,
     method: 'PUT',
@@ -20435,22 +20695,24 @@ export type renameProductResponseError = (renameProductResponseDefault) & {
 
 export type renameProductResponse = (renameProductResponseSuccess | renameProductResponseError)
 
-export const getRenameProductUrl = (id: string,) => {
+export const getRenameProductUrl = (namespace: string,
+    id: string,) => {
 
 
 
 
-  return `/products/${id}:rename`
+  return `/products/${namespace}/${id}:rename`
 }
 
 /**
  * Moves a custom product's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official product keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by product:rename.
  * @summary Rename a product
  */
-export const renameProduct = async (id: string,
+export const renameProduct = async (namespace: string,
+    id: string,
     renameCatalogInputBody: NonReadonly<RenameCatalogInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameProductResponse> => {
 
-  return ogFetch<renameProductResponse>(getRenameProductUrl(id),
+  return ogFetch<renameProductResponse>(getRenameProductUrl(namespace,id),
   {
     ...options,
     method: 'POST',
@@ -20568,21 +20830,23 @@ export type deletePropertyTypeResponseError = (deletePropertyTypeResponseDefault
 
 export type deletePropertyTypeResponse = (deletePropertyTypeResponseSuccess | deletePropertyTypeResponseError)
 
-export const getDeletePropertyTypeUrl = (name: string,) => {
+export const getDeletePropertyTypeUrl = (namespace: string,
+    name: string,) => {
 
 
 
 
-  return `/property-types/${name}`
+  return `/property-types/${namespace}/${name}`
 }
 
 /**
  * Removes a custom property by name. Official properties are read-only. A property a calc rule writes is a 409 naming the rule, and one identity bindings use as their match key is a 409 counting them. Gated by property_type:delete.
  * @summary Delete a property
  */
-export const deletePropertyType = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deletePropertyTypeResponse> => {
+export const deletePropertyType = async (namespace: string,
+    name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deletePropertyTypeResponse> => {
 
-  return ogFetch<deletePropertyTypeResponse>(getDeletePropertyTypeUrl(name),
+  return ogFetch<deletePropertyTypeResponse>(getDeletePropertyTypeUrl(namespace,name),
   {
     ...options,
     method: 'DELETE'
@@ -20612,21 +20876,23 @@ export type getPropertyTypeResponseError = (getPropertyTypeResponseDefault) & {
 
 export type getPropertyTypeResponse = (getPropertyTypeResponseSuccess | getPropertyTypeResponseError)
 
-export const getGetPropertyTypeUrl = (name: string,) => {
+export const getGetPropertyTypeUrl = (namespace: string,
+    name: string,) => {
 
 
 
 
-  return `/property-types/${name}`
+  return `/property-types/${namespace}/${name}`
 }
 
 /**
  * Returns one property by name. Gated by property_type:read.
  * @summary Get a property
  */
-export const getPropertyType = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getPropertyTypeResponse> => {
+export const getPropertyType = async (namespace: string,
+    name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getPropertyTypeResponse> => {
 
-  return ogFetch<getPropertyTypeResponse>(getGetPropertyTypeUrl(name),
+  return ogFetch<getPropertyTypeResponse>(getGetPropertyTypeUrl(namespace,name),
   {
     ...options,
     method: 'GET'
@@ -20656,22 +20922,24 @@ export type updatePropertyTypeResponseError = (updatePropertyTypeResponseDefault
 
 export type updatePropertyTypeResponse = (updatePropertyTypeResponseSuccess | updatePropertyTypeResponseError)
 
-export const getUpdatePropertyTypeUrl = (name: string,) => {
+export const getUpdatePropertyTypeUrl = (namespace: string,
+    name: string,) => {
 
 
 
 
-  return `/property-types/${name}`
+  return `/property-types/${namespace}/${name}`
 }
 
 /**
  * Patches a custom property's label, description, or validation. Partial by default: the fields present in the body change and the rest are left alone. validation is a nullable object with no empty value, so it clears by being named in update_mask with no value in the body; label and description clear with an explicit empty string. A mask naming a field this resource does not patch is a 422. Data type is fixed at creation. Official properties are read-only. Gated by property_type:update.
  * @summary Update a property
  */
-export const updatePropertyType = async (name: string,
+export const updatePropertyType = async (namespace: string,
+    name: string,
     updatePropertyInputBody: NonReadonly<UpdatePropertyInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updatePropertyTypeResponse> => {
 
-  return ogFetch<updatePropertyTypeResponse>(getUpdatePropertyTypeUrl(name),
+  return ogFetch<updatePropertyTypeResponse>(getUpdatePropertyTypeUrl(namespace,name),
   {
     ...options,
     method: 'PATCH',
@@ -20701,22 +20969,24 @@ export type setPropertyTypeRetentionResponseError = (setPropertyTypeRetentionRes
 
 export type setPropertyTypeRetentionResponse = (setPropertyTypeRetentionResponseSuccess | setPropertyTypeRetentionResponseError)
 
-export const getSetPropertyTypeRetentionUrl = (name: string,) => {
+export const getSetPropertyTypeRetentionUrl = (namespace: string,
+    name: string,) => {
 
 
 
 
-  return `/property-types/${name}:setRetention`
+  return `/property-types/${namespace}/${name}:setRetention`
 }
 
 /**
  * Sets how many days this type's transitions are kept, overriding the property lane's window (retention.property_days), or with null returns it to the lane's. Works on an official type: a shipped type's definition is read-only, but how long an install keeps its samples is the install's, and the boot seed never resets it. The retention floor still holds: a declared value and a series' latest value are never removed. 1 to 36,500 days. Audited as set_retention. Gated by property_type:update and platform:update.
  * @summary Set a property type's retention window
  */
-export const setPropertyTypeRetention = async (name: string,
+export const setPropertyTypeRetention = async (namespace: string,
+    name: string,
     setTypeRetentionBody: NonReadonly<SetTypeRetentionBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setPropertyTypeRetentionResponse> => {
 
-  return ogFetch<setPropertyTypeRetentionResponse>(getSetPropertyTypeRetentionUrl(name),
+  return ogFetch<setPropertyTypeRetentionResponse>(getSetPropertyTypeRetentionUrl(namespace,name),
   {
     ...options,
     method: 'POST',
@@ -21408,21 +21678,23 @@ export type deleteSeverityLevelResponseError = (deleteSeverityLevelResponseDefau
 
 export type deleteSeverityLevelResponse = (deleteSeverityLevelResponseSuccess | deleteSeverityLevelResponseError)
 
-export const getDeleteSeverityLevelUrl = (name: string,) => {
+export const getDeleteSeverityLevelUrl = (namespace: string,
+    name: string,) => {
 
 
 
 
-  return `/severity-levels/${name}`
+  return `/severity-levels/${namespace}/${name}`
 }
 
 /**
  * Removes an operator level no alarm or event rule names; an official level or one in use is a 409. Audited. Gated by severity_level:delete, with an all-scope grant.
  * @summary Delete a severity level
  */
-export const deleteSeverityLevel = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteSeverityLevelResponse> => {
+export const deleteSeverityLevel = async (namespace: string,
+    name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteSeverityLevelResponse> => {
 
-  return ogFetch<deleteSeverityLevelResponse>(getDeleteSeverityLevelUrl(name),
+  return ogFetch<deleteSeverityLevelResponse>(getDeleteSeverityLevelUrl(namespace,name),
   {
     ...options,
     method: 'DELETE'
@@ -21452,21 +21724,23 @@ export type getSeverityLevelResponseError = (getSeverityLevelResponseDefault) & 
 
 export type getSeverityLevelResponse = (getSeverityLevelResponseSuccess | getSeverityLevelResponseError)
 
-export const getGetSeverityLevelUrl = (name: string,) => {
+export const getGetSeverityLevelUrl = (namespace: string,
+    name: string,) => {
 
 
 
 
-  return `/severity-levels/${name}`
+  return `/severity-levels/${namespace}/${name}`
 }
 
 /**
  * Returns one severity level by name. Gated by severity_level:read.
  * @summary Get a severity level
  */
-export const getSeverityLevel = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getSeverityLevelResponse> => {
+export const getSeverityLevel = async (namespace: string,
+    name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getSeverityLevelResponse> => {
 
-  return ogFetch<getSeverityLevelResponse>(getGetSeverityLevelUrl(name),
+  return ogFetch<getSeverityLevelResponse>(getGetSeverityLevelUrl(namespace,name),
   {
     ...options,
     method: 'GET'
@@ -21496,22 +21770,24 @@ export type updateSeverityLevelResponseError = (updateSeverityLevelResponseDefau
 
 export type updateSeverityLevelResponse = (updateSeverityLevelResponseSuccess | updateSeverityLevelResponseError)
 
-export const getUpdateSeverityLevelUrl = (name: string,) => {
+export const getUpdateSeverityLevelUrl = (namespace: string,
+    name: string,) => {
 
 
 
 
-  return `/severity-levels/${name}`
+  return `/severity-levels/${namespace}/${name}`
 }
 
 /**
  * Patches an operator level's name, label, color or rank (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update, with an all-scope grant.
  * @summary Update a severity level
  */
-export const updateSeverityLevel = async (name: string,
+export const updateSeverityLevel = async (namespace: string,
+    name: string,
     updateSeverityLevelInputBody: NonReadonly<UpdateSeverityLevelInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateSeverityLevelResponse> => {
 
-  return ogFetch<updateSeverityLevelResponse>(getUpdateSeverityLevelUrl(name),
+  return ogFetch<updateSeverityLevelResponse>(getUpdateSeverityLevelUrl(namespace,name),
   {
     ...options,
     method: 'PATCH',
@@ -21761,21 +22037,23 @@ export type deleteStandardResponseError = (deleteStandardResponseDefault) & {
 
 export type deleteStandardResponse = (deleteStandardResponseSuccess | deleteStandardResponseError)
 
-export const getDeleteStandardUrl = (id: string,) => {
+export const getDeleteStandardUrl = (namespace: string,
+    id: string,) => {
 
 
 
 
-  return `/standards/${id}`
+  return `/standards/${namespace}/${id}`
 }
 
 /**
  * Deletes a custom standard, refused if official (422) or still referenced by a system (409). Gated by standard:delete.
  * @summary Delete a standard
  */
-export const deleteStandard = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteStandardResponse> => {
+export const deleteStandard = async (namespace: string,
+    id: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteStandardResponse> => {
 
-  return ogFetch<deleteStandardResponse>(getDeleteStandardUrl(id),
+  return ogFetch<deleteStandardResponse>(getDeleteStandardUrl(namespace,id),
   {
     ...options,
     method: 'DELETE'
@@ -21805,21 +22083,23 @@ export type getStandardResponseError = (getStandardResponseDefault) & {
 
 export type getStandardResponse = (getStandardResponseSuccess | getStandardResponseError)
 
-export const getGetStandardUrl = (id: string,) => {
+export const getGetStandardUrl = (namespace: string,
+    id: string,) => {
 
 
 
 
-  return `/standards/${id}`
+  return `/standards/${namespace}/${id}`
 }
 
 /**
  * Fetches a standard by id. Gated by standard:read.
  * @summary Get a standard
  */
-export const getStandard = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<getStandardResponse> => {
+export const getStandard = async (namespace: string,
+    id: string, options?: Parameters<typeof ogFetch>[1]): Promise<getStandardResponse> => {
 
-  return ogFetch<getStandardResponse>(getGetStandardUrl(id),
+  return ogFetch<getStandardResponse>(getGetStandardUrl(namespace,id),
   {
     ...options,
     method: 'GET'
@@ -21849,22 +22129,24 @@ export type updateStandardResponseError = (updateStandardResponseDefault) & {
 
 export type updateStandardResponse = (updateStandardResponseSuccess | updateStandardResponseError)
 
-export const getUpdateStandardUrl = (id: string,) => {
+export const getUpdateStandardUrl = (namespace: string,
+    id: string,) => {
 
 
 
 
-  return `/standards/${id}`
+  return `/standards/${namespace}/${id}`
 }
 
 /**
  * Patches a custom standard's label, parent, label rule or map. The parent_standard_id field follows the three-state convention: an omitted field is unchanged, an explicit empty string clears it (a standalone standard), a handle or uuid sets it, and an unknown parent is a 422. Official standards are read-only (422). Gated by standard:update.
  * @summary Update a standard
  */
-export const updateStandard = async (id: string,
+export const updateStandard = async (namespace: string,
+    id: string,
     updateStandardInputBody: NonReadonly<UpdateStandardInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateStandardResponse> => {
 
-  return ogFetch<updateStandardResponse>(getUpdateStandardUrl(id),
+  return ogFetch<updateStandardResponse>(getUpdateStandardUrl(namespace,id),
   {
     ...options,
     method: 'PATCH',
@@ -21894,21 +22176,23 @@ export type listStandardMetricsResponseError = (listStandardMetricsResponseDefau
 
 export type listStandardMetricsResponse = (listStandardMetricsResponseSuccess | listStandardMetricsResponseError)
 
-export const getListStandardMetricsUrl = (id: string,) => {
+export const getListStandardMetricsUrl = (namespace: string,
+    id: string,) => {
 
 
 
 
-  return `/standards/${id}/metrics`
+  return `/standards/${namespace}/${id}/metrics`
 }
 
 /**
  * Lists the standard's declared-metric contract (which metrics every system conforming to it carries), ordered by metric name, each with its optional default and required flag. Gated by standard:read.
  * @summary List a standard's declared metrics
  */
-export const listStandardMetrics = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<listStandardMetricsResponse> => {
+export const listStandardMetrics = async (namespace: string,
+    id: string, options?: Parameters<typeof ogFetch>[1]): Promise<listStandardMetricsResponse> => {
 
-  return ogFetch<listStandardMetricsResponse>(getListStandardMetricsUrl(id),
+  return ogFetch<listStandardMetricsResponse>(getListStandardMetricsUrl(namespace,id),
   {
     ...options,
     method: 'GET'
@@ -21938,23 +22222,27 @@ export type deleteStandardMetricResponseError = (deleteStandardMetricResponseDef
 
 export type deleteStandardMetricResponse = (deleteStandardMetricResponseSuccess | deleteStandardMetricResponseError)
 
-export const getDeleteStandardMetricUrl = (id: string,
+export const getDeleteStandardMetricUrl = (namespace: string,
+    id: string,
+    metricNamespace: string,
     metric: string,) => {
 
 
 
 
-  return `/standards/${id}/metrics/${metric}`
+  return `/standards/${namespace}/${id}/metrics/${metricNamespace}/${metric}`
 }
 
 /**
  * Removes one line from a custom standard's contract; conforming systems keep any samples the series already holds, now off-contract. A metric the standard does not declare is a 404, and an official standard is read-only (422). Gated by standard:delete.
  * @summary Withdraw a metric from a standard
  */
-export const deleteStandardMetric = async (id: string,
+export const deleteStandardMetric = async (namespace: string,
+    id: string,
+    metricNamespace: string,
     metric: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteStandardMetricResponse> => {
 
-  return ogFetch<deleteStandardMetricResponse>(getDeleteStandardMetricUrl(id,metric),
+  return ogFetch<deleteStandardMetricResponse>(getDeleteStandardMetricUrl(namespace,id,metricNamespace,metric),
   {
     ...options,
     method: 'DELETE'
@@ -21984,24 +22272,28 @@ export type setStandardMetricResponseError = (setStandardMetricResponseDefault) 
 
 export type setStandardMetricResponse = (setStandardMetricResponseSuccess | setStandardMetricResponseError)
 
-export const getSetStandardMetricUrl = (id: string,
+export const getSetStandardMetricUrl = (namespace: string,
+    id: string,
+    metricNamespace: string,
     metric: string,) => {
 
 
 
 
-  return `/standards/${id}/metrics/${metric}`
+  return `/standards/${namespace}/${id}/metrics/${metricNamespace}/${metric}`
 }
 
 /**
  * Declares a catalog metric on a custom standard, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official standards are read-only (422); an unknown standard is a 404 and a metric the catalog does not know is a 422. Gated by standard:update.
  * @summary Declare a metric on a standard
  */
-export const setStandardMetric = async (id: string,
+export const setStandardMetric = async (namespace: string,
+    id: string,
+    metricNamespace: string,
     metric: string,
     setStandardMetricInputBody: NonReadonly<SetStandardMetricInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setStandardMetricResponse> => {
 
-  return ogFetch<setStandardMetricResponse>(getSetStandardMetricUrl(id,metric),
+  return ogFetch<setStandardMetricResponse>(getSetStandardMetricUrl(namespace,id,metricNamespace,metric),
   {
     ...options,
     method: 'PUT',
@@ -22031,21 +22323,23 @@ export type listStandardPropertiesResponseError = (listStandardPropertiesRespons
 
 export type listStandardPropertiesResponse = (listStandardPropertiesResponseSuccess | listStandardPropertiesResponseError)
 
-export const getListStandardPropertiesUrl = (id: string,) => {
+export const getListStandardPropertiesUrl = (namespace: string,
+    id: string,) => {
 
 
 
 
-  return `/standards/${id}/properties`
+  return `/standards/${namespace}/${id}/properties`
 }
 
 /**
  * Lists the standard's declared-property contract (what every system conforming to it exposes), ordered by property name, each with its optional default and required flag. Gated by standard:read.
  * @summary List a standard's declared properties
  */
-export const listStandardProperties = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<listStandardPropertiesResponse> => {
+export const listStandardProperties = async (namespace: string,
+    id: string, options?: Parameters<typeof ogFetch>[1]): Promise<listStandardPropertiesResponse> => {
 
-  return ogFetch<listStandardPropertiesResponse>(getListStandardPropertiesUrl(id),
+  return ogFetch<listStandardPropertiesResponse>(getListStandardPropertiesUrl(namespace,id),
   {
     ...options,
     method: 'GET'
@@ -22075,23 +22369,27 @@ export type deleteStandardPropertyResponseError = (deleteStandardPropertyRespons
 
 export type deleteStandardPropertyResponse = (deleteStandardPropertyResponseSuccess | deleteStandardPropertyResponseError)
 
-export const getDeleteStandardPropertyUrl = (id: string,
+export const getDeleteStandardPropertyUrl = (namespace: string,
+    id: string,
+    propertyNamespace: string,
     property: string,) => {
 
 
 
 
-  return `/standards/${id}/properties/${property}`
+  return `/standards/${namespace}/${id}/properties/${propertyNamespace}/${property}`
 }
 
 /**
  * Removes one line from a custom standard's contract; conforming systems keep any value they set for it, now off-contract. A property the standard does not declare is a 404, and an official standard is read-only (422). Gated by standard:delete.
  * @summary Withdraw a property from a standard
  */
-export const deleteStandardProperty = async (id: string,
+export const deleteStandardProperty = async (namespace: string,
+    id: string,
+    propertyNamespace: string,
     property: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteStandardPropertyResponse> => {
 
-  return ogFetch<deleteStandardPropertyResponse>(getDeleteStandardPropertyUrl(id,property),
+  return ogFetch<deleteStandardPropertyResponse>(getDeleteStandardPropertyUrl(namespace,id,propertyNamespace,property),
   {
     ...options,
     method: 'DELETE'
@@ -22121,24 +22419,28 @@ export type setStandardPropertyResponseError = (setStandardPropertyResponseDefau
 
 export type setStandardPropertyResponse = (setStandardPropertyResponseSuccess | setStandardPropertyResponseError)
 
-export const getSetStandardPropertyUrl = (id: string,
+export const getSetStandardPropertyUrl = (namespace: string,
+    id: string,
+    propertyNamespace: string,
     property: string,) => {
 
 
 
 
-  return `/standards/${id}/properties/${property}`
+  return `/standards/${namespace}/${id}/properties/${propertyNamespace}/${property}`
 }
 
 /**
  * Declares a catalog property on a custom standard, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official standards are read-only (422); an unknown standard is a 404 and a property the catalog does not know is a 422, as is a default its property type refuses. Gated by standard:update.
  * @summary Declare a property on a standard
  */
-export const setStandardProperty = async (id: string,
+export const setStandardProperty = async (namespace: string,
+    id: string,
+    propertyNamespace: string,
     property: string,
     setStandardPropertyInputBody: NonReadonly<SetStandardPropertyInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setStandardPropertyResponse> => {
 
-  return ogFetch<setStandardPropertyResponse>(getSetStandardPropertyUrl(id,property),
+  return ogFetch<setStandardPropertyResponse>(getSetStandardPropertyUrl(namespace,id,propertyNamespace,property),
   {
     ...options,
     method: 'PUT',
@@ -22168,21 +22470,23 @@ export type listStandardSlotsResponseError = (listStandardSlotsResponseDefault) 
 
 export type listStandardSlotsResponse = (listStandardSlotsResponseSuccess | listStandardSlotsResponseError)
 
-export const getListStandardSlotsUrl = (id: string,) => {
+export const getListStandardSlotsUrl = (namespace: string,
+    id: string,) => {
 
 
 
 
-  return `/standards/${id}/slots`
+  return `/standards/${namespace}/${id}/slots`
 }
 
 /**
  * Lists the slots this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the component_types (accepted_types) and, if pinned, the products a filling component must match. An unknown standard is a 404, never an empty list. Gated by standard:read.
  * @summary List a standard's declared slots
  */
-export const listStandardSlots = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<listStandardSlotsResponse> => {
+export const listStandardSlots = async (namespace: string,
+    id: string, options?: Parameters<typeof ogFetch>[1]): Promise<listStandardSlotsResponse> => {
 
-  return ogFetch<listStandardSlotsResponse>(getListStandardSlotsUrl(id),
+  return ogFetch<listStandardSlotsResponse>(getListStandardSlotsUrl(namespace,id),
   {
     ...options,
     method: 'GET'
@@ -22212,23 +22516,25 @@ export type deleteStandardSlotResponseError = (deleteStandardSlotResponseDefault
 
 export type deleteStandardSlotResponse = (deleteStandardSlotResponseSuccess | deleteStandardSlotResponseError)
 
-export const getDeleteStandardSlotUrl = (id: string,
+export const getDeleteStandardSlotUrl = (namespace: string,
+    id: string,
     slot: string,) => {
 
 
 
 
-  return `/standards/${id}/slots/${slot}`
+  return `/standards/${namespace}/${id}/slots/${slot}`
 }
 
 /**
  * Removes the slot from the standard, and with it every assignment conforming systems made to it. A slot the standard does not declare is a 404. Gated by standard:delete.
  * @summary Withdraw a slot from a standard
  */
-export const deleteStandardSlot = async (id: string,
+export const deleteStandardSlot = async (namespace: string,
+    id: string,
     slot: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteStandardSlotResponse> => {
 
-  return ogFetch<deleteStandardSlotResponse>(getDeleteStandardSlotUrl(id,slot),
+  return ogFetch<deleteStandardSlotResponse>(getDeleteStandardSlotUrl(namespace,id,slot),
   {
     ...options,
     method: 'DELETE'
@@ -22258,24 +22564,26 @@ export type setStandardSlotResponseError = (setStandardSlotResponseDefault) & {
 
 export type setStandardSlotResponse = (setStandardSlotResponseSuccess | setStandardSlotResponseError)
 
-export const getSetStandardSlotUrl = (id: string,
+export const getSetStandardSlotUrl = (namespace: string,
+    id: string,
     slot: string,) => {
 
 
 
 
-  return `/standards/${id}/slots/${slot}`
+  return `/standards/${namespace}/${id}/slots/${slot}`
 }
 
 /**
  * Declares a slot every conforming system needs filled, or revises it in place (the slot is addressed by name, so the write is idempotent and declaring is this same route). Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and ["*"] replaces the whole declaration. An unknown standard, type, or product is a 422, as is a mask naming a field this resource does not patch. A name a conforming system already declares itself is a 409, since a slot name must mean one slot in a system, and so is a capacity below what a conforming system already holds; either names the conflicting system only if the caller may read it. Gated by standard:update.
  * @summary Declare a slot on a standard
  */
-export const setStandardSlot = async (id: string,
+export const setStandardSlot = async (namespace: string,
+    id: string,
     slot: string,
     slotSpecBody: NonReadonly<SlotSpecBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setStandardSlotResponse> => {
 
-  return ogFetch<setStandardSlotResponse>(getSetStandardSlotUrl(id,slot),
+  return ogFetch<setStandardSlotResponse>(getSetStandardSlotUrl(namespace,id,slot),
   {
     ...options,
     method: 'PATCH',
@@ -22305,22 +22613,24 @@ export type renameStandardResponseError = (renameStandardResponseDefault) & {
 
 export type renameStandardResponse = (renameStandardResponseSuccess | renameStandardResponseError)
 
-export const getRenameStandardUrl = (id: string,) => {
+export const getRenameStandardUrl = (namespace: string,
+    id: string,) => {
 
 
 
 
-  return `/standards/${id}:rename`
+  return `/standards/${namespace}/${id}:rename`
 }
 
 /**
  * Moves a custom standard's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official standard keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by standard:rename.
  * @summary Rename a standard
  */
-export const renameStandard = async (id: string,
+export const renameStandard = async (namespace: string,
+    id: string,
     renameCatalogInputBody: NonReadonly<RenameCatalogInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameStandardResponse> => {
 
-  return ogFetch<renameStandardResponse>(getRenameStandardUrl(id),
+  return ogFetch<renameStandardResponse>(getRenameStandardUrl(namespace,id),
   {
     ...options,
     method: 'POST',
@@ -22482,21 +22792,23 @@ export type deleteSystemTypeResponseError = (deleteSystemTypeResponseDefault) & 
 
 export type deleteSystemTypeResponse = (deleteSystemTypeResponseSuccess | deleteSystemTypeResponseError)
 
-export const getDeleteSystemTypeUrl = (id: string,) => {
+export const getDeleteSystemTypeUrl = (namespace: string,
+    id: string,) => {
 
 
 
 
-  return `/system-types/${id}`
+  return `/system-types/${namespace}/${id}`
 }
 
 /**
  * Deletes a custom system_type, refused if official (422), still a parent of another system_type (409), or still classifying a system (409). Gated by system_type:delete.
  * @summary Delete a system type
  */
-export const deleteSystemType = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteSystemTypeResponse> => {
+export const deleteSystemType = async (namespace: string,
+    id: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteSystemTypeResponse> => {
 
-  return ogFetch<deleteSystemTypeResponse>(getDeleteSystemTypeUrl(id),
+  return ogFetch<deleteSystemTypeResponse>(getDeleteSystemTypeUrl(namespace,id),
   {
     ...options,
     method: 'DELETE'
@@ -22526,22 +22838,24 @@ export type updateSystemTypeResponseError = (updateSystemTypeResponseDefault) & 
 
 export type updateSystemTypeResponse = (updateSystemTypeResponseSuccess | updateSystemTypeResponseError)
 
-export const getUpdateSystemTypeUrl = (id: string,) => {
+export const getUpdateSystemTypeUrl = (namespace: string,
+    id: string,) => {
 
 
 
 
-  return `/system-types/${id}`
+  return `/system-types/${namespace}/${id}`
 }
 
 /**
  * Patches a custom system_type's label, stem, icon, abbrev, or label_rule. An unparseable label_rule is a 422 at rule-edit time, never a broken row at create time, and setting one restamps nothing on its own: apply it with /systems:recomputeLabels after seeing the blast radius with :previewLabels. Official types are read-only (422). Gated by system_type:update.
  * @summary Update a system type
  */
-export const updateSystemType = async (id: string,
+export const updateSystemType = async (namespace: string,
+    id: string,
     updateSystemTypeInputBody: NonReadonly<UpdateSystemTypeInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateSystemTypeResponse> => {
 
-  return ogFetch<updateSystemTypeResponse>(getUpdateSystemTypeUrl(id),
+  return ogFetch<updateSystemTypeResponse>(getUpdateSystemTypeUrl(namespace,id),
   {
     ...options,
     method: 'PATCH',
@@ -26815,21 +27129,23 @@ export type deleteVendorResponseError = (deleteVendorResponseDefault) & {
 
 export type deleteVendorResponse = (deleteVendorResponseSuccess | deleteVendorResponseError)
 
-export const getDeleteVendorUrl = (id: string,) => {
+export const getDeleteVendorUrl = (namespace: string,
+    id: string,) => {
 
 
 
 
-  return `/vendors/${id}`
+  return `/vendors/${namespace}/${id}`
 }
 
 /**
  * Deletes a custom vendor, refused if official (422). Gated by vendor:delete.
  * @summary Delete a vendor
  */
-export const deleteVendor = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteVendorResponse> => {
+export const deleteVendor = async (namespace: string,
+    id: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteVendorResponse> => {
 
-  return ogFetch<deleteVendorResponse>(getDeleteVendorUrl(id),
+  return ogFetch<deleteVendorResponse>(getDeleteVendorUrl(namespace,id),
   {
     ...options,
     method: 'DELETE'
@@ -26859,21 +27175,23 @@ export type getVendorResponseError = (getVendorResponseDefault) & {
 
 export type getVendorResponse = (getVendorResponseSuccess | getVendorResponseError)
 
-export const getGetVendorUrl = (id: string,) => {
+export const getGetVendorUrl = (namespace: string,
+    id: string,) => {
 
 
 
 
-  return `/vendors/${id}`
+  return `/vendors/${namespace}/${id}`
 }
 
 /**
  * Fetches a vendor by id. Gated by vendor:read.
  * @summary Get a vendor
  */
-export const getVendor = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<getVendorResponse> => {
+export const getVendor = async (namespace: string,
+    id: string, options?: Parameters<typeof ogFetch>[1]): Promise<getVendorResponse> => {
 
-  return ogFetch<getVendorResponse>(getGetVendorUrl(id),
+  return ogFetch<getVendorResponse>(getGetVendorUrl(namespace,id),
   {
     ...options,
     method: 'GET'
@@ -26903,22 +27221,24 @@ export type updateVendorResponseError = (updateVendorResponseDefault) & {
 
 export type updateVendorResponse = (updateVendorResponseSuccess | updateVendorResponseError)
 
-export const getUpdateVendorUrl = (id: string,) => {
+export const getUpdateVendorUrl = (namespace: string,
+    id: string,) => {
 
 
 
 
-  return `/vendors/${id}`
+  return `/vendors/${namespace}/${id}`
 }
 
 /**
  * Patches a custom vendor's label, kind, icon, support_phone, or website. Official vendors are read-only (422). Gated by vendor:update.
  * @summary Update a vendor
  */
-export const updateVendor = async (id: string,
+export const updateVendor = async (namespace: string,
+    id: string,
     updateVendorInputBody: NonReadonly<UpdateVendorInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateVendorResponse> => {
 
-  return ogFetch<updateVendorResponse>(getUpdateVendorUrl(id),
+  return ogFetch<updateVendorResponse>(getUpdateVendorUrl(namespace,id),
   {
     ...options,
     method: 'PATCH',
@@ -26948,22 +27268,24 @@ export type renameVendorResponseError = (renameVendorResponseDefault) & {
 
 export type renameVendorResponse = (renameVendorResponseSuccess | renameVendorResponseError)
 
-export const getRenameVendorUrl = (id: string,) => {
+export const getRenameVendorUrl = (namespace: string,
+    id: string,) => {
 
 
 
 
-  return `/vendors/${id}:rename`
+  return `/vendors/${namespace}/${id}:rename`
 }
 
 /**
  * Moves a custom vendor's name, the handle an operator types, addressed by its current name or its uuid. The uuid does not change, so every reference inside the platform still resolves and now reads the new name; a script or a bookmark that typed the old one stops resolving, which is why the rename is its own act and its own permission rather than a patch field. A label rendered from the name is not restamped (the recompute verb applies that). An official vendor keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; an illegal or uuid-shaped name is a 422. Audited as rename. Gated by vendor:rename.
  * @summary Rename a vendor
  */
-export const renameVendor = async (id: string,
+export const renameVendor = async (namespace: string,
+    id: string,
     renameCatalogInputBody: NonReadonly<RenameCatalogInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameVendorResponse> => {
 
-  return ogFetch<renameVendorResponse>(getRenameVendorUrl(id),
+  return ogFetch<renameVendorResponse>(getRenameVendorUrl(namespace,id),
   {
     ...options,
     method: 'POST',

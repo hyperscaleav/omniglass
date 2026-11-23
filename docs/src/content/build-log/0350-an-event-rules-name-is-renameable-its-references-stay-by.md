@@ -5,7 +5,7 @@ refs: [977]
 ---
 
 Event rules shipped with create-only names (#918), against ADR-0062 and ADR-0076; the architect folded
-the fix into #524's rollup. `POST /event-rules/{name}:rename` (gated `rule:update` on an all-scope
+the fix into #524's rollup. `POST /event-rules/{namespace}/{name}:rename` (gated `rule:update` on an all-scope
 grant, like every rule write; `omniglass event-rule rename`) moves an operator rule's name through the
 shared validator, audited (`rename`, keyed on the uuid) and answered with the rule and its `id`; an
 official rule is a 409, as every official write is, and a taken name a 409. A rename is not a material

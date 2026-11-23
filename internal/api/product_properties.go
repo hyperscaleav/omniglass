@@ -68,7 +68,7 @@ func registerProductPropertyRoutes(api huma.API, a *authenticator, gw storage.Ga
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-product-properties",
 		Method:      http.MethodGet,
-		Path:        "/products/{id}/properties",
+		Path:        "/products/{namespace}/{id}/properties",
 		Summary:     "List a product's declared properties",
 		Description: "Lists the product's declared-property contract (what every instance of the product exposes), ordered by property name, each with its optional default and required flag. Gated by product:read.",
 	}, "product", "read"), func(ctx context.Context, in *productPathInput) (*listProductPropertiesOutput, error) {
@@ -87,7 +87,7 @@ func registerProductPropertyRoutes(api huma.API, a *authenticator, gw storage.Ga
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "set-product-property",
 		Method:      http.MethodPut,
-		Path:        "/products/{id}/properties/{property}",
+		Path:        "/products/{namespace}/{id}/properties/{property_namespace}/{property}",
 		Summary:     "Declare a property on a product",
 		Description: "Declares a catalog property on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422); an unknown product is a 404 and a property the catalog does not know is a 422, as is a default its property type refuses. Gated by product:update.",
 	}, "product", "update"), func(ctx context.Context, in *setProductPropertyInput) (*productPropertyOutput, error) {
@@ -109,7 +109,7 @@ func registerProductPropertyRoutes(api huma.API, a *authenticator, gw storage.Ga
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-product-property",
 		Method:        http.MethodDelete,
-		Path:          "/products/{id}/properties/{property}",
+		Path:          "/products/{namespace}/{id}/properties/{property_namespace}/{property}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Withdraw a property from a product",
 		Description:   "Removes one line from a custom product's contract; instances keep any value they set for it, now off-contract. A property the product does not declare is a 404, and an official product is read-only (422). Gated by product:delete.",

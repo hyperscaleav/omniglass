@@ -56,7 +56,7 @@ func TestLocationTypePropertiesAPI(t *testing.T) {
 	// PUT declares the line. The property must already exist in the catalog
 	// (model-number is seeded); the contract only names it.
 	var set locationTypePropertyWire
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/location-types/annex/properties/model-number",
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/location-types/local/annex/properties/og/model-number",
 		map[string]any{"default_value": "MN-UNSET", "required": true}, http.StatusOK), &set); err != nil {
 		t.Fatalf("decode set: %v", err)
 	}
@@ -66,7 +66,7 @@ func TestLocationTypePropertiesAPI(t *testing.T) {
 
 	// GET lists the contract.
 	var listed locationTypePropertiesWire
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/location-types/annex/properties", nil, http.StatusOK), &listed); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/location-types/local/annex/properties", nil, http.StatusOK), &listed); err != nil {
 		t.Fatalf("decode list: %v", err)
 	}
 	if len(listed.Properties) != 1 || listed.Properties[0].PropertyTypeName != "model-number" {
@@ -74,14 +74,14 @@ func TestLocationTypePropertiesAPI(t *testing.T) {
 	}
 
 	// A second PUT revises the same line rather than adding another.
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/location-types/annex/properties/model-number",
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/location-types/local/annex/properties/og/model-number",
 		map[string]any{"default_value": "MN-REVISED"}, http.StatusOK), &set); err != nil {
 		t.Fatalf("decode revise: %v", err)
 	}
 	if set.Required || string(set.DefaultValue) != `"MN-REVISED"` {
 		t.Fatalf("revised = %+v, want required=false with default \"MN-REVISED\"", set)
 	}
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/location-types/annex/properties", nil, http.StatusOK), &listed); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/location-types/local/annex/properties", nil, http.StatusOK), &listed); err != nil {
 		t.Fatalf("decode list after revise: %v", err)
 	}
 	if len(listed.Properties) != 1 || string(listed.Properties[0].DefaultValue) != `"MN-REVISED"` {
@@ -89,20 +89,20 @@ func TestLocationTypePropertiesAPI(t *testing.T) {
 	}
 
 	// DELETE withdraws the line; withdrawing it twice is an explicit miss.
-	c.do(ownerTok, http.MethodDelete, "/location-types/annex/properties/model-number", nil, http.StatusNoContent)
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/location-types/annex/properties", nil, http.StatusOK), &listed); err != nil {
+	c.do(ownerTok, http.MethodDelete, "/location-types/local/annex/properties/og/model-number", nil, http.StatusNoContent)
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/location-types/local/annex/properties", nil, http.StatusOK), &listed); err != nil {
 		t.Fatalf("decode list after delete: %v", err)
 	}
 	if len(listed.Properties) != 0 {
 		t.Fatalf("contract after delete = %+v, want empty", listed.Properties)
 	}
-	c.do(ownerTok, http.MethodDelete, "/location-types/annex/properties/model-number", nil, http.StatusNotFound)
+	c.do(ownerTok, http.MethodDelete, "/location-types/local/annex/properties/og/model-number", nil, http.StatusNotFound)
 
 	// A property the catalog does not know, and a type that does not exist, are
 	// request faults rather than 500s.
-	c.do(ownerTok, http.MethodPut, "/location-types/annex/properties/not_a_property",
+	c.do(ownerTok, http.MethodPut, "/location-types/local/annex/properties/local/not_a_property",
 		map[string]any{"required": true}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodPut, "/location-types/no-such-type/properties/model-number",
+	c.do(ownerTok, http.MethodPut, "/location-types/local/no-such-type/properties/og/model-number",
 		map[string]any{"required": true}, http.StatusNotFound)
 
 	// A SHIPPED type's contract is writable over the wire too, which is what the
@@ -110,7 +110,7 @@ func TestLocationTypePropertiesAPI(t *testing.T) {
 	// ADR-0106). Held here and not only at the gateway, because the description
 	// that used to promise a 422 here is what the CLI, the typed client and the
 	// reference all repeat: a status is the claim, so a status is the assertion.
-	c.do(ownerTok, http.MethodPut, "/location-types/room/properties/model-number",
+	c.do(ownerTok, http.MethodPut, "/location-types/og/room/properties/og/model-number",
 		map[string]any{"required": true}, http.StatusOK)
-	c.do(ownerTok, http.MethodDelete, "/location-types/room/properties/model-number", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/location-types/og/room/properties/og/model-number", nil, http.StatusNoContent)
 }

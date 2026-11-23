@@ -465,7 +465,8 @@ func (a *authenticator) gated(op huma.Operation, tokens ...string) huma.Operatio
 	op.Extensions["x-omniglass-permission"] = perm
 	// authn then require, ahead of any operation-specific middleware the caller set.
 	op.Middlewares = append(huma.Middlewares{a.authn, a.require(tokens...)}, op.Middlewares...)
-	return op
+	// A catalog row's {namespace}/{key} resolves after the gate (#1434).
+	return a.catalogKeyed(op)
 }
 
 // platformTier is the cascade's least-specific owner kind, the install-wide level
@@ -1317,6 +1318,7 @@ type roleBody struct {
 	Name        string   `json:"name"`
 	Label       string   `json:"label,omitempty"`
 	Description string   `json:"description,omitempty"`
+	Namespace   string   `json:"namespace" doc:"The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"`
 	Official    bool     `json:"official"`
 	Permissions []string `json:"permissions"`
 	Inherits    []string `json:"inherits"`
@@ -1355,7 +1357,7 @@ func (a *authenticator) rolesHandler(gw storage.Gateway) func(context.Context, *
 			}
 			out.Body.Roles = append(out.Body.Roles, roleBody{
 				ID: r.ID, Name: r.Name, Label: r.Label, Description: r.Description,
-				Official: r.Official, Permissions: r.Permissions, Inherits: r.Inherits,
+				Official: r.Official, Namespace: catalogNamespaceOf(r.Official), Permissions: r.Permissions, Inherits: r.Inherits,
 				EffectivePermissions: eff.Strings(),
 				Held:                 held,
 			})

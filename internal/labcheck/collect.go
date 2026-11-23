@@ -151,8 +151,13 @@ func (r reader) shapeOf(name string, cache map[string]transport.DriverShape) (tr
 			Session   json.RawMessage   `json:"session"`
 		} `json:"spec"`
 	}
-	if err := r.get("/drivers/"+url.PathEscape(name), &d); err != nil {
-		return transport.DriverShape{}, err
+	// A component names its driver by its bare name, which the search path
+	// resolves: the operator's local driver first, then the platform's og one
+	// (ADR-0318).
+	if err := r.get("/drivers/local/"+url.PathEscape(name), &d); err != nil {
+		if err := r.get("/drivers/og/"+url.PathEscape(name), &d); err != nil {
+			return transport.DriverShape{}, err
+		}
 	}
 	var s transport.DriverShape
 	if d.Spec != nil {

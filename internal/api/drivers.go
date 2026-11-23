@@ -14,17 +14,18 @@ import (
 // driverBody is the wire shape of a driver catalog row. The catalog lists
 // alphabetically by label, like vendor.
 type driverBody struct {
-	ID       string          `json:"id" doc:"The driver's uuid, the stable handle that survives a rename"`
-	Name     string          `json:"name" doc:"The name an operator reads and types; renameable"`
-	Label    string          `json:"label"`
-	Version  string          `json:"version,omitempty"`
-	Official bool            `json:"official"`
-	Spec     json.RawMessage `json:"spec,omitempty" doc:"The declarative spec body (#813): transports, inputs, poll functions, listeners, command bindings. Absent on a stub that cannot be attached yet"`
+	ID        string          `json:"id" doc:"The driver's uuid, the stable handle that survives a rename"`
+	Name      string          `json:"name" doc:"The name an operator reads and types; renameable"`
+	Label     string          `json:"label"`
+	Version   string          `json:"version,omitempty"`
+	Namespace string          `json:"namespace" doc:"The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"`
+	Official  bool            `json:"official"`
+	Spec      json.RawMessage `json:"spec,omitempty" doc:"The declarative spec body (#813): transports, inputs, poll functions, listeners, command bindings. Absent on a stub that cannot be attached yet"`
 }
 
 func toDriverBody(d *storage.Driver) driverBody {
 	return driverBody{
-		ID: d.ID, Name: d.Name, Label: d.Label, Version: d.Version, Official: d.Official,
+		ID: d.ID, Name: d.Name, Label: d.Label, Version: d.Version, Official: d.Official, Namespace: catalogNamespaceOf(d.Official),
 		Spec: json.RawMessage(d.Spec),
 	}
 }
@@ -41,6 +42,7 @@ type driverPathInput struct {
 
 type createDriverInput struct {
 	Body struct {
+		CatalogCreateNamespace
 		Name    string          `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The globally unique name; renameable"`
 		Label   string          `json:"label" minLength:"1" doc:"What an operator reads in pickers and lists"`
 		Version string          `json:"version,omitempty" doc:"A free-form version string, e.g. 1.0.0"`
@@ -109,7 +111,7 @@ func registerDriverRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		OperationID: "get-driver",
 		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
-		Path:        "/drivers/{id}",
+		Path:        "/drivers/{namespace}/{id}",
 		Summary:     "Get a driver",
 		Description: "Fetches a driver by id. Gated by driver:read.",
 	}, "driver", "read"), func(ctx context.Context, in *driverPathInput) (*driverOutput, error) {
@@ -124,7 +126,7 @@ func registerDriverRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		OperationID: "update-driver",
 		Extensions:  mcpExposed(),
 		Method:      http.MethodPatch,
-		Path:        "/drivers/{id}",
+		Path:        "/drivers/{namespace}/{id}",
 		Summary:     "Update a driver",
 		Description: "Patches a custom driver's label or version. Official drivers are read-only (422). Gated by driver:update.",
 	}, "driver", "update"), func(ctx context.Context, in *updateDriverInput) (*driverOutput, error) {
@@ -140,7 +142,7 @@ func registerDriverRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-driver",
 		Method:        http.MethodDelete,
-		Path:          "/drivers/{id}",
+		Path:          "/drivers/{namespace}/{id}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a driver",
 		Description:   "Deletes a custom driver, refused if official (422). Gated by driver:delete.",

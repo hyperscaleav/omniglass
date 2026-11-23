@@ -86,7 +86,7 @@ func TestStandardsAPI(t *testing.T) {
 	if variant.ParentStandard != "kiosk" {
 		t.Fatalf("variant parent = %q, want kiosk", variant.ParentStandard)
 	}
-	c.do(ownerTok, http.MethodDelete, "/standards/kiosk-outdoor", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/standards/local/kiosk-outdoor", nil, http.StatusNoContent)
 
 	// Duplicate id is a 409; an unknown parent is a 422.
 	c.do(ownerTok, http.MethodPost, "/standards",
@@ -96,10 +96,10 @@ func TestStandardsAPI(t *testing.T) {
 		http.StatusUnprocessableEntity)
 
 	// The custom row is mutable, and the patch reads back on GET.
-	c.do(ownerTok, http.MethodPatch, "/standards/kiosk",
+	c.do(ownerTok, http.MethodPatch, "/standards/local/kiosk",
 		map[string]any{"label": "Info Kiosk"}, http.StatusOK)
 	var reread standardWire
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/standards/kiosk", nil, http.StatusOK), &reread); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/standards/local/kiosk", nil, http.StatusOK), &reread); err != nil {
 		t.Fatalf("decode get: %v", err)
 	}
 	if reread.Label != "Info Kiosk" {
@@ -110,20 +110,20 @@ func TestStandardsAPI(t *testing.T) {
 	// standard then deletes.
 	c.do(ownerTok, http.MethodPost, "/systems",
 		map[string]any{"name": "k1", "standard_id": "kiosk"}, http.StatusCreated)
-	c.do(ownerTok, http.MethodDelete, "/standards/kiosk", nil, http.StatusConflict)
+	c.do(ownerTok, http.MethodDelete, "/standards/local/kiosk", nil, http.StatusConflict)
 	c.do(ownerTok, http.MethodDelete, "/systems/k1", nil, http.StatusNoContent)
-	c.do(ownerTok, http.MethodDelete, "/standards/kiosk", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/standards/local/kiosk", nil, http.StatusNoContent)
 
 	// A standard forked from a template is the operator's own, so it is
 	// editable rather than read-only. The official read-only
 	// guard still exists for genuinely official rows; it is proven at the storage
 	// tier, where a test can mint one.
-	c.do(ownerTok, http.MethodPatch, "/standards/classroom",
+	c.do(ownerTok, http.MethodPatch, "/standards/local/classroom",
 		map[string]any{"label": "Our Classroom"}, http.StatusOK)
 
 	// Unknown id is a 404, on both read and delete.
-	c.do(ownerTok, http.MethodGet, "/standards/nope", nil, http.StatusNotFound)
-	c.do(ownerTok, http.MethodDelete, "/standards/nope", nil, http.StatusNotFound)
+	c.do(ownerTok, http.MethodGet, "/standards/local/nope", nil, http.StatusNotFound)
+	c.do(ownerTok, http.MethodDelete, "/standards/local/nope", nil, http.StatusNotFound)
 }
 
 // The map declaration on the wire (#791, ADR-0128): PATCH stores it, GET
@@ -157,7 +157,7 @@ func TestStandardMapOnTheWire(t *testing.T) {
 			{"role": "main-display", "position": 1, "x": 0.5, "y": 0.05},
 		},
 	}
-	c.do(ownerTok, http.MethodPatch, "/standards/"+created.ID, map[string]any{"map": mapDecl}, http.StatusOK)
+	c.do(ownerTok, http.MethodPatch, "/standards/local/"+created.ID, map[string]any{"map": mapDecl}, http.StatusOK)
 
 	var got struct {
 		Map *struct {
@@ -168,7 +168,7 @@ func TestStandardMapOnTheWire(t *testing.T) {
 			} `json:"positions"`
 		} `json:"map"`
 	}
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/standards/"+created.ID, nil, http.StatusOK), &got); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/standards/local/"+created.ID, nil, http.StatusOK), &got); err != nil {
 		t.Fatalf("read back: %v", err)
 	}
 	if got.Map == nil || got.Map.Aspect != 1.6 || len(got.Map.Positions) != 2 || got.Map.Positions[0].X != 0.3 {
@@ -176,14 +176,14 @@ func TestStandardMapOnTheWire(t *testing.T) {
 	}
 
 	// Out of bounds is a 422, not stored garbage.
-	c.do(ownerTok, http.MethodPatch, "/standards/"+created.ID, map[string]any{"map": map[string]any{"aspect": 1.6, "positions": []map[string]any{{"role": "r", "position": 1, "x": 1.2, "y": 0.5}}}}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPatch, "/standards/local/"+created.ID, map[string]any{"map": map[string]any{"aspect": 1.6, "positions": []map[string]any{{"role": "r", "position": 1, "x": 1.2, "y": 0.5}}}}, http.StatusUnprocessableEntity)
 
 	// JSON null clears the declaration.
-	c.do(ownerTok, http.MethodPatch, "/standards/"+created.ID, map[string]any{"map": nil}, http.StatusOK)
+	c.do(ownerTok, http.MethodPatch, "/standards/local/"+created.ID, map[string]any{"map": nil}, http.StatusOK)
 	var cleared struct {
 		Map json.RawMessage `json:"map"`
 	}
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/standards/"+created.ID, nil, http.StatusOK), &cleared); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/standards/local/"+created.ID, nil, http.StatusOK), &cleared); err != nil {
 		t.Fatalf("read cleared: %v", err)
 	}
 	if len(cleared.Map) != 0 && string(cleared.Map) != "null" {
@@ -448,7 +448,7 @@ func TestStandardParentClearsWithEmptyString(t *testing.T) {
 	patch := func(body map[string]any) standardWire {
 		t.Helper()
 		var st standardWire
-		if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/standards/variant-kiosk", body, http.StatusOK), &st); err != nil {
+		if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/standards/local/variant-kiosk", body, http.StatusOK), &st); err != nil {
 			t.Fatalf("decode patch: %v", err)
 		}
 		return st
@@ -467,11 +467,11 @@ func TestStandardParentClearsWithEmptyString(t *testing.T) {
 		t.Fatalf("cleared: parent = %q / %q, want none", st.ParentStandard, st.ParentStandardID)
 	}
 	var got standardWire
-	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/standards/variant-kiosk", nil, http.StatusOK), &got)
+	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/standards/local/variant-kiosk", nil, http.StatusOK), &got)
 	if got.ParentStandard != "" || got.ParentStandardID != "" {
 		t.Fatalf("reread: parent = %q / %q, want none", got.ParentStandard, got.ParentStandardID)
 	}
 	// An unknown parent is still refused rather than read as a clear.
-	c.do(ownerTok, http.MethodPatch, "/standards/variant-kiosk",
+	c.do(ownerTok, http.MethodPatch, "/standards/local/variant-kiosk",
 		map[string]any{"parent_standard_id": "no-such-standard"}, http.StatusUnprocessableEntity)
 }

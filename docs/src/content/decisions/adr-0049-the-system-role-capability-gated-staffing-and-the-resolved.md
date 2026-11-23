@@ -46,7 +46,7 @@ summary: "A **`system_role`** is a slot a system needs filled (a table microphon
   `on delete restrict`**, so a component staffing a role cannot be deleted out from under the system.
 
   Eight routes carry it, regenerated into the OpenAPI document, the cobra CLI, and the typed client:
-  `GET /standards/{id}/roles` plus `PUT` / `DELETE /standards/{id}/roles/{role}` (gated `standard:read` /
+  `GET /standards/{namespace}/{id}/roles` plus `PUT` / `DELETE /standards/{namespace}/{id}/roles/{role}` (gated `standard:read` /
   `:update` / `:delete`); `GET /systems/{name}/roles` (the resolved read) plus
   `PUT` / `DELETE /systems/{name}/roles/{role}` and
   `PUT` / `DELETE /systems/{name}/roles/{role}/assignments/{component}` (gated `system:read` / `:update`);

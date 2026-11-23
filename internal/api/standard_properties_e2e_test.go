@@ -54,7 +54,7 @@ func TestStandardPropertiesAPI(t *testing.T) {
 	// PUT declares the line. The property must already exist in the catalog
 	// (model-number is seeded); the contract only names it.
 	var set standardPropertyWire
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/standards/acme-room/properties/model-number",
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/standards/local/acme-room/properties/og/model-number",
 		map[string]any{"default_value": "MN-UNSET", "required": true}, http.StatusOK), &set); err != nil {
 		t.Fatalf("decode set: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestStandardPropertiesAPI(t *testing.T) {
 
 	// GET lists the contract.
 	var listed standardPropertiesWire
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/standards/acme-room/properties", nil, http.StatusOK), &listed); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/standards/local/acme-room/properties", nil, http.StatusOK), &listed); err != nil {
 		t.Fatalf("decode list: %v", err)
 	}
 	if len(listed.Properties) != 1 || listed.Properties[0].PropertyTypeName != "model-number" {
@@ -72,14 +72,14 @@ func TestStandardPropertiesAPI(t *testing.T) {
 	}
 
 	// A second PUT revises the same line rather than adding another.
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/standards/acme-room/properties/model-number",
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/standards/local/acme-room/properties/og/model-number",
 		map[string]any{"default_value": "MN-REVISED"}, http.StatusOK), &set); err != nil {
 		t.Fatalf("decode revise: %v", err)
 	}
 	if set.Required || string(set.DefaultValue) != `"MN-REVISED"` {
 		t.Fatalf("revised = %+v, want required=false with default \"MN-REVISED\"", set)
 	}
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/standards/acme-room/properties", nil, http.StatusOK), &listed); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/standards/local/acme-room/properties", nil, http.StatusOK), &listed); err != nil {
 		t.Fatalf("decode list after revise: %v", err)
 	}
 	if len(listed.Properties) != 1 || string(listed.Properties[0].DefaultValue) != `"MN-REVISED"` {
@@ -87,19 +87,19 @@ func TestStandardPropertiesAPI(t *testing.T) {
 	}
 
 	// DELETE withdraws the line; withdrawing it twice is an explicit miss.
-	c.do(ownerTok, http.MethodDelete, "/standards/acme-room/properties/model-number", nil, http.StatusNoContent)
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/standards/acme-room/properties", nil, http.StatusOK), &listed); err != nil {
+	c.do(ownerTok, http.MethodDelete, "/standards/local/acme-room/properties/og/model-number", nil, http.StatusNoContent)
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/standards/local/acme-room/properties", nil, http.StatusOK), &listed); err != nil {
 		t.Fatalf("decode list after delete: %v", err)
 	}
 	if len(listed.Properties) != 0 {
 		t.Fatalf("contract after delete = %+v, want empty", listed.Properties)
 	}
-	c.do(ownerTok, http.MethodDelete, "/standards/acme-room/properties/model-number", nil, http.StatusNotFound)
+	c.do(ownerTok, http.MethodDelete, "/standards/local/acme-room/properties/og/model-number", nil, http.StatusNotFound)
 
 	// A property the catalog does not know, and a standard that does not exist,
 	// are request faults rather than 500s.
-	c.do(ownerTok, http.MethodPut, "/standards/acme-room/properties/not_a_property",
+	c.do(ownerTok, http.MethodPut, "/standards/local/acme-room/properties/local/not_a_property",
 		map[string]any{"required": true}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodPut, "/standards/no-such-standard/properties/model-number",
+	c.do(ownerTok, http.MethodPut, "/standards/local/no-such-standard/properties/og/model-number",
 		map[string]any{"required": true}, http.StatusNotFound)
 }

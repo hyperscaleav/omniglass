@@ -112,13 +112,13 @@ count** fixes it in one click before the rule is saved.
 | Console | CLI | API |
 |---|---|---|
 | List | `omniglass calc-rule list` | `GET /calc-rules` |
-| Open a rule | `omniglass calc-rule get <name>` | `GET /calc-rules/{name}` |
-| Its state | `omniglass calc-rule state list <name>` | `GET /calc-rules/{name}/state` |
+| Open a rule | `omniglass calc-rule get <name>` | `GET /calc-rules/{namespace}/{name}` |
+| Its state | `omniglass calc-rule state list <name>` | `GET /calc-rules/{namespace}/{name}/state` |
 | Preview | `omniglass calc-rule preview` | `POST /calc-rules:preview` |
 | New rule | `omniglass calc-rule create` | `POST /calc-rules` |
-| Edit, Disable, Enable | `omniglass calc-rule update <name>` | `PATCH /calc-rules/{name}` |
-| Rename | `omniglass calc-rule rename <name> --name <new>` | `POST /calc-rules/{name}:rename` |
-| Delete | `omniglass calc-rule delete <name>` | `DELETE /calc-rules/{name}` |
+| Edit, Disable, Enable | `omniglass calc-rule update <name>` | `PATCH /calc-rules/{namespace}/{name}` |
+| Rename | `omniglass calc-rule rename <name> --name <new>` | `POST /calc-rules/{namespace}/{name}:rename` |
+| Delete | `omniglass calc-rule delete <name>` | `DELETE /calc-rules/{namespace}/{name}` |
 
 ```sh
 omniglass metric-type create --name rtt-worst --data-type float --unit ms --label "Worst RTT"

@@ -22,14 +22,14 @@ import { TEMPLATES_KEY } from "../lib/templates";
 // and a writable declared-property contract on its detail blade. Data is seeded
 // into the query cache so no server is needed.
 const seed: Standard[] = [
-  { id: uuidFor("std-meeting-room"), name: "meeting-room", label: "Meeting room", official: true },
-  { id: uuidFor("std-huddle-space"), name: "huddle-space", label: "Huddle space", official: false, parent_standard: "meeting-room", parent_standard_id: uuidFor("std-meeting-room") },
+  { id: uuidFor("std-meeting-room"), name: "meeting-room", label: "Meeting room", namespace: "og", official: true },
+  { id: uuidFor("std-huddle-space"), name: "huddle-space", label: "Huddle space", namespace: "local", official: false, parent_standard: "meeting-room", parent_standard_id: uuidFor("std-meeting-room") },
 ];
 
 const contract: ClassifierProperty[] = [{ property_type_name: "seat_count", property_type_id: "seat_count-id", default_value: 8, required: true }];
 const catalog: PropertyRow[] = [
-  { name: "seat_count", data_type: "int", label: "Seat count", official: true },
-  { name: "has_camera", data_type: "bool", label: "Has camera", official: true },
+  { name: "seat_count", data_type: "int", label: "Seat count", namespace: "og", official: true },
+  { name: "has_camera", data_type: "bool", label: "Has camera", namespace: "og", official: true },
 ];
 
 // The slots the custom standard declares (SlotEditor keys the query on the
@@ -37,7 +37,7 @@ const catalog: PropertyRow[] = [
 // and product catalogs its typed-slot pickers read (#626).
 const slots: DeclaredSlot[] = [{ name: "table-mic", label: "Table microphone", quorum: 2, accepted_types: ["video-bar"], pinned_products: [], position_labels: [], impact: "degraded" }];
 const componentTypes: ComponentType[] = [{ id: uuidFor("ct-video-bar"), name: "video-bar", label: "Video Bar", official: true, forked: false, default_tags: [] }];
-const products: Product[] = [{ id: uuidFor("prod-cisco-room-bar"), name: "cisco-room-bar", label: "Cisco Room Bar", kind: "device", component_type: "video-bar", component_type_id: uuidFor("ct-video-bar"), official: true }];
+const products: Product[] = [{ id: uuidFor("prod-cisco-room-bar"), name: "cisco-room-bar", label: "Cisco Room Bar", kind: "device", component_type: "video-bar", component_type_id: uuidFor("ct-video-bar"), namespace: "og", official: true }];
 
 const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
 const viewer: Me = { user: { id: "u-view", kind: "person" }, person: { username: "viewer" }, permissions: ["*:read"], grants: [] };

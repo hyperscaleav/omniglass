@@ -88,7 +88,7 @@ func TestEventRuleAPI(t *testing.T) {
 		Pending    []any      `json:"pending"`
 		LastJudged *time.Time `json:"last_judged_at"`
 	}
-	if err := json.Unmarshal(c.do(viewer, http.MethodGet, "/event-rules/reach-lost/state", nil, http.StatusOK), &state); err != nil {
+	if err := json.Unmarshal(c.do(viewer, http.MethodGet, "/event-rules/local/reach-lost/state", nil, http.StatusOK), &state); err != nil {
 		t.Fatal(err)
 	}
 	if state.Open == nil || state.Pending == nil || len(state.Open) != 0 || len(state.Pending) != 0 || state.LastJudged != nil {
@@ -132,7 +132,7 @@ func TestEventRuleAPI(t *testing.T) {
 		}
 	}
 	var one eventRuleBody
-	if err := json.Unmarshal(c.do(viewer, http.MethodGet, "/event-rules/reach-lost", nil, http.StatusOK), &one); err != nil {
+	if err := json.Unmarshal(c.do(viewer, http.MethodGet, "/event-rules/local/reach-lost", nil, http.StatusOK), &one); err != nil {
 		t.Fatal(err)
 	}
 	if one.OpenAlarms == nil || one.Pending == nil || *one.OpenAlarms != 0 || *one.Pending != 1 {
@@ -148,7 +148,7 @@ func TestEventRuleAPI(t *testing.T) {
 		}
 	}
 	state.LastJudged = nil
-	if err := json.Unmarshal(c.do(viewer, http.MethodGet, "/event-rules/reach-lost/state", nil, http.StatusOK), &state); err != nil {
+	if err := json.Unmarshal(c.do(viewer, http.MethodGet, "/event-rules/local/reach-lost/state", nil, http.StatusOK), &state); err != nil {
 		t.Fatal(err)
 	}
 	if state.LastJudged == nil || !state.LastJudged.Equal(*one.LastJudged) {
@@ -188,7 +188,7 @@ func TestEventRuleAPI(t *testing.T) {
 				Component string `json:"component"`
 			} `json:"pending"`
 		}
-		if err := json.Unmarshal(c.do(tok, http.MethodGet, "/event-rules/reach-lost/state", nil, http.StatusOK), &st); err != nil {
+		if err := json.Unmarshal(c.do(tok, http.MethodGet, "/event-rules/local/reach-lost/state", nil, http.StatusOK), &st); err != nil {
 			t.Fatal(err)
 		}
 		return st.Pending
@@ -212,7 +212,7 @@ func TestEventRuleAPI(t *testing.T) {
 			}
 		}
 		var one eventRuleBody
-		if err := json.Unmarshal(c.do(tok, http.MethodGet, "/event-rules/reach-lost", nil, http.StatusOK), &one); err != nil {
+		if err := json.Unmarshal(c.do(tok, http.MethodGet, "/event-rules/local/reach-lost", nil, http.StatusOK), &one); err != nil {
 			t.Fatal(err)
 		}
 		if one.Name != "reach-lost" || *one.Pending != len(want) {
@@ -225,7 +225,7 @@ func TestEventRuleAPI(t *testing.T) {
 	}
 
 	var upd eventRuleBody
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/event-rules/reach-lost",
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/event-rules/local/reach-lost",
 		map[string]any{"enabled": false, "clear_criteria": map[string]any{"op": "eq", "value": "up"}}, http.StatusOK), &upd); err != nil {
 		t.Fatal(err)
 	}
@@ -265,15 +265,15 @@ func TestEventRuleAPI(t *testing.T) {
 	// A holder of every rule permission on one place alone still writes no
 	// rule: a rule's selector reaches the whole fleet.
 	placeOnly := setupScopedUser(t, ctx, dsn, "north-only-owner", grantSpec{role: "owner", scopeKind: "location", scopeID: loc.ID})
-	c.do(placeOnly, http.MethodGet, "/event-rules/reach-lost", nil, http.StatusOK)
+	c.do(placeOnly, http.MethodGet, "/event-rules/local/reach-lost", nil, http.StatusOK)
 	c.do(placeOnly, http.MethodPost, "/event-rules", map[string]any{"name": "north-only", "sample_key": "room-temperature",
 		"fire_criteria": map[string]any{"op": "gt", "value": 30}, "severity": "high", "fire_event_type": "rule-fired"}, http.StatusForbidden)
-	c.do(placeOnly, http.MethodPatch, "/event-rules/reach-lost", map[string]any{"label": "mine"}, http.StatusForbidden)
-	c.do(placeOnly, http.MethodDelete, "/event-rules/reach-lost", nil, http.StatusForbidden)
+	c.do(placeOnly, http.MethodPatch, "/event-rules/local/reach-lost", map[string]any{"label": "mine"}, http.StatusForbidden)
+	c.do(placeOnly, http.MethodDelete, "/event-rules/local/reach-lost", nil, http.StatusForbidden)
 
-	c.do(viewer, http.MethodDelete, "/event-rules/reach-lost", nil, http.StatusForbidden)
-	c.do(ownerTok, http.MethodDelete, "/event-rules/reach-lost", nil, http.StatusNoContent)
-	c.do(ownerTok, http.MethodGet, "/event-rules/reach-lost", nil, http.StatusNotFound)
+	c.do(viewer, http.MethodDelete, "/event-rules/local/reach-lost", nil, http.StatusForbidden)
+	c.do(ownerTok, http.MethodDelete, "/event-rules/local/reach-lost", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodGet, "/event-rules/local/reach-lost", nil, http.StatusNotFound)
 }
 
 // TestEventRuleTypesAPI drives #948 over HTTP: a rule saves with no severity
@@ -332,17 +332,17 @@ func TestEventRuleTypesAPI(t *testing.T) {
 		t.Fatalf("an alarm-raising rule reads %+v", paged)
 	}
 	var upd eventRuleBody
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/event-rules/hot-page", map[string]any{"severity": "",
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/event-rules/local/hot-page", map[string]any{"severity": "",
 		"clear_event_type": ""}, http.StatusOK), &upd); err != nil {
 		t.Fatal(err)
 	}
 	if upd.Severity != nil || upd.ClearEventType != nil || upd.Version != 2 {
 		t.Fatalf("patched %+v, want informational with no clear type, version 2", upd)
 	}
-	c.do(ownerTok, http.MethodPatch, "/event-rules/hot-page", map[string]any{"fire_event_type": ""}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPatch, "/event-rules/local/hot-page", map[string]any{"fire_event_type": ""}, http.StatusUnprocessableEntity)
 
 	var official eventRuleBody
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/event-rules/reachability-lost", nil, http.StatusOK), &official); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/event-rules/og/reachability-lost", nil, http.StatusOK), &official); err != nil {
 		t.Fatal(err)
 	}
 	if official.FireEventType != "rule-fired" || official.ClearEventType == nil || *official.ClearEventType != "rule-cleared" {
@@ -411,7 +411,7 @@ func TestRuleEventsOnTheEventsRead(t *testing.T) {
 		Firing     *int `json:"firing"`
 		OpenAlarms int  `json:"open_alarms"`
 	}
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/event-rules/ev-watch", nil, http.StatusOK), &one); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/event-rules/local/ev-watch", nil, http.StatusOK), &one); err != nil {
 		t.Fatal(err)
 	}
 	if one.Firing == nil || *one.Firing != 1 || one.OpenAlarms != 1 {
@@ -425,7 +425,7 @@ func TestRuleEventsOnTheEventsRead(t *testing.T) {
 			Since       time.Time `json:"since"`
 		} `json:"firings"`
 	}
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/event-rules/ev-watch/state", nil, http.StatusOK), &st); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/event-rules/local/ev-watch/state", nil, http.StatusOK), &st); err != nil {
 		t.Fatal(err)
 	}
 	if len(st.Firings) != 1 || st.Firings[0].ComponentID != target.ID || st.Firings[0].Instance != "tcp" {
@@ -478,7 +478,7 @@ func TestRuleEventsOnTheEventsRead(t *testing.T) {
 	if name, id := ruleID(); name != "ev-watch" || id == "" {
 		t.Fatalf("a live rule's event names %q by id %q, want ev-watch with its id", name, id)
 	}
-	c.do(ownerTok, http.MethodDelete, "/event-rules/ev-watch", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/event-rules/local/ev-watch", nil, http.StatusNoContent)
 	if name, id := ruleID(); name != "ev-watch" || id != "" {
 		t.Fatalf("a deleted rule's event names %q by id %q, want ev-watch with no id", name, id)
 	}
@@ -649,7 +649,7 @@ func TestEventRuleExpressionAPI(t *testing.T) {
 	check(c.do(ownerTok, http.MethodPost, "/event-rules", map[string]any{"name": "bad", "sample_key": "room-temperature",
 		"fire_criteria": map[string]any{"expr": "value > 40 &&\n  humidity > 2"}, "fire_event_type": "rule-fired"},
 		http.StatusUnprocessableEntity), "body.fire_criteria.expr", 2, 3)
-	check(c.do(ownerTok, http.MethodPatch, "/event-rules/hot", map[string]any{"clear_criteria": map[string]any{"expr": "value + 1"}},
+	check(c.do(ownerTok, http.MethodPatch, "/event-rules/local/hot", map[string]any{"clear_criteria": map[string]any{"expr": "value + 1"}},
 		http.StatusUnprocessableEntity), "body.clear_criteria.expr", 1, 1)
 	// A short form is located at the criteria, not at an expr it never had.
 	big := strings.Repeat("x", 4090)
@@ -683,7 +683,7 @@ func TestEventRuleExpressionAPI(t *testing.T) {
 		} `json:"criteria_error"`
 	}
 	var got withErr
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/event-rules/reachability-lost", nil, http.StatusOK), &got); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/event-rules/og/reachability-lost", nil, http.StatusOK), &got); err != nil {
 		t.Fatal(err)
 	}
 	if got.CriteriaError == nil || got.CriteriaError.Field != "fire_criteria" || got.CriteriaError.Line != 1 || got.CriteriaError.Message == "" {
@@ -701,7 +701,7 @@ func TestEventRuleExpressionAPI(t *testing.T) {
 		}
 	}
 	var st withErr
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/event-rules/reachability-lost/state", nil, http.StatusOK), &st); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/event-rules/og/reachability-lost/state", nil, http.StatusOK), &st); err != nil {
 		t.Fatal(err)
 	}
 	if st.CriteriaError == nil || *st.CriteriaError != *got.CriteriaError {
@@ -790,7 +790,7 @@ func TestEventRuleRenameAPI(t *testing.T) {
 	alarm := open[0].ID
 
 	body := map[string]any{"name": "rn-after"}
-	c.do(viewer, http.MethodPost, "/event-rules/rn-before:rename", body, http.StatusForbidden)
+	c.do(viewer, http.MethodPost, "/event-rules/local/rn-before:rename", body, http.StatusForbidden)
 	south := c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "rn-south", "location_type": "campus"}, http.StatusCreated)
 	var loc struct {
 		ID string `json:"id"`
@@ -799,7 +799,7 @@ func TestEventRuleRenameAPI(t *testing.T) {
 		t.Fatalf("created location %s (%v)", south, err)
 	}
 	placeOwner := setupScopedUser(t, ctx, dsn, "rn-south-owner", grantSpec{role: "owner", scopeKind: "location", scopeID: loc.ID})
-	c.do(placeOwner, http.MethodPost, "/event-rules/rn-before:rename", body, http.StatusForbidden)
+	c.do(placeOwner, http.MethodPost, "/event-rules/local/rn-before:rename", body, http.StatusForbidden)
 
 	var renamed struct {
 		ID         string `json:"id"`
@@ -808,14 +808,14 @@ func TestEventRuleRenameAPI(t *testing.T) {
 		OpenAlarms int    `json:"open_alarms"`
 		Firing     int    `json:"firing"`
 	}
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/event-rules/rn-before:rename", body, http.StatusOK), &renamed); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/event-rules/local/rn-before:rename", body, http.StatusOK), &renamed); err != nil {
 		t.Fatal(err)
 	}
 	if renamed.ID != made.ID || renamed.Name != "rn-after" || renamed.Version != made.Version || renamed.OpenAlarms != 1 || renamed.Firing != 1 {
 		t.Fatalf("renamed = %+v, want the same uuid under rn-after, version %d, its alarm and firing held", renamed, made.Version)
 	}
-	c.do(ownerTok, http.MethodGet, "/event-rules/rn-before", nil, http.StatusNotFound)
-	c.do(viewer, http.MethodGet, "/event-rules/rn-after", nil, http.StatusOK)
+	c.do(ownerTok, http.MethodGet, "/event-rules/local/rn-before", nil, http.StatusNotFound)
+	c.do(viewer, http.MethodGet, "/event-rules/local/rn-after", nil, http.StatusOK)
 	if got := alarms(); len(got) != 1 || got[0].ID != alarm || got[0].ClearedAt != nil || got[0].DedupKey != "rule:"+made.ID+":tcp" || got[0].RaisedByRule != "rn-after" {
 		t.Fatalf("after the rename alarms = %+v, want the same alarm open, keyed by the uuid, raised by rn-after", got)
 	}
@@ -846,13 +846,13 @@ func TestEventRuleRenameAPI(t *testing.T) {
 		t.Fatalf("events = %+v, want the fire event under rn-before and the clear event under rn-after, both by the rule's uuid", evs.Events)
 	}
 
-	c.do(ownerTok, http.MethodPost, "/event-rules/reachability-lost:rename", map[string]any{"name": "mine-now"}, http.StatusConflict)
+	c.do(ownerTok, http.MethodPost, "/event-rules/og/reachability-lost:rename", map[string]any{"name": "mine-now"}, http.StatusConflict)
 	c.do(ownerTok, http.MethodPost, "/event-rules", map[string]any{"name": "rn-taken", "sample_key": "room-temperature",
 		"fire_criteria": map[string]any{"expr": "value > 30.0"}, "fire_event_type": "rule-fired"}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPost, "/event-rules/rn-after:rename", map[string]any{"name": "rn-taken"}, http.StatusConflict)
-	c.do(ownerTok, http.MethodPost, "/event-rules/rn-after:rename", map[string]any{"name": "Not Kebab"}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodPost, "/event-rules/rn-after:rename", map[string]any{"name": made.ID}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodPost, "/event-rules/nope:rename", map[string]any{"name": "rn-x"}, http.StatusNotFound)
+	c.do(ownerTok, http.MethodPost, "/event-rules/local/rn-after:rename", map[string]any{"name": "rn-taken"}, http.StatusConflict)
+	c.do(ownerTok, http.MethodPost, "/event-rules/local/rn-after:rename", map[string]any{"name": "Not Kebab"}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPost, "/event-rules/local/rn-after:rename", map[string]any{"name": made.ID}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPost, "/event-rules/local/nope:rename", map[string]any{"name": "rn-x"}, http.StatusNotFound)
 
 	// A hand raise cannot take a key in the rule namespace: it would stand in
 	// for the rule's firing, or be cleared as one.

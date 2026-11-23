@@ -131,7 +131,7 @@ func TestExpressionDiagnosticsAPI(t *testing.T) {
 	if len(made.CalcWarnings) != 1 || made.CalcWarnings[0].Code != "unused-alias" || made.CalcWarnings[0].Field != "reduce.expr" {
 		t.Fatalf("calc_warnings %+v, want unused-alias on reduce.expr", made.CalcWarnings)
 	}
-	if err := json.Unmarshal(c.do(viewer, http.MethodGet, "/calc-rules/counts", nil, http.StatusOK), &made); err != nil || len(made.CalcWarnings) != 1 {
+	if err := json.Unmarshal(c.do(viewer, http.MethodGet, "/calc-rules/local/counts", nil, http.StatusOK), &made); err != nil || len(made.CalcWarnings) != 1 {
 		t.Fatalf("get calc_warnings %+v (%v)", made.CalcWarnings, err)
 	}
 
@@ -148,7 +148,7 @@ func TestExpressionDiagnosticsAPI(t *testing.T) {
 		Message: ev.CriteriaWarnings[0].Message, Code: "float-equality"}) || ev.CriteriaWarnings[0].Message == "" {
 		t.Fatalf("criteria_warnings %+v", ev.CriteriaWarnings)
 	}
-	if err := json.Unmarshal(c.do(viewer, http.MethodGet, "/event-rules/exactly-warm", nil, http.StatusOK), &ev); err != nil || len(ev.CriteriaWarnings) != 1 {
+	if err := json.Unmarshal(c.do(viewer, http.MethodGet, "/event-rules/local/exactly-warm", nil, http.StatusOK), &ev); err != nil || len(ev.CriteriaWarnings) != 1 {
 		t.Fatalf("get criteria_warnings %+v (%v)", ev.CriteriaWarnings, err)
 	}
 }

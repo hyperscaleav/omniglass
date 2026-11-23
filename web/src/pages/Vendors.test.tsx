@@ -12,9 +12,9 @@ import { uuidFor } from "../lib/testids";
 // read-only, same invariant as the Types catalog's official rows: no edit
 // pencil, no Delete. Data is seeded into the query cache so no server is needed.
 const seed: Vendor[] = [
-  { id: uuidFor("ven-crestron"), name: "crestron", label: "Crestron", kind: "manufacturer", official: true, icon: "crestron-logo" },
-  { id: uuidFor("ven-acme-av"), name: "acme-av", label: "Acme AV", kind: "integrator", official: false, website: "https://acme.example" },
-  { id: uuidFor("ven-evil-corp"), name: "evil-corp", label: "Evil Corp", kind: "manufacturer", official: false, website: "javascript:alert(document.cookie)" },
+  { id: uuidFor("ven-crestron"), name: "crestron", label: "Crestron", kind: "manufacturer", namespace: "og", official: true, icon: "crestron-logo" },
+  { id: uuidFor("ven-acme-av"), name: "acme-av", label: "Acme AV", kind: "integrator", namespace: "local", official: false, website: "https://acme.example" },
+  { id: uuidFor("ven-evil-corp"), name: "evil-corp", label: "Evil Corp", kind: "manufacturer", namespace: "local", official: false, website: "javascript:alert(document.cookie)" },
 ];
 
 const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };

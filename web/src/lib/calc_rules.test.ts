@@ -21,7 +21,7 @@ const rule: CalcRule = {
   selector: { system_types: ["meeting"] },
   inputs: [{ alias: "t", key: "room-temperature", key_id: "22222222-2222-7222-8222-222222222222", lane: "metric" }],
   reduce: { expr: "avg(t)" },
-  output_key: "avg-temp", output_lane: "metric", enabled: true, official: false, version: 2,
+  output_key: "avg-temp", output_lane: "metric", enabled: true, namespace: "local", official: false, version: 2,
   created_at: "2026-10-21T00:00:00Z", updated_at: "2026-10-21T00:00:00Z",
   owners_computed: 3, owners_pending: 1, owners_unsupported: 0, owners_failed: 0,
 };

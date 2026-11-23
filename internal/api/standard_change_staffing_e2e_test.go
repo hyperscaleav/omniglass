@@ -17,7 +17,7 @@ func TestChangingAStandardKeepsTheComponentStaffable(t *testing.T) {
 	c, owner := f.c, f.owner
 
 	declare := func(std, slot string, body map[string]any) {
-		c.do(owner, http.MethodPatch, "/standards/"+std+"/slots/"+slot, body, http.StatusOK)
+		c.do(owner, http.MethodPatch, "/standards/local/"+std+"/slots/"+slot, body, http.StatusOK)
 	}
 	for _, std := range []string{"std-old", "std-new", "std-strict"} {
 		c.do(owner, http.MethodPost, "/standards", map[string]any{"name": std, "label": std}, http.StatusCreated)

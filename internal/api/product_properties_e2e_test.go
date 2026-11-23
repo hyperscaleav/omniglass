@@ -56,7 +56,7 @@ func TestProductPropertiesAPI(t *testing.T) {
 	// PUT declares the line. The property must already exist in the catalog
 	// (serial-number is seeded); the contract only names it.
 	var set productPropertyWire
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/products/acme-panel/properties/serial-number",
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/products/local/acme-panel/properties/og/serial-number",
 		map[string]any{"default_value": "SN-UNSET", "required": true}, http.StatusOK), &set); err != nil {
 		t.Fatalf("decode set: %v", err)
 	}
@@ -66,7 +66,7 @@ func TestProductPropertiesAPI(t *testing.T) {
 
 	// GET lists the contract.
 	var listed productPropertiesWire
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/products/acme-panel/properties", nil, http.StatusOK), &listed); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/products/local/acme-panel/properties", nil, http.StatusOK), &listed); err != nil {
 		t.Fatalf("decode list: %v", err)
 	}
 	if len(listed.Properties) != 1 || listed.Properties[0].PropertyTypeName != "serial-number" {
@@ -74,14 +74,14 @@ func TestProductPropertiesAPI(t *testing.T) {
 	}
 
 	// A second PUT revises the same line rather than adding another.
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/products/acme-panel/properties/serial-number",
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPut, "/products/local/acme-panel/properties/og/serial-number",
 		map[string]any{"default_value": "SN-REVISED"}, http.StatusOK), &set); err != nil {
 		t.Fatalf("decode revise: %v", err)
 	}
 	if set.Required || string(set.DefaultValue) != `"SN-REVISED"` {
 		t.Fatalf("revised = %+v, want required=false with default \"SN-REVISED\"", set)
 	}
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/products/acme-panel/properties", nil, http.StatusOK), &listed); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/products/local/acme-panel/properties", nil, http.StatusOK), &listed); err != nil {
 		t.Fatalf("decode list after revise: %v", err)
 	}
 	if len(listed.Properties) != 1 || string(listed.Properties[0].DefaultValue) != `"SN-REVISED"` {
@@ -89,22 +89,22 @@ func TestProductPropertiesAPI(t *testing.T) {
 	}
 
 	// DELETE withdraws the line; withdrawing it twice is an explicit miss.
-	c.do(ownerTok, http.MethodDelete, "/products/acme-panel/properties/serial-number", nil, http.StatusNoContent)
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/products/acme-panel/properties", nil, http.StatusOK), &listed); err != nil {
+	c.do(ownerTok, http.MethodDelete, "/products/local/acme-panel/properties/og/serial-number", nil, http.StatusNoContent)
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/products/local/acme-panel/properties", nil, http.StatusOK), &listed); err != nil {
 		t.Fatalf("decode list after delete: %v", err)
 	}
 	if len(listed.Properties) != 0 {
 		t.Fatalf("contract after delete = %+v, want empty", listed.Properties)
 	}
-	c.do(ownerTok, http.MethodDelete, "/products/acme-panel/properties/serial-number", nil, http.StatusNotFound)
+	c.do(ownerTok, http.MethodDelete, "/products/local/acme-panel/properties/og/serial-number", nil, http.StatusNotFound)
 
 	// The seeded official product ships its contract with the release, so both
 	// writes are refused (the official read-only rule, not a permission fault).
-	c.do(ownerTok, http.MethodPut, "/products/generic-device/properties/serial-number",
+	c.do(ownerTok, http.MethodPut, "/products/og/generic-device/properties/og/serial-number",
 		map[string]any{"required": true}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodDelete, "/products/generic-device/properties/serial-number", nil, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodDelete, "/products/og/generic-device/properties/og/serial-number", nil, http.StatusUnprocessableEntity)
 
 	// A property the catalog does not know is a request fault, not a 500.
-	c.do(ownerTok, http.MethodPut, "/products/acme-panel/properties/not_a_property",
+	c.do(ownerTok, http.MethodPut, "/products/local/acme-panel/properties/local/not_a_property",
 		map[string]any{"required": true}, http.StatusUnprocessableEntity)
 }

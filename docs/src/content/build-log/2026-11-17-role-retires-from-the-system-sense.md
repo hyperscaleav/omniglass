@@ -7,7 +7,7 @@ refs: [2061, 2032, 2028]
 ADR-2032 gave role back to IAM alone, and this sweep carries the other sense, what a system needs filled,
 to system slot on every surface. One migration renames the schema (`system_slot`, `system_slot_assignment`,
 `system_slot_type`, `system_slot_product`, `slot_choice`, and every `role_id` column, constraint and index
-with them); the IAM `role` table is untouched. The routes are `/standards/{id}/slots/{slot}` and
+with them); the IAM `role` table is untouched. The routes are `/standards/{namespace}/{id}/slots/{slot}` and
 `/systems/{name}/slots/{slot}` (assignments and `:swapPositions` included), so the CLI groups are
 `omniglass standard slot` and `omniglass system slot`, the expression accessor is `$slot`, and the template,
 health and simulation bodies carry `slots`. The storage methods are `ListSystemSlots`, `SetSystemSlot`,

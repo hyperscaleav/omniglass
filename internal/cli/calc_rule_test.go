@@ -40,7 +40,7 @@ func TestCalcRuleCommands(t *testing.T) {
 	if err != nil {
 		t.Fatalf("rename failed: %v (%s)", err, out)
 	}
-	if method != http.MethodPost || path != "/api/v1/calc-rules/temp-mean:rename" || body["name"] != "temp-peak" {
-		t.Fatalf("the CLI sent %s %s %v, want POST /api/v1/calc-rules/temp-mean:rename {name: temp-peak}", method, path, body)
+	if method != http.MethodPost || path != "/api/v1/calc-rules/local/temp-mean:rename" || body["name"] != "temp-peak" {
+		t.Fatalf("the CLI sent %s %s %v, want POST /api/v1/calc-rules/local/temp-mean:rename {name: temp-peak}", method, path, body)
 	}
 }

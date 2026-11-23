@@ -61,7 +61,7 @@ func TestDriverAttachAPI(t *testing.T) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	// The seeded snmp-generic driver serves its spec.
-	out := c.do(ownerTok, http.MethodGet, "/drivers/snmp-generic", nil, http.StatusOK)
+	out := c.do(ownerTok, http.MethodGet, "/drivers/og/snmp-generic", nil, http.StatusOK)
 	if !strings.Contains(string(out), `"1.3.6.1.2.1.1.3.0"`) {
 		t.Fatalf("seeded driver body carries no spec: %s", out)
 	}

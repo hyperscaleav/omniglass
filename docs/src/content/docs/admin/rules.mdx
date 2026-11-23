@@ -366,12 +366,12 @@ Every console action is the same API call, with the same checks
 | Console | CLI | API |
 |---|---|---|
 | List | `omniglass event-rule list` | `GET /event-rules` |
-| Open a rule | `omniglass event-rule get <name>` | `GET /event-rules/{name}` |
-| Its live state | `omniglass event-rule state list <name>` | `GET /event-rules/{name}/state` |
+| Open a rule | `omniglass event-rule get <name>` | `GET /event-rules/{namespace}/{name}` |
+| Its live state | `omniglass event-rule state list <name>` | `GET /event-rules/{namespace}/{name}/state` |
 | New rule | `omniglass event-rule create` | `POST /event-rules` |
-| Edit, Disable, Enable | `omniglass event-rule update <name>` | `PATCH /event-rules/{name}` |
-| Rename (Edit, the Name field) | `omniglass event-rule rename <name> --name <new>` | `POST /event-rules/{name}:rename` |
-| Delete | `omniglass event-rule delete <name>` | `DELETE /event-rules/{name}` |
+| Edit, Disable, Enable | `omniglass event-rule update <name>` | `PATCH /event-rules/{namespace}/{name}` |
+| Rename (Edit, the Name field) | `omniglass event-rule rename <name> --name <new>` | `POST /event-rules/{namespace}/{name}:rename` |
+| Delete | `omniglass event-rule delete <name>` | `DELETE /event-rules/{namespace}/{name}` |
 
 The worked example from a terminal, with criteria as JSON and sustains as durations. A criterion is
 an expression, `{"expr": "..."}`, over the sample: `value`, `key`, `instance`, and `component` with

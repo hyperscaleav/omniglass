@@ -83,7 +83,7 @@ func TestHealthAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/standards", map[string]any{
 		"name": "hq-room", "label": "HQ Room",
 	}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPatch, "/standards/hq-room/slots/table-mic", map[string]any{
+	c.do(ownerTok, http.MethodPatch, "/standards/local/hq-room/slots/table-mic", map[string]any{
 		"label": "Table Microphone", "quorum": 1,
 		"accepted_types": []string{"video-bar"}, "impact": "outage",
 	}, http.StatusOK)
