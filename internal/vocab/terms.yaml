@@ -572,8 +572,6 @@ not_terms:
     reason: the lab simulator, not part of a real fleet
   - collection: assistant
     reason: omnibot's own state, a person's stored conversations with it, rather than a thing in the fleet
-  - collection: plans
-    reason: the bulk-create mechanism (POST /plans:apply); a plan is submitted and landed, never stored as a thing an operator manages
   - nav: /
     reason: Home
   - nav: /explore

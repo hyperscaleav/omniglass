@@ -52,17 +52,23 @@ func TestAPIBaseIsTheSpecsServer(t *testing.T) {
 	}
 }
 
-// apply-plan writes in bulk but is gated by a read, so its stamp says it writes:
-// an agent can import a plan (#2368, #2369), and a client confirms it as a
-// write rather than running it as a read-only, idempotent preview.
-func TestApplyPlanIsAWriteTool(t *testing.T) {
-	for _, d := range catalog {
-		if d.Name == "apply-plan" {
-			if d.Annotations.ReadOnly || d.Annotations.Idempotent || d.Class != tooldef.ClassWrite {
-				t.Fatalf("apply-plan is classed %s (read-only %t, idempotent %t), want a write", d.Class, d.Annotations.ReadOnly, d.Annotations.Idempotent)
+// The batch creates write in bulk: each is gated by its collection's create,
+// so the rule classes it a write, and a client confirms it as one rather than
+// running it as a read-only, idempotent preview (#2368, #2369).
+func TestBatchCreatesAreWriteTools(t *testing.T) {
+	for _, name := range []string{"batch-create-locations", "batch-create-systems", "batch-create-components"} {
+		found := false
+		for _, d := range catalog {
+			if d.Name != name {
+				continue
 			}
-			return
+			found = true
+			if d.Annotations.ReadOnly || d.Annotations.Idempotent || d.Class != tooldef.ClassWrite {
+				t.Errorf("%s is classed %s (read-only %t, idempotent %t), want a write", name, d.Class, d.Annotations.ReadOnly, d.Annotations.Idempotent)
+			}
+		}
+		if !found {
+			t.Errorf("%s is not an MCP tool", name)
 		}
 	}
-	t.Fatal("apply-plan is not an MCP tool")
 }

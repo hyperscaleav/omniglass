@@ -3,7 +3,6 @@ package storage_test
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -302,55 +301,5 @@ func TestCreatePlanHealthRecomputeCostIsFlatInSlotCount(t *testing.T) {
 	// One system, one floor and one building, each recorded once.
 	if small != 3 || large != 3 {
 		t.Errorf("the rollup recorded %d system/location rows for two slots and %d for six, want 3 for both (once per owner of the chain)", small, large)
-	}
-}
-
-// TestCreatePlanValidateOnlyWritesNothing (#2368): a ValidateOnly plan runs
-// every piece and returns what an apply would make, then rolls back; the same
-// plan applied under an import id lands, every audit row it wrote carrying the
-// id under from_import beside the template's from_template; and a failing
-// piece names where it sits in the plan.
-func TestCreatePlanValidateOnlyWritesNothing(t *testing.T) {
-	t.Parallel()
-	gw, count := planFixture(t)
-	ctx := context.Background()
-	disp := storagetest.MintProduct(t, ctx, gw, "display")
-	rows := func() int {
-		return count(`select count(*) from location`) + count(`select count(*) from system where name <> 'platform'`) +
-			count(`select count(*) from component`) + count(`select count(*) from standard`) + count(`select count(*) from audit_log`)
-	}
-
-	before := rows()
-	dry := slotPlan("dry", 2, disp.Name)
-	dry.ValidateOnly = true
-	made, err := gw.CreatePlan(ctx, "", dry, allScopes())
-	if err != nil {
-		t.Fatalf("validate plan: %v", err)
-	}
-	if len(made.Locations) != 2 || len(made.Systems) != 1 || len(made.Systems[0].Components) != 2 || len(made.CreatedStandards) != 1 {
-		t.Fatalf("validated = %+v, want what the apply would make", made)
-	}
-	if n := rows(); n != before {
-		t.Fatalf("a validate-only plan wrote %d rows", n-before)
-	}
-
-	apply := slotPlan("dry", 2, disp.Name)
-	apply.Import = "import-2368"
-	if _, err := gw.CreatePlan(ctx, "", apply, allScopes()); err != nil {
-		t.Fatalf("apply plan: %v", err)
-	}
-	stamped := count(`select count(*) from audit_log where new->>'from_import' = 'import-2368'`)
-	templated := count(`select count(*) from audit_log where new ? 'from_template'`)
-	if stamped == 0 || stamped != templated {
-		t.Fatalf("audit rows: %d carry the import, %d a template, want every plan row both", stamped, templated)
-	}
-
-	bad := slotPlan("bad", 2, disp.Name)
-	nope := "no-such-product"
-	bad.Systems[0].Components[1].Component.ProductName = &nope
-	_, err = gw.CreatePlan(ctx, "", bad, allScopes())
-	var pe *storage.PlanError
-	if !errors.As(err, &pe) || pe.Path != "systems[0].components[1]" {
-		t.Fatalf("a bad component = %v, want a PlanError at systems[0].components[1]", err)
 	}
 }

@@ -157,23 +157,23 @@ func templateFrom(ctx context.Context) string {
 	return name
 }
 
-// importKey carries the import id a plan applied through POST /plans:apply
-// came from (#2368).
-type importKey struct{}
+// batchKey carries the batch id a batch create (POST /locations:batchCreate
+// and its siblings, #2368) writes under.
+type batchKey struct{}
 
-// WithImport marks every audit row written under ctx with the import that
-// wrote it, under from_import: like the template, provenance lives in the
-// audit detail only (ADR-0071), so the id is the one handle that finds every
-// row one applied plan wrote. An empty id leaves ctx as it is.
-func WithImport(ctx context.Context, id string) context.Context {
+// WithBatch marks every audit row written under ctx with the batch that wrote
+// it, under from_batch: like the template, provenance lives in the audit
+// detail only (ADR-0071), so the id is the one handle that finds every row one
+// batch create wrote. An empty id leaves ctx as it is.
+func WithBatch(ctx context.Context, id string) context.Context {
 	if id == "" {
 		return ctx
 	}
-	return context.WithValue(ctx, importKey{}, id)
+	return context.WithValue(ctx, batchKey{}, id)
 }
 
-func importFrom(ctx context.Context) string {
-	id, _ := ctx.Value(importKey{}).(string)
+func batchFrom(ctx context.Context) string {
+	id, _ := ctx.Value(batchKey{}).(string)
 	return id
 }
 
@@ -183,17 +183,17 @@ func importFrom(ctx context.Context) string {
 // from a standard template inside a system's plan) keeps its own.
 const templateDetailKey = "from_template"
 
-// importDetailKey is the audit image key an applied plan's import id lands
+// batchDetailKey is the audit image key a batch create's batch id lands
 // under (#2368).
-const importDetailKey = "from_import"
+const batchDetailKey = "from_batch"
 
 // withProvenanceDetail adds the provenance the context carries (the template
-// under from_template, the import under from_import) to an audit image (a
+// under from_template, the batch under from_batch) to an audit image (a
 // JSON object), so the detail names where the row came from. A key the image
 // already holds is kept; a nil image, or one that is not an object, is left as
 // it is.
 func withProvenanceDetail(ctx context.Context, image any) any {
-	marks := provenanceMarks(templateFrom(ctx), importFrom(ctx))
+	marks := provenanceMarks(templateFrom(ctx), batchFrom(ctx))
 	b, ok := image.([]byte)
 	if len(marks) == 0 || !ok || len(b) < 2 || b[0] != '{' {
 		return image
@@ -215,14 +215,14 @@ func withProvenanceDetail(ctx context.Context, image any) any {
 }
 
 // provenanceMarks is the key and value of each provenance mark set: the
-// template, then the import. Pure.
-func provenanceMarks(template, importID string) [][2]string {
+// template, then the batch. Pure.
+func provenanceMarks(template, batchID string) [][2]string {
 	var out [][2]string
 	if template != "" {
 		out = append(out, [2]string{templateDetailKey, template})
 	}
-	if importID != "" {
-		out = append(out, [2]string{importDetailKey, importID})
+	if batchID != "" {
+		out = append(out, [2]string{batchDetailKey, batchID})
 	}
 	return out
 }

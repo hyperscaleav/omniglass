@@ -49,11 +49,6 @@ type Hints struct {
 	// OpenWorld marks a tool that reaches outside omniglass: an outpost touching the
 	// network, or the server fetching from the internet.
 	OpenWorld bool `json:"open_world,omitempty"`
-	// Writes marks a POST that writes although its route gate is a read: the gate
-	// only admits the caller, and the handler checks the create or update
-	// permission each piece of the body needs (a plan apply). Without it the rule
-	// would present the operation as a read-only, idempotent preview.
-	Writes bool `json:"writes,omitempty"`
 }
 
 // ParseHints reads a stamp strictly: an unknown key, a false hint (a stamp only
@@ -93,8 +88,7 @@ type Annotations struct {
 // nothing). Anything else writes: a PATCH, a PUT or a DELETE is destructive (it
 // overwrites or removes), a POST is additive unless its stamp says otherwise. A
 // read, a PUT and a DELETE are idempotent. OpenWorld comes only from the stamp.
-// A writes stamp makes a read-gated POST a write. A destructive or writes hint
-// on a GET is refused as a contradiction.
+// A destructive hint on a read is refused as a contradiction.
 func Annotate(method, permission string, h Hints) (Annotations, error) {
 	method = strings.ToUpper(method)
 	var a Annotations
@@ -102,14 +96,11 @@ func Annotate(method, permission string, h Hints) (Annotations, error) {
 	case "GET", "HEAD":
 		a.ReadOnly = true
 	case "POST":
-		a.ReadOnly = gateAction(permission) == "read" && !h.Writes
+		a.ReadOnly = gateAction(permission) == "read"
 	case "PATCH", "PUT", "DELETE":
 		a.Destructive = true
 	default:
 		return Annotations{}, fmt.Errorf("tooldef: no annotation rule for method %q", method)
-	}
-	if h.Writes && a.ReadOnly {
-		return Annotations{}, errors.New("tooldef: a writes hint on a read-only method is a contradiction")
 	}
 	if h.Destructive {
 		if a.ReadOnly {

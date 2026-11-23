@@ -717,164 +717,6 @@ components:
         - role
         - body
       type: object
-    AppliedComponentBody:
-      additionalProperties: false
-      properties:
-        component:
-          description: The component's name
-          type: string
-        component_id:
-          description: The component's id; omitted on a dry run
-          type: string
-        product:
-          description: Its product
-          type: string
-        slot:
-          description: The slot it fills in its system
-          type: string
-      required:
-        - component
-        - product
-      type: object
-    AppliedLocationBody:
-      additionalProperties: false
-      properties:
-        key:
-          description: The plan's key for it
-          type: string
-        location:
-          description: The location's name
-          type: string
-        location_id:
-          description: The location's id; omitted on a dry run, which keeps nothing
-          type: string
-        parent:
-          description: The location it sits under
-          type: string
-      required:
-        - key
-        - location
-      type: object
-    AppliedSystemBody:
-      additionalProperties: false
-      properties:
-        components:
-          description: The components that staff it, in plan order
-          items:
-            $ref: "#/components/schemas/AppliedComponentBody"
-          type:
-            - array
-            - "null"
-        standard:
-          description: The standard it is built to
-          type: string
-        system:
-          description: The system's name
-          type: string
-        system_id:
-          description: The system's id; omitted on a dry run
-          type: string
-      required:
-        - system
-        - components
-      type: object
-    ApplyPlanInputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/ApplyPlanInputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        components:
-          description: Standalone components, in no system
-          items:
-            $ref: "#/components/schemas/PlanComponentBody"
-          type:
-            - array
-            - "null"
-        locations:
-          description: "The locations to create, in order: a parent before its children"
-          items:
-            $ref: "#/components/schemas/PlanLocationBody"
-          type:
-            - array
-            - "null"
-        standards:
-          description: Standard templates to create standards from, by name, each with any parent it hangs off; one the fleet already holds is used as it is
-          items:
-            type: string
-          type:
-            - array
-            - "null"
-        systems:
-          description: The systems to create, each with the components that staff it
-          items:
-            $ref: "#/components/schemas/PlanSystemBody"
-          type:
-            - array
-            - "null"
-        validate_only:
-          description: "Run the whole plan and roll it back: the response says what an apply would create, or the piece that would refuse it, and nothing is written"
-          type: boolean
-      type: object
-    ApplyPlanOutputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/ApplyPlanOutputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        components:
-          description: The standalone components, in plan order
-          items:
-            $ref: "#/components/schemas/AppliedComponentBody"
-          type:
-            - array
-            - "null"
-        counts:
-          $ref: "#/components/schemas/PlanCountsBody"
-          description: How many of each piece the plan created (or would create)
-        import_id:
-          description: The import every audit row of this apply carries as from_import; omitted on a dry run
-          type: string
-        locations:
-          description: The locations, in plan order
-          items:
-            $ref: "#/components/schemas/AppliedLocationBody"
-          type:
-            - array
-            - "null"
-        standards_created:
-          description: The standards created from their templates, parents first
-          items:
-            type: string
-          type:
-            - array
-            - "null"
-        systems:
-          description: The systems, in plan order
-          items:
-            $ref: "#/components/schemas/AppliedSystemBody"
-          type:
-            - array
-            - "null"
-        validate_only:
-          description: Whether this was a dry run that wrote nothing
-          type: boolean
-      required:
-        - validate_only
-        - counts
-        - standards_created
-        - locations
-        - systems
-        - components
-      type: object
     AssistantConversation:
       additionalProperties: false
       properties:
@@ -1178,6 +1020,159 @@ components:
           type: string
       required:
         - image_base64
+      type: object
+    BatchCreateComponentsInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/BatchCreateComponentsInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        requests:
+          description: "The components to create, each the body POST /components takes, in order: a parent before its children"
+          items:
+            $ref: "#/components/schemas/CreateComponentInputBody"
+          minItems: 1
+          type:
+            - array
+            - "null"
+        validate_only:
+          description: "Run every request in the transaction and roll it back: the response is what the write would create (names minted, ids empty), or the row that would refuse it, and nothing is written"
+          type: boolean
+      required:
+        - requests
+      type: object
+    BatchCreateComponentsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/BatchCreateComponentsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        batch_id:
+          description: The batch id every audit row of this call carries as from_batch; omitted on a dry run
+          type: string
+        components:
+          description: The components created, each as POST /components answers it, in request order
+          items:
+            $ref: "#/components/schemas/ComponentBody"
+          type:
+            - array
+            - "null"
+        validate_only:
+          description: Whether this was a dry run that wrote nothing
+          type: boolean
+      required:
+        - components
+        - validate_only
+      type: object
+    BatchCreateLocationsInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/BatchCreateLocationsInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        requests:
+          description: "The locations to create, each the body POST /locations takes, in order: a parent before its children, which then name it as their parent"
+          items:
+            $ref: "#/components/schemas/CreateLocationInputBody"
+          minItems: 1
+          type:
+            - array
+            - "null"
+        validate_only:
+          description: "Run every request in the transaction and roll it back: the response is what the write would create (names minted, ids empty), or the row that would refuse it, and nothing is written"
+          type: boolean
+      required:
+        - requests
+      type: object
+    BatchCreateLocationsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/BatchCreateLocationsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        batch_id:
+          description: The batch id every audit row of this call carries as from_batch; omitted on a dry run
+          type: string
+        locations:
+          description: The locations created, each as POST /locations answers it, in request order
+          items:
+            $ref: "#/components/schemas/LocationBody"
+          type:
+            - array
+            - "null"
+        validate_only:
+          description: Whether this was a dry run that wrote nothing
+          type: boolean
+      required:
+        - locations
+        - validate_only
+      type: object
+    BatchCreateSystemsInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/BatchCreateSystemsInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        requests:
+          description: "The systems to create, each the body POST /systems takes, in order: a parent before its children"
+          items:
+            $ref: "#/components/schemas/CreateSystemInputBody"
+          minItems: 1
+          type:
+            - array
+            - "null"
+        validate_only:
+          description: "Run every request in the transaction and roll it back: the response is what the write would create (names minted, ids empty), or the row that would refuse it, and nothing is written"
+          type: boolean
+      required:
+        - requests
+      type: object
+    BatchCreateSystemsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/BatchCreateSystemsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        batch_id:
+          description: The batch id every audit row of this call carries as from_batch; omitted on a dry run
+          type: string
+        systems:
+          description: The systems created, each as POST /systems answers it, in request order
+          items:
+            $ref: "#/components/schemas/SystemBody"
+          type:
+            - array
+            - "null"
+        validate_only:
+          description: Whether this was a dry run that wrote nothing
+          type: boolean
+      required:
+        - systems
+        - validate_only
       type: object
     CalcErrorBody:
       additionalProperties: false
@@ -8274,166 +8269,6 @@ components:
         - enabled
         - created_at
         - updated_at
-      type: object
-    PlanComponentBody:
-      additionalProperties: false
-      properties:
-        label:
-          description: The component's label
-          type: string
-        location:
-          description: An existing location the component sits in, by name, dotted path or id
-          type: string
-        location_key:
-          description: The key of a location of this plan the component sits in
-          type: string
-        name:
-          description: The component's name; minted when empty
-          type: string
-        product:
-          description: Its product, by name
-          minLength: 1
-          type: string
-        properties:
-          description: Values declared on the component
-          items:
-            $ref: "#/components/schemas/PlanValueBody"
-          type:
-            - array
-            - "null"
-      required:
-        - product
-      type: object
-    PlanCountsBody:
-      additionalProperties: false
-      properties:
-        components:
-          description: Components created, in systems and standalone
-          format: int64
-          type: integer
-        locations:
-          description: Locations created
-          format: int64
-          type: integer
-        standards_created:
-          description: Standards created from their templates
-          format: int64
-          type: integer
-        systems:
-          description: Systems created
-          format: int64
-          type: integer
-      required:
-        - standards_created
-        - locations
-        - systems
-        - components
-      type: object
-    PlanLocationBody:
-      additionalProperties: false
-      properties:
-        key:
-          description: The plan's own handle for this location, which a later location's parent_key or a system's or component's location_key names; never stored
-          minLength: 1
-          type: string
-        label:
-          description: The location's label
-          type: string
-        name:
-          description: The location's name; minted by its type's name rule when empty
-          type: string
-        parent:
-          description: An existing location this one sits under, by name, dotted path or id; omitted with parent_key makes it a new top
-          type: string
-        parent_key:
-          description: The key of an earlier location of this plan this one sits under
-          type: string
-        type:
-          description: Its location type
-          examples:
-            - building
-          minLength: 1
-          type: string
-      required:
-        - key
-        - type
-      type: object
-    PlanSlotComponentBody:
-      additionalProperties: false
-      properties:
-        label:
-          description: The component's label
-          type: string
-        name:
-          description: The component's name; minted when empty
-          type: string
-        product:
-          description: Its product, by name
-          minLength: 1
-          type: string
-        properties:
-          description: Values declared on the component
-          items:
-            $ref: "#/components/schemas/PlanValueBody"
-          type:
-            - array
-            - "null"
-        slot:
-          description: The slot of the system it fills; a component in no system is a standalone component
-          minLength: 1
-          type: string
-      required:
-        - slot
-        - product
-      type: object
-    PlanSystemBody:
-      additionalProperties: false
-      properties:
-        components:
-          description: The components that staff it; each sits where the system sits
-          items:
-            $ref: "#/components/schemas/PlanSlotComponentBody"
-          type:
-            - array
-            - "null"
-        label:
-          description: The system's label
-          type: string
-        location:
-          description: An existing location the system sits in, by name, dotted path or id
-          type: string
-        location_key:
-          description: The key of a location of this plan the system sits in
-          type: string
-        name:
-          description: The system's name; minted from its type when empty
-          type: string
-        properties:
-          description: Values declared on the system
-          items:
-            $ref: "#/components/schemas/PlanValueBody"
-          type:
-            - array
-            - "null"
-        standard:
-          description: "The standard it is built to, by name: one the fleet holds or one this plan's standards create"
-          type: string
-        type:
-          description: Its system type, by name
-          type: string
-      type: object
-    PlanValueBody:
-      additionalProperties: false
-      properties:
-        name:
-          description: The property, by name
-          minLength: 1
-          type: string
-        value:
-          description: The declared value, shaped by the property's data type
-      required:
-        - name
-        - value
       type: object
     PlatformAlarmBody:
       additionalProperties: false
@@ -18663,6 +18498,39 @@ paths:
       summary: Set a tag value on a component
       x-omniglass-mcp: {}
       x-omniglass-permission: component:update
+  /components:batchCreate:
+    post:
+      description: "Creates components in one transaction: each request is the body POST /components takes, run as that create runs it, in order, so a component may name as its parent one an earlier request creates, and its system and location by name as the single create does. Every row writes its own audit row carrying the one batch_id the response returns, under from_batch. A refused request refuses the whole batch, mapped as POST /components maps it, with its position in the request (requests[3]) leading the detail; nothing lands. validate_only runs the same transaction and rolls it back, answering 200 with the names the write would mint and no ids. A batch carries at most 1000 requests; more is a 413 naming the limit, so split a bigger import (by building). Gated by component:create; each request is held to that scope, its location resolves within your location:read scope, and a request naming a system also needs system:update over it, as its single create does."
+      operationId: batch-create-components
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BatchCreateComponentsInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatchCreateComponentsOutputBody"
+          description: "The dry run: what the write would create, nothing written"
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatchCreateComponentsOutputBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create many components in one write
+      x-omniglass-conditional-permission: system:update
+      x-omniglass-mcp: {}
+      x-omniglass-permission: component:create
   /components:checkName:
     post:
       description: Reports whether a proposed name is a valid slug and currently free within the given placement (parent wins over location; neither means the unplaced/root bucket). Advisory (Save is still gated by the unique constraint). Gated by component:update.
@@ -20596,6 +20464,38 @@ paths:
           description: Error
       summary: Set a tag value on a location
       x-omniglass-permission: location:update
+  /locations:batchCreate:
+    post:
+      description: "Creates locations in one transaction: each request is the body POST /locations takes, run as that create runs it, in order, so a location may name as its parent one an earlier request creates. Every row writes its own audit row carrying the one batch_id the response returns, under from_batch. A refused request refuses the whole batch, mapped as POST /locations maps it, with its position in the request (requests[3]) leading the detail; nothing lands. validate_only runs the same transaction and rolls it back, answering 200 with the names the write would mint and no ids. A batch carries at most 1000 requests; more is a 413 naming the limit, so split a bigger import (by building). Gated by location:create, and each request is held to that scope as its single create is."
+      operationId: batch-create-locations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BatchCreateLocationsInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatchCreateLocationsOutputBody"
+          description: "The dry run: what the write would create, nothing written"
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatchCreateLocationsOutputBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create many locations in one write
+      x-omniglass-mcp: {}
+      x-omniglass-permission: location:create
   /locations:checkName:
     post:
       description: Reports whether a proposed name is a valid slug and currently free within the given placement (under the given parent, or among roots when no parent is given). Advisory (Save is still gated by the unique constraint). Gated by location:update.
@@ -21782,39 +21682,6 @@ paths:
           description: Internal Server Error
       summary: Claim an outpost identity in exchange for its NATS credential
       x-omniglass-plaintext: true
-  /plans:apply:
-    post:
-      description: "Lands a plan you built in one transaction: standards created from their templates (with any parent, unless you hold one of that name), locations parents first (a parent_key names an earlier location of the plan, a parent an existing one), systems at a location of the plan or an existing one with the components that staff their slots, standalone components, and the values declared on each. Every piece is the ordinary create in your own scope with its own audit row, and every row carries the one import_id the response returns, under from_import. A refused piece refuses the whole plan, mapped as its own route maps it, with its path in the plan (systems[3].components[1]) leading the detail; nothing lands. validate_only runs the same transaction and rolls it back, returning the counts and the names the apply would mint (200, no ids). A plan carries at most 1000 rows (each standard, location, system, component and declared value is one); a bigger one is a 413 naming the limit, so chunk an import (by building), one plan each. Gated by location:read, and each piece needs what its own create needs: location:create for locations, system:create for systems, component:create for components, system:read, system:update, component:read and component:update for a slot assignment, the update permission of what a value is declared on, and standard:create when a standard is created from its template. A location outside your scope for the piece there refuses that piece as its own create does (a location you cannot read reads as not found, 422; one you can read but not create in is a 403). A parent_key or location_key the plan does not hold, or a key given twice, is a 422 naming the row. The request body is held to the server's 1 MiB cap as every route's is, also a 413."
-      operationId: apply-plan
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ApplyPlanInputBody"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApplyPlanOutputBody"
-          description: "The dry run: the counts and names an apply would mint, nothing written"
-        "201":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApplyPlanOutputBody"
-          description: Created
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Create a plan of locations, systems and components in one write
-      x-omniglass-mcp:
-        writes: true
-      x-omniglass-permission: location:read
   /products:
     get:
       description: Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
@@ -24495,6 +24362,38 @@ paths:
           description: Error
       summary: Set a tag value on a system
       x-omniglass-permission: system:update
+  /systems:batchCreate:
+    post:
+      description: "Creates systems in one transaction: each request is the body POST /systems takes, run as that create runs it, in order, so a system may name as its parent one an earlier request creates, and its location by name as the single create does. Every row writes its own audit row carrying the one batch_id the response returns, under from_batch. A refused request refuses the whole batch, mapped as POST /systems maps it, with its position in the request (requests[3]) leading the detail; nothing lands. validate_only runs the same transaction and rolls it back, answering 200 with the names the write would mint and no ids. A batch carries at most 1000 requests; more is a 413 naming the limit, so split a bigger import (by building). Gated by system:create; each request is held to that scope, and its location resolves within your location:read scope, as its single create is."
+      operationId: batch-create-systems
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BatchCreateSystemsInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatchCreateSystemsOutputBody"
+          description: "The dry run: what the write would create, nothing written"
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatchCreateSystemsOutputBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create many systems in one write
+      x-omniglass-mcp: {}
+      x-omniglass-permission: system:create
   /systems:checkName:
     post:
       description: Reports whether a proposed name is a valid slug and currently free within the given placement (parent wins over location; neither means the root/unplaced bucket). Advisory (Save is still gated by the unique constraint). Gated by system:update.

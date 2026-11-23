@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestProvenanceDetailStampsTemplateAndImport(t *testing.T) {
+func TestProvenanceDetailStampsTemplateAndBatch(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	cases := []struct {
@@ -16,10 +16,10 @@ func TestProvenanceDetailStampsTemplateAndImport(t *testing.T) {
 	}{
 		{"none", ctx, []byte(`{"a":1}`), `{"a":1}`},
 		{"template", WithTemplate(ctx, "t"), []byte(`{"a":1}`), `{"a":1,"from_template":"t"}`},
-		{"import", WithImport(ctx, "i"), []byte(`{"a":1}`), `{"a":1,"from_import":"i"}`},
-		{"both", WithImport(WithTemplate(ctx, "t"), "i"), []byte(`{"a":1}`), `{"a":1,"from_import":"i","from_template":"t"}`},
-		{"own template kept", WithImport(WithTemplate(ctx, "t"), "i"), []byte(`{"from_template":"own"}`), `{"from_import":"i","from_template":"own"}`},
-		{"not an object", WithImport(ctx, "i"), []byte(`[1]`), `[1]`},
+		{"batch", WithBatch(ctx, "i"), []byte(`{"a":1}`), `{"a":1,"from_batch":"i"}`},
+		{"both", WithBatch(WithTemplate(ctx, "t"), "i"), []byte(`{"a":1}`), `{"a":1,"from_batch":"i","from_template":"t"}`},
+		{"own template kept", WithBatch(WithTemplate(ctx, "t"), "i"), []byte(`{"from_template":"own"}`), `{"from_batch":"i","from_template":"own"}`},
+		{"not an object", WithBatch(ctx, "i"), []byte(`[1]`), `[1]`},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -29,10 +29,10 @@ func TestProvenanceDetailStampsTemplateAndImport(t *testing.T) {
 			}
 		})
 	}
-	if got := withProvenanceDetail(WithImport(ctx, "i"), nil); got != nil {
+	if got := withProvenanceDetail(WithBatch(ctx, "i"), nil); got != nil {
 		t.Fatalf("a nil image = %v, want nil", got)
 	}
-	if WithImport(ctx, "") != ctx {
-		t.Fatal("an empty import id changed the context")
+	if WithBatch(ctx, "") != ctx {
+		t.Fatal("an empty batch id changed the context")
 	}
 }

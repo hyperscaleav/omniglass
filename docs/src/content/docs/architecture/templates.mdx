@@ -175,65 +175,6 @@ create (`storage.CreatePlan`) then lands the standards to create from their temp
 with its components, their endpoints, declared values and slot assignments, and any standalone
 components, in one transaction.
 
-### A client applies a plan directly
-
-The same primitive takes a plan a client built: `POST /plans:apply` (`omniglass plan apply`,
-an MCP tool too, [ADR-2368](/architecture/decisions/#adr-2368-a-client-applies-a-plan-in-one-call-under-one-import-id))
-is the import path for a fleet that already exists somewhere else, a spreadsheet or another
-system's records, with no template involved. The body names the standard templates to create
-standards from, the locations (each with a `key` the rest of the plan refers to, under a
-`parent_key` of the plan or an existing `parent`), the systems with the components that fill their
-slots, the standalone components, and the values declared on each:
-
-```json
-{
-  "validate_only": true,
-  "standards": ["meeting-room"],
-  "locations": [
-    {"key": "b", "name": "north-campus", "type": "building"},
-    {"key": "f1", "parent_key": "b", "name": "floor-1", "type": "floor"}
-  ],
-  "systems": [
-    {"location_key": "f1", "standard": "meeting-room", "type": "meeting",
-     "components": [
-       {"slot": "video-bar", "product": "kestrel-vroom"},
-       {"slot": "main-display", "product": "boreal-edge-55",
-        "properties": [{"name": "video-input", "value": "hdmi1"}]}
-     ]}
-  ],
-  "components": [{"location_key": "f1", "product": "newtron-panel-7"}]
-}
-```
-
-Three things the template routes do not need:
-
-- **A dry run.** `validate_only: true` runs every piece, every check and every name rule in the
-  transaction and then rolls it back. The answer (200) is the counts and the names an apply would
-  mint, with no ids, or the refusal the apply would meet. Nothing is written, not even an audit row.
-- **One import id.** An apply (201) mints an id, returns it as `import_id`, and stamps it into the
-  audit detail of every row the plan wrote, under `from_import`, beside `from_template` when a
-  standard came from its template. Like the template, provenance lives in the audit detail and
-  nowhere else, so `new->>'from_import'` finds everything one import made and nothing points back.
-- **A path in every refusal.** A refused piece is answered as its own route answers it (a 422 for a
-  product the fleet lacks or a location you cannot read, a 403 for one you can read but not create
-  in), its path in the plan leading the detail (`systems[3].components[1]: ...`) and set as the
-  error's location. The whole plan rolls back.
-
-Each piece is checked as its ordinary create is, under your own scope; the route's gate is only
-`location:read`, and the handler names any further permission the plan's pieces need
-(`location:create` for locations, `system:create`, `component:create`, the slot assignment's
-`system:update` and `component:update`) before it reads anything. There is no import permission.
-
-A plan is one transaction, so it is bounded: **at most 1000 rows**, each standard, location,
-system, component and declared value counting one. A bigger plan is a 413 that names the limit
-(and a body over the server's 1 MiB request cap is a 413 too; ordinary rows are far smaller). A
-`parent_key` or `location_key` the plan does not hold, or a key given to two locations, is a 422
-naming the row.
-Chunk an import by building: each building's subtree is its own plan, its own transaction and its
-own import id, and a later chunk names the earlier one's locations as an existing `parent` or
-`location`. A refused chunk lands nothing, so fix it and apply it again; there is no resume, and
-re-applying a chunk that landed creates it twice.
-
 ## Why this dissolves the shipped-defaults problem
 
 The thing the vendor updates and the thing the operator owns are **never the same object**, so a

@@ -26,14 +26,6 @@ type Plan struct {
 	// Template is the template the plan came from, written into every audit
 	// row the plan writes as from_template (WithTemplate); empty for none.
 	Template string
-	// Import is the import id an applied plan (POST /plans:apply, #2368) is
-	// written under, stamped as from_import into every audit row the plan
-	// writes (WithImport); empty for none.
-	Import string
-	// ValidateOnly runs the whole plan, every piece and its checks, in the
-	// transaction and then rolls it back (#2368): what it returns is what an
-	// apply would make, and nothing is written.
-	ValidateOnly bool
 	// Standards are created from their templates, in order, unless a standard of that name
 	// already exists (then the existing one is used as it is).
 	Standards []StandardFromTemplate
@@ -98,36 +90,16 @@ type PlanScopes struct {
 // who may not create a standard.
 var ErrPlanStandardForbidden = errors.New("storage: creating the standard from its template needs standard:create")
 
-// ErrPlanKey is a plan that refers to its own pieces wrongly: a parent_key
-// that names no earlier location of the plan, a location key no location of
-// the plan holds, or one key given to two locations. It is the plan's own
-// mistake, not a refusal of any piece's create.
-var ErrPlanKey = errors.New("storage: plan key")
-
 // PlanError says which piece of a plan failed, so a caller maps the cause
 // the way that piece's own route maps it. Stage is standard, location, system,
 // component, endpoint, slot, property (a component's declared value) or
 // system-property; Ref names the piece (a slot, a
-// location key, a standard, a property). Path is where the piece sits in the
-// plan (standards[0], locations[2], systems[1].components[0],
-// systems[1].properties[0], components[3], components[3].properties[0]), so a
-// client that submitted the plan finds the row it wrote.
+// location key, a standard, a property).
 type PlanError struct {
 	Stage string
 	Slot  string
 	Ref   string
-	Path  string
 	Err   error
-}
-
-// planErrAt sets the plan path on err when it is a PlanError that has none
-// yet (the innermost path wins), and returns err.
-func planErrAt(err error, path string) error {
-	var pe *PlanError
-	if errors.As(err, &pe) && pe.Path == "" {
-		pe.Path = path
-	}
-	return err
 }
 
 func (e *PlanError) Error() string {
@@ -163,10 +135,9 @@ type PlannedSystemResult struct {
 // system's declared values, then the standalone components. Every piece is
 // the ordinary create with the caller's own scope and its own audit row, so
 // a refused piece refuses the whole plan, mapped as that piece's own route
-// maps it (a PlanError names it), and nothing lands. A ValidateOnly plan
-// runs the same way and is rolled back instead of committed.
+// maps it (a PlanError names it), and nothing lands.
 func (p *PG) CreatePlan(ctx context.Context, actorID string, plan Plan, sc PlanScopes) (*Planned, error) {
-	ctx = WithImport(WithTemplate(ctx, plan.Template), plan.Import)
+	ctx = WithTemplate(ctx, plan.Template)
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin create plan: %w", err)
@@ -175,9 +146,6 @@ func (p *PG) CreatePlan(ctx context.Context, actorID string, plan Plan, sc PlanS
 	out, err := p.createPlanTx(ctx, tx, actorID, plan, sc)
 	if err != nil {
 		return nil, err
-	}
-	if plan.ValidateOnly {
-		return out, nil // the deferred rollback discards every write
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("storage: commit create plan: %w", err)
@@ -190,7 +158,7 @@ func (p *PG) createPlanTx(ctx context.Context, tx pgx.Tx, actorID string, plan P
 	// Health is recomputed once, after the last piece, over everything the
 	// plan staffed (#915): see healthDeferral.
 	deferred := newHealthDeferral()
-	for fi, f := range plan.Standards {
+	for _, f := range plan.Standards {
 		var exists bool
 		if err := tx.QueryRow(ctx, `select exists (select 1 from standard_in_effect() standard where name = $1)`, f.Name).Scan(&exists); err != nil {
 			return nil, fmt.Errorf("storage: plan standard %s: %w", f.Name, err)
@@ -199,33 +167,29 @@ func (p *PG) createPlanTx(ctx context.Context, tx pgx.Tx, actorID string, plan P
 			continue
 		}
 		if !sc.CanCreateStandard {
-			return nil, &PlanError{Stage: "standard", Ref: f.Name, Path: fmt.Sprintf("standards[%d]", fi), Err: ErrPlanStandardForbidden}
+			return nil, &PlanError{Stage: "standard", Ref: f.Name, Err: ErrPlanStandardForbidden}
 		}
 		st, err := p.createStandardFromTemplateTx(ctx, tx, actorID, f)
 		if err != nil {
-			return nil, &PlanError{Stage: "standard", Ref: f.Name, Path: fmt.Sprintf("standards[%d]", fi), Err: err}
+			return nil, &PlanError{Stage: "standard", Ref: f.Name, Err: err}
 		}
 		out.CreatedStandards = append(out.CreatedStandards, st)
 	}
 
 	locations := map[string]*Location{}
-	for li, pl := range plan.Locations {
+	for _, pl := range plan.Locations {
 		spec := pl.Location
-		at := fmt.Sprintf("locations[%d]", li)
 		if pl.ParentKey != "" {
 			parent, ok := locations[pl.ParentKey]
 			if !ok {
-				return nil, &PlanError{Stage: "location", Ref: pl.Key, Path: at, Err: fmt.Errorf("%w: parent %q is not an earlier location of the plan", ErrPlanKey, pl.ParentKey)}
+				return nil, &PlanError{Stage: "location", Ref: pl.Key, Err: fmt.Errorf("parent %q is not an earlier place of the plan", pl.ParentKey)}
 			}
 			id := parent.ID
 			spec.ParentName = &id
 		}
-		if _, dup := locations[pl.Key]; dup {
-			return nil, &PlanError{Stage: "location", Ref: pl.Key, Path: at, Err: fmt.Errorf("%w: key %q is given to an earlier location of the plan", ErrPlanKey, pl.Key)}
-		}
 		l, err := p.createLocationTx(ctx, tx, actorID, spec, sc.LocationCreate)
 		if err != nil {
-			return nil, &PlanError{Stage: "location", Ref: pl.Key, Path: at, Err: err}
+			return nil, &PlanError{Stage: "location", Ref: pl.Key, Err: err}
 		}
 		locations[pl.Key] = l
 		out.Locations = append(out.Locations, l)
@@ -236,58 +200,55 @@ func (p *PG) createPlanTx(ctx context.Context, tx pgx.Tx, actorID string, plan P
 		}
 		l, ok := locations[key]
 		if !ok {
-			return nil, fmt.Errorf("%w: location %q is not a location of the plan", ErrPlanKey, key)
+			return nil, fmt.Errorf("location %q is not a location of the plan", key)
 		}
 		id := l.ID
 		return &id, nil
 	}
 
-	for si, ps := range plan.Systems {
+	for _, ps := range plan.Systems {
 		spec := ps.System
-		at := fmt.Sprintf("systems[%d]", si)
 		loc, err := placeOf(ps.LocationKey, spec.LocationName)
 		if err != nil {
-			return nil, &PlanError{Stage: "system", Path: at, Err: err}
+			return nil, &PlanError{Stage: "system", Err: err}
 		}
 		spec.LocationName = loc
 		sys, err := p.createSystemTx(ctx, tx, actorID, spec, sc.SystemCreate, sc.LocationRead, deferred)
 		if err != nil {
-			return nil, &PlanError{Stage: "system", Path: at, Err: err}
+			return nil, &PlanError{Stage: "system", Err: err}
 		}
 		res := PlannedSystemResult{System: sys}
-		for ci, pc := range ps.Components {
-			cat := fmt.Sprintf("%s.components[%d]", at, ci)
+		for _, pc := range ps.Components {
 			// A system's component sits where the system sits.
 			pc.Component.LocationName = spec.LocationName
 			c, err := p.createPlannedComponentTx(ctx, tx, actorID, pc, sc)
 			if err != nil {
-				return nil, planErrAt(err, cat)
+				return nil, err
 			}
 			if pc.Slot != "" {
 				if err := p.assignSlotTx(ctx, tx, actorID, sys.ID, pc.Slot, c.ID, sc.SystemRead, sc.SystemUpdate, sc.ComponentRead, sc.ComponentUpdate, deferred); err != nil {
-					return nil, &PlanError{Stage: "slot", Slot: pc.Slot, Path: cat, Err: err}
+					return nil, &PlanError{Stage: "slot", Slot: pc.Slot, Err: err}
 				}
 			}
 			res.Components = append(res.Components, c)
 		}
-		for vi, v := range ps.Properties {
+		for _, v := range ps.Properties {
 			if _, err := p.setPropertyTx(ctx, tx, actorID, "system", sys.ID, v.Name, "", v.Value, sc.SystemRead, sc.SystemUpdate); err != nil {
-				return nil, &PlanError{Stage: "system-property", Ref: v.Name, Path: fmt.Sprintf("%s.properties[%d]", at, vi), Err: err}
+				return nil, &PlanError{Stage: "system-property", Ref: v.Name, Err: err}
 			}
 		}
 		out.Systems = append(out.Systems, res)
 	}
 
-	for ci, pc := range plan.Components {
-		at := fmt.Sprintf("components[%d]", ci)
+	for _, pc := range plan.Components {
 		loc, err := placeOf(pc.LocationKey, pc.Component.LocationName)
 		if err != nil {
-			return nil, &PlanError{Stage: "component", Path: at, Err: err}
+			return nil, &PlanError{Stage: "component", Err: err}
 		}
 		pc.Component.LocationName = loc
 		c, err := p.createPlannedComponentTx(ctx, tx, actorID, pc, sc)
 		if err != nil {
-			return nil, planErrAt(err, at)
+			return nil, err
 		}
 		out.Components = append(out.Components, c)
 	}

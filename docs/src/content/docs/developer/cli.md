@@ -233,25 +233,28 @@ normalizes it to a 256x256 JPEG. An administrator manages **any** user's picture
 (gated by `user:set-avatar`), reading one back with `omniglass user avatar list alice` (gated by
 `user:read:admin`). A user with no picture is a 404.
 
-## Importing a plan
+## Creating in batches
 
-`omniglass plan apply` lands a whole plan of locations, systems and components in one write
-(`POST /plans:apply`, the shape and its rules in
-[templates](/architecture/templates/#a-client-applies-a-plan-directly)). Each part of the plan is
-a JSON flag, so a plan kept in a file goes in with `jq`; dry-run it first, then apply:
+`omniglass location batchCreate`, `omniglass system batchCreate` and `omniglass component
+batchCreate` create many rows of one collection in one write (`POST /locations:batchCreate` and its
+siblings, [ADR-2368](/architecture/decisions/#adr-2368-fleet-entities-are-created-in-batches-one-collection-per-call)).
+`--requests` is a JSON list, each entry exactly the body the single create takes, so rows kept in a
+file go in with `jq`. Dry-run first, then write:
 
 ```sh
-omniglass plan apply --validate-only \
-  --standards "$(jq -c .standards plan.json)" \
-  --locations "$(jq -c .locations plan.json)" \
-  --systems "$(jq -c .systems plan.json)"
-# the same flags without --validate-only apply it, and print the import_id
+omniglass location batchCreate --validate-only --requests "$(jq -c .locations import.json)"
+omniglass location batchCreate --requests "$(jq -c .locations import.json)"   # prints the batch_id
+omniglass system batchCreate --requests "$(jq -c .systems import.json)"
 ```
 
-The dry run writes nothing and prints the counts and the names the apply would mint, or the
-refusal (its path in the plan, `systems[3].components[1]`, leads the message). An apply prints the
-`import_id` every audit row it wrote carries as `from_import`. A plan holds at most 1000 rows; split
-a bigger import into one plan per building and apply each in turn.
+The rows run in order, so a location may name as its `parent` one an earlier row of the same batch
+creates; a system or component names the locations an earlier batch created, by name, as its single
+create would. The dry run writes nothing and prints the rows and the names a write would mint, or the
+refusal, led by the row's position in the list (`requests[3]: ...`). A refused row refuses the whole
+batch. A write prints the `batch_id` every audit row it wrote carries as `from_batch`. A batch holds
+at most 1000 rows; split a bigger import (by building) and send each in turn: locations parents
+first, then systems, then components. A dry run of a later batch cannot see the rows an earlier batch
+has not written yet.
 
 ## Everything else is in the reference
 

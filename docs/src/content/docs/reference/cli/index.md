@@ -1274,6 +1274,27 @@ Example:
 omniglass component alarm unsnooze <name> <id>
 ```
 
+### `omniglass component batchCreate`
+
+Create many components in one write
+
+```
+omniglass component batchCreate [flags]
+```
+
+Creates components in one transaction: each request is the body POST /components takes, run as that create runs it, in order, so a component may name as its parent one an earlier request creates, and its system and location by name as the single create does. Every row writes its own audit row carrying the one batch_id the response returns, under from_batch. A refused request refuses the whole batch, mapped as POST /components maps it, with its position in the request (requests[3]) leading the detail; nothing lands. validate_only runs the same transaction and rolls it back, answering 200 with the names the write would mint and no ids. A batch carries at most 1000 requests; more is a 413 naming the limit, so split a bigger import (by building). Gated by component:create; each request is held to that scope, its location resolves within your location:read scope, and a request naming a system also needs system:update over it, as its single create does.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--requests` | string | (none) | The components to create, each the body POST /components takes, in order: a parent before its children |
+| `--validate-only` | bool | `false` | Run every request in the transaction and roll it back: the response is what the write would create (names minted, ids empty), or the row that would refuse it, and nothing is written |
+
+Example:
+
+```sh
+omniglass component batchCreate --requests <json>
+```
+
 ### `omniglass component checkName`
 
 Check a component name
@@ -3303,6 +3324,27 @@ With --record-dir it also writes the release record, one file named for the buil
 
 Commands for the location resource
 
+### `omniglass location batchCreate`
+
+Create many locations in one write
+
+```
+omniglass location batchCreate [flags]
+```
+
+Creates locations in one transaction: each request is the body POST /locations takes, run as that create runs it, in order, so a location may name as its parent one an earlier request creates. Every row writes its own audit row carrying the one batch_id the response returns, under from_batch. A refused request refuses the whole batch, mapped as POST /locations maps it, with its position in the request (requests[3]) leading the detail; nothing lands. validate_only runs the same transaction and rolls it back, answering 200 with the names the write would mint and no ids. A batch carries at most 1000 requests; more is a 413 naming the limit, so split a bigger import (by building). Gated by location:create, and each request is held to that scope as its single create is.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--requests` | string | (none) | The locations to create, each the body POST /locations takes, in order: a parent before its children, which then name it as their parent |
+| `--validate-only` | bool | `false` | Run every request in the transaction and roll it back: the response is what the write would create (names minted, ids empty), or the row that would refuse it, and nothing is written |
+
+Example:
+
+```sh
+omniglass location batchCreate --requests <json>
+```
+
 ### `omniglass location checkName`
 
 Check a location name
@@ -4819,34 +4861,6 @@ Example:
 omniglass outpost update <name>
 ```
 
-## `omniglass plan`
-
-Commands for the plan resource
-
-### `omniglass plan apply`
-
-Create a plan of locations, systems and components in one write
-
-```
-omniglass plan apply [flags]
-```
-
-Lands a plan you built in one transaction: standards created from their templates (with any parent, unless you hold one of that name), locations parents first (a parent_key names an earlier location of the plan, a parent an existing one), systems at a location of the plan or an existing one with the components that staff their slots, standalone components, and the values declared on each. Every piece is the ordinary create in your own scope with its own audit row, and every row carries the one import_id the response returns, under from_import. A refused piece refuses the whole plan, mapped as its own route maps it, with its path in the plan (systems[3].components[1]) leading the detail; nothing lands. validate_only runs the same transaction and rolls it back, returning the counts and the names the apply would mint (200, no ids). A plan carries at most 1000 rows (each standard, location, system, component and declared value is one); a bigger one is a 413 naming the limit, so chunk an import (by building), one plan each. Gated by location:read, and each piece needs what its own create needs: location:create for locations, system:create for systems, component:create for components, system:read, system:update, component:read and component:update for a slot assignment, the update permission of what a value is declared on, and standard:create when a standard is created from its template. A location outside your scope for the piece there refuses that piece as its own create does (a location you cannot read reads as not found, 422; one you can read but not create in is a 403). A parent_key or location_key the plan does not hold, or a key given twice, is a 422 naming the row. The request body is held to the server's 1 MiB cap as every route's is, also a 413.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--components` | string | (none) | Standalone components, in no system |
-| `--locations` | string | (none) | The locations to create, in order: a parent before its children |
-| `--standards` | string | (none) | Standard templates to create standards from, by name, each with any parent it hangs off; one the fleet already holds is used as it is |
-| `--systems` | string | (none) | The systems to create, each with the components that staff it |
-| `--validate-only` | bool | `false` | Run the whole plan and roll it back: the response says what an apply would create, or the piece that would refuse it, and nothing is written |
-
-Example:
-
-```sh
-omniglass plan apply
-```
-
 ## `omniglass platform`
 
 Read Omniglass's own health from a running server
@@ -6194,6 +6208,27 @@ Example:
 
 ```sh
 omniglass system alarm list <name>
+```
+
+### `omniglass system batchCreate`
+
+Create many systems in one write
+
+```
+omniglass system batchCreate [flags]
+```
+
+Creates systems in one transaction: each request is the body POST /systems takes, run as that create runs it, in order, so a system may name as its parent one an earlier request creates, and its location by name as the single create does. Every row writes its own audit row carrying the one batch_id the response returns, under from_batch. A refused request refuses the whole batch, mapped as POST /systems maps it, with its position in the request (requests[3]) leading the detail; nothing lands. validate_only runs the same transaction and rolls it back, answering 200 with the names the write would mint and no ids. A batch carries at most 1000 requests; more is a 413 naming the limit, so split a bigger import (by building). Gated by system:create; each request is held to that scope, and its location resolves within your location:read scope, as its single create is.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--requests` | string | (none) | The systems to create, each the body POST /systems takes, in order: a parent before its children |
+| `--validate-only` | bool | `false` | Run every request in the transaction and roll it back: the response is what the write would create (names minted, ids empty), or the row that would refuse it, and nothing is written |
+
+Example:
+
+```sh
+omniglass system batchCreate --requests <json>
 ```
 
 ### `omniglass system checkName`
