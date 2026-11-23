@@ -320,3 +320,71 @@ func TestRowBytesCountsWhatTheRowCarries(t *testing.T) {
 		t.Fatal("a sample's owner and key weigh nothing")
 	}
 }
+
+// A commit that is durable but not yet published when Mark's snapshot opens is
+// in that snapshot's history; a cursor that excludes it would deliver the row
+// again on the tail (#2357). Mark must not return until such a commit has
+// published, so the cursor it returns covers it.
+func TestMarkWaitsOutACommitDurableButNotPublished(t *testing.T) {
+	h := tail.New(8, 0)
+	durable, release, done := make(chan struct{}), make(chan struct{}), make(chan error, 1)
+	go func() {
+		done <- h.Commit(func() error { close(durable); <-release; return nil }, []tail.Row{metric("a", 1)})
+	}()
+	<-durable // the row is committed in the database, the ring does not hold it yet
+
+	attempts := 0
+	cur, err := h.Mark(func() error {
+		attempts++
+		if attempts == 2 { // the commit finishes publishing before the retry's snapshot
+			close(release)
+			if err := <-done; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("mark: %v", err)
+	}
+	if attempts < 2 {
+		t.Fatalf("mark returned on attempt %d with a durable, unpublished commit in flight", attempts)
+	}
+	commits, _, err := h.Read(cur, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(commits) != 0 {
+		t.Fatalf("the tail after the mark holds %d commits the snapshot already has", len(commits))
+	}
+}
+
+// Steady concurrent ingest does not turn Mark into ErrMarkBusy: between
+// attempts it waits for the in-flight commits to publish.
+func TestMarkSucceedsUnderConcurrentCommits(t *testing.T) {
+	h := tail.New(64, 0)
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+	for range 3 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				_ = h.Commit(func() error { time.Sleep(time.Millisecond); return nil }, []tail.Row{metric("k", 1)})
+				time.Sleep(5 * time.Millisecond)
+			}
+		}()
+	}
+	defer func() { close(stop); wg.Wait() }()
+	for i := 0; i < 20; i++ {
+		if _, err := h.Mark(func() error { return nil }); err != nil {
+			t.Fatalf("mark %d under concurrent commits: %v", i, err)
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+}
