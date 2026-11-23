@@ -1256,24 +1256,53 @@ func (p *PG) healthMembers(ctx context.Context, q txQuerier, systemID string, re
 		return nil, err
 	}
 	out := make([]HealthMember, 0, len(members))
-	for _, m := range members {
-		var ranks []int
-		var observed bool
-		if err := q.QueryRow(ctx, `
-			select coalesce((select array_agg(l.rank) from alarm a join severity_level l on l.name = a.severity
-			                 where a.component_id = $1::uuid and a.cleared_at is null), '{}'),
-			       `+componentObservedSQL("$1::uuid"), m.id).Scan(&ranks, &observed); err != nil {
-			return nil, fmt.Errorf("storage: member health %q: %w", m.id, err)
+	if len(members) == 0 {
+		return out, nil
+	}
+	ids := make([]string, len(members))
+	for i, m := range members {
+		ids[i] = m.id
+	}
+	// Two set-based reads keyed by the in-scope member ids, not two per member.
+	type rankObs struct {
+		ranks    []int
+		observed bool
+	}
+	byID := make(map[string]rankObs, len(members))
+	rows, err := q.Query(ctx, `
+		select i.id::text,
+		       coalesce((select array_agg(l.rank) from alarm a join severity_level l on l.name = a.severity
+		                 where a.component_id = i.id and a.cleared_at is null), '{}'),
+		       `+componentObservedSQL("i.id")+`
+		from unnest($1::uuid[]) as i(id)`, ids)
+	if err != nil {
+		return nil, fmt.Errorf("storage: member health %q: %w", systemID, err)
+	}
+	for rows.Next() {
+		var id string
+		var ro rankObs
+		if err := rows.Scan(&id, &ro.ranks, &ro.observed); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("storage: scan member health: %w", err)
 		}
-		v := health.ComponentValue(ranks)
+		byID[id] = ro
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("storage: member health %q: %w", systemID, err)
+	}
+	alarmsByID, err := p.activeAlarmsFor(ctx, q, ids)
+	if err != nil {
+		return nil, err
+	}
+	for _, m := range members {
+		ro := byID[m.id]
+		v := health.ComponentValue(ro.ranks)
 		h := v.String()
-		if v == health.Healthy && !observed {
+		if v == health.Healthy && !ro.observed {
 			h = "unknown"
 		}
-		alarms, err := p.activeAlarms(ctx, q, m.id)
-		if err != nil {
-			return nil, err
-		}
+		alarms := alarmsByID[m.id]
 		if alarms == nil {
 			alarms = []Alarm{}
 		}

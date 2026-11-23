@@ -2,10 +2,12 @@ package storage_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/storage/storagetest/querycount"
 )
 
 // A member outside every slot is shown on its system, not rolled up (#2459,
@@ -155,5 +157,43 @@ func TestSystemHealthMembersStayInComponentScope(t *testing.T) {
 
 	if m := member(f.report(t, ctx, "hand"), "amp-1"); m == nil {
 		t.Fatal("a caller who may read every component does not see amp-1")
+	}
+}
+
+// The health read's statement count does not grow with the member count: the
+// members' alarm ranks, observed flags and open alarms are read set-based, not
+// once per member (#2563).
+func TestSystemHealthQueryCountIgnoresMemberCount(t *testing.T) {
+	t.Parallel()
+	f := newHealthFixture(t)
+	ctx := context.Background()
+	f.handBuilt(t, ctx)
+	counter := querycount.New()
+	gw, err := storage.NewPG(ctx, f.dsn, storage.WithQueryTracer(counter))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(gw.Close)
+	read := func() int {
+		t.Helper()
+		counter.Reset()
+		if _, err := gw.SystemHealth(ctx, "hand", storage.HealthRange{}, f.all, f.all); err != nil {
+			t.Fatalf("system health: %v", err)
+		}
+		return len(counter.Statements())
+	}
+	one := read()
+	for i := range 5 {
+		name := fmt.Sprintf("amp-extra-%d", i)
+		f.mustComponent(t, ctx, name)
+		if err := f.gw.AddMember(ctx, "", "hand", name, f.all, f.all, f.all, f.all); err != nil {
+			t.Fatalf("add member: %v", err)
+		}
+		if _, err := f.gw.RaiseAlarm(ctx, "", name, storage.AlarmSpec{Severity: "high", Message: "off"}); err != nil {
+			t.Fatalf("raise: %v", err)
+		}
+	}
+	if six := read(); six != one {
+		t.Fatalf("health read ran %d statements with 6 members, %d with 1: it must not grow with members", six, one)
 	}
 }

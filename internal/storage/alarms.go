@@ -797,6 +797,29 @@ func (p *PG) activeAlarms(ctx context.Context, q txQuerier, componentID string) 
 	return out, rows.Err()
 }
 
+// activeAlarmsFor is activeAlarms for a set of components in one read, grouped
+// by component id, each list newest first.
+func (p *PG) activeAlarmsFor(ctx context.Context, q txQuerier, componentIDs []string) (map[string][]Alarm, error) {
+	rows, err := q.Query(ctx, `
+		select `+alarmCols+`
+		from alarm a
+		where a.component_id = any($1::uuid[]) and a.cleared_at is null
+		order by a.raised_at desc, a.id desc`, componentIDs)
+	if err != nil {
+		return nil, fmt.Errorf("storage: active alarms: %w", err)
+	}
+	defer rows.Close()
+	out := map[string][]Alarm{}
+	for rows.Next() {
+		a, err := scanAlarm(rows)
+		if err != nil {
+			return nil, fmt.Errorf("storage: scan active alarm: %w", err)
+		}
+		out[a.ComponentID] = append(out[a.ComponentID], *a)
+	}
+	return out, rows.Err()
+}
+
 // clearAlarmByDedupTx clears the open alarm of one dedup key on a component
 // raised by ruleID (the rule evaluator's clear, #919; a rule clears only its
 // own alarms), audited and with health recomputed in
