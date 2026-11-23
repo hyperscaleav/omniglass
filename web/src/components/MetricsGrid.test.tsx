@@ -118,6 +118,26 @@ await waitFor(() => expect(read(reads, "/systems/room-1/metrics/rtt/samples?hour
     expect(screen.queryAllByTestId("chart-crosshair")).toHaveLength(0);
   });
 
+  it("a series that fails to read says so on its card and offers a retry", async () => {
+    let fail = true;
+    const json = (b: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(b), { status, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const u = new URL((input instanceof Request ? input : new Request(String(input))).url);
+        if (u.pathname.endsWith("/metrics")) return json({ metrics: [metrics[0]] });
+        if (fail) return json({ title: "boom" }, 500);
+        return json({ buckets: buckets(6, 60, 40) });
+      }),
+    );
+    mount("components", "cam-1", () => ({ kind: "preset", preset: "6h" }));
+    const card = await screen.findByTestId("metric-card-cpu-load");
+    expect(await within(card).findByText("Could not read this series.")).toBeTruthy();
+    fail = false;
+    fireEvent.click(within(card).getByRole("button", { name: "Retry" }));
+    expect(await within(card).findByTestId("timeseries-chart")).toBeTruthy();
+  });
+
   it("draws nothing when the entity has no metrics", async () => {
     vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify({ metrics: [] }), { status: 200, headers: { "content-type": "application/json" } }))));
     mount("components", "cam-1", () => ({ kind: "preset", preset: "6h" }));

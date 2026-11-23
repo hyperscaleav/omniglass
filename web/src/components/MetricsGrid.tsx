@@ -60,10 +60,17 @@ export default function MetricsGrid(props: { kind: "components" | "systems"; id:
             <For each={metrics()}>
               {(m, i) => {
                 const q = () => seriesQ[i()];
-                const buckets = () => (q()?.data?.buckets ?? []).filter((b) => {
-                  const t = Date.parse(b.ts);
-                  return t >= win().from && t < win().to;
-                });
+                // An absolute range keeps only its own window (the read
+                // reaches back from now); a preset's window ends now, so a
+                // bucket newer than the clock's last tick still draws.
+                const buckets = () => {
+                  const all = q()?.data?.buckets ?? [];
+                  if (props.range.kind !== "absolute") return all;
+                  return all.filter((b) => {
+                    const t = Date.parse(b.ts);
+                    return t >= win().from && t < win().to;
+                  });
+                };
                 return (
                   <article data-testid={`metric-card-${m.metric_type_name}`} class="flex min-w-0 flex-col gap-1 rounded-box border border-base-300 bg-base-100 p-3">
                     <header class="flex items-baseline gap-2">
@@ -86,8 +93,11 @@ export default function MetricsGrid(props: { kind: "components" | "systems"; id:
                     <Show
                       when={q()?.data}
                       fallback={
-                        <div class="flex h-[170px] items-center justify-center text-xs text-base-content/45">
-                          {q()?.isError ? "Could not read this series." : "Reading…"}
+                        <div class="flex h-[170px] flex-col items-center justify-center gap-2 text-xs text-base-content/45">
+                          <Show when={q()?.isError} fallback="Reading…">
+                            <span>Could not read this series.</span>
+                            <button type="button" class="btn btn-xs" onClick={() => void q()?.refetch()}>Retry</button>
+                          </Show>
                         </div>
                       }
                     >
