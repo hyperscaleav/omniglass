@@ -57,7 +57,9 @@ export default function Alarms() {
   const rows = () => queue.data?.alarms ?? [];
   const canAck = () => can(me.data, "alarm", "acknowledge");
   const canSnooze = () => can(me.data, "alarm", "snooze");
-  const now = () => (queue.dataUpdatedAt, Date.now());
+  // Reading dataUpdatedAt ties the relative times to each poll; it is never
+  // later than the clock, so the value is the current time.
+  const now = () => Math.max(queue.dataUpdatedAt, Date.now());
 
   const columns: FlatColumn<Alarm>[] = [
     { key: "severity", label: "Severity", width: "110px", cell: (a) => <SeverityBadge name={a.severity} /> },
