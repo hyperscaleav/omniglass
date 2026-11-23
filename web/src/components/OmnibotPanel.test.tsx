@@ -25,12 +25,17 @@ const sse = (text: string) => new Response(text, { headers: { "Content-Type": "t
 type Call = { url: string; method: string; body: Record<string, unknown> };
 let calls: Call[];
 let runReply: (body: Record<string, unknown>) => Response;
+// What the server says omnibot answers from (#2443); a live model by default.
+let facts: Record<string, unknown>;
 
 beforeEach(() => {
   calls = [];
   runReply = () => sse(fixture("run.sse"));
+  facts = { conversations: [], omnibot: { mode: "live", prompts: [] } };
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     const req = input as Request;
+    // The facts read is the panel's own, apart from the calls a run makes.
+    if (req.url.endsWith("/assistant/conversations") && req.method === "GET") return json(facts);
     const text = await req.text();
     const body = text ? JSON.parse(text) : {};
     calls.push({ url: req.url, method: req.method, body });
@@ -304,5 +309,99 @@ describe("the omnibot panel", () => {
     send("hello");
     await waitFor(() => expect(calls.some((c) => c.url.includes(":run"))).toBe(true));
     expect(calls.find((c) => c.url.includes(":run"))!.body.context).toBeUndefined();
+  });
+
+  describe("when the server plays a recording (#2443)", () => {
+    const prompts = ["Tag the meeting 405 video bar with its asset id", "What is wrong with the meeting 405 video bar?"];
+    const unmatchedRefusal = () =>
+      json(
+        { type: "urn:omniglass:omnibot-replay-unmatched", title: "Unrecorded question", status: 422, detail: "This lab plays a recording; connect a model to ask your own question" },
+        422,
+      );
+    beforeEach(() => {
+      facts = { conversations: [], omnibot: { mode: "replay", prompts } };
+    });
+    const runs = () => calls.filter((c) => c.url.includes(":run"));
+
+    it("says it is a recorded demo and offers the recorded prompts", async () => {
+      open();
+      const note = await screen.findByTestId("omnibot-replay");
+      expect(note.textContent).toContain("Recorded demo");
+      const chips = within(await screen.findByTestId("omnibot-prompts")).getAllByRole("button");
+      expect(chips.map((c) => c.textContent)).toEqual(prompts);
+    });
+
+    it("plays a recorded prompt to its answer when it is chosen", async () => {
+      open();
+      fireEvent.click(await screen.findByRole("button", { name: prompts[0] }));
+      await screen.findByTestId("omnibot-ask");
+      expect(runs()).toHaveLength(1);
+      expect(runs()[0].body.messages).toEqual([expect.objectContaining({ role: "user", content: prompts[0] })]);
+      expect(screen.getByText(prompts[0])).toBeTruthy();
+    });
+
+    it("plays no run for a question it has no recording for, and offers the recorded ones", async () => {
+      runReply = unmatchedRefusal;
+      open();
+      await screen.findByTestId("omnibot-prompts");
+      send("Which alarm is worst?");
+      const status = await screen.findByTestId("omnibot-status");
+      expect(status.getAttribute("data-status")).toBe("unmatched");
+      expect(status.textContent).toContain("This lab plays a recording; connect a model to ask your own question");
+      expect(screen.queryAllByTestId("omnibot-step")).toHaveLength(0);
+      expect(screen.queryByTestId("omnibot-ask")).toBeNull();
+      expect(within(screen.getByTestId("omnibot-prompts")).getAllByRole("button").map((c) => c.textContent)).toEqual(prompts);
+      expect(runs()).toHaveLength(1);
+      // The panel is free for another question, and a chip then plays.
+      runReply = () => sse(fixture("run.sse"));
+      fireEvent.click(screen.getByRole("button", { name: prompts[1] }));
+      await screen.findByTestId("omnibot-ask");
+      expect(runs()).toHaveLength(2);
+      expect(screen.queryByTestId("omnibot-status")).toBeNull();
+    });
+
+    it("marks the write it waits on as part of the recording", async () => {
+      open();
+      fireEvent.click(await screen.findByRole("button", { name: prompts[0] }));
+      const ask = await screen.findByTestId("omnibot-ask");
+      expect(ask.textContent).toContain("part of the recording");
+      expect(within(ask).getByRole("button", { name: "Confirm" })).toBeTruthy();
+    });
+
+    it("resumes the recorded write once it is confirmed", async () => {
+      open();
+      fireEvent.click(await screen.findByRole("button", { name: prompts[0] }));
+      await screen.findByTestId("omnibot-ask");
+      runReply = () => sse(fixture("resume-approved.sse"));
+      fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+      await waitFor(() => expect(screen.queryByTestId("omnibot-ask")).toBeNull());
+      expect(screen.queryByTestId("omnibot-status")).toBeNull();
+    });
+  });
+
+  describe("the empty panel", () => {
+    it("is one line of what omnibot does, and the page it will read", () => {
+      open(undefined, { kind: "page", ref: "/systems/boardroom" });
+      const empty = screen.getByTestId("omnibot-empty");
+      expect(empty.querySelectorAll("p")).toHaveLength(2);
+      expect(empty.textContent).toContain("acts as you");
+      expect(empty.textContent).toContain("/systems/boardroom");
+    });
+
+    it("says no page goes with a question when there is none", () => {
+      open();
+      expect(screen.getByTestId("omnibot-empty").textContent).toContain("No page");
+    });
+  });
+
+  describe("with a live model", () => {
+    it("adds no note and no prompts, and takes any question", async () => {
+      open();
+      send("Which alarm is worst?");
+      await screen.findByTestId("omnibot-ask");
+      expect(screen.queryByTestId("omnibot-replay")).toBeNull();
+      expect(screen.queryByTestId("omnibot-prompts")).toBeNull();
+      expect(screen.queryByText(/part of the recording/)).toBeNull();
+    });
   });
 });
