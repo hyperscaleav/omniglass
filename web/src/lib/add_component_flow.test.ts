@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   STEPS,
+  addComponentHref,
   commitFlow,
   driverChoices,
   emptyDraft,
@@ -42,6 +43,14 @@ const snmpInputs = [
   { name: "port", kind: "number" as const, default: "161" },
   { name: "community", kind: "secret" as const, secret_type: "snmp-community", required: true },
 ];
+
+describe("addComponentHref", () => {
+  it("starts the flow where the operator stands", () => {
+    expect(addComponentHref({})).toBe("/components/add");
+    expect(addComponentHref({ system: "s 1", simulated: true })).toBe("/components/add?system=s+1&simulated=1");
+    expect(addComponentHref({ under: "loc", product: "edge-55" })).toBe("/components/add?under=loc&product=edge-55");
+  });
+});
 
 describe("STEPS", () => {
   it("walks product, where, endpoint, credentials, test, done in that order", () => {

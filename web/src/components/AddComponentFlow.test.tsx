@@ -233,6 +233,15 @@ describe("AddComponentFlow", () => {
     expect(calls.filter((c) => c.startsWith("DELETE"))).toEqual([`DELETE /endpoints/${E_NEW}`, `DELETE /components/${C_NEW}`]);
   });
 
+  it("starts in the system it was opened from, by name, with the system's place", async () => {
+    stub();
+    mount("/components/add?system=lobby-av&product=boreal-edge-55");
+    await next();
+    await waitFor(() => expect(current()).toBe("Where"));
+    expect(screen.getByLabelText("System").textContent).toBe("Lobby AV");
+    expect(screen.getByText(/Taken from Lobby AV/)).toBeTruthy();
+  });
+
   it("sends an address that did not answer back to the endpoint step", async () => {
     stub({ pollFails: { status: 504, detail: "no answer from 127.60.0.9:161" } });
     mount();

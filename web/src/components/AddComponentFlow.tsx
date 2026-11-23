@@ -160,7 +160,16 @@ export default function AddComponentFlow(): JSX.Element {
     if (at) setD("location", at);
   }
   // A system named on arrival places the component as choosing it would.
-  createEffect(on(() => systems.data, () => d.system && !d.location && chooseSystem(d.system)));
+  // It arrives by uuid or by name; the pickers hold the uuid.
+  createEffect(
+    on(
+      () => systems.data,
+      (all) => {
+        const at = all?.find((s) => s.id === d.system || s.name === d.system);
+        if (at && !d.location) chooseSystem(at.id);
+      },
+    ),
+  );
 
   // In a lab: a new simulated device of this product, planned by the server
   // (its free address, and the driver attach the simulator answers to).

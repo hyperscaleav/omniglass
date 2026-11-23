@@ -19,6 +19,17 @@ import { entityLabel } from "./entities";
 // test, Cancel, leaving the page) takes both back out. A commit refused half
 // way takes back what it made, so a refusal also leaves nothing.
 
+// addComponentHref: the flow's address, starting where the operator stands.
+export function addComponentHref(at: { system?: string; under?: string; product?: string; simulated?: boolean }): string {
+  const q = new URLSearchParams();
+  if (at.under) q.set("under", at.under);
+  if (at.system) q.set("system", at.system);
+  if (at.product) q.set("product", at.product);
+  if (at.simulated) q.set("simulated", "1");
+  const s = q.toString();
+  return `/components/add${s ? `?${s}` : ""}`;
+}
+
 export type StepKey = "product" | "where" | "endpoint" | "credentials" | "test" | "done";
 
 export const STEPS: { key: StepKey; title: string }[] = [
