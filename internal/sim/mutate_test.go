@@ -3,6 +3,7 @@ package sim
 import (
 	"errors"
 	"net"
+	"reflect"
 	"testing"
 	"time"
 
@@ -75,6 +76,9 @@ func TestApplyMutations_EmptyReturnsNil(t *testing.T) {
 	}
 }
 
+// TestApplyMutations_FailedMutationNotInDiffs pins the per-mutation
+// semantics the non-route callers (behaviors, overrides, commands) keep:
+// a failed mutation is absent from the diffs and the rest still apply.
 func TestApplyMutations_FailedMutationNotInDiffs(t *testing.T) {
 	muts, err := compileMutations(map[string]any{
 		"channels.99.mute": "{{ .Request.Body.mute }}", // out of range
@@ -101,6 +105,90 @@ func TestApplyMutations_FailedMutationNotInDiffs(t *testing.T) {
 	}
 	if got := diffs["status.device.ok"]; got != true {
 		t.Errorf("successful mutation missing from diffs, got %v", diffs)
+	}
+}
+
+func routeMutRoot() map[string]any {
+	return map[string]any{
+		"channels": []any{map[string]any{"mute": false}},
+		"status":   map[string]any{"device": map[string]any{"ok": false, "power": "off"}},
+	}
+}
+
+// A required mutation that fails at apply time (bad index) leaves no
+// diffs and no state change, whichever position it holds (#1487).
+func TestApplyRouteMutations_RefusedMutationLeavesStateUntouched(t *testing.T) {
+	cases := []struct {
+		name string
+		muts []profile.Mutation
+	}{
+		{"first refused", []profile.Mutation{
+			{Path: "status.device.power", Value: "{{ .Request.Body.power }}", Enum: []string{"on", "standby"}},
+			{Path: "status.device.ok", Value: true},
+		}},
+		{"second refused", []profile.Mutation{
+			{Path: "status.device.ok", Value: true},
+			{Path: "status.device.power", Value: "{{ .Request.Body.power }}", Enum: []string{"on", "standby"}},
+		}},
+		{"second fails at apply time", []profile.Mutation{
+			{Path: "status.device.ok", Value: true},
+			{Path: "channels.99.mute", Value: true},
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			muts, err := compileMutationList(tc.muts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			root := routeMutRoot()
+			data := templateData{State: root, Request: requestContext{Body: map[string]any{"power": "bogus"}}}
+			diffs, errs := applyRouteMutations(root, muts, data)
+			if len(errs) != 1 {
+				t.Fatalf("want 1 refusal, got %v", errs)
+			}
+			if len(diffs) != 0 {
+				t.Errorf("diffs = %v, want none", diffs)
+			}
+			if !reflect.DeepEqual(root, routeMutRoot()) {
+				t.Errorf("state changed: %v", root)
+			}
+		})
+	}
+}
+
+func TestApplyRouteMutations_AllValidApplyAll(t *testing.T) {
+	muts, err := compileMutationList([]profile.Mutation{
+		{Path: "status.device.ok", Value: true},
+		{Path: "status.device.power", Value: "on"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := routeMutRoot()
+	diffs, errs := applyRouteMutations(root, muts, templateData{State: root})
+	if len(errs) != 0 || len(diffs) != 2 {
+		t.Fatalf("diffs=%v errs=%v", diffs, errs)
+	}
+	dev := root["status"].(map[string]any)["device"].(map[string]any)
+	if dev["ok"] != true || dev["power"] != "on" {
+		t.Errorf("state = %v", dev)
+	}
+}
+
+// An optional mutation that fails is skipped; the rest still apply.
+func TestApplyRouteMutations_OptionalFailureSkipped(t *testing.T) {
+	muts, err := compileMutationList([]profile.Mutation{
+		{Path: "channels.99.mute", Value: true, Optional: true},
+		{Path: "status.device.ok", Value: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := routeMutRoot()
+	diffs, errs := applyRouteMutations(root, muts, templateData{State: root})
+	if len(errs) != 1 || diffs["status.device.ok"] != true {
+		t.Fatalf("diffs=%v errs=%v", diffs, errs)
 	}
 }
 

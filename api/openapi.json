@@ -716,6 +716,10 @@
             "description": "The name of the location the alarm's component sits in (its plane root's location); absent when the component is unplaced, and on every read but the fleet queue",
             "type": "string"
           },
+          "location_id": {
+            "description": "That location's uuid, the stable form of location; only on the fleet queue",
+            "type": "string"
+          },
           "location_path": {
             "description": "That location's dotted ancestor path, root first (for example boi.17c)",
             "type": "string"
@@ -747,6 +751,16 @@
             "description": "Until when the alarm (by component and dedup_key) is snoozed: its notifications are written suppressed until then. Null while it is not snoozed. Independent of acknowledged and cleared_at",
             "format": "date-time",
             "type": "string"
+          },
+          "system_ids": {
+            "description": "Those systems' uuids, in the same order as systems; only on the fleet queue",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
           },
           "systems": {
             "description": "The names of the systems the alarm's component is a member of; only on the fleet queue",
@@ -21277,9 +21291,53 @@
     },
     "/alarms": {
       "get": {
-        "description": "What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Each row names its component's location and the systems it belongs to that the caller may read. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.",
+        "description": "What is wrong now across every component the caller may read, in one read: by default the active alarms (state=cleared is the history, each row carrying when it cleared, and state=all both; since and until keep the alarms whose raised-to-cleared interval overlaps that range, so one raised before it and still open in it is kept, and since after until is a 400), worst severity first and newest first within a severity, each naming its component. Each row names its component's location and the systems it belongs to that the caller may read. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.",
         "operationId": "list-alarms",
         "parameters": [
+          {
+            "description": "Which alarms: active (still raised, the default), cleared (a cleared alarm is history, with when it cleared), or all",
+            "explode": false,
+            "in": "query",
+            "name": "state",
+            "schema": {
+              "default": "active",
+              "description": "Which alarms: active (still raised, the default), cleared (a cleared alarm is history, with when it cleared), or all",
+              "enum": [
+                "active",
+                "cleared",
+                "all"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only the alarms still raised at or after this RFC 3339 time: active, or cleared at or after it",
+            "explode": false,
+            "in": "query",
+            "name": "since",
+            "schema": {
+              "description": "Only the alarms still raised at or after this RFC 3339 time: active, or cleared at or after it",
+              "examples": [
+                "2026-11-23T00:00:00Z"
+              ],
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only the alarms raised at or before this RFC 3339 time; must not be earlier than since",
+            "explode": false,
+            "in": "query",
+            "name": "until",
+            "schema": {
+              "description": "Only the alarms raised at or before this RFC 3339 time; must not be earlier than since",
+              "examples": [
+                "2026-11-23T12:00:00Z"
+              ],
+              "format": "date-time",
+              "type": "string"
+            }
+          },
           {
             "description": "Only the alarms nobody has looked at: the queue an operator, or an agent, works",
             "explode": false,
@@ -21390,7 +21448,7 @@
             "description": "Error"
           }
         },
-        "summary": "List the fleet's active alarms",
+        "summary": "List the fleet's alarms",
         "x-omniglass-mcp": {},
         "x-omniglass-permission": "component:read"
       }
