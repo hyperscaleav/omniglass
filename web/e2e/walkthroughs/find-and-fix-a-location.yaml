@@ -5,7 +5,7 @@ description: Drill Explore down to a location, open the system it holds, and ren
 steps:
   - goto: /explore
     caption: Explore is the outline of every location in the fleet, with what each one holds.
-  - click: { role: button, name: Expand Service Depot }
+  - click: { role: button, name: Expand Service Depot, exact: true }
     caption: Open a building. Each location inside reads its type, and the standard its system is built to.
   - click: { role: treeitem, name: Bay 3 }
     caption: Bay 3 holds one system, so opening the location opens that system.
