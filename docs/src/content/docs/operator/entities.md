@@ -29,13 +29,16 @@ screenshots:
     # widest line a capture renders ("since May 28, 12:59 AM · 59m") is 164px
     # in the console's face; a line wider than 184px fails the capture by name.
     mask:
-      - selector: "[data-testid=location-detail] [data-testid=since-line]"
+      - selector: "[data-testid=since-line]"
         width: 184
   - id: entity-edit-face
     path: /web/locations/east?edit=1
     alt: "An ?edit=1 deep link lands a location's view on its Configure tab, already editing."
-    # No mask: the Configure tab replaces the overview (and its since-line
-    # clock), and the form renders from the seed deterministically.
+    # The location header's since line ages with the capture on every tab
+    # (#2423); the form below renders from the seed deterministically.
+    mask:
+      - selector: "[data-testid=since-line]"
+        width: 184
 ---
 
 Once you have [found an entity](/operator/fleet/), you open it, read it, and change
@@ -72,11 +75,12 @@ read-only reference.
 
 ## Edit through the footer action bar
 
-A blade opens **read-only**, and its actions live in the **footer action bar**; the header is
-chrome only (back, full-page, close). **Edit** turns the whole blade live in place, fleet
-and identity blades alike: a fleet blade's form (the identity, classification and tags of the
-same form the detail view's [Configure tab](/operator/fleet/) renders) and an identity blade's profile, members,
-and grants.
+A blade opens **read-only**, and the header is chrome only (back, full-page, close). A fleet
+blade (a location, a system, a component) is its detail view, so it edits as the page does: on its
+**Configure** tab, whose footer carries **Edit** and, on the left, **Delete** behind a confirm (see
+[Configure](/operator/fleet/)). The rest of this section is the identity and catalog blades, whose
+actions live in the blade's own **footer action bar**: **Edit** turns the whole blade live in place,
+its profile, members and grants.
 On an identity blade, **Edit** (right) opens edit mode: the profile becomes inputs, the members and grants go live, and the right
 cluster swaps to **Cancel** and **Save**. Changes stage locally so you can check your work first; **Save**
 commits them together, **Cancel** discards them. The **destructive** action sits on the **left** and is always

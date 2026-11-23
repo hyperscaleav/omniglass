@@ -91,8 +91,12 @@ screenshots:
       - "[data-testid=sparkline]"
   - id: fleet-location
     path: /web/locations/east
-    alt: "A location holding no system of its own: its card with its type and tags, its tabs, and the outline of what is beneath it, counted by systems."
-    # Nothing on a folder's view moves with the clock: no mask.
+    alt: "A location holding no system of its own: its card with its type, health, since-when and tags, its tabs, and the outline of what is beneath it, counted by systems."
+    # The header's since line ages with the capture (#2423): its box is
+    # declared, as the blade's is, so the clock never moves the baseline.
+    mask:
+      - selector: "[data-testid=since-line]"
+        width: 184
   # A room holding two systems keeps a view of its own: a brief card per
   # system.
   - id: fleet-location-systems
@@ -110,6 +114,8 @@ screenshots:
     # · 59m") is 186px in the console's face; a line wider than 208px fails
     # the capture by name.
     mask:
+      - selector: "[data-testid=since-line]"
+        width: 184
       - selector: "[data-testid=summary-since]"
         width: 208
   # Opened down to one room so the shot shows every rule at once: folded
@@ -121,9 +127,9 @@ screenshots:
       - action: click
         selector: "role=button[name='Expand West Building']"
       - action: click
-        selector: "role=button[name='Expand Level 2']"
+        selector: "role=button[name=/^Expand Level 2( in .*)?$/]"
       - action: click
-        selector: "role=button[name='Expand Huddle Room']"
+        selector: "role=button[name=/^Expand Huddle Room( in .*)?$/]"
     alt: "Explore: the outline of locations, Headquarters and West Building folded into one row and opened down to the Huddle Room, which wears its system with the components beneath it; every collapsed location says what it holds and counts its systems by health."
 walkthroughs:
   - id: find-and-fix-a-location
@@ -370,8 +376,8 @@ permission and its own audit verb; systems and components read where they sit.
 together (the rename last, so a refusal leaves the rest saved), Cancel reverts. A
 `?edit=1` address lands already editing. A sole system's Configure also carries its location's
 form, in its own section with its own Edit (`?edit=location` opens that one). A location's and a
-component's views carry the same tab. The side panel carries the same form's identity, classification and tags; slots,
-properties and their cascade are configuration, and live here.
+component's views carry the same tab. A blade opened from Explore carries this same Configure
+tab, panels, Edit and Delete included: it is the detail view in a side panel (ADR-2423).
 
 ::screenshot{#fleet-configure}
 
