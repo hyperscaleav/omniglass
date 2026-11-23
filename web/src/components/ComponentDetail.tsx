@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createUniqueId } from "solid-js";
+import { For, Show, createMemo, createUniqueId, onCleanup } from "solid-js";
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/solid-query";
 import TabRail from "./TabRail";
@@ -93,6 +93,8 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
   // nested open stacks on whichever host it is in.
   const blades = useBlades();
   const leave = createLeaveGuard();
+  // In a blade, closing or popping it asks the same guard a tab switch does.
+  if (props.host === "blade") onCleanup(blades.guard({ kind: "component", id: props.id }, leave));
   // Three tabs (#826): Overview, Activity, Configure. A legacy ?tab=events
   // address lands on Activity, which absorbed it.
   const leafTabs = createMemo(() => [

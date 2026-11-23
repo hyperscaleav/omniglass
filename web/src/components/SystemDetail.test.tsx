@@ -201,6 +201,18 @@ describe("the blade's tab and edit are its own", () => {
     expect(window.location.search).toBe("?node=x");
   });
 
+  it("a range chosen in a blade is the blade's own: the page's address keeps its range", async () => {
+    mountBlade("/web/explore?range=1h");
+    const blade = await screen.findByRole("dialog");
+    const trigger = await within(blade).findByTestId("time-range-trigger");
+    // The page's ?range= is the page's, not the blade's.
+    expect(trigger.textContent).toContain("Last 24 hours");
+    fireEvent.click(trigger);
+    fireEvent.click(await screen.findByTestId("time-range-preset-7d"));
+    await waitFor(() => expect(within(blade).getByTestId("time-range-trigger").textContent).toContain("Last 7 days"));
+    expect(window.location.search).toBe("?range=1h");
+  });
+
   it("edits the system from the blade's Configure, and a page ?edit=location does not reach it", async () => {
     mountBlade("/web/explore?edit=location");
     const blade = await screen.findByRole("dialog");
@@ -231,6 +243,19 @@ describe("the blade's tab and edit are its own", () => {
     const face = await screen.findByTestId("configure-face-location");
     await within(face).findByRole("button", { name: "Edit" });
     expect(within(face).queryByRole("button", { name: "Delete" })).toBeNull();
+  });
+
+  it("closing the blade with unsaved drafts asks first", async () => {
+    const asked = answerConfirms(false);
+    const r = mountBlade();
+    const blade = await screen.findByRole("dialog");
+    fireEvent.click(await within(blade).findByRole("tab", { name: "Configure" }));
+    const face = await within(blade).findByTestId("configure-face");
+    fireEvent.click(await within(face).findByRole("button", { name: "Edit" }));
+    fireEvent.input(await within(face).findByDisplayValue("boardroom"), { target: { value: "boardroom-2" } });
+    fireEvent.click(within(blade).getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(asked).toHaveBeenCalled());
+    expect(r.controller().stack().length).toBe(1);
   });
 
   it("deletes from the blade's Configure and closes the stack", async () => {
