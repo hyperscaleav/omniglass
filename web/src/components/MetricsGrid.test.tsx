@@ -170,6 +170,26 @@ await waitFor(() => expect(read(reads, "/systems/room-1/metrics/rtt/samples?hour
     expect(document.activeElement).toBe(chart);
   });
 
+  // A link can carry an absolute range to a caller who may not read views
+  // (the picker offers none to them): the card says what is missing rather
+  // than offering a Retry that cannot succeed.
+  it("an absolute range refused for want of view:read says so, with no Retry", async () => {
+    const to = Date.now() - HOUR;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const req = input instanceof Request ? input : new Request(String(input));
+        const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "content-type": "application/json" } });
+        if (req.method === "POST") return json({ status: 403, title: "Forbidden", detail: "view:read" }, 403);
+        return json({ metrics: [metrics[1]] });
+      }),
+    );
+    mount("systems", "room-1", () => ({ kind: "absolute", from: to - HOUR, to }));
+    const card = await screen.findByTestId("metric-card-rtt");
+    expect(await within(card).findByText(/custom range needs the view:read permission/)).toBeTruthy();
+    expect(within(card).queryByRole("button", { name: "Retry" })).toBeNull();
+  });
+
   it("draws nothing when the entity has no metrics", async () => {
     vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify({ metrics: [] }), { status: 200, headers: { "content-type": "application/json" } }))));
     mount("components", "cam-1", () => ({ kind: "preset", preset: "6h" }));
