@@ -722,7 +722,7 @@ func TestPlatformSimulationViewAPI(t *testing.T) {
 	}
 	panel, _ := lineProtocolProduct(t, ctx, gw)
 	annex, annexSys := "annex", "annex-av"
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: annex, LocationType: "campus"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: annex, LocationType: "campus"}, all, all); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: annexSys, LocationName: &annex}, all, all); err != nil {

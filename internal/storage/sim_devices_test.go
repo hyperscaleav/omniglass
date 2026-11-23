@@ -130,7 +130,7 @@ func TestComponentPlaces(t *testing.T) {
 		{Name: "level-2", LocationType: "building", ParentName: strptr("hq")},
 		{Name: "annex", LocationType: "campus"},
 	} {
-		if _, err := gw.CreateLocation(ctx, "", l, all); err != nil {
+		if _, err := gw.CreateLocation(ctx, "", l, all, all); err != nil {
 			t.Fatalf("create location %s: %v", l.Name, err)
 		}
 	}
