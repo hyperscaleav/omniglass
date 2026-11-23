@@ -463,10 +463,13 @@ How to read each row:
   count over the window is above 0, the lag is refused with the share as the reason (`N % of the
   window's published batches had not landed`). The closed loop's window is the endpoint marks, taken a
   read or two around the database window the lag is read over, so the share is a window-edge
-  approximation; any share above 0 refuses. When the closed loop was not read, the lab estimates the
-  share from the poll cadence (rows landed against the probes the targets should have drawn), refuses
-  past 5 %, and says in the reason that it is a floor estimate. The JSON carries `unlanded_share` and
-  `unlanded_estimated` beside the reason.
+  approximation, so a share up to 5 % (a batch still in flight at the end mark) stands and a share past
+  it refuses. When the closed loop was not read, the lab estimates the share from the poll cadence in
+  one unit, probes (the distinct component and probe times that landed against the probes the targets
+  should have drawn), refuses past the same 5 %, and says in the reason that it is a floor estimate. When
+  that estimate cannot be computed the lag stands, with a note under the table (`ingest_lag_note` in the
+  JSON) that it was not checked. The JSON carries `unlanded_share` and `unlanded_estimated` beside the
+  reason.
 - **consumer redeliveries**: batches the ingest consumer could not confirm and the bus handed it again
   (`unconfirmed acks`), and messages it dropped after repeated failures (`abandoned`), counted from
   the server's log since the window began. A redelivery that succeeds the second time logs nothing, so

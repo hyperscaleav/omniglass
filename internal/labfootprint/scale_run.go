@@ -486,7 +486,11 @@ func (h *harness) measureWindow(ctx context.Context, cfg ScaleConfig, s scaleSes
 		run.EndpointsGap = endpointErr.Error()
 		h.say("endpoints not measured: %v", endpointErr)
 	}
-	run.Lag, run.LagGap = RefuseBehindLag(run.Lag, run.LagGap, run.Endpoints, h.expectedProbes(ctx, endpointErr, db1.At.Sub(db0.At)))
+	landed, expected := h.estimateProbes(ctx, endpointErr, db0.At, db1.At)
+	run.Lag, run.LagGap, run.LagNote = RefuseBehindLag(run.Lag, run.LagGap, run.Endpoints, landed, expected)
+	if run.LagNote != "" {
+		h.say("%s", run.LagNote)
+	}
 	run.Delivery = h.readDelivery(ctx, delivery.Window{From: db0.At, To: db1.At}, cfg.SettleTimeout)
 	if run.Delivery.Read {
 		h.say("delivery: %d receipts read", len(run.Delivery.Receipts))
@@ -886,23 +890,39 @@ func (h *harness) ingestLag(ctx context.Context, from, to time.Time) ([]float64,
 	return nil, &gap, nil
 }
 
-// expectedProbes is the cadence estimate's denominator, read only when the
-// closed loop was not (endpointErr set): the samples the poll targets should
-// have drawn over the window, at the outposts' default cadence. 0 when the
-// targets did not read.
-func (h *harness) expectedProbes(ctx context.Context, endpointErr error, window time.Duration) int64 {
+// landedProbesQuery counts the probes the window landed: one per component and
+// probe time, however many metrics the probe emitted, so it shares a unit with
+// ExpectedProbes.
+func landedProbesQuery(from, to time.Time) string {
+	return fmt.Sprintf(`select count(*) from (select distinct component_id, ts from metric
+		where ts >= to_timestamp(%.3f) and ts < to_timestamp(%.3f) and source_rule is null) p`,
+		float64(from.UnixMilli())/1000, float64(to.UnixMilli())/1000)
+}
+
+// estimateProbes is the cadence estimate's two figures, read only when the
+// closed loop was not (endpointErr set): the probes that landed and the probes
+// the poll targets should have drawn over the window. Expected is 0, and
+// landed -1, when a read failed.
+func (h *harness) estimateProbes(ctx context.Context, endpointErr error, from, to time.Time) (landed, expected int64) {
 	if endpointErr == nil {
-		return 0
+		return 0, 0
 	}
 	out, err := h.psql(ctx, pollTargetsQuery)
 	if err != nil {
-		return 0
+		return -1, 0
 	}
 	targets, err := parsePollTargets(out, nil)
 	if err != nil {
-		return 0
+		return -1, 0
 	}
-	return ExpectedProbes(targets, window)
+	out, err = h.psql(ctx, landedProbesQuery(from, to))
+	if err != nil {
+		return -1, 0
+	}
+	if _, err = fmt.Sscan(strings.TrimSpace(out), &landed); err != nil {
+		return -1, 0
+	}
+	return landed, ExpectedProbes(targets, to.Sub(from))
 }
 
 // serverLog is what the server container logged since a time.

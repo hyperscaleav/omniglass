@@ -459,7 +459,9 @@ type ScaleRun struct {
 	Lag []float64
 	// LagGap is set when Lag is empty: why, and how stale the newest landed
 	// sample was.
-	LagGap       *LagGap
+	LagGap *LagGap
+	// LagNote says the lag stands unchecked for a partial landing.
+	LagNote      string
 	Redeliveries Redeliveries
 	// Lane is the consumer lane's utilisation, from the server's tally lines.
 	Lane      Lane
@@ -528,11 +530,12 @@ type ScaleReport struct {
 	Containers []ScaleContainer `json:"containers"`
 	IngestLag  Quantiles        `json:"ingest_lag_ms"`
 	// IngestLagGap is set, and IngestLag zero, when no lag was measured.
-	IngestLagGap *LagGap      `json:"ingest_lag_not_measured,omitempty"`
-	Redeliveries Redeliveries `json:"redeliveries"`
-	ConsumerLane Lane         `json:"consumer_lane"`
-	FleetView    Quantiles    `json:"fleet_view_ms"`
-	Drain        Drain        `json:"retention_drain"`
+	IngestLagGap  *LagGap      `json:"ingest_lag_not_measured,omitempty"`
+	IngestLagNote string       `json:"ingest_lag_note,omitempty"`
+	Redeliveries  Redeliveries `json:"redeliveries"`
+	ConsumerLane  Lane         `json:"consumer_lane"`
+	FleetView     Quantiles    `json:"fleet_view_ms"`
+	Drain         Drain        `json:"retention_drain"`
 	// Absolutes is what the database holds at the window's end, where the
 	// rates above are what it gains a day.
 	Absolutes Absolutes `json:"absolutes"`
@@ -597,6 +600,7 @@ func SummarizeScale(r ScaleRun) ScaleReport {
 		SamplesPerBatch:       w.SamplesPerBatch,
 		BatchesPerSecond:      w.BatchesPerSecond,
 		IngestLagGap:          r.LagGap,
+		IngestLagNote:         r.LagNote,
 		Redeliveries:          r.Redeliveries,
 		ConsumerLane:          r.Lane,
 		FleetView:             DurationQuantiles(r.FleetView),
@@ -728,6 +732,9 @@ func (r ScaleReport) Table() string {
 	r.deliveryTable(&b)
 	if r.IngestLagGap != nil {
 		b.WriteString("\n" + r.IngestLagGap.footer())
+	}
+	if r.IngestLagNote != "" {
+		b.WriteString("\n" + r.IngestLagNote + "\n")
 	}
 	if !r.ConsumerLane.Measured && r.ConsumerLane.Reason != "" {
 		b.WriteString("\nconsumer lane not measured: " + r.ConsumerLane.Reason + "\n")

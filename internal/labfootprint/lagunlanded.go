@@ -7,10 +7,10 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/closedloop"
 )
 
-// estimateTolerance is the unlanded share the cadence estimate must pass
-// before it refuses the lag: the estimate counts probes from the task
-// cadence, so a few percent is its own noise, not a backlog.
-const estimateTolerance = 0.05
+// unlandedTolerance is the unlanded share the lag must pass before it is
+// refused: a batch in flight at the end mark, or the noise of a cadence
+// estimate, is a few percent, not a backlog.
+const unlandedTolerance = 0.05
 
 // ClosedLoopUnlanded is the share of the window's published batches that had
 // not landed, over every outpost the closed loop read (#1897). The closed loop
@@ -45,29 +45,31 @@ func ExpectedProbes(targets map[string][]closedloop.PollTarget, window time.Dura
 
 // RefuseBehindLag decides whether a lag read over a partial landing may stand.
 // The lag times only the samples that landed, so a lane behind reads healthy
-// (#1897). When the closed loop's published-not-landed share is above 0 the
-// lag is refused as not measured, with the share as the reason. When the
-// closed loop is not read (brackets empty), the share is estimated from the
-// poll cadence: the rows landed against the probes the targets should have
-// drawn, a floor, and refused only past estimateTolerance. A read at the row
-// cap is not a survivor set, so the estimate does not refuse it.
-func RefuseBehindLag(lags []float64, gap *LagGap, brackets []closedloop.OutpostBracket, expected int64) ([]float64, *LagGap) {
+// (#1897). When the closed loop's published-not-landed share is past
+// unlandedTolerance the lag is refused as not measured, with the share as the
+// reason; a batch still in flight at the end mark is under it, not a backlog.
+// When the closed loop is not read (brackets empty), the share is estimated
+// in one unit, probes: the probes that landed (landed) against the probes the
+// targets should have drawn (expected), a floor, refused past the same
+// tolerance. When that estimate cannot be computed the lag stands, and the
+// note says it stands unchecked.
+func RefuseBehindLag(lags []float64, gap *LagGap, brackets []closedloop.OutpostBracket, landed, expected int64) ([]float64, *LagGap, string) {
 	if gap != nil || len(lags) == 0 {
-		return lags, gap
+		return lags, gap, ""
 	}
 	if share, ok := ClosedLoopUnlanded(brackets); ok {
-		if share > 0 {
-			return nil, unlandedGap(share, false)
+		if share > unlandedTolerance {
+			return nil, unlandedGap(share, false), ""
 		}
-		return lags, nil
+		return lags, nil, ""
 	}
-	if expected <= 0 || len(lags) >= lagSampleRows {
-		return lags, nil
+	if expected <= 0 || landed < 0 {
+		return lags, nil, "ingest lag not checked for a partial landing: the closed loop was not read and the poll cadence could not be estimated"
 	}
-	if share := 1 - float64(len(lags))/float64(expected); share > estimateTolerance {
-		return nil, unlandedGap(share, true)
+	if share := 1 - float64(landed)/float64(expected); share > unlandedTolerance {
+		return nil, unlandedGap(share, true), ""
 	}
-	return lags, nil
+	return lags, nil, ""
 }
 
 func unlandedGap(share float64, estimated bool) *LagGap {
