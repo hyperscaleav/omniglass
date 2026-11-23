@@ -217,13 +217,13 @@ Coded pages with rich interaction, all reading through views:
 Two layers, deliberately decoupled:
 
 1. **Routes are flat and identity-based.** Every entity page is a top-level path (`/systems`,
-   `/components`, `/templates`, `/config`); a URL addresses the *entity*, never its position in the
+   `/components`, `/templates`, `/variables`); a URL addresses the *entity*, never its position in the
    menu, so deep links stay stable however the menu is reorganized. No taxonomy-nested routes, no
    redirects to maintain.
 2. **The sidebar groups those flat routes into clusters for browsing**: Home, Explore (the one
    door into the fleet, #826: its outline lists every location, system and component, #861),
-   Dashboards, Alarms, Outposts, Values (variables, secrets, config, files),
-   Catalog (a single entry opening the catalog shell, next), Learn, Admin (users, roles,
+   Alarms, Outposts, Values (variables, secrets, files),
+   Catalog (a single entry opening the catalog shell, next), Admin (users, roles,
    groups, audit, and the Settings leaf). A cluster is pure presentation, not a destination:
    rearrangeable and user-customizable without touching a route.
 

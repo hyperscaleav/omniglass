@@ -24,10 +24,8 @@ export type Command = { label: string; path: string; group?: string; section?: s
 // name here without a second membership list to drift (#628).
 //
 // A catalog wears its catalog group as a section, so the group tag reads
-// `Catalog · Telemetry` and a lane name finds its catalogs. A pathless soon
-// slot (the Templates reservations) is no destination and is left out; a routed
-// soon slot (Rules, Notifications) jumps to its stub, exactly as the rail's own
-// unbuilt sections do.
+// `Catalog · Telemetry` and a lane name finds its catalogs. Every entry
+// is a built page and a destination.
 export function buildCommands(allow: (tokens: string[]) => boolean): Command[] {
   const rail: Command[] = filterNav(navItems, allow).flatMap((item) =>
     item.path

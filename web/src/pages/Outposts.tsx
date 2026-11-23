@@ -335,10 +335,7 @@ function OutpostBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput)
                     <div class="flex items-center gap-2 px-3 py-1.5 text-sm" classList={{ "border-t border-base-300": i() > 0 }}>
                       <span class="font-data text-base-content/80">{t.iface}</span>
                       <span class="text-base-content/25">/</span>
-                      <span class="flex items-center gap-1.5 text-base-content/50">
-                        reachability
-                        <span class="rounded bg-base-content/5 px-1 py-px text-[9px] font-medium uppercase tracking-wide text-base-content/40" title="Named collection functions arrive with device drivers">driver fn soon</span>
-                      </span>
+                      <span class="text-base-content/50">reachability</span>
                       <span class="flex-1" />
                       <span class={`badge badge-xs ${t.enabled ? "badge-soft badge-success" : "bg-base-content/10 text-base-content/70 border-transparent"}`}>{t.enabled ? "enabled" : "disabled"}</span>
                     </div>

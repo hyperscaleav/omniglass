@@ -1,7 +1,6 @@
 import { For, Show, createMemo, type ParentComponent } from "solid-js";
 import { A, useHref, useLocation, useNavigate } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
-import { Soon } from "./Sidebar";
 import { useMe, can } from "../lib/auth";
 import { OVERVIEW_PATH, entryActive, entryCount, entryHref, visibleGroups, type CatalogEntry } from "../lib/catalog";
 
@@ -62,9 +61,7 @@ const CatalogShell: ParentComponent = (props) => {
 
 export default CatalogShell;
 
-// One subrail entry. A live catalog links to its page with its live count; a
-// soon slot wears the rail's SOON treatment, linking when its stub page is
-// routed (Notifications) and rendering disabled when no page exists yet. A
+// One subrail entry: a catalog links to its page with its live count. A
 // filtered slot (the three Templates slots, one page) lights by its query too,
 // so only the slot whose kinds are showing reads active.
 function Entry(props: { entry: CatalogEntry }) {
@@ -74,49 +71,29 @@ function Entry(props: { entry: CatalogEntry }) {
   const href = useHref(() => entryHref(props.entry));
   return (
     <Show
-      when={!props.entry.soon}
+      when={props.entry.query}
       fallback={
-        <Show
-          when={props.entry.path}
-          fallback={
-            <button type="button" disabled class="opacity-45">
-              <span class="flex-1 truncate">{props.entry.label}</span>
-              <Soon />
-            </button>
-          }
-        >
-          <A href={props.entry.path!} activeClass="menu-active" class="opacity-45">
-            <span class="flex-1 truncate">{props.entry.label}</span>
-            <Soon />
-          </A>
-        </Show>
-      }
-    >
-      <Show
-        when={props.entry.query}
-        fallback={
-          <A href={props.entry.path!} activeClass="menu-active">
-            <span class="flex-1 truncate">{props.entry.label}</span>
-            <EntryCount entry={props.entry} />
-          </A>
-        }
-      >
-        {/* A router link marks every query of its path current, so a filtered
-            slot is its own anchor: active, and aria-current, on its query. */}
-        <a
-          href={href()}
-          classList={{ "menu-active": active() }}
-          aria-current={active() ? "page" : undefined}
-          onClick={(e) => {
-            if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
-            e.preventDefault();
-            navigate(entryHref(props.entry));
-          }}
-        >
+        <A href={props.entry.path!} activeClass="menu-active">
           <span class="flex-1 truncate">{props.entry.label}</span>
           <EntryCount entry={props.entry} />
-        </a>
-      </Show>
+        </A>
+      }
+    >
+      {/* A router link marks every query of its path current, so a filtered
+          slot is its own anchor: active, and aria-current, on its query. */}
+      <a
+        href={href()}
+        classList={{ "menu-active": active() }}
+        aria-current={active() ? "page" : undefined}
+        onClick={(e) => {
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+          e.preventDefault();
+          navigate(entryHref(props.entry));
+        }}
+      >
+        <span class="flex-1 truncate">{props.entry.label}</span>
+        <EntryCount entry={props.entry} />
+      </a>
     </Show>
   );
 }

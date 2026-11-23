@@ -187,7 +187,7 @@ describe("Outposts page", () => {
     await within(blade).findByText("Tasks");
     expect(await within(blade).findByText("disp-1-tcp")).toBeTruthy();
     expect(within(blade).getByText("reachability")).toBeTruthy();
-    expect(within(blade).getByText(/driver fn soon/i)).toBeTruthy();
+    expect(within(blade).queryByText(/soon/i)).toBeNull(); // no "driver fn soon" chip (#2445)
     expect(within(blade).getByText("enabled")).toBeTruthy();
     expect(within(blade).queryByText("poll")).toBeNull(); // the mode mechanism is not shown
   });

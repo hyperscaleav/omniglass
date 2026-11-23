@@ -180,7 +180,6 @@ what each page draws itself.
 | `Rules.tsx` | `/event-rules` | V12, V33, V38 |
 | `SecretTypes.tsx` | `/secret-types` | none checked: config chips only |
 | `Secrets.tsx` | `/secrets` | none checked: config chips only |
-| `SectionStub.tsx` | `/config`, `/dashboards`, `/learn`, `/log-types` | none checked: placeholder page (`/dashboards` is where the canvas lands) |
 | `Settings.tsx` | `/settings` | none checked: effective and lock chips are config |
 | `SeverityLevels.tsx` | `/severity-levels` | none checked: `SeverityBadge` here previews a configured level's look, not an alarm's state |
 | `Simulation.tsx` | `/simulation` | V23, V24 (drawer) |

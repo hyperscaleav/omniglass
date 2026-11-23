@@ -54,7 +54,9 @@ one you can do in the other.
   under Values, Catalog and Admin. **Catalog** is a single entry: its own subrail groups the catalogs
   by the fleet noun they serve (Telemetry, Actions, Components, Systems, Locations, Metadata), and each
   catalog opens at its own address. These pages name a catalog by group and entry: **Catalog, under
-  Locations: Types**. A catalog whose backend has not landed is dimmed with a **soon** tag. The
+  Locations: Types**. Nothing in the console is marked
+  "soon": a page that is not built has no door, and an address with no page lands on a **Not found** face
+  that names the address and links Home and Explore. The
   subrail's first entry, **Overview**, has a card per group with live counts.
 - **The top bar** names the section you are in and carries **Search (⌘K)** and, if you may use the
   assistant, **Ask omnibot**, which opens [omnibot](/developer/agents/#omnibot-in-the-console) with the
