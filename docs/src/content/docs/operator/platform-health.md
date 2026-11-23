@@ -18,7 +18,7 @@ screenshots:
   # every capture, so the panel grid is masked whole in the baseline.
   - id: platform-health
     path: /web/platform
-    alt: "Platform health with every section folded to one line: the platform system's health linking to its system, the build the server runs and how long it has been up, then Where work is lost with its end to end loss, the server with its health and open alarms, the outposts with how many are up, and With a simulator with its loss and device count, each a verdict and the one number that matters."
+    alt: "Platform health with every section folded to one line: the platform system's health linking to its system, the build the server runs and how long it has been up, then Where work is lost with its end to end loss, the server with its health and open alarms, the outposts with how many are up, and With a simulator with its loss and device count, each its health and the one number that matters."
     steps:
       - action: wait
         selector: "[data-testid=section-server-server] [data-testid=section-summary]"
@@ -148,7 +148,7 @@ none of its other tabs.
 
 ## The sections
 
-Under the header the page is four sections, each folded to one line: its name, a verdict and the one
+Under the header the page is four sections, each folded to one line: its name, a reading and the one
 number that matters. The first screen therefore answers whether the platform is well and, if not,
 where, with nothing opened:
 
@@ -450,9 +450,9 @@ connections **Accepted**, requests **Received** and **Answered**, the simulator'
 the outpost's **Poll targets** on the protocol, and the most requests it held at once. A probe that only
 connects (a tcp reachability check), or logs in and asks nothing, draws a connection and no request, so
 those rows count accepted connections beside 0 received. The device table lists the simulated devices a page at a time (25 rows), with the requests each
-received by protocol. A filter above it narrows the list by name, system or place, every word of what
+received by protocol. A filter above it narrows the list by name, system or location, every word of what
 you type, so a name the seeded fleet repeats (`amp-1` in four rooms) is told apart by the system and
-the places from the root down that sit beside it. The **State** column is never blank: a device is
+the locations from the root down that sit beside it. The **State** column is never blank: a device is
 **answering**, **impaired** (the simulator impairs it on purpose), or **due, never seen** (a poll
 target due over the window that saw no request); the ones that need a look sort first. A device's name
 opens its drawer on the Simulation page.
@@ -538,7 +538,7 @@ state, start and end, its gaps with their ratios and readings, its protocols and
 
 ## Walkthroughs
 
-From Home, open the tile and read the header and each section's one-line verdict, open where work is
+From Home, open the tile and read the header and each section's one-line reading, open where work is
 lost and read each hop as a loss ratio and the outpost hop's explainer, open the outposts and the
 simulator's gaps, then open the server's panels on the Requests panel and follow the slowest route's
 figure from its tooltip onto its series on the server's platform component.

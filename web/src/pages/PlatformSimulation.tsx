@@ -276,8 +276,8 @@ function DeviceTable(props: { outpost: PlatformSimOutpost }) {
         <input
           type="search"
           class="input input-bordered input-sm w-full max-w-xs"
-          placeholder="Filter by device, system or place"
-          aria-label={`Filter ${props.outpost.outpost}'s devices by name, system or place`}
+          placeholder="Filter by device, system or location"
+          aria-label={`Filter ${props.outpost.outpost}'s devices by name, system or location`}
           value={query()}
           onInput={(e) => setQuery(e.currentTarget.value)}
           data-testid="platform-sim-device-filter"

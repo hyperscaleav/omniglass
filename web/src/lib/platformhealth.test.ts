@@ -268,7 +268,7 @@ describe("states with no number", () => {
 });
 
 describe("devices", () => {
-  const dev = (over: Partial<PlatformSimDevice>): PlatformSimDevice => ({ component_id: "c", component: "", received: {}, impaired: false, unhit: false, system: "", place: [], ...over });
+  const dev = (over: Partial<PlatformSimDevice>): PlatformSimDevice => ({ component_id: "c", component: "", received: {}, impaired: false, unhit: false, system: "", location_path: [], ...over });
   it("sums a device's requests over its protocols", () => {
     expect(deviceReceived(dev({ received: { http: 4, tcp: 2 } }))).toBe(6);
     expect(deviceReceived(dev({}))).toBe(0);

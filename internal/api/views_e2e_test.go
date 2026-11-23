@@ -684,12 +684,12 @@ type platformSimulationWire struct {
 		QueueDepth  *int64 `json:"queue_depth"`
 		BusyWorkers *int64 `json:"busy_workers"`
 		Devices     []struct {
-			ComponentID string           `json:"component_id"`
-			Component   string           `json:"component"`
-			Received    map[string]int64 `json:"received"`
-			Impaired    bool             `json:"impaired"`
-			System      string           `json:"system"`
-			Place       []string         `json:"place"`
+			ComponentID  string           `json:"component_id"`
+			Component    string           `json:"component"`
+			Received     map[string]int64 `json:"received"`
+			Impaired     bool             `json:"impaired"`
+			System       string           `json:"system"`
+			LocationPath []string         `json:"location_path"`
 		} `json:"devices"`
 	} `json:"outposts"`
 }
@@ -872,8 +872,8 @@ func TestPlatformSimulationViewAPI(t *testing.T) {
 		t.Fatalf("devices = %+v, want panel-1 with its 12 tcp hits over the window", n.Devices)
 	}
 	// #1724: a repeated name reads apart by the system and places it sits in.
-	if d := n.Devices[0]; d.System != "annex-av" || len(d.Place) != 1 || d.Place[0] != "annex" {
-		t.Fatalf("device place = %q at %v, want annex-av at annex", d.System, d.Place)
+	if d := n.Devices[0]; d.System != "annex-av" || len(d.LocationPath) != 1 || d.LocationPath[0] != "annex" {
+		t.Fatalf("device place = %q at %v, want annex-av at annex", d.System, d.LocationPath)
 	}
 
 	// A handler with no ring (no simulator anywhere) reads no outpost.

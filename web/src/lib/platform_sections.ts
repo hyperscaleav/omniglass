@@ -105,9 +105,9 @@ export function setSectionOpen(raw: string | string[] | undefined, id: string, o
 // ---- The simulator's device table ----
 
 // devicePlaceText tells repeated device names apart (#1724): the system the
-// device is in, then the places from the root down to it.
-export function devicePlaceText(d: Pick<PlatformSimDevice, "system" | "place">): string {
-  const place = (d.place ?? []).join(" / ");
+// device is in, then the locations from the root down to it.
+export function devicePlaceText(d: Pick<PlatformSimDevice, "system" | "location_path">): string {
+  const place = (d.location_path ?? []).join(" / ");
   return [d.system, place].filter(Boolean).join(" · ");
 }
 
@@ -118,13 +118,13 @@ export function deviceStateText(d: Pick<PlatformSimDevice, "impaired" | "unhit">
   return out.length > 0 ? out : ["answering"];
 }
 
-// filterDevices keeps the devices whose name, system or place holds every word
+// filterDevices keeps the devices whose name, system or location holds every word
 // of the query, in any case.
 export function filterDevices(devices: PlatformSimDevice[], query: string): PlatformSimDevice[] {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   if (words.length === 0) return devices;
   return devices.filter((d) => {
-    const hay = `${d.component} ${d.system} ${(d.place ?? []).join(" ")}`.toLowerCase();
+    const hay = `${d.component} ${d.system} ${(d.location_path ?? []).join(" ")}`.toLowerCase();
     return words.every((w) => hay.includes(w));
   });
 }

@@ -6663,10 +6663,10 @@ export type PlatformSimulationDevice = {
   /** Whether the simulator impairs the device at the window's end. */
   impaired: boolean;
   /**
-     * The places from the root down to the device's location, so devices that share a name read apart; empty when it is unplaced.
+     * The locations from the root down to the device's location, so devices that share a name read apart; empty when it has no location.
      * @nullable
      */
-  place: string[] | null;
+  location_path: string[] | null;
   /** Requests the device saw over the window, by protocol. */
   received: PlatformSimulationDeviceReceived;
   /** The name of the device's primary system; empty when it has none. */

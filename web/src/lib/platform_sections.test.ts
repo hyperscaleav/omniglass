@@ -96,7 +96,7 @@ const simOutpost = (over: Partial<PlatformSimOutpost>): PlatformSimOutpost => ({
 
 describe("simulationSummary", () => {
   it("reads a measured window with every gap at 0 as no loss, with the device count", () => {
-    const d = (n: string) => ({ component_id: n, component: n, received: {}, impaired: false, unhit: false, system: "", place: [] });
+    const d = (n: string) => ({ component_id: n, component: n, received: {}, impaired: false, unhit: false, system: "", location_path: [] });
     expect(simulationSummary([simOutpost({ devices: [d("a"), d("b")] })])).toEqual({ tone: "ok", text: "no loss, 2 devices" });
     expect(simulationSummary([simOutpost({ devices: [d("a")] })])).toEqual({ tone: "ok", text: "no loss, 1 device" });
   });
@@ -137,13 +137,13 @@ describe("open state held in the URL", () => {
   });
 });
 
-const dev = (over: Partial<PlatformSimDevice>): PlatformSimDevice => ({ component_id: "c", component: "amp-1", received: {}, impaired: false, unhit: false, system: "", place: [], ...over });
+const dev = (over: Partial<PlatformSimDevice>): PlatformSimDevice => ({ component_id: "c", component: "amp-1", received: {}, impaired: false, unhit: false, system: "", location_path: [], ...over });
 
 describe("device table", () => {
   it("tells a repeated name apart by its system and place", () => {
-    expect(devicePlaceText(dev({ system: "board-meeting", place: ["hq", "level-2", "boardroom-a"] }))).toBe("board-meeting · hq / level-2 / boardroom-a");
-    expect(devicePlaceText(dev({ system: "", place: ["hq"] }))).toBe("hq");
-    expect(devicePlaceText(dev({ system: "board", place: [] }))).toBe("board");
+    expect(devicePlaceText(dev({ system: "board-meeting", location_path: ["hq", "level-2", "boardroom-a"] }))).toBe("board-meeting · hq / level-2 / boardroom-a");
+    expect(devicePlaceText(dev({ system: "", location_path: ["hq"] }))).toBe("hq");
+    expect(devicePlaceText(dev({ system: "board", location_path: [] }))).toBe("board");
     expect(devicePlaceText(dev({}))).toBe("");
   });
   it("fills the state column for every device", () => {
@@ -154,9 +154,9 @@ describe("device table", () => {
   });
   it("filters by name, system or place, case-insensitively, every word", () => {
     const list = [
-      dev({ component_id: "1", system: "board-meeting", place: ["hq", "boardroom-a"] }),
-      dev({ component_id: "2", system: "auditorium", place: ["east", "auditorium"] }),
-      dev({ component_id: "3", component: "camera-1", system: "auditorium", place: ["east"] }),
+      dev({ component_id: "1", system: "board-meeting", location_path: ["hq", "boardroom-a"] }),
+      dev({ component_id: "2", system: "auditorium", location_path: ["east", "auditorium"] }),
+      dev({ component_id: "3", component: "camera-1", system: "auditorium", location_path: ["east"] }),
     ];
     expect(filterDevices(list, "").length).toBe(3);
     expect(filterDevices(list, "  ").length).toBe(3);

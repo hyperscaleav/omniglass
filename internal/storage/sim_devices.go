@@ -231,12 +231,12 @@ func webhookSenderSecret(scheme string, f map[string]string) string {
 }
 
 // ComponentPlace is where a component sits: its primary system's name and the
-// names of the places from the root down to its location. Either is empty for a
+// names of the locations from the root down to its location. Either is empty for a
 // component with no primary system or no location. The Platform health
 // simulation table reads it to tell repeated device names apart (#1724).
 type ComponentPlace struct {
 	System string
-	Place  []string
+	Path   []string
 }
 
 // ComponentPlaces reads the place of each component id, keyed by id; an id that
@@ -278,7 +278,7 @@ func (p *PG) ComponentPlaces(ctx context.Context, ids []string) (map[string]Comp
 			if s == accessorComp {
 				break
 			}
-			cp.Place = append(cp.Place, s)
+			cp.Path = append(cp.Path, s)
 		}
 		out[id] = cp
 	}

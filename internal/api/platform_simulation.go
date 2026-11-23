@@ -49,13 +49,13 @@ type platformSimulationProtocol struct {
 
 // platformSimulationDevice is one simulated device over the window.
 type platformSimulationDevice struct {
-	ComponentID string           `json:"component_id"`
-	Component   string           `json:"component" doc:"The component's name; empty when it is no longer one of the outpost's simulated devices."`
-	Received    map[string]int64 `json:"received" doc:"Requests the device saw over the window, by protocol."`
-	Impaired    bool             `json:"impaired" doc:"Whether the simulator impairs the device at the window's end."`
-	Unhit       bool             `json:"unhit" doc:"Whether it is a poll target due over the window that the simulator never saw."`
-	System      string           `json:"system" doc:"The name of the device's primary system; empty when it has none."`
-	Place       []string         `json:"place" doc:"The places from the root down to the device's location, so devices that share a name read apart; empty when it is unplaced."`
+	ComponentID  string           `json:"component_id"`
+	Component    string           `json:"component" doc:"The component's name; empty when it is no longer one of the outpost's simulated devices."`
+	Received     map[string]int64 `json:"received" doc:"Requests the device saw over the window, by protocol."`
+	Impaired     bool             `json:"impaired" doc:"Whether the simulator impairs the device at the window's end."`
+	Unhit        bool             `json:"unhit" doc:"Whether it is a poll target due over the window that the simulator never saw."`
+	System       string           `json:"system" doc:"The name of the device's primary system; empty when it has none."`
+	LocationPath []string         `json:"location_path" doc:"The locations from the root down to the device's location, so devices that share a name read apart; empty when it has no location."`
 }
 
 // platformSimulationOutpost is one outpost with a simulator, read over the window.
@@ -115,7 +115,7 @@ func toPlatformSimulationOutpost(w closedloop.OutpostWindow, names map[string]st
 	}
 	for _, d := range w.Devices {
 		n.Devices = append(n.Devices, platformSimulationDevice{ComponentID: d.ComponentID, Component: names[d.ComponentID],
-			Received: d.Received, Impaired: d.Impaired, Unhit: d.Unhit, System: places[d.ComponentID].System, Place: orEmpty(places[d.ComponentID].Place)})
+			Received: d.Received, Impaired: d.Impaired, Unhit: d.Unhit, System: places[d.ComponentID].System, LocationPath: orEmpty(places[d.ComponentID].Path)})
 	}
 	return n
 }

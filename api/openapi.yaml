@@ -8840,8 +8840,8 @@ components:
         impaired:
           description: Whether the simulator impairs the device at the window's end.
           type: boolean
-        place:
-          description: The places from the root down to the device's location, so devices that share a name read apart; empty when it is unplaced.
+        location_path:
+          description: The locations from the root down to the device's location, so devices that share a name read apart; empty when it has no location.
           items:
             type: string
           type:
@@ -8866,7 +8866,7 @@ components:
         - impaired
         - unhit
         - system
-        - place
+        - location_path
       type: object
     PlatformSimulationGap:
       additionalProperties: false

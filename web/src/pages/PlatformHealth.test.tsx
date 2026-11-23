@@ -484,7 +484,7 @@ const measured: PlatformSimOutpost = {
   receipts: { landed: 42, margin: 1, backlog: 0, after_end: 0 },
   protocols: [{ protocol: "http", accepted: 9, received: 90, answered: 90, latency_ms: { p50: 1, p95: 2.5, p99: 4, n: 90 }, poll_targets: 1, in_flight_high: 2 }],
   in_flight_high: 2, queue_depth: null, busy_workers: null,
-  devices: [{ component_id: uuidFor("display"), component: "lobby-display", received: { http: 90 }, impaired: true, unhit: false, system: "lobby", place: ["hq", "level-1"] }],
+  devices: [{ component_id: uuidFor("display"), component: "lobby-display", received: { http: 90 }, impaired: true, unhit: false, system: "lobby", location_path: ["hq", "level-1"] }],
 };
 const simBody = (outposts: PlatformSimOutpost[]): PlatformSimulation => ({ read_at: readAt, window_seconds: 600, bracket_seconds: 60, outposts });
 
@@ -590,7 +590,7 @@ describe("PlatformHealth simulator device table", () => {
     ...measured,
     devices: Array.from({ length: n }, (_, i) => ({
       component_id: uuidFor(`dev-${i}`), component: i % 2 === 0 ? "amp-1" : "camera-1", received: { http: i }, impaired: i === 3, unhit: i === 4,
-      system: `system-${i}`, place: ["hq", `room-${i}`],
+      system: `system-${i}`, location_path: ["hq", `room-${i}`],
     })),
   });
 

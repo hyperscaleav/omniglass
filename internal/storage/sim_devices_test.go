@@ -157,13 +157,13 @@ func TestComponentPlaces(t *testing.T) {
 	if err != nil {
 		t.Fatalf("component places: %v", err)
 	}
-	if p := got[a]; p.System != "board-1" || len(p.Place) != 2 || p.Place[0] != "hq" || p.Place[1] != "level-2" {
+	if p := got[a]; p.System != "board-1" || len(p.Path) != 2 || p.Path[0] != "hq" || p.Path[1] != "level-2" {
 		t.Fatalf("first amp-1 = %+v, want board-1 at hq, level-2", p)
 	}
-	if p := got[b]; p.System != "board-2" || len(p.Place) != 1 || p.Place[0] != "annex" {
+	if p := got[b]; p.System != "board-2" || len(p.Path) != 1 || p.Path[0] != "annex" {
 		t.Fatalf("second amp-1 = %+v, want board-2 at annex", p)
 	}
-	if p := got[loose]; p.System != "" || len(p.Place) != 0 {
+	if p := got[loose]; p.System != "" || len(p.Path) != 0 {
 		t.Fatalf("unplaced = %+v, want nothing", p)
 	}
 	if _, ok := got["00000000-0000-0000-0000-000000000000"]; ok || len(got) != 3 {
