@@ -378,6 +378,37 @@ and the **logs** are the members' raw lines merged, each naming the component th
 it. Both cover the last 24 hours, capped; both scope to what you can read. A component's
 Activity tab carries its own events the same way.
 
+## Timeline: what happened, in order
+
+**Timeline** lays everything a system or a component recorded over the page's time range on one
+axis, so the order of events reads straight off it: a property or metric moves, a rule raises an
+alarm, health degrades, someone sends a command, the alarm clears. Lanes stack top down, each
+collapsible:
+
+- **Health**: the verdict in force across the range, one span per recorded change, so a range in
+  which nothing changed is one span of the health that held. A system adds one row per member
+  component.
+- **Alarms**: every alarm raised during the range on its own row, from raise to clear (or to now
+  while still raised), in its severity's color, the bar labeled with how long it was raised. An
+  alarm raised before the range and still open in it starts at the range's left edge but keeps its
+  whole duration. Hover one for when it was raised, when it cleared, how long, the rule that raised
+  it and whether anyone acknowledged it; click it to open its own history below.
+- **Properties** and **Metrics**: the properties and metrics you pick (**Pick** on the lane). Until
+  you pick, the timeline shows what the alarming rules watch and every property that changed in
+  range, so the signal that crossed the threshold sits right above the span it raised.
+- **Events**, **Logs** and **Commands**: a marker each at its time. Markers too close to tell
+  apart become one counted marker; click any marker to list its rows, and a command's row opens its
+  arc on the Activity tab. Logs show lines at the severity you choose and worse.
+
+Hover anywhere on the lanes (or focus them and use the arrow keys) and the cursor crosses every
+lane; the line above the lanes reads them at that instant (the health, how many alarms were
+raised, each property's value and each metric's reading), and the metrics grid under the timeline
+draws its crosshair at the same instant. The time range on the tab rail governs every lane, and
+changing it reads them all again. A read that stops at its cap says so on its lane rather than
+dropping rows silently.
+
+::walkthrough{#read-what-happened-on-the-timeline}
+
 ## Configure
 
 Editing lives on the detail view (#800): the **Configure** tab renders for anyone holding an

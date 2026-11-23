@@ -1,0 +1,18 @@
+# Read what happened on the timeline (#2425): a system's Timeline view lays
+# its health, every alarm raised in range, the watched properties and metrics,
+# events, logs and commands on one axis, and the cursor crosses every lane and
+# the metrics grid under it. The huddle room holds one system, so its address
+# lands on it.
+title: Read what happened on the timeline
+description: Open a system's Timeline over the last six hours, rest the pointer on the lanes, and read every lane at that instant, the metrics grid's crosshair standing at the same moment.
+steps:
+  - goto: /systems/huddle?tab=timeline&range=6h
+    caption: A huddle room's system, its Timeline view over the last six hours.
+  - wait: { selector: '[data-testid=timeline-health-row] rect', timeout: 60000 }
+    caption: Health on top, a row per member under it, then each alarm raised in range, the properties and metrics it watched, events, logs and commands.
+  - hover: '[data-testid=timeline-health-row] svg'
+    caption: Rest the pointer on the lanes.
+  - wait: { selector: '[data-testid=timeline-cursor] >> nth=1' }
+    caption: The cursor crosses every lane, and the line above them reads each lane at that instant.
+    hold: 2500
+    poster: true
