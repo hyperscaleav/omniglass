@@ -17,5 +17,6 @@ page logic; on the system view it replaces the Data table and its expand-a-row c
 component view it sits below Vitals. Charts stay hand-drawn SVG; a `fluid` chart lays out at its
 measured width so its axis text keeps reading size in a drawer-width card.
 
-The range comes from #2304's `useTimeRange`. The series routes count `hours` back from now, so an
-absolute range reads back to its start (at most 720 hours) and the chart keeps only its window.
+The range comes from #2304's `useTimeRange`, picked on the tab rail of either view. A preset reads
+`hours` back from now on the series route and polls; an absolute range reads its own from and to
+through the views binding (`metricBucketsBetween`, `/views:run`) and holds still.
