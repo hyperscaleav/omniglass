@@ -69,10 +69,10 @@ func TestALabelRecomputeWaitingOnARowLockRendersTheNamesCommittedDuringTheWait(t
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "building"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "building"}, all, all); err != nil {
 		t.Fatalf("create building: %v", err)
 	}
-	room, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "room-a", LocationType: "room", ParentName: strptr("hq")}, all)
+	room, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "room-a", LocationType: "room", ParentName: strptr("hq")}, all, all)
 	if err != nil {
 		t.Fatalf("create room: %v", err)
 	}

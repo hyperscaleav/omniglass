@@ -54,7 +54,7 @@ func newWritersFixture(t *testing.T) *writersFixture {
 		{Name: "r1", LocationType: "room", ParentName: strptr("hq-b1")},
 		{Name: "r2", LocationType: "room", ParentName: strptr("hq-b2")},
 	} {
-		if _, err := gw.CreateLocation(ctx, "", l, all); err != nil {
+		if _, err := gw.CreateLocation(ctx, "", l, all, all); err != nil {
 			t.Fatalf("create location %s: %v", l.Name, err)
 		}
 	}
