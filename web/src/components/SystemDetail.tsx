@@ -453,6 +453,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                                         <button type="button" class="cursor-pointer font-mono text-base-content/70 hover:underline" onClick={(e) => { e.stopPropagation(); openComponent(r.componentId); }}>{r.component}</button>
                                         <span class="text-base-content/45 tabular-nums">
                                           {fmtTime(r.raisedAt)} → {r.clearedAt ? fmtTime(r.clearedAt) : "ongoing"}
+                                          {r.clearedAt ? ` · lasted ${durationText(Date.parse(r.clearedAt) - Date.parse(r.raisedAt))}` : ""}
                                         </span>
                                       </li>
                                     )}
@@ -479,7 +480,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                         <SeverityBadge name={r.severity} size="xs" />
                         <span>{r.message}</span>
                         <button type="button" class="cursor-pointer font-mono text-base-content/70 hover:underline" onClick={() => openComponent(r.componentId)}>{r.component}</button>
-                        <span class="ml-auto text-base-content/45 tabular-nums">{fmtTime(r.raisedAt)}</span>
+                        <span class="ml-auto text-base-content/45 tabular-nums">{fmtTime(r.raisedAt)}{r.clearedAt ? ` · lasted ${durationText(Date.parse(r.clearedAt) - Date.parse(r.raisedAt))}` : ""}</span>
                       </li>
                     )}
                   </For>

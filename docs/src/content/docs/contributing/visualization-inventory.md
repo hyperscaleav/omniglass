@@ -133,7 +133,7 @@ component set; the surfaces below are where they are mounted.
 |---|---|---|---|---|---|---|
 | V48 | `PipelineFlow`, the "where work is lost" hop flow with a lane tab group and a per-hop loss figure (`components/PipelineFlow.tsx`) | `/platform` | derived (counts of metric, property, event and log samples per hop) | `view.pipeline` from `platformView` | follows parent (poll 5 s) | new: pipeline flow |
 | V49 | `SystemMap`, the top-down room map with health-coloured markers (`components/SystemMap.tsx`, `lib/system_map.ts`) | `/systems/<id>` | derived | `systemMembers`, `layoutMarkers` | poll 5 s | new: floor map |
-| V50 | The alarm queue: severity-badged alarm rows with component, systems, location, raised-at and ack and snooze state (`pages/Alarms.tsx`) | `/alarms` | event | `fleetAlarms` (`lib/alarms.ts`), paged by `page_token` | poll 5 s (the leaf cadence) | new: alarm queue |
+| V50 | The alarm queue: severity-badged alarm rows with component, systems, location, raised-at, cleared-at and a duration, ack (by whom) and snooze state, with an Open, Cleared and All state read (`pages/Alarms.tsx`) | `/alarms` | event | `fleetAlarms` (`lib/alarms.ts`), the state read, paged by `page_token` | poll 5 s (the leaf cadence); an open alarm's duration ticks each second (`AlarmDuration`) | new: alarm queue |
 | V51 | `DependenciesPanel`: upstream and downstream rows with a kind badge, a health badge and a holding mark (`components/DependenciesPanel.tsx`, `lib/dependencies.ts`) | `/components/<id>` | derived | `listDependencies` (`lib/dependencies.ts`), the fleet view's dot health, `getReachability` | poll 5 s | new: dependency list |
 
 ## Every page
