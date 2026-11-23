@@ -63,14 +63,18 @@ STACK_SCENARIO=dev lab_up --no-outpost --platform-history
 
 # The dev fleet's faults (#2434) are recorded readings the event rules judge, so
 # their alarms open only once each rule's sustain has passed after the seed.
-# Wait until no streak is pending, before any write of the capture's own, so no
-# shot lands before them and the audit trail holds the same order every
-# capture. LOUD past the deadline: a capture that cannot see the fleet's
-# alarms is not a capture of it.
+# Wait until the rules that judge the faults (internal/devseed/fixtures.yaml:
+# reachability-lost for DSP 1, response-slow for Display 1) hold no pending
+# streak, before any write of the capture's own, so no shot lands before
+# their alarms and the audit trail holds the same order every capture. Only
+# those rules: a platform rule such as ingest-lag-high can sit pending on a
+# loaded host, and no shot waits on it. LOUD past the deadline: a capture that
+# cannot see the fleet's alarms is not a capture of it.
 for i in $(seq 1 60); do
-  pending="$(curl -fsS -H "Authorization: Bearer $LAB_TOKEN" "$LAB_HOST_URL/api/v1/event-rules" | jq '[.event_rules[].pending_streaks] | add')"
+  pending="$(curl -fsS -H "Authorization: Bearer $LAB_TOKEN" "$LAB_HOST_URL/api/v1/event-rules" |
+    jq '[.event_rules[] | select(.name == "reachability-lost" or .name == "response-slow") | .pending_streaks] | add')"
   [ "$pending" = 0 ] && break
-  [ "$i" = 60 ] && { echo "capture: event rule streaks still pending after 120s ($pending)" >&2; exit 1; }
+  [ "$i" = 60 ] && { echo "capture: the seeded faults' rule streaks still pending after 120s ($pending)" >&2; exit 1; }
   sleep 2
 done
 
