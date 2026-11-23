@@ -32538,14 +32538,14 @@
         "operationId": "patch-settings-me-namespace",
         "parameters": [
           {
-            "description": "the settings namespace, e.g. ui",
+            "description": "a profile-domain settings namespace: ui, keybindings or learn",
             "in": "path",
             "name": "namespace",
             "required": true,
             "schema": {
-              "description": "the settings namespace, e.g. ui",
+              "description": "a profile-domain settings namespace: ui, keybindings or learn",
               "examples": [
-                "notification"
+                "learn"
               ],
               "type": "string"
             }
@@ -32556,11 +32556,11 @@
             "application/json": {
               "schema": {
                 "additionalProperties": {},
-                "description": "an RFC 7386 JSON Merge Patch for the namespace; null on a key restores it",
+                "description": "an RFC 7386 JSON Merge Patch for the namespace; null on a key restores it to the platform's value",
                 "examples": [
                   {
-                    "egress_allow": [
-                      "smtp.example.com"
+                    "done": [
+                      "device-to-samples"
                     ]
                   }
                 ],

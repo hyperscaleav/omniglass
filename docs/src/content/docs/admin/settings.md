@@ -20,8 +20,8 @@ definition, is [settings](/architecture/settings/).
 A single setting may also be fed from the server's environment. Set
 `OMNIGLASS_SETTING__<NAMESPACE>__<KEY>` to override one key, double-underscore between the parts
 (`OMNIGLASS_SETTING__RETENTION__METRIC_DAYS=30`). The level sits between the settings file and the
-console binding, so the console still wins. A per-user namespace (the `profile` domain, `ui` and
-`keybindings`) is refused at boot, naming the variable: those levels are per-user, not per-process.
+console binding, so the console still wins. A per-user namespace (the `profile` domain: `ui`,
+`keybindings` and `learn`) is refused at boot, naming the variable: those levels are per-user, not per-process.
 The generated [server variables reference](/deployment/container-image/#configuration) lists every
 key a variable can set, one `OMNIGLASS_SETTING__*` row per key. A scalar or a comma-separated list
 can come from a variable; a keyed map (`agent.roles`, `agent.tools`) cannot, and is set in the
@@ -37,6 +37,17 @@ merge patch to one, where a `null` restores a key:
 ```sh
 omniglass setting update retention --body '{"metric_days": 30}'
 omniglass setting update retention --body '{"metric_days": null}'
+```
+
+A profile-domain namespace (`ui`, `keybindings`, `learn`) can also be set by each person for
+themselves, at the user level, over whatever the platform says. It takes no permission beyond
+signing in, and writes only the caller's own binding; a key you locked here at the platform level is
+refused to them (409) rather than stored. `omniglass setting me list` reads your own effective
+settings, and `omniglass setting me update` patches them; the console's [Learn](/start/learn/) page
+keeps the lessons a person has finished this way, in `learn.done`:
+
+```sh
+omniglass setting me update learn --body '{"done": ["device-to-samples"]}'
 ```
 
 This page teaches the two namespaces that shape what your fleet keeps. The others are taught where

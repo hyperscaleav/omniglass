@@ -5740,7 +5740,7 @@ The request body is a JSON object: pass it inline with --body, or from a file (o
 Example:
 
 ```sh
-omniglass setting me update notification --body '{"egress_allow":["smtp.example.com"]}'
+omniglass setting me update learn --body '{"done":["device-to-samples"]}'
 ```
 
 ### `omniglass setting restoreDefaults`

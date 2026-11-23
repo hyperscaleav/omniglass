@@ -30,6 +30,13 @@ type settingsPatchInput struct {
 	Body      map[string]any `doc:"an RFC 7386 JSON Merge Patch for the namespace; null on a key restores it" example:"{\"egress_allow\":[\"smtp.example.com\"]}"`
 }
 
+// settingsMePatchInput is a person's merge patch for one of their own
+// profile-domain namespaces (#2450).
+type settingsMePatchInput struct {
+	Namespace string         `path:"namespace" doc:"a profile-domain settings namespace: ui, keybindings or learn" example:"learn"`
+	Body      map[string]any `doc:"an RFC 7386 JSON Merge Patch for the namespace; null on a key restores it to the platform's value" example:"{\"done\":[\"device-to-samples\"]}"`
+}
+
 type settingsNamespaceInput struct {
 	Namespace string `path:"namespace" doc:"the settings namespace"`
 }
@@ -69,7 +76,7 @@ func registerSettingsRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		Summary:     "Update the caller's own settings namespace",
 		Description: "Applies an RFC 7386 JSON Merge Patch to the caller's own user-level binding for a profile-domain namespace (ui, keybindings, learn); null on a key restores it to the platform's value. A platform-domain namespace is the admin's (403), an unknown one a 404, a bad key or value a 422, and a key an admin locked at the platform level a 409. Answers the caller's effective settings. Requires authentication; self-scoped (writes only your own binding).",
 		Middlewares: huma.Middlewares{a.authn},
-	}, func(ctx context.Context, in *settingsPatchInput) (*settingsMeOutput, error) {
+	}, func(ctx context.Context, in *settingsMePatchInput) (*settingsMeOutput, error) {
 		if err := settings.Validate(in.Namespace, in.Body); err != nil {
 			if errors.Is(err, settings.ErrUnknownNamespace) {
 				return nil, huma.Error404NotFound("unknown settings namespace")

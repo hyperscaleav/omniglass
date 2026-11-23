@@ -9783,7 +9783,7 @@ export type SearchParams = {
 };
 
 /**
- * an RFC 7386 JSON Merge Patch for the namespace; null on a key restores it
+ * an RFC 7386 JSON Merge Patch for the namespace; null on a key restores it to the platform's value
  */
 export type PatchSettingsMeNamespaceBody = {[key: string]: unknown};
 
