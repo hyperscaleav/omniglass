@@ -15,6 +15,7 @@ import SimComponentDrawer from "../components/SimComponentDrawer";
 import SimFaultChip from "../components/SimFaultChip";
 import SimFaultMenu from "../components/SimFaultMenu";
 import AddSimSystemForm from "../components/AddSimSystemForm";
+import AddComponentLink from "../components/AddComponentLink";
 import { ChevronRight, FlaskConical, MapPin, Plus, RotateCcw, X } from "../components/icons";
 import SimStatusBadge from "../components/SimStatusBadge";
 import { activeFaults } from "../lib/simfaults";
@@ -145,6 +146,7 @@ export default function Simulation(): JSX.Element {
   const canAddSystemNow = () => canAddSystem() && connectedOutposts(sim.data).length > 0;
   const AddButton = () => (
     <>
+      <AddComponentLink simulated label="Add and monitor a device" />
       <Show when={canAddSystem()}>
         <Button icon={Plus} disabled={!canAddSystemNow()} title={canAddSystemNow() ? undefined : "No simulator is connected"} onClick={() => setAddingSystem(true)}>
           Add simulated system
