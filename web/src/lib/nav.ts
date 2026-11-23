@@ -4,13 +4,13 @@ import * as Icons from "../components/icons";
 // The operator console IA, from the "Omniglass Console" design. Routes are flat
 // and identity-based (a page addresses its entity, never its menu cluster); the
 // sidebar groups them for browsing. `live` marks a route backed by a real page;
-// everything else renders the generic SectionStub until its backend lands.
+// an entry exists only for a page that is built (nothing in the console says "soon").
 export type NavChild = {
   label: string;
   path: string;
   hint: string;
   live?: boolean;
-  issue?: number; // tracking issue for a not-yet-built section, shown on its stub
+  issue?: number; // tracking issue, when an entry carries one
   // The authorization resource this tab needs to read. When set, the sidebar hides
   // the tab from a user without <resource>:read. Set it when the entity goes
   // live (its server route already gates on the same resource); leave unset while
@@ -155,8 +155,7 @@ export function filterWhen(items: NavItem[], holds: (c: NavCondition) => boolean
 // /templates set the precedent when it left the rail (#608). Each entry's
 // resource/perm feeds navPerms exactly as a rail entry's would, so collapsing
 // the rail loosened no gate: /secret-types still demands secret:read. A
-// not-yet-built page's tracking issue rides here too, shown on its stub
-// through navByPath exactly as a rail entry's would be.
+// page's tracking issue, when it has one, rides here too.
 export const OFF_RAIL: { path: string; label: string; hint: string; resource?: string; perm?: string; issue?: number }[] = [
   // The fleet kinds (#798, #861): Explore's outline lists them and each bare
   // URL redirects there, but the detail view routes (/locations/{id} and
@@ -189,7 +188,7 @@ export const OFF_RAIL: { path: string; label: string; hint: string; resource?: s
 ];
 
 // Flattened title + hint (+ icon + tracking issue) lookup by base-relative path,
-// for the generic stub. A child inherits its parent group's icon (that is the icon
+// for the top bar and tests. A child inherits its parent group's icon (that is the icon
 // the sidebar shows it under), so the placeholder matches the sidebar. A sectioned
 // child also carries its group and section labels so the top bar can spell out the
 // full address. Off-rail pages keep their identity here too: a bookmark to
@@ -246,7 +245,7 @@ export function sectionLabel(pathname: string): string {
 // navPerms maps a gated route path to the permission tokens it requires, from the
 // SAME nav config that hides the sidebar button (an explicit `perm`, else
 // `<resource>:read`), plus the off-rail pages, whose gates outlive their rail
-// entries. An ungated path (Home, Profile, the stubs) is absent. This is the
+// entries. An ungated path (Home, Profile) is absent. This is the
 // single source both the sidebar (hide the button) and the route guard (block
 // the URL) read, so the two can never diverge.
 const navPerms: Record<string, string[][]> = (() => {

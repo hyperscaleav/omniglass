@@ -7,7 +7,7 @@
 // loads it in node, where a component import would not resolve.
 //
 // route-manifest-guard.test.ts pins the construction: every page key resolves,
-// the stub entries equal the nav's own stub lists, every smoke address is
+// no entry is a stub, every smoke address is
 // concrete, paths are unique.
 
 export type RouteEntry = {
