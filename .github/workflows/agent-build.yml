@@ -226,7 +226,9 @@ jobs:
 
             Follow CLAUDE.md as any session would: branch from origin/main as
             <type>/issue-${{ github.event.issue.number }}-<short-name>, build test-first,
-            ship the docs with the change.
+            ship the docs with the change. A fix for a bug or flaky-test issue must add or
+            change a test that fails without the fix, or carry
+            `regression-test: none (<reason>)` in the PR body.
 
             Keep your work on GitHub as you go. This run is claude -p: the moment you end
             your turn it exits, and the checkout is thrown away with everything not pushed.

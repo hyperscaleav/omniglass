@@ -6,8 +6,8 @@ description: "The CI gates on every PR and the manual release cut from a release
 `make test` is the local gate (the [test-driven](/contributing/test-driven/) doctrine says
 validate locally, do not lean on CI). CI is the backstop, and the release workflow cuts each
 release from a release branch.
-Thirteen workflows carry it: `test`, `pr-title`, `image`, `docs-shots`, `gen-drift`,
-`docs-build`, `migrations`, `preview-comment`, `demo`, `demo-tag`, `demo-prune`, `release`, and `goreleaser`.
+Fourteen workflows carry it: `test`, `pr-title`, `image`, `docs-shots`, `gen-drift`,
+`docs-build`, `migrations`, `preview-comment`, `demo`, `demo-tag`, `regression-test`, `demo-prune`, `release`, and `goreleaser`.
 The three agent workflows (`agent-build`, `agent-review`, `agent-fix`) run Claude Code agents
 on GitHub-hosted runners and have a page of their own, [Agents in CI](/contributing/agents-in-ci/).
 
@@ -59,7 +59,9 @@ reacts to the `run:demo` label, recording the [demos](/contributing/demos/) the 
 (each on a runner of its own) to the PR's evidence ref, keeping one comment listing every demo and
 writing each demo's clip into the PR body (see [Labels](/contributing/labels/)); nightly, the same
 workflow re-records every demo on main and opens an issue when one fails. **`demo-tag.yml`** lints
-the PR body's demo tag on every PR. **`demo-prune.yml`** deletes an evidence ref 30 days after its
+the PR body's demo tag on every PR. **`regression-test.yml`** fails a PR that closes a bug or flaky-test
+issue (label or Bug type) without changing a test or carrying a reasoned `regression-test: none (<reason>)` line.
+**`demo-prune.yml`** deletes an evidence ref 30 days after its
 PR closes.
 
 ## Merging through the queue
@@ -74,7 +76,7 @@ up-to-date rule met on the commit that actually lands, without a rebase loop or 
 The queue waits for each required check (`test`, `e2e`, `gen-drift`, `smoke-lab` and `lint`) to
 report on the queue entry, so every workflow that reports one also runs on `merge_group`. A
 queue entry has its own ref, so the workflows' `github.ref` concurrency groups give each entry a
-run of its own. Two lints have nothing to read there: `pr-title.yml` and `demo-tag.yml` checked
+run of its own. Three lints have nothing to read there: `pr-title.yml`, `demo-tag.yml` and `regression-test.yml` checked
 the PR's title and body before it could be queued, so on `merge_group` their `lint` job passes
 without reading a PR. `image.yml` runs only `smoke-lab` in the queue and publishes no image, since
 a queue entry's commit may never land; the arm64 smoke and the publish run on the PR and on `main`.
