@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -145,6 +146,51 @@ func TestSettingsAuditRowsCarryTheirImages(t *testing.T) {
 	all := latestAudit(t, dsn, "settings", "", "delete")
 	if !strings.Contains(all.Raw, `"ui"`) || !strings.Contains(all.Raw, `"notifications"`) {
 		t.Errorf("the factory reset's old image does not hold every deleted row: %s", all.Raw)
+	}
+}
+
+// A factory reset that commits while a setting update is in flight must not leave
+// the update's before-image showing a row the reset already deleted (#2221). The
+// reset is held open on its own connection with the row deleted and uncommitted;
+// the update starts, then the reset commits. The update's image is read under the
+// row's lock, so it waits for the reset and sees an empty namespace.
+func TestSettingsUpdateImageSurvivesAConcurrentReset(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dsn, gw := newAuditGateway(t)
+
+	if _, err := gw.UpsertSettingBinding(ctx, "", "platform", "ui", map[string]any{"theme": "omniglass-light"}, nil); err != nil {
+		t.Fatalf("seed binding: %v", err)
+	}
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(ctx)
+	reset, err := conn.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin reset: %v", err)
+	}
+	if _, err := reset.Exec(ctx, `delete from setting_binding where scope = 'platform' and user_id is null`); err != nil {
+		t.Fatalf("reset delete: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := gw.UpsertSettingBinding(ctx, "", "platform", "ui", map[string]any{"theme": "omniglass-dark"}, nil)
+		done <- err
+	}()
+	time.Sleep(500 * time.Millisecond)
+	if err := reset.Commit(ctx); err != nil {
+		t.Fatalf("commit reset: %v", err)
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	row := latestAudit(t, dsn, "settings", "ui", "update")
+	if doc, _ := row.Old["doc"].(map[string]any); len(doc) != 0 {
+		t.Errorf("the update's before-image shows %v, a row the reset had already deleted", doc)
 	}
 }
 
