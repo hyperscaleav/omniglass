@@ -15,6 +15,7 @@ import { can, useMe, useUpdateProfile, useChangePassword, setMyAvatar, removeMyA
 import { useSessions, useRevokeSession, useRevokeAllSelfSessions, createSelfToken, type Session } from "../lib/sessions";
 import { Bell, Check, Copy, Key, LogOut, Plus, Save, Trash } from "../components/icons";
 import { kindLabel } from "../lib/users";
+import { confirmAction } from "../lib/confirm";
 
 // Profile is the signed-in operator's own account surface: edit your label
 // and email, change your password, and (pedagogically) see the identity model you
@@ -49,7 +50,7 @@ export default function Profile() {
   const [revokingAll, setRevokingAll] = createSignal<"session" | "token" | null>(null);
   async function revokeAll(purpose: "session" | "token") {
     const noun = purpose === "session" ? "other sessions" : "API tokens";
-    if (!window.confirm(`Revoke all your ${noun}? You stay signed in on this one.`)) return;
+    if (!(await confirmAction({ title: `Revoke all your ${noun}?`, body: "You stay signed in on this one.", confirmLabel: `Revoke ${noun}`, tone: "danger" }))) return;
     setRevokingAll(purpose);
     const r = await revokeAllSelf(purpose);
     if (!r.ok) setProfileMsg({ tone: "error", text: r.message });
@@ -119,7 +120,7 @@ export default function Profile() {
 
   const [current, setCurrent] = createSignal("");
   const [next, setNext] = createSignal("");
-  const [confirm, setConfirm] = createSignal("");
+  const [confirmation, setConfirmation] = createSignal("");
   const [pwMsg, setPwMsg] = createSignal<Note>(null);
   const [pwBusy, setPwBusy] = createSignal(false);
   // A password-policy rejection (the server denylist) renders inline under the new
@@ -129,7 +130,7 @@ export default function Profile() {
   // Profile + Access, rather than a third stacked form.
   const [pwOpen, setPwOpen] = createSignal(false);
   async function savePassword() {
-    if (next() !== confirm()) {
+    if (next() !== confirmation()) {
       setPwMsg({ tone: "error", text: "The new passwords do not match." });
       return;
     }
@@ -140,7 +141,7 @@ export default function Profile() {
     if (r.ok) {
       setCurrent("");
       setNext("");
-      setConfirm("");
+      setConfirmation("");
       setPwMsg(null);
       setPwOpen(false);
       // Feedback lands on the page (the drawer just closed).
@@ -200,7 +201,7 @@ export default function Profile() {
       submitIcon: Save,
       submit: () => void savePassword(),
       busy: pwBusy,
-      disabled: () => !current() || !next() || next() !== confirm() || !!passwordError(next(), human()?.username),
+      disabled: () => !current() || !next() || next() !== confirmation() || !!passwordError(next(), human()?.username),
       cancel: () => setPwOpen(false),
     });
     return (
@@ -230,12 +231,12 @@ export default function Profile() {
             type="password"
             autocomplete="new-password"
             class="input input-bordered w-full font-data"
-            value={confirm()}
-            onInput={(e) => setConfirm(e.currentTarget.value)}
+            value={confirmation()}
+            onInput={(e) => setConfirmation(e.currentTarget.value)}
             disabled={pwBusy()}
             aria-required="true"
           />
-          <Show when={confirm() && next() !== confirm()}>
+          <Show when={confirmation() && next() !== confirmation()}>
             <p class="mt-1 text-[11px] text-error">Passwords do not match.</p>
           </Show>
         </div>

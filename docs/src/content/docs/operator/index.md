@@ -34,6 +34,8 @@ one you can do in the other.
   view each system and location opens.
 - **[Create and edit](/operator/entities/)**: the side panel, the edit face, names and labels,
   properties, and a system's slots.
+- **[Find anything](/operator/find/)**: the command palette, from the keyboard: locations, systems,
+  components and catalog entries by name, each in your own scope.
 - **[Alarms and health](/operator/alarms/)**: an alarm's life (raise, acknowledge, snooze, clear), how
   health rolls up from it, and the loop end to end.
 - **[Commands](/operator/commands/)**: sending an instruction to a component and reading its outcome.
@@ -54,18 +56,20 @@ one you can do in the other.
   under Values, Catalog and Admin. **Catalog** is a single entry: its own subrail groups the catalogs
   by the fleet noun they serve (Telemetry, Actions, Components, Systems, Locations, Metadata), and each
   catalog opens at its own address. These pages name a catalog by group and entry: **Catalog, under
-  Locations: Types**. A catalog whose backend has not landed is dimmed with a **soon** tag. The
+  Locations: Types**. Nothing in the console is marked
+  "soon": a page that is not built has no door, and an address with no page lands on a **Not found** face
+  that names the address and links Home and Explore. The
   subrail's first entry, **Overview**, has a card per group with live counts.
 - **The top bar** names the section you are in and carries **Search (⌘K)** and, if you may use the
   assistant, **Ask omnibot**, which opens [omnibot](/developer/agents/#omnibot-in-the-console) with the
   page you are on as its context. The console is dark-only; its theme is an
   [Admin > Settings](/admin/settings/) value, not a per-session toggle.
-- **⌘K** (or Ctrl-K) is the command palette, a jump to any destination by name: arrow keys move,
-  Enter goes, Esc closes. It finds each catalog by its own name (`products` lands on **Catalog, under
-  Components: Products**) and every entry under a group by the group's name (`telemetry` lists
-  Metrics, Properties and Events). Its last row hands what you typed to omnibot as a draft. The
-  palette jumps between pages; finding one thing in the fleet is Explore's own
-  [filter](/operator/fleet/#finding-one-thing).
+- **⌘K** (or Ctrl-K) is the command palette: type a name and jump to the page, location, system,
+  component or catalog entry it names. Arrow keys move, Enter goes, Esc closes. See
+  [Find anything from the keyboard](/operator/find/). It finds each catalog by its own name
+  (`products` lands on **Catalog, under Components: Products**) and every entry under a group by the
+  group's name (`telemetry` lists Metrics, Properties and Events). Its last row hands what you typed
+  to omnibot as a draft.
 - **You see only what you can use.** A tab you hold no read permission for is hidden, an action you
   may not take does not render, and an address you may not read redirects you to Home. The server
   checks every request regardless; the console only hides what it already knows you cannot reach.

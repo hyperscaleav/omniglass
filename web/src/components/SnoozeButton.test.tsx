@@ -126,3 +126,12 @@ describe("SnoozeButton errors", () => {
     await waitFor(() => expect(calls.length).toBeGreaterThan(before));
   });
 });
+
+describe("SnoozedBadge (#2426)", () => {
+  it("keeps its words on one line inside the pill, however long the deadline reads", () => {
+    const { getByText } = render(() => <SnoozedBadge alarm={{ id: "a-1", snoozed_until: "2026-11-24T14:30:00Z" }} />);
+    const pill = getByText(/snoozed until/);
+    expect(pill.className).toContain("whitespace-nowrap");
+    expect(pill.className).toContain("h-auto");
+  });
+});

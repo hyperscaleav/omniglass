@@ -66,9 +66,9 @@ func batchCreate[S, R any](ctx context.Context, p *PG, what string, specs []S, v
 
 // BatchCreateLocations is CreateLocation for each spec, in order, in one
 // transaction: a parent created earlier in the batch resolves by name.
-func (p *PG) BatchCreateLocations(ctx context.Context, actorID string, specs []LocationSpec, create scope.Set, validateOnly bool) ([]*Location, error) {
+func (p *PG) BatchCreateLocations(ctx context.Context, actorID string, specs []LocationSpec, read, create scope.Set, validateOnly bool) ([]*Location, error) {
 	return batchCreate(ctx, p, "locations", specs, validateOnly, func(ctx context.Context, tx pgx.Tx, s LocationSpec) (*Location, error) {
-		return p.createLocationTx(ctx, tx, actorID, s, create)
+		return p.createLocationTx(ctx, tx, actorID, s, read, create)
 	}, nil)
 }
 

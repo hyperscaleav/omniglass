@@ -45,10 +45,10 @@ func TestCLIAddressesByName(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 	campus, room := "hq", "huddle"
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: campus, LocationType: "campus"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: campus, LocationType: "campus"}, all, all); err != nil {
 		t.Fatalf("campus: %v", err)
 	}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: room, LocationType: "room", ParentName: &campus}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: room, LocationType: "room", ParentName: &campus}, all, all); err != nil {
 		t.Fatalf("room: %v", err)
 	}
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "touch-panel-1", LocationName: &room}, all, all, all, all); err != nil {

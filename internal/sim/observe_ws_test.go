@@ -45,3 +45,31 @@ func TestObservedWebSocketFramesUpgradeAndRefusal(t *testing.T) {
 		t.Fatalf("after the socket closed: %+v, want both connections accepted", got)
 	}
 }
+
+// A reader racing stream opens never sees the open gauge above the opened
+// total: openStream writes the total first and counters reads it last.
+func TestObservationNeverShowsMoreOpenStreamsThanOpened(t *testing.T) {
+	d := &deviceObservation{}
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				d.openStream(obsWebSocket)()
+			}
+		}
+	}()
+	for i := 0; i < 200000; i++ {
+		if c := d.counters(obsWebSocket); c.OpenStreams > c.StreamsOpened {
+			close(stop)
+			<-done
+			t.Fatalf("torn read: %+v", c)
+		}
+	}
+	close(stop)
+	<-done
+}

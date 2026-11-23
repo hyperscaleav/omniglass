@@ -1,6 +1,6 @@
 import { For, Index, Show, createContext, createEffect, createMemo, createSignal, createUniqueId, on, useContext, type JSX } from "solid-js";
 import { createStore } from "solid-js/store";
-import { A, useSearchParams } from "@solidjs/router";
+import { A } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import Drawer from "../components/Drawer";
@@ -56,6 +56,7 @@ import {
   validateCalcDraft,
   withInputKey,
 } from "../lib/calc_rules";
+import { confirmDelete } from "../lib/confirm";
 
 // Calc rules (Catalog > Actions > Calc rules, #999, #1018; epic #525): the
 // calc rule catalog, a sibling of Rules and Severity in the catalog's Actions
@@ -186,28 +187,9 @@ export default function CalcRules(): JSX.Element {
     setEditing(null);
     blades.push({ kind: "calc-rule", id: name });
   };
-  // A link may name a rule (/calc-rules?rule=<name or uuid>): a calculated
-  // value on a component or a system points at the rule that derived it.
-  const [search, setSearch] = useSearchParams();
-  const linked = () => (typeof search.rule === "string" && search.rule ? search.rule : undefined);
-  createEffect(
-    on(linked, (ref) => {
-      if (!ref) return;
-      const top = blades.stack().at(-1);
-      if (top?.kind === "calc-rule" && top.id === ref) return;
-      blades.close();
-      blades.push({ kind: "calc-rule", id: ref });
-    }),
-  );
-  createEffect(
-    on(
-      () => blades.stack().length,
-      (n, prev) => {
-        if (n === 0 && (prev ?? 0) > 0 && linked()) setSearch({ rule: undefined });
-      },
-      { defer: true },
-    ),
-  );
+  // A link names a calc rule through the list's drawer address (/calc-rules?open=<name
+  // or uuid>, drawerHref): a calculated value on a component or a system points at the
+  // rule that derived it. The older ?rule= still opens.
 
   const columns: FlatColumn<CalcRule>[] = [
     identityColumn<CalcRule>(),
@@ -238,6 +220,8 @@ export default function CalcRules(): JSX.Element {
             columns,
             empty: "No calc rules yet. A calc rule derives a value from others: whether a component is busy from its call state and occupancy, a system's average temperature from its members.",
             rowId: (r) => r.name,
+            rowAlt: (r) => r.id,
+            legacyParam: "rule",
             blades: { registry: { "calc-rule": calcRuleBlade }, rootKind: "calc-rule", controller: blades },
             railExtra: () => (
               <span class="mr-1 inline-flex items-center gap-1.5 text-[12px] text-base-content/50">
@@ -435,7 +419,7 @@ function CalcBladeBody(p: { name: string }): JSX.Element {
   }
 
   async function remove(r: CalcRule) {
-    if (!confirm(`Delete calc rule "${r.name}"? The values it wrote stay on their owners, as history naming it.`)) return;
+    if (!(await confirmDelete({ kind: "calc rule", name: r.name, consequence: "The values it wrote stay on their owners, as history naming it." }))) return;
     setErr(null);
     try {
       await deleteCalcRule(r.name);

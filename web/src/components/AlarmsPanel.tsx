@@ -17,6 +17,7 @@ import { useSeverity } from "../lib/severity";
 import { entityLabel } from "../lib/entities";
 import SeverityBadge from "./SeverityBadge";
 import AlarmActions from "./AlarmActions";
+import AlarmDuration from "./AlarmDuration";
 import { SnoozedBadge } from "./SnoozeButton";
 
 // AlarmsPanel: what is wrong with this component, and what was.
@@ -254,7 +255,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
                       <span class="min-w-0 flex-1 text-[12.5px] text-base-content/70">{a.message || "(no message)"}</span>
                       <span class="shrink-0 text-[11px] text-base-content/45">
                         raised {rel(a.raised_at)}
-                        <Show when={a.cleared_at}> · cleared {rel(a.cleared_at!)}</Show>
+                        <Show when={a.cleared_at}> · cleared {rel(a.cleared_at!)} · lasted <AlarmDuration alarm={a} /></Show>
                         {/* An alarm that came and went with nobody looking is worth
                             seeing in the history: it is the one that got no attention. */}
                         <Show when={!a.acknowledged}> · never acknowledged</Show>

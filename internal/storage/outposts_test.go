@@ -287,11 +287,11 @@ func TestOutpostIdentityAndEdit(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 
-	closet, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq-closet", LocationType: "campus"}, all)
+	closet, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq-closet", LocationType: "campus"}, all, all)
 	if err != nil {
 		t.Fatalf("create location: %v", err)
 	}
-	other, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "east-rack", LocationType: "campus"}, all)
+	other, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "east-rack", LocationType: "campus"}, all, all)
 	if err != nil {
 		t.Fatalf("create other location: %v", err)
 	}

@@ -1,6 +1,6 @@
 import { For, Show, createContext, createEffect, createMemo, createSignal, on, useContext, type JSX } from "solid-js";
 import { createStore } from "solid-js/store";
-import { A, useSearchParams } from "@solidjs/router";
+import { A } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import Drawer from "../components/Drawer";
@@ -17,7 +17,7 @@ import { EVENT_TYPES_KEY, listEventTypes } from "../lib/event_types";
 import SeverityBadge from "../components/SeverityBadge";
 import ComponentTypeSelect from "../components/ComponentTypeSelect";
 import { identityColumn } from "../components/IdentityCell";
-import { Pencil, Plus, Save, Trash, X } from "../components/icons";
+import { Ban, Pencil, Plus, RotateCcw, Save, X } from "../components/icons";
 import { entityLabel } from "../lib/entities";
 import { useFormActions } from "../lib/formactions";
 import { bindSelectValue } from "../lib/selectvalue";
@@ -64,6 +64,7 @@ import {
   withLane,
 } from "../lib/event_rules";
 import { previewEventRule, type RulePreview } from "../lib/expressions";
+import { confirmDelete } from "../lib/confirm";
 
 // Rules (Catalog > Actions > Rules, #921): the event rule catalog. A rule reads
 // one sample key across the components it selects and raises an alarm at its
@@ -208,31 +209,9 @@ export default function Rules(): JSX.Element {
     setEditing(null);
     blades.push({ kind: "rule", id: name });
   };
-  // A link may name a rule (/event-rules?rule=<name or uuid>): an event row on Activity
-  // points at the rule that wrote it, and lands on its blade. The page follows
-  // the param as it changes (back and forward open the rule it names), and
-  // lets go of it when the blade stack closes, so a reload does not reopen a
-  // blade the operator closed.
-  const [search, setSearch] = useSearchParams();
-  const linked = () => (typeof search.rule === "string" && search.rule ? search.rule : undefined);
-  createEffect(
-    on(linked, (name) => {
-      if (!name) return;
-      const top = blades.stack().at(-1);
-      if (top?.kind === "rule" && top.id === name) return;
-      blades.close();
-      blades.push({ kind: "rule", id: name });
-    }),
-  );
-  createEffect(
-    on(
-      () => blades.stack().length,
-      (n, prev) => {
-        if (n === 0 && (prev ?? 0) > 0 && linked()) setSearch({ rule: undefined });
-      },
-      { defer: true },
-    ),
-  );
+  // A link names a rule through the list's drawer address (/event-rules?open=<name or
+  // uuid>, drawerHref): an event row on Activity points at the rule that wrote it. The
+  // older ?rule= still opens, and a uuid (an event written before a rename) resolves too.
 
   const columns: FlatColumn<EventRule>[] = [
     identityColumn<EventRule>(),
@@ -285,6 +264,8 @@ export default function Rules(): JSX.Element {
             columns,
             empty: "No rules yet.",
             rowId: (r) => r.name,
+            rowAlt: (r) => r.id,
+            legacyParam: "rule",
             blades: { registry: { rule: ruleBlade }, rootKind: "rule", controller: blades },
             railExtra: () => (
               <span class="mr-1 inline-flex items-center gap-1.5 text-[12px] text-base-content/50">
@@ -458,7 +439,7 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
   }
 
   async function remove(r: EventRule) {
-    if (!confirm(`Delete rule "${r.name}"? Deleting it clears the alarms it holds open; its past alarms stay in each component's history, no longer naming it.`)) return;
+    if (!(await confirmDelete({ kind: "rule", name: r.name, consequence: "Deleting it clears the alarms it holds open; its past alarms stay in each component's history, no longer naming it." }))) return;
     setErr(null);
     try {
       await deleteEventRule(r.name);
@@ -471,8 +452,10 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
 
   // An official row is read-only for everyone: the Edit / Delete pair greys with
   // the official sentence and nothing else binds. A custom row offers Edit (the
-  // Drawer), the Disable / Enable toggle and a kebab Delete, each on its own
-  // permission; a caller holding none sees the pair greyed with what it needs.
+  // Drawer), Delete in the rail's destructive slot (#2463, where every other
+  // blade's Delete sits) and the Disable / Enable toggle under More actions,
+  // each on its own permission; a caller holding none sees the pair greyed with
+  // what it needs.
   edit.bind({
     primary: () => {
       const r = row();
@@ -480,15 +463,17 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
     },
     destructive: () => {
       const r = row();
-      if (!r || r.official || !canUpdate()) return undefined;
-      return r.enabled
-        ? { label: "Disable", tone: "warn", onClick: () => void toggleEnabled(r) }
-        : { label: "Enable", tone: "ok", onClick: () => void toggleEnabled(r) };
+      if (!r || r.official || !canDelete()) return undefined;
+      return { label: "Delete", tone: "danger", onClick: () => void remove(r) };
     },
     secondary: () => {
       const r = row();
-      if (!r || r.official || !canDelete()) return [];
-      return [{ label: "Delete", icon: <Trash size={15} />, tone: "danger", onClick: () => void remove(r) }];
+      if (!r || r.official || !canUpdate()) return [];
+      return [
+        r.enabled
+          ? { label: "Disable", icon: <Ban size={15} />, onClick: () => void toggleEnabled(r) }
+          : { label: "Enable", icon: <RotateCcw size={15} />, onClick: () => void toggleEnabled(r) },
+      ];
     },
     locked: () => {
       const r = row();

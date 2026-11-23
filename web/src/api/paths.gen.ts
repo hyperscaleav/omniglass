@@ -2044,6 +2044,16 @@ export interface paths {
       error: og.addOutpostSimulationComponentResponseError["data"];
     };
   };
+  "/outposts/{name}/simulation/components:plan": {
+    get: {
+      path: { "name": string };
+      query: NonNullable<Parameters<typeof og.planOutpostSimulationComponent>[1]>;
+      body: never;
+      bodyRequired: false;
+      data: og.planOutpostSimulationComponentResponseSuccess["data"];
+      error: og.planOutpostSimulationComponentResponseError["data"];
+    };
+  };
   "/outposts/{name}/simulation/observation": {
     get: {
       path: { "name": string };
@@ -2286,6 +2296,16 @@ export interface paths {
       bodyRequired: false;
       data: og.listRolesResponseSuccess["data"];
       error: og.listRolesResponseError["data"];
+    };
+  };
+  "/search": {
+    get: {
+      path: never;
+      query: NonNullable<Parameters<typeof og.search>[0]>;
+      body: never;
+      bodyRequired: false;
+      data: og.searchResponseSuccess["data"];
+      error: og.searchResponseError["data"];
     };
   };
   "/secret-types": {

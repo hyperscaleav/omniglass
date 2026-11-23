@@ -55,6 +55,17 @@ type Status struct {
 	// Impairments is the simulator's latest account of impairments: whether
 	// it can apply them, its last error, and what it impairs now.
 	Impairments collection.SimImpairmentStatus
+	// Faults is each listed device's state paths held off their defaults,
+	// as the simulator last reported them, with when the hub first heard
+	// each (#2462). In memory, like the hits: a server restart starts the
+	// clock again.
+	Faults map[string][]DeviceFault
+}
+
+// DeviceFault is a fault with when the hub first heard it.
+type DeviceFault struct {
+	collection.SimFault
+	Since time.Time
 }
 
 type outpostState struct {
@@ -68,6 +79,7 @@ type outpostState struct {
 	since   map[string]time.Time
 	serving map[string]bool
 	devices map[string]*DeviceHits
+	faults  map[string][]DeviceFault
 }
 
 // Registry holds every outpost's simulator status. Safe for concurrent use.
@@ -161,6 +173,7 @@ func (r *Registry) Report(outpost string, b collection.SimHitBatch) (accepted, r
 		st.impairs = *b.Impairments
 		st.impairs.Impaired = filterListed(st.listed, b.Impairments.Impaired)
 	}
+	st.faults = r.keepFaults(st, b.Faults)
 	st.serving = map[string]bool{}
 	for _, id := range b.Serving {
 		if st.listed[id] {
@@ -188,6 +201,31 @@ func (r *Registry) Report(outpost string, b collection.SimHitBatch) (accepted, r
 		d.LastAt, d.LastProtocol = now, h.Protocol
 	}
 	return accepted, rejected
+}
+
+// keepFaults takes a batch's account of faults for the listed devices, each
+// stamped with the time it was first heard: a fault that held since the last
+// batch (same path and value) keeps its time. The caller holds mu.
+func (r *Registry) keepFaults(st *outpostState, reported map[string][]collection.SimFault) map[string][]DeviceFault {
+	now := r.now()
+	out := make(map[string][]DeviceFault, len(reported))
+	for id, fs := range reported {
+		if !st.listed[id] || len(fs) == 0 {
+			continue
+		}
+		kept := make([]DeviceFault, 0, len(fs))
+		for _, f := range fs {
+			since := now
+			for _, old := range st.faults[id] {
+				if old.Path == f.Path && old.Value == f.Value {
+					since = old.Since
+				}
+			}
+			kept = append(kept, DeviceFault{SimFault: f, Since: since})
+		}
+		out[id] = kept
+	}
+	return out
 }
 
 // Forget drops an outpost's entry, for an outpost that was deleted. A simulator that
@@ -241,6 +279,10 @@ func (r *Registry) Status(outpost string) (Status, bool) {
 		ListedSince:  make(map[string]time.Time, len(st.since)),
 		Impairments:  st.impairs,
 		Devices:      make(map[string]DeviceHits, len(st.devices)),
+		Faults:       make(map[string][]DeviceFault, len(st.faults)),
+	}
+	for id, fs := range st.faults {
+		out.Faults[id] = append([]DeviceFault(nil), fs...)
 	}
 	for id := range st.serving {
 		out.Serving[id] = true

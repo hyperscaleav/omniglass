@@ -15,6 +15,7 @@ import { OFFICIAL_LOCK } from "../lib/catalog";
 import { uuidFor } from "../lib/testids";
 import { EVENT_TYPES_KEY, type EventTypeRow } from "../lib/event_types";
 import { expressionText, typeExpression, warmExpressionEditor } from "../components/ExpressionField.testing";
+import { answerConfirms } from "../lib/confirm.testkit";
 
 // The Rules page (#921): a FlatList over /event-rules, each row reading its
 // criteria in words and its live state (open alarms, pending streaks); a row
@@ -693,13 +694,18 @@ describe("Rules page", () => {
     expect(await screen.findByText(/clears the alarms it holds open/)).toBeTruthy();
   });
 
-  it("deletes a custom rule from the kebab after a confirmation", async () => {
+  it("deletes a custom rule from the footer's destructive slot after a confirmation", async () => {
     const writes = catchWrites();
-    const ask = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const ask = answerConfirms(true);
     mount();
     fireEvent.click(screen.getByText("Too hot"));
     const b = await blade();
-    fireEvent.click(within(b).getByText("Delete"));
+    // Delete is the rail's destructive slot (#2463), not a kebab item: the
+    // kebab holds the Disable / Enable toggle instead.
+    const del = within(b).getByRole("button", { name: "Delete" });
+    expect(del.closest(".dropdown-content")).toBeNull();
+    expect(within(b).getByText(/^(Disable|Enable)$/).closest(".dropdown-content")).not.toBeNull();
+    fireEvent.click(del);
     await waitFor(() => expect(writes).toHaveLength(1));
     // The server clears what the rule holds open before it goes (storage
     // DeleteEventRule), so the confirmation says so rather than promising the
@@ -756,7 +762,7 @@ describe("Rules page", () => {
   });
 
   it("opens the rule a link names, so an event row can point at the rule that wrote it", async () => {
-    window.history.pushState({}, "", "/event-rules?rule=reachability-lost");
+    window.history.pushState({}, "", "/event-rules?open=reachability-lost");
     try {
       mount();
       const b = await blade();
@@ -767,7 +773,7 @@ describe("Rules page", () => {
   });
 
   it("opens the rule a link names by uuid, so an event written before a rename still leads to its rule", async () => {
-    window.history.pushState({}, "", `/event-rules?rule=${reach.id}`);
+    window.history.pushState({}, "", `/event-rules?open=${reach.id}`);
     try {
       mount();
       const b = await blade();
@@ -781,12 +787,12 @@ describe("Rules page", () => {
   });
 
   it("follows the rule a link names as it changes (back and forward), and lets go of it when the blade closes", async () => {
-    window.history.pushState({}, "", "/event-rules?rule=reachability-lost");
+    window.history.pushState({}, "", "/event-rules?open=reachability-lost");
     try {
       mount();
       let b = await blade();
       expect(within(b).getByText("reachability-lost")).toBeTruthy();
-      window.history.pushState({}, "", "/event-rules?rule=too-hot");
+      window.history.pushState({}, "", "/event-rules?open=too-hot");
       window.dispatchEvent(new PopStateEvent("popstate"));
       await waitFor(() => expect(within(asides()[asides().length - 1] as HTMLElement).getByText("too-hot")).toBeTruthy());
       b = asides()[asides().length - 1] as HTMLElement;
@@ -797,8 +803,8 @@ describe("Rules page", () => {
     }
   });
 
-  it("says a linked rule is not found only once the list has loaded, and reads no state for it", async () => {
-    window.history.pushState({}, "", "/event-rules?rule=no-such-rule");
+  it("says a linked rule is not found only once the list has loaded, opens no blade, and reads no state for it", async () => {
+    window.history.pushState({}, "", "/event-rules?open=no-such-rule");
     try {
       let release!: () => void;
       const gate = new Promise<void>((r) => { release = r; });
@@ -820,10 +826,10 @@ describe("Rules page", () => {
           <Router><Route path="*" component={Rules} /></Router>
         </QueryClientProvider>
       ));
-      const b = await blade();
-      expect(within(b).queryByText("Rule not found.")).toBeNull();
+      expect(screen.queryByTestId("drawer-miss")).toBeNull();
       release();
-      expect(await within(b).findByText("Rule not found.")).toBeTruthy();
+      expect(await screen.findByTestId("drawer-miss")).toHaveTextContent("no-such-rule");
+      expect(asides()).toHaveLength(0);
       expect(states).toEqual([]);
     } finally {
       window.history.pushState({}, "", "/");

@@ -50,9 +50,10 @@ Click a row to open its **blade**, a panel that slides in from the right with th
 details. From a blade you can drill into a child (it stacks another blade behind the first),
 step back with the breadcrumb, or **Expand** to the entity's own page: a fleet entity opens
 its [detail view](/operator/fleet/#one-view-per-system), an identity entity its full detail. The page has its own URL, so it is
-shareable and bookmarkable; a blade opened by a click is a quick look that does not change
-the URL, though a blade can be addressed by one (a user's `?u=<id>` deep link, which the
-create flow uses for its own handoff). Rows are keyboard-operable: Tab to a row and press
+shareable and bookmarkable. A row opened on a list page (any catalog page, users, roles,
+secrets, variables, outposts, files, alarms) is addressed too: its drawer puts
+`?open=<the row's name or id>` in the URL, so you can [link a colleague to it](#link-a-colleague-to-an-open-drawer).
+Rows are keyboard-operable: Tab to a row and press
 Enter to open it.
 
 ::screenshot{#entity-blade}
@@ -73,13 +74,28 @@ trace where access comes from without leaving the page. Each page roots one enti
 user's groups, a group's members), so the stack stays shallow and the reverse relation on the far blade is a
 read-only reference.
 
+## Link a colleague to an open drawer
+
+An open drawer has an address. Open a rule on **Event rules**, and the address bar reads
+`/event-rules?open=disk-nearly-full`: the row's name, the same one its API route and the CLI take
+(a user, role or secret is addressed by its id). Copy the address and send it, and your colleague
+lands on the list with the same drawer already open. A reload keeps your place, and **Back** closes
+the drawer and leaves you on the list, since opening is a step in your history. Closing the drawer
+clears the address. The address composes with the page's other state, so a filter or a sort in the
+address survives opening and closing. A blade you drill into from the drawer is a quick look and is
+not in the address.
+
+An address that names nothing (a rule that was deleted, or one you may not see) shows the list with a
+notice, not a blank drawer. The notice reads the same either way, so it does not reveal which.
+
 ## Edit through the footer action bar
 
-A blade opens **read-only**, and its actions live in the **footer action bar**; the header is
-chrome only (back, full-page, close). **Edit** turns the whole blade live in place, fleet
-and identity blades alike: a fleet blade's form (the identity, classification and tags of the
-same form the detail view's [Configure tab](/operator/fleet/) renders) and an identity blade's profile, members,
-and grants.
+A blade opens **read-only**, and the header is chrome only (back, full-page, close). A fleet
+blade (a location, a system, a component) is its detail view, so it edits as the page does: on its
+**Configure** tab, whose footer carries **Edit** and, on the left, **Delete** behind a confirm (see
+[Configure](/operator/fleet/) and [what is in the way](#delete-and-what-is-in-the-way)). The rest of this section is the identity and catalog blades, whose
+actions live in the blade's own **footer action bar**: **Edit** turns the whole blade live in place,
+its profile, members and grants.
 On an identity blade, **Edit** (right) opens edit mode: the profile becomes inputs, the members and grants go live, and the right
 cluster swaps to **Cancel** and **Save**. Changes stage locally so you can check your work first; **Save**
 commits them together, **Cancel** discards them. The **destructive** action sits on the **left** and is always
@@ -98,6 +114,28 @@ file) or as its own blade (New endpoint) puts its **Create** button in the bar a
 panel, never floating after the last field, and greys it out until the form is complete. **Cancel**
 sits beside it on the forms that offer one; where it does not, the header **x** closes the panel.
 
+## Delete, and what is in the way
+
+Every delete in the console asks first in the same dialog: its title names the thing (**Delete
+component "display-1"?**), its body says what goes with it, and the red button carries the verb
+(**Delete component**, **Remove simulated component**, **Withdraw slot**). Cancel holds the focus
+when it opens, so Enter never deletes by accident; Escape and the overlay close it too.
+
+A location, a system or a component cannot be deleted while something still depends on it: a
+child, an endpoint it owns, a system or component placed in it, a slot it staffs. The server
+refuses, and the dialog stays open and lists **In the way**, each row naming its kind and linking
+to its own page (an endpoint has no page, so it is named, not linked). Each row has its own
+**Delete**, which asks once more on the row and then deletes that row by its own kind's delete,
+under its own permission; a row that is itself refused says why on the row. Once nothing is left,
+press the dialog's **Delete** again: the retry happens in place, and nothing needs the API. Where a
+blocker should move rather than go (a system that belongs in another room), follow its link and
+move it there.
+
+The list names only what you may read. A blocker outside your scope is counted (**1 more you
+cannot see from here**), never named, so a refusal tells you no more about the fleet than your
+grants already do; someone who can see it has to clear it. Nothing here deletes in cascade: each
+row goes by its own delete. (Decommissioning a whole location, with what it holds, is a separate verb.)
+
 ## Deep-link the edit
 
 The mode is part of the address: append `?edit=1` to a fleet entity's URL and it lands on
@@ -107,14 +145,19 @@ link lands reading, quietly. Leaving edit (Cancel or Save) strips the param, so 
 mid-edit keeps your place, while Back and a re-shared URL never reopen an edit you already
 left. A location holding one system is configured on its system's view, so `?edit=1` on that
 location's address lands on the system's Configure with the location's own form editing
-(`?edit=location`). The console itself uses these links for its handoffs: creating an entity lands on
-`/…/<id>?edit=1`, and a user's `?u=<id>&edit=1` deep link keeps the same contract on the
-identity pages.
+(`?edit=location`). The console uses these links for its handoffs, for example a user's
+`?open=<id>&edit=1` deep link on the identity pages (the older `?u=<id>` still opens). Creating a
+location, system or component does not: it lands on the new row's **Overview** with a "created" notice
+(#2465), since what you want next is to see it. The **back** link above a create form names the location
+you pressed **+** on (`← West Building`) and goes there; opened from nowhere in particular it is
+`← Explore`.
 
 ::screenshot{#entity-edit-face}
 
 ## Create, edit, delete
 
+- A **component** is added through its own flow, from its product to an endpoint that has answered
+  ([add a component](/operator/add-a-component/)); the plain form below is its **advanced** link.
 - **New** opens a **draft** at the entity's own `/create` address, **From scratch** by default; **From a
   template** instead starts from one of the examples Omniglass ships
   ([starting from a template](/operator/templates/)). From scratch, it asks **what** and **where**
@@ -178,8 +221,9 @@ identity pages.
   field that arrives filled in.
 
   The locked **label** is the real label, rendered by the same rule engine that will stamp it,
-  against the classification and placement you have just chosen, and against that same number. The form
-  also names the **rule** that produced it, so the value is traceable rather than arriving from nowhere.
+  against the classification and placement you have just chosen, and against that same number. The
+  field's **(i)** carries the **rule** that produced it, so the value is traceable rather than arriving from
+  nowhere; the hint under the field says the label is rendered, not the template itself.
   Nothing is created to work either of them out: it is a render, not a draft row
   ([ADR-0104](/architecture/decisions/)).
 
