@@ -90,6 +90,12 @@ screenshots:
         timeout: 150000
       - action: click
         selector: "[data-testid=server-panels-server] > summary .eyebrow"
+      # Same table as platform-health-outposts: hold until the outpost-silent
+      # alarm has raised, so the row's tone and pill read the same every run (#2291).
+      - action: wait
+        selector: "table >> text=outage"
+        timeout: 60000
+        message: "the outpost-silent alarm never raised, so the liveness pill never read outage"
       - action: hover
         selector: "[data-testid=platform-outposts] button[aria-label='Worklist Pull Loss']"
       - action: wait
