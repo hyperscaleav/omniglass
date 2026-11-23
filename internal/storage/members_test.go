@@ -471,3 +471,39 @@ func TestListSystemAlarmsIsTheMembersAlarmsWindowed(t *testing.T) {
 		t.Fatalf("capped at 1 = %+v (%v), want the newest alone", capped, err)
 	}
 }
+
+// An endpoint attached to, then removed from, a never-observed member observes
+// nothing: the component stays unknown (#1454), as the bind that added it did.
+func TestEndpointWriteLeavesUnobservedMemberUnknown(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	f := newMemberFixture(t, ctx)
+	if err := f.gw.AddMember(ctx, "", "room-a", "mic-a", f.all, f.all, f.all, f.all); err != nil {
+		t.Fatalf("add: %v", err)
+	}
+	if _, err := f.gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge"}, f.all, f.all); err != nil {
+		t.Fatalf("outpost: %v", err)
+	}
+	comp, edge := "mic-a", "edge"
+	ep, err := f.gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
+		Transport: "icmp", Component: &comp, Outpost: &edge, Params: []byte(`{"target":"10.0.0.1"}`)}, f.all)
+	if err != nil {
+		t.Fatalf("attach: %v", err)
+	}
+	check := func(when string) {
+		members, err := f.gw.ListMembers(ctx, "room-a", f.all)
+		if err != nil {
+			t.Fatalf("list: %v", err)
+		}
+		for _, m := range members {
+			if m.ComponentID == "mic-a" && m.ComponentHealth != "unknown" {
+				t.Errorf("%s: mic-a health = %q, want unknown", when, m.ComponentHealth)
+			}
+		}
+	}
+	check("after attach")
+	if err := f.gw.DeleteEndpoint(ctx, "", ep.ID, f.all, f.all); err != nil {
+		t.Fatalf("detach: %v", err)
+	}
+	check("after detach")
+}

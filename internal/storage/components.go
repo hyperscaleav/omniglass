@@ -787,7 +787,7 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 		if err := p.markComponentCalcRules(ctx, tx, after.ID); err != nil {
 			return nil, err
 		}
-		if err := p.recomputeChain(ctx, tx, []ownerRef{{ID: after.ID, Name: after.Name}}, nil, nil); err != nil {
+		if err := p.recomputeComponentSystems(ctx, tx, after.ID); err != nil {
 			return nil, err
 		}
 	}

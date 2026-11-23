@@ -78,10 +78,10 @@ component set; the surfaces below are where they are mounted.
 
 | ID | Component | Pages | Primitive | Source | Live behavior | Widget |
 |---|---|---|---|---|---|---|
-| V14 | `HealthBadge` sm, header (`components/HealthBadge.tsx`, in `pages/SystemZoom.tsx`) | `/systems/<id>` | derived | `systemHealth` | poll 5 s | new: health badge |
-| V15 | `HealthBadge` sm, header (`pages/ComponentLeaf.tsx`) | `/components/<id>` | derived | the fleet view's recorded health | mount+focus | new: health badge |
+| V14 | `HealthBadge` sm, header (`components/HealthBadge.tsx`, in `components/SystemDetail.tsx`) | `/systems/<id>` | derived | `systemHealth` | poll 5 s | new: health badge |
+| V15 | `HealthBadge` sm, header (`components/ComponentDetail.tsx`) | `/components/<id>` | derived | the fleet view's recorded health | mount+focus | new: health badge |
 | V16 | `HealthBadge` md, outpost rows xs, per-server disclosure with an "N open" badge (`pages/PlatformHealth.tsx`) | `/platform` | derived | `platformView` | poll 5 s | new: health badge |
-| V17 | `HealthBadge` in the system, component and location blades (`components/EntityBlade.tsx`) | `/explore`, `/locations/<id>`, `/systems/<id>`, `/components/<id>` | derived | `fleetView`, `systemHealth`, `locationHealth` | mount+focus (health reads refetch off on focus when standalone) | new: health badge |
+| V17 | `HealthBadge` in the system, component and location detail bodies (`components/SystemDetail.tsx`, `ComponentDetail.tsx`, `LocationDetail.tsx`; the blade renders the same body as the page) | `/explore`, `/locations/<id>`, `/systems/<id>`, `/components/<id>` | derived | `fleetView`, `systemHealth`, `locationHealth` | mount+focus (health reads refetch off on focus when standalone) | new: health badge |
 | V18 | `SystemSummary` card: health, since-line, why rows, slot text (`components/SystemSummary.tsx`) | `/locations/<id>` | derived | `fleetView`, `systemHealth` (stale 30 s) | mount+focus | new: system summary card |
 | V19 | `HealthGlyph` and `HealthSlots`, the four-slot health counts on each outline row (`components/Outline.tsx`, `components/OutlineWorkspace.tsx`) | `/explore`, `/locations/<id>`, `/systems/<id>` | derived | `fleetView`, the health values the server recorded | mount+focus | new: health slots |
 | V20 | `MemberRows` glyph and alarm text per member (`components/MemberRows.tsx`) | `/systems/<id>` | derived | `systemMembers` | poll 5 s | new: health badge |
@@ -110,9 +110,9 @@ component set; the surfaces below are where they are mounted.
 
 | ID | Component | Pages | Primitive | Source | Live behavior | Widget |
 |---|---|---|---|---|---|---|
-| V34 | `alarm-strip` "Why": `SeverityBadge` and `AlarmTimeline` (`pages/SystemZoom.tsx`) | `/systems/<id>` | event | `systemAlarms` | poll 5 s | new: alarm list |
+| V34 | `alarm-strip` "Why": `SeverityBadge` and `AlarmTimeline` (`components/SystemDetail.tsx`) | `/systems/<id>` | event | `systemAlarms` | poll 5 s | new: alarm list |
 | V35 | `stretch-list` and "Other alarms" (`pages/SystemZoom.tsx`) | `/systems/<id>` (Activity tab) | event | `systemAlarms`, `systemHealth` | poll 5 s | new: alarm list |
-| V36 | `leaf-alarms` "Why": `SeverityBadge`, `SnoozedBadge`, `AlarmTimeline` (`pages/ComponentLeaf.tsx`) | `/components/<id>` | event | `componentAlarmsRead` (`lib/alarms.ts`) | poll 5 s | new: alarm list |
+| V36 | `leaf-alarms` "Why": `SeverityBadge`, `SnoozedBadge`, `AlarmTimeline` (`components/ComponentDetail.tsx`) | `/components/<id>` | event | `componentAlarmsRead` (`lib/alarms.ts`) | poll 5 s | new: alarm list |
 | V37 | `AlarmsPanel`: grouped by severity, unacknowledged badge, `AlarmTimeline` (`components/AlarmsPanel.tsx`) | `/components/<id>` (Configure tab), component blades | event | `componentAlarms` | mount+focus (focus refetch off) | new: alarm list |
 | V38 | Rule detail "Open alarms" and "Firing" lists with `SeverityBadge` and `AlarmTimeline` (`pages/Rules.tsx`) | `/event-rules` (blade) | event | `getRuleState` | poll 5 s | new: alarm list |
 | V39 | `events-tab` with `RuleLink` and alarm timeline toggles (`pages/SystemZoom.tsx`) | `/systems/<id>` (Activity tab) | event | `systemEvents` | poll 5 s, only while the tab is open | event list |

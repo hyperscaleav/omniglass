@@ -515,7 +515,7 @@ func (p *PG) recomputeAttached(ctx context.Context, tx pgx.Tx, componentID *stri
 	if componentID == nil {
 		return nil
 	}
-	return p.recomputeChain(ctx, tx, []ownerRef{{ID: *componentID}}, nil, nil)
+	return p.recomputeComponentSystems(ctx, tx, *componentID)
 }
 
 // createEndpointTx is CreateEndpoint inside a transaction the caller owns, so a composite write (adding

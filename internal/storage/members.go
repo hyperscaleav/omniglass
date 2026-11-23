@@ -620,3 +620,22 @@ func (p *PG) recomputeMembership(ctx context.Context, tx pgx.Tx, componentID, sy
 	}
 	return p.recomputeChain(ctx, tx, nil, []ownerRef{{ID: systemID, Name: systemName}}, nil)
 }
+
+// recomputeComponentSystems recomputes the systems a component feeds (slots or
+// memberships) without recording the component itself: it takes the
+// component's health lock, then recomputes only its systems. Recording the
+// component would write it a first healthy row, which marks it observed
+// (#1454); an endpoint or product write observes nothing.
+func (p *PG) recomputeComponentSystems(ctx context.Context, tx pgx.Tx, componentID string) error {
+	if err := lockHealthOwner(ctx, tx, "component", componentID); err != nil {
+		return err
+	}
+	held, err := p.systemsHolding(ctx, tx, componentID)
+	if err != nil {
+		return err
+	}
+	if len(held) == 0 {
+		return nil
+	}
+	return p.recomputeChain(ctx, tx, nil, held, nil)
+}
