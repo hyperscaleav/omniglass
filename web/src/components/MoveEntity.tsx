@@ -62,7 +62,7 @@ export default function MoveEntity(props: {
 
   const canSystem = () => props.kind === "component" && (props.systems?.length ?? 0) > 0;
   const modes = createMemo(() => [
-    { value: "place", label: "Another place" },
+    { value: "place", label: "Another location" },
     ...(canSystem() ? [{ value: "system", label: "Another system" }] : []),
     { value: "parent", label: props.kind === "component" ? "Under a component" : "Under a system" },
   ]);
@@ -73,7 +73,7 @@ export default function MoveEntity(props: {
     if (m === "place") return props.places.map((o) => (o.value === props.currentPlace ? { ...o, disabled: true, detail: o.detail ? `${o.detail} (current)` : "current" } : o));
     if (m === "system") return (props.systems ?? []).map((o) => (o.value === fromSystem() ? { ...o, disabled: true, detail: o.detail ? `${o.detail} (current)` : "current" } : o));
     const list = props.parents.map((o) => (o.value === props.currentParent ? { ...o, disabled: true, detail: o.detail ? `${o.detail} (current)` : "current" } : o));
-    return props.currentParent ? [{ value: ROOT, label: "No parent (top level)", detail: "needs a grant over every place" }, ...list] : list;
+    return props.currentParent ? [{ value: ROOT, label: "No parent (top level)", detail: "needs a grant over every location" }, ...list] : list;
   });
 
   // The destination system's slots, for the optional slot choice.
@@ -149,7 +149,7 @@ export default function MoveEntity(props: {
           <SegmentedControl label="What to move to" options={modes()} value={mode()} onChange={pickMode} />
           <Picker
             aria-label="Destination"
-            placeholder={mode() === "place" ? "Choose a place" : mode() === "system" ? "Choose a system" : props.kind === "component" ? "Choose a component" : "Choose a system"}
+            placeholder={mode() === "place" ? "Choose a location" : mode() === "system" ? "Choose a system" : props.kind === "component" ? "Choose a component" : "Choose a system"}
             options={options()}
             value={dest()}
             onChange={(v) => { setDest(v); setSlot(null); setErr(null); }}

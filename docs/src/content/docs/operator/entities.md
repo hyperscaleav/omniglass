@@ -5,8 +5,8 @@ sidebar:
   label: Create and edit
   order: 3
   badge:
-    text: Partial
-    variant: note
+    text: Built
+    variant: success
 screenshots:
   - id: entity-blade
     path: /web/explore
@@ -263,10 +263,10 @@ identity pages.
 - A **component**'s and a **system**'s edit face carries **Move to...** under Placement, gated by
   `component:move` or `system:move`. It is its own act, not a field **Save** carries: pick what to move
   to, press **Move**, and it happens at once, so the rest of your edit is untouched. A destination
-  is a type-to-filter list whose second line says where each choice is (a place by the places above
+  is a type-to-filter list whose second line says where each choice is (a location by the locations above
   it, a system or component by the place it sits in), so two rooms named alike tell apart. What you
   can move to:
-  - **Another place**: relocates it. The current place is shown but cannot be chosen.
+  - **Another location**: relocates it to another location. The current location is shown but cannot be chosen.
   - **Another system** (a component, with `system:update`): joins the system, optionally in a slot
     you choose (a full slot is shown and cannot be chosen), makes it the component's primary, and
     leaves the system it was in, freeing the slot it held there first. Other systems it serves are
@@ -278,7 +278,7 @@ identity pages.
   destination) shows under the picker and leaves the panel open to try another destination. A move
   can rename an entity the platform named, since its name is unique within its placement; the page
   stays on the entity, which is addressed by its uuid, and the breadcrumb and Explore show the new
-  place. The same moves are available from the API or CLI (`omniglass component move`,
+  location. The same moves are available from the API or CLI (`omniglass component move`,
   `omniglass system move`), where a clear-to-root, an unplace and the rest are the same three-state
   convention: an empty location unplaces, clearing parent to lift an entity to a root needs an
   all-scoped grant, the same authorization creating a root entity already requires, since a
