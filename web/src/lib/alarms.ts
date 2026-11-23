@@ -1,6 +1,7 @@
 import { api } from "../api/client";
 import type { AlarmBody, AlarmTimelineEntryBody } from "../api/api.gen";
 import { compareSeverity, type SeverityLevel } from "./severity";
+import { fmtClock, fmtDay } from "./format";
 
 // The alarms data layer: thin typed wrappers over the generated client, plus the
 // pure ordering and splitting the panel renders.
@@ -123,9 +124,9 @@ export async function unsnoozeAlarm(name: string, id: string): Promise<Alarm> {
 // time alone when it ends today, the day and time when it ends later.
 export function snoozedUntilWords(until: string, now: number = Date.now()): string {
   const d = new Date(until);
-  const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const time = fmtClock(until);
   if (d.toDateString() === new Date(now).toDateString()) return `snoozed until ${time}`;
-  return `snoozed until ${d.toLocaleDateString([], { month: "short", day: "numeric" })} ${time}`;
+  return `snoozed until ${fmtDay(until, { local: true })} ${time}`;
 }
 
 export function unacknowledgedCount(list: Alarm[]): number {

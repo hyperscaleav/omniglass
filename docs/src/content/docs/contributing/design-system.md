@@ -65,6 +65,26 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
   whether the row is absent or out of scope. A blade drilled over the root keeps its own stack and
   is not in the URL, and the param composes with the page's filter, sort and `?edit=1`. Every
   link into a drawer from another surface is `drawerHref(kind, address)`, never a hand-built string.
+- **Every page has the `Page` header.** A page opens with its title and a one-line hint, both read
+  from the nav metadata (`<Page route="/roles">`), so the sidebar, the top bar and the page say the
+  same words and a page never ships without one. A page that wraps a list takes the header like any
+  other; the full-page detail of a node renders its own heading instead.
+- **One drawer width rule.** A drawer is the narrow panel (`max-w-md`) unless its body carries a
+  table or a timeline, which takes the wide one (`max-w-2xl`; `wide` on a `FlatList` detail or on
+  `Drawer`). The alarm drawer (its timeline) and the audit drawer (its change table) are wide; a
+  form, a read of facts or a blade is narrow. Decide by what the body holds, never by the page.
+- **One date format.** Date, time and locale-number formatting lives in `lib/format.ts` and nowhere
+  else (`src/date-guard.test.ts` fails a `toLocaleString`, `toLocaleDateString` or
+  `toLocaleTimeString` call anywhere else). An instant in a list or a drawer is the `Time`
+  component: relative ("4m ago") with the absolute time and the exact RFC 3339 instant on hover
+  and focus (`Time absolute` where a relative age says nothing, such as a before/after pair). A
+  recorded field name in the audit change table is humanized (`humanizeField`: "Last orphaned at"),
+  the recorded key kept as the hover title.
+- **A filter bar's placeholder is lower case** ("filter by name, type…"), pinned by
+  `filter-placeholder-guard.test.ts`.
+- **An empty list that has a create action teaches.** `FlatList`'s `empty` takes a function that
+  receives the create action when the viewer may create, so an empty directory says what the thing
+  is for and offers it (user groups, as the Inbox and Subscriptions do) instead of a bare line.
 - **Lists render in server order; the SQL rule is the ordering primitive.** A catalog list the
   API serves arrives ordered by `order by label nulls last, name` (a row with no label last,
   otherwise by label, then by name), and the page renders the rows as received: `FlatList` sorts

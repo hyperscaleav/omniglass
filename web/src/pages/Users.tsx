@@ -1,4 +1,5 @@
 import { For, Show, createSignal } from "solid-js";
+import Page from "../components/Page";
 import { useSearchParams } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
@@ -93,35 +94,37 @@ export default function Users() {
   // ?open=<id> deep-links to a user (the drawer address, #2429); the older ?u=<id> still opens it.
 
   return (
-    <FlatList<User>
-      config={{
-        entity: { name: "user", plural: "users" },
-        rows: () => users.data ?? [],
-        loading: () => users.isLoading,
-        error: () => users.error,
-        filterKeys,
-        filterPlaceholder: "filter by name, kind, username",
-        columns,
-        empty: "No users yet.",
-        rowId: (p) => p.id,
-        legacyParam: "u",
-        blades: { registry: identityRegistry, rootKind: "user" },
-        railExtra: () => (
-          <label class="flex cursor-pointer items-center gap-2 text-xs text-base-content/60">
-            <input type="checkbox" class="toggle toggle-xs" checked={showArchived()} onChange={(e) => setShowArchived(e.currentTarget.checked)} />
-            Show archived
-          </label>
-        ),
-        create: {
-          label: "New user",
-          can: () => can(me.data, "user", "create"),
-          // The handoff is the URL (#759): ?open=<id>&edit=1 opens the new user's
-          // blade already editing (the open address plus the edit param),
-          // so grants are assigned without a second step.
-          body: (ctx) => <CreateUserForm close={ctx.close} onCreated={(p) => { setParams({ open: p.id, u: undefined, edit: "1" }); ctx.close(); }} />,
-        },
-      }}
-    />
+    <Page route="/users">
+      <FlatList<User>
+        config={{
+          entity: { name: "user", plural: "users" },
+          rows: () => users.data ?? [],
+          loading: () => users.isLoading,
+          error: () => users.error,
+          filterKeys,
+          filterPlaceholder: "filter by name, kind, username",
+          columns,
+          empty: "No users yet.",
+          rowId: (p) => p.id,
+          legacyParam: "u",
+          blades: { registry: identityRegistry, rootKind: "user" },
+          railExtra: () => (
+            <label class="flex cursor-pointer items-center gap-2 text-xs text-base-content/60">
+              <input type="checkbox" class="toggle toggle-xs" checked={showArchived()} onChange={(e) => setShowArchived(e.currentTarget.checked)} />
+              Show archived
+            </label>
+          ),
+          create: {
+            label: "New user",
+            can: () => can(me.data, "user", "create"),
+            // The handoff is the URL (#759): ?open=<id>&edit=1 opens the new user's
+            // blade already editing (the open address plus the edit param),
+            // so grants are assigned without a second step.
+            body: (ctx) => <CreateUserForm close={ctx.close} onCreated={(p) => { setParams({ open: p.id, u: undefined, edit: "1" }); ctx.close(); }} />,
+          },
+        }}
+      />
+    </Page>
   );
 }
 

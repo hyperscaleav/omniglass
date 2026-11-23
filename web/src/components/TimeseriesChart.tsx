@@ -1,6 +1,6 @@
 import { For, Show, createMemo, createSignal } from "solid-js";
 import { bucketLayout, chartLayout, nearestPoint, type ChartBucket, type ChartPoint, type ChartSample } from "../lib/chart";
-import { fmtTime } from "../lib/format";
+import { fmtClock, fmtTime } from "../lib/format";
 
 // The timeseries chart (#794): one series, drawn from chartLayout's pure
 // geometry. Single series, so no legend (the row or title names it); a 2px
@@ -46,7 +46,6 @@ export default function TimeseriesChart(props: {
       ? `${fmtV(p.value)}${props.unit ?? ""} avg, ${fmtV(p.min)} to ${fmtV(p.max)} (${p.count} samples) · ${fmtTime(p.ts)}`
       : `${fmtV(p.value)}${props.unit ?? ""} · ${fmtTime(p.ts)}`;
   const fmtV = (v: number) => (Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(1));
-  const fmtClock = (ts: string) => new Date(ts).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
   // The crosshair: the sample nearest the pointer, an exact time and value
   // where a sample exists, never an interpolation (#795 review).
   const [hover, setHover] = createSignal<ChartPoint | null>(null);

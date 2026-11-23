@@ -26,7 +26,7 @@ screenshots:
     # mask would blank out along with the name the shot exists to show.
     mask:
       - "text=/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}/"
-      - "text=/[A-Z][a-z]{2} \\d{1,2}, \\d{2}:\\d{2} (AM|PM)/ >> xpath=ancestor::td[1]"
+      - "text=/\\d+[smhd] ago/ >> xpath=ancestor::td[1]"
 ---
 
 **Files** (under Values) is where you keep the **opaque bytes** that go with a fleet, a firmware

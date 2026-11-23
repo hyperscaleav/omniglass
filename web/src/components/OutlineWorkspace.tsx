@@ -293,7 +293,7 @@ export default function OutlineWorkspace(props: { rootId?: string }) {
                   rows={entries()}
                   chips={chips}
                   onChips={setChips}
-                  placeholder="Filter by name, location, health, type, standard, product or tag"
+                  placeholder="filter by name, location, health, type, standard, product or tag"
                 >
                   {(filtered) => (
                     <Show

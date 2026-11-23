@@ -1,4 +1,5 @@
 import { Show, createMemo, createSignal } from "solid-js";
+import Page from "../components/Page";
 import { A, useSearchParams } from "@solidjs/router";
 import { keepPreviousData, useQuery } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
@@ -12,7 +13,7 @@ import { FLEET_ALARMS_PAGE, fleetAlarms, fleetAlarmsKey, type Alarm } from "../l
 import { alarmFilterKeys, chipsFromParams, paramsFromChips, queryFromChips } from "../lib/alarmqueue";
 import { LEAF_POLL_MS } from "../lib/component_leaf";
 import { can, useMe } from "../lib/auth";
-import { fmtTime, rel } from "../lib/format";
+import Time from "../components/Time";
 import { useSeverity } from "../lib/severity";
 import type { Chip } from "../lib/predicate";
 
@@ -79,7 +80,7 @@ export default function Alarms() {
         // A fixed-width box: the age reads from the clock (9s, 17m ago), and its
         // width must not size the column, or the columns after it move between
         // two captures of the same page (the docs shot masks this cell).
-        <span class="inline-block w-[9ch] whitespace-nowrap text-xs tnum text-base-content/60" title={fmtTime(a.raised_at)}>{rel(a.raised_at, now())}</span>
+        <Time iso={a.raised_at} now={now()} class="inline-block w-[9ch] whitespace-nowrap text-xs text-base-content/60" />
       ),
     },
     {
@@ -105,7 +106,8 @@ export default function Alarms() {
   const shownColumns = () => (canAck() || canSnooze() || can(me.data, "assistant", "use") ? columns : columns.filter((c) => c.key !== "actions"));
 
   return (
-    <div class="h-[calc(100dvh-9rem)] min-h-96" data-testid="alarm-queue">
+    <Page route="/alarms">
+    <div class="h-[calc(100dvh-14rem)] min-h-96" data-testid="alarm-queue">
       <FlatList<Alarm>
         config={{
           entity: { name: "alarm", plural: "alarms" },
@@ -128,7 +130,7 @@ export default function Alarms() {
               <div class="flex flex-col gap-4">
                 <div class="grid grid-cols-2 gap-3 text-sm">
                   <KVStacked label="Severity" value={<SeverityBadge name={a.severity} />} />
-                  <KVStacked label="Raised" value={<span class="tnum text-xs">{fmtTime(a.raised_at)}</span>} />
+                  <KVStacked label="Raised" value={<span class="text-xs"><Time iso={a.raised_at} now={now()} /></span>} />
                   <KVStacked label="Location" value={<span class="font-data text-xs">{a.location_path || "unplaced"}</span>} />
                   <KVStacked label="Systems" value={<span class="font-data text-xs">{(a.systems ?? []).join(", ") || "none"}</span>} />
                 </div>
@@ -154,5 +156,6 @@ export default function Alarms() {
         }}
       />
     </div>
+    </Page>
   );
 }

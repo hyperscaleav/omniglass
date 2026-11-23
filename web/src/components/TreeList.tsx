@@ -12,7 +12,7 @@ import Drawer from "./Drawer";
 import { hasLabel, labelIsName, type Labelled } from "../lib/entities";
 import ColumnMenu from "./ColumnMenu";
 import {
-  ChevronDown, ChevronsDownUp, ChevronsUpDown, ListTree, Rows, Maximize, Plus, Pencil, Trash,
+  ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, ListTree, Rows, Maximize, Plus, Pencil, Trash,
 } from "./icons";
 import BladeStack from "./BladeStack";
 import Button from "./Button";
@@ -101,6 +101,9 @@ export interface ListConfig<N extends ListNode> {
   loading?: Accessor<boolean>;
   error?: Accessor<unknown>;
   filterPlaceholder?: string;
+  // Draw the open chevron at the end of every row, as a flat list does (the row
+  // click opens the node). Opt-in so a page's rows change only when it asks.
+  rowChevron?: boolean;
   columns: Record<string, { label: string; width: number }>;
   columnKeys: string[];
   defaultCols: string[];
@@ -517,13 +520,18 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
           {(k) => <td class="overflow-hidden text-ellipsis whitespace-nowrap text-sm">{cfg.cellFor(k, n, ctxFull)}</td>}
         </For>
         <td>
-          <div class="flex justify-end gap-0.5 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
+          <div class="flex items-center justify-end gap-0.5">
+            <div class="flex gap-0.5 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
             <Button square size="xs" icon={Maximize} title="Open full page" onClick={(e) => { e.stopPropagation(); openFull(n); }} />
             <Show when={rowAllow(n, "update")}>
               <Button square size="xs" icon={Pencil} title="Edit" onClick={(e) => { e.stopPropagation(); ctxFull.openEdit(n); }} />
             </Show>
             <Show when={rowAllow(n, "delete") && cfg.onDelete}>
               <Button square size="xs" intent="danger" icon={Trash} title="Delete" onClick={(e) => { e.stopPropagation(); cfg.onDelete!(n, ctxFull); }} />
+            </Show>
+            </div>
+            <Show when={cfg.rowChevron}>
+              <span class="ml-1 text-base-content/30" data-testid="row-chevron"><ChevronRight size={15} /></span>
             </Show>
           </div>
         </td>

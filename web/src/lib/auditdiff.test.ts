@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { diffFields } from "./auditdiff";
+import { diffFields, humanizeField, isTimestamp } from "./auditdiff";
 
 // The audit drawer's diff classification (#473): pure rows over the old/new
 // images, so the drawer's added/removed/changed styling has a spec.
@@ -39,5 +39,54 @@ describe("diffFields", () => {
 
   it("returns nothing when the event recorded no images", () => {
     expect(diffFields(null, null)).toEqual([]);
+  });
+});
+
+// Field names as the audit trail records them: Go struct names (PascalCase, ID
+// suffixes) from the older writers and snake_case column names from the newer,
+// both taken from the review lab's real audit rows (#2447).
+describe("humanizeField", () => {
+  const cases: [string, string][] = [
+    ["LastOrphanedAt", "Last orphaned at"],
+    ["LastHeartbeatAt", "Last heartbeat at"],
+    ["OrphanedBatches", "Orphaned batches"],
+    ["CreatedAt", "Created at"],
+    ["ID", "ID"],
+    ["ComponentID", "Component ID"],
+    ["PlatformComponentID", "Platform component ID"],
+    ["LocationTypeID", "Location type ID"],
+    ["RaisedByRuleID", "Raised by rule ID"],
+    ["UserID", "User ID"],
+    ["DedupKey", "Dedup key"],
+    ["OutOfBand", "Out of band"],
+    ["PathSegments", "Path segments"],
+    ["LabelGenerated", "Label generated"],
+    ["owner_kind", "Owner kind"],
+    ["owner_id", "Owner ID"],
+    ["host_key", "Host key"],
+    ["is_primary", "Is primary"],
+    ["secret_type", "Secret type"],
+    ["component", "Component"],
+    ["value", "Value"],
+    ["label", "Label"],
+  ];
+  for (const [raw, human] of cases) {
+    it(`${raw} reads ${human}`, () => expect(humanizeField(raw)).toBe(human));
+  }
+
+  it("leaves a key with no letters or an empty key as it came", () => {
+    expect(humanizeField("")).toBe("");
+    expect(humanizeField("42")).toBe("42");
+  });
+});
+
+describe("isTimestamp", () => {
+  it("accepts the RFC 3339 instants the audit images carry and nothing looser", () => {
+    expect(isTimestamp("2026-11-23T16:35:10.80497Z")).toBe(true);
+    expect(isTimestamp("2026-11-23T16:35:10Z")).toBe(true);
+    expect(isTimestamp("2026-11-23T16:35:10+02:00")).toBe(true);
+    expect(isTimestamp("2026-11-23")).toBe(false);
+    expect(isTimestamp("v2026-11-23T16:35:10Z")).toBe(false);
+    expect(isTimestamp("01a2093c-33ec-79ea-9d4a-9a0b27a96650")).toBe(false);
   });
 });

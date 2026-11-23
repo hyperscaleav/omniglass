@@ -23,7 +23,7 @@ import { useFormActions } from "../lib/formactions";
 import { bindSelectValue } from "../lib/selectvalue";
 import { useMe, canFleet, fleetView } from "../lib/auth";
 import { OFFICIAL_LOCK, catalogLock } from "../lib/catalog";
-import { describeError, fmtTime, rel } from "../lib/format";
+import { describeError, fmtCount, fmtTime, rel } from "../lib/format";
 import { type BladeDef, createBladeController, useBlades, useBladeEdit } from "../lib/blades";
 import { useSeverity } from "../lib/severity";
 import { PROPERTIES_KEY, listProperties } from "../lib/properties";
@@ -1121,7 +1121,7 @@ function RulePreviewPanel(p: { draft: RuleDraft; ready: boolean }): JSX.Element 
               <div data-testid="preview-truncated" class="alert alert-warning alert-soft text-[12px]">
                 <span>
                   Judged {r().series_judged} of {r().series_total} series: the rest would pass the{" "}
-                  {r().row_cap.toLocaleString("en-US")}-sample cap.
+                  {fmtCount(r().row_cap)}-sample cap.
                 </span>
               </div>
             </Show>

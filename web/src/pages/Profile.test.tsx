@@ -17,7 +17,7 @@ function meWith(hasAvatar: boolean, email?: string): Me {
     user: { id: "u-me", kind: "person" },
     person: { username: "ada", label: "Ada Lovelace", has_avatar: hasAvatar, email },
     permissions: [">"],
-    grants: [],
+    grants: [{ role: "owner", scope_kind: "all" }],
   };
 }
 
@@ -214,9 +214,23 @@ describe("Profile access", () => {
     mount(false);
     const trigger = await screen.findByRole("button", { name: "Permissions (1)" });
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
-    expect(screen.queryByText(">")).toBeNull();
+    expect(screen.queryByText("Every permission")).toBeNull();
     fireEvent.click(trigger);
-    await waitFor(() => expect(screen.getByText(">")).toBeTruthy());
+    // The bare ">" wildcard reads as what it means, never as a lone chip (#2447).
+    await waitFor(() => expect(screen.getByText("Every permission")).toBeTruthy());
+    expect(screen.queryByText(">")).toBeNull();
     expect(trigger.getAttribute("aria-expanded")).toBe("true");
+  });
+});
+
+// Roles and scope are rows, not a prose paragraph and a grant chip (#2447).
+describe("Profile access rows", () => {
+  afterEach(() => vi.restoreAllMocks());
+  it("lists each role grant with its scope in words", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response("[]", { status: 200, headers: { "Content-Type": "application/json" } }));
+    mount(false);
+    const rows = await screen.findByTestId("access-rows");
+    expect(rows.textContent).toMatch(/Role/);
+    expect(rows.textContent).toMatch(/Everywhere/);
   });
 });

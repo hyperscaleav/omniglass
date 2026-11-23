@@ -27,7 +27,7 @@ import { ENDPOINTS_KEY, listEndpoints } from "../lib/endpoints";
 import { DRIVERS_KEY, listDrivers } from "../lib/drivers";
 import { can, useMe } from "../lib/auth";
 import { CLOCK_TICK_MS, createClock } from "../lib/clock";
-import { describeError, fmtTime, rel } from "../lib/format";
+import { describeError, fmtClock, fmtTime, rel } from "../lib/format";
 
 // CommandsPanel (#1155): a component's commands, newest first, each where it
 // stands: in flight (queued for its outpost, delivered, awaiting the reply or the
@@ -180,7 +180,7 @@ function CommandRow(props: { c: Command; now: number; open: boolean; controls: s
 }
 
 // clockTime is a moment to the second, the issue's time on the arc.
-const clockTime = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+const clockTime = (iso: string) => fmtClock(iso, { seconds: true });
 
 // CommandDetail is a command's whole arc, opened in place under its row: the
 // issue's time, then each later transition as an offset from it.
