@@ -7,6 +7,7 @@ import Eyebrow from "./Eyebrow";
 import DetailGate from "./DetailGate";
 import LocationCard from "./LocationCard";
 import MemberRows from "./MemberRows";
+import AddComponentLink from "./AddComponentLink";
 import OutlineWorkspace from "./OutlineWorkspace";
 import { FLEET_VIEW_KEY, fleetView, childrenIndex } from "../lib/fleet";
 import { systemHealth, systemHealthKey, healthOf } from "../lib/health";
@@ -52,6 +53,7 @@ import { useBlades } from "../lib/blades";
 import { type DetailHost } from "../lib/tabstate";
 import { useEntityDelete } from "../lib/entity_delete";
 import { deleteSystem } from "../lib/systems";
+import { LOCATIONS_KEY, deleteLocation, listLocations } from "../lib/locations";
 
 import { CLOCK_TICK_MS, createClock } from "../lib/clock";
 
@@ -157,7 +159,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
   const tabs = createMemo(() => [
     { key: "overview", label: "Overview" },
     { key: "activity", label: "Activity" },
-    ...(can(me.data, "system", "update") ? [{ key: "configure", label: "Configure" }] : []),
+    ...(can(me.data, "system", "update") || can(me.data, "system", "delete") ? [{ key: "configure", label: "Configure" }] : []),
   ]);
   const tabState = createTabState(props.host, tabs, { legacy: { map: "overview", data: "overview", history: "activity", events: "activity", logs: "activity" } });
   const tab = tabState.active;
@@ -348,6 +350,26 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
     onDeleted: () => (props.host === "blade" ? blades.close() : navigate("/explore")),
     invalidate: () => Promise.all([qc.invalidateQueries({ queryKey: [...SYSTEMS_KEY] }), qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] })]),
   });
+  // A sole system's location has no page of its own (its address lands
+  // here), so its section below carries the location's own Delete (#2463).
+  const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
+  const locationRow = () => (locations.data ?? []).find((l) => l.id === locationId());
+  const locationDelete = useEntityDelete({
+    kindLabel: "location",
+    get id() {
+      return locationId() ?? "";
+    },
+    name: () => locationRow()?.name,
+    actions: () => locationRow()?.actions ?? [],
+    remove: (lid) => deleteLocation(lid),
+    onDeleted: () => (props.host === "blade" ? blades.close() : navigate("/explore")),
+    invalidate: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: [...LOCATIONS_KEY] }),
+        qc.invalidateQueries({ queryKey: [...SYSTEMS_KEY] }),
+        qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] }),
+      ]),
+  });
   const pending = () => view.isPending || health.isPending || declared.isPending;
 
   return (
@@ -406,7 +428,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                 {(pid) => (
                   <section class="border-b border-base-300">
                     <div class="px-4 pt-4"><Eyebrow label="Location" hint="Where this system sits: the location's own name, type, parent, properties and tags. Its edit is its own, beside the system's." /></div>
-                    <ConfigureFace kind="location" id={pid} editValue="location" testid="configure-face-location" guard={leave} host={props.host} />
+                    <ConfigureFace kind="location" id={pid} editValue="location" testid="configure-face-location" guard={leave} host={props.host} destructive={locationDelete.destructive} />
                   </section>
                 )}
               </Show>
@@ -648,7 +670,10 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                     </section>
                   </Show>
                   <section class="flex flex-col gap-2">
-                    <Eyebrow label="Components" hint="The pieces of this system, each with the slot it fills. A slot gets its own header only where it says something a column cannot: more than one wanted, a shortfall, or nobody staffing it yet." />
+                    <div class="flex items-center justify-between gap-2">
+                      <Eyebrow label="Components" hint="The pieces of this system, each with the slot it fills. A slot gets its own header only where it says something a column cannot: more than one wanted, a shortfall, or nobody staffing it yet." />
+                      <AddComponentLink system={id()} size="xs" intent={members().rows.length + members().groups.length === 0 ? "action" : "quiet"} />
+                    </div>
                     <MemberRows rows={members().rows} groups={members().groups} onOpen={openComponent} />
                   </section>
                   <Show when={mapDecl()}>

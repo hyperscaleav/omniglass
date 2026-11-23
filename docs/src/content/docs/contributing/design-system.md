@@ -266,8 +266,11 @@ console's confirm for a decision that needs reading first (a centred `ModalDialo
 the one `PanelFooter`, the focus on Cancel when it opens): the confirm repeats both keys and teaches
 **Why a key changes** as three chips, each an `InfoTip` trigger, the man in the middle on the
 warning hue and the two routine causes on the neutral chip. Both are generic over the class, so a
-tls certificate's pinned key renders the same. A delete keeps the browser's own `confirm()`; a
-confirm whose body has to teach cannot be a native prompt.
+tls certificate's pinned key renders the same. Every other destructive confirm reaches the same
+dialog through `confirmDelete` / `confirmAction` (`web/src/lib/confirm.ts`), one line at the site:
+the title names the thing, the body says what goes with it, the button carries the verb. Handed the
+act as `run`, the dialog runs it and, on a refused delete, lists the blockers the 409 names, each
+with its own link and delete. The browser's `confirm()` is barred under `web/src` by a guard test.
 
 ## Primitives (the reuse target)
 
@@ -308,6 +311,7 @@ same keys and focus, and the library underneath is swappable in one directory.
 |---|---|---|
 | A modal surface | `ModalDialog` (+ `DialogHeading`, `DialogClose`) | `Drawer` and the palette are built on it; `alert` for an alertdialog |
 | A decision that needs reading | `ConfirmDialog` | Cancel takes the focus; the body can teach |
+| Any destructive confirm | `confirmDelete` / `confirmAction` (`lib/confirm`) | one line at the site; renders the one `ConfirmDialog`; `run` lists a refused delete's blockers |
 | A floating panel from a button | `Popover` | the column menu, Snooze, Add under |
 | Help on hover or focus | `Tooltip` | `InfoTip` is the (i) built on it; never inside a `<label>` |
 | A short fixed list with drawn options | `Select` | `TreeSelect` is built on it |

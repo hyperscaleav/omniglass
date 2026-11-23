@@ -17,7 +17,7 @@ import { EVENT_TYPES_KEY, listEventTypes } from "../lib/event_types";
 import SeverityBadge from "../components/SeverityBadge";
 import ComponentTypeSelect from "../components/ComponentTypeSelect";
 import { identityColumn } from "../components/IdentityCell";
-import { Pencil, Plus, Save, Trash, X } from "../components/icons";
+import { Ban, Pencil, Plus, RotateCcw, Save, X } from "../components/icons";
 import { entityLabel } from "../lib/entities";
 import { useFormActions } from "../lib/formactions";
 import { bindSelectValue } from "../lib/selectvalue";
@@ -64,6 +64,7 @@ import {
   withLane,
 } from "../lib/event_rules";
 import { previewEventRule, type RulePreview } from "../lib/expressions";
+import { confirmDelete } from "../lib/confirm";
 
 // Rules (Catalog > Actions > Rules, #921): the event rule catalog. A rule reads
 // one sample key across the components it selects and raises an alarm at its
@@ -438,7 +439,7 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
   }
 
   async function remove(r: EventRule) {
-    if (!confirm(`Delete rule "${r.name}"? Deleting it clears the alarms it holds open; its past alarms stay in each component's history, no longer naming it.`)) return;
+    if (!(await confirmDelete({ kind: "rule", name: r.name, consequence: "Deleting it clears the alarms it holds open; its past alarms stay in each component's history, no longer naming it." }))) return;
     setErr(null);
     try {
       await deleteEventRule(r.name);
@@ -451,8 +452,10 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
 
   // An official row is read-only for everyone: the Edit / Delete pair greys with
   // the official sentence and nothing else binds. A custom row offers Edit (the
-  // Drawer), the Disable / Enable toggle and a kebab Delete, each on its own
-  // permission; a caller holding none sees the pair greyed with what it needs.
+  // Drawer), Delete in the rail's destructive slot (#2463, where every other
+  // blade's Delete sits) and the Disable / Enable toggle under More actions,
+  // each on its own permission; a caller holding none sees the pair greyed with
+  // what it needs.
   edit.bind({
     primary: () => {
       const r = row();
@@ -460,15 +463,17 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
     },
     destructive: () => {
       const r = row();
-      if (!r || r.official || !canUpdate()) return undefined;
-      return r.enabled
-        ? { label: "Disable", tone: "warn", onClick: () => void toggleEnabled(r) }
-        : { label: "Enable", tone: "ok", onClick: () => void toggleEnabled(r) };
+      if (!r || r.official || !canDelete()) return undefined;
+      return { label: "Delete", tone: "danger", onClick: () => void remove(r) };
     },
     secondary: () => {
       const r = row();
-      if (!r || r.official || !canDelete()) return [];
-      return [{ label: "Delete", icon: <Trash size={15} />, tone: "danger", onClick: () => void remove(r) }];
+      if (!r || r.official || !canUpdate()) return [];
+      return [
+        r.enabled
+          ? { label: "Disable", icon: <Ban size={15} />, onClick: () => void toggleEnabled(r) }
+          : { label: "Enable", icon: <RotateCcw size={15} />, onClick: () => void toggleEnabled(r) },
+      ];
     },
     locked: () => {
       const r = row();

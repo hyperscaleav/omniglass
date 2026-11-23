@@ -1522,7 +1522,7 @@ Delete a component
 omniglass component delete <name>
 ```
 
-Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
+Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
 
 Arguments:
   <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
@@ -3519,7 +3519,7 @@ Delete a location
 omniglass location delete <name>
 ```
 
-Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
+Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
 
 Arguments:
   <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
@@ -5964,6 +5964,26 @@ Example:
 omniglass simulation get
 ```
 
+### `omniglass simulation plan-component`
+
+Plan a simulated component
+
+```
+omniglass simulation plan-component <name> [flags]
+```
+
+Previews what adding a simulated component of a product would create (see add-outpost-simulation-component): the lowest free address in the simulated block (127.60.0.0/16) and the endpoints the collector would reach it through, a driver attach with its inputs (a secret input names the platform secret, never its value) or a reachability probe with its target, planned exactly as the add plans them. Creates nothing and reserves nothing: the address is not held, so an add or another plan in between may take it, and an add made after this plan then lands on the next free address instead. Gated by simulation:read, and needs outpost:read on the outpost. An outpost that does not exist is a 404, one with no simulator connected a 409, a product no profile simulates a 422, and a full block or a profile with no surface the collector can reach a 409.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--product` | string | (none) | A product a simulator profile simulates |
+
+Example:
+
+```sh
+omniglass simulation plan-component <name>
+```
+
 ### `omniglass simulation plan-system`
 
 Plan a simulated system to a standard
@@ -6443,7 +6463,7 @@ Delete a system
 omniglass system delete <name>
 ```
 
-Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
+Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
 
 Arguments:
   <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.

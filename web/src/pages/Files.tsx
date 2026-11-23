@@ -21,6 +21,7 @@ import {
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import Time from "../components/Time";
+import { confirmDelete } from "../lib/confirm";
 
 // Files: the tenant-wide file directory, built on the generic TreeList in flat
 // mode (files have no tree, no parent, no scope). A file is a content-addressed
@@ -80,7 +81,7 @@ export default function Files() {
   const [err, setErr] = createSignal<string | null>(null);
 
   async function del(n: FileNode) {
-    if (!confirm(`Delete file "${n.raw.name}"?`)) return;
+    if (!(await confirmDelete({ kind: "file", name: n.raw.name }))) return;
     setErr(null);
     try {
       await deleteFile(n.raw.id);

@@ -21,6 +21,7 @@ export type SimProfile = S.SimProfileBody;
 export type ComponentSim = S.ComponentSimOutputBody;
 export type SimSurface = S.SimSurfaceBody;
 export type SimRoute = S.SimRouteBody;
+export type SimSet = S.SimSetBody;
 export type SimCommand = S.SimCommandBody;
 export type SimOID = S.SimOIDBody;
 export type SimResult = S.SimOperationResult;
@@ -74,6 +75,18 @@ export function simulatorConnected(me: Me | null | undefined, f: SimFleet | unde
   return can(me, "simulation", "read") && f?.connected === true;
 }
 
+// planSimComponent previews a new simulated device of a product beside the
+// outpost (#2460): the address it would answer on and the driver attach the
+// simulator answers to. Creates and reserves nothing; the add-a-component flow
+// fills its endpoint from it.
+export type SimComponentPlan = S.PlanSimComponentOutputBody;
+export const simComponentPlanKey = (outpost: string, product: string) => ["simulation", "component-plan", outpost, product] as const;
+export async function planSimComponent(outpost: string, product: string): Promise<SimComponentPlan> {
+  const { data, error } = await api.GET("/outposts/{name}/simulation/components:plan", { params: { path: { name: outpost }, query: { product } } });
+  if (error) throw error;
+  return data as SimComponentPlan;
+}
+
 export async function getSimulation(): Promise<SimFleet> {
   const { data, error } = await api.GET("/simulation");
   if (error) throw error;
@@ -85,6 +98,11 @@ export async function listSimProfiles(): Promise<SimProfile[]> {
   if (error) throw error;
   return data?.profiles ?? [];
 }
+
+// componentSimPollMs: a component's page refreshes its simulation while it is
+// simulated; a component that is not is read once and left alone, since the
+// chip and the section mount on every component page.
+export const componentSimPollMs = (d: Pick<ComponentSim, "simulated"> | undefined): number | false => (d?.simulated ? 5_000 : false);
 
 export async function getComponentSim(id: string): Promise<ComponentSim> {
   const { data, error } = await api.GET("/components/{name}/simulation", { params: { path: { name: id } } });

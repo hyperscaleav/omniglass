@@ -1949,6 +1949,17 @@ export type ComponentPropertyBody = {
   value_id: string;
 };
 
+export type SimFaultBody = {
+  /** What the profile defaults it to. */
+  default: string;
+  /** The state path, as the profile names it. */
+  path: string;
+  /** When the server first heard the device hold this value. */
+  since: string;
+  /** What it holds now. */
+  value: string;
+};
+
 export type ImpairmentFields = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -2000,6 +2011,11 @@ export type SimDeviceBody = {
   /** The component's name. */
   component: string;
   component_id: string;
+  /**
+     * The device's settable state paths the simulator reports held off their profile defaults (a display powered off), each with when the server first heard it. In memory, per server process, like the hits.
+     * @nullable
+     */
+  faults?: SimFaultBody[] | null;
   /** Connections and requests the simulated device has answered since the server started. */
   hits: number;
   hits_by_protocol: SimDeviceBodyHitsByProtocol;
@@ -2007,6 +2023,8 @@ export type SimDeviceBody = {
   impaired: boolean;
   /** What an operator has broken on the device; absent when healthy. */
   impairment?: ImpairmentFields;
+  /** When the impairment was last set; absent when healthy. */
+  impairment_since?: string;
   last_hit_at?: string;
   last_protocol?: string;
   /** The component's product; its name selects the simulator profile. */
@@ -2015,6 +2033,19 @@ export type SimDeviceBody = {
   serving: boolean;
   /** What the simulator is doing with the component, most urgent first: offline (its simulator stopped reporting), starting (added since the simulator's last pull, or handed over moments ago), failed (handed to the simulator but not started), running. */
   status: SimDeviceBodyStatus;
+};
+
+export type SimBehaviorBody = {
+  /** Whether it posts a webhook each time. */
+  emits?: boolean;
+  /** How often it runs, as a duration: 5s, 1m. */
+  interval: string;
+  name: string;
+  /**
+     * The state paths it changes each time.
+     * @nullable
+     */
+  writes?: string[] | null;
 };
 
 export type SimImpairmentStatus = {
@@ -2039,12 +2070,31 @@ export type SimOIDBody = {
   path: string;
 };
 
+export type SimSetBody = {
+  /** What the profile defaults the path to, when it does. */
+  default?: string;
+  /** The request body field its value comes from. */
+  field: string;
+  /** The state path the route writes. */
+  path: string;
+  /**
+     * The values the route accepts.
+     * @nullable
+     */
+  values: string[] | null;
+};
+
 export type SimRouteBody = {
   example?: string;
   method: string;
   path: string;
   /** A route the product's own web UI calls but does not advertise. */
   private?: boolean;
+  /**
+     * The state paths the route sets from a field of its body, each to a fixed list of values: what the console offers as quick sets.
+     * @nullable
+     */
+  sets?: SimSetBody[] | null;
   summary?: string;
 };
 
@@ -2075,6 +2125,11 @@ export type ComponentSimOutputBody = {
   /** What the simulator reports for the component: serving, hits, and its impairment. */
   activity?: SimDeviceBody;
   address?: string;
+  /**
+     * What the profile changes on the device by itself over time.
+     * @nullable
+     */
+  behaviors?: SimBehaviorBody[] | null;
   /** The outpost's simulator pulled recently. */
   connected: boolean;
   impairments: SimImpairmentStatus;
@@ -3447,6 +3502,66 @@ export type DatabaseSettings = {
   slow_query_ms: number;
 };
 
+/**
+ * The blocking row's own resource, so a client can link it and offer that kind's own remove.
+ */
+export type DeleteBlockerKind = typeof DeleteBlockerKind[keyof typeof DeleteBlockerKind];
+
+
+export const DeleteBlockerKind = {
+  component: 'component',
+  endpoint: 'endpoint',
+  system: 'system',
+  location: 'location',
+} as const;
+
+export type DeleteBlocker = {
+  /** The blocking row's uuid. */
+  id: string;
+  /** The blocking row's own resource, so a client can link it and offer that kind's own remove. */
+  kind: DeleteBlockerKind;
+  /** What an operator reads for the blocking row: its label, or its name when it has none. */
+  label: string;
+  /** The blocking row's name, its operator-facing address (an endpoint's is unique within its component). */
+  name: string;
+};
+
+export type ErrorDetail = {
+  /** Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
+  location?: string;
+  /** Error message text */
+  message?: string;
+  /** The value at the given location */
+  value?: unknown;
+};
+
+export type DeleteRefusal = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The rows in the way that the caller may read, each to be removed or moved before the delete can succeed.
+     * @nullable
+     */
+  blockers?: DeleteBlocker[] | null;
+  /** How many more rows are in the way that are not listed: outside the caller's read scope, or past the listing cap. */
+  blockers_hidden?: number;
+  /** A human-readable explanation specific to this occurrence of the problem. */
+  detail?: string;
+  /**
+     * Optional list of individual error details
+     * @nullable
+     */
+  errors?: ErrorDetail[] | null;
+  /** A URI reference that identifies the specific occurrence of the problem. */
+  instance?: string;
+  /** HTTP status code */
+  status?: number;
+  /** A short, human-readable summary of the problem type. This value should not change between occurrences of the error. */
+  title?: string;
+  /** A URI reference to human-readable documentation for the error. */
+  type?: string;
+};
+
 export type DownloadFileOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -3822,15 +3937,6 @@ export type EntityTagsOutputBody = {
   readonly $schema?: string;
   /** @nullable */
   tags: TagBindingBody[] | null;
-};
-
-export type ErrorDetail = {
-  /** Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
-  location?: string;
-  /** Error message text */
-  message?: string;
-  /** The value at the given location */
-  value?: unknown;
 };
 
 export type ErrorModel = {
@@ -6386,6 +6492,38 @@ export type OwnerStruct = {
      * @minLength 1
      */
   ref: string;
+};
+
+/**
+ * The driver's inputs the attach would send; a secret input holds the secret's NAME, never its value.
+ */
+export type SimPlannedEndpointBodyInputs = {[key: string]: string};
+
+export type SimPlannedEndpointBody = {
+  /** The driver the endpoint would attach; empty for a reachability probe. */
+  driver?: string;
+  /** The driver's inputs the attach would send; a secret input holds the secret's NAME, never its value. */
+  inputs?: SimPlannedEndpointBodyInputs;
+  /** The host:port a reachability probe would reach; empty for a driver attach. */
+  target?: string;
+  /** The transport a reachability probe would speak; empty for a driver attach. */
+  transport?: string;
+};
+
+export type PlanSimComponentOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** The loopback address the simulated component would answer on. */
+  address: string;
+  /**
+     * The endpoints an add would create for the collector to reach it.
+     * @nullable
+     */
+  endpoints: SimPlannedEndpointBody[] | null;
+  /** The outpost whose simulator would serve the component. */
+  outpost: string;
+  /** The simulated product planned. */
+  product: string;
 };
 
 export type PlatformAlarmBody = {
@@ -9783,6 +9921,14 @@ export const ListNotificationStatus = {
   '': '',
 } as const;
 
+export type PlanOutpostSimulationComponentParams = {
+  /**
+   * A product a simulator profile simulates
+   * @minLength 1
+   */
+  product: string;
+};
+
 export type SearchParams = {
   /**
    * The text to find, matched case-insensitively anywhere in a name or label
@@ -12972,15 +13118,20 @@ export type deleteComponentResponse204 = {
   status: 204
 }
 
+export type deleteComponentResponse409 = {
+  data: DeleteRefusal
+  status: 409
+}
+
 export type deleteComponentResponseDefault = {
   data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
+  status: Exclude<HTTPStatusCodes, 204 | 409>
 }
 
 export type deleteComponentResponseSuccess = (deleteComponentResponse204) & {
   headers: Headers;
 };
-export type deleteComponentResponseError = (deleteComponentResponseDefault) & {
+export type deleteComponentResponseError = (deleteComponentResponse409 | deleteComponentResponseDefault) & {
   headers: Headers;
 };
 
@@ -12995,7 +13146,7 @@ export const getDeleteComponentUrl = (name: string,) => {
 }
 
 /**
- * Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
+ * Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
  * @summary Delete a component
  */
 export const deleteComponent = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteComponentResponse> => {
@@ -17524,15 +17675,20 @@ export type deleteLocationResponse204 = {
   status: 204
 }
 
+export type deleteLocationResponse409 = {
+  data: DeleteRefusal
+  status: 409
+}
+
 export type deleteLocationResponseDefault = {
   data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
+  status: Exclude<HTTPStatusCodes, 204 | 409>
 }
 
 export type deleteLocationResponseSuccess = (deleteLocationResponse204) & {
   headers: Headers;
 };
-export type deleteLocationResponseError = (deleteLocationResponseDefault) & {
+export type deleteLocationResponseError = (deleteLocationResponse409 | deleteLocationResponseDefault) & {
   headers: Headers;
 };
 
@@ -17547,7 +17703,7 @@ export const getDeleteLocationUrl = (name: string,) => {
 }
 
 /**
- * Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
+ * Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
  * @summary Delete a location
  */
 export const deleteLocation = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteLocationResponse> => {
@@ -19797,6 +19953,59 @@ export const addOutpostSimulationComponent = async (name: string,
     method: 'POST',
     headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(addSimComponentInputBody)
+  }
+);}
+
+
+
+export type planOutpostSimulationComponentResponse200 = {
+  data: PlanSimComponentOutputBody
+  status: 200
+}
+
+export type planOutpostSimulationComponentResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type planOutpostSimulationComponentResponseSuccess = (planOutpostSimulationComponentResponse200) & {
+  headers: Headers;
+};
+export type planOutpostSimulationComponentResponseError = (planOutpostSimulationComponentResponseDefault) & {
+  headers: Headers;
+};
+
+export type planOutpostSimulationComponentResponse = (planOutpostSimulationComponentResponseSuccess | planOutpostSimulationComponentResponseError)
+
+export const getPlanOutpostSimulationComponentUrl = (name: string,
+    params: PlanOutpostSimulationComponentParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/outposts/${name}/simulation/components:plan?${stringifiedParams}` : `/outposts/${name}/simulation/components:plan`
+}
+
+/**
+ * Previews what adding a simulated component of a product would create (see add-outpost-simulation-component): the lowest free address in the simulated block (127.60.0.0/16) and the endpoints the collector would reach it through, a driver attach with its inputs (a secret input names the platform secret, never its value) or a reachability probe with its target, planned exactly as the add plans them. Creates nothing and reserves nothing: the address is not held, so an add or another plan in between may take it, and an add made after this plan then lands on the next free address instead. Gated by simulation:read, and needs outpost:read on the outpost. An outpost that does not exist is a 404, one with no simulator connected a 409, a product no profile simulates a 422, and a full block or a profile with no surface the collector can reach a 409.
+ * @summary Plan a simulated component
+ */
+export const planOutpostSimulationComponent = async (name: string,
+    params: PlanOutpostSimulationComponentParams, options?: Parameters<typeof ogFetch>[1]): Promise<planOutpostSimulationComponentResponse> => {
+
+  return ogFetch<planOutpostSimulationComponentResponse>(getPlanOutpostSimulationComponentUrl(name,params),
+  {
+    ...options,
+    method: 'GET'
+
+
   }
 );}
 
@@ -22898,15 +23107,20 @@ export type deleteSystemResponse204 = {
   status: 204
 }
 
+export type deleteSystemResponse409 = {
+  data: DeleteRefusal
+  status: 409
+}
+
 export type deleteSystemResponseDefault = {
   data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
+  status: Exclude<HTTPStatusCodes, 204 | 409>
 }
 
 export type deleteSystemResponseSuccess = (deleteSystemResponse204) & {
   headers: Headers;
 };
-export type deleteSystemResponseError = (deleteSystemResponseDefault) & {
+export type deleteSystemResponseError = (deleteSystemResponse409 | deleteSystemResponseDefault) & {
   headers: Headers;
 };
 
@@ -22921,7 +23135,7 @@ export const getDeleteSystemUrl = (name: string,) => {
 }
 
 /**
- * Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
+ * Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
  * @summary Delete a system
  */
 export const deleteSystem = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteSystemResponse> => {

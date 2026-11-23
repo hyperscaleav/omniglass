@@ -294,6 +294,66 @@ func TestIntegrationLabOnARealDaemon(t *testing.T) {
 		}
 	})
 
+	// Every open alarm on the lab is true (#2434): the dev fleet hand-raises
+	// none, so each was raised by a rule from a cause the simulator holds,
+	// carries its triggering event and agrees with its component's page.
+	t.Run("every open alarm is true", func(t *testing.T) {
+		deadline := time.Now().Add(2 * time.Minute)
+		for {
+			bad, err := untrueAlarms(ctx, client, lab.BaseURL)
+			if err == nil && len(bad) == 0 {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("open alarms that are not true: %v (%v)", bad, err)
+			}
+			time.Sleep(5 * time.Second)
+		}
+	})
+
+	// Lifting a seeded fault on the Simulation page (its PUT) clears the
+	// alarm through the rule, with no hand on the alarm; setting it again
+	// puts the lab back as it was.
+	t.Run("lifting a seeded fault clears its alarm", func(t *testing.T) {
+		impaired, err := impairedComponents(ctx, client, lab.BaseURL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		alarms, err := openLabAlarms(ctx, client, lab.BaseURL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var target labAlarm
+		for _, a := range alarms {
+			if impaired[a.ComponentID] && a.Rule == "response-slow" {
+				target = a
+			}
+		}
+		if target.ID == "" {
+			t.Fatal("no seeded slow-response alarm to lift")
+		}
+		var was map[string]any
+		if err := getJSON(ctx, client, lab.BaseURL+"/api/v1/components/"+target.ComponentID+"/impairment", &was); err != nil {
+			t.Fatal(err)
+		}
+		delete(was, "$schema")
+		restore, _ := json.Marshal(was)
+		put(t, client, lab.BaseURL+"/api/v1/components/"+target.ComponentID+"/impairment", `{}`)
+		waitUntil(t, 2*time.Minute, "the lifted fault's alarm to clear", func() bool {
+			open, err := openLabAlarms(ctx, client, lab.BaseURL)
+			if err != nil {
+				return false
+			}
+			for _, a := range open {
+				if a.ID == target.ID {
+					return false
+				}
+			}
+			return true
+		})
+		put(t, client, lab.BaseURL+"/api/v1/components/"+target.ComponentID+"/impairment", string(restore))
+	})
+
 	// An impairment set through the API takes a simulated component's
 	// reachability down in the lab; an empty one brings it back.
 	t.Run("an unplugged component goes down and comes back", func(t *testing.T) {

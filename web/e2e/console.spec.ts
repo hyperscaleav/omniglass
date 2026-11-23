@@ -7,6 +7,15 @@ import { test, expect, type Page } from "@playwright/test";
 const USER = process.env.OG_E2E_USER;
 const PASSWORD = process.env.OG_E2E_PASSWORD;
 
+// Every destructive confirm is the console's one confirm dialog (#2463), never
+// the browser's: its destructive button carries the verb.
+async function confirmInDialog(page: Page) {
+  const d = page.getByRole("alertdialog");
+  await expect(d).toBeVisible();
+  await d.locator("footer").getByRole("button").last().click();
+  await expect(d).toHaveCount(0);
+}
+
 // watchTrouble records every failed response and console error from now on, so
 // a flow can assert it ran clean. A 4xx the console logs is an operator-visible
 // defect even when the page recovers (#2465).
@@ -83,12 +92,12 @@ test.describe("operator console", () => {
     // Confirm-delete it from its blade: a row opens the blade (#799), the
     // location's detail body (#2423), whose Configure footer carries Delete
     // behind a confirm.
-    page.on("dialog", (d) => d.accept());
     await row.click();
     await expect(page.locator("aside[data-blade]")).toBeVisible();
     await page.locator("aside[data-blade]").getByRole("tab", { name: "Configure" }).click();
     await expect(page.locator('aside[data-blade] button:text-is("Delete")')).toBeVisible();
     await page.locator('aside[data-blade] button:text-is("Delete")').click();
+    await confirmInDialog(page);
 
     // It is gone from the outline.
     await expect(row).toHaveCount(0);
@@ -193,7 +202,6 @@ test.describe("operator console", () => {
     // Clean up after the run, and prove on the way that a component placed
     // nowhere is still findable: it sits in the outline's "Placed nowhere you
     // can see" outpost, whose row blade carries the confirm-delete (#799).
-    page.on("dialog", (d) => d.accept());
     await page.goto("/web/explore");
     await page.getByRole("button", { name: "Expand Placed nowhere you can see" }).click();
     const row = page.getByRole("treeitem").filter({ has: page.locator("[data-label]", { hasText: draftedLabel }) });
@@ -201,6 +209,7 @@ test.describe("operator console", () => {
     await expect(page.locator("aside[data-blade]")).toBeVisible();
     await page.locator("aside[data-blade]").getByRole("tab", { name: "Configure" }).click();
     await page.locator('aside[data-blade] button:text-is("Delete")').click();
+    await confirmInDialog(page);
     await expect(row).toHaveCount(0);
   });
 
@@ -353,11 +362,13 @@ test.describe("operator console", () => {
 
     // Clean up: the system through its blade (the blade delete under test),
     // then the locations through the API on the browser's own session.
-    page.on("dialog", (d) => d.accept());
     await page.goto(`/web/explore?node=${buildingId}`);
     await rowOf(buildingLabel).click();
     await page.locator("aside[data-blade]").getByRole("tab", { name: "Configure" }).click();
-    await page.locator('aside[data-blade] button:text-is("Delete")').click();
+    // The system's own face: its location's section above carries the
+    // location's Delete (#2463).
+    await page.locator('aside[data-blade] [data-testid="configure-face"] button:text-is("Delete")').click();
+    await confirmInDialog(page);
     await expect(page.locator("aside[data-blade]")).toHaveCount(0);
     await expect.poll(async () => (await page.request.get(`/api/v1/systems/${systemId}`)).status()).toBe(404);
     for (const id of [buildingId, secondId, campusId]) {
@@ -372,11 +383,65 @@ test.describe("operator console", () => {
   // expression editor, switches it off and on, and removes both. The e2e
   // server names no egress allow list and has no route to the world, so the
   // target's host never resolves: the test's answer is the honest reason.
+  // #2463: each tree tier deletes from its own page, and a refused delete
+  // names its blockers in the confirm, each with its own Delete, so the
+  // cleanup finishes in the same dialog. (The blade deletes are driven above.)
+  test("delete from the page: the confirm names what is in the way and clears it in place", async ({ page }) => {
+    const stamp = Date.now();
+    const site = `e2e-del-site-${stamp}`;
+    const sys = `e2e-del-sys-${stamp}`;
+    const comp = `e2e-del-comp-${stamp}`;
+    expect((await page.request.post("/api/v1/locations", { data: { name: site, location_type: "campus" } })).ok()).toBeTruthy();
+    expect((await page.request.post("/api/v1/systems", { data: { name: sys, location: site } })).ok()).toBeTruthy();
+    const made = await page.request.post("/api/v1/components", { data: { name: comp, product: "generic-device", location: site } });
+    expect(made.ok()).toBeTruthy();
+    const compId = ((await made.json()) as { id: string }).id;
+    expect((await page.request.post("/api/v1/endpoints", { data: { transport: "icmp", component: comp } })).ok()).toBeTruthy();
+    const dialog = page.getByRole("alertdialog");
+    const blockers = dialog.getByTestId("delete-blockers");
+
+    // The component owns an endpoint: refused, the endpoint named, deleted in
+    // place, and the retry from the same dialog succeeds.
+    await page.goto(`/web/components/${comp}?tab=configure`);
+    await page.getByTestId("configure-face").getByRole("button", { name: "Delete", exact: true }).click();
+    await expect(dialog).toHaveAccessibleName(`Delete component "${comp}"?`);
+    await dialog.locator("footer").getByRole("button", { name: "Delete component" }).click();
+    await expect(blockers.locator("[data-blocker^='endpoint:']")).toHaveCount(1);
+    await blockers.getByRole("button", { name: /^Delete endpoint/ }).click();
+    await blockers.getByRole("button", { name: /^Confirm delete endpoint/ }).click();
+    await expect(blockers).toContainText("Nothing left in the way");
+    await dialog.locator("footer").getByRole("button", { name: "Delete component" }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect.poll(async () => (await page.request.get(`/api/v1/components/${compId}`)).status()).toBe(404);
+
+    // The location holds one system, so its address lands on the system,
+    // whose page carries the location's own section and Delete. Refused: the
+    // system is named as a link to its own page, deleted in place, and the
+    // location goes on the retry.
+    await page.goto(`/web/locations/${site}?tab=configure`);
+    await page.getByTestId("configure-face-location").getByRole("button", { name: "Delete", exact: true }).click();
+    await dialog.locator("footer").getByRole("button", { name: "Delete location" }).click();
+    await expect(blockers.locator(`[data-blocker="system:${sys}"]`).getByRole("link")).toBeVisible();
+    await blockers.getByRole("button", { name: /^Delete system/ }).click();
+    await blockers.getByRole("button", { name: /^Confirm delete system/ }).click();
+    await expect(blockers).toContainText("Nothing left in the way");
+    await dialog.locator("footer").getByRole("button", { name: "Delete location" }).click();
+    await expect(dialog).toHaveCount(0);
+
+    // A system deletes from its own page too.
+    const lone = `e2e-del-lone-${stamp}`;
+    expect((await page.request.post("/api/v1/systems", { data: { name: lone } })).ok()).toBeTruthy();
+    await page.goto(`/web/systems/${lone}?tab=configure`);
+    await page.getByTestId("configure-face").getByRole("button", { name: "Delete", exact: true }).click();
+    await confirmInDialog(page);
+    await expect.poll(async () => (await page.request.get(`/api/v1/systems/${lone}`)).status()).toBe(404);
+    await expect.poll(async () => (await page.request.get(`/api/v1/locations/${site}`)).status()).toBe(404);
+  });
+
   test("notifications: a target is made, tested and revealed; an action rule sends to it", async ({ page }) => {
     const stamp = Date.now();
     const target = `e2e-hook-${stamp}`;
     const rule = `e2e-page-${stamp}`;
-    page.on("dialog", (d) => d.accept());
     const blade = page.locator("aside[data-blade]");
 
     await page.goto("/web/notification-targets");
@@ -415,6 +480,7 @@ test.describe("operator console", () => {
     expect((await page.request.delete(`/api/v1/notification-targets/${target}`)).status()).toBe(409);
     await blade.getByRole("button", { name: "More actions" }).click();
     await blade.locator(".dropdown-content").getByRole("button", { name: "Delete" }).click();
+    await confirmInDialog(page);
     await expect(blade).toHaveCount(0);
     await expect.poll(async () => (await page.request.get(`/api/v1/action-rules/${rule}`)).status()).toBe(404);
     expect((await page.request.delete(`/api/v1/notification-targets/${target}`)).ok()).toBeTruthy();
@@ -449,10 +515,12 @@ test.describe("operator console", () => {
   });
 
   // The closed loop (#1647), on the second lab run.sh brings up: the dev fleet
-  // with its outpost and the simulator beside it, nothing impaired. Once the ring
-  // holds a window the section reads measured for every outpost, and a healthy
-  // lab loses nothing at any hop: every gap reads 0 (or no figure, where the
-  // sim does not observe the hop), and every protocol with a poll target
+  // with its outpost and the simulator beside it, its seeded faults impaired
+  // (#2434). Once the ring holds a window the section reads measured for every
+  // outpost, and the lab loses nothing it did not break on purpose: every gap
+  // reads 0 (or no figure, where the sim does not observe the hop) unless the
+  // console reads it as expected under an applied impairment, and no gap reads
+  // as a fault. Every protocol with a poll target
   // reached the simulator: requests it received, or, for a probe that only
   // connects or logs in and asks nothing (ssh, telnet), connections its
   // listener accepted.
@@ -486,10 +554,13 @@ test.describe("operator console", () => {
     for (const card of await cards.all()) {
       const outpost = await card.getAttribute("data-testid");
       const gaps = await card.getByTestId("platform-sim-gap").evaluateAll((els) =>
-        els.map((e) => ({ gap: e.getAttribute("data-gap"), protocol: e.getAttribute("data-protocol"), ratio: e.getAttribute("data-ratio") })),
+        els.map((e) => ({ gap: e.getAttribute("data-gap"), protocol: e.getAttribute("data-protocol"), ratio: e.getAttribute("data-ratio"), tone: e.getAttribute("data-tone") })),
       );
       expect(gaps.length, `${outpost} reads its gaps`).toBeGreaterThan(0);
-      for (const g of gaps) expect(["0", ""], `${outpost} ${g.gap} ${g.protocol} ratio`).toContain(g.ratio);
+      for (const g of gaps) {
+        expect(g.tone, `${outpost} ${g.gap} ${g.protocol} reads as a fault`).not.toBe("fault");
+        if (g.tone !== "expected") expect(["0", ""], `${outpost} ${g.gap} ${g.protocol} ratio`).toContain(g.ratio);
+      }
 
       const polled = await card.getByTestId("platform-sim-protocol").evaluateAll((els) =>
         els.map((e) => ({

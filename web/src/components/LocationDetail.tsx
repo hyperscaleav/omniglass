@@ -66,7 +66,7 @@ export default function LocationDetail(props: { id: string; host: DetailHost }) 
 
   const tabs = createMemo(() => [
     { key: "overview", label: "Overview" },
-    ...(can(me.data, "location", "update") ? [{ key: "configure", label: "Configure" }] : []),
+    ...(can(me.data, "location", "update") || can(me.data, "location", "delete") ? [{ key: "configure", label: "Configure" }] : []),
   ]);
   const tabState = createTabState(props.host, tabs);
   const tab = tabState.active;

@@ -3126,6 +3126,16 @@
           "address": {
             "type": "string"
           },
+          "behaviors": {
+            "description": "What the profile changes on the device by itself over time.",
+            "items": {
+              "$ref": "#/components/schemas/SimBehaviorBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "connected": {
             "description": "The outpost's simulator pulled recently.",
             "type": "boolean"
@@ -5689,6 +5699,120 @@
         "required": [
           "slow_query_ms"
         ],
+        "type": "object"
+      },
+      "DeleteBlocker": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "description": "The blocking row's uuid.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "kind": {
+            "description": "The blocking row's own resource, so a client can link it and offer that kind's own remove.",
+            "enum": [
+              "component",
+              "endpoint",
+              "system",
+              "location"
+            ],
+            "type": "string"
+          },
+          "label": {
+            "description": "What an operator reads for the blocking row: its label, or its name when it has none.",
+            "type": "string"
+          },
+          "name": {
+            "description": "The blocking row's name, its operator-facing address (an endpoint's is unique within its component).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "name",
+          "label"
+        ],
+        "type": "object"
+      },
+      "DeleteRefusal": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/DeleteRefusal.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "blockers": {
+            "description": "The rows in the way that the caller may read, each to be removed or moved before the delete can succeed.",
+            "items": {
+              "$ref": "#/components/schemas/DeleteBlocker"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "blockers_hidden": {
+            "description": "How many more rows are in the way that are not listed: outside the caller's read scope, or past the listing cap.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "detail": {
+            "description": "A human-readable explanation specific to this occurrence of the problem.",
+            "examples": [
+              "Property foo is required but is missing."
+            ],
+            "type": "string"
+          },
+          "errors": {
+            "description": "Optional list of individual error details",
+            "items": {
+              "$ref": "#/components/schemas/ErrorDetail"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "instance": {
+            "description": "A URI reference that identifies the specific occurrence of the problem.",
+            "examples": [
+              "https://example.com/error-log/abc123"
+            ],
+            "format": "uri",
+            "type": "string"
+          },
+          "status": {
+            "description": "HTTP status code",
+            "examples": [
+              400
+            ],
+            "format": "int64",
+            "type": "integer"
+          },
+          "title": {
+            "description": "A short, human-readable summary of the problem type. This value should not change between occurrences of the error.",
+            "examples": [
+              "Bad Request"
+            ],
+            "type": "string"
+          },
+          "type": {
+            "default": "about:blank",
+            "description": "A URI reference to human-readable documentation for the error.",
+            "examples": [
+              "https://example.com/errors/example"
+            ],
+            "format": "uri",
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "DownloadFileOutputBody": {
@@ -11316,6 +11440,49 @@
         ],
         "type": "object"
       },
+      "PlanSimComponentOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/PlanSimComponentOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "address": {
+            "description": "The loopback address the simulated component would answer on.",
+            "type": "string"
+          },
+          "endpoints": {
+            "description": "The endpoints an add would create for the collector to reach it.",
+            "items": {
+              "$ref": "#/components/schemas/SimPlannedEndpointBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "outpost": {
+            "description": "The outpost whose simulator would serve the component.",
+            "type": "string"
+          },
+          "product": {
+            "description": "The simulated product planned.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "outpost",
+          "product",
+          "address",
+          "endpoints"
+        ],
+        "type": "object"
+      },
       "PlatformAlarmBody": {
         "additionalProperties": false,
         "properties": {
@@ -16073,6 +16240,37 @@
         ],
         "type": "object"
       },
+      "SimBehaviorBody": {
+        "additionalProperties": false,
+        "properties": {
+          "emits": {
+            "description": "Whether it posts a webhook each time.",
+            "type": "boolean"
+          },
+          "interval": {
+            "description": "How often it runs, as a duration: 5s, 1m.",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "writes": {
+            "description": "The state paths it changes each time.",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "interval"
+        ],
+        "type": "object"
+      },
       "SimCapabilities": {
         "additionalProperties": false,
         "properties": {
@@ -16130,6 +16328,16 @@
           "component_id": {
             "type": "string"
           },
+          "faults": {
+            "description": "The device's settable state paths the simulator reports held off their profile defaults (a display powered off), each with when the server first heard it. In memory, per server process, like the hits.",
+            "items": {
+              "$ref": "#/components/schemas/SimFaultBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "hits": {
             "description": "Connections and requests the simulated device has answered since the server started.",
             "format": "int64",
@@ -16149,6 +16357,11 @@
           "impairment": {
             "$ref": "#/components/schemas/ImpairmentFields",
             "description": "What an operator has broken on the device; absent when healthy."
+          },
+          "impairment_since": {
+            "description": "When the impairment was last set; absent when healthy.",
+            "format": "date-time",
+            "type": "string"
           },
           "last_hit_at": {
             "format": "date-time",
@@ -16220,6 +16433,35 @@
           "protocol",
           "received",
           "overlapped"
+        ],
+        "type": "object"
+      },
+      "SimFaultBody": {
+        "additionalProperties": false,
+        "properties": {
+          "default": {
+            "description": "What the profile defaults it to.",
+            "type": "string"
+          },
+          "path": {
+            "description": "The state path, as the profile names it.",
+            "type": "string"
+          },
+          "since": {
+            "description": "When the server first heard the device hold this value.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "value": {
+            "description": "What it holds now.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "value",
+          "default",
+          "since"
         ],
         "type": "object"
       },
@@ -16451,6 +16693,31 @@
         ],
         "type": "object"
       },
+      "SimPlannedEndpointBody": {
+        "additionalProperties": false,
+        "properties": {
+          "driver": {
+            "description": "The driver the endpoint would attach; empty for a reachability probe.",
+            "type": "string"
+          },
+          "inputs": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "The driver's inputs the attach would send; a secret input holds the secret's NAME, never its value.",
+            "type": "object"
+          },
+          "target": {
+            "description": "The host:port a reachability probe would reach; empty for a driver attach.",
+            "type": "string"
+          },
+          "transport": {
+            "description": "The transport a reachability probe would speak; empty for a driver attach.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "SimProfileBody": {
         "additionalProperties": false,
         "properties": {
@@ -16641,6 +16908,16 @@
             "description": "A route the product's own web UI calls but does not advertise.",
             "type": "boolean"
           },
+          "sets": {
+            "description": "The state paths the route sets from a field of its body, each to a fixed list of values: what the console offers as quick sets.",
+            "items": {
+              "$ref": "#/components/schemas/SimSetBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "summary": {
             "type": "string"
           }
@@ -16648,6 +16925,39 @@
         "required": [
           "method",
           "path"
+        ],
+        "type": "object"
+      },
+      "SimSetBody": {
+        "additionalProperties": false,
+        "properties": {
+          "default": {
+            "description": "What the profile defaults the path to, when it does.",
+            "type": "string"
+          },
+          "field": {
+            "description": "The request body field its value comes from.",
+            "type": "string"
+          },
+          "path": {
+            "description": "The state path the route writes.",
+            "type": "string"
+          },
+          "values": {
+            "description": "The values the route accepts.",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "path",
+          "field",
+          "values"
         ],
         "type": "object"
       },
@@ -23913,7 +24223,7 @@
     },
     "/components/{name}": {
       "delete": {
-        "description": "Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.",
+        "description": "Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.",
         "operationId": "delete-component",
         "parameters": [
           {
@@ -23930,6 +24240,16 @@
         "responses": {
           "204": {
             "description": "No Content"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteRefusal"
+                }
+              }
+            },
+            "description": "Refused: something still depends on the row. blockers names what the caller may see; blockers_hidden counts the rest."
           },
           "default": {
             "content": {
@@ -28752,7 +29072,7 @@
     },
     "/locations/{name}": {
       "delete": {
-        "description": "Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.",
+        "description": "Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.",
         "operationId": "delete-location",
         "parameters": [
           {
@@ -28769,6 +29089,16 @@
         "responses": {
           "204": {
             "description": "No Content"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteRefusal"
+                }
+              }
+            },
+            "description": "Refused: something still depends on the row. blockers names what the caller may see; blockers_hidden counts the rest."
           },
           "default": {
             "content": {
@@ -30978,6 +31308,60 @@
         "summary": "Add a simulated component",
         "x-omniglass-conditional-permission": "secret:bind",
         "x-omniglass-permission": "simulation:update"
+      }
+    },
+    "/outposts/{name}/simulation/components:plan": {
+      "get": {
+        "description": "Previews what adding a simulated component of a product would create (see add-outpost-simulation-component): the lowest free address in the simulated block (127.60.0.0/16) and the endpoints the collector would reach it through, a driver attach with its inputs (a secret input names the platform secret, never its value) or a reachability probe with its target, planned exactly as the add plans them. Creates nothing and reserves nothing: the address is not held, so an add or another plan in between may take it, and an add made after this plan then lands on the next free address instead. Gated by simulation:read, and needs outpost:read on the outpost. An outpost that does not exist is a 404, one with no simulator connected a 409, a product no profile simulates a 422, and a full block or a profile with no surface the collector can reach a 409.",
+        "operationId": "plan-outpost-simulation-component",
+        "parameters": [
+          {
+            "description": "The outpost whose simulator would serve the component",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "The outpost whose simulator would serve the component",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A product a simulator profile simulates",
+            "explode": false,
+            "in": "query",
+            "name": "product",
+            "required": true,
+            "schema": {
+              "description": "A product a simulator profile simulates",
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanSimComponentOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Plan a simulated component",
+        "x-omniglass-permission": "simulation:read"
       }
     },
     "/outposts/{name}/simulation/observation": {
@@ -33982,7 +34366,7 @@
     },
     "/systems/{name}": {
       "delete": {
-        "description": "Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.",
+        "description": "Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.",
         "operationId": "delete-system",
         "parameters": [
           {
@@ -33999,6 +34383,16 @@
         "responses": {
           "204": {
             "description": "No Content"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteRefusal"
+                }
+              }
+            },
+            "description": "Refused: something still depends on the row. blockers names what the caller may see; blockers_hidden counts the rest."
           },
           "default": {
             "content": {

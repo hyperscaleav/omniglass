@@ -31,6 +31,7 @@ import { COMPONENTS_KEY, listComponents } from "../lib/components";
 import { useMe, can, canAtPlatform, platformTierGap, platformAuthorityHint } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
+import { confirmDelete } from "../lib/confirm";
 
 // Variables: the macro directory on the FlatList surface. A variable is a typed,
 // plaintext free value owned at one scope (platform, or a location / system /
@@ -131,7 +132,7 @@ function VariableBladeBody(p: { id: string }): JSX.Element {
   async function removeVariable() {
     const v = variable();
     if (!v) return;
-    if (!confirm(`Delete variable "${v.name}" (${ownerLabel(v)})?`)) return;
+    if (!(await confirmDelete({ kind: "variable", name: `${v.name} (${ownerLabel(v)})` }))) return;
     setErr(null);
     try {
       await deleteVariable(v.id);

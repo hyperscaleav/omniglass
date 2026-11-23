@@ -6,8 +6,8 @@ import ConfigureFace from "./ConfigureFace";
 import EventsPanel from "./EventsPanel";
 import LogsPanel from "./LogsPanel";
 import CommandsPanel from "./CommandsPanel";
-import IdentitiesPanel from "./IdentitiesPanel";
 import DependenciesPanel from "./DependenciesPanel";
+import IdentitiesPanel from "./IdentitiesPanel";
 import HealthBadge from "./HealthBadge";
 import Eyebrow from "./Eyebrow";
 import DetailGate from "./DetailGate";
@@ -17,6 +17,7 @@ import { SnoozedBadge } from "./SnoozeButton";
 import AlarmTimeline, { createTimelineToggles } from "./AlarmTimeline";
 import SeverityBadge from "./SeverityBadge";
 import SimulationSection from "./SimulationSection";
+import { SimFaultChipFor } from "./SimFaultChip";
 import ReachLadder from "./ReachLadder";
 import SessionPill from "./SessionPill";
 import SessionNotice from "./SessionNotice";
@@ -101,7 +102,7 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
   const leafTabs = createMemo(() => [
     { key: "overview", label: "Overview" },
     { key: "activity", label: "Activity" },
-    ...(can(me.data, "component", "update") ? [{ key: "configure", label: "Configure" }] : []),
+    ...(can(me.data, "component", "update") || can(me.data, "component", "delete") ? [{ key: "configure", label: "Configure" }] : []),
   ]);
   const tabState = createTabState(props.host, leafTabs, { legacy: { events: "activity" } });
   const leafTab = tabState.active;
@@ -265,6 +266,7 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
               <Show when={since()}>
                 {(sc) => <span data-testid="since-line" class="tabular-nums text-base-content/70">since {fmtTime(sc().ts)} · {durationText(sc().ms)}</span>}
               </Show>
+              <SimFaultChipFor componentId={component()?.id ?? id()} name={component()?.name} />
               <span class="text-base-content/30">·</span>
               <span class="font-data text-xs text-base-content/60">{component()?.name}</span>
             </div>

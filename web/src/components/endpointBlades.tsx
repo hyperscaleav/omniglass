@@ -9,6 +9,7 @@ import SessionPill from "./SessionPill";
 import ReachLadder from "./ReachLadder";
 import SessionNotice from "./SessionNotice";
 import PollTest from "./PollTest";
+import DriverInputFields from "./DriverInputFields";
 import {
   type Endpoint,
   type UpdateEndpoint,
@@ -32,6 +33,7 @@ import { entityLabel } from "../lib/entities";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
+import { confirmDelete } from "../lib/confirm";
 
 // The endpoint blades, salvaged from the retired standalone page and folded
 // onto the component detail's shared blade stack (an endpoint belongs to its
@@ -54,7 +56,7 @@ function useEndpointById(id: string): () => Endpoint | null {
 
 // An outpost-placement select shared by the create and edit forms: the enrolled outposts
 // plus an unassigned option. The value is the outpost's name (its address).
-function OutpostSelect(props: { value: string; onChange: (v: string) => void; disabled?: boolean; id?: string; allowNone?: boolean }) {
+export function OutpostSelect(props: { value: string; onChange: (v: string) => void; disabled?: boolean; id?: string; allowNone?: boolean }) {
   const outposts = useQuery(() => ({ queryKey: OUTPOSTS_KEY, queryFn: () => listOutposts() }));
   // The enrolled-outpost list answers on its own schedule, and the edit face is
   // routinely on screen first, so the control takes its value through the shared
@@ -157,7 +159,7 @@ function EndpointBladeBody(props: { id: string }): JSX.Element {
   async function removeEndpoint() {
     const iface = i();
     if (!iface) return;
-    if (!confirm(`Delete endpoint "${entityLabel(iface)}"?`)) return;
+    if (!(await confirmDelete({ kind: "endpoint", name: entityLabel(iface) }))) return;
     setErr(null);
     try {
       await deleteEndpoint(iface.id);
@@ -480,28 +482,13 @@ export function CreateEndpointForm(props: { onCreated: (i: Endpoint) => void; co
         </div>
         <Show when={chosenDriver()}>
           {(d) => (
-            <For each={d().spec?.inputs ?? []}>
-              {(input) => (
-                <div>
-                  <label class="eyebrow mb-1.5 block" for={`new-iface-input-${input.name}`}>
-                    {input.name}
-                    <Show when={!input.required}><span class="ml-1 normal-case text-base-content/40">optional</span></Show>
-                  </label>
-                  <input
-                    id={`new-iface-input-${input.name}`}
-                    autocomplete="off"
-                    class="input input-bordered w-full font-data"
-                    value={inputs()[input.name] ?? ""}
-                    placeholder={input.default || (input.kind === "secret" ? `a ${input.secret_type} secret's name` : input.name)}
-                    onInput={(e) => setInputs({ ...inputs(), [input.name]: e.currentTarget.value })}
-                    disabled={busy()}
-                  />
-                  <Show when={input.kind === "secret"}>
-                    <p class="mt-1 text-[11px] text-base-content/40">A secret reference: the name of a {input.secret_type} secret, never the value itself.</p>
-                  </Show>
-                </div>
-              )}
-            </For>
+            <DriverInputFields
+              inputs={d().spec?.inputs ?? []}
+              values={inputs()}
+              onChange={(name, value) => setInputs({ ...inputs(), [name]: value })}
+              disabled={busy()}
+              idPrefix="new-iface-input-"
+            />
           )}
         </Show>
       </Show>
