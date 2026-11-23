@@ -28,6 +28,11 @@ export type NavChild = {
   // section, never as a collapsible fold; filterNav still judges each entry on
   // its own gate, so a section whose entries are all hidden loses its header too.
   section?: string;
+  // An explicit "no gate": every signed-in person may open this entry. Set it on
+  // purpose (a stub whose "soon" door stays visible, an entry that filters its own
+  // contents); nav.test.ts fails an entry that declares no gate and is not public,
+  // so a new door cannot ship ungated by omission (#2442).
+  public?: boolean;
 };
 
 export type NavItem = {
@@ -45,6 +50,7 @@ export type NavItem = {
   // entries), a single resource would silently lock a reader of only one kind
   // out of the whole page; the faces inside permission-filter themselves.
   anyResource?: string[];
+  public?: boolean; // see NavChild.public
   // A runtime condition the entry also waits on, beyond its permission: the
   // sidebar shows the entry only while the condition holds (filterWhen). The
   // route itself stays registered and gated as usual, so a bookmark still
@@ -61,14 +67,14 @@ export type NavCondition = "simulator";
 export const PLATFORM_HEALTH_NAME = "Platform health";
 
 export const navItems: NavItem[] = [
-  { label: "Home", path: "/", icon: Icons.Home, live: true, hint: "Your environment at a glance, and what needs attention right now." },
+  { label: "Home", path: "/", icon: Icons.Home, live: true, public: true, hint: "Your environment at a glance, and what needs attention right now." },
   // Explore (#826): the sidebar's one door into the fleet ("fleet" stays the
   // noun, ADR-0122), the outline of locations (#861). It
   // replaced the Fleet entry and the Explore stub once reserved for a data
   // explorer, which takes a later name. Gated like the location tree it draws;
   // the projection scopes each tier on its own read underneath.
   { label: "Explore", path: "/explore", icon: Icons.Compass, live: true, anyResource: ["location", "system", "component"], hint: "Every location in the fleet, the systems that sit there, and what is in them." },
-  { label: "Dashboards", path: "/dashboards", icon: Icons.LayoutDashboard, hint: "Official, shared, and your own dashboards." },
+  { label: "Dashboards", path: "/dashboards", icon: Icons.LayoutDashboard, public: true, hint: "Official, shared, and your own dashboards." },
   { label: "Alarms", path: "/alarms", icon: Icons.Bell, live: true, anyResource: ["component"], hint: "What is firing now across the fleet: acknowledge, snooze, or hand one to omnibot." },
   // The fleet has ONE door (#798, the reconciliation ruled on the #795 review):
   // the old fleet group dissolved into the entry above, whose outline lists
@@ -86,7 +92,7 @@ export const navItems: NavItem[] = [
     children: [
       { label: "Variables", path: "/variables", live: true, resource: "variable", hint: "Free interpolated values (macros), resolved down the scope cascade." },
       { label: "Secrets", path: "/secrets", live: true, resource: "secret", hint: "Shared device and platform credentials, resolved down the scope cascade." },
-      { label: "Declared", path: "/config", hint: "The state operators declare for components and systems, optionally observed back from the device to detect drift and reconcile." },
+      { label: "Declared", path: "/config", public: true, hint: "The state operators declare for components and systems, optionally observed back from the device to detect drift and reconcile." },
       // Files are operator-uploaded content, not a cascaded value: a flat, tenant-wide
       // store of opaque bytes kept beside the fleet. It sits in Values as the
       // non-cascading member (deliberately off the exclusive arc).
@@ -101,8 +107,8 @@ export const navItems: NavItem[] = [
   // exactly the catalogs it may read, while each catalog page keeps its own
   // route-guard gate. The per-catalog pages stay declared off-rail (OFF_RAIL
   // below): that carries their top-bar identity and their route-guard gates.
-  { label: "Catalog", path: "/catalog", icon: Icons.Layers, live: true, hint: "Everything the fleet is typed by: every catalog, browsable in one place." },
-  { label: "Learn", path: "/learn", icon: Icons.GraduationCap, hint: "How collection turns a device into owned samples." },
+  { label: "Catalog", path: "/catalog", icon: Icons.Layers, live: true, public: true, hint: "Everything the fleet is typed by: every catalog, browsable in one place." },
+  { label: "Learn", path: "/learn", icon: Icons.GraduationCap, public: true, hint: "How collection turns a device into owned samples." },
   {
     label: "Admin", icon: Icons.Settings,
     children: [
@@ -118,7 +124,7 @@ export const navItems: NavItem[] = [
       // (#2446): one name, not the one-word "Status" the door wore before.
       { label: "Outposts", path: "/outposts", live: true, resource: "outpost", hint: "Collection daemons: their health, enrollment, and the collection tasks assigned to each." },
       { label: "Platform health", path: "/platform", live: true, resource: "outpost", hint: "Whether Omniglass itself is well: the build running, how long it has been up, and each outpost's check-in, schedule and command queue." },
-      { label: "Settings", path: "/settings", live: true, hint: "Platform preferences resolved down the cascade: the theme, defaults, and keybindings, each with its provenance and lock state." },
+      { label: "Settings", path: "/settings", live: true, resource: "settings", hint: "Platform preferences resolved down the cascade: the theme, defaults, and keybindings, each with its provenance and lock state." },
     ],
   },
 ];
@@ -165,7 +171,7 @@ export function filterWhen(items: NavItem[], holds: (c: NavCondition) => boolean
 // the rail loosened no gate: /secret-types still demands secret:read. A
 // not-yet-built page's tracking issue rides here too, shown on its stub
 // through navByPath exactly as a rail entry's would be.
-export const OFF_RAIL: { path: string; label: string; hint: string; resource?: string; perm?: string; issue?: number }[] = [
+export const OFF_RAIL: { path: string; label: string; hint: string; resource?: string; perm?: string; issue?: number; public?: boolean }[] = [
   // The fleet kinds (#798, #861): Explore's outline lists them and each bare
   // URL redirects there, but the detail view routes (/locations/{id} and
   // friends) still resolve identity and gate here.
@@ -188,7 +194,7 @@ export const OFF_RAIL: { path: string; label: string; hint: string; resource?: s
   { path: "/event-rules", label: "Event rules", resource: "rule", hint: "The event rules: what each one reads, when it opens and clears an alarm, and what it holds open right now." },
   { path: "/calc-rules", label: "Calc rules", resource: "rule", hint: "The calc rules: what each derives a value from, how it folds its inputs, and what it last computed on each owner." },
   { path: "/severity-levels", label: "Severity levels", resource: "severity_level", hint: "The severity levels: how bad an alarm is, ranked, each with its color and whether it takes its component out." },
-  { path: "/log-types", label: "Logs", hint: "The log shape catalog. The log lane arrives untyped today; typing what a line can be is still to come." },
+  { path: "/log-types", label: "Logs", public: true, hint: "The log shape catalog. The log lane arrives untyped today; typing what a line can be is still to come." },
   { path: "/notifications", label: "Notifications", resource: "notification_type", hint: "The notification types: what a message about an alarm says, as a subject and a text, previewed against a real alarm." },
   { path: "/action-rules", label: "Action rules", resource: "rule", hint: "The action rules: when a message about an alarm is sent, on which transitions, under which predicate, and to which targets." },
   { path: "/notification-targets", label: "Notification targets", resource: "notification_target", hint: "The notification targets: where a message about an alarm goes, a webhook, a mailbox, a user group or a person. Admin-only." },
@@ -302,6 +308,13 @@ export function routeTokens(pathname: string): string[] | null {
 export function routeAllowed(pathname: string, allow: (tokens: string[]) => boolean): boolean {
   const alts = routeAlternatives(pathname);
   return !alts || alts.some(allow);
+}
+
+// routeNeeds is routeTokens for every alternative, each as its
+// <resource>:<action> string (an empty list for an ungated route): what the denied
+// face names, so a person reads which permission opens the page.
+export function routeNeeds(pathname: string): string[] {
+  return (routeAlternatives(pathname) ?? []).map((t) => t.join(":"));
 }
 
 function routeAlternatives(pathname: string): string[][] | null {

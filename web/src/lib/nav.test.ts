@@ -237,19 +237,40 @@ describe("nav IA rework", () => {
     expect(labels).not.toContain("Settings");
   });
 
-  it("keeps governance plus the Settings soon-stub under Admin for an owner", () => {
+  it("keeps governance plus Settings under Admin for an owner", () => {
     expect(section("Admin", [">"])).toEqual(["Users", "Roles", "User groups", "Audit", "Outposts", "Platform health", "Settings"]);
   });
 
-  it("shows a bare *:read viewer only Outposts, Platform health and the ungated Settings under Admin", () => {
-    expect(section("Admin", ["*:read"])).toEqual(["Outposts", "Platform health", "Settings"]);
+  it("shows a bare *:read viewer only Outposts and Platform health under Admin: settings:read is sensitive (#2442)", () => {
+    expect(section("Admin", ["*:read"])).toEqual(["Outposts", "Platform health"]);
+    expect(section("Admin", ["settings:read"])).toContain("Settings");
+    expect(routeTokens("/web/settings")).toEqual(["settings", "read"]);
+  });
+
+  // The guard (#2442): an entry with no gate must say so on purpose. A new nav
+  // entry that forgets its permission fails here instead of shipping a door every
+  // signed-in person sees and the server then refuses.
+  it("declares a permission, a resource, or public on every nav entry", () => {
+    type Gate = { label: string; perm?: string; resource?: string; anyResource?: string[]; public?: boolean; children?: Gate[] };
+    const leaves = (xs: Gate[]): Gate[] => xs.flatMap((x) => (x.children ? leaves(x.children) : [x]));
+    const ungated = [...leaves(navItems as Gate[]), ...(OFF_RAIL as Gate[])]
+      .filter((n) => !n.perm && !n.resource && !n.anyResource && !n.public)
+      .map((n) => n.label);
+    expect(ungated).toEqual([]);
+  });
+
+  it("never marks a public entry as also gated", () => {
+    type Gate = { label: string; perm?: string; resource?: string; anyResource?: string[]; public?: boolean; children?: Gate[] };
+    const leaves = (xs: Gate[]): Gate[] => xs.flatMap((x) => (x.children ? leaves(x.children) : [x]));
+    const both = [...leaves(navItems as Gate[]), ...(OFF_RAIL as Gate[])].filter((n) => n.public && (n.perm || n.resource || n.anyResource));
+    expect(both.map((n) => n.label)).toEqual([]);
   });
 
   it("keeps moved entries' gates and leaves the stubs ungated", () => {
     expect(routeTokens("/web/secrets")).toEqual(["secret", "read"]);
     expect(routeTokens("/web/variables")).toEqual(["variable", "read"]);
     expect(routeTokens("/web/config")).toBeNull();
-    expect(routeTokens("/web/settings")).toBeNull();
+    expect(routeTokens("/web/settings")).toEqual(["settings", "read"]);
     expect(routeTokens("/web/outposts")).toEqual(["outpost", "read"]); // outpost directory is live, gated on outpost:read
   });
 });

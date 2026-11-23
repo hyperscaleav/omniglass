@@ -376,7 +376,8 @@ users:
   # A read-only viewer across the whole fleet, all-scoped like operator: the one
   # seeded user who can open a component and may change nothing on it, so a
   # gated affordance (Retry on a rejected session, #1059) is seen greyed with its
-  # reason. viewer-hq cannot stand in: a location grant reaches no component.
+  # reason. viewer-hq reads only the components placed under hq (#1498, #1774),
+  # so it cannot stand in for one anywhere in the fleet.
   - username: viewer
     password: dev
     label: Fleet Viewer
