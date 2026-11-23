@@ -12,7 +12,7 @@ steps:
     caption: Health on top, a row per member under it, then each alarm raised in range, the properties and metrics it watched, events, logs and commands.
   - hover: '[data-testid=timeline-health-row] svg'
     caption: Rest the pointer on the lanes.
-  - wait: { selector: '[data-testid=timeline-cursor] >> nth=1' }
-    caption: The cursor crosses every lane, and the line above them reads each lane at that instant.
+  - wait: { selector: '[data-testid=metrics-grid] [data-testid=chart-crosshair] >> nth=0' }
+    caption: The cursor crosses every lane and the metrics below, and the line above the lanes reads each lane at that instant.
     hold: 2500
     poster: true
