@@ -12,6 +12,7 @@ import { treeValue } from "../components/TreeSelect.testkit";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 import { toasts } from "../lib/toast";
+import { answerConfirms } from "../lib/confirm.testkit";
 
 // The Outposts page is a config over the shared FlatList: a row per collection outpost,
 // each labelled by its label (the name/key is the subtitle), a row opening
@@ -159,7 +160,7 @@ describe("Outposts page", () => {
   });
 
   it("offers a gated Delete that confirms then calls DELETE /outposts/{name}", async () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const confirmSpy = answerConfirms(true);
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       const url = typeof input === "string" ? input : req.url;

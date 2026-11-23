@@ -49,6 +49,7 @@ import {
   type TargetKind,
   type TargetTest,
 } from "../lib/notification_targets";
+import { confirmDelete } from "../lib/confirm";
 
 // Notification targets (Catalog > Actions > Targets, #1346): where a message
 // about an alarm goes. A webhook (its URL masked on every read, revealed whole
@@ -216,7 +217,7 @@ function TargetBladeBody(p: { name: string }): JSX.Element {
   }
 
   async function remove(t: NotificationTarget) {
-    if (!confirm(`Delete target "${t.name}"? What was already sent to it stays on each alarm's timeline.`)) return;
+    if (!(await confirmDelete({ kind: "target", name: t.name, consequence: "What was already sent to it stays on each alarm's timeline." }))) return;
     setErr(null);
     try {
       await deleteNotificationTarget(t.name);

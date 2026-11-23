@@ -28,6 +28,7 @@ import { describeError } from "../lib/format";
 import { useFormActions } from "../lib/formactions";
 import { bindSelectValue } from "../lib/selectvalue";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
+import { confirmDelete } from "../lib/confirm";
 
 // Notifications (Catalog > Actions > Notifications, #618): the outbound message
 // catalog, the peer of Commands. A notification type says WHAT a message about
@@ -128,7 +129,7 @@ function NotificationTypeBladeBody(p: { name: string }): JSX.Element {
   async function remove() {
     const r = row();
     if (!r) return;
-    if (!confirm(`Delete notification type "${r.name}"?`)) return;
+    if (!(await confirmDelete({ kind: "notification type", name: r.name }))) return;
     setErr(null);
     try {
       await deleteNotificationType(r.name);

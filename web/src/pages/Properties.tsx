@@ -25,6 +25,7 @@ import { useMe, can } from "../lib/auth";
 import { catalogLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
+import { confirmDelete } from "../lib/confirm";
 
 // Properties: the categorical lane of the signal catalog (Catalog > Properties),
 // the twin of the Metrics page. A property is a typed, registered non-numeric
@@ -130,7 +131,7 @@ function PropertyBladeBody(p: { name: string }): JSX.Element {
   async function removeProperty() {
     const r = row();
     if (!r) return;
-    if (!confirm(`Delete property "${r.name}"?`)) return;
+    if (!(await confirmDelete({ kind: "property", name: r.name }))) return;
     setErr(null);
     try {
       await deleteProperty(r.name);

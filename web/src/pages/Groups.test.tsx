@@ -7,6 +7,7 @@ import { GROUPS_KEY, type Group, type GroupMember } from "../lib/groups";
 import { USERS_KEY, ROLES_KEY, type User } from "../lib/users";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
+import { answerConfirms } from "../lib/confirm.testkit";
 
 // The Groups page is a config over the shared FlatList (rooted on group): a row per
 // group opens the group blade (members drill into the member's user blade), and the
@@ -126,7 +127,7 @@ describe("Groups page", () => {
     // deleted group's own detail 404s (as the real server would). The blade must
     // close, and the dead detail query must not be refetched (an orphan 404).
     let detailRefetched = false;
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    answerConfirms(true);
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       const url = typeof input === "string" ? input : req.url;

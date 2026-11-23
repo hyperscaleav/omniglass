@@ -432,17 +432,17 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		return out, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.gated(withDeleteRefusal(api, huma.Operation{
 		OperationID:   "delete-component",
 		Method:        http.MethodDelete,
 		Path:          "/components/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a component",
-		Description:   "Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.",
-	}, "component", "delete"), func(ctx context.Context, in *componentPathInput) (*struct{}, error) {
+		Description:   "Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.",
+	}), "component", "delete"), func(ctx context.Context, in *componentPathInput) (*struct{}, error) {
 		if err := gw.DeleteComponent(ctx, actorID(ctx), in.Name,
 			a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "component", "delete")); err != nil {
-			return nil, mapComponentErr(err)
+			return nil, a.deleteRefusal(ctx, gw, "component", in.Name, err, mapComponentErr(err))
 		}
 		return nil, nil
 	})

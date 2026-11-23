@@ -19,6 +19,7 @@ import {
 import { useMe, can, canAtPlatform, platformTierGap, platformAuthorityHint } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
+import { confirmDelete } from "../lib/confirm";
 
 // Secrets: the shared-credential directory on the FlatList surface. A secret is a
 // typed, encrypted-at-rest value owned at one scope (platform, or a location /
@@ -142,7 +143,7 @@ function SecretBladeBody(p: { id: string }): JSX.Element {
   async function removeSecret() {
     const s = secret();
     if (!s) return;
-    if (!confirm(`Delete secret "${s.name}" (${ownerLabel(s)})?`)) return;
+    if (!(await confirmDelete({ kind: "secret", name: `${s.name} (${ownerLabel(s)})` }))) return;
     setErr(null);
     try {
       await deleteSecret(s.id);

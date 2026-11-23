@@ -29,6 +29,8 @@ import { ROOT_STEM_HINT, TYPE_PARENT_HINT, inheritedFact, catalogLock, catalogOr
 import { createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
+import { confirmDelete } from "../lib/confirm";
+import { confirmAction } from "../lib/confirm";
 
 // Component Types (Catalog > Components: Types): the device-class type
 // catalog (ADR-0085, the component_type catalog's partial reversal of
@@ -198,7 +200,7 @@ function ComponentTypeBladeBody(p: { id: string }): JSX.Element {
   async function removeType() {
     const r = row();
     if (!r) return;
-    if (!confirm(`Delete component type "${r.name}"?`)) return;
+    if (!(await confirmDelete({ kind: "component type", name: r.name }))) return;
     setErr(null);
     try {
       await deleteComponentType(r.id);
@@ -215,7 +217,7 @@ function ComponentTypeBladeBody(p: { id: string }): JSX.Element {
   async function restoreType() {
     const r = row();
     if (!r) return;
-    if (!confirm(`Discard your changes to "${r.name}" and go back to the shipped values?`)) return;
+    if (!(await confirmAction({ title: `Discard your changes to "${r.name}"?`, body: "It goes back to the shipped values.", confirmLabel: "Discard changes", tone: "danger" }))) return;
     setErr(null);
     try {
       await restoreComponentType(r.id);
