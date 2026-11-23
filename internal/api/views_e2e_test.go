@@ -688,6 +688,8 @@ type platformSimulationWire struct {
 			Component   string           `json:"component"`
 			Received    map[string]int64 `json:"received"`
 			Impaired    bool             `json:"impaired"`
+			System      string           `json:"system"`
+			Place       []string         `json:"place"`
 		} `json:"devices"`
 	} `json:"outposts"`
 }
@@ -719,7 +721,14 @@ func TestPlatformSimulationViewAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	panel, _ := lineProtocolProduct(t, ctx, gw)
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-1", ProductName: &panel}, all, all, all, all); err != nil {
+	annex, annexSys := "annex", "annex-av"
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: annex, LocationType: "campus"}, all); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: annexSys, LocationName: &annex}, all, all); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-1", ProductName: &panel, LocationName: &annex, SystemName: &annexSys}, all, all, all, all); err != nil {
 		t.Fatal(err)
 	}
 	comp, outpost := "panel-1", "site-a"
@@ -861,6 +870,10 @@ func TestPlatformSimulationViewAPI(t *testing.T) {
 	}
 	if len(n.Devices) != 1 || n.Devices[0].ComponentID != panelID || n.Devices[0].Component != "panel-1" || n.Devices[0].Received["tcp"] != 12 {
 		t.Fatalf("devices = %+v, want panel-1 with its 12 tcp hits over the window", n.Devices)
+	}
+	// #1724: a repeated name reads apart by the system and places it sits in.
+	if d := n.Devices[0]; d.System != "annex-av" || len(d.Place) != 1 || d.Place[0] != "annex" {
+		t.Fatalf("device place = %q at %v, want annex-av at annex", d.System, d.Place)
 	}
 
 	// A handler with no ring (no simulator anywhere) reads no outpost.

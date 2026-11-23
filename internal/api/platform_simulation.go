@@ -54,6 +54,8 @@ type platformSimulationDevice struct {
 	Received    map[string]int64 `json:"received" doc:"Requests the device saw over the window, by protocol."`
 	Impaired    bool             `json:"impaired" doc:"Whether the simulator impairs the device at the window's end."`
 	Unhit       bool             `json:"unhit" doc:"Whether it is a poll target due over the window that the simulator never saw."`
+	System      string           `json:"system" doc:"The name of the device's primary system; empty when it has none."`
+	Place       []string         `json:"place" doc:"The places from the root down to the device's location, so devices that share a name read apart; empty when it is unplaced."`
 }
 
 // platformSimulationOutpost is one outpost with a simulator, read over the window.
@@ -86,7 +88,7 @@ type platformSimulationViewOutput struct {
 
 // toPlatformSimulationOutpost is a ring's read of one outpost as the wire carries
 // it, its devices named by name.
-func toPlatformSimulationOutpost(w closedloop.OutpostWindow, names map[string]string) platformSimulationOutpost {
+func toPlatformSimulationOutpost(w closedloop.OutpostWindow, names map[string]string, places map[string]storage.ComponentPlace) platformSimulationOutpost {
 	n := platformSimulationOutpost{Outpost: w.Outpost, State: w.State, Brackets: w.Brackets, Error: w.Err,
 		Protocols: []platformSimulationProtocol{}, Devices: []platformSimulationDevice{}}
 	if w.State == closedloop.WindowWarmingUp {
@@ -113,7 +115,7 @@ func toPlatformSimulationOutpost(w closedloop.OutpostWindow, names map[string]st
 	}
 	for _, d := range w.Devices {
 		n.Devices = append(n.Devices, platformSimulationDevice{ComponentID: d.ComponentID, Component: names[d.ComponentID],
-			Received: d.Received, Impaired: d.Impaired, Unhit: d.Unhit})
+			Received: d.Received, Impaired: d.Impaired, Unhit: d.Unhit, System: places[d.ComponentID].System, Place: orEmpty(places[d.ComponentID].Place)})
 	}
 	return n
 }
@@ -151,8 +153,25 @@ func registerPlatformSimulationView(api huma.API, a *authenticator, gw storage.G
 			for _, d := range devs {
 				names[d.ComponentID] = d.Name
 			}
-			out.Body.Outposts = append(out.Body.Outposts, toPlatformSimulationOutpost(w, names))
+			ids := make([]string, 0, len(w.Devices))
+			for _, d := range w.Devices {
+				ids = append(ids, d.ComponentID)
+			}
+			places, err := gw.ComponentPlaces(ctx, ids)
+			if err != nil {
+				log.ErrorContext(ctx, "read platform simulation places", "outpost", w.Outpost, "error", err)
+				return nil, huma.Error500InternalServerError("read platform simulation view")
+			}
+			out.Body.Outposts = append(out.Body.Outposts, toPlatformSimulationOutpost(w, names, places))
 		}
 		return out, nil
 	})
+}
+
+// orEmpty keeps a nil list on the wire as [], so a client never reads null.
+func orEmpty(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
 }

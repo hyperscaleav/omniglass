@@ -6662,8 +6662,15 @@ export type PlatformSimulationDevice = {
   component_id: string;
   /** Whether the simulator impairs the device at the window's end. */
   impaired: boolean;
+  /**
+     * The places from the root down to the device's location, so devices that share a name read apart; empty when it is unplaced.
+     * @nullable
+     */
+  place: string[] | null;
   /** Requests the device saw over the window, by protocol. */
   received: PlatformSimulationDeviceReceived;
+  /** The name of the device's primary system; empty when it has none. */
+  system: string;
   /** Whether it is a poll target due over the window that the simulator never saw. */
   unhit: boolean;
 };

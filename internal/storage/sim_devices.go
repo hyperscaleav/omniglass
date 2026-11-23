@@ -229,3 +229,58 @@ func webhookSenderSecret(scheme string, f map[string]string) string {
 	}
 	return ""
 }
+
+// ComponentPlace is where a component sits: its primary system's name and the
+// names of the places from the root down to its location. Either is empty for a
+// component with no primary system or no location. The Platform health
+// simulation table reads it to tell repeated device names apart (#1724).
+type ComponentPlace struct {
+	System string
+	Place  []string
+}
+
+// ComponentPlaces reads the place of each component id, keyed by id; an id that
+// is no component has no entry. It reads names only, for a caller that already
+// holds an all-scope component read, so it takes no scope of its own.
+func (p *PG) ComponentPlaces(ctx context.Context, ids []string) (map[string]ComponentPlace, error) {
+	out := map[string]ComponentPlace{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	rows, err := p.pool.Query(ctx, `
+		select c.id::text, coalesce((select s.name from system s join system_member m on m.system_id = s.id
+		                              where m.component_id = c.id and m.is_primary), '')
+		from component c where c.id = any($1::uuid[])`, ids)
+	if err != nil {
+		return nil, fmt.Errorf("storage: component places: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id, system string
+		if err := rows.Scan(&id, &system); err != nil {
+			return nil, fmt.Errorf("storage: scan component place: %w", err)
+		}
+		out[id] = ComponentPlace{System: system}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("storage: component places: %w", err)
+	}
+	paths, err := PathsOf(ctx, p.pool, componentTable, ids)
+	if err != nil {
+		return nil, err
+	}
+	for id, segs := range paths {
+		cp, ok := out[id]
+		if !ok {
+			continue
+		}
+		for _, s := range segs {
+			if s == accessorComp {
+				break
+			}
+			cp.Place = append(cp.Place, s)
+		}
+		out[id] = cp
+	}
+	return out, nil
+}

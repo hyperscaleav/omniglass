@@ -11887,6 +11887,16 @@
             "description": "Whether the simulator impairs the device at the window's end.",
             "type": "boolean"
           },
+          "place": {
+            "description": "The places from the root down to the device's location, so devices that share a name read apart; empty when it is unplaced.",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "received": {
             "additionalProperties": {
               "format": "int64",
@@ -11894,6 +11904,10 @@
             },
             "description": "Requests the device saw over the window, by protocol.",
             "type": "object"
+          },
+          "system": {
+            "description": "The name of the device's primary system; empty when it has none.",
+            "type": "string"
           },
           "unhit": {
             "description": "Whether it is a poll target due over the window that the simulator never saw.",
@@ -11905,7 +11919,9 @@
           "component",
           "received",
           "impaired",
-          "unhit"
+          "unhit",
+          "system",
+          "place"
         ],
         "type": "object"
       },
