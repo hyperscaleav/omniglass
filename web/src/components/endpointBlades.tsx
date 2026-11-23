@@ -8,6 +8,7 @@ import Eyebrow from "./Eyebrow";
 import SessionPill from "./SessionPill";
 import ReachLadder from "./ReachLadder";
 import SessionNotice from "./SessionNotice";
+import PollTest from "./PollTest";
 import {
   type Endpoint,
   type UpdateEndpoint,
@@ -245,6 +246,10 @@ function EndpointBladeBody(props: { id: string }): JSX.Element {
                 />
               </section>
             )}
+          </Show>
+
+          <Show when={!edit.editing()}>
+            <PollTest endpoint={iface().id} />
           </Show>
 
           <Show

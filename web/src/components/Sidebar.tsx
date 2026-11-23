@@ -59,7 +59,7 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
 
   return (
     <aside
-      class="sticky top-0 flex h-screen flex-none flex-col border-r border-base-300 bg-base-200 transition-[width] duration-200"
+      class="flex flex-none flex-col border-r border-base-300 bg-base-200 transition-[width] duration-200"
       classList={{ "w-16": props.collapsed, "w-60": !props.collapsed }}
     >
       {/* The brand mark stays in this h-14 row in both states (vertically centered,
@@ -95,6 +95,7 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
             class="flex min-w-0 items-center gap-2.5 rounded-field hover:bg-base-300"
             classList={{ "flex-1 p-1 -m-1": !props.collapsed, "tooltip tooltip-right": props.collapsed }}
             data-tip={props.collapsed ? "Your profile" : undefined}
+            data-testid="user-chip"
             title="Your profile"
           >
             <Show
