@@ -21,7 +21,7 @@
 //   node web/e2e/explorer.mjs adopt <issue> <key> [--dry-run]
 //       give an open issue a person filed the key of the finding it covers,
 //       so the next sighting lands on it instead of filing a duplicate
-import { execFileSync } from 'node:child_process';
+import { run } from './explorerrun.mjs';
 import { readFileSync } from 'node:fs';
 import { load } from 'js-yaml';
 import {
@@ -53,7 +53,6 @@ const flag = (name) => {
 const today = flag('today') ?? new Date().toISOString().slice(0, 10);
 const dryRun = args.includes('--dry-run');
 
-const run = (bin, a, input) => execFileSync(bin, a, { encoding: 'utf8', input, stdio: [input ? 'pipe' : 'ignore', 'pipe', 'inherit'] });
 const gh = (...a) => run('gh', a);
 const ghJSON = (...a) => JSON.parse(gh(...a));
 const graphql = (query, vars = {}) => {
