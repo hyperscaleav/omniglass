@@ -5,6 +5,7 @@ import TemplateNotice from "../components/TemplateNotice";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
+import IdentityFields from "../components/IdentityFields";
 import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
@@ -236,7 +237,8 @@ export function CreateStandardForm(p: { onCreated: (s: Standard) => void }): JSX
   const qc = useQueryClient();
   // Label leads and the handle follows it, stopping the moment the
   // operator edits the handle by hand (lib/entities).
-  const { display, setDisplay, name, setName, nameDerived } = createIdentity();
+  const identity = createIdentity();
+  const { display, name } = identity;
   const [parentId, setParentId] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
@@ -272,12 +274,7 @@ export function CreateStandardForm(p: { onCreated: (s: Standard) => void }): JSX
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow bind="label" hint="What an operator reads.">
-        <input class="input input-bordered w-full" value={display()} placeholder="Meeting room" onInput={(e) => setDisplay(e.currentTarget.value)} />
-      </FieldRow>
-      <FieldRow bind="name" hint={nameDerived() ? "Derived from the label. Edit to set your own." : "A kebab name, e.g. meeting-room."}>
-        <input class="input input-bordered w-full font-data" value={name()} placeholder="meeting-room" onInput={(e) => setName(e.currentTarget.value)} />
-      </FieldRow>
+      <IdentityFields identity={identity} labelPlaceholder="Meeting room" namePlaceholder="meeting-room" />
       <FieldRow label="Variant of" hint="A standard this one specializes. Optional.">
         <ParentStandardSelect value={parentId()} onChange={setParentId} />
       </FieldRow>

@@ -321,6 +321,9 @@ function LevelForm(p: { mode: "create" | "edit"; level?: SeverityLevel; onSaved:
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
+      <FieldRow bind="label">
+        <input class="input input-bordered w-full" value={d.label} placeholder="Major" onInput={(e) => setD("label", e.currentTarget.value)} />
+      </FieldRow>
       <FieldRow bind="name" info={SEVERITY_HINTS.name}>
         <input
           class="input input-bordered w-full font-data"
@@ -331,9 +334,6 @@ function LevelForm(p: { mode: "create" | "edit"; level?: SeverityLevel; onSaved:
           onInput={(e) => { setD("name", e.currentTarget.value); touch("name"); }}
         />
         {err("name")}
-      </FieldRow>
-      <FieldRow bind="label">
-        <input class="input input-bordered w-full" value={d.label} placeholder="Major" onInput={(e) => setD("label", e.currentTarget.value)} />
       </FieldRow>
       <FieldRow label="Color" info={SEVERITY_HINTS.color}>
         <select

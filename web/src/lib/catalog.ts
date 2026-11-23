@@ -180,6 +180,10 @@ export const CATALOG_GROUPS: CatalogGroup[] = [
 // says official, never seed: the seeding mechanics are not operator vocabulary.
 export const OFFICIAL_LOCK = "Official: ships with Omniglass and updates with it.";
 
+// A catalog whose API has no write route at all (secret types): the footer's
+// one note says so in a line, instead of a pair of buttons that can never act.
+export const READ_ONLY_KIND_LOCK = "Read-only: this catalog ships with Omniglass and has no write route.";
+
 // The ROOT-STEM rule, in the words the two tree catalogs' create forms say it
 // with. It is one rule (`ErrRootComponentTypeNeedsStem` and
 // `ErrRootSystemTypeNeedsStem` refuse the same thing on their own tier: a root

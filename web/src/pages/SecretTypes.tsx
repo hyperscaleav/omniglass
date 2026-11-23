@@ -7,7 +7,7 @@ import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
 import { type SecretType, SECRET_TYPES_KEY, listSecretTypes } from "../lib/secret_types";
 import { type BladeDef, useBladeEdit } from "../lib/blades";
-import { OFFICIAL_LOCK } from "../lib/catalog";
+import { READ_ONLY_KIND_LOCK } from "../lib/catalog";
 
 // Secret types (Catalog > Secrets): the shapes a secret can take (snmp-community, basic-auth, and
 // the rest), read-only by design. The catalog is authoritative release-owned
@@ -62,8 +62,8 @@ export default function SecretTypes() {
 }
 
 // secretTypeBlade renders one catalog row read-only: the body binds only the
-// edit slot's lock, so the footer's Edit / Delete pair renders greyed with the
-// seeded-only reason on each tooltip, whatever the caller holds. The fields
+// edit slot's lock, so the footer carries one read-only note (no dead Edit or
+// Delete) with the seeded-only reason, whatever the caller holds. The fields
 // list is the payload: what a secret of this type expects.
 export const secretTypeBlade: BladeDef = {
   Title: (p) => <SecretTypeBladeTitle id={p.id} />,
@@ -84,10 +84,9 @@ function SecretTypeBladeBody(p: { id: string }): JSX.Element {
   const row = useSecretTypeRow(p.id);
 
   // Always locked, for everyone: this catalog has no write route at all, so
-  // the reason is release ownership itself, not a permission. Same official
-  // sentence as every other catalog's official rows.
+  // the reason is release ownership itself, not a permission.
   useBladeEdit().bind({
-    locked: () => (row() ? OFFICIAL_LOCK : null),
+    locked: () => (row() ? READ_ONLY_KIND_LOCK : null),
   });
 
   return (
