@@ -113,6 +113,10 @@ func registerSettingsRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 			if _, err := gw.MergePatchAssistantSettings(ctx, actorID(ctx), in.Body, a.secretBind(ctx)); err != nil {
 				return nil, mapModelKeyErr(err)
 			}
+		case "sso":
+			if _, err := gw.MergePatchSSOSettings(ctx, actorID(ctx), in.Body, a.secretBind(ctx)); err != nil {
+				return nil, mapSSOSecretErr(err)
+			}
 		default:
 			if _, err := gw.MergePatchSettingBinding(ctx, actorID(ctx), "platform", in.Namespace, in.Body); err != nil {
 				return nil, err
@@ -201,6 +205,22 @@ func mapMailSecretErr(err error) error {
 		return huma.Error403Forbidden("binding the mail relay's secret, or moving the relay while one is bound, takes the right to bind that secret (secret:bind)")
 	case errors.Is(err, storage.ErrMailSecretInvalid):
 		return huma.Error422UnprocessableEntity(strings.TrimPrefix(err.Error(), "storage: the mail relay's secret is invalid: "))
+	}
+	return err
+}
+
+// mapSSOSecretErr maps an sso settings patch refused for the client secret
+// (#2362): naming one, or moving the issuer while one is bound, takes the
+// right to bind it (secret:bind), since every sign-in sends it to the
+// issuer's token endpoint.
+func mapSSOSecretErr(err error) error {
+	switch {
+	case errors.Is(err, storage.ErrSecretNotFound):
+		return huma.Error404NotFound("secret not found")
+	case errors.Is(err, storage.ErrSecretForbidden):
+		return huma.Error403Forbidden("binding the single sign-on client secret, or moving the issuer while one is bound, takes the right to bind that secret (secret:bind)")
+	case errors.Is(err, storage.ErrSSOSecretInvalid):
+		return huma.Error422UnprocessableEntity(strings.TrimPrefix(err.Error(), storage.ErrSSOSecretInvalid.Error()+": "))
 	}
 	return err
 }

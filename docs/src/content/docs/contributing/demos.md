@@ -177,6 +177,15 @@ Write it the way an operator would work:
   three minutes) is waited for after sign-in and before the title card, so the wait never spends
   the recording's budget. A ready that never comes fails the run naming what it waited for.
 
+- **Name what the lab must run with `lab`.** A walkthrough plays on the dev fleet. One that signs in
+  through an identity provider (sign-in-with-sso) says `lab: [sso]`, and the recorder's lab then
+  runs Dex beside it, with single sign-on configured against it and a demo person, Avery Quinn,
+  whose identity there is linked (the demo values are in `internal/lab/sso.go`). The provider's
+  address is on the lab network, which the recorder's browser joins and yours does not, so only a
+  script's lab runs it, and the [lab guide](/developer/lab/) lists that walkthrough as recorded
+  rather than followed. The probe runs it too, and plays such a walkthrough in a browser context of
+  its own, so the walkthroughs after it still play as the owner.
+
 `make test-web` validates every script in the tree, so a malformed one fails before a browser
 starts.
 

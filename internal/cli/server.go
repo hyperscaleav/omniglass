@@ -28,6 +28,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/settings"
+	"github.com/hyperscaleav/omniglass/internal/sso"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/spf13/cobra"
 )
@@ -258,6 +259,10 @@ func runServer(ctx context.Context, version string, lab bool) error {
 	// then a signed request to it every interval, through the egress contract,
 	// until shutdown cancels it.
 	go heartbeat.New(gw, egress.Options{}, c.ServerName, version).Run(notifyCtx)
+	// The single sign-on re-check (#2362, ADR-2361 point 9): idle until the
+	// sso settings name an issuer, then every recheck_minutes each link's
+	// refresh token is redeemed and a refusal revokes what came through it.
+	go sso.NewSweeper(gw, egress.Options{}, log).Run(notifyCtx)
 	// The server's self-report, once a collection report window, until
 	// shutdown cancels it. A server with no component writes nothing, and
 	// still re-reads its slow-query setting each window.
