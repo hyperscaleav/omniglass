@@ -12,24 +12,23 @@ title: "Learn: rules and alarms"
 description: Open lesson 3 of Learn, preview a temperature threshold on a simulated amplifier over its real samples, then unplug it and watch the reachability rule open an alarm in the lesson.
 steps:
   - goto: /learn/rules-and-alarms
-    caption: Lesson 3 of Learn walks a simulated amplifier through the rule that turns its samples into an alarm.
+    caption: Lesson 3 of Learn walks a simulated amplifier from samples to an alarm.
   - select: { target: '[aria-label="Metric"]', value: temperature }
-    caption: An event rule reads one metric. Pick the amplifier's temperature.
+    caption: A rule reads one metric. Pick its temperature.
   - type: { target: '[aria-label="Threshold"]', text: '35' }
-    caption: Say when it is bad, here above 35 degrees.
+    caption: Say when it is bad, above 35 degrees.
   - click: { role: button, name: Preview, exact: true }
-    caption: Preview runs the threshold over the last day of real samples and writes nothing.
+    caption: Preview runs it over the last day of real samples, writing nothing.
   - wait: { selector: '[data-testid="preview-result"]', timeout: 15000 }
-    caption: The preview names what the rule would hold in force now, and the edges it would have written.
-    hold: 1500
+    caption: What the rule would hold in force now, and the edges it would have written.
   - click: '[data-testid="lesson-live-simulation"] >> role=button[name="Open simulation"]'
-    caption: Now trip a shipped rule for real. The amplifier is simulated, so it can be broken on purpose.
+    caption: Now trip a shipped rule for real, on the simulated amplifier.
   - click: '#sim-unplugged'
-    caption: Unplug it. The simulated amplifier goes dark on every protocol, as if its cable were pulled.
+    caption: Unplug it, as if its cable were pulled.
   - click: { role: button, name: Save impairment }
     caption: Save. The simulator applies it on its next pull.
   - press: Escape
-    caption: Back in the lesson, the next step lists the amplifier's alarms as they land.
+    caption: The lesson lists the amplifier's alarms as they land.
   - wait: { selector: '[data-testid="lesson-live-alarms"] [data-alarm-actions]', timeout: 45000 }
-    caption: The down held past the rule's 15 second sustain, so reachability-lost opened an alarm, listed in the lesson with no reload.
+    caption: The down held past its 15 second sustain, so reachability-lost opened an alarm, live.
     poster: true

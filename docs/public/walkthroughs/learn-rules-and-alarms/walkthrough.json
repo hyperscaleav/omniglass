@@ -1,0 +1,74 @@
+{
+  "id": "learn-rules-and-alarms",
+  "title": "Learn: rules and alarms",
+  "description": "Open lesson 3 of Learn, preview a temperature threshold on a simulated amplifier over its real samples, then unplug it and watch the reachability rule open an alarm in the lesson.",
+  "steps": [
+    {
+      "n": 1,
+      "kind": "goto",
+      "caption": "Lesson 3 of Learn walks a simulated amplifier from samples to an alarm.",
+      "still": "step-01.png"
+    },
+    {
+      "n": 2,
+      "kind": "select",
+      "caption": "A rule reads one metric. Pick its temperature.",
+      "still": "step-02.png"
+    },
+    {
+      "n": 3,
+      "kind": "type",
+      "caption": "Say when it is bad, above 35 degrees.",
+      "still": "step-03.png"
+    },
+    {
+      "n": 4,
+      "kind": "click",
+      "caption": "Preview runs it over the last day of real samples, writing nothing.",
+      "still": "step-04.png"
+    },
+    {
+      "n": 5,
+      "kind": "wait",
+      "caption": "What the rule would hold in force now, and the edges it would have written.",
+      "still": "step-05.png"
+    },
+    {
+      "n": 6,
+      "kind": "click",
+      "caption": "Now trip a shipped rule for real, on the simulated amplifier.",
+      "still": "step-06.png"
+    },
+    {
+      "n": 7,
+      "kind": "click",
+      "caption": "Unplug it, as if its cable were pulled.",
+      "still": "step-07.png"
+    },
+    {
+      "n": 8,
+      "kind": "click",
+      "caption": "Save. The simulator applies it on its next pull.",
+      "still": "step-08.png"
+    },
+    {
+      "n": 9,
+      "kind": "press",
+      "caption": "The lesson lists the amplifier's alarms as they land.",
+      "still": "step-09.png"
+    },
+    {
+      "n": 10,
+      "kind": "wait",
+      "caption": "The down held past its 15 second sustain, so reachability-lost opened an alarm, live.",
+      "still": "step-10.png"
+    }
+  ],
+  "poster": "step-10.png",
+  "preview": "preview.webp",
+  "budget": {
+    "seconds": 50.7,
+    "bytes": 846369,
+    "previewBytes": 578032
+  }
+}
