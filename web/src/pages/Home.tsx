@@ -8,6 +8,7 @@ import { listLocations, LOCATIONS_KEY } from "../lib/locations";
 import { listOutposts, OUTPOSTS_KEY } from "../lib/outposts";
 import { can, useMe } from "../lib/auth";
 import { HEALTH_HUE, healthOf } from "../lib/health";
+import { ATTENTION_CHIP, attentionCount, attentionPhrase, fleetAttentionRows } from "../lib/attention";
 import { notUpCount, platformView, PLATFORM_VIEW_KEY, retryPlatformView } from "../lib/platformhealth";
 
 // Home is the situation room. Every tile is a real, scoped read: locations,
@@ -37,6 +38,8 @@ export default function Home() {
     const down = notUpCount(v);
     return `${down} ${down === 1 ? "outpost" : "outposts"} not up`;
   };
+  // The same count Explore's chip makes, over the same fleet view.
+  const attention = () => (fleet.data ? attentionCount(fleetAttentionRows(fleet.data)) : undefined);
   const who = () => me.data?.person?.username ?? me.data?.machine?.name ?? "operator";
 
   return (
@@ -53,6 +56,16 @@ export default function Home() {
             onClick={() => navigate("/alarms")}
           />
         </Suspense>
+        <Show when={!fleet.isPending} fallback={<Stat label="Need attention" testid="home-attention" value="…" unit="reading the fleet" />}>
+          <Stat
+            label="Need attention"
+            testid="home-attention"
+            {...(fleet.isError || !attention()
+              ? countOf(fleet.isError, undefined, "")
+              : { value: String(attention()!.total), unit: attentionPhrase(attention()!), tone: attention()!.total > 0 ? "text-warning" : "text-primary" })}
+            onClick={() => navigate(`/explore?chips=${encodeURIComponent(JSON.stringify([ATTENTION_CHIP]))}`)}
+          />
+        </Show>
         <Suspense fallback={<Stat label="Systems" testid="home-systems" value="…" unit="in scope" />}>
           <Stat
             label="Systems"

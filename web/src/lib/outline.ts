@@ -222,6 +222,9 @@ export function buildOutline(input: OutlineInput): Outline {
     // and its parent holds the first place in it.
     for (const c of children) counts.set(c.chain[0].typeName, (counts.get(c.chain[0].typeName) ?? 0) + 1);
     const parts = [...counts.entries()].map(([t, n]) => countWord(entityLabel(typeOf.get(t) ?? { name: t }), n));
+    // Several systems here is what a place holds, so Detail says so; one is
+    // worn by the row (its standard and health) and needs no count.
+    if (systems.length > 1) parts.push(countWord("system", systems.length));
     if (componentCount > 0) parts.push(countWord("component", componentCount));
 
     const info = typeOf.get(loc.location_type);
@@ -275,7 +278,10 @@ export function buildOutline(input: OutlineInput): Outline {
 // One filterable row: a location or a component, with its path (the locations above
 // it, top first) and the facts the filter bar matches on.
 export type OutlineEntry = {
-  kind: "location" | "component";
+  // A "system" entry exists only for a system in a place holding several (or in
+  // the node of things out of sight): a place holding exactly one wears it, and
+  // is its row.
+  kind: "location" | "system" | "component";
   id: string;
   label: string;
   path: string[];
@@ -287,47 +293,62 @@ export type OutlineEntry = {
   search: string;
 };
 
-const worst = (vs: (HealthState | null)[]): HealthState | null => {
-  const rank: Record<HealthState, number> = { healthy: 0, incomplete: 1, degraded: 2, outage: 3 };
-  let w: HealthState | null = null;
-  for (const v of vs) if (v && (!w || rank[v] > rank[w])) w = v;
-  return w;
-};
-
 export function entriesOf(outline: Outline, roots?: LocationNode[]): OutlineEntry[] {
   const out: OutlineEntry[] = [];
+  // A component serving several systems is listed under each in the tree, but
+  // is one row to filter and to count.
+  const seen = new Set<string>();
   const visit = (n: LocationNode, above: string[]) => {
     const own = n.chain[n.chain.length - 1].label;
     const path = [...above, ...n.chain.slice(0, -1).map((c) => c.label)];
+    // One system wears the location; several (or the out-of-sight node) are
+    // rows of their own, each with its own verdict.
+    const wears = n.id !== "unplaced" && n.systems.length === 1;
     out.push({
       kind: "location",
       id: n.id,
       label: own,
       path,
       type: n.type,
-      standard: n.systems.map((s) => s.standard).filter(Boolean).join(" "),
+      standard: wears ? n.systems[0].standard : "",
       product: "",
-      // A location's own health is its systems'; a location holding none has none of
-      // its own to match on.
-      health: worst(n.systems.map((s) => s.health)),
+      health: wears ? n.systems[0].health : null,
       // A location's tags are its own, merged over the ones its systems carry.
       tags: Object.assign({}, ...n.systems.map((s) => outline.tags.get(s.id) ?? {}), outline.tags.get(n.id) ?? {}),
-      search: [own, ...n.systems.flatMap((s) => [s.label, s.name, s.standard])].join(" "),
+      search: [own, ...(wears ? n.systems.flatMap((s) => [s.label, s.name, s.standard]) : [])].join(" "),
     });
     const below = [...path, own];
-    for (const g of n.groups) for (const c of g.components) {
-      out.push({
-        kind: "component",
-        id: c.id,
-        label: c.label,
-        path: below,
-        type: "",
-        standard: g.system?.standard ?? "",
-        product: c.product,
-        health: c.health,
-        tags: outline.tags.get(c.id) ?? {},
-        search: [c.label, c.name, c.product].join(" "),
-      });
+    for (const g of n.groups) {
+      if (!wears && g.system) {
+        out.push({
+          kind: "system",
+          id: g.system.id,
+          label: g.system.label,
+          path: below,
+          type: "",
+          standard: g.system.standard,
+          product: "",
+          health: g.system.health,
+          tags: outline.tags.get(g.system.id) ?? {},
+          search: [g.system.label, g.system.name, g.system.standard].join(" "),
+        });
+      }
+      for (const c of g.components) {
+        if (seen.has(c.id)) continue;
+        seen.add(c.id);
+        out.push({
+          kind: "component",
+          id: c.id,
+          label: c.label,
+          path: below,
+          type: "",
+          standard: g.system?.standard ?? "",
+          product: c.product,
+          health: c.health,
+          tags: outline.tags.get(c.id) ?? {},
+          search: [c.label, c.name, c.product].join(" "),
+        });
+      }
     }
     for (const k of n.children) visit(k, below);
   };

@@ -150,7 +150,7 @@ describe("two systems, shared components, and components in no system", () => {
   it("puts a component in no system under its location, with no system header", () => {
     const lab = buildOutline(input(view, { components: comps })).roots.find((r) => r.chain[0].label === "Media Lab")!;
     expect(lab.groups[2].components.map((c) => c.label)).toEqual(["Spare Display"]);
-    expect(lab.contents).toBe("4 components");
+    expect(lab.contents).toBe("2 systems, 4 components");
   });
 });
 
@@ -225,6 +225,15 @@ describe("filter entries and reveal", () => {
     expect(mic.path).toEqual(["Headquarters", "West", "Boardroom A"]);
     expect(mic.product).toBe("Lyra GN-12");
     expect(mic.health).toBe("outage");
+  });
+
+  it("gives a place holding several systems no health of its own, and a row per system", () => {
+    const multi = { locations: [loc("hq", "Headquarters", "campus"), loc("lab", "Lab", "room", "hq")], systems: [sys("s-a", "Lab A", "lab", "degraded", [dot("shared", "incomplete", true)]), sys("s-b", "Lab B", "lab", "healthy", [dot("shared", "incomplete", true)])] };
+    const es = entriesOf(buildOutline(input(multi)));
+    expect(es.find((e) => e.id === uuidFor("lab"))!.health).toBeNull();
+    expect(es.filter((e) => e.kind === "system").map((e) => [e.label, e.health, e.path])).toEqual([["Lab A", "degraded", ["Headquarters", "Lab"]], ["Lab B", "healthy", ["Headquarters", "Lab"]]]);
+    // A shared component is one row, however many systems serve it.
+    expect(es.filter((e) => e.kind === "component")).toHaveLength(1);
   });
 
   it("carries each entry's effective tags, so a tag filter matches locations and components alike", () => {

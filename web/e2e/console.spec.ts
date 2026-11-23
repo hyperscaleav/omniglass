@@ -19,6 +19,32 @@ test.describe("operator console", () => {
     await page.waitForURL((url) => !url.pathname.endsWith("/login"));
   });
 
+  // #2438: the need-attention chip counts what it filters. Whatever the fleet
+  // holds, the chip's two figures are the system rows and component rows its
+  // filter leaves, and Home's card says the same words.
+  test("explore: the need-attention chip's number is the rows it shows, and Home agrees", async ({ page }) => {
+    await page.goto("/web/");
+    const card = page.getByTestId("home-attention");
+    await expect(card).toBeVisible();
+    await expect(card).not.toContainText("reading the fleet");
+    const homeWords = (await card.innerText()).replace(/\s+/g, " ");
+
+    await page.goto("/web/explore");
+    const chip = page.getByTestId("explore-counts").getByRole("button", { name: /need attention/ });
+    // A fleet with nothing wrong has no chip, and Home says so.
+    if ((await chip.count()) === 0) {
+      expect(homeWords).toContain("Nothing needs attention");
+      return;
+    }
+    const words = (await chip.innerText()).replace(/\s+/g, " ");
+    expect(homeWords).toContain(words);
+    const figures = [...words.matchAll(/(\d+) (system|component)/g)].reduce((n, m) => n + Number(m[1]), 0);
+    await chip.click();
+    await expect(chip).toHaveAttribute("aria-pressed", "true");
+    await expect(chip.getByTestId("attention-dot")).toBeVisible();
+    await expect(page.getByRole("list", { name: "Matches" }).getByRole("listitem")).toHaveCount(figures);
+  });
+
   test("signs in, finds the outline, creates a location, opens it, deletes it", async ({ page }) => {
     await page.goto("/web/locations");
 

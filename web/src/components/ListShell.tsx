@@ -32,6 +32,8 @@ export default function ListShell<T>(props: {
   // instead of growing the page. The FilterBar header (and any footer) stay
   // pinned. Off (the default), the shell grows with content.
   fill?: boolean;
+  // The text being typed in the filter, as it changes (see FilterBar).
+  onDraft?: (text: string) => void;
   children: (filtered: Accessor<T[]>, chips: Accessor<Chip[]>) => JSX.Element;
 }) {
   const [ownChips, setOwnChips] = createSignal<Chip[]>(props.initialChips ?? []);
@@ -58,6 +60,7 @@ export default function ListShell<T>(props: {
             clearable
             trailing={props.trailing}
             placeholder={props.placeholder}
+            onDraft={props.onDraft}
           />
         </div>
         {props.children(filtered, chips)}
