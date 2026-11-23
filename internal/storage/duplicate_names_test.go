@@ -429,7 +429,7 @@ func TestDuplicateNamesDoNotBreakGatewayReads(t *testing.T) {
 
 	// Health recompute: already exercised in-transaction by RaiseAlarm and
 	// AssignSlot above (both call it); read the result back explicitly too.
-	rep, err := gw.SystemHealth(ctx, sys.Name, 0, all)
+	rep, err := gw.SystemHealth(ctx, sys.Name, storage.HealthRange{}, all)
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}
@@ -625,7 +625,7 @@ func TestStandardOwnedSlotDeclarationSurvivesDuplicateSystemNames(t *testing.T) 
 	// post-declaration read below can assert it is BYTE-FOR-BYTE unchanged,
 	// not merely "still empty of the new slot" (which live-computed Slots
 	// already covers and cannot fail on this bug).
-	repBBefore, err := gw.SystemHealth(ctx, sysB.ID, 0, all)
+	repBBefore, err := gw.SystemHealth(ctx, sysB.ID, storage.HealthRange{}, all)
 	if err != nil {
 		t.Fatalf("system health sysB before declaration: %v", err)
 	}
@@ -639,7 +639,7 @@ func TestStandardOwnedSlotDeclarationSurvivesDuplicateSystemNames(t *testing.T) 
 		t.Fatalf("declare standard slot: %v", err)
 	}
 
-	repA, err := gw.SystemHealth(ctx, sysA.ID, 0, all)
+	repA, err := gw.SystemHealth(ctx, sysA.ID, storage.HealthRange{}, all)
 	if err != nil {
 		t.Fatalf("system health sysA by id: %v", err)
 	}
@@ -659,7 +659,7 @@ func TestStandardOwnedSlotDeclarationSurvivesDuplicateSystemNames(t *testing.T) 
 		t.Fatalf("sysA latest transition = %+v, want incomplete (an unstaffed quorum-1 slot)", last)
 	}
 
-	repB, err := gw.SystemHealth(ctx, sysB.ID, 0, all)
+	repB, err := gw.SystemHealth(ctx, sysB.ID, storage.HealthRange{}, all)
 	if err != nil {
 		t.Fatalf("system health sysB by id: %v", err)
 	}
@@ -674,7 +674,7 @@ func TestStandardOwnedSlotDeclarationSurvivesDuplicateSystemNames(t *testing.T) 
 	if err := gw.DeleteSystemSlot(ctx, "", "standard", "dup-std", "seat"); err != nil {
 		t.Fatalf("withdraw standard slot: %v", err)
 	}
-	repA2, err := gw.SystemHealth(ctx, sysA.ID, 0, all)
+	repA2, err := gw.SystemHealth(ctx, sysA.ID, storage.HealthRange{}, all)
 	if err != nil {
 		t.Fatalf("system health sysA after withdraw: %v", err)
 	}
@@ -686,7 +686,7 @@ func TestStandardOwnedSlotDeclarationSurvivesDuplicateSystemNames(t *testing.T) 
 	} else if last := repA2.Transitions[n-1]; last.Value != "healthy" {
 		t.Fatalf("sysA latest transition after withdraw = %+v, want healthy (the recorded recovery)", last)
 	}
-	repB2, err := gw.SystemHealth(ctx, sysB.ID, 0, all)
+	repB2, err := gw.SystemHealth(ctx, sysB.ID, storage.HealthRange{}, all)
 	if err != nil {
 		t.Fatalf("system health sysB after withdraw: %v", err)
 	}

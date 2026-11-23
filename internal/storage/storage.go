@@ -1127,13 +1127,18 @@ type Gateway interface {
 	AlarmTimeline(ctx context.Context, componentID, alarmID string, view RecipientView) ([]AlarmTimelineEntry, error)
 	ListAlarms(ctx context.Context, componentName string, filter AlarmFilter) ([]Alarm, error)
 	// The health reads: the current verdict, why it is what it is, and the
-	// recorded transitions at or after since (a zero since is the whole history).
-	SystemHealth(ctx context.Context, systemName string, window time.Duration, read scope.Set) (*HealthReport, error)
+	// recorded transitions inside rng (the zero HealthRange is the whole history).
+	SystemHealth(ctx context.Context, systemName string, rng HealthRange, read scope.Set) (*HealthReport, error)
 	// SystemHealths is the BULK health read: every system in the read scope with
 	// its current verdict, in one statement. The read a LIST paints its health
 	// column from, where SystemHealth is the read one system's panel opens (#653).
 	SystemHealths(ctx context.Context, read scope.Set) ([]SystemHealthEntry, error)
-	LocationHealth(ctx context.Context, locationName string, window time.Duration, read scope.Set) (*HealthReport, error)
+	LocationHealth(ctx context.Context, locationName string, rng HealthRange, read scope.Set) (*HealthReport, error)
+	// ComponentHealthReport is a component's own current verdict beside its
+	// recorded transitions inside rng, in the report shape a system's read
+	// serves (no slots, no systems: a component's health is its own alarms).
+	// A component outside read is ErrComponentNotFound.
+	ComponentHealthReport(ctx context.Context, componentName string, rng HealthRange, read scope.Set) (*HealthReport, error)
 
 	// FleetProjection is the read behind the fleet canvas: the whole in-scope
 	// place tree, the systems on it, and one dot per component in each system.

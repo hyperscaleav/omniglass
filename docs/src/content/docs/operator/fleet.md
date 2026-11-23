@@ -121,9 +121,9 @@ screenshots:
       - action: click
         selector: "role=button[name='Expand West Building']"
       - action: click
-        selector: "role=button[name='Expand Level 2']"
+        selector: "role=button[name=/^Expand Level 2( in .*)?$/]"
       - action: click
-        selector: "role=button[name='Expand Huddle Room']"
+        selector: "role=button[name=/^Expand Huddle Room( in .*)?$/]"
     alt: "Explore: the outline of locations, Headquarters and West Building folded into one row and opened down to the Huddle Room, which wears its system with the components beneath it; every collapsed location says what it holds and counts its systems by health."
 walkthroughs:
   - id: find-and-fix-a-location

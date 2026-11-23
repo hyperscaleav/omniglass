@@ -98,7 +98,7 @@ func TestAssignedToIsPositionOrdered(t *testing.T) {
 		t.Errorf("EffectiveSlots assigned_to = %v, want [zeta alpha] (assignment order), not alphabetical", got)
 	}
 
-	rep, err := gw.SystemHealth(ctx, "position-order-sys", 0, all)
+	rep, err := gw.SystemHealth(ctx, "position-order-sys", storage.HealthRange{}, all)
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}

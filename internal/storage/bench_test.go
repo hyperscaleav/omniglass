@@ -505,7 +505,7 @@ func BenchmarkLocationHealth(b *testing.B) {
 		ctx := context.Background()
 		window := time.Duration(0)
 		rows := warmRows(b, func() (int, error) {
-			rep, err := e.gw.LocationHealth(ctx, e.campus, window, all)
+			rep, err := e.gw.LocationHealth(ctx, e.campus, storage.HealthRange{Window: window}, all)
 			if err != nil {
 				return 0, err
 			}
@@ -513,7 +513,7 @@ func BenchmarkLocationHealth(b *testing.B) {
 		})
 		b.ResetTimer()
 		for b.Loop() {
-			if _, err := e.gw.LocationHealth(ctx, e.campus, window, all); err != nil {
+			if _, err := e.gw.LocationHealth(ctx, e.campus, storage.HealthRange{Window: window}, all); err != nil {
 				b.Fatalf("location health: %v", err)
 			}
 		}
@@ -536,7 +536,7 @@ func BenchmarkSystemHealth(b *testing.B) {
 		ctx := context.Background()
 		window := time.Duration(0)
 		rows := warmRows(b, func() (int, error) {
-			rep, err := e.gw.SystemHealth(ctx, e.sysName, window, all)
+			rep, err := e.gw.SystemHealth(ctx, e.sysName, storage.HealthRange{Window: window}, all)
 			if err != nil {
 				return 0, err
 			}
@@ -544,7 +544,7 @@ func BenchmarkSystemHealth(b *testing.B) {
 		})
 		b.ResetTimer()
 		for b.Loop() {
-			if _, err := e.gw.SystemHealth(ctx, e.sysName, window, all); err != nil {
+			if _, err := e.gw.SystemHealth(ctx, e.sysName, storage.HealthRange{Window: window}, all); err != nil {
 				b.Fatalf("system health: %v", err)
 			}
 		}
