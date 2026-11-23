@@ -201,7 +201,7 @@
     {
       "id": "read-every-metric-at-one-instant",
       "title": "Read every metric at one instant",
-      "description": "Open a system's view over the last hour, rest the pointer on one metric's chart, and read the crosshair and value every other chart draws at the same instant.",
+      "description": "Open a boardroom's system over the last hour, rest the pointer on one metric's chart, and read the crosshair and value every other chart draws at the same instant.",
       "lab": [],
       "setup": []
     },

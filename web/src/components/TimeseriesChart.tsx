@@ -215,7 +215,7 @@ export default function TimeseriesChart(props: {
         <Show when={last()}>
           {(p) => (
             <>
-              <circle cx={p().x} cy={p().y} r={props.spark ? "2.5" : "3.5"} class="fill-primary stroke-base-100" stroke-width={props.spark ? "1" : "2"} />
+              <circle data-testid="chart-end-dot" cx={p().x} cy={p().y} r={props.spark ? "2.5" : "3.5"} class="fill-primary stroke-base-100" stroke-width={props.spark ? "1" : "2"} />
               <Show when={!props.spark}>
                 <text
                   // Near the right edge the label ends at the frame rather
