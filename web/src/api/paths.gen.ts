@@ -2384,6 +2384,16 @@ export interface paths {
       error: og.getSettingsMeResponseError["data"];
     };
   };
+  "/settings/me/{namespace}": {
+    patch: {
+      path: { "namespace": string };
+      query: never;
+      body: NonNullable<Parameters<typeof og.patchSettingsMeNamespace>[1]>;
+      bodyRequired: true;
+      data: og.patchSettingsMeNamespaceResponseSuccess["data"];
+      error: og.patchSettingsMeNamespaceResponseError["data"];
+    };
+  };
   "/settings/{namespace}": {
     delete: {
       path: { "namespace": string };

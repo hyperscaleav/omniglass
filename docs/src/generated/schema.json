@@ -2160,7 +2160,9 @@
      {
       "name": "user_id",
       "type": "uuid",
-      "nullable": true
+      "nullable": true,
+      "fk": true,
+      "fk_target": "users.id"
      },
      {
       "name": "namespace",
@@ -2194,7 +2196,7 @@
     "checks": [
      {
       "name": "setting_binding_scope_check",
-      "expr": "CHECK ((scope = 'platform'::text))"
+      "expr": "CHECK ((((scope = 'platform'::text) AND (user_id IS NULL)) OR ((scope = 'user'::text) AND (user_id IS NOT NULL))))"
      }
     ],
     "uniques": [

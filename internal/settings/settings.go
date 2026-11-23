@@ -80,6 +80,16 @@ func ClientVisibleNamespaces() map[string]bool {
 	return out
 }
 
+// ProfileNamespaces indexes the registry by domain: true for a profile-domain
+// namespace, the ones a person may bind at the user level (#2450).
+func ProfileNamespaces() map[string]bool {
+	out := map[string]bool{}
+	for _, n := range Namespaces() {
+		out[n.Name] = n.Domain == "profile"
+	}
+	return out
+}
+
 // Defaults reflects the off-axis default layer from the Settings struct: each leaf's
 // default tag, coerced to the field's Go kind. This is the single declaration point
 // for a setting's default. A field with no default tag contributes nothing.

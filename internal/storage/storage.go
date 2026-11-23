@@ -1225,6 +1225,11 @@ type Gateway interface {
 	MergePatchSettingBinding(ctx context.Context, actorID, scope, namespace string, patch map[string]any) (*SettingBinding, error)
 	DeleteSettingBinding(ctx context.Context, actorID, scope, namespace string) error
 	DeleteAllSettingBindings(ctx context.Context, actorID, scope string) error
+	// The user level (#2450): one person's own bindings for profile-domain
+	// namespaces, read and merge-patched by that person alone (the route
+	// passes the caller's id). Audited like the platform writes.
+	GetUserSettingBindings(ctx context.Context, userID string) ([]SettingBinding, error)
+	MergePatchUserSettingBinding(ctx context.Context, userID, namespace string, patch map[string]any) (*SettingBinding, error)
 
 	// The notification_type catalog (#618): official types from the boot
 	// seed, operator types created, patched and deleted; a type addressed by

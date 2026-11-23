@@ -575,6 +575,7 @@ config: {
   setting_binding: {
     shape: sql_table
     id: uuid {constraint: primary_key}
+    user_id: uuid {constraint: foreign_key}
   }
   variable: {
     shape: sql_table
@@ -669,6 +670,7 @@ config.secret.component_id -> fleet.component.id
 config.secret.location_id -> fleet.location.id
 config.secret.secret_type -> config.secret_type.id
 config.secret.system_id -> fleet.system.id
+config.setting_binding.user_id -> identity.users.id
 config.variable.component_id -> fleet.component.id
 config.variable.location_id -> fleet.location.id
 config.variable.system_id -> fleet.system.id

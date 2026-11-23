@@ -14,10 +14,13 @@ import (
 // settings tag is "<domain>[,client]": domain is "profile" or "platform", and the
 // client token marks a client-visible namespace (fed to /settings/me).
 type Settings struct {
-	UI          UISettings        `json:"ui" settings:"profile,client"`
-	Keybindings Keybindings       `json:"keybindings" settings:"profile,client"`
-	Label       LabelSettings     `json:"label" settings:"platform,client"`
-	Retention   RetentionSettings `json:"retention" settings:"platform,client"`
+	UI          UISettings  `json:"ui" settings:"profile,client"`
+	Keybindings Keybindings `json:"keybindings" settings:"profile,client"`
+	// Learn is a person's progress through the console's lessons (#2450):
+	// profile domain, so each person binds their own at the user level.
+	Learn     LearnSettings     `json:"learn" settings:"profile,client"`
+	Label     LabelSettings     `json:"label" settings:"platform,client"`
+	Retention RetentionSettings `json:"retention" settings:"platform,client"`
 	// Collection is how the install's collection reports on itself (#1369):
 	// platform domain, client-visible, as retention is, since a chart of a
 	// collection telemetry series reads its window.
@@ -57,6 +60,12 @@ type Keybindings struct {
 	OpenEdit       string `json:"open_edit" default:"e" doc:"Open the edit pane"`
 	CloseBlade     string `json:"close_blade" default:"Escape" doc:"Close the top blade"`
 	CommandPalette string `json:"command_palette" default:"mod+k" doc:"Open the command palette"`
+}
+
+// LearnSettings is the learn namespace (#2450): which of the console's
+// lessons (web/src/lib/lessons.ts) this person has finished, by slug.
+type LearnSettings struct {
+	Done []string `json:"done" nullable:"false" default:"" doc:"The lessons this person has finished, by slug (device-to-samples); set at the user level from the Learn page"`
 }
 
 // LabelSettings is the label namespace: how the label rule engine renders, as

@@ -56,20 +56,46 @@ func registerSettingsRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		Method:      http.MethodGet,
 		Path:        "/settings/me",
 		Summary:     "Get the caller's effective settings",
-		Description: "The current user's resolved settings, client-visible namespaces only, no provenance. Feeds the SPA at boot. Requires authentication.",
+		Description: "The current user's resolved settings, client-visible namespaces only, no provenance: the platform level with the caller's own user-level bindings on top. Feeds the SPA at boot. Requires authentication.",
 		Middlewares: huma.Middlewares{a.authn},
 	}, func(ctx context.Context, _ *struct{}) (*settingsMeOutput, error) {
-		vals, err := svc.ClientEffective(ctx)
+		return settingsMe(ctx, gw, svc)
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "patch-settings-me-namespace",
+		Method:      http.MethodPatch,
+		Path:        "/settings/me/{namespace}",
+		Summary:     "Update the caller's own settings namespace",
+		Description: "Applies an RFC 7386 JSON Merge Patch to the caller's own user-level binding for a profile-domain namespace (ui, keybindings, learn); null on a key restores it to the platform's value. A platform-domain namespace is the admin's (403), an unknown one a 404, a bad key or value a 422, and a key an admin locked at the platform level a 409. Answers the caller's effective settings. Requires authentication; self-scoped (writes only your own binding).",
+		Middlewares: huma.Middlewares{a.authn},
+	}, func(ctx context.Context, in *settingsPatchInput) (*settingsMeOutput, error) {
+		if err := settings.Validate(in.Namespace, in.Body); err != nil {
+			if errors.Is(err, settings.ErrUnknownNamespace) {
+				return nil, huma.Error404NotFound("unknown settings namespace")
+			}
+			var fe *settings.FieldError
+			if errors.As(err, &fe) {
+				return nil, huma.Error422UnprocessableEntity(fe.Error())
+			}
+			return nil, err
+		}
+		if !settings.ProfileNamespaces()[in.Namespace] {
+			return nil, huma.Error403Forbidden("a platform-domain namespace is set at the platform level only, by an admin")
+		}
+		r, err := svc.Resolve(ctx)
 		if err != nil {
 			return nil, err
 		}
-		typed, err := settings.Typed(vals)
-		if err != nil {
+		for key := range in.Body {
+			if lvl, locked := r.Locks[in.Namespace+"."+key]; locked {
+				return nil, huma.Error409Conflict(in.Namespace + "." + key + " is locked at the " + lvl + " level")
+			}
+		}
+		if _, err := gw.MergePatchUserSettingBinding(ctx, actorID(ctx), in.Namespace, in.Body); err != nil {
 			return nil, err
 		}
-		out := &settingsMeOutput{}
-		out.Body.Values = typed
-		return out, nil
+		return settingsMe(ctx, gw, svc)
 	})
 
 	huma.Register(api, a.conditionalGated(a.platformGated(a.gated(huma.Operation{
@@ -158,6 +184,27 @@ func registerSettingsRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		}
 		return nil, nil
 	})
+}
+
+// settingsMe resolves the caller's client-visible settings: the platform level
+// with their own user-level bindings on top (#2450).
+func settingsMe(ctx context.Context, gw storage.Gateway, svc *settings.Service) (*settingsMeOutput, error) {
+	rows, err := gw.GetUserSettingBindings(ctx, actorID(ctx))
+	if err != nil {
+		return nil, err
+	}
+	user, _ := storage.SettingLevel(rows)
+	vals, err := svc.ClientEffectiveFor(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+	typed, err := settings.Typed(vals)
+	if err != nil {
+		return nil, err
+	}
+	out := &settingsMeOutput{}
+	out.Body.Values = typed
+	return out, nil
 }
 
 // resolveOutput resolves the effective settings document and renders it as the

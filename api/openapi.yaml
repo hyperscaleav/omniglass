@@ -6083,6 +6083,17 @@ components:
       required:
         - acronyms
       type: object
+    LearnSettings:
+      additionalProperties: false
+      properties:
+        done:
+          description: The lessons this person has finished, by slug (device-to-samples); set at the user level from the Learn page
+          items:
+            type: string
+          type: array
+      required:
+        - done
+      type: object
     ListActionRulesOutputBody:
       additionalProperties: false
       properties:
@@ -11840,6 +11851,8 @@ components:
           $ref: "#/components/schemas/Keybindings"
         label:
           $ref: "#/components/schemas/LabelSettings"
+        learn:
+          $ref: "#/components/schemas/LearnSettings"
         notification:
           $ref: "#/components/schemas/NotificationSettings"
         retention:
@@ -11851,6 +11864,7 @@ components:
       required:
         - ui
         - keybindings
+        - learn
         - label
         - retention
         - collection
@@ -23031,7 +23045,7 @@ paths:
       x-omniglass-permission: settings:read
   /settings/me:
     get:
-      description: The current user's resolved settings, client-visible namespaces only, no provenance. Feeds the SPA at boot. Requires authentication.
+      description: "The current user's resolved settings, client-visible namespaces only, no provenance: the platform level with the caller's own user-level bindings on top. Feeds the SPA at boot. Requires authentication."
       operationId: get-settings-me
       responses:
         "200":
@@ -23047,6 +23061,45 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Get the caller's effective settings
+  /settings/me/{namespace}:
+    patch:
+      description: Applies an RFC 7386 JSON Merge Patch to the caller's own user-level binding for a profile-domain namespace (ui, keybindings, learn); null on a key restores it to the platform's value. A platform-domain namespace is the admin's (403), an unknown one a 404, a bad key or value a 422, and a key an admin locked at the platform level a 409. Answers the caller's effective settings. Requires authentication; self-scoped (writes only your own binding).
+      operationId: patch-settings-me-namespace
+      parameters:
+        - description: the settings namespace, e.g. ui
+          in: path
+          name: namespace
+          required: true
+          schema:
+            description: the settings namespace, e.g. ui
+            examples:
+              - notification
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              additionalProperties: {}
+              description: an RFC 7386 JSON Merge Patch for the namespace; null on a key restores it
+              examples:
+                - egress_allow:
+                    - smtp.example.com
+              type: object
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettingsMeOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update the caller's own settings namespace
   /settings/{namespace}:
     delete:
       description: Drops the namespace's platform binding, restoring the env layer, the file layer and the declared defaults. Gated by settings:update and platform:update.

@@ -929,6 +929,12 @@ func (UnimplementedGateway) DeleteSettingBinding(context.Context, string, string
 func (UnimplementedGateway) DeleteAllSettingBindings(context.Context, string, string) error {
 	return nil
 }
+func (UnimplementedGateway) GetUserSettingBindings(context.Context, string) ([]SettingBinding, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) MergePatchUserSettingBinding(context.Context, string, string, map[string]any) (*SettingBinding, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) Close() {}
 
 func (UnimplementedGateway) ListStandardProperties(context.Context, string) ([]StandardProperty, error) {

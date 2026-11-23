@@ -5712,12 +5712,35 @@ Get the caller's effective settings
 omniglass setting me list
 ```
 
-The current user's resolved settings, client-visible namespaces only, no provenance. Feeds the SPA at boot. Requires authentication.
+The current user's resolved settings, client-visible namespaces only, no provenance: the platform level with the caller's own user-level bindings on top. Feeds the SPA at boot. Requires authentication.
 
 Example:
 
 ```sh
 omniglass setting me list
+```
+
+#### `omniglass setting me update`
+
+Update the caller's own settings namespace
+
+```
+omniglass setting me update <namespace> [flags]
+```
+
+Applies an RFC 7386 JSON Merge Patch to the caller's own user-level binding for a profile-domain namespace (ui, keybindings, learn); null on a key restores it to the platform's value. A platform-domain namespace is the admin's (403), an unknown one a 404, a bad key or value a 422, and a key an admin locked at the platform level a 409. Answers the caller's effective settings. Requires authentication; self-scoped (writes only your own binding).
+
+The request body is a JSON object: pass it inline with --body, or from a file (or - for stdin) with --body-file. A malformed document is refused before any request is made.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--body` | string | (none) | the request body as a JSON object |
+| `--body-file` | string | (none) | read the request body, a JSON object, from this file (- for stdin) |
+
+Example:
+
+```sh
+omniglass setting me update notification --body '{"egress_allow":["smtp.example.com"]}'
 ```
 
 ### `omniglass setting restoreDefaults`

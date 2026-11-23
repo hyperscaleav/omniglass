@@ -7308,7 +7308,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list",
 						Short:   "Get the caller's effective settings",
-						Long:    "The current user's resolved settings, client-visible namespaces only, no provenance. Feeds the SPA at boot. Requires authentication.",
+						Long:    "The current user's resolved settings, client-visible namespaces only, no provenance: the platform level with the caller's own user-level bindings on top. Feeds the SPA at boot. Requires authentication.",
 						Example: "  omniglass setting me list",
 						Args:    pathArgs(0),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -7316,6 +7316,30 @@ func generatedCommands() []*cobra.Command {
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					var fBody, fBodyFile string
+					cmd := &cobra.Command{
+						Use:     "update <namespace>",
+						Short:   "Update the caller's own settings namespace",
+						Long:    "Applies an RFC 7386 JSON Merge Patch to the caller's own user-level binding for a profile-domain namespace (ui, keybindings, learn); null on a key restores it to the platform's value. A platform-domain namespace is the admin's (403), an unknown one a 404, a bad key or value a 422, and a key an admin locked at the platform level a 409. Answers the caller's effective settings. Requires authentication; self-scoped (writes only your own binding).\n\nThe request body is a JSON object: pass it inline with --body, or from a file (or - for stdin) with --body-file. A malformed document is refused before any request is made.",
+						Example: "  omniglass setting me update notification --body '{\"egress_allow\":[\"smtp.example.com\"]}'",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/settings/me/%s", pathSegment(args[0]))
+							body, err := freeFormBody(cmd, fBody, fBodyFile, true)
+							if err != nil {
+								return err
+							}
+							return runAPICommand(cmd, "PATCH", path, body)
+						},
+					}
+					cmd.Flags().StringVar(&fBody, "body", "", "the request body as a JSON object")
+					cmd.Flags().StringVar(&fBodyFile, "body-file", "", "read the request body, a JSON object, from this file (- for stdin)")
 					return cmd
 				}()
 				return cmd

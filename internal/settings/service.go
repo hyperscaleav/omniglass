@@ -72,10 +72,33 @@ func (s *Service) Effective(ctx context.Context) (Doc, error) {
 // ClientEffective returns the resolved values filtered to client-visible
 // namespaces, for /settings/me (what an unprivileged SPA may read at boot).
 func (s *Service) ClientEffective(ctx context.Context) (Doc, error) {
-	r, err := s.Resolve(ctx)
+	return s.ClientEffectiveFor(ctx, nil)
+}
+
+// ClientEffectiveFor is ClientEffective for one person: their user-level
+// binding (#2450), read by the caller, sits on top of the platform level. Only
+// its profile-domain namespaces contribute, since a platform-domain namespace
+// is set at the platform level alone; a platform lock still pins its key, so
+// the person's value for it is ignored, exactly as the cascade says.
+func (s *Service) ClientEffectiveFor(ctx context.Context, user Doc) (Doc, error) {
+	platformDoc, platformLocks, err := s.bindings(ctx, "platform")
 	if err != nil {
 		return nil, err
 	}
+	profile := ProfileNamespaces()
+	userDoc := Doc{}
+	for ns, keys := range user {
+		if profile[ns] {
+			userDoc[ns] = keys
+		}
+	}
+	r := Resolve(
+		Level{Name: "default", Doc: s.defaults},
+		Level{Name: "file", Doc: s.file},
+		Level{Name: "env", Doc: s.env},
+		Level{Name: "platform", Doc: platformDoc, Locks: platformLocks},
+		Level{Name: "user", Doc: userDoc},
+	)
 	visible := ClientVisibleNamespaces()
 	out := Doc{}
 	for ns, keys := range r.Values {

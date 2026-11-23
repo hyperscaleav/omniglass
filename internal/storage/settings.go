@@ -389,3 +389,90 @@ func (p *PG) announceReportWindowChange(ctx context.Context, tx pgx.Tx, before i
 	}
 	return announceEveryOutpost(ctx, tx)
 }
+
+// GetUserSettingBindings returns one person's binding rows, the user level of
+// the cascade (#2450), ordered by namespace. Unscoped like the platform read:
+// the rows describe the person, not the fleet; the caller passes its own id,
+// so a person reads only their own rows.
+func (p *PG) GetUserSettingBindings(ctx context.Context, userID string) ([]SettingBinding, error) {
+	rows, err := p.pool.Query(ctx, `
+		select namespace, doc
+		from setting_binding
+		where scope = 'user' and user_id = $1
+		order by namespace`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("storage: list user setting bindings: %w", err)
+	}
+	defer rows.Close()
+	var out []SettingBinding
+	for rows.Next() {
+		o := SettingBinding{Scope: "user", Locks: []string{}}
+		var docRaw []byte
+		if err := rows.Scan(&o.Namespace, &docRaw); err != nil {
+			return nil, fmt.Errorf("storage: scan user setting binding: %w", err)
+		}
+		if err := json.Unmarshal(docRaw, &o.Doc); err != nil {
+			return nil, fmt.Errorf("storage: unmarshal user binding doc: %w", err)
+		}
+		out = append(out, o)
+	}
+	return out, rows.Err()
+}
+
+// MergePatchUserSettingBinding applies an RFC 7386 merge patch to one person's
+// binding for a namespace (#2450) and audits it, as one serialized
+// read-modify-write: the advisory lock is keyed on the person and the
+// namespace, so two tabs saving at once lose neither write. A user level holds
+// no locks; locking is enforced from above. The caller has already judged the
+// namespace (profile domain) and the patch (the namespace's schema).
+func (p *PG) MergePatchUserSettingBinding(ctx context.Context, userID, namespace string, patch map[string]any) (*SettingBinding, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin merge-patch user setting binding: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if _, err := tx.Exec(ctx,
+		`select pg_advisory_xact_lock(hashtext('user:' || $1), hashtext($2))`, userID, namespace); err != nil {
+		return nil, fmt.Errorf("storage: lock user setting binding: %w", err)
+	}
+	current := map[string]any{}
+	var docRaw []byte
+	err = tx.QueryRow(ctx,
+		`select doc from setting_binding where scope = 'user' and user_id = $1 and namespace = $2 for update`,
+		userID, namespace).Scan(&docRaw)
+	switch {
+	case err == nil:
+		if err := json.Unmarshal(docRaw, &current); err != nil {
+			return nil, fmt.Errorf("storage: unmarshal user binding doc: %w", err)
+		}
+	case errors.Is(err, pgx.ErrNoRows):
+	default:
+		return nil, fmt.Errorf("storage: read user setting binding: %w", err)
+	}
+	before := map[string]any{"scope": "user", "namespace": namespace, "doc": current}
+	merged := settings.ApplyMergePatch(current, patch)
+	if merged == nil {
+		merged = map[string]any{}
+	}
+	mergedJSON, err := json.Marshal(merged)
+	if err != nil {
+		return nil, fmt.Errorf("storage: marshal user binding doc: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		insert into setting_binding (scope, user_id, namespace, doc, locks, updated_by)
+		values ('user', $1, $2, $3, '[]'::jsonb, $1)
+		on conflict on constraint setting_binding_identity
+		do update set doc = excluded.doc, updated_at = now(), updated_by = excluded.updated_by`,
+		userID, namespace, mergedJSON); err != nil {
+		return nil, fmt.Errorf("storage: upsert user setting binding: %w", err)
+	}
+	after := map[string]any{"scope": "user", "namespace": namespace, "doc": merged}
+	if err := writeAuditRes(ctx, tx, userID, "update", "settings", namespace, before, after); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit merge-patch user setting binding: %w", err)
+	}
+	return &SettingBinding{Scope: "user", Namespace: namespace, Doc: merged, Locks: []string{}}, nil
+}

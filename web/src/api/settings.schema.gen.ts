@@ -130,6 +130,12 @@ export const settingsSchema = {
       "type": "array"
     }
   },
+  "learn": {
+    "done": {
+      "description": "The lessons this person has finished, by slug (device-to-samples); set at the user level from the Learn page",
+      "type": "array"
+    }
+  },
   "notification": {
     "console_url": {
       "description": "The console's base URL as a receiver of a notification reaches it (https://omniglass.example.com); the prefix of the Link a notification's subject and text read. Empty leaves Link empty",

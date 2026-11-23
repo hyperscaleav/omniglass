@@ -83,3 +83,36 @@ func TestClientEffectiveKeepsOnlyVisibleNamespaces(t *testing.T) {
 		t.Fatalf("client effective missing ui")
 	}
 }
+
+// TestClientEffectiveForUserShadowsProfileOnly pins the user level (#2450): a
+// person's binding shadows the platform on a profile-domain key, a platform
+// lock still wins over it, and a user doc naming a platform-domain namespace
+// contributes nothing (the domain says who writes it).
+func TestClientEffectiveForUserShadowsProfileOnly(t *testing.T) {
+	svc := NewService(Doc{}, nil, func(ctx context.Context, scope string) (Doc, map[string][]string, error) {
+		return Doc{"ui": {"default_landing": "/alarms"}, "keybindings": {"open_edit": "x"}},
+			map[string][]string{"keybindings": {"open_edit"}}, nil
+	})
+	user := Doc{
+		"ui":          {"theme": "omniglass-light"},
+		"keybindings": {"open_edit": "y"},
+		"learn":       {"done": []any{"device-to-samples"}},
+		"label":       {"acronyms": []any{"XYZ"}},
+	}
+	eff, err := svc.ClientEffectiveFor(context.Background(), user)
+	if err != nil {
+		t.Fatalf("client effective for: %v", err)
+	}
+	if eff["ui"]["theme"] != "omniglass-light" || eff["ui"]["default_landing"] != "/alarms" {
+		t.Fatalf("ui = %v, want the user's theme over the platform's landing", eff["ui"])
+	}
+	if eff["keybindings"]["open_edit"] != "x" {
+		t.Fatalf("open_edit = %v, want the platform-locked x", eff["keybindings"]["open_edit"])
+	}
+	if done, _ := eff["learn"]["done"].([]any); len(done) != 1 {
+		t.Fatalf("learn.done = %v, want the user's one lesson", eff["learn"]["done"])
+	}
+	if acr, _ := eff["label"]["acronyms"].([]any); len(acr) == 1 {
+		t.Fatalf("label.acronyms = %v: a user binding on a platform-domain namespace must not apply", acr)
+	}
+}

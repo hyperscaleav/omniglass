@@ -4559,6 +4559,11 @@ export type LabelSettings = {
   acronyms: string[];
 };
 
+export type LearnSettings = {
+  /** The lessons this person has finished, by slug (device-to-samples); set at the user level from the Learn page */
+  done: string[];
+};
+
 export type ListActionRulesOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -8370,6 +8375,7 @@ export type Settings = {
   heartbeat: HeartbeatSettings;
   keybindings: Keybindings;
   label: LabelSettings;
+  learn: LearnSettings;
   notification: NotificationSettings;
   retention: RetentionSettings;
   sso: SSOSettings;
@@ -9775,6 +9781,11 @@ export type SearchParams = {
    */
   limit?: number;
 };
+
+/**
+ * an RFC 7386 JSON Merge Patch for the namespace; null on a key restores it
+ */
+export type PatchSettingsMeNamespaceBody = {[key: string]: unknown};
 
 /**
  * an RFC 7386 JSON Merge Patch for the namespace; null on a key restores it
@@ -21383,7 +21394,7 @@ export const getGetSettingsMeUrl = () => {
 }
 
 /**
- * The current user's resolved settings, client-visible namespaces only, no provenance. Feeds the SPA at boot. Requires authentication.
+ * The current user's resolved settings, client-visible namespaces only, no provenance: the platform level with the caller's own user-level bindings on top. Feeds the SPA at boot. Requires authentication.
  * @summary Get the caller's effective settings
  */
 export const getSettingsMe = async ( options?: Parameters<typeof ogFetch>[1]): Promise<getSettingsMeResponse> => {
@@ -21394,6 +21405,51 @@ export const getSettingsMe = async ( options?: Parameters<typeof ogFetch>[1]): P
     method: 'GET'
 
 
+  }
+);}
+
+
+
+export type patchSettingsMeNamespaceResponse200 = {
+  data: SettingsMeOutputBody
+  status: 200
+}
+
+export type patchSettingsMeNamespaceResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type patchSettingsMeNamespaceResponseSuccess = (patchSettingsMeNamespaceResponse200) & {
+  headers: Headers;
+};
+export type patchSettingsMeNamespaceResponseError = (patchSettingsMeNamespaceResponseDefault) & {
+  headers: Headers;
+};
+
+export type patchSettingsMeNamespaceResponse = (patchSettingsMeNamespaceResponseSuccess | patchSettingsMeNamespaceResponseError)
+
+export const getPatchSettingsMeNamespaceUrl = (namespace: string,) => {
+
+
+
+
+  return `/settings/me/${namespace}`
+}
+
+/**
+ * Applies an RFC 7386 JSON Merge Patch to the caller's own user-level binding for a profile-domain namespace (ui, keybindings, learn); null on a key restores it to the platform's value. A platform-domain namespace is the admin's (403), an unknown one a 404, a bad key or value a 422, and a key an admin locked at the platform level a 409. Answers the caller's effective settings. Requires authentication; self-scoped (writes only your own binding).
+ * @summary Update the caller's own settings namespace
+ */
+export const patchSettingsMeNamespace = async (namespace: string,
+    patchSettingsMeNamespaceBody: PatchSettingsMeNamespaceBody, options?: Parameters<typeof ogFetch>[1]): Promise<patchSettingsMeNamespaceResponse> => {
+
+  return ogFetch<patchSettingsMeNamespaceResponse>(getPatchSettingsMeNamespaceUrl(namespace),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
+    body: JSON.stringify(patchSettingsMeNamespaceBody)
   }
 );}
 
