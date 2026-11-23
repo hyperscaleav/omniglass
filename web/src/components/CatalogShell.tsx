@@ -73,7 +73,7 @@ const CatalogShell: ParentComponent = (props) => {
         </ul>
       </nav>
 
-      <div class="h-full min-w-0 flex-1 overflow-y-auto">{props.children}</div>
+      <div class="min-h-0 min-w-0 flex-1 overflow-y-auto min-[1100px]:h-full">{props.children}</div>
     </div>
   );
 };
