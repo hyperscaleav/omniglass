@@ -25,7 +25,9 @@
 # the loop at the viewport's size, and ffmpeg encodes that to H.264, smaller until
 # it fits the 1.5 MB budget. The loop's length and size are then checked against
 # the budget (marketinglib.mjs), and any shot over it fails the run, naming the
-# shot and the limit.
+# shot and the limit. Each loop also gets a storyboard (one still per beat,
+# $OUT/storyboard/), and a beat whose frame misses the text its step `expect`s
+# fails the run at its end, after everything is written.
 #
 # Prereqs: docker, and `make` run first (make marketing-shots does): the lab is
 # the binary and the image it builds.
@@ -127,6 +129,30 @@ encode_shot() {
   printf '  %s: %ss, %s bytes (crf %s)\n' "$id" "$(printf '%.1f' "$seconds")" "$bytes" "$crf" >&2
 }
 
+# The storyboard of loop $1: one still per beat, taken from the finished clip
+# just before the beat ends (what the viewer sees as the camera leaves), side by
+# side in $OUT/storyboard/$1.png. A beat's in-frame text is in $OUT/$1.beats.json.
+storyboard_shot() {
+  local id=$1 dir="$OUT/storyboard" k t inputs=() n=0
+  [ -f "$OUT/$id.beats.json" ] || return 0
+  mkdir -p "$dir"
+  while read -r k t; do
+    t=$(awk -v t="$t" 'BEGIN { t -= 0.05; if (t < 0) t = 0; printf "%.3f", t }')
+    ffmpeg_in "$OUT" "$FFMPEG_IMG" -hide_banner -loglevel error -y -ss "$t" -i "/o/$id.mp4" \
+      -frames:v 1 -vf scale=720:-2 "/o/storyboard/$id-$k.png" </dev/null || return 1
+    inputs+=(-i "/o/storyboard/$id-$k.png")
+    n=$((n + 1))
+  done < <(mk beat-times "${OUT#web/}/$id.beats.json")
+  [ "$n" -gt 0 ] || return 0
+  if [ "$n" -eq 1 ]; then
+    cp -- "$dir/$id-1.png" "$dir/$id.png"
+  else
+    ffmpeg_in "$OUT" "$FFMPEG_IMG" -hide_banner -loglevel error -y "${inputs[@]}" \
+      -filter_complex "hstack=inputs=$n" "/o/storyboard/$id.png" || return 1
+  fi
+  printf '  %s: storyboard, %s beats\n' "$id" "$n" >&2
+}
+
 # The checks that need no lab: the destination, the shot list, the recording.
 preflight() {
   mk check "$SHOTS_W" "${MARKETING_DEST:-}"
@@ -190,10 +216,18 @@ echo "encoding" >&2
 failed=0
 while read -r id kind max; do
   encode_shot "$id" "$kind" "$MARKETING_DEST" "$max" || failed=1
+  [ "$kind" != loop ] || storyboard_shot "$id" || echo "marketing: $id: the storyboard failed (the clip is fine)" >&2
 done < <(mk ids "$SHOTS_W")
 [ "$failed" = 0 ] || {
   echo "marketing: a shot is over budget or failed to encode (above); nothing was published" >&2
   exit 1
 }
 mk manifest "$SHOTS_W" "$MARKETING_DEST" "${OUT#web/}/dims.json"
-echo "marketing: captures written to $MARKETING_DEST"
+echo "marketing: captures written to $MARKETING_DEST; storyboards in $OUT/storyboard"
+# The frame check: a beat whose frame did not show its expected text (shots.yaml
+# `expect`). Everything is written, so its storyboard shows why; the run fails.
+if [ -s "$OUT/frame-check.txt" ]; then
+  echo "marketing: the frame check failed; see the storyboards:" >&2
+  sed 's/^/  /' "$OUT/frame-check.txt" >&2
+  exit 1
+fi

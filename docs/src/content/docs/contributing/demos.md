@@ -464,6 +464,16 @@ eases over 0.6 s and centres the target, even near the capture's edge, where the
 own dark base past it; so focus the thing the beat is about, not the panel around it. It eases back to the whole frame before the loop
 ends, so the loop's seam lands on the full view: the recorder keeps recording for that last ease when the
 final step leaves the camera zoomed. A focus on a still, or on a loop's prep, fails the parse.
+
+A focus opens a **beat**, which runs until the next focus or the clip's end. A step's `expect` lists the
+text its beat's frame must show: as the beat ends, the recorder reads the text on screen inside the frame
+(each text node wholly inside it, and not covered by a backdrop or dialog) and checks every string. A
+miss does not stop the run: every shot is still written, and the run fails at its end, naming the shot,
+the step, what was missing and what the frame held. Each loop also gets a **storyboard**, one still per
+beat taken from the finished clip as the beat ends, in the storyboard folder of the run's output, with each
+beat's in-frame text in `<id>.beats.json` beside the clip. A loop's beats (when each opens and ends, and
+the part of the capture it frames) ride along in `shots.json`. Write an `expect` from the words the
+page's bullet rests on, as the console renders them (an input's value is not text on screen).
 The recorder takes the loop's frames as screenshots at twice the viewport, as fast as the page allows
 (Playwright's own video has CSS-pixel frames, so a "2x video" is the 1x frame padded with gray), so a 2x zoom
 is still crisp, and writes where each focused target sat on screen. ffmpeg joins the frames, each held for

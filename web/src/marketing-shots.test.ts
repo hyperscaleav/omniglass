@@ -14,6 +14,8 @@ import {
   buildManifest,
   cameraTrack,
   frameFor,
+  frameRect,
+  missingText,
   conditionMet,
   destProblem,
   expandAddress,
@@ -194,6 +196,13 @@ describe("buildManifest", () => {
     expect(() => buildManifest({ generatedAt: "x", lab, shots: [{ ...shots[0], poster: undefined }] })).toThrow("is not a bare file name");
   });
 
+  it("carries a loop's beats and drops them from a still", () => {
+    const beats = [{ step: 2, from: 1, to: 2.5, frame: { x: 0, y: 0, width: 720, height: 450 } }];
+    const m = buildManifest({ generatedAt: "x", lab, shots: [{ ...shots[0], beats }, { ...shots[1], beats }] });
+    expect(m.shots[0]).toMatchObject({ id: "a-loop", beats });
+    expect(m.shots[1]).not.toHaveProperty("beats");
+  });
+
   it("names a shot's files by kind", () => {
     expect(shotFiles({ id: "x", kind: "loop" })).toEqual({ file: "x.mp4", poster: "x.webp" });
     expect(shotFiles({ id: "x", kind: "still" })).toEqual({ file: "x.webp", poster: "x.webp" });
@@ -289,6 +298,53 @@ describe("focus and zoom on a step", () => {
     expect(still.problems).toEqual(["shot a-still: step 1 has a focus: the camera moves on a loop only"]);
     const prep = parseShots(LOOP("      - click: a\n").replace("    steps:", "    prep:\n      - click: b\n        focus: here\n    steps:"));
     expect(prep.problems).toEqual(["shot a-loop: prep step 1 has a focus: prep is cut from the recording"]);
+  });
+});
+
+describe("expect on a beat", () => {
+  it("takes the text a focused beat's frame must show", () => {
+    const { list, problems } = parseShots(LOOP("      - click: a\n        focus: here\n        expect: [Reachability lost, display-1]\n"));
+    expect(problems).toEqual([]);
+    expect(list?.shots[0].steps[0].expect).toEqual(["Reachability lost", "display-1"]);
+  });
+
+  it("names an expect with no focus, on a focus out, and one that is not a list of text", () => {
+    const { problems } = parseShots(
+      LOOP(
+        "      - click: a\n        expect: [x]\n" +
+          "      - click: b\n        focus: out\n        expect: [x]\n" +
+          "      - click: c\n        focus: here\n        expect: x\n" +
+          "      - click: d\n        focus: here\n        expect: []\n",
+      ),
+    );
+    expect(problems).toEqual([
+      "shot a-loop: step 1 (click): expect goes with a focus on a target",
+      "shot a-loop: step 2 (click): expect goes with a focus on a target",
+      "shot a-loop: step 3 (click): expect is a list of the text the frame must show",
+      "shot a-loop: step 4 (click): expect is a list of the text the frame must show",
+    ]);
+  });
+});
+
+describe("a beat's frame and its text", () => {
+  const vp = { width: 1440, height: 900 };
+
+  it("is the part of the capture the landed camera shows, and the part of that on screen", () => {
+    expect(frameRect({ scale: 2, x: 720, y: 450 }, vp)).toEqual({
+      rect: { x: 360, y: 225, width: 720, height: 450 },
+      onScreen: { x: 360, y: 225, width: 720, height: 450 },
+    });
+    // Centred near the right edge: the frame reaches past it, the backdrop shows there.
+    expect(frameRect({ scale: 2, x: 1300, y: 450 }, vp)).toEqual({
+      rect: { x: 940, y: 225, width: 720, height: 450 },
+      onScreen: { x: 940, y: 225, width: 500, height: 450 },
+    });
+  });
+
+  it("finds expected text across pieces and spacing, and names what is missing", () => {
+    const seen = ["Reachability lost", "display-1", "impairs  Main\nDisplay"];
+    expect(missingText(seen, ["Reachability lost display-1", "impairs Main Display"])).toEqual([]);
+    expect(missingText(seen, ["Acknowledge", "display-1"])).toEqual(["Acknowledge"]);
   });
 });
 

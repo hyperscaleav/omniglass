@@ -21,11 +21,11 @@
 // A failing step fails the run naming the shot, the step, its kind and what it
 // waited for, and keeps the frame it failed on beside the captures.
 
-import { existsSync, readFileSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { appendFileSync, existsSync, readFileSync, rmSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import {
   CAPTURE_CSS, buildManifest, cameraTail, concatList, retime, budgetProblems, conditionMet, destProblem,
-  expandAddress, parseShots, pick, shotFiles, referencedResources,
+  expandAddress, frameFor, frameRect, missingText, parseShots, pick, shotFiles, referencedResources,
 } from './marketinglib.mjs';
 import { describeTarget, locate } from './walkthroughlib.mjs';
 
@@ -75,13 +75,26 @@ async function main() {
     process.exit(problems.length ? 1 : 0);
   } else if (mode === 't0') {
     console.log(JSON.parse(readFileSync(args[0], 'utf8'))[args[1]].t0);
+  } else if (mode === 'beat-times') {
+    // One line per beat of a loop's beats.json: its number and the second it ends.
+    JSON.parse(readFileSync(args[0], 'utf8')).beats.forEach((/** @type {{ to: number }} */ b, /** @type {number} */ i) => console.log(i + 1, b.to));
   } else if (mode === 'manifest') {
-    const [file, dest] = args;
+    const [file, dest, dims] = args;
     const list = readList(file);
-      const manifest = buildManifest({
+    // A loop's beats (when each opens and ends, and the part of the capture its
+    // frame shows) ride along from the recording, when it wrote them.
+    const beatsOf = (/** @type {string} */ id) => {
+      const f = dims ? join(dirname(dims), `${id}.beats.json`) : '';
+      if (!f || !existsSync(f)) return undefined;
+      return JSON.parse(readFileSync(f, 'utf8')).beats.map((/** @type {{ step: number, from: number, to: number, frame: object }} */ b) => ({ step: b.step, from: b.from, to: b.to, frame: b.frame }));
+    };
+    const manifest = buildManifest({
       generatedAt: new Date().toISOString(),
       lab: { scenario: list.lab.scenario, systems: list.lab.systems },
-      shots: list.shots.map((s) => ({ id: s.id, kind: s.kind, ...shotFiles(s), alt: s.alt, width: s.viewport.width, height: s.viewport.height })),
+      shots: list.shots.map((s) => ({
+        id: s.id, kind: s.kind, ...shotFiles(s), alt: s.alt, width: s.viewport.width, height: s.viewport.height,
+        ...(s.kind === 'loop' && beatsOf(s.id) ? { beats: beatsOf(s.id) } : {}),
+      })),
     });
     writeFileSync(join(dest, 'shots.json'), JSON.stringify(manifest, null, 2) + '\n');
     console.log(`marketing: wrote ${join(dest, 'shots.json')} (${list.shots.length} shots)`);
@@ -105,6 +118,7 @@ async function capture(file, out, only) {
   }
   const list = readList(file);
   mkdirSync(out, { recursive: true });
+  rmSync(join(out, 'frame-check.txt'), { force: true });
   const api = makeApi(base, token);
 
   // Before any capture: every component, system and endpoint a setup item or a
@@ -284,7 +298,7 @@ async function record(browser, base, storageState, shot, out) {
   const page = await ctx.newPage();
   const cursor = { x: width / 2, y: height / 2 };
   /** @type {Camera} */
-  const cam = { events: [], lapses: [], now: () => 0 };
+  const cam = { events: [], lapses: [], now: () => 0, vp: { width, height }, beats: [], open: null };
   let current = 'start';
   try {
     await page.goto(`${base}/web${shot.start}`, { waitUntil: 'load', timeout: ACT_TIMEOUT * 2 });
@@ -309,6 +323,10 @@ async function record(browser, base, storageState, shot, out) {
       await play(page, base, step, cursor, loop, cam);
       if (process.env.MARKETING_TRACE) console.log(`  ${shot.id} ${current}: ${((Date.now() - t) / 1000).toFixed(1)}s`);
     }
+    if (loop) {
+      current = 'last beat';
+      await closeBeat(page, cam);
+    }
     // Let the last state settle and the stills' data finish arriving.
     current = 'final frame';
     await page.waitForTimeout(shot.kind === 'still' ? 1500 : 300);
@@ -325,6 +343,19 @@ async function record(browser, base, storageState, shot, out) {
       // The camera track's input: where each focus landed, in viewport pixels and
       // seconds from the clip's first frame. The compositor turns it into moves.
       writeFileSync(join(out, `${shot.id}.camera.json`), JSON.stringify({ viewport: { width, height }, events }, null, 2));
+      // Each beat: when it opened and ended, the part of the capture its frame
+      // shows, and the text on screen inside that frame as it ended. The
+      // storyboard takes one still per beat at its end from the finished clip.
+      const beats = cam.beats.map((b) => ({ ...b, from: round3(retime(b.from, cam.lapses)), to: round3(retime(b.to, cam.lapses)) }));
+      writeFileSync(join(out, `${shot.id}.beats.json`), JSON.stringify({ viewport: { width, height }, beats }, null, 2));
+      // A beat whose frame misses its expected text does not stop the run: every
+      // shot is still recorded and encoded, with its storyboard, so one pass
+      // shows them all. marketing.sh fails the run at its end, listing them.
+      for (const b of beats.filter((x) => x.missing?.length)) {
+        const line = `shot ${shot.id}: step ${b.step}'s frame does not show ${(b.missing ?? []).map((m) => JSON.stringify(m)).join(', ')}; it shows: ${b.seen.slice(0, 12).join(' | ') || 'no text'}`;
+        console.error(`marketing: ${line}`);
+        appendFileSync(join(out, 'frame-check.txt'), line + '\n');
+      }
     }
     await ctx.close();
     return { width, height };
@@ -375,7 +406,57 @@ function writeFrames(frames, out, id) {
   writeFileSync(join(out, `${id}.frames.txt`), concatList(frames, name));
 }
 
-/** @typedef {{ events: import('./marketinglib.mjs').FocusEvent[], lapses: import('./marketinglib.mjs').Lapse[], now: () => number }} Camera */
+/** @typedef {{ step: number, from: number, to: number, frame: import('./marketinglib.mjs').Box, seen: string[], expect?: string[], missing?: string[] }} Beat */
+/** @typedef {{ step: number, from: number, frame: import('./marketinglib.mjs').Box, onScreen: import('./marketinglib.mjs').Box, expect?: string[] }} OpenBeat */
+/** @typedef {{ events: import('./marketinglib.mjs').FocusEvent[], lapses: import('./marketinglib.mjs').Lapse[], now: () => number, vp: { width: number, height: number }, beats: Beat[], open: OpenBeat | null }} Camera */
+
+const round3 = (/** @type {number} */ n) => Math.round(n * 1000) / 1000;
+
+/**
+ * The text on screen inside a part of the page, in document order: each text
+ * node wholly inside it, shown, and not covered by something else at its middle
+ * (a blade's dimmed backdrop, a dialog).
+ * @param {import('@playwright/test').Page} page
+ * @param {import('./marketinglib.mjs').Box} r in viewport pixels
+ * @returns {Promise<string[]>}
+ */
+function textInside(page, r) {
+  return page.evaluate((r) => {
+    /** @type {string[]} */
+    const out = [];
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const text = (n.textContent ?? '').replace(/\s+/g, ' ').trim();
+      const el = n.parentElement;
+      if (!text || !el || !el.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
+      const range = document.createRange();
+      range.selectNodeContents(n);
+      const boxes = [...range.getClientRects()].filter((b) => b.width > 0 && b.height > 0);
+      if (!boxes.length) continue;
+      const inside = boxes.every((b) => b.left >= r.x - 1 && b.top >= r.y - 1 && b.right <= r.x + r.width + 1 && b.bottom <= r.y + r.height + 1);
+      if (!inside) continue;
+      const top = document.elementFromPoint(boxes[0].left + boxes[0].width / 2, boxes[0].top + boxes[0].height / 2);
+      if (top && !el.contains(top) && !top.contains(el)) continue;
+      out.push(text);
+    }
+    return out;
+  }, r);
+}
+
+/**
+ * Ends the open beat, if any: reads the text its frame shows now, as the camera
+ * is about to leave, and checks it against what the beat expects.
+ * @param {import('@playwright/test').Page} page
+ * @param {Camera} cam
+ */
+async function closeBeat(page, cam) {
+  const b = cam.open;
+  if (!b) return;
+  cam.open = null;
+  const seen = await textInside(page, b.onScreen);
+  const missing = b.expect ? missingText(seen, b.expect) : [];
+  cam.beats.push({ step: b.step, from: b.from, to: cam.now(), frame: b.frame, seen, ...(b.expect ? { expect: b.expect } : {}), ...(missing.length ? { missing } : {}) });
+}
 
 /**
  * Logs a step's focus: the box it names (or null for the whole frame), stamped
@@ -400,7 +481,10 @@ async function logFocus(page, step, cam, own) {
     box = await el.boundingBox();
   }
   if (!box) throw new Error('the focus has no box on screen');
-  cam.events.push({ t: cam.now(), box, ...(step.zoom ? { zoom: step.zoom } : {}) });
+  const t = cam.now();
+  cam.events.push({ t, box, ...(step.zoom ? { zoom: step.zoom } : {}) });
+  const { rect, onScreen } = frameRect(frameFor(box, cam.vp, step.zoom), cam.vp);
+  cam.open = { step: step.n, from: t, frame: rect, onScreen, ...(step.expect ? { expect: step.expect } : {}) };
 }
 
 /**
@@ -415,6 +499,11 @@ async function logFocus(page, step, cam, own) {
  * @param {Camera} cam
  */
 async function play(page, base, step, cursor, loop, cam) {
+  // A focus ends the beat before it: its frame is read as the camera leaves.
+  if (loop && step.focus !== undefined) await closeBeat(page, cam);
+  // A focus on a selector of its own is what the step reveals, so it is looked
+  // for once the step has acted; `here` lands as the cursor does.
+  const later = step.focus !== undefined && step.focus !== 'here' && step.focus !== 'out';
   switch (step.kind) {
     case 'goto':
       await page.goto(`${base}/web${step.path}`, { waitUntil: 'load', timeout: ACT_TIMEOUT });
@@ -422,8 +511,9 @@ async function play(page, base, step, cursor, loop, cam) {
       await logFocus(page, step, cam, null);
       break;
     case 'press':
-      await logFocus(page, step, cam, null);
+      if (!later) await logFocus(page, step, cam, null);
       await page.keyboard.press(/** @type {string} */ (step.key));
+      if (later) await logFocus(page, step, cam, null);
       break;
     case 'wait': {
       const el = locate(page, step.target).filter({ visible: true }).first();
@@ -437,10 +527,6 @@ async function play(page, base, step, cursor, loop, cam) {
       const el = locate(page, step.target);
       await el.waitFor({ state: 'visible', timeout: ACT_TIMEOUT });
       await el.scrollIntoViewIfNeeded({ timeout: ACT_TIMEOUT });
-      // A focus on the step's own target lands as the cursor does. A focus on
-      // another selector is what the step reveals (an edit form opening), so it
-      // is looked for once the step has acted.
-      const later = step.focus !== undefined && step.focus !== 'here' && step.focus !== 'out';
       if (!later) await logFocus(page, step, cam, el);
       const box = await el.boundingBox();
       if (!box) throw new Error('the target has no box on screen');

@@ -14,6 +14,12 @@
 # focus the information itself, not the row or panel around it. A clip that
 # ends zoomed eases out before it loops.
 #
+# A focus opens a beat, which runs until the next focus. Its `expect` names the
+# text its bullet rests on; the recorder reads the text on screen inside the
+# frame as the beat ends, and a beat whose frame misses any of it fails the run
+# (after every shot is written, with a storyboard still per beat in
+# web/e2e/marketing/out/storyboard/ showing what the frame held).
+#
 # Each loop tells one story in three beats, and the three bullets beside it on
 # the landing page name those beats in the same order. The camera lands once
 # per beat, on the thing its bullet names, and holds long enough to read it.
@@ -67,10 +73,12 @@ shots:
         hold: 900
       - click: { role: button, name: need attention }
         focus: here
+        expect: ["need attention"]
         zoom: 1.8
         hold: 500
       - wait: { text: Regional Office 06 }
         focus: 'ul[role=list]:has-text("Regional Office 06")'
+        expect: ["Regional Office 06"]
         zoom: 1.3
         hold: 1800
       - click: { role: button, name: Clear }
@@ -99,6 +107,7 @@ shots:
         hold: 300
       - click: '[role=treeitem][aria-level="3"]:has(:text-is("Hq Annex 1")) svg >> nth=0'
         focus: '[role=treeitem][aria-level="3"] :text-is("Hq Annex 1")'
+        expect: ["Headquarters", "Hq Annex 1", "Hq Annex 1 03"]
         zoom: 1.5
         hold: 1100
       - click: '[role=treeitem][aria-level="4"]:has(:text-is("Hq Annex 1 03"))'
@@ -107,11 +116,13 @@ shots:
       # Beat 2: the room's system, its components as a table.
       - wait: { text: Scheduling Panel 1 }
         focus: '[data-testid=overview-tab] section:has(:text-is("Scheduling Panel 1"))'
+        expect: ["Display 1", "Scheduling Panel 1", "Touch Panel 1", "Video Bar 1"]
         zoom: 1.4
         hold: 1300
       # Beat 3: each product in its slot.
       - wait: { text: Newtron Slate 5 }
         focus: here
+        expect: ["Scheduling Panel", "Newtron Slate 5", "Boreal Edge 65"]
         zoom: 1.6
         hold: 1500
 
@@ -152,11 +163,13 @@ shots:
       # Beat 1: the refusal, with the device's own answer.
       - hover: 'aside[data-blade] [data-testid=session-notice]'
         focus: here
+        expect: ["refused the credential"]
         zoom: 1.7
         hold: 1500
       # Beat 2: the edit, framed on the login field from the click to the save.
       - click: { role: button, name: Edit credential }
         focus: '#edit-iface-input-login'
+        expect: ["login", "Save"]
         zoom: 1.6
         hold: 200
       - type: { target: '#edit-iface-input-login', text: sim-kestrel-login, replace: true }
@@ -167,6 +180,7 @@ shots:
       - wait: { selector: 'aside[data-blade] [data-testid=endpoint-session]:not(:has([data-testid=session-notice])):has([data-testid=ladder-rung][data-rung=authenticated][data-status=pass])', timeout: 30000 }
         fast: 4
         focus: 'aside[data-blade] [data-testid=endpoint-session]'
+        expect: ["reachable", "responsive", "authenticated"]
         zoom: 1.7
         hold: 1500
 
@@ -190,6 +204,7 @@ shots:
       # Beat 1: the room's degraded health and the Why strip under it, in one frame.
       - hover: '[data-testid=alarm-strip]'
         focus: here
+        expect: ["degraded", "Reachability lost", "display-1", "Main Display"]
         zoom: 1.3
         hold: 1500
       # Beat 2: the click, still framed on the strip so the click reads.
@@ -200,6 +215,7 @@ shots:
       # Beat 3: the component's page, its outage to its vitals.
       - wait: { selector: '[data-testid=component-card]' }
         focus: here
+        expect: ["outage", "Reachability lost", "Boreal Edge 86", "Uptime"]
         zoom: 1.3
         hold: 2200
 
@@ -239,9 +255,11 @@ shots:
       # sent, then its first thinking, opened, and the calls as they run.
       - press: Enter
         focus: '[data-testid=omnibot-working]'
+        expect: ["Working"]
         zoom: 1.4
       - wait: { selector: '[data-testid=omnibot-thinking] >> nth=0', timeout: 30000 }
         focus: '[data-testid=omnibot-thinking] >> nth=0'
+        expect: ["Thinking", "Start with its health", "get-system-health"]
         zoom: 1.4
       - click: '[data-testid=omnibot-thinking] >> nth=0 >> summary'
         hold: 300
@@ -250,5 +268,6 @@ shots:
       # Beat 3: the answer, through its next step.
       - wait: { text: Next step, timeout: 30000 }
         focus: here
+        expect: ["Next step", "ask before changing anything"]
         zoom: 1.4
         hold: 2000

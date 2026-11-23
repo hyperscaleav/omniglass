@@ -20,7 +20,7 @@ import { load } from 'js-yaml';
 /** @typedef {({ kind: 'call' } & Call) | ({ kind: 'await' } & Await)} SetupItem */
 /** @typedef {string | { role: string, name?: string, exact?: boolean } | { text: string, exact?: boolean } | { selector: string }} Target */
 /** @typedef {'out' | 'here' | Target} Focus */
-/** @typedef {{ n: number, kind: string, path?: string, key?: string, target?: Target, text?: string, value?: string, replace?: boolean, timeout: number, hold: number, focus?: Focus, zoom?: number, fast?: number }} Step */
+/** @typedef {{ n: number, kind: string, path?: string, key?: string, target?: Target, text?: string, value?: string, replace?: boolean, timeout: number, hold: number, focus?: Focus, zoom?: number, fast?: number, expect?: string[] }} Step */
 /** @typedef {{ id: string, kind: 'still' | 'loop', alt: string, viewport: Viewport, start: string, ready: Target | null, setup: SetupItem[], prep: Step[], steps: Step[], maxSeconds: number }} Shot */
 /** @typedef {{ lab: { scenario: string, systems: number, omnibotReplay: string }, setup: SetupItem[], shots: Shot[] }} ShotList */
 
@@ -39,14 +39,15 @@ export const DEFAULT_WAIT_MS = 15_000;
 const MAX_HOLD_MS = 8000;
 
 export const STEP_KINDS = ['goto', 'click', 'hover', 'type', 'select', 'press', 'wait'];
-const STEP_KEYS = [...STEP_KINDS, 'hold', 'focus', 'zoom', 'fast'];
+const STEP_KEYS = [...STEP_KINDS, 'hold', 'focus', 'zoom', 'fast', 'expect'];
 
 // The camera (a loop only): a step's `focus` eases the frame onto a box, so a
 // clip draws the eye to what changed. `here` is the step's own target, `out`
 // is the whole frame, and anything else is a target of its own. `zoom` sets the
 // scale instead of fitting the box. Moves ease over CAMERA.ease seconds and
-// never show past the capture's edge; a clip that ends zoomed eases back out
-// before it loops, so the seam is invisible.
+// centre the box; a clip that ends zoomed eases back out before it loops, so
+// the seam is invisible. A focus opens a beat, which runs until the next focus
+// (or the clip's end); `expect` names text the frame must show as the beat ends.
 // backdrop is the console's own base colour (--color-base-100, dark): the
 // frame shows it past the capture's edge when a focus near that edge is
 // centred.
@@ -154,6 +155,15 @@ function parseStep(raw, n, label = 'step') {
     }
     if (!('focus' in o) || o.focus === 'out') problems.push(`${where}: zoom goes with a focus on a target`);
     step.zoom = o.zoom;
+  }
+  // expect: the text a beat's frame must hold as the beat ends, each string
+  // found within what is on screen inside the frame. It goes with the focus that
+  // opens the beat, so it cannot sit on a focus that leaves for the whole frame.
+  if ('expect' in o) {
+    const e = o.expect;
+    if (!Array.isArray(e) || e.length === 0 || !e.every(isStr)) problems.push(`${where}: expect is a list of the text the frame must show`);
+    else if (!('focus' in o) || o.focus === 'out') problems.push(`${where}: expect goes with a focus on a target`);
+    else step.expect = e;
   }
   // fast: N plays a wait N times faster, the quiet seconds before something
   // changes (a loop has 9 to spend, and a console that needs 5 to recover is not
@@ -406,9 +416,11 @@ const BARE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 /**
  * The manifest the landing page reads (shots.json): when, which lab, and each
- * shot's files (bare names beside the manifest), alt text and pixel size.
+ * shot's files (bare names beside the manifest), alt text and pixel size, and a
+ * loop's beats (when each opens and ends, and the part of the capture it frames)
+ * when the recording logged them.
  * Throws on a shot the page could not use: a missing alt, a file with a path.
- * @param {{ generatedAt: string, lab: { scenario: string, systems: number }, shots: { id: string, kind: 'still' | 'loop', file: string, poster?: string, alt: string, width: number, height: number }[] }} m
+ * @param {{ generatedAt: string, lab: { scenario: string, systems: number }, shots: { id: string, kind: 'still' | 'loop', file: string, poster?: string, alt: string, width: number, height: number, beats?: unknown[] }[] }} m
  */
 export function buildManifest({ generatedAt, lab, shots }) {
   /** @type {Record<string, unknown>[]} */
@@ -423,6 +435,7 @@ export function buildManifest({ generatedAt, lab, shots }) {
       id: s.id, kind: s.kind, file: s.file,
       ...(s.kind === 'loop' ? { poster: s.poster } : {}),
       alt: s.alt, width: s.width, height: s.height,
+      ...(s.kind === 'loop' && Array.isArray(s.beats) ? { beats: s.beats } : {}),
     });
   }
   return { generatedAt, lab: { scenario: lab.scenario, systems: lab.systems }, shots: out };
@@ -492,6 +505,36 @@ export function frameFor(box, vp, zoom) {
 }
 
 const round = (/** @type {number} */ n) => Math.round(n * 1000) / 1000;
+
+/**
+ * The part of the capture a frame shows, in viewport pixels: what the viewer
+ * sees once the camera has landed. It can reach past the capture's edge (the
+ * backdrop shows there); `onScreen` is the part of it inside the capture.
+ * @param {{ scale: number, x: number, y: number }} f a frame from frameFor
+ * @param {Viewport} vp
+ * @returns {{ rect: Box, onScreen: Box }}
+ */
+export function frameRect(f, vp) {
+  const width = vp.width / f.scale, height = vp.height / f.scale;
+  const rect = { x: round(f.x - width / 2), y: round(f.y - height / 2), width: round(width), height: round(height) };
+  const x0 = Math.max(0, rect.x), y0 = Math.max(0, rect.y);
+  const x1 = Math.min(vp.width, rect.x + rect.width), y1 = Math.min(vp.height, rect.y + rect.height);
+  return { rect, onScreen: { x: x0, y: y0, width: round(Math.max(0, x1 - x0)), height: round(Math.max(0, y1 - y0)) } };
+}
+
+/**
+ * The expected text a beat's frame does not show: each string is looked for in
+ * the frame's text, its pieces joined by spaces and runs of space collapsed, so
+ * a string may cross from one element to the next.
+ * @param {string[]} seen the text inside the frame, in document order
+ * @param {string[]} expect
+ * @returns {string[]}
+ */
+export function missingText(seen, expect) {
+  const norm = (/** @type {string} */ t) => t.replace(/\s+/g, ' ').trim();
+  const all = norm(seen.join(' '));
+  return expect.filter((e) => !all.includes(norm(e)));
+}
 
 /**
  * A loop's camera: the focus events the recorder logged (seconds from the
