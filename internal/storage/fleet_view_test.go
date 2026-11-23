@@ -225,7 +225,7 @@ func TestFleetProjectionSystemVerdictMatchesTheHealthRead(t *testing.T) {
 	f := newFleetFixture(t)
 	v := f.project(t, f.all, f.all, f.all)
 
-	rep, err := f.gw.SystemHealth(context.Background(), "hq-huddle", 0, f.all)
+	rep, err := f.gw.SystemHealth(context.Background(), "hq-huddle", storage.HealthRange{}, f.all)
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}

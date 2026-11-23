@@ -4255,6 +4255,10 @@ export type HealthTransitionBody = {
 export type FleetHealthOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
+  /** The health in force when the range opened: the last recorded edge before its start. Present when the caller bounded the start (an explicit since, or the one derived from until); absent on the default window, or when nothing was recorded before it. A timeline draws the stretch before the first transition from it */
+  carried_in?: string;
+  /** When this owner's health was first recorded; absent if never. How long it has been watched, whatever the range */
+  first_recorded_at?: string;
   /** healthy, incomplete, degraded, or outage: the rollup of the slots or systems served beside it. incomplete is a commissioning gap, a slot short because the hardware was never installed rather than because installed hardware is failing, and it ranks between healthy and degraded */
   health: string;
   owner: string;
@@ -9582,6 +9586,13 @@ export type EffectiveTagsParams = {
   system?: string;
 };
 
+export type GetComponentHealthParams = {
+  /** Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent */
+  since?: string;
+  /** Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since */
+  until?: string;
+};
+
 export type ListComponentLogsParams = {
   /** Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out */
   severity?: ListComponentLogsSeverity;
@@ -9661,6 +9672,13 @@ export type RunEndpointPollParams = {
   timeout_seconds?: number;
 };
 
+export type GetLocationHealthParams = {
+  /** Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent */
+  since?: string;
+  /** Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since */
+  until?: string;
+};
+
 export type ListNotificationParams = {
   /** Only the notifications about this alarm (its uuid) */
   alarm?: string;
@@ -9691,6 +9709,13 @@ export const ListNotificationStatus = {
  * an RFC 7386 JSON Merge Patch for the namespace; null on a key restores it
  */
 export type PatchSettingsNamespaceBody = {[key: string]: unknown};
+
+export type GetSystemHealthParams = {
+  /** Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent */
+  since?: string;
+  /** Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since */
+  until?: string;
+};
 
 export type ListSystemLogsParams = {
   /** Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out */
@@ -13786,6 +13811,59 @@ export const listComponentEvents = async (name: string, options?: Parameters<typ
 
 
 
+export type getComponentHealthResponse200 = {
+  data: FleetHealthOutputBody
+  status: 200
+}
+
+export type getComponentHealthResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type getComponentHealthResponseSuccess = (getComponentHealthResponse200) & {
+  headers: Headers;
+};
+export type getComponentHealthResponseError = (getComponentHealthResponseDefault) & {
+  headers: Headers;
+};
+
+export type getComponentHealthResponse = (getComponentHealthResponseSuccess | getComponentHealthResponseError)
+
+export const getGetComponentHealthUrl = (name: string,
+    params?: GetComponentHealthParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/components/${name}/health?${stringifiedParams}` : `/components/${name}/health`
+}
+
+/**
+ * The component's own current health (healthy, degraded or outage from its active alarms; unknown for a device nothing has observed) beside the recorded edges that got it there, in the shape the system health read returns: slots and systems are empty, transitions are one entry per change inside since..until (default the last 30 days), oldest first. since after until is a 400. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+ * @summary Read a component's health
+ */
+export const getComponentHealth = async (name: string,
+    params?: GetComponentHealthParams, options?: Parameters<typeof ogFetch>[1]): Promise<getComponentHealthResponse> => {
+
+  return ogFetch<getComponentHealthResponse>(getGetComponentHealthUrl(name,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
 export type listIdentityBindingsResponse200 = {
   data: ListIdentityBindingsOutputBody
   status: 200
@@ -17500,21 +17578,30 @@ export type getLocationHealthResponseError = (getLocationHealthResponseDefault) 
 
 export type getLocationHealthResponse = (getLocationHealthResponseSuccess | getLocationHealthResponseError)
 
-export const getGetLocationHealthUrl = (name: string,) => {
+export const getGetLocationHealthUrl = (name: string,
+    params?: GetLocationHealthParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/locations/${name}/health`
+  return stringifiedParams.length > 0 ? `/locations/${name}/health?${stringifiedParams}` : `/locations/${name}/health`
 }
 
 /**
- * The location's current health, worst-wins over every system placed anywhere beneath it, with those systems and their health as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+ * The location's current health, worst-wins over every system placed anywhere beneath it, with those systems and their health as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges inside since..until (default the last 30 days); since after until is a 400. Gated by location:read; an out-of-scope location is a non-disclosing 404.
  * @summary Read a location's health
  */
-export const getLocationHealth = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getLocationHealthResponse> => {
+export const getLocationHealth = async (name: string,
+    params?: GetLocationHealthParams, options?: Parameters<typeof ogFetch>[1]): Promise<getLocationHealthResponse> => {
 
-  return ogFetch<getLocationHealthResponse>(getGetLocationHealthUrl(name),
+  return ogFetch<getLocationHealthResponse>(getGetLocationHealthUrl(name,params),
   {
     ...options,
     method: 'GET'
@@ -22902,21 +22989,30 @@ export type getSystemHealthResponseError = (getSystemHealthResponseDefault) & {
 
 export type getSystemHealthResponse = (getSystemHealthResponseSuccess | getSystemHealthResponseError)
 
-export const getGetSystemHealthUrl = (name: string,) => {
+export const getGetSystemHealthUrl = (name: string,
+    params?: GetSystemHealthParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/systems/${name}/health`
+  return stringifiedParams.length > 0 ? `/systems/${name}/health?${stringifiedParams}` : `/systems/${name}/health`
 }
 
 /**
- * The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+ * The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Transitions are the recorded edges inside since..until (default the last 30 days), one entry per change; since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.
  * @summary Read a system's health
  */
-export const getSystemHealth = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getSystemHealthResponse> => {
+export const getSystemHealth = async (name: string,
+    params?: GetSystemHealthParams, options?: Parameters<typeof ogFetch>[1]): Promise<getSystemHealthResponse> => {
 
-  return ogFetch<getSystemHealthResponse>(getGetSystemHealthUrl(name),
+  return ogFetch<getSystemHealthResponse>(getGetSystemHealthUrl(name,params),
   {
     ...options,
     method: 'GET'

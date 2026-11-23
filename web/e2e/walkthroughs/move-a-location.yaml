@@ -6,7 +6,7 @@ description: Open a room's Configure, pick its new parent from the location tree
 steps:
   - goto: /explore
     caption: Explore is the outline of every location in the fleet, with what each one holds.
-  - click: { role: button, name: Expand Service Depot }
+  - click: { role: button, name: Expand Service Depot, exact: true }
     caption: Open the depot. Bay 3 is a room inside it.
   - click: { role: treeitem, name: Bay 3 }
     caption: Bay 3 holds one system, so opening the location opens that system.
