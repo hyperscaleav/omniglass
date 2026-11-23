@@ -33,26 +33,48 @@ export type BladeController = {
   close: () => void; // clear the stack
   filter: (pred: (r: BladeRef) => boolean) => void; // prune (e.g. a node deleted upstream)
   isTop: (i: number) => boolean;
+  // A body's leave guard, registered against its own blade (#2423): a pop,
+  // close or fold-back that would drop that blade asks it first, so a detail
+  // body's unsaved Configure drafts are never discarded silently. Returns the
+  // unregister function (call it on cleanup).
+  guard: (ref: BladeRef, g: { confirmLeave: () => boolean }) => () => void;
 };
 
 const key = (r: BladeRef) => `${r.kind}:${r.id}`;
 
 export function createBladeController(): BladeController {
   const [stack, setStack] = createSignal<BladeRef[]>([]);
-  const push = (ref: BladeRef) =>
-    setStack((s) => {
-      const i = s.findIndex((r) => key(r) === key(ref));
-      return i >= 0 ? s.slice(0, i + 1) : [...s, ref];
-    });
-  const pop = () => setStack((s) => s.slice(0, -1));
-  const close = () => setStack([]);
+  const guards = new Map<string, { confirmLeave: () => boolean }>();
+  // May these blades be dropped? Each one's guard is asked, top first.
+  const mayDrop = (dropped: BladeRef[]) => [...dropped].reverse().every((r) => guards.get(key(r))?.confirmLeave() ?? true);
+  const push = (ref: BladeRef) => {
+    const s = stack();
+    const i = s.findIndex((r) => key(r) === key(ref));
+    if (i >= 0 && !mayDrop(s.slice(i + 1))) return;
+    setStack(i >= 0 ? s.slice(0, i + 1) : [...s, ref]);
+  };
+  const pop = () => {
+    const s = stack();
+    if (s.length && !mayDrop(s.slice(-1))) return;
+    setStack(s.slice(0, -1));
+  };
+  const close = () => {
+    if (!mayDrop(stack())) return;
+    setStack([]);
+  };
+  const guard = (ref: BladeRef, g: { confirmLeave: () => boolean }) => {
+    guards.set(key(ref), g);
+    return () => {
+      if (guards.get(key(ref)) === g) guards.delete(key(ref));
+    };
+  };
   const filter = (pred: (r: BladeRef) => boolean) =>
     setStack((s) => {
       const next = s.filter(pred);
       return next.length === s.length ? s : next;
     });
   const isTop = (i: number) => i === stack().length - 1;
-  return { stack, push, pop, close, filter, isTop };
+  return { stack, push, pop, close, filter, isTop, guard };
 }
 
 export const BladesContext: Context<BladeController | undefined> = createContext<BladeController>();
