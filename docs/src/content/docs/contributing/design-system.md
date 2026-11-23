@@ -58,6 +58,7 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
   API serves arrives ordered by `order by label nulls last, name` (a row with no label last,
   otherwise by label, then by name), and the page renders the rows as received: `FlatList` sorts
   only when the operator clicks a column header, and no page or picker re-sorts a served list.
+  The sort and the open are keyboard operable from the primitive: a sortable header renders its label in a `<button>` and the `<th>` carries `aria-sort`, and an openable row ends in a button named "Open <name>" (`rowLabel`, else the entity noun), which also gives a scrolling table its focus stop.
   A new catalog list picks the order up by doing nothing. `byLabel` (`lib/entities.ts`) is the
   same rule for a list the client composes itself, where no query ordered it, and its doc comment
   names the call sites that remain. The two halves are held together by one committed fixture
