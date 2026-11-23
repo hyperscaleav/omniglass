@@ -201,7 +201,13 @@ until it passes) and **authenticated** (the login, shown once a
 credential was actually tried). Hover or focus a rung for what it checks and what it says now. A
 rung a refusal holds wears the refusal glyph and the rungs above it read untried, while the rungs
 below keep their readings: an endpoint whose login was refused still shows its ping and its
-transport answering. A down endpoint also shows a plain-language **why** line. Every value is a
+transport answering. Over a datagram transport (udp, snmp) a silent **responsive** rung reads **no answer**,
+not down: silence proves nothing there. The host may be off, the agent or service stopped, the v2c
+community wrong (an agent drops a wrong community without a word), or the port filtered; a closed
+port is different and says so (the affirmative **refused**, an ICMP port-unreachable). The rung's
+hint, the collection badge on the component and the row's pill all name those causes. The verdict and
+the unreachable streak are unchanged, so a run of silence still alarms; only what it says changed. A tcp connect that times out
+still reads down. A down endpoint also shows a plain-language **why** line. Every value is a
 real reading from the outpost, and the panel is also the authoring surface: its header carries **Add
 endpoint** (with `endpoint:create`) and each row that maps to an endpoint a **Manage** affordance
 opening that endpoint's detail.

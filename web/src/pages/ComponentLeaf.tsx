@@ -532,6 +532,7 @@ export default function ComponentLeaf() {
                                       "outpost-offline": "outpost offline",
                                       "no-outpost": "no outpost collecting it",
                                       down: "component reports down",
+                                      "no-answer": "no answer (silence over a datagram transport: host off, agent stopped, wrong v2c community, or filtered)",
                                       rejected: "polls stopped",
                                       "session-down": "polls failing",
                                       unknown: "no sample yet",
