@@ -138,7 +138,7 @@ func TestOutpostAPI(t *testing.T) {
 	c.do(viewerTok, http.MethodPost, "/outposts/site-a:enroll", nil, http.StatusForbidden)
 
 	// N1: create carries label + location, and the create response mints no token.
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "campus"}, scope.Set{All: true}); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "campus"}, scope.Set{All: true}, scope.Set{All: true}); err != nil {
 		t.Fatalf("seed location: %v", err)
 	}
 	created := c.do(ownerTok, http.MethodPost, "/outposts", map[string]any{"name": "site-c", "label": "Site C", "location": "hq"}, http.StatusCreated)
@@ -248,13 +248,13 @@ func TestOutpostCreateWithAmbiguousLocationIs404(t *testing.T) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	all := scope.Set{All: true}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "holder", LocationType: "campus"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "holder", LocationType: "campus"}, all, all); err != nil {
 		t.Fatalf("seed holder location: %v", err)
 	}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "dup-loc", LocationType: "campus"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "dup-loc", LocationType: "campus"}, all, all); err != nil {
 		t.Fatalf("seed root dup-loc: %v", err)
 	}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "dup-loc", LocationType: "room", ParentName: ptr("holder")}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "dup-loc", LocationType: "room", ParentName: ptr("holder")}, all, all); err != nil {
 		t.Fatalf("seed nested dup-loc: %v", err)
 	}
 

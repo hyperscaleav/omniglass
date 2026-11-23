@@ -6,6 +6,7 @@ import ConfigureFace from "./ConfigureFace";
 import EventsPanel from "./EventsPanel";
 import LogsPanel from "./LogsPanel";
 import CommandsPanel from "./CommandsPanel";
+import DependenciesPanel from "./DependenciesPanel";
 import IdentitiesPanel from "./IdentitiesPanel";
 import HealthBadge from "./HealthBadge";
 import Eyebrow from "./Eyebrow";
@@ -560,6 +561,15 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
                 </ul>
               </Show>
             </section>
+            {/* What it needs and what needs it (#2428). */}
+            <Show when={component()}>
+              {(c) => (
+                <DependenciesPanel
+                  component={c().id}
+                  canUpdate={can(me.data, "component", "update") && (Array.isArray(c().actions) ? c().actions!.includes("update") : true)}
+                />
+              )}
+            </Show>
             {/* A component that speaks for many owners (a conduit, #1389):
                 the identities it fans out and the ones it heard unbound. It
                 renders nothing on a component that speaks only for itself. */}

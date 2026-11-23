@@ -66,6 +66,13 @@
   ],
   "walkthroughs": [
     {
+      "id": "add-a-dependency",
+      "title": "Add and remove a dependency",
+      "description": "Read what a video bar depends on and what depends on it, try an edge that would close a cycle and read the server's refusal, then add a real upstream and remove it again.",
+      "lab": [],
+      "setup": []
+    },
+    {
       "id": "declare-a-first-slot",
       "title": "Declare a first slot",
       "description": "Give a one-off system its first slot from the console, name it, say what it accepts, and see the slot it opens.",

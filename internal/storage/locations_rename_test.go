@@ -25,7 +25,7 @@ func TestRenameLocation(t *testing.T) {
 
 	// A location with a system placed in it, so we can prove the placement's
 	// location_id (a UUID FK) survives the rename (it references the id, not the name).
-	root, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq-root", LocationType: "campus"}, all)
+	root, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq-root", LocationType: "campus"}, all, all)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func TestRenameLocation(t *testing.T) {
 	}
 
 	// The old name is free; a create can reuse it.
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq-root", LocationType: "campus"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq-root", LocationType: "campus"}, all, all); err != nil {
 		t.Fatalf("old name should be free after rename: %v", err)
 	}
 
@@ -96,7 +96,7 @@ func TestRenameLocation(t *testing.T) {
 	}
 
 	// Create-tightening: the shared validator gates create too, not just rename.
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "Bad Name", LocationType: "campus"}, all); !errors.Is(err, storage.ErrInvalidEntityName) {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "Bad Name", LocationType: "campus"}, all, all); !errors.Is(err, storage.ErrInvalidEntityName) {
 		t.Fatalf("bad-format create err = %v, want ErrInvalidEntityName", err)
 	}
 

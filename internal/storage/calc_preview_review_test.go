@@ -20,7 +20,7 @@ func TestCalcPreviewSelectorInScope(t *testing.T) {
 	t.Parallel()
 	r := newEvalRig(t)
 	for _, loc := range []string{"east", "west"} {
-		if _, err := r.gw.CreateLocation(r.ctx, "", storage.LocationSpec{Name: loc, LocationType: "campus"}, r.all); err != nil {
+		if _, err := r.gw.CreateLocation(r.ctx, "", storage.LocationSpec{Name: loc, LocationType: "campus"}, r.all, r.all); err != nil {
 			t.Fatal(err)
 		}
 	}

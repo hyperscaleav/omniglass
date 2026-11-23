@@ -273,7 +273,7 @@ type Gateway interface {
 	// drives the non-disclosing 404 versus the 403.
 	ListLocations(ctx context.Context, read scope.Set) ([]Location, error)
 	GetLocation(ctx context.Context, name string, read scope.Set) (*Location, error)
-	CreateLocation(ctx context.Context, actorID string, spec LocationSpec, create scope.Set) (*Location, error)
+	CreateLocation(ctx context.Context, actorID string, spec LocationSpec, read, create scope.Set) (*Location, error)
 	UpdateLocation(ctx context.Context, actorID, name string, patch LocationPatch, read, action scope.Set) (*Location, error)
 	// RenameLocation moves the location's name, scoped exactly as the update is.
 	// Its own function, not a patch field, because a rename breaks the references
@@ -842,7 +842,7 @@ type Gateway interface {
 	// the single create for each row, in order, in one transaction (#2368): a
 	// refused row refuses the batch as a BatchError naming it, and
 	// validateOnly rolls the transaction back.
-	BatchCreateLocations(ctx context.Context, actorID string, specs []LocationSpec, create scope.Set, validateOnly bool) ([]*Location, error)
+	BatchCreateLocations(ctx context.Context, actorID string, specs []LocationSpec, read, create scope.Set, validateOnly bool) ([]*Location, error)
 	BatchCreateSystems(ctx context.Context, actorID string, specs []SystemSpec, create, locationRead scope.Set, validateOnly bool) ([]*System, error)
 	BatchCreateComponents(ctx context.Context, actorID string, specs []ComponentSpec, create, locationRead, systemRead, systemUpdate scope.Set, validateOnly bool) ([]*Component, error)
 	// ResolveTaskOwner binds a task's owner component and confines the outpost to its

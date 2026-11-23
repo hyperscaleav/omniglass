@@ -392,7 +392,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Path:          "/locations",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a location",
-		Description:   "Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. Gated by location:create.",
+		Description:   "Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. The parent resolves within the caller's location:read scope before its location:create scope: a parent the caller cannot read is the same 404 as one that does not exist, so the answer never discloses a location outside the caller's read, and a parent the caller can read but not create under is a 403. Gated by location:create.",
 	}, "location", "create"), func(ctx context.Context, in *createLocationInput) (*locationOutput, error) {
 		l, err := gw.CreateLocation(ctx, actorID(ctx), storage.LocationSpec{
 			Name:         in.Body.Name,
@@ -400,7 +400,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 			LocationType: in.Body.LocationType,
 			ParentName:   in.Body.Parent,
 			ExpectedName: in.Body.ExpectedName,
-		}, a.scopeFor(ctx, "location", "create"))
+		}, a.scopeFor(ctx, "location", "read"), a.scopeFor(ctx, "location", "create"))
 		if err != nil {
 			return nil, mapLocationErr(err)
 		}
@@ -576,7 +576,9 @@ func mapLocationErr(err error) error {
 	case errors.Is(err, storage.ErrInvalidEntityName):
 		return huma.Error422UnprocessableEntity("invalid name")
 	case errors.Is(err, storage.ErrParentNotFound):
-		return huma.Error422UnprocessableEntity("parent location not found")
+		// 404, not 422 (#1343): a create resolves its parent under read, so an
+		// unreadable parent and an absent one are this one answer.
+		return huma.Error404NotFound("parent location not found")
 	case errors.Is(err, storage.ErrUnknownType):
 		return huma.Error422UnprocessableEntity("unknown location_type")
 	case errors.Is(err, storage.ErrLocationCycle):
