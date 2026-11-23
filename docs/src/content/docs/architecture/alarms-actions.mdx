@@ -21,7 +21,7 @@ Built today: the **alarm as a held row**, raised on a **component** by a caller 
 [event rule](#the-event_rule) (#819), carrying a `severity`
 (a level of the [severity catalog](#severity-a-catalog-of-named-levels), by name), a message, a
 `raised_at`, and a nullable `cleared_at` (clearing keeps the row). Any active alarm reaches a system
-through the component's own verdict (any active alarm degrades it, one at or above the `high` level
+through the component's own health (any active alarm degrades it, one at or above the `high` level
 is an outage), and such an alarm impairs every [slot](/architecture/health/) that component occupies
 while it stays open, since only an outage
 component stops occupying its slots; a lesser alarm degrades the component but leaves it in place
@@ -83,7 +83,7 @@ component does today, and retention will, #1339) never touches `audit_log` ([aud
 [ADR-1442](/architecture/decisions/#adr-1442-an-audit-row-outlives-its-subject-both-images-and-a-string-reference)).
 
 An alarm write is **not sample-silent**: raising or clearing one recomputes
-[health](/architecture/health/) in the same transaction, and the rollup records the verdict
+[health](/architecture/health/) in the same transaction, and the rollup records the health
 transition as a **calculated-provenance `property` sample** (`provenance='calculated'`,
 `source_rule='health-rollup'`). Cycle safety therefore rests on **provenance, not topology**
 ([ADR-0069](/architecture/decisions/#adr-0069-cycle-safety-is-provenance-based-not-topology-based),
@@ -131,7 +131,7 @@ any of these states:
 person:
 
 - **It does not recompute health.** Acknowledging is not fixing. A recompute here would record a
-  verdict transition at a moment when nothing about the fleet changed, and the health history is
+  health transition at a moment when nothing about the fleet changed, and the health history is
   meant to be edges and only edges.
 - **It carries its own permission and its own scope**, resolved on the component tier from
   `alarm:acknowledge` itself rather than from `component:update`. Recording that somebody looked is
@@ -382,7 +382,7 @@ passes and then dropped with an error logged, while the pass moves on. The platf
 
 <SeededSet kind="event_rules" />
 
-An endpoint whose verdict reads `down` for the sustain opens a `high` alarm on its component, and
+An endpoint whose reachability reads `down` for the sustain opens a `high` alarm on its component, and
 reading `up` clears it, so unplugging a simulated component takes its system out and plugging it back recovers it, with no
 operator in between. That takes the system out only when the component fills a slot whose impact
 is `outage` and losing it drops the slot below quorum; otherwise the system reads whatever the slot's
@@ -554,8 +554,8 @@ at most 200 a pass, so a fleet of trend rules never starves the repair of a miss
 are rejudged on a later pass. The shape, a window field on the rule and generic list functions
 shared with calc rules rather than a trend operator, is [ADR-1985](/architecture/decisions/#adr-1985-a-trend-rule-reads-its-series-window-through-list-functions).
 
-A rule does not declare a health verdict itself: the alarm it raises impairs its owner's own
-verdict (any active alarm degrades it, one at or above `high` is an outage). Only an outage owner stops
+A rule does not declare a health value itself: the alarm it raises impairs its owner's own
+health (any active alarm degrades it, one at or above `high` is an outage). Only an outage owner stops
 occupying the [system slots](/architecture/core-entities/#system-slots-what-a-system-needs-filled)
 it fills; a lesser alarm degrades it but leaves it in place. When it does drop out (#626), how much
 that matters is the slot's **impact** ([health](/architecture/health/)).
@@ -595,7 +595,7 @@ word), the five official levels above from the boot seed, and operator levels at
 all-scope grant; a name or rank
 already taken is a 409, an official level is read-only). An alarm's `severity` references a level
 **by name** (a rename carries its alarms; a level an alarm names cannot be deleted). A component's
-own verdict reads the rank: **`high` and above is an outage**, anything lower degrades. The retired
+own health reads the rank: **`high` and above is an outage**, anything lower degrades. The retired
 three values mapped by meaning: `critical` became `high`, `info` and `warning` kept their names.
 The console reads the catalog everywhere a severity shows: every alarm chip (the component's
 alarms, a system's and a location's "why", a rule's open alarms) renders the level's label in its color

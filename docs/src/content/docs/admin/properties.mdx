@@ -36,7 +36,7 @@ every reader; the write gates decide who may change it.
   or `json`), and **origin** (**official** or **custom**). **name** filters by
   the name or its label; **type** and **official** narrow the list.
 - A property is a **value** (what something *is*: an input, a firmware version, a reachability
-  verdict); a numeric **quantity** is a **metric**, its own catalog beside this one
+  result); a numeric **quantity** is a **metric**, its own catalog beside this one
   ([**Catalog, under Telemetry: Metrics**](/admin/metrics/)), carrying the numeric facts (unit, precision).
   The two catalogs share one name rule and refuse a name the other holds. A property nothing
   observes is simply declared-only, something an operator sets, like `serial-number`.
@@ -140,7 +140,7 @@ rest of the detail, and **Cancel** discards them.
   system** (one conforming to no standard) have no contract at all, so everything they carry is off
   contract. Nothing breaks; the panel simply shows one group.
 - **An outpost's own facts are not yours to set.** A property of the `outpost-probe` writer class (a
-  reachability verdict, a held session's state, the gate, a trusted host key or tls certificate) is the
+  reachability, a held session's state, the gate, a trusted host key or tls certificate) is the
   outpost's observation, and `health` is the rollup's, so setting one is refused (422) naming the key; a
   key you trust is pinned through the endpoint's **Retry** instead
   ([who writes a key](/architecture/properties/#who-writes-a-key-the-writer-class)).

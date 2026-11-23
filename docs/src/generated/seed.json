@@ -298,13 +298,13 @@
    "name": "endpoint-reachable",
    "data_type": "string",
    "label": "Endpoint Reachable",
-   "description": "Per-endpoint reachability verdict, the AND of the endpoint's probe results (up = every applicable probe reached the target). A built-in state: availability is time_in_state over it. Unknown/stale are read-time derivations, not stored values."
+   "description": "Per-endpoint reachability, the AND of the endpoint's probe results (up = every applicable probe reached the target). A built-in state: availability is time_in_state over it. Unknown/stale are read-time derivations, not stored values."
   },
   {
    "name": "endpoint-responsive",
    "data_type": "string",
    "label": "Endpoint Responsive",
-   "description": "The layer-7 rung beside endpoint-reachable: the protocol itself answered (an HTTP request drew a response, an SSH exchange completed). A port that accepts but never answers is reachable and not responsive, which is the distinction this verdict exists to draw."
+   "description": "The layer-7 rung beside endpoint-reachable: the protocol itself answered (an HTTP request drew a response, an SSH exchange completed). A port that accepts but never answers is reachable and not responsive, which is the distinction this reachability exists to draw."
   },
   {
    "name": "endpoint-authenticated",
@@ -358,7 +358,7 @@
    "name": "health",
    "data_type": "string",
    "label": "Health",
-   "description": "The rolled-up health verdict for a component, system, or location, worst-wins over its inputs (a component's active alarms, a system's slots, the systems under a location). Recorded transition-only, so the series is the edges: when it broke and when it came back, not a sample per check. incomplete ranks between healthy and degraded and means a commissioning gap: a slot short because its hardware was never installed, which no alarm will ever fire for."
+   "description": "The rolled-up health for a component, system, or location, worst-wins over its inputs (a component's active alarms, a system's slots, the systems under a location). Recorded transition-only, so the series is the edges: when it broke and when it came back, not a sample per check. incomplete ranks between healthy and degraded and means a commissioning gap: a slot short because its hardware was never installed, which no alarm will ever fire for."
   },
   {
    "name": "server-version",
@@ -605,7 +605,7 @@
    "name": "hold-expiry-count",
    "data_type": "int",
    "label": "Hold Expiries",
-   "description": "Disruptions of the endpoint (a reboot closed its gate) released in the report window by the command type's hold backstop because no up verdict came after the quiet period; reported only when nonzero."
+   "description": "Disruptions of the endpoint (a reboot closed its gate) released in the report window by the command type's hold backstop because no up reading came after the quiet period; reported only when nonzero."
   },
   {
    "name": "poll-due-count",
@@ -1477,12 +1477,12 @@
   {
    "name": "reboot",
    "label": "Reboot",
-   "description": "Tell a component to restart. A fire-and-forget command: it opens no intended value, so its outpost's execution report settles or fails it, and it times out when no report arrives within its delivery window. A disruptive one: its delivery closes the gates of its hold set on that outpost (the component's in-band endpoints and those of what it hosts), the outpost runs nothing against them for the quiet period, then each reopens on its own first up verdict, with the hold as the backstop for one that never reads up."
+   "description": "Tell a component to restart. A fire-and-forget command: it opens no intended value, so its outpost's execution report settles or fails it, and it times out when no report arrives within its delivery window. A disruptive one: its delivery closes the gates of its hold set on that outpost (the component's in-band endpoints and those of what it hosts), the outpost runs nothing against them for the quiet period, then each reopens on its own first up reading, with the hold as the backstop for one that never reads up."
   },
   {
    "name": "outlet-off",
    "label": "Outlet Off",
-   "description": "Switch one outlet of a PDU off. A fire-and-forget command and a power command: its delivery closes the gates of what that outlet feeds on the outpost (every endpoint of a component with a power dependency on the outlet, its out-of-band ones included, and the in-band endpoints of what those host), never the PDU's own, so the outpost sends nothing to a component while its power is cut. Each reopens on its own first up verdict after the quiet period, with the hold as the backstop for one that stays dark."
+   "description": "Switch one outlet of a PDU off. A fire-and-forget command and a power command: its delivery closes the gates of what that outlet feeds on the outpost (every endpoint of a component with a power dependency on the outlet, its out-of-band ones included, and the in-band endpoints of what those host), never the PDU's own, so the outpost sends nothing to a component while its power is cut. Each reopens on its own first up reading after the quiet period, with the hold as the backstop for one that stays dark."
   },
   {
    "name": "outlet-on",

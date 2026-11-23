@@ -126,7 +126,7 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 			"publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is " +
 			"rejected and reported in the response rather than silently dropped, and a property or event payload " +
 			"violating its type's schema refuses the batch with a 422. Every key has one writer class, and a push " +
-			"writes only a collected key: a built-in key an outpost writes (a reachability verdict or rung, a probe metric " +
+			"writes only a collected key: a built-in key an outpost writes (a reachability or rung, a probe metric " +
 			"or timing, a held session's state, collection-failed, an endpoint's collection telemetry) is an outpost's own " +
 			"observation and a platform key (health, the webhook receiver's counts) is the platform's, each rejected " +
 			"by name on every lane; a key a calc rule outputs is rejected " +
