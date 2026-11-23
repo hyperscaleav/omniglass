@@ -66,6 +66,21 @@ describe("Groups page", () => {
     expect(screen.getAllByText("night-ops")).toHaveLength(1);
   });
 
+  it("opens the group a link names by its name, so a target's group link lands on the drawer", async () => {
+    window.history.pushState({}, "", "/?open=help-desk");
+    try {
+      mount();
+      const b = await waitFor(() => {
+        const el = asides()[0];
+        if (!el) throw new Error("no blade yet");
+        return el as HTMLElement;
+      });
+      expect(within(b).getByText("Delete user group")).toBeTruthy();
+    } finally {
+      window.history.pushState({}, "", "/");
+    }
+  });
+
   it("opens read-only with a footer bar; Delete is always there, Edit reveals the member controls", async () => {
     mount();
     fireEvent.click(screen.getByText("Help Desk"));

@@ -6,6 +6,7 @@ import Drawer from "../components/Drawer";
 import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
 import KVStacked from "../components/KVStacked";
+import { SeverityUsedBy } from "../components/CatalogUsage";
 import InfoTip from "../components/InfoTip";
 import SeverityBadge from "../components/SeverityBadge";
 import { identityColumn } from "../components/IdentityCell";
@@ -239,6 +240,7 @@ function SeverityLevelBladeBody(p: { name: string }): JSX.Element {
             />
             <KVStacked label="Color" value={<span class="font-data">{l().color}</span>} />
           </div>
+          <SeverityUsedBy name={l().name} />
         </div>
       )}
     </Show>

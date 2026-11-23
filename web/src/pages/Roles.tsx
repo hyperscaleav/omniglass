@@ -60,6 +60,7 @@ export default function Roles() {
           // other list's create button gives it, so the tables line up (#2447).
           railExtra: () => <span class="h-8" aria-hidden="true" data-testid="bar-height" />,
           rowId: (r) => r.id,
+          rowAlt: (r) => r.name,
           blades: { registry: identityRegistry, rootKind: "role" },
         }}
       />

@@ -20,6 +20,9 @@ export type PropertyRow = {
   official: boolean;
   // The calc rule that writes this key, when one does (#1019).
   written_by?: { rule: string; rule_id: string };
+  // Who may write this key (ADR-0161): collected, outpost-probe, platform, calc.
+  // Names the writer for a key no calc rule writes.
+  writer_class?: string;
 };
 
 export const PROPERTIES_KEY = ["properties"] as const;

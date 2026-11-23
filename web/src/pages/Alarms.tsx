@@ -44,7 +44,7 @@ import type { Chip } from "../lib/predicate";
 
 const ACTIONS_SURFACE = "alarm-queue";
 // The row and its drawer offer the same actions: a drawer never offers less than the page.
-const ROW_ACTIONS = { ack: true, snooze: true, troubleshoot: true };
+const ROW_ACTIONS = { ack: true, snooze: true, troubleshoot: true, command: true };
 // A cleared alarm has nothing left to acknowledge; a snooze still applies, since
 // it is stored on the component and dedup key and quiets a flapping one.
 const CLEARED_ACTIONS = { snooze: true, troubleshoot: true };

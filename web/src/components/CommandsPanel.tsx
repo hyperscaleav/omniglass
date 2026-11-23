@@ -6,10 +6,9 @@ import Eyebrow from "./Eyebrow";
 import InfoTip from "./InfoTip";
 import KVStacked from "./KVStacked";
 import IssueCommandForm from "./IssueCommandForm";
-import { ChevronDown, ChevronRight, Zap } from "./icons";
+import { ChevronDown, ChevronRight, Plus, Zap } from "./icons";
 import {
   PHASE_WORDS,
-  boundCommandTypes,
   commandSteps,
   commandsPollMs,
   componentCommands,
@@ -23,9 +22,8 @@ import {
   windowWords,
   type Command,
 } from "../lib/commands";
-import { ENDPOINTS_KEY, listEndpoints } from "../lib/endpoints";
-import { DRIVERS_KEY, listDrivers } from "../lib/drivers";
-import { can, useMe } from "../lib/auth";
+import { createBoundCommands } from "../lib/bound_commands";
+import { commandGap } from "../lib/command_form";
 import { CLOCK_TICK_MS, createClock } from "../lib/clock";
 import { describeError, fmtClock, fmtTime, rel } from "../lib/format";
 
@@ -41,17 +39,25 @@ import { describeError, fmtClock, fmtTime, rel } from "../lib/format";
 // issue's toast opens the new command's row here (`open`). `component` is
 // the address the reads take (the uuid the view is addressed by), `name` what
 // the operator reads.
-export default function CommandsPanel(props: { component: string; name: string; componentId?: string; open?: number }): JSX.Element {
-  const me = useMe();
+export default function CommandsPanel(props: {
+  component: string;
+  name: string;
+  componentId?: string;
+  open?: number;
+  // The driver its product names, and the add-endpoint action (a caller who may
+  // create one): the empty panel names the fix with them (#2466).
+  productDriver?: string;
+  onAddEndpoint?: () => void;
+}): JSX.Element {
   const q = useQuery(() => ({
     queryKey: componentCommandsKey(props.component),
     queryFn: () => componentCommands(props.component),
     refetchInterval: (query) => commandsPollMs(query.state.data as Command[] | undefined),
   }));
-  const canIssue = () => can(me.data, "command", "issue");
-  const endpoints = useQuery(() => ({ queryKey: ENDPOINTS_KEY, queryFn: listEndpoints, enabled: canIssue() && !!props.componentId }));
-  const drivers = useQuery(() => ({ queryKey: DRIVERS_KEY, queryFn: listDrivers, enabled: canIssue() && !!props.componentId }));
-  const bound = createMemo(() => (props.componentId ? boundCommandTypes(props.componentId, endpoints.data ?? [], drivers.data ?? []) : []));
+  const reach = createBoundCommands(() => props.componentId);
+  const canIssue = reach.canIssue;
+  const bound = reach.bound;
+  const gap = createMemo(() => (props.componentId ? commandGap(props.componentId, reach.endpoints(), reach.drivers(), props.productDriver) : undefined));
   const [issuing, setIssuing] = createSignal(false);
 
   const now = createClock(CLOCK_TICK_MS);
@@ -111,10 +117,10 @@ export default function CommandsPanel(props: { component: string; name: string; 
           fallback={
             <div class="rounded-box border border-base-300 px-3 py-3 text-sm text-base-content/55" data-testid="commands-empty">
               <Show
-                when={canIssue() && endpoints.data && drivers.data && bound().length === 0}
+                when={canIssue() && reach.ready() && bound().length === 0}
                 fallback={<>No commands issued to this component yet.</>}
               >
-                No commands issued to this component yet, and none can reach it: no driver attached to its endpoints binds a command.
+                <NoReach gap={gap()} onAdd={props.onAddEndpoint} />
               </Show>
             </div>
           }
@@ -141,6 +147,51 @@ export default function CommandsPanel(props: { component: string; name: string; 
         <IssueCommandForm component={props.component} name={props.name} componentId={props.componentId} types={bound()} close={() => setIssuing(false)} />
       </Drawer>
     </section>
+  );
+}
+
+// NoReach is the empty panel's answer to "why can nothing be sent": the drivers
+// its endpoints use that bind no command, which drivers do (its product's own
+// first), and the way to add that endpoint.
+const SHOWN_DRIVERS = 4;
+function NoReach(props: { gap?: ReturnType<typeof commandGap>; onAdd?: () => void }): JSX.Element {
+  const g = () => props.gap;
+  const offers = () => (g()?.offering ?? []).slice(0, SHOWN_DRIVERS);
+  const more = () => Math.max(0, (g()?.offering.length ?? 0) - SHOWN_DRIVERS);
+  return (
+    <div class="flex flex-col gap-1.5" data-testid="commands-no-reach">
+      <p>
+        No commands issued to this component yet, and none can reach it:{" "}
+        <Show when={g()?.attachedWithout.length} fallback={<>no driver is attached to its endpoints.</>}>
+          its only driver{g()!.attachedWithout.length > 1 ? "s" : ""} (<span class="font-data">{g()!.attachedWithout.join(", ")}</span>) bind{g()!.attachedWithout.length > 1 ? "" : "s"} no command.
+        </Show>
+      </p>
+      <Show when={offers().length > 0}>
+        <p>
+          <Show when={g()?.productDriver} fallback={<>An endpoint with one of these drivers would let it take commands: </>}>
+            {(pd) => (
+              <>
+                Its product names <span class="font-data">{pd().driver}</span>, which offers {pd().commands.join(", ")}; an endpoint attached with it would let it take commands. Others:{" "}
+              </>
+            )}
+          </Show>
+          <For each={offers().filter((o) => o.driver !== g()?.productDriver?.driver)}>
+            {(o, i) => (
+              <>
+                <Show when={i() > 0}>; </Show>
+                <span class="font-data">{o.driver}</span> ({o.commands.join(", ")})
+              </>
+            )}
+          </For>
+          <Show when={more() > 0}>{` and ${more()} more`}</Show>.
+        </p>
+      </Show>
+      <Show when={props.onAdd}>
+        <div>
+          <Button size="xs" intent="action" icon={Plus} onClick={() => props.onAdd!()}>Add an endpoint</Button>
+        </div>
+      </Show>
+    </div>
   );
 }
 

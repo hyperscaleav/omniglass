@@ -300,13 +300,19 @@ Lists the component_type catalog (the taxonomy a product is classified under: mi
 
 List components in scope
 
-Lists the components the caller may read, each filtered to its scope subtree. Gated by component:read.
+Lists the components the caller may read, each filtered to its scope subtree. Optional product, driver and component_type filters narrow to the components a catalog row classifies or a driver serves, and limit caps the page while total counts every match (the catalog drawers' used-by reads). Gated by component:read.
 
 - Route: `GET /api/v1/components`
 - Gate: `component:read`
 - Assume: read-only, idempotent
 - Agent class: read
-- Arguments: none
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `component_type` | string | no | Only components of a product classified under exactly this component type (name or uuid) |
+| `driver` | string | no | Only components of a product this driver serves (name or uuid) |
+| `limit` | integer | no | Cap the page at this many rows; 0 or absent is no cap. total still counts every match. |
+| `product` | string | no | Only components of this product (name or uuid) |
 
 ## `create-component`
 
@@ -1402,13 +1408,17 @@ Returns the outpost's own recent operational log lines (the raw ingest lane of A
 
 List products
 
-Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
+Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. declares_metric and declares_property narrow it to the products whose contract declares that key. Gated by product:read.
 
 - Route: `GET /api/v1/products`
 - Gate: `product:read`
 - Assume: read-only, idempotent
 - Agent class: read
-- Arguments: none
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `declares_metric` | string | no | Only products whose contract declares this metric (name or uuid) |
+| `declares_property` | string | no | Only products whose contract declares this property (name or uuid) |
 
 ## `get-product`
 
@@ -1471,13 +1481,17 @@ Writes one standard of your own (official false) from a standard template in the
 
 List systems in scope
 
-Lists the systems the caller may read, each filtered to its scope subtree. Gated by system:read.
+Lists the systems the caller may read, each filtered to its scope subtree. An optional standard filter narrows to the systems built to one standard, and limit caps the page while total counts every match. Gated by system:read.
 
 - Route: `GET /api/v1/systems`
 - Gate: `system:read`
 - Assume: read-only, idempotent
 - Agent class: read
-- Arguments: none
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `limit` | integer | no | Cap the page at this many rows; 0 or absent is no cap. total still counts every match. |
+| `standard` | string | no | Only systems built to this standard (name or uuid) |
 
 ## `get-system`
 

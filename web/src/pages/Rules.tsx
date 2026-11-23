@@ -15,6 +15,7 @@ import Button from "../components/Button";
 import AlarmTimeline, { createTimelineToggles } from "../components/AlarmTimeline";
 import { EVENT_TYPES_KEY, listEventTypes } from "../lib/event_types";
 import SeverityBadge from "../components/SeverityBadge";
+import CatalogRef from "../components/CatalogRef";
 import ComponentTypeSelect from "../components/ComponentTypeSelect";
 import { identityColumn } from "../components/IdentityCell";
 import { Ban, Pencil, Plus, RotateCcw, Save, X } from "../components/icons";
@@ -131,10 +132,13 @@ function useMetricUnit(): (r: EventRule) => string | undefined {
   return (r) => (r.sample_lane === "metric" ? byName().get(r.sample_key) || undefined : undefined);
 }
 
-function readsCell(r: EventRule): JSX.Element {
+function readsCell(r: EventRule, linked = false): JSX.Element {
   return (
     <span class="flex min-w-0 flex-col leading-snug">
-      <span class="truncate font-data text-[12px]" title={r.sample_key}>{r.sample_key}</span>
+      {/* The drawer opens the metric or property the rule judges; a list row stays plain text, since a row click already opens this drawer. */}
+      <Show when={linked} fallback={<span class="truncate font-data text-[12px]" title={r.sample_key}>{r.sample_key}</span>}>
+        <CatalogRef kind={r.sample_lane === "property" ? "property" : "metric"} name={r.sample_key} />
+      </Show>
       <span class="text-[11px] text-base-content/40">{r.sample_lane}</span>
     </span>
   );
@@ -338,7 +342,7 @@ function SelectorFacts(p: { rule: EventRule }): JSX.Element {
   return (
     <Show when={types().length + comps().length > 0} fallback={<span class="text-sm text-base-content/60">Every component</span>}>
       <div class="flex flex-wrap gap-1.5">
-        <For each={types()}>{(t) => <span class="badge badge-ghost badge-sm font-data" title="Component type">{t}</span>}</For>
+        <For each={types()}>{(t) => <span class="badge badge-ghost badge-sm" title="Component type"><CatalogRef kind="component_type" name={t} /></span>}</For>
         <For each={comps()}>
           {(id) => (
             <A href={`/components/${id}`} class="badge badge-outline badge-sm hover:underline">
@@ -515,6 +519,9 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
                 <span class="inline-flex items-center gap-1.5">
                   {severityCell(r().severity)}
                   <InfoTip label="severity" text={RULE_HINTS.severity} />
+                  <Show when={r().severity}>
+                    <span class="text-[11px]"><CatalogRef kind="severity_level" name={r().severity} /></span>
+                  </Show>
                   <A href="/severity-levels" class="link text-[11px] text-base-content/50 hover:text-base-content">All levels</A>
                 </span>
               }
@@ -551,7 +558,7 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
 
           <section class="flex flex-col gap-2">
             <Eyebrow label="Reads" hint={RULE_HINTS.reads} />
-            <div>{readsCell(r())}</div>
+            <div>{readsCell(r(), true)}</div>
             <Eyebrow label="Watches" hint={RULE_HINTS.selector} class="mt-1" />
             <SelectorFacts rule={r()} />
           </section>
@@ -596,10 +603,10 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
             <Eyebrow label="Writes" hint={RULE_HINTS.events} />
             <div class="grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-1 text-sm">
               <span class="text-[12px] text-base-content/50">Starts</span>
-              <span class="font-data" data-testid="rule-fire-type">{r().fire_event_type}</span>
+              <span data-testid="rule-fire-type"><CatalogRef kind="event_type" name={r().fire_event_type} /></span>
               <span class="text-[12px] text-base-content/50">Ends</span>
               <span data-testid="rule-clear-type">
-                {r().clear_event_type ? <span class="font-data">{r().clear_event_type}</span> : <span class="text-base-content/50">no clear event</span>}
+                {r().clear_event_type ? <CatalogRef kind="event_type" name={r().clear_event_type} /> : <span class="text-base-content/50">no clear event</span>}
               </span>
             </div>
           </section>

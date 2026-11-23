@@ -106,6 +106,7 @@ export default function Users() {
           columns,
           empty: "No users yet.",
           rowId: (p) => p.id,
+          rowAlt: (p) => p.person?.username ?? p.machine?.name,
           legacyParam: "u",
           blades: { registry: identityRegistry, rootKind: "user" },
           railExtra: () => (
