@@ -264,7 +264,7 @@ text whose width can change paints a **box the text cannot move**, one of two wa
 
   ```yaml
   mask:
-    - selector: "[data-testid=blade-since]"
+    - selector: "[data-testid=since-line]"
       width: 184
   ```
 
@@ -318,7 +318,7 @@ shows live, and the raster survives the value changing) is pinned at the browser
 capture's own mask code (`web/e2e/shotmasklib.mjs`) against synthetic markup, changing the value
 on demand, so it also covers the single-digit day a timezone shift cannot reach. A new mask over
 a varying value adds its case there. Every capture logs what each mask resolved to
-(`mask 59x td 190x37 <- text=/…/`, `mask  1x box 184x16 over span 157 <- [data-testid=blade-since]`),
+(`mask 59x td 190x37 <- text=/…/`, `mask  1x box 184x16 over span 157 <- [data-testid=since-line]`),
 so a mask that lands on the wrong element shows up in the capture output rather than in a raster
 nobody diffs by hand: a selector mask whose box is as wide as its text is the tell.
 

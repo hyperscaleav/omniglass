@@ -212,6 +212,40 @@ func compileOneFuncs(path string, value any, enum []string, pattern string, opti
 // carries the mutation's Optional flag so the caller can decide whether
 // a failure should fail the request closed (default) or only log.
 func applyMutations(root map[string]any, muts []mutation, data templateData) (diffs map[string]any, errs []error) {
+	return applyMutationsEach(root, muts, data)
+}
+
+// applyRouteMutations is the all-or-nothing form a request route uses:
+// if any required mutation fails (render, validation or write), state is
+// restored to exactly what it was before the call and no diffs are
+// returned, so a refused request (400) never leaves state half written.
+// An optional mutation that fails is skipped and reported; the rest
+// still apply. Mutations run in order, so a later one still reads the
+// effect of an earlier one. Behavior ticks, overrides and commands keep
+// the per-mutation semantics of applyMutations.
+func applyRouteMutations(root map[string]any, muts []mutation, data templateData) (diffs map[string]any, errs []error) {
+	if len(muts) == 0 {
+		return nil, nil
+	}
+	snapshot := deepCopy(root)
+	diffs, errs = applyMutationsEach(root, muts, data)
+	if len(collectRequiredErrors(errs)) == 0 {
+		return diffs, errs
+	}
+	// Restore in place: callers hold root (and templateData.State) by
+	// reference, so the top-level map identity must survive.
+	for k := range root {
+		delete(root, k)
+	}
+	for k, v := range snapshot {
+		root[k] = v
+	}
+	return nil, errs
+}
+
+// applyMutationsEach applies mutations one by one, accumulating errors
+// without aborting the batch.
+func applyMutationsEach(root map[string]any, muts []mutation, data templateData) (diffs map[string]any, errs []error) {
 	if len(muts) == 0 {
 		return nil, nil
 	}
