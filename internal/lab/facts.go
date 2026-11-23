@@ -64,11 +64,14 @@ type FactVolume struct {
 // Walkthrough is a guided walkthrough's id, title and description, from its
 // manifest (web/e2e/walkthroughs/<id>.yaml), and the CLI commands that stage
 // its scene in a learner's lab (its setup, which the recorder makes off
-// camera).
+// camera). Lab names what its lab runs beyond the dev fleet (#2362): sso is
+// the identity provider, which only a script's lab runs (lab run --sso), so a
+// learner's lab cannot follow that walkthrough.
 type Walkthrough struct {
 	ID          string   `json:"id"`
 	Title       string   `json:"title"`
 	Description string   `json:"description"`
+	Lab         []string `json:"lab"`
 	Setup       []string `json:"setup"`
 }
 
@@ -186,8 +189,9 @@ func FactsJSON(walkthroughs fs.FS) ([]byte, error) {
 			return nil, err
 		}
 		var m struct {
-			Title       string `yaml:"title"`
-			Description string `yaml:"description"`
+			Title       string   `yaml:"title"`
+			Description string   `yaml:"description"`
+			Lab         []string `yaml:"lab"`
 			Setup       []struct {
 				Post string         `yaml:"post"`
 				Body map[string]any `yaml:"body"`
@@ -196,7 +200,7 @@ func FactsJSON(walkthroughs fs.FS) ([]byte, error) {
 		if err := yaml.Unmarshal(b, &m); err != nil {
 			return nil, fmt.Errorf("walkthrough %s: %w", n, err)
 		}
-		w := Walkthrough{ID: strings.TrimSuffix(path.Base(n), ".yaml"), Title: m.Title, Description: m.Description, Setup: []string{}}
+		w := Walkthrough{ID: strings.TrimSuffix(path.Base(n), ".yaml"), Title: m.Title, Description: m.Description, Lab: append([]string{}, m.Lab...), Setup: []string{}}
 		for _, it := range m.Setup {
 			c, err := SetupCommand(it.Post, it.Body)
 			if err != nil {

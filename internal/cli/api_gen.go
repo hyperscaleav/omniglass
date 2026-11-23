@@ -954,6 +954,83 @@ func generatedCommands() []*cobra.Command {
 			}())
 			cmd.AddCommand(func() *cobra.Command {
 				parent := &cobra.Command{
+					Use:   "identity-link",
+					Short: "Commands for the identity-link resource",
+				}
+				parent.AddCommand(func() *cobra.Command {
+					cmd := func() *cobra.Command {
+						cmd := &cobra.Command{
+							Use:     "list",
+							Short:   "List your own identity links",
+							Long:    "Lists the identities at the identity provider you sign in through. Requires authentication; self-scoped (never another person's).",
+							Example: "  omniglass auth me identity-link list",
+							Args:    pathArgs(0),
+							RunE: func(cmd *cobra.Command, args []string) error {
+								path := fmt.Sprintf("/api/v1/auth/me/identity-links")
+								return runAPICommand(cmd, "GET", path, nil)
+							},
+						}
+						return cmd
+					}()
+					return cmd
+				}())
+				parent.AddCommand(func() *cobra.Command {
+					cmd := func() *cobra.Command {
+						var fCurrentPassword string
+						var fProvider string
+						cmd := &cobra.Command{
+							Use:     "start",
+							Short:   "Start linking your own identity at the provider",
+							Long:    "Confirms your current password and starts a sign-in at the identity provider bound to this session: send the browser to the returned url, and signing in there links that identity to you (an owner's only way to gain single sign-on). Requires authentication; self-scoped (it only ever links to you). Needs a session; refused to an agent token. A wrong password is a 403; single sign-on not configured is a 409.",
+							Example: "  omniglass auth me identity-link start --current-password current_password",
+							Args:    pathArgs(0),
+							RunE: func(cmd *cobra.Command, args []string) error {
+								path := fmt.Sprintf("/api/v1/auth/me/identity-links:start")
+								body := map[string]any{}
+								if cmd.Flags().Changed("current-password") {
+									body["current_password"] = fCurrentPassword
+								}
+								if cmd.Flags().Changed("provider") {
+									body["provider"] = fProvider
+								}
+								return runAPICommand(cmd, "POST", path, body)
+							},
+						}
+						cmd.Flags().StringVar(&fCurrentPassword, "current-password", "", "Your current password: a link outlives the session that makes it, so it is confirmed as a password change is")
+						_ = cmd.MarkFlagRequired("current-password")
+						cmd.Flags().StringVar(&fProvider, "provider", "", "The identity provider to link, by name")
+						return cmd
+					}()
+					return cmd
+				}())
+				parent.AddCommand(func() *cobra.Command {
+					cmd := func() *cobra.Command {
+						var fCurrentPassword string
+						cmd := &cobra.Command{
+							Use:     "unlink <link>",
+							Short:   "Unlink one of your own identity links",
+							Long:    "Confirms your current password and removes one of your identity links; every session and token through it ends with it. Requires authentication; self-scoped (a link that is not yours is a 404). Refused to an agent token. Audited.",
+							Example: "  omniglass auth me identity-link unlink <link> --current-password current_password",
+							Args:    pathArgs(1),
+							RunE: func(cmd *cobra.Command, args []string) error {
+								path := fmt.Sprintf("/api/v1/auth/me/identity-links/%s:unlink", pathSegment(args[0]))
+								body := map[string]any{}
+								if cmd.Flags().Changed("current-password") {
+									body["current_password"] = fCurrentPassword
+								}
+								return runAPICommand(cmd, "POST", path, body)
+							},
+						}
+						cmd.Flags().StringVar(&fCurrentPassword, "current-password", "", "Your current password, as linking asks")
+						_ = cmd.MarkFlagRequired("current-password")
+						return cmd
+					}()
+					return cmd
+				}())
+				return parent
+			}())
+			cmd.AddCommand(func() *cobra.Command {
+				parent := &cobra.Command{
 					Use:   "notification",
 					Short: "Commands for the notification resource",
 				}
@@ -6238,7 +6315,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "simulation <name>",
 					Short:   "Get an outpost's simulator",
-					Long:    "The devices a simulator beside the outpost serves (each component with an endpoint placed on the outpost, within the caller's component read scope), joined to the hits the server has seen and the simulator's capabilities. Hits are live and per server process, not stored. Requires an all-scope outpost read. Gated by outpost:read.",
+					Long:    "The devices a simulator beside the outpost serves (each component with an endpoint placed on the outpost, within the caller's component read scope), joined to the hits the server has seen and the simulator's capabilities. Hits are live and per server process, not stored. Requires an all-scope outpost read. Gated by outpost:read.\n\nA value equal to a subcommand name (observation) runs that subcommand; put -- before it to pass it as <name>, e.g. `outpost simulation -- observation`.",
 					Example: "  omniglass outpost simulation <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -9644,6 +9721,71 @@ func generatedCommands() []*cobra.Command {
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/users/%s/grants/%s", pathSegment(args[0]), pathSegment(args[1]))
 							return runAPICommand(cmd, "DELETE", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
+				Use:   "identity-link",
+				Short: "Commands for the identity-link resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					var fIdentifier string
+					cmd := &cobra.Command{
+						Use:     "create <id>",
+						Short:   "Link a person to an identity at the provider",
+						Long:    "Links another person to an identity at the identity provider (iss|sub), so they sign in through single sign-on as that person. Email never links. Gated by user:link-identity (all-scope) and the takeover guard a password reset takes: refused on yourself (link from your profile), on an owner (an owner links their own identity), or on a person whose capabilities exceed yours. An identity already linked to anyone is a 409. Audited, the link recording who made it; granting the person owner later deletes it.",
+						Example: "  omniglass user identity-link create <id> --identifier identifier",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/users/%s/identity-links", pathSegment(args[0]))
+							body := map[string]any{}
+							if cmd.Flags().Changed("identifier") {
+								body["identifier"] = fIdentifier
+							}
+							return runAPICommand(cmd, "POST", path, body)
+						},
+					}
+					cmd.Flags().StringVar(&fIdentifier, "identifier", "", "The identity at the provider as iss|sub: the issuer exactly as its id_tokens carry it, a bar, and the subject verbatim (the provider's admin console shows it, and an unlinked sign-in names it)")
+					_ = cmd.MarkFlagRequired("identifier")
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "delete <id> <link>",
+						Short:   "Unlink a person from an identity at the provider",
+						Long:    "Removes one of another person's identity links; every session and token they signed in through it ends with it. Gated by user:link-identity (all-scope) and the same takeover guard as linking. Audited.",
+						Example: "  omniglass user identity-link delete <id> <link>",
+						Args:    pathArgs(2),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/users/%s/identity-links/%s", pathSegment(args[0]), pathSegment(args[1]))
+							return runAPICommand(cmd, "DELETE", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "list <id>",
+						Short:   "List a person's identity links",
+						Long:    "Lists the identities at the identity provider a person signs in through (single sign-on), each iss|sub with who made it and when it was last used. Gated by user:read:admin (all-scope), as the user directory is.",
+						Example: "  omniglass user identity-link list <id>",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/users/%s/identity-links", pathSegment(args[0]))
+							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
 					return cmd

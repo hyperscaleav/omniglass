@@ -767,6 +767,8 @@ export type AuthStatusOutputBody = {
   bootstrapped: boolean;
   /** Whether this server is a lab started by omniglass lab run: disposable data and a well-known login, never a real deployment */
   lab: boolean;
+  /** The identity providers a person may sign in through, by the name /auth/oidc/start/{provider} takes; empty when single sign-on is not configured */
+  sso_providers: string[];
 };
 
 /**
@@ -2619,6 +2621,17 @@ export type CreateGroupInputBody = {
   name: string;
 };
 
+export type CreateIdentityLinkInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The identity at the provider as iss|sub: the issuer exactly as its id_tokens carry it, a bar, and the subject verbatim (the provider's admin console shows it, and an unlinked sign-in names it)
+     * @minLength 3
+     * @maxLength 2048
+     */
+  identifier: string;
+};
+
 export type NameRuleBody = {
   /** Suppress the ordinal on the first of this stem in a parent, so the only wing there is wing and the second is wing-2. Ignored when stem is empty. */
   bare_first?: boolean;
@@ -3717,6 +3730,9 @@ export type SimObservation = {
   outpost: string;
   /** @nullable */
   protocols: SimProtocolObservation[] | null;
+  /** @nullable */
+  served_ids?: string[] | null;
+  served_truncated?: boolean;
   started: string;
 };
 
@@ -4396,6 +4412,34 @@ export type IdentityBindingBody = {
   owner_name: string;
   /** The identity value the conduit reports (e.g. the id a UCC service gives one of the rooms it reports on) */
   value: string;
+};
+
+export type IdentityLinkBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  created_at: string;
+  /** The link's id, which unlinking names */
+  id: string;
+  /** The identity at the provider: its issuer and subject, iss|sub, exactly as its id_tokens carry them */
+  identifier: string;
+  /** The identifier's issuer half */
+  issuer: string;
+  /** When the person last signed in through it */
+  last_used_at?: string;
+  /** The username of whoever made the link: the person themselves or an administrator; absent once that user is purged */
+  linked_by?: string;
+  /** When the provider last accepted the link's refresh token, at sign-in or at a re-check */
+  refresh_accepted_at?: string;
+  /** True when the person made the link themselves */
+  self: boolean;
+  /** The identifier's subject half */
+  subject: string;
+};
+
+export type IdentityLinksOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  links: IdentityLinkBody[];
 };
 
 /**
@@ -8091,6 +8135,29 @@ export type RunViewsOutputBody = {
   results: ViewResultBody[] | null;
 };
 
+export type SSOSettings = {
+  /** A platform oauth2-client secret, by name: its client_id field is the client id Omniglass is registered as, its client_secret field authenticates the token exchange. Setting it from the console or API takes secret:bind on it; the settings file and environment are trusted as deployment config */
+  client_secret: string;
+  /** The id_token claim carrying the person's groups at the provider (read by group mapping, #2363) */
+  groups_claim: string;
+  /** The identity provider's issuer URL exactly as its id_tokens carry it (https://login.example.com/realms/corp). Empty turns single sign-on off. An on-premises provider is reached only when the notification settings' egress_allow names it. Moving it from the console or API while client_secret is bound takes secret:bind on that secret; the settings file and environment are trusted as deployment config */
+  issuer: string;
+  /**
+     * Minutes a link may go without a refresh the provider accepted (an outage) before its sessions and tokens are refused until one is; also the length of a session through a provider that issues no refresh token
+     * @minimum 1
+     * @maximum 10080
+     */
+  recheck_grace_minutes: number;
+  /**
+     * Minutes between re-checks: each link with a live session or token through it redeems its refresh token at the provider, and a refusal revokes them
+     * @minimum 1
+     * @maximum 1440
+     */
+  recheck_minutes: number;
+  /** The scopes a sign-in asks for, space-separated. offline_access asks for the refresh token the re-check redeems; a provider that issues none gives sessions of recheck_grace_minutes and no API tokens */
+  scopes: string;
+};
+
 export type SetAvatarInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -8223,6 +8290,7 @@ export type Settings = {
   label: LabelSettings;
   notification: NotificationSettings;
   retention: RetentionSettings;
+  sso: SSOSettings;
   ui: UISettings;
 };
 
@@ -8406,6 +8474,22 @@ export type SnoozeAlarmInputBody = {
   readonly $schema?: string;
   /** How long from now the alarm stays snoozed, from 1m to 7d: a duration such as 15m, 1h, 4h or 24h, or whole days such as 7d. Snoozing a snoozed alarm replaces its deadline, shorter or longer */
   duration: string;
+};
+
+export type StartSelfLinkInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** Your current password: a link outlives the session that makes it, so it is confirmed as a password change is */
+  current_password: string;
+  /** The identity provider to link, by name */
+  provider?: string;
+};
+
+export type StartSelfLinkOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** The provider's sign-in page to send the browser to; signing in there links that identity to you and returns to your profile */
+  url: string;
 };
 
 export type SwapSlotPositionsInputBody = {
@@ -8642,6 +8726,13 @@ export type UnboundIdentitiesOutputBody = {
      * @nullable
      */
   identities: UnboundIdentityBody[] | null;
+};
+
+export type UnlinkSelfInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** Your current password, as linking asks */
+  current_password: string;
 };
 
 export type UpdateActionRuleInputBody = {
@@ -11001,6 +11092,169 @@ export const getAuthMeAvatar = async ( options?: Parameters<typeof ogFetch>[1]):
     method: 'GET'
 
 
+  }
+);}
+
+
+
+export type listAuthMeIdentityLinksResponse200 = {
+  data: IdentityLinksOutputBody
+  status: 200
+}
+
+export type listAuthMeIdentityLinksResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type listAuthMeIdentityLinksResponseSuccess = (listAuthMeIdentityLinksResponse200) & {
+  headers: Headers;
+};
+export type listAuthMeIdentityLinksResponseError = (listAuthMeIdentityLinksResponseDefault) & {
+  headers: Headers;
+};
+
+export type listAuthMeIdentityLinksResponse = (listAuthMeIdentityLinksResponseSuccess | listAuthMeIdentityLinksResponseError)
+
+export const getListAuthMeIdentityLinksUrl = () => {
+
+
+
+
+  return `/auth/me/identity-links`
+}
+
+/**
+ * Lists the identities at the identity provider you sign in through. Requires authentication; self-scoped (never another person's).
+ * @summary List your own identity links
+ */
+export const listAuthMeIdentityLinks = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listAuthMeIdentityLinksResponse> => {
+
+  return ogFetch<listAuthMeIdentityLinksResponse>(getListAuthMeIdentityLinksUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type unlinkAuthMeIdentityLinkResponse204 = {
+  data: void
+  status: 204
+}
+
+export type unlinkAuthMeIdentityLinkResponse403 = {
+  data: ErrorModel
+  status: 403
+}
+
+export type unlinkAuthMeIdentityLinkResponse404 = {
+  data: ErrorModel
+  status: 404
+}
+
+export type unlinkAuthMeIdentityLinkResponse422 = {
+  data: ErrorModel
+  status: 422
+}
+
+export type unlinkAuthMeIdentityLinkResponse500 = {
+  data: ErrorModel
+  status: 500
+}
+
+export type unlinkAuthMeIdentityLinkResponseSuccess = (unlinkAuthMeIdentityLinkResponse204) & {
+  headers: Headers;
+};
+export type unlinkAuthMeIdentityLinkResponseError = (unlinkAuthMeIdentityLinkResponse403 | unlinkAuthMeIdentityLinkResponse404 | unlinkAuthMeIdentityLinkResponse422 | unlinkAuthMeIdentityLinkResponse500) & {
+  headers: Headers;
+};
+
+export type unlinkAuthMeIdentityLinkResponse = (unlinkAuthMeIdentityLinkResponseSuccess | unlinkAuthMeIdentityLinkResponseError)
+
+export const getUnlinkAuthMeIdentityLinkUrl = (link: string,) => {
+
+
+
+
+  return `/auth/me/identity-links/${link}:unlink`
+}
+
+/**
+ * Confirms your current password and removes one of your identity links; every session and token through it ends with it. Requires authentication; self-scoped (a link that is not yours is a 404). Refused to an agent token. Audited.
+ * @summary Unlink one of your own identity links
+ */
+export const unlinkAuthMeIdentityLink = async (link: string,
+    unlinkSelfInputBody: NonReadonly<UnlinkSelfInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<unlinkAuthMeIdentityLinkResponse> => {
+
+  return ogFetch<unlinkAuthMeIdentityLinkResponse>(getUnlinkAuthMeIdentityLinkUrl(link),
+  {
+    ...options,
+    method: 'POST',
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
+    body: JSON.stringify(unlinkSelfInputBody)
+  }
+);}
+
+
+
+export type startAuthMeIdentityLinkResponse200 = {
+  data: StartSelfLinkOutputBody
+  status: 200
+}
+
+export type startAuthMeIdentityLinkResponse403 = {
+  data: ErrorModel
+  status: 403
+}
+
+export type startAuthMeIdentityLinkResponse409 = {
+  data: ErrorModel
+  status: 409
+}
+
+export type startAuthMeIdentityLinkResponse422 = {
+  data: ErrorModel
+  status: 422
+}
+
+export type startAuthMeIdentityLinkResponse500 = {
+  data: ErrorModel
+  status: 500
+}
+
+export type startAuthMeIdentityLinkResponseSuccess = (startAuthMeIdentityLinkResponse200) & {
+  headers: Headers;
+};
+export type startAuthMeIdentityLinkResponseError = (startAuthMeIdentityLinkResponse403 | startAuthMeIdentityLinkResponse409 | startAuthMeIdentityLinkResponse422 | startAuthMeIdentityLinkResponse500) & {
+  headers: Headers;
+};
+
+export type startAuthMeIdentityLinkResponse = (startAuthMeIdentityLinkResponseSuccess | startAuthMeIdentityLinkResponseError)
+
+export const getStartAuthMeIdentityLinkUrl = () => {
+
+
+
+
+  return `/auth/me/identity-links:start`
+}
+
+/**
+ * Confirms your current password and starts a sign-in at the identity provider bound to this session: send the browser to the returned url, and signing in there links that identity to you (an owner's only way to gain single sign-on). Requires authentication; self-scoped (it only ever links to you). Needs a session; refused to an agent token. A wrong password is a 403; single sign-on not configured is a 409.
+ * @summary Start linking your own identity at the provider
+ */
+export const startAuthMeIdentityLink = async (startSelfLinkInputBody: NonReadonly<StartSelfLinkInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<startAuthMeIdentityLinkResponse> => {
+
+  return ogFetch<startAuthMeIdentityLinkResponse>(getStartAuthMeIdentityLinkUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
+    body: JSON.stringify(startSelfLinkInputBody)
   }
 );}
 
@@ -25508,6 +25762,171 @@ export const revokeGrant = async (id: string,
     grantId: string, options?: Parameters<typeof ogFetch>[1]): Promise<revokeGrantResponse> => {
 
   return ogFetch<revokeGrantResponse>(getRevokeGrantUrl(id,grantId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+export type listUserIdentityLinksResponse200 = {
+  data: IdentityLinksOutputBody
+  status: 200
+}
+
+export type listUserIdentityLinksResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type listUserIdentityLinksResponseSuccess = (listUserIdentityLinksResponse200) & {
+  headers: Headers;
+};
+export type listUserIdentityLinksResponseError = (listUserIdentityLinksResponseDefault) & {
+  headers: Headers;
+};
+
+export type listUserIdentityLinksResponse = (listUserIdentityLinksResponseSuccess | listUserIdentityLinksResponseError)
+
+export const getListUserIdentityLinksUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}/identity-links`
+}
+
+/**
+ * Lists the identities at the identity provider a person signs in through (single sign-on), each iss|sub with who made it and when it was last used. Gated by user:read:admin (all-scope), as the user directory is.
+ * @summary List a person's identity links
+ */
+export const listUserIdentityLinks = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<listUserIdentityLinksResponse> => {
+
+  return ogFetch<listUserIdentityLinksResponse>(getListUserIdentityLinksUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type createUserIdentityLinkResponse201 = {
+  data: IdentityLinkBody
+  status: 201
+}
+
+export type createUserIdentityLinkResponse403 = {
+  data: ErrorModel
+  status: 403
+}
+
+export type createUserIdentityLinkResponse409 = {
+  data: ErrorModel
+  status: 409
+}
+
+export type createUserIdentityLinkResponse422 = {
+  data: ErrorModel
+  status: 422
+}
+
+export type createUserIdentityLinkResponse500 = {
+  data: ErrorModel
+  status: 500
+}
+
+export type createUserIdentityLinkResponseSuccess = (createUserIdentityLinkResponse201) & {
+  headers: Headers;
+};
+export type createUserIdentityLinkResponseError = (createUserIdentityLinkResponse403 | createUserIdentityLinkResponse409 | createUserIdentityLinkResponse422 | createUserIdentityLinkResponse500) & {
+  headers: Headers;
+};
+
+export type createUserIdentityLinkResponse = (createUserIdentityLinkResponseSuccess | createUserIdentityLinkResponseError)
+
+export const getCreateUserIdentityLinkUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}/identity-links`
+}
+
+/**
+ * Links another person to an identity at the identity provider (iss|sub), so they sign in through single sign-on as that person. Email never links. Gated by user:link-identity (all-scope) and the takeover guard a password reset takes: refused on yourself (link from your profile), on an owner (an owner links their own identity), or on a person whose capabilities exceed yours. An identity already linked to anyone is a 409. Audited, the link recording who made it; granting the person owner later deletes it.
+ * @summary Link a person to an identity at the provider
+ */
+export const createUserIdentityLink = async (id: string,
+    createIdentityLinkInputBody: NonReadonly<CreateIdentityLinkInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createUserIdentityLinkResponse> => {
+
+  return ogFetch<createUserIdentityLinkResponse>(getCreateUserIdentityLinkUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
+    body: JSON.stringify(createIdentityLinkInputBody)
+  }
+);}
+
+
+
+export type deleteUserIdentityLinkResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deleteUserIdentityLinkResponse403 = {
+  data: ErrorModel
+  status: 403
+}
+
+export type deleteUserIdentityLinkResponse404 = {
+  data: ErrorModel
+  status: 404
+}
+
+export type deleteUserIdentityLinkResponse422 = {
+  data: ErrorModel
+  status: 422
+}
+
+export type deleteUserIdentityLinkResponse500 = {
+  data: ErrorModel
+  status: 500
+}
+
+export type deleteUserIdentityLinkResponseSuccess = (deleteUserIdentityLinkResponse204) & {
+  headers: Headers;
+};
+export type deleteUserIdentityLinkResponseError = (deleteUserIdentityLinkResponse403 | deleteUserIdentityLinkResponse404 | deleteUserIdentityLinkResponse422 | deleteUserIdentityLinkResponse500) & {
+  headers: Headers;
+};
+
+export type deleteUserIdentityLinkResponse = (deleteUserIdentityLinkResponseSuccess | deleteUserIdentityLinkResponseError)
+
+export const getDeleteUserIdentityLinkUrl = (id: string,
+    link: string,) => {
+
+
+
+
+  return `/users/${id}/identity-links/${link}`
+}
+
+/**
+ * Removes one of another person's identity links; every session and token they signed in through it ends with it. Gated by user:link-identity (all-scope) and the same takeover guard as linking. Audited.
+ * @summary Unlink a person from an identity at the provider
+ */
+export const deleteUserIdentityLink = async (id: string,
+    link: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteUserIdentityLinkResponse> => {
+
+  return ogFetch<deleteUserIdentityLinkResponse>(getDeleteUserIdentityLinkUrl(id,link),
   {
     ...options,
     method: 'DELETE'

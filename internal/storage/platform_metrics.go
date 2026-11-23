@@ -72,6 +72,36 @@ func (p *PG) RecordPlatformMetrics(ctx context.Context, rows []PlatformMetric) e
 	return errors.Join(errs...)
 }
 
+// PlatformMetricInstancesAt reads the instances of key on a platform component
+// whose newest observed sample reads value, in name order. The retention loop
+// seeds its behind set from it at start (#1673), so a restart does not lose
+// the lanes the last pass flagged. A component with none reads nil.
+func (p *PG) PlatformMetricInstancesAt(ctx context.Context, componentID, key string, value float64) ([]string, error) {
+	lane, err := p.metricLane(ctx, p.pool)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := p.pool.Query(ctx, `
+		select x.instance from (
+			select distinct on (s.instance) s.instance, n.value
+			from metric_series s
+			join metric_type_in_effect() mt on mt.id = s.metric_type_id
+			cross join lateral (`+metricNewestSQL("s.id", lane)+`) n
+			where s.owner_id = $1::uuid and s.owner_kind = 'component' and mt.name = $2
+			  and s.provenance = 'observed'
+			order by s.instance, n.ts desc, n.id desc) x
+		where x.value = $3
+		order by x.instance`, componentID, key, value)
+	if err != nil {
+		return nil, fmt.Errorf("storage: read %s instances: %w", key, err)
+	}
+	out, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return nil, fmt.Errorf("storage: read %s instances: %w", key, err)
+	}
+	return out, nil
+}
+
 // OutpostCheckin is one claimed outpost's last word (#1625): its platform
 // component and the time it last spoke, its last heartbeat or, before its
 // first, its claim. The check-in age is the time since.

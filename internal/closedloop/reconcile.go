@@ -155,8 +155,10 @@ func Reconcile(b OutpostBracket) []ClosedLoopGap {
 	// need not agree (a tcp probe of a port the sim serves http on). The
 	// widest sim span (first read to last) carries the most the sim could
 	// have seen, so the difference is a floor.
-	add(ClosedLoopGap{Gap: GapConnectNotAccepted, MaskedBy: maskedByBacklog,
-		Count: outpostConnections(b) - simAccepted(s1, s2)})
+	connects := outpostConnections(b) - simAccepted(s1, s2)
+	connectsUnserved := min(max(connects, 0), unservedPolls(b, ""))
+	add(ClosedLoopGap{Gap: GapConnectNotAccepted, MaskedBy: maskedByBacklog + unservedTerm(connectsUnserved),
+		Count: connects - connectsUnserved, Masked: connectsUnserved})
 
 	// The request hops, per transport the outpost tallied. A tally transport is
 	// named as the sim's protocol, so the rows pair by name.
@@ -165,8 +167,10 @@ func Reconcile(b OutpostBracket) []ClosedLoopGap {
 		n1 := tallyRow(b.Start.Outpost, p)
 		sent := n2.Sent - n1.Sent
 		received := s2.Protocol(p).Received - s1.Protocol(p).Received
-		add(ClosedLoopGap{Gap: GapSentNotReceived, Protocol: p, MaskedBy: maskedByOutpostInFlight,
-			Count: sent - received - n2.InFlight, Masked: n2.InFlight})
+		lost := sent - received - n2.InFlight
+		toUnserved := min(max(lost, 0), unservedPolls(b, p))
+		add(ClosedLoopGap{Gap: GapSentNotReceived, Protocol: p, MaskedBy: maskedByOutpostInFlight + unservedTerm(toUnserved),
+			Count: lost - toUnserved, Masked: n2.InFlight + toUnserved})
 		// Answers: the narrowest sim span (the start's second read to the
 		// end's first) holds only answers given after the outpost's start read
 		// and before its end read. Each one came back, is in flight, timed
@@ -197,6 +201,42 @@ func Reconcile(b OutpostBracket) []ClosedLoopGap {
 
 	out = append(out, unhit(b, reading)...)
 	return out
+}
+
+// unservedTerm names the masking a poll to an unserved target adds, when any.
+func unservedTerm(n int64) string {
+	if n <= 0 {
+		return ""
+	}
+	return ", and polls to targets the sim does not serve (not bound yet, or stopped)"
+}
+
+// unservedPolls is the most polls the outpost could have sent in the window to
+// poll targets the sim does not serve, of one sim protocol (every protocol when
+// empty). The node's worklist and the sim's device list move on their own
+// clocks, so a target the sim has not bound yet, or has stopped serving, is
+// polled and never received with no fleet change in the window (#1962). The
+// sim names its served devices; when it did not (a fleet past the cap, an older sim, none served) no
+// target is known unserved.
+func unservedPolls(b OutpostBracket, protocol string) int64 {
+	end := b.End.SimAfter
+	if end.ServedTruncated || len(end.ServedIDs) == 0 {
+		return 0
+	}
+	servedSet := make(map[string]bool, len(end.ServedIDs))
+	for _, id := range end.ServedIDs {
+		servedSet[id] = true
+	}
+	var n int64
+	for _, t := range b.Targets {
+		p, ok := collection.SimProtocolOf(t.Transport)
+		if !ok || (protocol != "" && p != protocol) || t.Interval <= 0 || servedSet[t.ComponentID] {
+			continue
+		}
+		// One more than the window holds: a poll lands on each edge.
+		n += int64(b.Window/t.Interval) + 1
+	}
+	return n
 }
 
 // unhit names each poll target the window should have drawn at least twice
