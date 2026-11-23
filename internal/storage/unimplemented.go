@@ -1075,7 +1075,7 @@ func (UnimplementedGateway) ListSystemEvents(context.Context, string, time.Durat
 	return nil, nil
 }
 
-func (UnimplementedGateway) ListSystemAlarms(context.Context, string, time.Duration, int) ([]Alarm, error) {
+func (UnimplementedGateway) ListSystemAlarms(context.Context, string, AlarmRange, int) ([]Alarm, error) {
 	return nil, nil
 }
 

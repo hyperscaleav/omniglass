@@ -1867,10 +1867,12 @@ func generatedCommands() []*cobra.Command {
 				cmd := func() *cobra.Command {
 					var qIncludeCleared bool
 					var qUnacknowledged bool
+					var qSince string
+					var qUntil string
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a component's alarms",
-						Long:    "What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set, and since/until to keep only the alarms raised during a range (still raised at since or later, raised by until). since after until is a 400. Gated by component:read; an out-of-scope component is a non-disclosing 404.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component alarm list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -1882,6 +1884,12 @@ func generatedCommands() []*cobra.Command {
 							if cmd.Flags().Changed("unacknowledged") {
 								q.Set("unacknowledged", fmt.Sprintf("%v", qUnacknowledged))
 							}
+							if cmd.Flags().Changed("since") {
+								q.Set("since", fmt.Sprintf("%v", qSince))
+							}
+							if cmd.Flags().Changed("until") {
+								q.Set("until", fmt.Sprintf("%v", qUntil))
+							}
 							if enc := q.Encode(); enc != "" {
 								path += "?" + enc
 							}
@@ -1890,6 +1898,8 @@ func generatedCommands() []*cobra.Command {
 					}
 					cmd.Flags().BoolVar(&qIncludeCleared, "include-cleared", false, "Include cleared alarms, so the list is the history rather than what is wrong now")
 					cmd.Flags().BoolVar(&qUnacknowledged, "unacknowledged", false, "Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the alarms that came and went unattended")
+					cmd.Flags().StringVar(&qSince, "since", "", "Only the alarms still raised at or after this RFC 3339 time: active, or cleared at or after it. With include_cleared, a timeline's read of what was raised during a range")
+					cmd.Flags().StringVar(&qUntil, "until", "", "Only the alarms raised at or before this RFC 3339 time; must not be earlier than since")
 					return cmd
 				}()
 				return cmd
@@ -8040,17 +8050,31 @@ func generatedCommands() []*cobra.Command {
 			}
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
+					var qSince string
+					var qUntil string
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a system's members' alarms",
-						Long:    "Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its alarms, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. With since (and optionally until) it is instead every alarm raised during that range, active or cleared, the same cap applying. It is what a system's Activity reads to explain its alarms, one request however many members the system has. since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass system alarm list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/systems/%s/alarms", pathSegment(args[0]))
+							q := url.Values{}
+							if cmd.Flags().Changed("since") {
+								q.Set("since", fmt.Sprintf("%v", qSince))
+							}
+							if cmd.Flags().Changed("until") {
+								q.Set("until", fmt.Sprintf("%v", qUntil))
+							}
+							if enc := q.Encode(); enc != "" {
+								path += "?" + enc
+							}
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
+					cmd.Flags().StringVar(&qSince, "since", "", "Read the alarms raised during since..until instead of the default (active ones, and those cleared in the last 30 days): active, or cleared at or after since, and raised at or before until")
+					cmd.Flags().StringVar(&qUntil, "until", "", "The range's end, with since; defaults to now and must not be earlier than since")
 					return cmd
 				}()
 				return cmd

@@ -718,8 +718,9 @@ type Gateway interface {
 	// newest first, each row naming its owner (#793).
 	ListSystemEvents(ctx context.Context, systemID string, window time.Duration, limit int) ([]Event, error)
 	// ListSystemAlarms is the members' alarms in one read (#940): active ones
-	// whatever their age and those cleared inside window, newest first, capped.
-	ListSystemAlarms(ctx context.Context, systemID string, window time.Duration, limit int) ([]Alarm, error)
+	// whatever their age and those cleared inside the window, or those raised
+	// during an explicit range (#2425), newest first, capped.
+	ListSystemAlarms(ctx context.Context, systemID string, rng AlarmRange, limit int) ([]Alarm, error)
 	// ListFleetAlarms is the active alarms across every component in read, the
 	// Gateway injecting the scope (#2025): worst severity first, then newest,
 	// capped at limit. Unacknowledged narrows it to the queue nobody has worked;

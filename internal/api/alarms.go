@@ -118,9 +118,27 @@ func parseSnoozeDuration(s string) (time.Duration, error) {
 }
 
 type listAlarmsInput struct {
-	Name           string `path:"name" doc:"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)"`
-	IncludeCleared bool   `query:"include_cleared" doc:"Include cleared alarms, so the list is the history rather than what is wrong now"`
-	Unacknowledged bool   `query:"unacknowledged" doc:"Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the alarms that came and went unattended"`
+	Name           string    `path:"name" doc:"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)"`
+	IncludeCleared bool      `query:"include_cleared" doc:"Include cleared alarms, so the list is the history rather than what is wrong now"`
+	Unacknowledged bool      `query:"unacknowledged" doc:"Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the alarms that came and went unattended"`
+	Since          time.Time `query:"since" doc:"Only the alarms still raised at or after this RFC 3339 time: active, or cleared at or after it. With include_cleared, a timeline's read of what was raised during a range" example:"2026-11-23T00:00:00Z"`
+	Until          time.Time `query:"until" doc:"Only the alarms raised at or before this RFC 3339 time; must not be earlier than since" example:"2026-11-23T12:00:00Z"`
+}
+
+// systemAlarmsInput is the system's alarms read, with the optional range a
+// timeline reads it over (#2425).
+type systemAlarmsInput struct {
+	Name  string    `path:"name" doc:"The system's name, or a dotted address (e.g. boi.17c.$sys.av)"`
+	Since time.Time `query:"since" doc:"Read the alarms raised during since..until instead of the default (active ones, and those cleared in the last 30 days): active, or cleared at or after since, and raised at or before until" example:"2026-11-23T00:00:00Z"`
+	Until time.Time `query:"until" doc:"The range's end, with since; defaults to now and must not be earlier than since" example:"2026-11-23T12:00:00Z"`
+}
+
+// alarmRangeErr refuses an inverted range.
+func alarmRangeErr(since, until time.Time) error {
+	if !since.IsZero() && !until.IsZero() && since.After(until) {
+		return huma.Error400BadRequest("since must not be after until")
+	}
+	return nil
 }
 
 type listAlarmsOutput struct {
@@ -236,13 +254,20 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/systems/{name}/alarms",
 		Summary:     "List a system's members' alarms",
-		Description: "Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its alarms, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
-	}, "system", "read"), func(ctx context.Context, in *systemPathInput) (*systemAlarmsOutput, error) {
+		Description: "Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. With since (and optionally until) it is instead every alarm raised during that range, active or cleared, the same cap applying. It is what a system's Activity reads to explain its alarms, one request however many members the system has. since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+	}, "system", "read"), func(ctx context.Context, in *systemAlarmsInput) (*systemAlarmsOutput, error) {
+		if err := alarmRangeErr(in.Since, in.Until); err != nil {
+			return nil, err
+		}
 		sys, err := gw.GetSystem(ctx, in.Name, a.scopeFor(ctx, "system", "read"))
 		if err != nil {
 			return nil, mapSystemErr(err)
 		}
-		alarms, err := gw.ListSystemAlarms(ctx, sys.ID, systemAlarmWindow, systemAlarmLimit)
+		rng := storage.AlarmRange{Window: systemAlarmWindow}
+		if !in.Since.IsZero() {
+			rng = storage.AlarmRange{Since: in.Since, Until: in.Until}
+		}
+		alarms, err := gw.ListSystemAlarms(ctx, sys.ID, rng, systemAlarmLimit)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("read system alarms")
 		}
@@ -261,8 +286,11 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/alarms",
 		Summary:     "List a component's alarms",
-		Description: "What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+		Description: "What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set, and since/until to keep only the alarms raised during a range (still raised at since or later, raised by until). since after until is a 400. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
 	}, "component", "read"), func(ctx context.Context, in *listAlarmsInput) (*listAlarmsOutput, error) {
+		if err := alarmRangeErr(in.Since, in.Until); err != nil {
+			return nil, err
+		}
 		compID, err := requireComponentInScope(ctx, a, gw, in.Name, "read")
 		if err != nil {
 			return nil, err
@@ -270,6 +298,8 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		alarms, err := gw.ListAlarms(ctx, compID, storage.AlarmFilter{
 			IncludeCleared: in.IncludeCleared,
 			Unacknowledged: in.Unacknowledged,
+			Since:          in.Since,
+			Until:          in.Until,
 		})
 		if err != nil {
 			return nil, mapAlarmErr(err)

@@ -7105,6 +7105,10 @@
             "readOnly": true,
             "type": "string"
           },
+          "carried_in": {
+            "description": "The health in force when since opened the range: the last recorded edge before it. Absent without since, or when nothing was recorded before it. A timeline draws the stretch before the first transition from it",
+            "type": "string"
+          },
           "health": {
             "description": "healthy, incomplete, degraded, or outage: the rollup of the slots or systems served beside it. incomplete is a commissioning gap, a slot short because the hardware was never installed rather than because installed hardware is failing, and it ranks between healthy and degraded",
             "type": "string"
@@ -23818,7 +23822,7 @@
     },
     "/components/{name}/alarms": {
       "get": {
-        "description": "What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+        "description": "What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set, and since/until to keep only the alarms raised during a range (still raised at since or later, raised by until). since after until is a 400. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
         "operationId": "list-component-alarms",
         "parameters": [
           {
@@ -23849,6 +23853,34 @@
             "schema": {
               "description": "Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the alarms that came and went unattended",
               "type": "boolean"
+            }
+          },
+          {
+            "description": "Only the alarms still raised at or after this RFC 3339 time: active, or cleared at or after it. With include_cleared, a timeline's read of what was raised during a range",
+            "explode": false,
+            "in": "query",
+            "name": "since",
+            "schema": {
+              "description": "Only the alarms still raised at or after this RFC 3339 time: active, or cleared at or after it. With include_cleared, a timeline's read of what was raised during a range",
+              "examples": [
+                "2026-11-23T00:00:00Z"
+              ],
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only the alarms raised at or before this RFC 3339 time; must not be earlier than since",
+            "explode": false,
+            "in": "query",
+            "name": "until",
+            "schema": {
+              "description": "Only the alarms raised at or before this RFC 3339 time; must not be earlier than since",
+              "examples": [
+                "2026-11-23T12:00:00Z"
+              ],
+              "format": "date-time",
+              "type": "string"
             }
           }
         ],
@@ -33825,7 +33857,7 @@
     },
     "/systems/{name}/alarms": {
       "get": {
-        "description": "Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its alarms, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+        "description": "Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. With since (and optionally until) it is instead every alarm raised during that range, active or cleared, the same cap applying. It is what a system's Activity reads to explain its alarms, one request however many members the system has. since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
         "operationId": "list-system-alarms",
         "parameters": [
           {
@@ -33835,6 +33867,34 @@
             "required": true,
             "schema": {
               "description": "The system's name, or a dotted address (e.g. boi.17c.$sys.av)",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Read the alarms raised during since..until instead of the default (active ones, and those cleared in the last 30 days): active, or cleared at or after since, and raised at or before until",
+            "explode": false,
+            "in": "query",
+            "name": "since",
+            "schema": {
+              "description": "Read the alarms raised during since..until instead of the default (active ones, and those cleared in the last 30 days): active, or cleared at or after since, and raised at or before until",
+              "examples": [
+                "2026-11-23T00:00:00Z"
+              ],
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The range's end, with since; defaults to now and must not be earlier than since",
+            "explode": false,
+            "in": "query",
+            "name": "until",
+            "schema": {
+              "description": "The range's end, with since; defaults to now and must not be earlier than since",
+              "examples": [
+                "2026-11-23T12:00:00Z"
+              ],
+              "format": "date-time",
               "type": "string"
             }
           }

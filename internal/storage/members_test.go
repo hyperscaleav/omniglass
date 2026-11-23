@@ -456,7 +456,7 @@ func TestListSystemAlarmsIsTheMembersAlarmsWindowed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get system: %v", err)
 	}
-	got, err := f.gw.ListSystemAlarms(ctx, sys.ID, 200*time.Millisecond, 50)
+	got, err := f.gw.ListSystemAlarms(ctx, sys.ID, storage.AlarmRange{Window: 200 * time.Millisecond}, 50)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -467,7 +467,7 @@ func TestListSystemAlarmsIsTheMembersAlarmsWindowed(t *testing.T) {
 	if len(got) != 2 || got[0].ID != active.ID || got[1].ID != recent.ID {
 		t.Fatalf("system alarms = %v, want [active %s, recently cleared %s] (newest first; the older clear and the non-member out)", ids, active.ID, recent.ID)
 	}
-	if capped, err := f.gw.ListSystemAlarms(ctx, sys.ID, 0, 1); err != nil || len(capped) != 1 || capped[0].ID != active.ID {
+	if capped, err := f.gw.ListSystemAlarms(ctx, sys.ID, storage.AlarmRange{}, 1); err != nil || len(capped) != 1 || capped[0].ID != active.ID {
 		t.Fatalf("capped at 1 = %+v (%v), want the newest alone", capped, err)
 	}
 }

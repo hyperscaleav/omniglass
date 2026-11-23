@@ -136,6 +136,7 @@ type fleetHealthOutput struct {
 		Slots       []healthSlotBody       `json:"slots" doc:"The contributing slots; empty for a location"`
 		Systems     []healthSystemBody     `json:"systems" doc:"The systems beneath a location with their health; empty for a system"`
 		Transitions []healthTransitionBody `json:"transitions" doc:"The recorded edges over the window, oldest first: one entry per change, never a sample"`
+		CarriedIn   string                 `json:"carried_in,omitempty" doc:"The health in force when since opened the range: the last recorded edge before it. Absent without since, or when nothing was recorded before it. A timeline draws the stretch before the first transition from it"`
 	}
 }
 
@@ -144,6 +145,7 @@ func toHealthOutput(rep *storage.HealthReport) *fleetHealthOutput {
 	out.Body.OwnerKind = rep.OwnerKind
 	out.Body.Owner = rep.OwnerID
 	out.Body.Health = rep.Verdict
+	out.Body.CarriedIn = rep.CarriedIn
 	out.Body.Slots = make([]healthSlotBody, 0, len(rep.Slots))
 	for i := range rep.Slots {
 		out.Body.Slots = append(out.Body.Slots, toHealthSlotBody(&rep.Slots[i]))

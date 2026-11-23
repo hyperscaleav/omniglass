@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -93,6 +94,11 @@ type HealthReport struct {
 	Slots       []HealthSlot   // system reports: the slots that contributed
 	Systems     []HealthSystem // location reports: the systems beneath it
 	Transitions []HealthTransition
+	// CarriedIn is the verdict in force when the range opened (#2425): the
+	// last recorded edge before an explicit Since, empty when the range has no
+	// Since or nothing was recorded before it. A timeline draws the stretch
+	// before the first edge in range from it.
+	CarriedIn string
 }
 
 // HealthSlot is one contributing slot, with the causing chain when it is
@@ -1154,6 +1160,9 @@ func (p *PG) SystemHealth(ctx context.Context, systemName string, rng HealthRang
 	if rep.Transitions, err = healthTransitions(ctx, p.pool, "system", sys.ID, rng); err != nil {
 		return nil, err
 	}
+	if rep.CarriedIn, err = healthCarriedIn(ctx, p.pool, "system", sys.ID, rng); err != nil {
+		return nil, err
+	}
 	return rep, nil
 }
 
@@ -1183,6 +1192,9 @@ func (p *PG) LocationHealth(ctx context.Context, locationName string, rng Health
 	if rep.Transitions, err = healthTransitions(ctx, p.pool, "location", loc.ID, rng); err != nil {
 		return nil, err
 	}
+	if rep.CarriedIn, err = healthCarriedIn(ctx, p.pool, "location", loc.ID, rng); err != nil {
+		return nil, err
+	}
 	return rep, nil
 }
 
@@ -1201,6 +1213,9 @@ func (p *PG) ComponentHealthReport(ctx context.Context, componentName string, rn
 		return nil, err
 	}
 	if rep.Transitions, err = healthTransitions(ctx, p.pool, "component", c.ID, rng); err != nil {
+		return nil, err
+	}
+	if rep.CarriedIn, err = healthCarriedIn(ctx, p.pool, "component", c.ID, rng); err != nil {
 		return nil, err
 	}
 	return rep, nil
@@ -1340,6 +1355,32 @@ func healthTransitions(ctx context.Context, q txQuerier, ownerKind, ownerID stri
 		out = append(out, t)
 	}
 	return out, rows.Err()
+}
+
+// healthCarriedIn is the verdict in force at rng.Since (#2425): the newest
+// recorded edge strictly before it, or "" when the range has no explicit
+// Since or nothing was recorded before it. One indexed row, however long ago.
+func healthCarriedIn(ctx context.Context, q txQuerier, ownerKind, ownerID string, rng HealthRange) (string, error) {
+	if rng.Since.IsZero() {
+		return "", nil
+	}
+	col, err := ownerColumn(ownerKind)
+	if err != nil {
+		return "", err
+	}
+	sql := fmt.Sprintf(`select value #>> '{}' from property
+		where %s = %s and property_type_id = (select id from property_type_in_effect() property_type where name = $2) and instance = ''
+		  and provenance = 'calculated' and ts < $3
+		order by ts desc, id desc limit 1`, col, ownerArcExprN(ownerKind, 1))
+	var v string
+	err = q.QueryRow(ctx, sql, ownerID, healthKey, rng.Since).Scan(&v)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("storage: health carried in %s/%s: %w", ownerKind, ownerID, err)
+	}
+	return v, nil
 }
 
 // refSet is the small dedupe-and-order helper the recompute leans on: the
