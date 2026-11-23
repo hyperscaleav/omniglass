@@ -4,9 +4,8 @@ import { keepPreviousData, useQuery } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import Button from "../components/Button";
 import SeverityBadge from "../components/SeverityBadge";
-import AcknowledgeButton from "../components/AcknowledgeButton";
-import { SnoozeControl, SnoozedBadge } from "../components/SnoozeButton";
-import TroubleshootButton from "../components/TroubleshootButton";
+import AlarmActions from "../components/AlarmActions";
+import { SnoozedBadge } from "../components/SnoozeButton";
 import AlarmTimeline from "../components/AlarmTimeline";
 import KVStacked from "../components/KVStacked";
 import { FLEET_ALARMS_PAGE, fleetAlarms, fleetAlarmsKey, type Alarm } from "../lib/alarms";
@@ -35,6 +34,8 @@ import type { Chip } from "../lib/predicate";
 // acknowledge or snooze refreshes it at once (FLEET_ALARMS_PREFIX).
 
 const ACTIONS_SURFACE = "alarm-queue";
+// The row and its drawer offer the same actions: a drawer never offers less than the page.
+const ROW_ACTIONS = { ack: true, snooze: true, troubleshoot: true };
 
 export default function Alarms() {
   const me = useMe();
@@ -95,9 +96,7 @@ export default function Alarms() {
       key: "actions", label: "", width: "250px", cell: (a) => (
         // The row opens its drawer on click; the actions are their own targets.
         <span class="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()} data-testid="alarm-actions">
-          <AcknowledgeButton component={a.component} alarm={a} />
-          <SnoozeControl component={a.component} alarm={a} surface={ACTIONS_SURFACE} allowed={canSnooze()} />
-          <TroubleshootButton alarm={a} />
+          <AlarmActions componentId={a.component_id} alarm={a} surface={ACTIONS_SURFACE} show={ROW_ACTIONS} allow={{ snooze: canSnooze() }} />
         </span>
       ),
     },
@@ -106,7 +105,7 @@ export default function Alarms() {
   const shownColumns = () => (canAck() || canSnooze() || can(me.data, "assistant", "use") ? columns : columns.filter((c) => c.key !== "actions"));
 
   return (
-    <div class="h-[calc(100dvh-9rem)] min-h-96" data-testid="alarm-queue">
+    <div class="h-full min-h-96" data-testid="alarm-queue">
       <FlatList<Alarm>
         config={{
           entity: { name: "alarm", plural: "alarms" },
@@ -133,7 +132,8 @@ export default function Alarms() {
                   <KVStacked label="Location" value={<span class="font-data text-xs">{a.location_path || "unplaced"}</span>} />
                   <KVStacked label="Systems" value={<span class="font-data text-xs">{(a.systems ?? []).join(", ") || "none"}</span>} />
                 </div>
-                <AlarmTimeline component={a.component} alarmId={a.id} label={a.message} />
+                <div class="flex"><AlarmActions componentId={a.component_id} alarm={a} surface={`${ACTIONS_SURFACE}:drawer`} show={ROW_ACTIONS} allow={{ snooze: canSnooze() }} /></div>
+                <AlarmTimeline component={a.component_id} alarmId={a.id} label={a.message} />
               </div>
             ),
           }),

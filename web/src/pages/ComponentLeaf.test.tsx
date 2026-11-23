@@ -577,6 +577,23 @@ describe("acknowledging from Why (#872)", () => {
     await waitFor(() => expect(acked).toEqual([`${uuidFor("cf-c-bar")}:al-1`]));
   });
 
+  // #2115: Acknowledge, Snooze and the timeline toggle are one non-wrapping
+  // group on one center line, not three flex items on a baseline row.
+  it("renders Acknowledge, Snooze and the timeline toggle in one center-aligned group", () => {
+    const withSnooze: Me = { ...ackOnly, permissions: [...ackOnly.permissions, "alarm:snooze"] };
+    mount(undefined, undefined, bar, withSnooze);
+    const groups = screen.getByTestId("leaf-alarms").querySelectorAll("[data-alarm-actions]");
+    expect(groups).toHaveLength(1);
+    const group = groups[0] as HTMLElement;
+    expect(group.className).toContain("items-center");
+    expect(group.className).toContain("flex-nowrap");
+    expect(within(group).getByRole("button", { name: "Acknowledge" })).toBeTruthy();
+    expect(within(group).getByRole("button", { name: /^Snooze/ })).toBeTruthy();
+    expect(within(group).getByRole("button", { name: /^Timeline of/ })).toBeTruthy();
+    // Nothing of the three sits outside the group on the row.
+    expect(screen.getByTestId("leaf-alarms").querySelectorAll("button.btn-xs")).toHaveLength(group.querySelectorAll("button.btn-xs").length);
+  });
+
   it("offers nothing to a caller without the acknowledge permission", () => {
     const readOnly: Me = { ...ackOnly, permissions: ["component:read", "system:read", "location:read"] };
     mount(undefined, undefined, bar, readOnly);
