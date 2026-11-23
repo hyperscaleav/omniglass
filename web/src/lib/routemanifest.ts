@@ -7,7 +7,7 @@
 // loads it in node, where a component import would not resolve.
 //
 // route-manifest-guard.test.ts pins the construction: every page key resolves,
-// the stub entries equal the nav's own stub lists, every smoke address is
+// no entry is a stub, every smoke address is
 // concrete, paths are unique.
 
 export type RouteEntry = {
@@ -76,13 +76,6 @@ export const ROUTE_MANIFEST: RouteEntry[] = [
   { path: "/alarms", shell: "protected", page: "Alarms", smoke: "/alarms" },
   { path: "/audit", shell: "protected", page: "Audit", smoke: "/audit" },
   { path: "/settings", shell: "protected", page: "Settings", smoke: "/settings" },
-  // Stubbed sections outside the catalog (nav.ts's STUBS minus the catalog's
-  // routed soon slots); the guard test pins this list to nav.ts, so a stub
-  // added there without a row here fails the suite.
-  { path: "/dashboards", shell: "protected", page: "SectionStub", smoke: "/dashboards" },
-    { path: "/learn", shell: "protected", page: "SectionStub", smoke: "/learn" },
-  { path: "/config", shell: "protected", page: "SectionStub", smoke: "/config" },
-  { path: "/log-types", shell: "protected", page: "SectionStub", smoke: "/log-types" },
   // The not-found face is a route like any other; any unroutable address smokes it.
   { path: "*", shell: "protected", page: "NotFound", smoke: "/definitely-not-a-route" },
 
@@ -111,8 +104,7 @@ export const ROUTE_MANIFEST: RouteEntry[] = [
   // The template catalog (#1329): one page across the four kinds, which the
   // Components, Systems and Locations groups' Templates slots open filtered.
   { path: "/templates", shell: "catalog", page: "Templates", smoke: "/templates" },
-  // The notification types (#618), the commands' outbound peer; it was the
-  // catalog's last routed soon slot.
+  // The notification types (#618), the commands' outbound peer.
   { path: "/notifications", shell: "catalog", page: "Notifications", smoke: "/notifications" },
   // Beside them (#1346): the action rules that say when a message is sent, and
   // the targets it goes to (admin-only, notification_target:*).

@@ -511,7 +511,7 @@ describe("PlatformHealth with a simulator", () => {
     expect(rows[2].className).toBe("");
   });
 
-  it("links each device to its drawer on the Simulation page and names the figures not wired yet", () => {
+  it("links each device to its drawer on the Simulation page and names the figures not reported", () => {
     mount(full, { fleet: connected, body: simBody([measured]) });
     const device = screen.getByTestId("platform-sim-device");
     expect(within(device).getByRole("link", { name: "lobby-display" })).toHaveAttribute("href", `/web/simulation?c=${uuidFor("display")}`);

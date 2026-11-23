@@ -46,7 +46,22 @@ type Doc struct {
 	// ComponentDependencies are the fleet's dependency edges (#1648): a
 	// component fed from a PDU's outlet, or hosted by another component.
 	ComponentDependencies []ComponentDependency `yaml:"component_dependencies"`
-	Alarms                []Alarm               `yaml:"alarms"`
+	// Alarms are alarms the seed raises by hand. The example fleet declares
+	// none (#2434): every alarm it shows is raised by a rule from a cause in
+	// Faults. Only the degraded scenarios fill this, from AlarmTemplates.
+	Alarms []Alarm `yaml:"alarms"`
+	// AlarmTemplates are the conditions the degraded scenarios hand-raise
+	// across the fleet (Degrade); the example fleet raises none of them.
+	AlarmTemplates []Alarm `yaml:"alarm_templates"`
+	// Faults are what is really wrong in the example fleet (#2434): a cause
+	// the engine judges, so every alarm it raises is true.
+	Faults []Fault `yaml:"faults"`
+	// EventRules are the fleet's own event rules, beside the official ones
+	// the boot seed ships: what judges a Fault no official rule reads.
+	EventRules []EventRule `yaml:"event_rules"`
+	// Subscriptions are a lab's people's own alarm subscriptions, seeded with
+	// the simulated fleet only, so its faults reach their inboxes.
+	Subscriptions []Subscription `yaml:"subscriptions"`
 	// CalcRules are operator calc rules (#2430): one is enough to populate the
 	// Calc rules page and the metrics list's Written by column in a lab.
 	CalcRules      []CalcRuleFixture `yaml:"calc_rules"`
@@ -796,13 +811,26 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 		return err
 	}
 
-	// Alarms: raised last of the fleet writes, since the component must exist and
-	// be staffed for the alarm to reach anything above it. RaiseAlarm recomputes
-	// health in the same transaction, so the verdicts the console reads are moved
-	// by this the moment it lands, exactly as they would be by a real fault.
-	// The fixture references the component BY KEY, resolved to its uuid here:
-	// most components are platform-named, so the minted name is not the fixture's
-	// to know, and a bare name could be ambiguous across rooms anyway.
+	// Faults (#2434): the fleet's own event rules, then, with no simulator to
+	// hold a fault, the reading each fault began with, landed through the
+	// ingest so the rules judge it. Last of the fleet writes, since the
+	// component must exist and be staffed for its alarm to reach anything above
+	// it. Beside the simulator the fault is an impairment instead, held from
+	// when the device is wired (seedSimFleet).
+	if err := seedEventRules(ctx, gw, actorID, doc); err != nil {
+		return err
+	}
+	if !opts.SimFleet {
+		if err := seedFaultReadings(ctx, gw, doc, compIDs); err != nil {
+			return err
+		}
+	}
+	// Hand-raised alarms: the degraded scenarios' alarm storm alone (Degrade);
+	// the example fleet raises none. RaiseAlarm recomputes health in the same
+	// transaction. The fixture references the component BY KEY, resolved to
+	// its uuid here: most components are platform-named, so the minted name is
+	// not the fixture's to know, and a bare name could be ambiguous across
+	// rooms anyway.
 	for _, a := range doc.Alarms {
 		compID, ok := compIDs[a.Component]
 		if !ok {
@@ -902,7 +930,17 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 			only[id] = true
 		}
 	}
-	if err := seedSimFleet(ctx, gw, actorID, opts.SimPortOffset, only); err != nil {
+	// The people's own subscriptions, before any fault's alarm raises, so the
+	// first one reaches their inboxes. With the simulated fleet only: a
+	// fleet that holds still for the docs' screenshots tells no one.
+	if err := seedSubscriptions(ctx, gw, actorID, base); err != nil {
+		return err
+	}
+	faults, err := faultImpairments(base, compIDs)
+	if err != nil {
+		return err
+	}
+	if err := seedSimFleet(ctx, gw, actorID, opts.SimPortOffset, only, faults); err != nil {
 		return err
 	}
 	if err := seedSimEndpoints(ctx, gw, actorID, base, locIDs, compIDs, opts.SimPortOffset); err != nil {

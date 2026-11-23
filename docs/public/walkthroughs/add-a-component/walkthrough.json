@@ -1,0 +1,110 @@
+{
+  "id": "add-a-component",
+  "title": "Add a component",
+  "description": "Add a display to a system from the Simulation page, with a simulated device as its address, pick its credential, test it, and land on its collected values.",
+  "steps": [
+    {
+      "n": 1,
+      "kind": "goto",
+      "caption": "The lab's simulated devices. Adding one to monitor starts here, or from Explore's New menu, or a system's Components.",
+      "still": "step-01.png"
+    },
+    {
+      "n": 2,
+      "kind": "click",
+      "caption": "One flow, from the product to an endpoint that has answered. Nothing is created until the test.",
+      "still": "step-02.png"
+    },
+    {
+      "n": 3,
+      "kind": "type",
+      "caption": "Choose what it is. Products are found by name, type or vendor.",
+      "still": "step-03.png"
+    },
+    {
+      "n": 4,
+      "kind": "click",
+      "caption": "A Boreal Edge 55, a display. The platform names it from its type.",
+      "still": "step-04.png"
+    },
+    {
+      "n": 5,
+      "kind": "click",
+      "caption": "Next, where it sits.",
+      "still": "step-05.png"
+    },
+    {
+      "n": 6,
+      "kind": "click",
+      "caption": "The system it serves.",
+      "still": "step-06.png"
+    },
+    {
+      "n": 7,
+      "kind": "click",
+      "caption": "The Bay 1 signage system.",
+      "still": "step-07.png"
+    },
+    {
+      "n": 8,
+      "kind": "select",
+      "caption": "It fills the system's panel slot. Only the slots a display may fill are offered, and its location comes from the system.",
+      "still": "step-08.png"
+    },
+    {
+      "n": 9,
+      "kind": "click",
+      "caption": "Next, how the outpost reaches it.",
+      "still": "step-09.png"
+    },
+    {
+      "n": 10,
+      "kind": "wait",
+      "caption": "The product's own driver is chosen, and a new simulated display fills in the outpost, its address and the driver's inputs.",
+      "still": "step-10.png"
+    },
+    {
+      "n": 11,
+      "kind": "click",
+      "caption": "Next, its credential.",
+      "still": "step-11.png"
+    },
+    {
+      "n": 12,
+      "kind": "wait",
+      "caption": "The SNMP community is picked from the secrets of that kind, never typed. The simulator's is already chosen.",
+      "still": "step-12.png"
+    },
+    {
+      "n": 13,
+      "kind": "click",
+      "caption": "Create the component and its endpoint, and test them.",
+      "still": "step-13.png"
+    },
+    {
+      "n": 14,
+      "kind": "wait",
+      "caption": "The outpost ran the driver's poll and shows what it read. A failure would name its cause and offer the step to fix.",
+      "still": "step-14.png"
+    },
+    {
+      "n": 15,
+      "kind": "click",
+      "caption": "Done. The new display opens on its Overview.",
+      "still": "step-15.png"
+    },
+    {
+      "n": 16,
+      "kind": "wait",
+      "caption": "Its first values are already collected, with no detour to another page.",
+      "still": "step-16.png"
+    }
+  ],
+  "poster": "step-16.png",
+  "preview": "preview.webp",
+  "budget": {
+    "seconds": 55.2,
+    "bytes": 907777,
+    "previewBytes": 822152
+  }
+}

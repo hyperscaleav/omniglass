@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal, createUniqueId, type JSX } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, createUniqueId, type JSX } from "solid-js";
 import { OP, opsFor, tokenToChip, chipGlyph, valueless, type FilterKey, type Chip, type OpKey } from "../lib/predicate";
 import { Search, X } from "./icons";
 import Button from "./Button";
@@ -38,12 +38,24 @@ export default function FilterBar<T>(props: {
   bare?: boolean;
   clearable?: boolean;
   trailing?: JSX.Element;
+  // Live filtering (#2462): bare text typed with no key prefix narrows the rows
+  // as it is typed, as a draft chip handed to onDraft (null when there is none).
+  // Enter still commits it as a chip. Off, the text only counts on Enter.
+  onDraft?: (draft: Chip | null) => void;
 }) {
   const [text, setText] = createSignal("");
   const [open, setOpen] = createSignal(false);
   const [sel, setSel] = createSignal(-1);
   const listId = createUniqueId();
   let inputRef: HTMLInputElement | undefined;
+
+  // The draft follows the text: bare words only, since "key:" is still being
+  // staged into a chip and a half-typed key would match nothing.
+  createEffect(() => {
+    if (!props.onDraft) return;
+    const t = text();
+    props.onDraft(t.trim() && !t.includes(":") ? tokenToChip(t, props.keys, fallbackKey()) : null);
+  });
 
   const fallbackKey = () => (props.keys.find((k) => k.hint === "substring") ?? props.keys[0])?.key ?? "";
   const keyOf = (k: string) => props.keys.find((s) => s.key === k);

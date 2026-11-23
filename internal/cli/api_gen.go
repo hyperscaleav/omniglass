@@ -7654,6 +7654,33 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var qProduct string
+				cmd := &cobra.Command{
+					Use:     "plan-component <name>",
+					Short:   "Plan a simulated component",
+					Long:    "Previews what adding a simulated component of a product would create (see add-outpost-simulation-component): the lowest free address in the simulated block (127.60.0.0/16) and the endpoints the collector would reach it through, a driver attach with its inputs (a secret input names the platform secret, never its value) or a reachability probe with its target, planned exactly as the add plans them. Creates nothing and reserves nothing: the address is not held, so an add or another plan in between may take it, and an add made after this plan then lands on the next free address instead. Gated by simulation:read, and needs outpost:read on the outpost. An outpost that does not exist is a 404, one with no simulator connected a 409, a product no profile simulates a 422, and a full block or a profile with no surface the collector can reach a 409.",
+					Example: "  omniglass simulation plan-component <name>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/outposts/%s/simulation/components:plan", pathSegment(args[0]))
+						q := url.Values{}
+						if cmd.Flags().Changed("product") {
+							q.Set("product", fmt.Sprintf("%v", qProduct))
+						}
+						if enc := q.Encode(); enc != "" {
+							path += "?" + enc
+						}
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				cmd.Flags().StringVar(&qProduct, "product", "", "A product a simulator profile simulates")
+				_ = cmd.MarkFlagRequired("product")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "plan-system <standard>",
 					Short:   "Plan a simulated system to a standard",
