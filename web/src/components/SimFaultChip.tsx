@@ -5,7 +5,7 @@ import { Plug, X } from "./icons";
 import { can, useMe } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { pushToast } from "../lib/toast";
-import { applyFaultSteps, activeFaults, age, restoreSteps, type HeldFault } from "../lib/simfaults";
+import { applyFaultSteps, activeFaults, age, restoreSteps, skippedRestores, type HeldFault } from "../lib/simfaults";
 import { componentSimKey, getComponentSim, componentSimPollMs, toImpairment, type SimComponent } from "../lib/simulation";
 
 // SimFaultChip: what an operator has broken on a simulated device, as one chip
@@ -38,9 +38,11 @@ export default function SimFaultChip(props: {
     try {
       // The surface says which route puts each held path back; a row has none
       // of it, so the clear reads it (the drawer and page already hold it).
-      const surfaces = (await qc.fetchQuery({ queryKey: componentSimKey(props.componentId), queryFn: () => getComponentSim(props.componentId), staleTime: 30_000 })).surface ?? [];
+      const surfaces = (await qc.fetchQuery({ queryKey: componentSimKey(props.componentId), queryFn: () => getComponentSim(props.componentId), staleTime: 0 })).surface ?? [];
       const held: HeldFault[] = (props.sim.faults ?? []).map((f) => ({ path: f.path, value: f.value, default: f.default, since: f.since }));
       await applyFaultSteps(qc, props.componentId, restoreSteps(surfaces, { impairment: toImpairment(props.sim.impairment), faults: held }));
+      const left = skippedRestores(surfaces, held);
+      if (left.length) pushToast({ tone: "warning", title: "Some values could not be set back", body: () => <>No route accepts the default for {left.join(", ")}.</> });
     } catch (e) {
       pushToast({ tone: "error", title: `Could not clear the fault on ${props.name ?? "the device"}`, body: () => <>{describeError(e)}</> });
     } finally {

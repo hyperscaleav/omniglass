@@ -139,6 +139,13 @@ export function restoreSteps(surfaces: readonly SimSurface[], state: FaultState)
   return steps;
 }
 
+// skippedRestores names the held paths restoreSteps leaves alone: no route
+// accepts the default, or the surface no longer has the route. The clear says so.
+export function skippedRestores(surfaces: readonly SimSurface[], faults: readonly HeldFault[]): string[] {
+  const sets = quickSets(surfaces);
+  return faults.filter((f) => !sets.find((x) => x.statePath === f.path)?.values.includes(f.default)).map((f) => f.path);
+}
+
 // runFaultSteps does the steps in order and stops at the first that fails.
 export async function runFaultSteps(componentId: string, steps: readonly FaultStep[]): Promise<void> {
   for (const s of steps) {

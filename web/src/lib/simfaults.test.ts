@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { HEALTHY, type SimComponent, type SimSurface } from "./simulation";
-import { activeFaults, faultActions, stateFields, faultLabel, restoreSteps, type FaultAction } from "./simfaults";
+import { activeFaults, faultActions, skippedRestores, stateFields, faultLabel, restoreSteps, type FaultAction } from "./simfaults";
 
 // A display's profile as the API lists it: an http surface with the power and
 // input routes (each declaring its quick sets), an snmp surface that has none.
@@ -125,5 +125,17 @@ describe("stateFields", () => {
     expect(f.map((x) => [x.name, x.current, x.default])).toEqual([["device.power", "off", "on"], ["display.input", "hdmi1", "hdmi1"]]);
     expect(f[0].values).toEqual(["on", "off", "standby"]);
     expect(f[0].stepFor("standby")).toEqual({ kind: "fire", surface: "http", method: "POST", path: "/api/display/power", body: '{"power":"standby"}' });
+  });
+});
+
+describe("skippedRestores", () => {
+  it("names the held paths a Restore cannot put back, so the clear can say so", () => {
+    const held = [
+      { path: "status.device.power", value: "off", default: "unknown", since: "2026-11-23T12:00:00Z" },
+      { path: "status.display.input", value: "hdmi2", default: "hdmi1", since: "2026-11-23T12:00:00Z" },
+      { path: "status.gone", value: "x", default: "y", since: "2026-11-23T12:00:00Z" },
+    ];
+    expect(skippedRestores(display, held)).toEqual(["status.device.power", "status.gone"]);
+    expect(skippedRestores(display, [])).toEqual([]);
   });
 });
