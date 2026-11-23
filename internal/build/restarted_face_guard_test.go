@@ -29,16 +29,6 @@ func TestNoTestRestartsAFaceAtALiteralAddress(t *testing.T) {
 	// The restarts not yet moved to a claim, each with its issue. A stale
 	// entry fails, so the list never outlives the code it excuses.
 	allowed := map[string]string{}
-	for _, fn := range []string{
-		"listener_hold_test.go:TestPanelListenerHearsPushesAndReArms",
-		"session_hold_test.go:TestPanelHeldSessionSurvivesItsListenerDying",
-		"ssh_session_hold_test.go:TestPanelSSHHostKeyChangeIsRejected",
-		"ssh_session_hold_test.go:TestPanelSSHSessionOperatesRecoversAndReadsDown",
-		"telnet_session_hold_test.go:TestPanelTelnetSessionLogsInOperatesAndRecovers",
-		"tls_face_test.go:TestTLSFaceRestartsAndCountsHandshakes",
-	} {
-		allowed["internal/sim/"+fn] = "the simulator's own session tests, moved to a claim by #1881"
-	}
 
 	root := filepath.Join("..", "..")
 	fset := token.NewFileSet()
