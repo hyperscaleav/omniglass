@@ -10,6 +10,6 @@ location names it could not read. The create, its batch and the template plan no
 parent through `resolveCreateParent`, which asks the read question only to choose the refusal: a
 parent outside `location:read`, or nowhere, is the same `404 parent location not found`, and a
 readable parent outside the create scope stays 403
-([ADR-1343](/architecture/decisions/#adr-1343-a-create-resolves-its-parent-under-read-before-create)).
+([ADR-1343](/architecture/decisions/#adr-1343-a-location-create-resolves-its-parent-under-read-before-create)).
 Tests: the three cases in `TestLocationScopeCRUD` (`internal/storage`) and the byte-identical
 bodies in `TestALocationCreateParentOutsideReadIsNotDisclosed` (`internal/api`).
