@@ -267,7 +267,7 @@ describe("states with no number", () => {
     expect(WARMING_UP).not.toMatch(/\d/);
     expect(RESTARTED).not.toMatch(/\d/);
   });
-  it("reads an unreported queue depth or busy-worker figure as not wired yet", () => {
+  it("reads an unreported queue depth or busy-worker figure as not reported", () => {
     expect(wiredText(null)).toBe(NOT_WIRED);
     expect(wiredText(undefined)).toBe(NOT_WIRED);
     expect(wiredText(0)).toBe("0");

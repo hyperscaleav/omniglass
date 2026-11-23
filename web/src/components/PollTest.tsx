@@ -1,4 +1,4 @@
-import { For, Show, createMemo } from "solid-js";
+import { For, Show, createEffect, createMemo } from "solid-js";
 import { createStore } from "solid-js/store";
 import { useQuery } from "@tanstack/solid-query";
 import Button from "./Button";
@@ -25,7 +25,13 @@ type Result =
   | { state: "ok"; run: PollRun }
   | { state: PollFailure["kind"]; failure: PollFailure };
 
-export default function PollTest(props: { endpoint: string }) {
+// A host that walks the operator through a test (the add-a-component flow,
+// #2460) asks for autoRun, which runs every poll once as soon as the endpoint
+// and its driver are read, and onResult, which hears each poll settle so it
+// can say which step a failure is fixed on.
+export type PollOutcome = { ok: true; run: PollRun } | { ok: false; failure: PollFailure };
+
+export default function PollTest(props: { endpoint: string; autoRun?: boolean; onResult?: (poll: string, outcome: PollOutcome) => void }) {
   const me = useMe();
   const permitted = () => testPollRefusal(me.data) === null;
   const endpoints = useQuery(() => ({ queryKey: ENDPOINTS_KEY, queryFn: () => listEndpoints(), enabled: permitted() }));
@@ -44,10 +50,13 @@ export default function PollTest(props: { endpoint: string }) {
     }
     setResults(poll, { state: "pending" });
     try {
-      setResults(poll, { state: "ok", run: await runEndpointPoll(props.endpoint, poll) });
+      const run = await runEndpointPoll(props.endpoint, poll);
+      setResults(poll, { state: "ok", run });
+      props.onResult?.(poll, { ok: true, run });
     } catch (e) {
       const failure = classifyPollFailure(e);
       setResults(poll, { state: failure.kind, failure });
+      props.onResult?.(poll, { ok: false, failure });
     }
   }
 
@@ -56,6 +65,13 @@ export default function PollTest(props: { endpoint: string }) {
   async function testAll() {
     for (const p of polls()) await test(p);
   }
+
+  let ran = false;
+  createEffect(() => {
+    if (!props.autoRun || ran || !ep() || polls().length === 0) return;
+    ran = true;
+    void testAll();
+  });
 
   return (
     <Show when={permitted() && polls().length > 0}>

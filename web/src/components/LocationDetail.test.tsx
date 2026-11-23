@@ -18,6 +18,7 @@ import { TAGS_KEY } from "../lib/tags";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 import { seedSeverityLevels } from "../lib/testseverity";
+import { answerConfirms } from "../lib/confirm.testkit";
 
 // LocationDetail (#2423): the location page and the location blade render ONE
 // body, so a blade shows every section, tab and action its page shows: the
@@ -195,8 +196,20 @@ describe("the blade's tab, filter and edit are its own", () => {
     expect(window.location.search).toBe("?node=x");
   });
 
+  it("closing the blade with unsaved drafts asks first", async () => {
+    const asked = answerConfirms(false);
+    const r = mountBlade(ROOM);
+    const blade = await screen.findByRole("dialog");
+    fireEvent.click(await within(blade).findByRole("tab", { name: "Configure" }));
+    fireEvent.click(await within(blade).findByRole("button", { name: "Edit" }));
+    fireEvent.input(await within(blade).findByDisplayValue("boardroom-a"), { target: { value: "boardroom-z" } });
+    fireEvent.click(within(blade).getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(asked).toHaveBeenCalled());
+    expect(r.controller().stack().length).toBe(1);
+  });
+
   it("edits the parent from the blade's Configure, and deletes there", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    answerConfirms(true);
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(null, { status: 204 }));
     const r = mountBlade(ROOM);
     const blade = await screen.findByRole("dialog");

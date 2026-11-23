@@ -41,10 +41,16 @@ func dspFloor(ctx context.Context, c *http.Client, base string) ([]string, error
 			Source string `json:"source"`
 		} `json:"samples"`
 	}
+	// A DSP impaired on purpose (the dev fleet's seeded outage, #2434) is
+	// dark by design and owes no value.
+	impaired, err := impairedComponents(ctx, c, base)
+	if err != nil {
+		return nil, err
+	}
 	var missing []string
 	placed := 0
 	for _, comp := range comps.Components {
-		if comp.Product != dspProduct {
+		if comp.Product != dspProduct || impaired[comp.ID] {
 			continue
 		}
 		placed++

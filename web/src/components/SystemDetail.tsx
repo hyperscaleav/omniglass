@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal } from "solid-js";
+import { For, Show, createMemo, createSignal, onCleanup } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/solid-query";
 import HealthBadge from "./HealthBadge";
@@ -7,6 +7,7 @@ import Eyebrow from "./Eyebrow";
 import DetailGate from "./DetailGate";
 import LocationCard from "./LocationCard";
 import MemberRows from "./MemberRows";
+import AddComponentLink from "./AddComponentLink";
 import OutlineWorkspace from "./OutlineWorkspace";
 import { FLEET_VIEW_KEY, fleetView, childrenIndex } from "../lib/fleet";
 import { systemHealth, systemHealthKey, healthOf } from "../lib/health";
@@ -40,7 +41,9 @@ import { spans as timelineSpans } from "../lib/timeline";
 import { systemEvents, systemEventsKey, systemLogs, systemLogsKey, type SystemLogs } from "../lib/system_activity";
 import type { LogFilter } from "../lib/logs";
 import LogFilters from "./LogFilters";
-import { SERIES_POLL_MS, metricBuckets, metricBucketsKey } from "../lib/series";
+import { SERIES_POLL_MS, metricBuckets, metricBucketsBetween, metricBucketsBetweenKey, metricBucketsKey } from "../lib/series";
+import { DEFAULT_RANGE, rangeHours, rangeStepSeconds, resolveRange, useTimeRange, type TimeRange } from "../lib/time_range";
+import TimeRangePicker from "./TimeRangePicker";
 import { CalcRuleLink } from "./RuleLink";
 import { memberModel, systemsAtLocation, type MemberContext } from "../lib/detail";
 import TimeseriesChart from "./TimeseriesChart";
@@ -50,6 +53,7 @@ import { useBlades } from "../lib/blades";
 import { type DetailHost } from "../lib/tabstate";
 import { useEntityDelete } from "../lib/entity_delete";
 import { deleteSystem } from "../lib/systems";
+import { LOCATIONS_KEY, deleteLocation, listLocations } from "../lib/locations";
 
 import { CLOCK_TICK_MS, createClock } from "../lib/clock";
 
@@ -77,8 +81,6 @@ import { CLOCK_TICK_MS, createClock } from "../lib/clock";
 // The Data table reads a day at five-minute buckets (#1269): 288 of them, the
 // min/max band and the avg line, so a one-sample spike survives and the read
 // is the same size however busy the metric.
-const SERIES_HOURS = 24;
-const SERIES_RESOLUTION_S = 300;
 // HISTORY_TICK_MS is how often the history and the charts take a new now:
 // a thirty-day strip and a day's sparkline move too little in a second to
 // redraw on every tick.
@@ -98,7 +100,6 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
   const qc = useQueryClient();
   const me = useMe();
   // Unsaved Configure drafts (the system's and its sole location's) the tab rail asks about.
-  const leave = createLeaveGuard();
   // Every age on the card reads one ticking clock: a poll that returns the
   // same report changes nothing a query can see, so an age pinned to the data
   // (or to the mount) would stop moving. The history and the charts read a
@@ -158,7 +159,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
   const tabs = createMemo(() => [
     { key: "overview", label: "Overview" },
     { key: "activity", label: "Activity" },
-    ...(can(me.data, "system", "update") ? [{ key: "configure", label: "Configure" }] : []),
+    ...(can(me.data, "system", "update") || can(me.data, "system", "delete") ? [{ key: "configure", label: "Configure" }] : []),
   ]);
   const tabState = createTabState(props.host, tabs, { legacy: { map: "overview", data: "overview", history: "activity", events: "activity", logs: "activity" } });
   const tab = tabState.active;
@@ -179,17 +180,69 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
   }));
   // One series query per declared metric, alive only on Overview, where the
   // Data table draws every sparkline at once (#795 review).
+  // The body's one time range (#2304). On a page it is held in the address,
+  // so a link carries it; in a blade it is the blade's own (#2423), so a
+  // blade never rewrites the page beneath it. A preset slides to now and
+  // reads `hours` back from it; an absolute range reads its own [from, to)
+  // through the views binding and holds still, so it never polls.
+  const { range: asked, setRange } = props.host === "page" ? useTimeRange() : bladeRange();
+  // An absolute range reads through the views read, which needs view:read: a
+  // shared link opened by a caller without it reads the default instead, and
+  // the data section says why rather than drawing empty charts.
+  const canViews = () => can(me.data, "view", "read");
+  const rangeDenied = () => asked().kind === "absolute" && !!me.data && !canViews();
+  const range = (): TimeRange => (rangeDenied() ? DEFAULT_RANGE : asked());
+  const hours = () => rangeHours(range());
+  // A preset's window is fixed by its key, not the clock, so a tick never
+  // changes a query key.
+  const seriesWindowMs = () => {
+    const h = hours();
+    if (h !== undefined) return h * 3600_000;
+    const r = resolveRange(range(), 0);
+    return r.to - r.from;
+  };
+  // An absolute range reaching back past a day steps in whole hours: the
+  // views read answers the hours past the raw samples from the hourly trends
+  // only at a whole-hour step, where a finer one would read them as empty.
+  const seriesStepS = () => {
+    const r = range();
+    return r.kind === "absolute" ? rangeStepSeconds(seriesWindowMs(), r.from < Date.now() - 86400_000 || undefined) : rangeStepSeconds(seriesWindowMs());
+  };
+  const seriesColumn = () => {
+    const r = range();
+    return r.kind === "preset" ? `Last ${r.preset}` : "In range";
+  };
+  // The charts' right edge: now for a preset, the range's end otherwise.
+  const seriesNow = () => (hours() !== undefined ? historyNow() : resolveRange(range(), 0).to);
+  // One series query per declared metric, alive only on Overview, where the
+  // Data table draws every sparkline at once (#795 review).
   const seriesQueries = useQueries(() => ({
-    queries: kpiMetrics().map((m) => ({
+    queries: kpiMetrics().map((m) => {
       // The chart is the series whose latest value sits beside it: a bucket
       // is one instance (#1485), so a sampled row names the instance it shows.
-      queryKey: metricBucketsKey("systems", id(), m.metric_type_name, SERIES_HOURS, SERIES_RESOLUTION_S, m.is_sampled ? m.instance : undefined),
-      queryFn: () => metricBuckets("systems", id(), m.metric_type_name, SERIES_HOURS, SERIES_RESOLUTION_S, m.is_sampled ? m.instance : undefined),
-      enabled: tab() === "overview",
-      // A day's sparkline does not visibly move in five seconds; the latest
-      // value beside it rides the metrics read, which does.
-      refetchInterval: SERIES_POLL_MS,
-    })),
+      const instance = m.is_sampled ? m.instance : undefined;
+      const h = hours();
+      const step = seriesStepS();
+      if (h === undefined) {
+        const { from, to } = resolveRange(range(), 0);
+        return {
+          queryKey: metricBucketsBetweenKey("systems", id(), m.metric_type_name, from, to, step, instance),
+          queryFn: () => metricBucketsBetween("systems", id(), m.metric_type_name, from, to, step, instance),
+          // Not before the caller is known: the views read may be theirs to refuse.
+          enabled: tab() === "overview" && !!me.data,
+          // A range ending in the future still fills; one wholly past holds.
+          refetchInterval: to > Date.now() ? SERIES_POLL_MS : false,
+        };
+      }
+      return {
+        queryKey: metricBucketsKey("systems", id(), m.metric_type_name, h, step, instance),
+        queryFn: () => metricBuckets("systems", id(), m.metric_type_name, h, step, instance),
+        enabled: tab() === "overview",
+        // A day's sparkline does not visibly move in five seconds; the latest
+        // value beside it rides the metrics read, which does.
+        refetchInterval: SERIES_POLL_MS,
+      };
+    }),
   }));
   const metricSeriesData = () => kpiMetrics().map((_, i) => seriesQueries[i]?.data);
   const eventsQ = useQuery(() => ({ queryKey: systemEventsKey(id()), queryFn: () => systemEvents(id()), enabled: tab() === "activity", refetchInterval: LEAF_POLL_MS }));
@@ -283,6 +336,10 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
   // every member, alarm and map marker opens the component's blade on it
   // (ADR-0129's altitude rule), stacking wherever the body is.
   const blades = useBlades();
+  // Unsaved Configure drafts (the system's and its sole location's) the tab
+  // rail asks about; in a blade, closing or popping it asks too.
+  const leave = createLeaveGuard();
+  if (props.host === "blade") onCleanup(blades.guard({ kind: "system", id: props.id }, leave));
   const openComponent = (cid: string) => blades.push({ kind: "component", id: cid });
   const { destructive, err } = useEntityDelete({
     kindLabel: "system",
@@ -292,6 +349,26 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
     remove: (sid) => deleteSystem(sid),
     onDeleted: () => (props.host === "blade" ? blades.close() : navigate("/explore")),
     invalidate: () => Promise.all([qc.invalidateQueries({ queryKey: [...SYSTEMS_KEY] }), qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] })]),
+  });
+  // A sole system's location has no page of its own (its address lands
+  // here), so its section below carries the location's own Delete (#2463).
+  const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
+  const locationRow = () => (locations.data ?? []).find((l) => l.id === locationId());
+  const locationDelete = useEntityDelete({
+    kindLabel: "location",
+    get id() {
+      return locationId() ?? "";
+    },
+    name: () => locationRow()?.name,
+    actions: () => locationRow()?.actions ?? [],
+    remove: (lid) => deleteLocation(lid),
+    onDeleted: () => (props.host === "blade" ? blades.close() : navigate("/explore")),
+    invalidate: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: [...LOCATIONS_KEY] }),
+        qc.invalidateQueries({ queryKey: [...SYSTEMS_KEY] }),
+        qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] }),
+      ]),
   });
   const pending = () => view.isPending || health.isPending || declared.isPending;
 
@@ -332,7 +409,15 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                 <span data-testid="slots-short" class="tabular-nums text-incomplete">{strip()!.filled} of {strip()!.total} slots filled</span>
               </Show>
             </div>
-            <TabRail tabs={tabs()} state={tabState} guard={leave} />
+            <TabRail
+              tabs={tabs()}
+              state={tabState}
+              guard={leave}
+              // The range governs Overview's charts. Activity's reads keep
+              // their own fixed windows (#2304's follow-up), so the control
+              // is not offered where it would be ignored.
+              end={tab() === "overview" ? <TimeRangePicker range={range()} onChange={setRange} allowCustom={canViews()} /> : undefined}
+            />
             <Show when={tab() === "configure"}>
               {/* A sole system's location has no page of its own: it configures
                   here, first, as the page reads (its card sits above the
@@ -343,7 +428,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                 {(pid) => (
                   <section class="border-b border-base-300">
                     <div class="px-4 pt-4"><Eyebrow label="Location" hint="Where this system sits: the location's own name, type, parent, properties and tags. Its edit is its own, beside the system's." /></div>
-                    <ConfigureFace kind="location" id={pid} editValue="location" testid="configure-face-location" guard={leave} host={props.host} />
+                    <ConfigureFace kind="location" id={pid} editValue="location" testid="configure-face-location" guard={leave} host={props.host} destructive={locationDelete.destructive} />
                   </section>
                 )}
               </Show>
@@ -454,6 +539,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                                         <button type="button" class="cursor-pointer font-mono text-base-content/70 hover:underline" onClick={(e) => { e.stopPropagation(); openComponent(r.componentId); }}>{r.component}</button>
                                         <span class="text-base-content/45 tabular-nums">
                                           {fmtTime(r.raisedAt)} → {r.clearedAt ? fmtTime(r.clearedAt) : "ongoing"}
+                                          {r.clearedAt ? ` · lasted ${durationText(Date.parse(r.clearedAt) - Date.parse(r.raisedAt))}` : ""}
                                         </span>
                                       </li>
                                     )}
@@ -480,7 +566,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                         <SeverityBadge name={r.severity} size="xs" />
                         <span>{r.message}</span>
                         <button type="button" class="cursor-pointer font-mono text-base-content/70 hover:underline" onClick={() => openComponent(r.componentId)}>{r.component}</button>
-                        <span class="ml-auto text-base-content/45 tabular-nums">{fmtTime(r.raisedAt)}</span>
+                        <span class="ml-auto text-base-content/45 tabular-nums">{fmtTime(r.raisedAt)}{r.clearedAt ? ` · lasted ${durationText(Date.parse(r.clearedAt) - Date.parse(r.raisedAt))}` : ""}</span>
                       </li>
                     )}
                   </For>
@@ -584,7 +670,10 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                     </section>
                   </Show>
                   <section class="flex flex-col gap-2">
-                    <Eyebrow label="Components" hint="The pieces of this system, each with the slot it fills. A slot gets its own header only where it says something a column cannot: more than one wanted, a shortfall, or nobody staffing it yet." />
+                    <div class="flex items-center justify-between gap-2">
+                      <Eyebrow label="Components" hint="The pieces of this system, each with the slot it fills. A slot gets its own header only where it says something a column cannot: more than one wanted, a shortfall, or nobody staffing it yet." />
+                      <AddComponentLink system={id()} size="xs" intent={members().rows.length + members().groups.length === 0 ? "action" : "quiet"} />
+                    </div>
                     <MemberRows rows={members().rows} groups={members().groups} onOpen={openComponent} />
                   </section>
                   <Show when={mapDecl()}>
@@ -598,13 +687,18 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                   </Show>
         <Show when={kpiMetrics().length > 0}>
           <section data-testid="data-tab" class="flex flex-col gap-3">
-            <Eyebrow label="Data" hint="Every metric the standard declares, stacked: the last 24 hours as a sparkline beside the latest value. Click a row for the full chart. Raw samples, capped; a series still on its contract default has nothing to chart yet." />
+            <Eyebrow label="Data" hint="Every metric the standard declares, stacked: the page's time range as a sparkline beside the latest value. Click a row for the full chart. Raw samples, capped; a series still on its contract default has nothing to chart yet." />
+            <Show when={rangeDenied()}>
+              <p data-testid="range-denied" role="status" class="text-xs text-warning">
+                This link's custom range is read through views, which needs view:read. Showing the last 24 hours instead.
+              </p>
+            </Show>
             <div class="overflow-x-auto rounded-box border border-base-300">
               <table class="table table-sm">
                 <thead>
                   <tr>
                     <th>Metric</th>
-                    <th>Last 24h</th>
+                    <th>{seriesColumn()}</th>
                     <th class="text-right">Latest</th>
                     <th></th>
                   </tr>
@@ -620,7 +714,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                         >
                           <td>{entityLabel({ name: m.metric_type_name, label: m.label })}</td>
                           <td>
-                            <TimeseriesChart spark buckets={metricSeriesData()[i()]?.buckets ?? []} resolutionMs={SERIES_RESOLUTION_S * 1000} now={historyNow()} windowMs={SERIES_HOURS * 3600_000} />
+                            <TimeseriesChart spark buckets={metricSeriesData()[i()]?.buckets ?? []} resolutionMs={seriesStepS() * 1000} now={seriesNow()} windowMs={seriesWindowMs()} />
                           </td>
                           <td class="text-right font-mono tabular-nums">{m.value === null || m.value === undefined ? "" : String(m.value)}</td>
                           <td class="text-right text-[10px] text-base-content/45">
@@ -632,7 +726,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                         <Show when={seriesPick() === m.metric_type_name}>
                           <tr>
                             <td colspan="4" class="bg-base-200/40">
-                              <TimeseriesChart buckets={metricSeriesData()[i()]?.buckets ?? []} resolutionMs={SERIES_RESOLUTION_S * 1000} now={historyNow()} windowMs={SERIES_HOURS * 3600_000} />
+                              <TimeseriesChart buckets={metricSeriesData()[i()]?.buckets ?? []} resolutionMs={seriesStepS() * 1000} now={seriesNow()} windowMs={seriesWindowMs()} />
                             </td>
                           </tr>
                         </Show>
@@ -659,4 +753,11 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
       </div>
     </DetailGate>
   );
+}
+
+// A blade's own time range (#2423): the same shape useTimeRange gives a page,
+// held in a signal, so a range chosen in a blade never touches the address.
+function bladeRange(): { range: () => TimeRange; setRange: (r: TimeRange) => void } {
+  const [range, setRange] = createSignal<TimeRange>(DEFAULT_RANGE);
+  return { range, setRange };
 }

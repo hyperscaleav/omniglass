@@ -445,7 +445,10 @@ is a 409, a surface it does not serve a 422, and no simulator answering a 503.
 and `endpoint:create`, each in the caller's own scope) adds a simulated component: a component of a
 simulated product at the lowest free address in `127.60.0.0/16`, with the endpoint the collector reaches
 it through placed on the outpost; an outpost with no simulator connected is a 409, a product no profile
-simulates a 422. A whole simulated system is built to a standard: `GET /simulation/standards/{standard}:plan`
+simulates a 422. `GET /outposts/{name}/simulation/components:plan?product=<product>` (gated `simulation:read`)
+previews the same add without creating anything: the address and the endpoints (a driver with its inputs, a
+secret input by name, or a probe with its target) the add would make, planned as the add plans them, with
+the same refusals. It holds no address, so an add in between may take the previewed one. A whole simulated system is built to a standard: `GET /simulation/standards/{standard}:plan`
 (gated `simulation:read`) previews each of the standard's slots staffed with a simulated product that fits
 (or left short, with why), and `POST /outposts/{name}/simulation/systems` (gated `simulation:update`, and also
 needing `system:create`, `system:update`, `system:read`, `component:create`, `endpoint:create` and
@@ -1193,6 +1196,13 @@ very rows served beside it, so a report can never disagree with its own evidence
 Every read above answers "what is this row". A **view** answers "what does this screen need", and it
 earns its own tier only when composing the entity reads in the browser would be the wrong shape.
 
+- `GET /search?q=&limit=` (`location:read`, the floor of every fleet reader; the component group also needs
+  `component:read`) is the read behind the command palette (#2444): up to `limit` (default 8, at most 20)
+  locations, systems and components whose name or label holds `q`, best match first, and catalog entries
+  (products, drivers, calc rules, event rules, metrics) each only for a caller holding that catalog's read
+  permission. Each fleet kind is read through its own scope by the Storage Gateway's scoped list walk, with the
+  match and the limit applied in the database, so nothing outside the caller's scope is found. A hit carries
+  its `location_path` (the locations above it) so same-named components are told apart.
 - `GET /views/fleet` (`location:read`) is the read behind Explore: every location flat
   with its `parent` and `health`, every system with its `location` and `health`, and one **dot**
   per component in each system. A dot is `{component, name, health, primary, shared}` and nothing

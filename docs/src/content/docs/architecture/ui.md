@@ -218,13 +218,13 @@ Coded pages with rich interaction, all reading through views:
 Two layers, deliberately decoupled:
 
 1. **Routes are flat and identity-based.** Every entity page is a top-level path (`/systems`,
-   `/components`, `/templates`, `/config`); a URL addresses the *entity*, never its position in the
+   `/components`, `/templates`, `/variables`); a URL addresses the *entity*, never its position in the
    menu, so deep links stay stable however the menu is reorganized. No taxonomy-nested routes, no
    redirects to maintain.
 2. **The sidebar groups those flat routes into clusters for browsing**: Home, Explore (the one
    door into the fleet, #826: its outline lists every location, system and component, #861),
-   Dashboards, Alarms, Outposts, Values (variables, secrets, config, files),
-   Catalog (a single entry opening the catalog shell, next), Learn, Admin (users, roles,
+   Alarms, Outposts, Values (variables, secrets, files),
+   Catalog (a single entry opening the catalog shell, next), Admin (users, roles,
    groups, audit, and the Settings leaf). A cluster is pure presentation, not a destination:
    rearrangeable and user-customizable without touching a route.
 
@@ -291,8 +291,8 @@ them (#1346). Targets is the one Actions entry off the read floor: `notification
 sensitive resource, so only an admin sees it.
 
 **Values is its own top-level group**: values set on fleet entities and resolved
-down the cascade, a distinct kind of thing from the entities themselves. **Config is the CI store** (desired
-configuration, optionally observed back to detect drift and reconcile), distinct from platform
+down the cascade, a distinct kind of thing from the entities themselves. **Declared values** (desired
+configuration, optionally observed back to detect drift and reconcile) have no console page yet (#1248, #404), so the group holds no entry for them; they stay distinct from platform
 Settings (preferences: severity scales, schedules, retention, defaults) and Variables (free
 interpolated values, no observed side); the full split is
 [variables, secrets, and declared values](/architecture/variables/).

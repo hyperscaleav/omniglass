@@ -35,7 +35,7 @@ func TestLocationPlacementEnforcement(t *testing.T) {
 	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{Name: "pod", Label: "Pod"}); err != nil {
 		t.Fatalf("create pod type: %v", err)
 	}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "pod-root", LocationType: "pod"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "pod-root", LocationType: "pod"}, all, all); err != nil {
 		t.Fatalf("unconstrained root placement: %v", err)
 	}
 
@@ -60,16 +60,16 @@ func TestLocationPlacementEnforcement(t *testing.T) {
 
 	// A room may skip straight under a building (listed) or a campus (listed):
 	// both succeed.
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq-r1", LocationType: "t-room", ParentName: strptr("hq-b1")}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq-r1", LocationType: "t-room", ParentName: strptr("hq-b1")}, all, all); err != nil {
 		t.Fatalf("room under building (skip floor, allowed): %v", err)
 	}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq-r2", LocationType: "t-room", ParentName: strptr("hq")}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq-r2", LocationType: "t-room", ParentName: strptr("hq")}, all, all); err != nil {
 		t.Fatalf("room under campus (skip floor+building, allowed): %v", err)
 	}
 
 	// Out of order: a floor under a room is refused (room is not in floor's
 	// allowed_parent_types); the error names both types.
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "bad-floor", LocationType: "t-floor", ParentName: strptr("hq-r1")}, all); err == nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "bad-floor", LocationType: "t-floor", ParentName: strptr("hq-r1")}, all, all); err == nil {
 		t.Fatal("floor under room = nil error, want PlacementError")
 	} else {
 		var placementErr *storage.PlacementError
@@ -85,7 +85,7 @@ func TestLocationPlacementEnforcement(t *testing.T) {
 	}
 
 	// t-campus's allowed set is {root} only: a non-root placement is refused.
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "bad-campus", LocationType: "t-campus", ParentName: strptr("hq-b1")}, all); !errors.Is(err, storage.ErrPlacementNotAllowed) {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "bad-campus", LocationType: "t-campus", ParentName: strptr("hq-b1")}, all, all); !errors.Is(err, storage.ErrPlacementNotAllowed) {
 		t.Fatalf("campus under building err = %v, want ErrPlacementNotAllowed", err)
 	}
 }
@@ -106,7 +106,7 @@ func TestLocationRootPlacementRejected(t *testing.T) {
 		t.Fatalf("create t-noroot type: %v", err)
 	}
 
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "bad-root", LocationType: "t-noroot"}, all); err == nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "bad-root", LocationType: "t-noroot"}, all, all); err == nil {
 		t.Fatal("root placement for a type without root in allowed_parent_types = nil error, want PlacementError")
 	} else {
 		var placementErr *storage.PlacementError

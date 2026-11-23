@@ -192,7 +192,13 @@ export default function OutlineWorkspace(props: { rootId?: string; host?: "page"
     if (props.rootId) return r ? addOptions(r.chain[0]) : [];
     return (["location", "system", "component"] as AddKind[]).filter((k) => can(me.data, k, "create"));
   };
-  const create = (kind: AddKind, under?: string) => navigate(`/${kind}s/create${under ? `?under=${encodeURIComponent(under)}` : ""}`);
+  // A component is added through the guided flow (#2460), which ends on an
+  // endpoint that has answered; its plain form stays one link away there.
+  // A caller who may create a component but not its endpoint gets the plain
+  // form, since the flow ends on an endpoint they could not make.
+  const guided = () => can(me.data, "endpoint", "create");
+  const create = (kind: AddKind, under?: string) =>
+    navigate(`/${kind}s/${kind === "component" && guided() ? "add" : "create"}${under ? `?under=${encodeURIComponent(under)}` : ""}`);
 
   const subtree = (n: LocationNode): string[] => [n.id, ...n.children.flatMap(subtree)];
   const onToggle = (n: LocationNode, deep: boolean) => {
