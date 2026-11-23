@@ -1,7 +1,8 @@
 import { For, Match, Show, Switch, createEffect, createSignal, onCleanup } from "solid-js";
 import Button from "./Button";
 import Drawer from "./Drawer";
-import OmnibotStep, { StepArgs } from "./OmnibotStep";
+import OmnibotThought from "./OmnibotThought";
+import { StepArgs } from "./OmnibotStep";
 import CreateSecretForm from "./CreateSecretForm";
 import { Bot, Key, Plus, X } from "./icons";
 import {
@@ -9,6 +10,7 @@ import {
   ask,
   closed,
   fail,
+  groupThoughts,
   initialRun,
   reduce,
   runOmnibot,
@@ -227,8 +229,8 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
               </p>
             </div>
           </Show>
-          <For each={state().items}>
-            {(item) => (
+          <For each={groupThoughts(state().items)}>
+            {(item, idx) => (
               <Switch>
                 <Match when={item.kind === "user" && item}>
                   {(u) => (
@@ -247,15 +249,15 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
                 <Match when={item.kind === "text" && item}>
                   {(t) => <div class="text-sm whitespace-pre-wrap">{t().text}</div>}
                 </Match>
-                <Match when={item.kind === "reasoning" && item}>
-                  {(r) => (
-                    <details data-testid="omnibot-thinking" class="text-xs text-base-content/60">
-                      <summary class="cursor-pointer select-none">Thinking</summary>
-                      <div class="mt-1 whitespace-pre-wrap border-l-2 border-base-300 pl-2">{r().text}</div>
-                    </details>
+                <Match when={item.kind === "thought" && item}>
+                  {(t) => (
+                    <OmnibotThought
+                      thought={t()}
+                      live={busy() && idx() === groupThoughts(state().items).length - 1}
+                      waitingId={state().interrupt?.id}
+                    />
                   )}
                 </Match>
-                <Match when={item.kind === "step" && item}>{(s) => <OmnibotStep step={s()} waiting={state().interrupt?.id === s().id} />}</Match>
               </Switch>
             )}
           </For>

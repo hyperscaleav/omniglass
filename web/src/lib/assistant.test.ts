@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { answer, ask, closed, initialRun, readEvents, reduce, runOmnibot, RunRefused, type RunState, type Step } from "./assistant";
+import { answer, argSummary, ask, closed, groupThoughts, stepFailed, thoughtSummary, initialRun, readEvents, reduce, runOmnibot, RunRefused, type RunState, type Step } from "./assistant";
 
 // The panel's data layer (#1167): the reader turns a :run stream into AG-UI
 // events, and the reducer folds them into what the panel shows. The fixtures
@@ -186,5 +186,39 @@ describe("a model's reasoning", () => {
       { kind: "reasoning", id: "r-1", text: "User asks 2+2." },
       { kind: "text", id: "r-2", text: "Four." },
     ]);
+  });
+});
+
+describe("folding a turn's reasoning and calls into one thought (#2422)", () => {
+  const r = (id: string) => ({ kind: "reasoning" as const, id, text: "hm" });
+  const st = (id: string, extra: Partial<Step> = {}): Step => ({ kind: "step", id, tool: "list-components", args: {}, ...extra });
+
+  it("groups consecutive reasoning and steps, leaving prompts and answers apart", () => {
+    const blocks = groupThoughts([{ kind: "user", text: "q" }, r("a"), st("b"), st("c"), { kind: "text", id: "t", text: "ans" }]);
+    expect(blocks.map((b) => b.kind)).toEqual(["user", "thought", "text"]);
+    expect(blocks[1]).toMatchObject({ kind: "thought", id: "a" });
+    expect((blocks[1] as { parts: unknown[] }).parts).toHaveLength(3);
+  });
+
+  it("says what is happening while live and counts calls once settled", () => {
+    const t = { kind: "thought" as const, id: "a", parts: [r("a"), st("b", { result: "{}" }), st("c")] };
+    expect(thoughtSummary(t, true)).toBe("Running list-components…");
+    expect(thoughtSummary(t, true, "c")).toBe("Waiting for you on list-components");
+    expect(thoughtSummary({ ...t, parts: [r("a")] }, true)).toBe("Thinking…");
+    expect(thoughtSummary({ ...t, parts: [r("a"), st("b", { result: "{}" })] }, false)).toBe("Thought · 1 tool call");
+    expect(thoughtSummary({ ...t, parts: [r("a")] }, false)).toBe("Thought");
+  });
+
+  it("reads a failed call from a declined call, a plain-text result or an error object", () => {
+    expect(stepFailed(st("a", { result: '{"components":[]}' }))).toBe(false);
+    expect(stepFailed(st("a"))).toBe(false);
+    expect(stepFailed(st("a", { result: "not found" }))).toBe(true);
+    expect(stepFailed(st("a", { result: '{"error":"x"}' }))).toBe(true);
+    expect(stepFailed(st("a", { decision: "declined" }))).toBe(true);
+  });
+
+  it("summarises arguments on one short line", () => {
+    expect(argSummary({ a: "x", b: 2 })).toBe("a=x, b=2");
+    expect(argSummary({ a: "x".repeat(100) }).length).toBe(60);
   });
 });

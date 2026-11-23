@@ -80,6 +80,68 @@ export function closed(s: RunState): RunState {
   return s.status === "working" ? fail(s, "The run ended before it finished. Ask again to carry on.") : s;
 }
 
+// A thought is the run of reasoning and tool calls between the person's
+// prompt and omnibot's answer (#2422): the panel shows it as one collapsed
+// block, in order, and the answer apart below it.
+export type Reasoning = Extract<Item, { kind: "reasoning" }>;
+export type Thought = { kind: "thought"; id: string; parts: (Reasoning | Step)[] };
+export type Block = Exclude<Item, Reasoning | Step> | Thought;
+
+// groupThoughts folds each consecutive run of reasoning and steps into one
+// thought, keyed by its first part. Pure, so a conversation replayed from
+// events groups the way a live one does.
+export function groupThoughts(items: Item[]): Block[] {
+  const out: Block[] = [];
+  for (const i of items) {
+    if (i.kind !== "reasoning" && i.kind !== "step") {
+      out.push(i);
+      continue;
+    }
+    const last = out[out.length - 1];
+    if (last?.kind === "thought") last.parts.push(i);
+    else out.push({ kind: "thought", id: i.id, parts: [i] });
+  }
+  return out;
+}
+
+// A call failed when the person declined it or its result is not a tool's
+// JSON (an error reaches the model as plain text), or is an object that
+// carries an error.
+export function stepFailed(s: Step): boolean {
+  if (s.decision === "declined") return true;
+  if (s.result === undefined) return false;
+  try {
+    const v = JSON.parse(s.result);
+    return !!v && typeof v === "object" && !Array.isArray(v) && "error" in v;
+  } catch {
+    return true;
+  }
+}
+
+// argSummary is a call's arguments on one short line: key=value pairs.
+export function argSummary(args: Record<string, unknown>, max = 60): string {
+  const line = Object.entries(args)
+    .map(([k, v]) => `${k}=${typeof v === "string" ? v : JSON.stringify(v)}`)
+    .join(", ");
+  return line.length > max ? `${line.slice(0, max - 1)}…` : line;
+}
+
+// thoughtSummary is the collapsed block's one line. While the run is live it
+// says what is happening now; settled, it counts the calls and flags failures.
+export function thoughtSummary(t: Thought, live: boolean, waitingId?: string): string {
+  const steps = t.parts.filter((p): p is Step => p.kind === "step");
+  const failed = steps.filter(stepFailed).length;
+  if (live) {
+    const waiting = steps.find((s) => s.id === waitingId);
+    if (waiting) return `Waiting for you on ${waiting.tool}`;
+    const running = [...steps].reverse().find((s) => s.result === undefined && s.decision !== "declined");
+    return running ? `Running ${running.tool}…` : "Thinking…";
+  }
+  const calls = steps.length ? ` · ${steps.length} tool call${steps.length === 1 ? "" : "s"}` : "";
+  const bad = failed ? ` · ${failed} failed` : "";
+  return `Thought${calls}${bad}`;
+}
+
 function objectOf(v: unknown): Record<string, unknown> {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
 }

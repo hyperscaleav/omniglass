@@ -119,9 +119,43 @@ describe("the omnibot panel", () => {
     await screen.findByText("Four.");
     const thinking = screen.getByTestId("omnibot-thinking") as HTMLDetailsElement;
     expect(thinking.open).toBe(false);
-    expect(within(thinking).getByText("Thinking")).toBeTruthy();
+    expect(within(thinking).getByText("Thought")).toBeTruthy();
     expect(thinking.textContent).toContain("User asks 2+2.");
     expect(screen.getByText("Four.").closest("details")).toBeNull();
+  });
+
+  it("folds reasoning and tool calls into one collapsed block, in order, answer below (#2422)", async () => {
+    const ev = (o: object) => `data: ${JSON.stringify(o)}\n\n`;
+    runReply = () =>
+      sse(
+        ev({ type: "RUN_STARTED", threadId: "conv-1", runId: "r" }) +
+          ev({ type: "REASONING_MESSAGE_START", messageId: "m1", role: "reasoning" }) +
+          ev({ type: "REASONING_MESSAGE_CONTENT", messageId: "m1", delta: "First look." }) +
+          ev({ type: "TOOL_CALL_START", toolCallId: "c1", toolCallName: "list-components" }) +
+          ev({ type: "TOOL_CALL_ARGS", toolCallId: "c1", delta: '{"limit":5}' }) +
+          ev({ type: "TOOL_CALL_RESULT", toolCallId: "c1", messageId: "t1", content: '{"components":[]}', role: "tool" }) +
+          ev({ type: "TOOL_CALL_START", toolCallId: "c2", toolCallName: "get-component" }) +
+          ev({ type: "TOOL_CALL_RESULT", toolCallId: "c2", messageId: "t2", content: "not found", role: "tool" }) +
+          ev({ type: "TEXT_MESSAGE_START", messageId: "m2", role: "assistant" }) +
+          ev({ type: "TEXT_MESSAGE_CONTENT", messageId: "m2", delta: "Done." }) +
+          ev({ type: "RUN_FINISHED", threadId: "conv-1", runId: "r", outcome: { type: "success" } }),
+      );
+    open();
+    send("look");
+    await screen.findByText("Done.");
+    const blocks = screen.getAllByTestId("omnibot-thinking") as HTMLDetailsElement[];
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].open).toBe(false);
+    expect(screen.getByTestId("omnibot-thinking-summary").textContent).toBe("Thought · 2 tool calls · 1 failed");
+    expect(screen.getByTestId("omnibot-thinking-error")).toBeTruthy();
+    const text = blocks[0].textContent ?? "";
+    expect(text.indexOf("First look.")).toBeLessThan(text.indexOf("list-components"));
+    expect(text.indexOf("list-components")).toBeLessThan(text.indexOf("get-component"));
+    const rows = within(blocks[0]).getAllByTestId("omnibot-step") as HTMLDetailsElement[];
+    expect(rows.every((r) => !r.open)).toBe(true);
+    expect(rows[0].textContent).toContain("limit=5");
+    expect(rows[1].dataset.state).toBe("error");
+    expect(screen.getByText("Done.").closest("details")).toBeNull();
   });
 
   it("runs on a plain-http origin, where the browser has no crypto.randomUUID", async () => {
