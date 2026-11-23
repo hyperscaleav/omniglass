@@ -253,8 +253,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           NUMBER: ${{ steps.what.outputs.number }}
           HEAD_SHA: ${{ steps.what.outputs.head_sha }}
-          # This workflow's own checks, and agent-fix's.
-          IGNORE: '^(plan|agent-review|oneshot|fix|lens \(.*\))$'
+          # This workflow's own checks, and agent-fix's; and docs-shots freshness,
+          # which the reviewer does not wait on while main recaptures the docs
+          # shots after merges (#2561), so a PR need not re-render them.
+          IGNORE: '^(plan|agent-review|oneshot|fix|lens \(.*\)|freshness)$'
         run: |
           set -euo pipefail
           script=$GITHUB_WORKSPACE/trusted/scripts/agent-review.sh
