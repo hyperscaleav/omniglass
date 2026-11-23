@@ -260,7 +260,12 @@ const liveFacts: OmnibotFacts = { mode: "live", prompts: [] };
 // a server that does not say, is treated as live: the panel then adds nothing
 // and restricts nothing, and a run says for itself what is wrong.
 export async function omnibotFacts(): Promise<OmnibotFacts> {
-  const { data, error } = await api.GET("/assistant/conversations");
-  if (error || !data?.omnibot) return liveFacts;
-  return { mode: data.omnibot.mode, prompts: data.omnibot.prompts ?? [] };
+  try {
+    const { data, error } = await api.GET("/assistant/conversations");
+    if (error || !data?.omnibot) return liveFacts;
+    return { mode: data.omnibot.mode, prompts: data.omnibot.prompts ?? [] };
+  } catch {
+    // A dropped connection reads like any other failed read: live.
+    return liveFacts;
+  }
 }

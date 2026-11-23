@@ -206,6 +206,8 @@ describe("a recording that has no answer (#2443)", () => {
     expect(await omnibotFacts()).toEqual({ mode: "live", prompts: [] });
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 500 }));
     expect(await omnibotFacts()).toEqual({ mode: "live", prompts: [] });
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("network down"));
+    expect(await omnibotFacts()).toEqual({ mode: "live", prompts: [] });
   });
 });
 
