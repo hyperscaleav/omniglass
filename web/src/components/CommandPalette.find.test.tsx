@@ -217,7 +217,7 @@ describe("recent items", () => {
     await waitFor(async () => expect((await rowTexts()).length).toBeGreaterThan(2));
     fireEvent.keyDown(f, { key: "Enter" });
     await waitFor(() => expect(first.onClose).toHaveBeenCalled());
-    expect(JSON.parse(sessionStorage.getItem("og-palette-recent:u-1") ?? "[]")[0]).toMatchObject({ path: `/locations/${uuidFor("loc-aud")}` });
+    expect(JSON.parse(sessionStorage.getItem(`og-palette-recent:${uuidFor("u-1")}`) ?? "[]")[0]).toMatchObject({ path: `/locations/${uuidFor("loc-aud")}` });
 
     fireEvent.click(first.trigger);
     await waitFor(async () => expect((await rowTexts())[0]).toContain("auditorium"));
