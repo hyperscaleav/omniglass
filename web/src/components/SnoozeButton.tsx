@@ -2,6 +2,7 @@ import { For, Show, createSignal, type JSX } from "solid-js";
 import { Popover } from "@kobalte/core/popover";
 import { useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
+import ActionFailure from "./ActionFailure";
 import { Moon } from "./icons";
 import { ALARM_TIMELINE_PREFIX, COMPONENT_ALARMS_PREFIX, FLEET_ALARMS_PREFIX, SNOOZE_PRESETS, snoozeAlarm, snoozedUntilWords, unsnoozeAlarm } from "../lib/alarms";
 import { FLEET_VIEW_KEY } from "../lib/fleet";
@@ -66,20 +67,23 @@ export function SnoozedBadge(props: { alarm: Snoozable }): JSX.Element {
 // alarm:snooze, never on the component's update (ADR-1318), and renders
 // nothing for a caller who may not. Unsnoozed, it opens a menu of durations;
 // snoozed, it ends the snooze early.
-export default function SnoozeButton(props: { component: string; alarm: Snoozable; surface: string }): JSX.Element {
+export default function SnoozeButton(props: { componentId: string; alarm: Snoozable; surface: string }): JSX.Element {
   const me = useMe();
-  return <SnoozeControl component={props.component} alarm={props.alarm} surface={props.surface} allowed={can(me.data, "alarm", "snooze")} />;
+  return <SnoozeControl componentId={props.componentId} alarm={props.alarm} surface={props.surface} allowed={can(me.data, "alarm", "snooze")} />;
 }
 
 // SnoozeControl is the control itself, for a surface that already knows the
 // caller's permissions (the alarms panel takes them as props, as it does
-// canAcknowledge).
-export function SnoozeControl(props: { component: string; alarm: Snoozable; surface: string; allowed: boolean }): JSX.Element {
+// canAcknowledge). Its failure floats under the AlarmActions group, one short
+// line with Retry (ActionFailure), never in the row's flow.
+export function SnoozeControl(props: { componentId: string; alarm: Snoozable; surface: string; allowed: boolean }): JSX.Element {
   const qc = useQueryClient();
   const [busy, setBusy] = createSignal(false);
   const key = () => `${props.surface}:${props.alarm.id}`;
   const err = () => errors()[key()] ?? null;
+  let last: (() => Promise<unknown>) | undefined;
   const run = async (write: () => Promise<unknown>) => {
+    last = write;
     setBusy(true);
     setError(key(), null);
     setOpenMenu(null);
@@ -103,8 +107,8 @@ export function SnoozeControl(props: { component: string; alarm: Snoozable; surf
       <Show
         when={!props.alarm.snoozed_until}
         fallback={
-          <Button size="xs" intent="quiet" loading={busy()} label={acting("Unsnooze", props.alarm)} title={err() ?? "End the snooze now. If the alarm is still raised, people are told again."}
-            onClick={() => void run(() => unsnoozeAlarm(props.component, props.alarm.id))}>
+          <Button size="xs" intent="quiet" loading={busy()} label={acting("Unsnooze", props.alarm)} title={"End the snooze now. If the alarm is still raised, people are told again."}
+            onClick={() => void run(() => unsnoozeAlarm(props.componentId, props.alarm.id))}>
             Unsnooze
           </Button>
         }
@@ -113,7 +117,7 @@ export function SnoozeControl(props: { component: string; alarm: Snoozable; surf
             if (o) setOpenMenu(key());
             else if (openMenu() === key()) setOpenMenu(null);
           }}>
-          <Popover.Trigger class="btn btn-quiet btn-xs gap-1.5" aria-label={acting("Snooze", props.alarm)} title={err() ?? SNOOZE_TIP} disabled={busy()}>
+          <Popover.Trigger class="btn btn-quiet btn-xs gap-1.5" aria-label={acting("Snooze", props.alarm)} title={SNOOZE_TIP} disabled={busy()}>
             <Moon size={14} />
             Snooze
           </Popover.Trigger>
@@ -125,7 +129,7 @@ export function SnoozeControl(props: { component: string; alarm: Snoozable; surf
                   {(p) => (
                     <li>
                       <button type="button" class="px-2 py-1.5 text-left text-[12px]"
-                        onClick={() => void run(() => snoozeAlarm(props.component, props.alarm.id, p.duration))}>
+                        onClick={() => void run(() => snoozeAlarm(props.componentId, props.alarm.id, p.duration))}>
                         {p.label}
                       </button>
                     </li>
@@ -137,7 +141,7 @@ export function SnoozeControl(props: { component: string; alarm: Snoozable; surf
         </Popover>
       </Show>
       <Show when={err()}>
-        <span role="alert" class="text-[11px] text-error">{err()}</span>
+        {(e) => <ActionFailure what={props.alarm.snoozed_until ? "end the snooze" : "snooze"} detail={e()} onRetry={() => last && void run(last)} />}
       </Show>
     </Show>
   );

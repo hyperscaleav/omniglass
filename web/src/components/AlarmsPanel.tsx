@@ -1,12 +1,11 @@
 import { For, Show, createMemo, createSignal, createUniqueId, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
-import { Check, Eye, Siren } from "./icons";
+import { Siren } from "./icons";
 import AlarmTimeline, { createTimelineToggles } from "./AlarmTimeline";
 import { describeError, rel } from "../lib/format";
 import {
   ALARM_TIMELINE_PREFIX,
-  acknowledgeAlarm,
   clearAlarm,
   componentAlarms,
   componentAlarmsKey,
@@ -17,8 +16,8 @@ import {
 import { useSeverity } from "../lib/severity";
 import { entityLabel } from "../lib/entities";
 import SeverityBadge from "./SeverityBadge";
-import { SnoozeControl, SnoozedBadge } from "./SnoozeButton";
-import TroubleshootButton from "./TroubleshootButton";
+import AlarmActions from "./AlarmActions";
+import { SnoozedBadge } from "./SnoozeButton";
 
 // AlarmsPanel: what is wrong with this component, and what was.
 //
@@ -110,8 +109,6 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
 
   const clear = (id: string) => run(() => clearAlarm(props.component, id));
 
-  const acknowledge = (id: string) => run(() => acknowledgeAlarm(props.component, id).then(() => undefined));
-
   return (
     <div class="flex flex-col gap-2">
       <div class="flex items-baseline justify-between gap-2">
@@ -187,33 +184,13 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
                   <SnoozedBadge alarm={a} />
                 </div>
                 {/* What you can do: one group that wraps as a unit and centers its own controls. */}
-                <div data-alarm-actions class="flex shrink-0 items-center gap-1">
-                  <Show when={props.canAcknowledge && !a.acknowledged}>
-                    <Button
-                      square
-                      size="xs"
-                      icon={Eye}
-                      label={`Acknowledge alarm ${a.id}`}
-                      title="Record that you have seen this alarm. It stays raised."
-                      disabled={busy()}
-                      onClick={() => void acknowledge(a.id)}
-                    />
-                  </Show>
-                  <Show when={props.canUpdate}>
-                    <Button
-                      square
-                      size="xs"
-                      icon={Check}
-                      label={`Clear alarm ${a.id}`}
-                      title="Clear this alarm"
-                      disabled={busy()}
-                      onClick={() => void clear(a.id)}
-                    />
-                  </Show>
-                  <SnoozeControl component={props.component} alarm={a} surface={surface} allowed={!!props.canSnooze} />
-                  <TroubleshootButton alarm={a} />
-                  {timelines.button(a.id, a.message)}
-                </div>
+                <AlarmActions
+                    componentId={props.component}
+                    alarm={a}
+                    surface={surface}
+                    show={{ ack: true, snooze: true, troubleshoot: true, timeline: timelines, clear: { allowed: !!props.canUpdate, busy: busy(), onClear: () => void clear(a.id) } }}
+                    allow={{ ack: !!props.canAcknowledge, snooze: !!props.canSnooze }}
+                  />
                 </div>
                 <Show when={timelines.isOpen(a.id)}>
                   <AlarmTimeline component={props.component} alarmId={a.id} id={timelines.panelId(a.id)} label={timelines.label(a.message)} />
@@ -287,10 +264,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
                     {/* A snooze is stored on the component and dedup key, so a
                         cleared alarm can carry one: snoozing an alarm that just
                         cleared is how a flapping one is quieted. */}
-                    <div data-alarm-actions class="flex shrink-0 items-center gap-1">
-                      <SnoozeControl component={props.component} alarm={a} surface={surface} allowed={!!props.canSnooze} />
-                      {timelines.button(a.id, a.message)}
-                    </div>
+                    <AlarmActions componentId={props.component} alarm={a} surface={surface} show={{ snooze: true, timeline: timelines }} allow={{ snooze: !!props.canSnooze }} />
                   </div>
                   <Show when={timelines.isOpen(a.id)}>
                     <AlarmTimeline component={props.component} alarmId={a.id} id={timelines.panelId(a.id)} label={timelines.label(a.message)} />
