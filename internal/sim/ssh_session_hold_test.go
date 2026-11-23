@@ -13,6 +13,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/driver"
+	"github.com/hyperscaleav/omniglass/internal/sim/simtest"
 )
 
 // An ssh session over the simulator's panel (#1032, the capability
@@ -41,7 +42,7 @@ func TestPanelSSHSessionOperatesRecoversAndReadsDown(t *testing.T) {
 	if testing.Short() {
 		t.Skip("real-wire ssh session test")
 	}
-	panel := servePanel(t, "127.88.9.7")
+	panel := servePanel(t, simtest.ClaimLoopback(t))
 	var trustMu sync.Mutex
 	var trusted []string
 	pin := collection.NewHostKeyPin("")
@@ -114,7 +115,7 @@ func TestPanelSSHHostKeyChangeIsRejected(t *testing.T) {
 	if testing.Short() {
 		t.Skip("real-wire ssh session test")
 	}
-	panel := servePanel(t, "127.88.9.9")
+	panel := servePanel(t, simtest.ClaimLoopback(t))
 	pin := collection.NewHostKeyPin("")
 	_, states := panelSSH(t, panel, "newtron", pin, collection.NewSSHSessionDialer(), nil, nil)
 	awaitSessionState(t, states, collection.SessionUp)
