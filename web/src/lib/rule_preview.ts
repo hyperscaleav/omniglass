@@ -6,7 +6,8 @@ import { sustainWords } from "./event_rules";
 // sentences the panel shows. The server judges each sample alone and never
 // applies a sustain (it says so: sustains_ignored), so the sentences name that
 // plainly when the operator typed one, instead of a footnote contradicting the
-// form.
+// form. When the server applies them (#2538), `sustains_ignored` goes false and the
+// note goes with it.
 
 export type PreviewContext = {
   // The metric or property the rule reads, as the operator sees it.

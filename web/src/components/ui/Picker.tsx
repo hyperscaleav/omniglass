@@ -19,6 +19,9 @@ import { ChevronDown, Plus, X } from "../icons";
 // choice is a chip with its own remove button, Enter keeps the list open for
 // the next pick, and Backspace in an empty field removes the last chip.
 //
+// A `group` on an option draws it under a heading (the rule form's Reads: metrics,
+// then properties); the groups keep the order they are first met in.
+//
 // onCreate adds the "create the missing item" row: when the typed text names
 // no option exactly (case-insensitive), the list ends with Create "text", and
 // picking it calls onCreate with the trimmed text and selects nothing; the

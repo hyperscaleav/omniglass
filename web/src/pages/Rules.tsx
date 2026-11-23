@@ -591,7 +591,7 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
               <span class="text-[12px] text-base-content/50">Clears</span>
               <span data-testid="rule-clear">{clearWords(r(), unit(r()))}</span>
             </div>
-            <Collapsible title="Show expression" class="text-[12px]" triggerClass="text-[12px] text-base-content/60 hover:text-base-content">
+            <Collapsible title="Show expression" class="text-[12px]" triggerClass="group flex cursor-pointer items-center gap-1 rounded-field text-left text-[12px] text-base-content/60 hover:text-base-content focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/60">
               <div class="grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-1 pt-1">
                 <span class="text-[12px] text-base-content/50">Fire</span>
                 <code data-testid="rule-fire-expr" class="break-all font-data text-[12px] text-base-content/80">{r().fire_criteria.expr}</code>

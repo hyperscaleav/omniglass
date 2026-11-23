@@ -66,6 +66,13 @@
   ],
   "walkthroughs": [
     {
+      "id": "alarm-on-what-you-are-looking-at",
+      "title": "Alarm on what you are looking at",
+      "description": "From a component's vitals, start a rule on one metric, see the form name what is missing, preview it in plain words, and save it.",
+      "lab": [],
+      "setup": []
+    },
+    {
       "id": "declare-a-first-slot",
       "title": "Declare a first slot",
       "description": "Give a one-off system its first slot from the console, name it, say what it accepts, and see the slot it opens.",
