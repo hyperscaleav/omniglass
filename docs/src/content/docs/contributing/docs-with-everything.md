@@ -228,7 +228,7 @@ passed a surface token swap. One caveat: a real UI change that falls entirely in
 region is invisible to the gate, which is the price of masking and the reason a mask names the
 smallest box that holds still around what moves.
 
-**Interim, until #2561 lands:** a PR does not re-render the docs shots. When a PR conflicts with main on a PNG it takes main's side, and `agent-review` does not wait on `freshness`, so a red freshness check on a PR is expected. Main's shots are recaptured in one PR after a merge wave, and #2561 replaces that with a recapture on main after every merge.
+**Interim, until #2561 lands:** a PR does not re-render the docs shots. When a PR conflicts with main on a PNG it takes main's side, and the `freshness` job does not run on pull requests (it still runs on main, and `docs-shots-verify` still checks every PR's shots are declared and present). Main's shots are recaptured in one PR after a merge wave, and #2561 replaces that with a recapture on main after every merge.
 
 Capture on a committed tree. The console shows the build id it was built from, and a dirty
 tree stamps a long `-dirty-<time>` id where CI's clean checkout stamps a bare commit, which

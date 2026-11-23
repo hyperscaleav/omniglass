@@ -8,7 +8,7 @@ import SimStatusBadge from "./SimStatusBadge";
 import { FlaskConical } from "./icons";
 import { can, useMe } from "../lib/auth";
 import { rel } from "../lib/format";
-import { componentSimKey, getComponentSim } from "../lib/simulation";
+import { componentSimKey, getComponentSim, componentSimPollMs } from "../lib/simulation";
 
 // SimulationSection: a component's own page says when the component is a
 // simulated component (#890), with where it is served, what has reached it and
@@ -21,7 +21,7 @@ export default function SimulationSection(props: { componentId: string }): JSX.E
     queryKey: componentSimKey(props.componentId),
     queryFn: () => getComponentSim(props.componentId),
     enabled: can(me.data, "simulation", "read"),
-    refetchInterval: 5_000,
+    refetchInterval: (q) => componentSimPollMs(q.state.data),
     retry: false,
   }));
   const [open, setOpen] = createSignal(false);

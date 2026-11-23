@@ -14,9 +14,11 @@ screenshots:
     steps:
       - { action: click, selector: 'button[aria-label="Ask omnibot"]' }
       - { action: wait, selector: "[data-testid=omnibot-page]" }
-    # The system's since line behind the drawer ages with the clock.
+    # The system's since line behind the drawer ages with the clock, and so
+    # does its Why strip's alarm, raised by its rule after the seed (#2434).
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
+      - "[data-testid=alarm-strip]"
 sidebar:
   order: 3
   badge:

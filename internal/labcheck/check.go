@@ -57,6 +57,10 @@ type Component struct {
 	Location  string
 	Endpoints []Endpoint
 	Values    []Value
+	// Impaired is a device someone broke on purpose in the simulator (a
+	// seeded fault, #2434, or an unplug on its page): it owes nothing while
+	// it is.
+	Impaired bool
 }
 
 // System is one system and the keys it carries a value for.
@@ -164,6 +168,9 @@ func Evaluate(s Snapshot, gaps Gaps) []Finding {
 	}
 
 	for _, c := range s.Components {
+		if c.Impaired {
+			continue
+		}
 		owner := c.owner()
 		cover(devseed.TierBuiltIn, c.Product)
 		cover(devseed.TierCollected, c.Product)

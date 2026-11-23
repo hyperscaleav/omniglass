@@ -66,9 +66,23 @@
   ],
   "walkthroughs": [
     {
+      "id": "add-a-component",
+      "title": "Add a component",
+      "description": "Add a display to a system from the Simulation page, with a simulated device as its address, pick its credential, test it, and land on its collected values.",
+      "lab": [],
+      "setup": []
+    },
+    {
       "id": "add-a-dependency",
       "title": "Add and remove a dependency",
       "description": "Read what a video bar depends on and what depends on it, try an edge that would close a cycle and read the server's refusal, then add a real upstream and remove it again.",
+      "lab": [],
+      "setup": []
+    },
+    {
+      "id": "break-a-device-in-one-click",
+      "title": "Break a device in one click",
+      "description": "Unplug a simulated panel from its row's Break menu, watch the fault chip and the reachability alarm it causes, then clear the fault from the chip.",
       "lab": [],
       "setup": []
     },

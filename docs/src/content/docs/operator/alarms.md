@@ -12,7 +12,7 @@ walkthroughs:
 screenshots:
   - id: alarm-troubleshoot
     path: /web/systems/auditorium
-    alt: "The auditorium DSP's blade, its detail page in a side panel: the Why strip holds the high alarm, No route to host on the control interface, with Acknowledge, Snooze, the bot button that asks omnibot to troubleshoot it and its timeline, then what it is, the systems it serves, its vitals and collection."
+    alt: "The auditorium DSP's blade, its detail page in a side panel: the Why strip holds the high alarm the reachability rule raised, Reachability lost, with Acknowledge, Snooze, the bot button that asks omnibot to troubleshoot it and its timeline, then what it is, the systems it serves, its vitals and collection."
     # The auditorium is degraded on its DSP's high alarm; the alarm's component
     # opens the DSP's blade, whose Why row carries the troubleshoot button.
     steps:
