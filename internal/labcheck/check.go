@@ -114,6 +114,20 @@ func ownValue(vs []Value) bool {
 	})
 }
 
+// platformProducts are the products of the platform's own components (the
+// server, a node, an outpost). They report platform metrics themselves and
+// have no endpoint by design, so the endpoint-driven built-in and collected
+// tiers do not apply to them; they are held to the platform tier instead.
+var platformProducts = []string{"omniglass-server", "omniglass-node", "omniglass-outpost"}
+
+// isPlatform reports whether c is one of the platform's own components.
+func (c Component) isPlatform() bool { return slices.Contains(platformProducts, c.Product) }
+
+// carriesPlatformValue is whether vs holds a value the platform wrote.
+func carriesPlatformValue(vs []Value) bool {
+	return slices.ContainsFunc(vs, func(v Value) bool { return v.Class == writerclass.Platform })
+}
+
 // owner names a component for a finding. A component's name is unique within
 // its room, not across the fleet, so the product and location say which one.
 func (c Component) owner() string {
@@ -165,6 +179,13 @@ func Evaluate(s Snapshot, gaps Gaps) []Finding {
 
 	for _, c := range s.Components {
 		owner := c.owner()
+		if c.isPlatform() && len(c.Endpoints) == 0 {
+			// Held to the tier it carries: its own platform metrics.
+			if !carriesPlatformValue(c.Values) {
+				fail(devseed.TierBuiltIn, c.Product, owner, "platform component reports no platform metric")
+			}
+			continue
+		}
 		cover(devseed.TierBuiltIn, c.Product)
 		cover(devseed.TierCollected, c.Product)
 		if len(c.Endpoints) == 0 {
