@@ -26,6 +26,7 @@ import { ME_KEY, type Me } from "../lib/auth";
 import { pendingTriage, requestTriage } from "../lib/handover";
 import { uuidFor } from "../lib/testids";
 import { seedSeverityLevels } from "../lib/testseverity";
+import { answerConfirms } from "../lib/confirm.testkit";
 
 // SystemDetail (#2423): the system page and the system blade render ONE body,
 // so a blade shows every section, tab and action its page shows.
@@ -212,7 +213,7 @@ describe("the blade's tab and edit are its own", () => {
   });
 
   it("deletes from the blade's Configure and closes the stack", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    answerConfirms(true);
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(null, { status: 204 }));
     const r = mountBlade();
     const blade = await screen.findByRole("dialog");

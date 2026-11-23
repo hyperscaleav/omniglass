@@ -64,6 +64,7 @@ import {
   withLane,
 } from "../lib/event_rules";
 import { previewEventRule, type RulePreview } from "../lib/expressions";
+import { confirmDelete } from "../lib/confirm";
 
 // Rules (Catalog > Actions > Rules, #921): the event rule catalog. A rule reads
 // one sample key across the components it selects and raises an alarm at its
@@ -458,7 +459,7 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
   }
 
   async function remove(r: EventRule) {
-    if (!confirm(`Delete rule "${r.name}"? Deleting it clears the alarms it holds open; its past alarms stay in each component's history, no longer naming it.`)) return;
+    if (!(await confirmDelete({ kind: "rule", name: r.name, consequence: "Deleting it clears the alarms it holds open; its past alarms stay in each component's history, no longer naming it." }))) return;
     setErr(null);
     try {
       await deleteEventRule(r.name);

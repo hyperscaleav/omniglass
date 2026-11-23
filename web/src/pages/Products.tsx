@@ -33,6 +33,7 @@ import { useMe, can } from "../lib/auth";
 import { catalogLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
+import { confirmDelete } from "../lib/confirm";
 
 // Products: the product catalog (the model a component is an instance of, e.g.
 // "Kestrel VRoom"), on the flat FlatList surface. A product is addressed by
@@ -155,7 +156,7 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
   async function removeProduct() {
     const r = row();
     if (!r) return;
-    if (!confirm(`Delete product "${r.name}"?`)) return;
+    if (!(await confirmDelete({ kind: "product", name: r.name }))) return;
     setErr(null);
     try {
       await deleteProduct(r.name);

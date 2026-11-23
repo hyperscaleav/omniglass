@@ -18,6 +18,7 @@ import { TAGS_KEY } from "../lib/tags";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 import { seedSeverityLevels } from "../lib/testseverity";
+import { answerConfirms } from "../lib/confirm.testkit";
 
 // LocationDetail (#2423): the location page and the location blade render ONE
 // body, so a blade shows every section, tab and action its page shows: the
@@ -196,7 +197,7 @@ describe("the blade's tab, filter and edit are its own", () => {
   });
 
   it("edits the parent from the blade's Configure, and deletes there", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    answerConfirms(true);
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(null, { status: 204 }));
     const r = mountBlade(ROOM);
     const blade = await screen.findByRole("dialog");

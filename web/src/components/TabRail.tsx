@@ -26,8 +26,9 @@ export default function TabRail(props: { tabs: TabDef[]; state: TabState; guard?
                 "text-base-content/60 hover:text-base-content": props.state.active() !== t.key,
               }}
               onClick={() => {
-                if (t.key !== props.state.active() && props.guard && !props.guard.confirmLeave()) return;
-                props.state.select(t.key);
+                const leave = t.key === props.state.active() || !props.guard ? true : props.guard.confirmLeave();
+                if (leave === true) return props.state.select(t.key);
+                void leave.then((ok) => ok && props.state.select(t.key));
               }}
             >
               {t.label}

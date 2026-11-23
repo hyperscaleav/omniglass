@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 
 // The browser-driven e2e tier for the console: drive it as an operator would, end
 // to end, against the real binary (the API, the typed client, the SPA), asserting
@@ -6,6 +6,15 @@ import { test, expect } from "@playwright/test";
 // shell, the typed client, the create-as-route draft, the detail, and delete.
 const USER = process.env.OG_E2E_USER;
 const PASSWORD = process.env.OG_E2E_PASSWORD;
+
+// Every destructive confirm is the console's one confirm dialog (#2463), never
+// the browser's: its destructive button carries the verb.
+async function confirmInDialog(page: Page) {
+  const d = page.getByRole("alertdialog");
+  await expect(d).toBeVisible();
+  await d.locator("footer").getByRole("button").last().click();
+  await expect(d).toHaveCount(0);
+}
 
 test.describe("operator console", () => {
   test.skip(!USER || !PASSWORD, "set OG_E2E_USER/OG_E2E_PASSWORD (run via `make test-e2e`)");
@@ -68,12 +77,12 @@ test.describe("operator console", () => {
     // Confirm-delete it from its blade: a row opens the blade (#799), the
     // location's detail body (#2423), whose Configure footer carries Delete
     // behind a confirm.
-    page.on("dialog", (d) => d.accept());
     await row.click();
     await expect(page.locator("aside[data-blade]")).toBeVisible();
     await page.locator("aside[data-blade]").getByRole("tab", { name: "Configure" }).click();
     await expect(page.locator('aside[data-blade] button:text-is("Delete")')).toBeVisible();
     await page.locator('aside[data-blade] button:text-is("Delete")').click();
+    await confirmInDialog(page);
 
     // It is gone from the outline.
     await expect(row).toHaveCount(0);
@@ -153,7 +162,6 @@ test.describe("operator console", () => {
     // Clean up after the run, and prove on the way that a component placed
     // nowhere is still findable: it sits in the outline's "Placed nowhere you
     // can see" outpost, whose row blade carries the confirm-delete (#799).
-    page.on("dialog", (d) => d.accept());
     await page.goto("/web/explore");
     await page.getByRole("button", { name: "Expand Placed nowhere you can see" }).click();
     const row = page.getByRole("treeitem").filter({ has: page.locator("[data-label]", { hasText: draftedLabel }) });
@@ -161,6 +169,7 @@ test.describe("operator console", () => {
     await expect(page.locator("aside[data-blade]")).toBeVisible();
     await page.locator("aside[data-blade]").getByRole("tab", { name: "Configure" }).click();
     await page.locator('aside[data-blade] button:text-is("Delete")').click();
+    await confirmInDialog(page);
     await expect(row).toHaveCount(0);
   });
 
@@ -314,11 +323,11 @@ test.describe("operator console", () => {
 
     // Clean up: the system through its blade (the blade delete under test),
     // then the locations through the API on the browser's own session.
-    page.on("dialog", (d) => d.accept());
     await page.goto(`/web/explore?node=${buildingId}`);
     await rowOf(buildingLabel).click();
     await page.locator("aside[data-blade]").getByRole("tab", { name: "Configure" }).click();
     await page.locator('aside[data-blade] button:text-is("Delete")').click();
+    await confirmInDialog(page);
     await expect(page.locator("aside[data-blade]")).toHaveCount(0);
     await expect.poll(async () => (await page.request.get(`/api/v1/systems/${systemId}`)).status()).toBe(404);
     for (const id of [buildingId, secondId, campusId]) {
@@ -337,7 +346,6 @@ test.describe("operator console", () => {
     const stamp = Date.now();
     const target = `e2e-hook-${stamp}`;
     const rule = `e2e-page-${stamp}`;
-    page.on("dialog", (d) => d.accept());
     const blade = page.locator("aside[data-blade]");
 
     await page.goto("/web/notification-targets");
@@ -376,6 +384,7 @@ test.describe("operator console", () => {
     expect((await page.request.delete(`/api/v1/notification-targets/${target}`)).status()).toBe(409);
     await blade.getByRole("button", { name: "More actions" }).click();
     await blade.locator(".dropdown-content").getByRole("button", { name: "Delete" }).click();
+    await confirmInDialog(page);
     await expect(blade).toHaveCount(0);
     await expect.poll(async () => (await page.request.get(`/api/v1/action-rules/${rule}`)).status()).toBe(404);
     expect((await page.request.delete(`/api/v1/notification-targets/${target}`)).ok()).toBeTruthy();

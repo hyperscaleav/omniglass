@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, waitFor } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
+import { MemoryRouter, Route } from "@solidjs/router";
 
 vi.mock("../api/client", () => ({
   api: { GET: vi.fn(async () => ({ data: { bootstrapped: true, lab: true } })) },
@@ -16,7 +17,9 @@ describe("AppRoot", () => {
   const mount = (screen: () => any) =>
     render(() => (
       <QueryClientProvider client={new QueryClient()}>
-        <AppRoot>{screen()}</AppRoot>
+        <MemoryRouter root={AppRoot}>
+          <Route path="/" component={screen} />
+        </MemoryRouter>
       </QueryClientProvider>
     ));
 

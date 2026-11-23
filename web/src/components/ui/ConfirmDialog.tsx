@@ -8,8 +8,9 @@ import ModalDialog, { DialogClose, DialogHeading } from "./ModalDialog";
 // before it is made (#1078, trusting a changed key): a centred ModalDialog
 // in its alert role (role alertdialog, focus trapped and restored, Esc to close,
 // portalled so no card clips it), its body the host's and its rail the one
-// PanelFooter draws. A delete keeps the browser's own confirm(); this is for a
-// confirm whose body has to teach, which a native prompt cannot hold.
+// PanelFooter draws. Every destructive confirm in the console renders here
+// (#2463), most through lib/confirm's ConfirmHost; tone="danger" gives the
+// confirm button the destructive intent, and the button carries the verb.
 //
 // The safe choice holds the focus when it opens: Enter on a freshly opened
 // confirm cancels, never confirms. Cancel, Esc and the overlay all close it
@@ -28,6 +29,7 @@ export default function ConfirmDialog(props: {
   disabled?: boolean;
   error?: string | null;
   cancelLabel?: string;
+  tone?: "action" | "danger";
 }) {
   return (
     <ModalDialog
@@ -58,7 +60,7 @@ export default function ConfirmDialog(props: {
             {props.cancelLabel ?? "Cancel"}
           </Button>
           <Button
-            intent="action"
+            intent={props.tone ?? "action"}
             icon={props.confirmIcon}
             loading={props.busy}
             disabled={props.disabled}

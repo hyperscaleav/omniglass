@@ -15,6 +15,7 @@ import { OFFICIAL_LOCK } from "../lib/catalog";
 import { uuidFor } from "../lib/testids";
 import { EVENT_TYPES_KEY, type EventTypeRow } from "../lib/event_types";
 import { expressionText, typeExpression, warmExpressionEditor } from "../components/ExpressionField.testing";
+import { answerConfirms } from "../lib/confirm.testkit";
 
 // The Rules page (#921): a FlatList over /event-rules, each row reading its
 // criteria in words and its live state (open alarms, pending streaks); a row
@@ -695,7 +696,7 @@ describe("Rules page", () => {
 
   it("deletes a custom rule from the kebab after a confirmation", async () => {
     const writes = catchWrites();
-    const ask = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const ask = answerConfirms(true);
     mount();
     fireEvent.click(screen.getByText("Too hot"));
     const b = await blade();
