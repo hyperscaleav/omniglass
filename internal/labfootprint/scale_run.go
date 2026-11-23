@@ -486,6 +486,7 @@ func (h *harness) measureWindow(ctx context.Context, cfg ScaleConfig, s scaleSes
 		run.EndpointsGap = endpointErr.Error()
 		h.say("endpoints not measured: %v", endpointErr)
 	}
+	run.Lag, run.LagGap = RefuseBehindLag(run.Lag, run.LagGap, run.Endpoints, h.expectedProbes(ctx, endpointErr, db1.At.Sub(db0.At)))
 	run.Delivery = h.readDelivery(ctx, delivery.Window{From: db0.At, To: db1.At}, cfg.SettleTimeout)
 	if run.Delivery.Read {
 		h.say("delivery: %d receipts read", len(run.Delivery.Receipts))
@@ -848,6 +849,25 @@ func (h *harness) ingestLag(ctx context.Context, from, to time.Time) ([]float64,
 	}
 	gap := NewLagGap(ages, to.Sub(from))
 	return nil, &gap, nil
+}
+
+// expectedProbes is the cadence estimate's denominator, read only when the
+// closed loop was not (endpointErr set): the samples the poll targets should
+// have drawn over the window, at the outposts' default cadence. 0 when the
+// targets did not read.
+func (h *harness) expectedProbes(ctx context.Context, endpointErr error, window time.Duration) int64 {
+	if endpointErr == nil {
+		return 0
+	}
+	out, err := h.psql(ctx, pollTargetsQuery)
+	if err != nil {
+		return 0
+	}
+	targets, err := parsePollTargets(out, nil)
+	if err != nil {
+		return 0
+	}
+	return ExpectedProbes(targets, window)
 }
 
 // serverLog is what the server container logged since a time.

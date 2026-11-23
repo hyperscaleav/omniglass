@@ -456,6 +456,16 @@ How to read each row:
   probed before the window began, `ingest lag exceeds the window` with how long before the window's end
   it was probed. That is an ingest finding, not a blank; the JSON carries the same under
   `ingest_lag_not_measured`, and every other figure is still reported.
+  The lag also reads `not measured` when the lane is behind, because it times only the samples that
+  landed, and a lane far behind lands only the ones that skipped the queue, which read fast (#1897). The
+  lab's closed loop reads each outpost's tally outside the ingest stream: when its `published-not-landed`
+  count over the window is above 0, the lag is refused with the share as the reason (`N % of the
+  window's published batches had not landed`). The closed loop's window is the endpoint marks, taken a
+  read or two around the database window the lag is read over, so the share is a window-edge
+  approximation; any share above 0 refuses. When the closed loop was not read, the lab estimates the
+  share from the poll cadence (rows landed against the probes the targets should have drawn), refuses
+  past 5 %, and says in the reason that it is a floor estimate. The JSON carries `unlanded_share` and
+  `unlanded_estimated` beside the reason.
 - **consumer redeliveries**: batches the ingest consumer could not confirm and the bus handed it again
   (`unconfirmed acks`), and messages it dropped after repeated failures (`abandoned`), counted from
   the server's log since the window began. A redelivery that succeeds the second time logs nothing, so

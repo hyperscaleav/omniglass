@@ -129,6 +129,11 @@ type LagGap struct {
 	// ExceedsWindow is true when the newest landed sample was probed before
 	// the window began.
 	ExceedsWindow bool `json:"exceeds_window"`
+	// Unlanded is the share of the window still unlanded when the lag was
+	// refused for a partial landing (#1897); Estimated says it is a floor from
+	// the poll cadence, not the closed loop's count.
+	Unlanded  *float64 `json:"unlanded_share,omitempty"`
+	Estimated bool     `json:"unlanded_estimated,omitempty"`
 }
 
 const lagGapReason = "no sample probed in the window had landed by its end"
@@ -146,6 +151,9 @@ func NewLagGap(a LagAges, window time.Duration) LagGap {
 // footer is the gap's account under the table.
 func (g LagGap) footer() string {
 	var b strings.Builder
+	if g.Unlanded != nil {
+		return "ingest lag " + g.Reason + "\n"
+	}
 	fmt.Fprintf(&b, "ingest lag not measured: %s", g.Reason)
 	switch {
 	case g.NewestCommitAgeS == nil || g.NewestProbeAgeS == nil:
