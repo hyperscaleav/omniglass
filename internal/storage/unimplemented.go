@@ -329,6 +329,9 @@ func (UnimplementedGateway) ResetComponentName(context.Context, string, string, 
 func (UnimplementedGateway) ComponentNameTaken(context.Context, string, *string, *string) (bool, error) {
 	return false, nil
 }
+func (UnimplementedGateway) DeleteBlockersOf(context.Context, string, string, func(string) scope.Set) (*DeleteBlockers, error) {
+	return &DeleteBlockers{}, nil
+}
 func (UnimplementedGateway) DeleteComponent(context.Context, string, string, scope.Set, scope.Set) error {
 	return nil
 }

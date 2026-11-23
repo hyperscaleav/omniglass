@@ -511,17 +511,17 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		return out, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.gated(withDeleteRefusal(api, huma.Operation{
 		OperationID:   "delete-location",
 		Method:        http.MethodDelete,
 		Path:          "/locations/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a location",
-		Description:   "Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.",
-	}, "location", "delete"), func(ctx context.Context, in *locationPathInput) (*struct{}, error) {
+		Description:   "Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.",
+	}), "location", "delete"), func(ctx context.Context, in *locationPathInput) (*struct{}, error) {
 		if err := gw.DeleteLocation(ctx, actorID(ctx), in.Name,
 			a.scopeFor(ctx, "location", "read"), a.scopeFor(ctx, "location", "delete")); err != nil {
-			return nil, mapLocationErr(err)
+			return nil, a.deleteRefusal(ctx, gw, "location", in.Name, err, mapLocationErr(err))
 		}
 		return nil, nil
 	})
