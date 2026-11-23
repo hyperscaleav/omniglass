@@ -4,7 +4,7 @@ import { pageHere, pendingTriage } from "./lib/handover";
 import Sidebar from "./components/Sidebar";
 import TopBar from "./components/TopBar";
 import CommandPalette from "./components/CommandPalette";
-import Toaster from "./components/Toaster";
+import { Toaster } from "./components/ui/Toast";
 import OmnibotPanel from "./components/OmnibotPanel";
 import { can, useMe } from "./lib/auth";
 import { sectionLabel } from "./lib/nav";

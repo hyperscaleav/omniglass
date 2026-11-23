@@ -92,7 +92,6 @@ export default function Templates(): JSX.Element {
           columns,
           empty: "No templates in this catalog.",
           rowId: (t) => t.name,
-          openId: () => param(params.open),
           blades: { registry: { template: templateBlade }, rootKind: "template", controller: blades },
           chips,
           onChips,
