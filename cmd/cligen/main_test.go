@@ -552,3 +552,28 @@ func TestAFreeFormBodyRendersABodyFlag(t *testing.T) {
 		t.Errorf("a body with declared properties must keep per-property flags only:\n%s", src)
 	}
 }
+
+// A repeatable query parameter (Huma writes its type as ["array","null"]) is a
+// string-slice flag whose every value becomes its own query-string pair.
+func TestBuildCommandRepeatableQueryParam(t *testing.T) {
+	var ps paramSchema
+	if err := json.Unmarshal([]byte(`{"type":["array","null"],"items":{"type":"string"}}`), &ps); err != nil {
+		t.Fatalf("a nullable array schema must parse: %v", err)
+	}
+	op := operation{OperationID: "list-alarms", Parameters: []param{{Name: "severity", In: "query", Schema: ps}}}
+	cmd := buildCommand(spec{}, "/api/v1", "/alarms", "get", op)
+	if len(cmd.Query) != 1 || !cmd.Query[0].Array || cmd.Query[0].FlagFunc != "StringSliceVar" || cmd.Query[0].GoType != "[]string" {
+		t.Fatalf("Query = %+v, want one repeatable []string flag", cmd.Query)
+	}
+	roots, err := tree([]command{cmd})
+	if err != nil {
+		t.Fatalf("tree: %v", err)
+	}
+	out, err := render(roots)
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if !strings.Contains(string(out), `q.Add("severity", v)`) {
+		t.Errorf("generated source does not add each value as its own pair:\n%s", out)
+	}
+}

@@ -10,14 +10,14 @@ var catalog = []tooldef.Def{
 	{
 		Name:        "list-alarms",
 		Title:       "List the fleet's active alarms",
-		Description: "What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Pass unacknowledged for the queue nobody has looked at, and limit to cap it (default 200, at most 1000). It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.",
+		Description: "What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Each row names its component's location and systems. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.",
 		Method:      "GET",
 		Path:        "/alarms",
 		Permission:  "component:read",
-		QueryParams: []string{"unacknowledged", "limit"},
+		QueryParams: []string{"unacknowledged", "limit", "severity", "location", "acknowledged", "snoozed", "page_token"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
 		Class:       tooldef.ClassRead,
-		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"limit\":{\"description\":\"At most this many, the worst first; 0 or absent means 200\",\"format\":\"int64\",\"maximum\":1000,\"minimum\":0,\"type\":\"integer\"},\"unacknowledged\":{\"description\":\"Only the alarms nobody has looked at: the queue an operator, or an agent, works\",\"type\":\"boolean\"}},\"type\":\"object\"}",
+		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"acknowledged\":{\"description\":\"true keeps the acknowledged alarms, false the unacknowledged ones; absent keeps both\",\"enum\":[\"true\",\"false\"],\"type\":\"string\"},\"limit\":{\"description\":\"At most this many, the worst first; 0 or absent means 200\",\"format\":\"int64\",\"maximum\":1000,\"minimum\":0,\"type\":\"integer\"},\"location\":{\"description\":\"Only alarms whose component sits in this location or any location below it, by name\",\"type\":\"string\"},\"page_token\":{\"description\":\"The next_page_token of the previous page: resumes the same worst-first order after it, however many alarms there are\",\"type\":\"string\"},\"severity\":{\"description\":\"Only alarms at these severity levels, by name (see /severity-levels); repeat the parameter for several\",\"items\":{\"type\":\"string\"},\"type\":[\"array\",\"null\"]},\"snoozed\":{\"description\":\"true keeps the snoozed alarms, false the ones not snoozed; absent keeps both\",\"enum\":[\"true\",\"false\"],\"type\":\"string\"},\"unacknowledged\":{\"description\":\"Only the alarms nobody has looked at: the queue an operator, or an agent, works\",\"type\":\"boolean\"}},\"type\":\"object\"}",
 	},
 	{
 		Name:        "list-audit-log",

@@ -90,11 +90,35 @@ type param struct {
 }
 
 type paramSchema struct {
-	Type string `json:"type"`
+	Type schemaType `json:"type"`
 	// Examples carries a path parameter's `example:` tag (Huma writes it into
 	// the parameter's schema), which the command's Example line shows in place
 	// of a placeholder (#1133), so the CLI's help teaches a name, not <id>.
 	Examples []any `json:"examples"`
+}
+
+// schemaType is a JSON Schema "type": a string, or a list of them when the
+// schema is nullable (Huma writes ["array","null"] for a slice query parameter).
+// It reads as the first type that is not "null".
+type schemaType string
+
+func (t *schemaType) UnmarshalJSON(b []byte) error {
+	var one string
+	if err := json.Unmarshal(b, &one); err == nil {
+		*t = schemaType(one)
+		return nil
+	}
+	var many []string
+	if err := json.Unmarshal(b, &many); err != nil {
+		return err
+	}
+	for _, m := range many {
+		if m != "null" {
+			*t = schemaType(m)
+			return nil
+		}
+	}
+	return nil
 }
 
 type requestBody struct {
@@ -271,6 +295,7 @@ type queryField struct {
 	Zero     string // Go source for the flag default: "", false, 0
 	Desc     string
 	Required bool
+	Array    bool // a repeatable flag: each value is its own query-string pair
 }
 
 // nameOverride names an operation the route cannot. With the parent-qualified
@@ -441,7 +466,10 @@ func queryFields(op operation) []queryField {
 			continue
 		}
 		goType, flagFunc, zero := "string", "StringVar", `""`
+		array := false
 		switch p.Schema.Type {
+		case "array":
+			goType, flagFunc, zero, array = "[]string", "StringSliceVar", "nil", true
 		case "boolean":
 			goType, flagFunc, zero = "bool", "BoolVar", "false"
 		case "integer":
@@ -456,6 +484,7 @@ func queryFields(op operation) []queryField {
 			Zero:     zero,
 			Desc:     p.Description,
 			Required: p.Required,
+			Array:    array,
 		})
 	}
 	return out
@@ -915,7 +944,13 @@ func generatedCommands() []*cobra.Command {
 				q := url.Values{}
 				{{- range $qp := .Query}}
 				if cmd.Flags().Changed({{quote $qp.Flag}}) {
+					{{- if $qp.Array}}
+					for _, v := range {{$qp.Var}} {
+						q.Add({{quote $qp.Name}}, v)
+					}
+					{{- else}}
 					q.Set({{quote $qp.Name}}, fmt.Sprintf("%v", {{$qp.Var}}))
+					{{- end}}
 				}
 				{{- end}}
 				if enc := q.Encode(); enc != "" {

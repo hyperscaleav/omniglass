@@ -505,6 +505,10 @@ export type AlarmBody = {
   /** What the alarm is about: one open alarm per (component, dedup_key) */
   dedup_key: string;
   id: string;
+  /** The name of the location the alarm's component sits in (its plane root's location); absent when the component is unplaced, and on every read but the fleet queue */
+  location?: string;
+  /** That location's dotted ancestor path, root first (for example boi.17c) */
+  location_path?: string;
   message: string;
   raised_at: string;
   /** The event rule that raised the alarm, by name; absent when an operator raised it */
@@ -517,6 +521,11 @@ export type AlarmBody = {
   snoozed_by?: string;
   /** Until when the alarm (by component and dedup_key) is snoozed: its notifications are written suppressed until then. Null while it is not snoozed. Independent of acknowledged and cleared_at */
   snoozed_until?: string;
+  /**
+     * The names of the systems the alarm's component is a member of; only on the fleet queue
+     * @nullable
+     */
+  systems?: string[] | null;
 };
 
 export type AlarmFactBody = {
@@ -4452,6 +4461,8 @@ export type ListFleetAlarmsOutputBody = {
   readonly $schema?: string;
   /** @nullable */
   alarms: AlarmBody[] | null;
+  /** Pass as page_token for the next page; absent on the last page */
+  next_page_token?: string;
 };
 
 export type ListGroupGrantsOutputBody = {
@@ -9252,7 +9263,36 @@ export type ListAlarmsParams = {
    * @maximum 1000
    */
   limit?: number;
+  /**
+   * Only alarms at these severity levels, by name (see /severity-levels); repeat the parameter for several
+   * @nullable
+   */
+  severity?: string[] | null;
+  /** Only alarms whose component sits in this location or any location below it, by name */
+  location?: string;
+  /** true keeps the acknowledged alarms, false the unacknowledged ones; absent keeps both */
+  acknowledged?: ListAlarmsAcknowledged;
+  /** true keeps the snoozed alarms, false the ones not snoozed; absent keeps both */
+  snoozed?: ListAlarmsSnoozed;
+  /** The next_page_token of the previous page: resumes the same worst-first order after it, however many alarms there are */
+  page_token?: string;
 };
+
+export type ListAlarmsAcknowledged = typeof ListAlarmsAcknowledged[keyof typeof ListAlarmsAcknowledged];
+
+
+export const ListAlarmsAcknowledged = {
+  true: 'true',
+  false: 'false',
+} as const;
+
+export type ListAlarmsSnoozed = typeof ListAlarmsSnoozed[keyof typeof ListAlarmsSnoozed];
+
+
+export const ListAlarmsSnoozed = {
+  true: 'true',
+  false: 'false',
+} as const;
 
 export type ListAuditLogParams = {
   /** Max rows to return, newest first (default 100, capped at 500) */
@@ -9963,7 +10003,7 @@ export const getListAlarmsUrl = (params?: ListAlarmsParams,) => {
 }
 
 /**
- * What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Pass unacknowledged for the queue nobody has looked at, and limit to cap it (default 200, at most 1000). It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.
+ * What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Each row names its component's location and systems. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.
  * @summary List the fleet's active alarms
  */
 export const listAlarms = async (params?: ListAlarmsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listAlarmsResponse> => {
