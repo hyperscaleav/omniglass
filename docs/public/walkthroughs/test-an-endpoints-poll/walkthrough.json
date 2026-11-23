@@ -1,0 +1,74 @@
+{
+  "id": "test-an-endpoints-poll",
+  "title": "Test an endpoint's poll",
+  "description": "Attach a driver to a display, then run its poll now and read what the outpost collected, without waiting for the next cycle.",
+  "steps": [
+    {
+      "n": 1,
+      "kind": "goto",
+      "caption": "A display in Bay 2, with no endpoint yet.",
+      "still": "step-01.png"
+    },
+    {
+      "n": 2,
+      "kind": "click",
+      "caption": "Add an endpoint, the way an outpost reaches the display.",
+      "still": "step-02.png"
+    },
+    {
+      "n": 3,
+      "kind": "click",
+      "caption": "Attach a driver.",
+      "still": "step-03.png"
+    },
+    {
+      "n": 4,
+      "kind": "select",
+      "caption": "The SNMP driver reads the uptime any agent reports.",
+      "still": "step-04.png"
+    },
+    {
+      "n": 5,
+      "kind": "type",
+      "caption": "The host is the display's address.",
+      "still": "step-05.png"
+    },
+    {
+      "n": 6,
+      "kind": "type",
+      "caption": "The community is a secret's name, never its value.",
+      "still": "step-06.png"
+    },
+    {
+      "n": 7,
+      "kind": "select",
+      "caption": "The outpost edge-hq collects it.",
+      "still": "step-07.png"
+    },
+    {
+      "n": 8,
+      "kind": "click",
+      "caption": "Attach it. The endpoint opens, and its polls carry a Test button.",
+      "still": "step-08.png"
+    },
+    {
+      "n": 9,
+      "kind": "click",
+      "caption": "Test the poll now, instead of waiting for the next cycle.",
+      "still": "step-09.png"
+    },
+    {
+      "n": 10,
+      "kind": "wait",
+      "caption": "The outpost ran it and shows each sample it read, with its value and the round trip.",
+      "still": "step-10.png"
+    }
+  ],
+  "poster": "step-10.png",
+  "preview": "preview.webp",
+  "budget": {
+    "seconds": 45.2,
+    "bytes": 631179,
+    "previewBytes": 381692
+  }
+}
