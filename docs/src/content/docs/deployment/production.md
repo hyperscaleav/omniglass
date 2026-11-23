@@ -151,8 +151,8 @@ OMNIGLASS_SETTING__SSO__CLIENT_SECRET=corp-sso
 - `client_secret` names the `oauth2-client` secret. Naming it, or moving `issuer` while one is bound,
   from the console or API takes `secret:bind` on that secret, since every sign-in sends it to the
   issuer's token endpoint; the settings file and environment are trusted as deployment config.
-- `scopes` (default `openid email profile offline_access`), `groups_claim` (default `groups`, read by
-  group mapping when it lands), `recheck_minutes` (default 15) and `recheck_grace_minutes` (default
+- `scopes` (default `openid email profile offline_access`), `groups_claim` (default `groups`, the claim
+  [identity provider groups](/admin/access/#identity-provider-groups) are read from), `recheck_minutes` (default 15) and `recheck_grace_minutes` (default
   60) are explained below.
 
 **4. Let the server reach the provider.** Discovery, the key set and the token exchange go through

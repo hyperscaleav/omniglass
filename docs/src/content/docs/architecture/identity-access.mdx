@@ -59,8 +59,14 @@ Where the build differs from the present-tense design below (each logged in the
   password-confirmed self-link (`/auth/me/identity-links:start`) are built; an owner grant deletes the
   links others made for that person. The PKCE verifier and nonce are derived from the browser binding
   rather than stored ([ADR-2362](/architecture/decisions/#adr-2362-a-sign-ins-pkce-verifier-and-nonce-are-derived-from-its-browser-binding-not-stored)).
-  Group mapping ([#2363](https://github.com/hyperscaleav/omniglass/issues/2363)), provisioning and
-  enforce mode ([#2364](https://github.com/hyperscaleav/omniglass/issues/2364)) and SAML
+  **Group mapping is built** ([#2363](https://github.com/hyperscaleav/omniglass/issues/2363)): a
+  groups-claim value keyed by issuer maps to a `user_group` (`/user-groups/{group}/idp-mappings`, gated
+  `user_group`), `user_group_member` carries a `source` (`local` or `idp`) and an idp row's issuer, and
+  the sign-in and each re-check refresh whose id_token carries the claim sync that issuer's `idp` rows
+  in their own transaction, audited; the owner guard refuses both a mapping to a group with an owner
+  grant and an owner grant on a mapped group
+  ([ADR-2363](/architecture/decisions/#adr-2363-an-admins-add-makes-an-idp-membership-local-and-a-groups-last-mapping-takes-its-idp-members-with-it)).
+  Provisioning and enforce mode ([#2364](https://github.com/hyperscaleav/omniglass/issues/2364)) and SAML
   ([#2365](https://github.com/hyperscaleav/omniglass/issues/2365)) are not built.
   The minted bearer token prefix is `ogp_`.
 - **Every credential is time-bounded** ([ADR-0019](/architecture/decisions/#adr-0019-every-credential-is-time-bounded-token-purpose-not-expiry-shape),
@@ -162,7 +168,7 @@ Persons, machine users (outposts among them), and **`user_group`s**. Roles attac
 The `group` membership mechanism (static list or dynamic filter) is shared across kinds, but the kinds are kept **distinct** (not one polymorphic primitive yet):
 
 - **`component` / `system` / `location` groups** are **entity-groups**: they carry config bindings (the cascade) and serve as ABAC **scopes**.
-- **`user_group`** is a collection of users (SCIM-synced or local): a grant **subject**, carrying no config. Members can be any user kind, in practice persons synced from the IdP. A grant attaches through the same `user_grant` table and every member **inherits** it (the grant loader unions group grants with direct grants, so an inherited grant resolves identically). Membership is static and flat (no nesting) in the first cut; a group grant is bounded by the same escalation cover-check as a direct one. A grant inherited from a group names its source by the identity triad: `group` (the group's name, which `/user-groups/{group}` takes), `group_id`, and `group_label` (the friendly string, absent when the group has none).
+- **`user_group`** is a collection of users (local, or synced from an identity provider's groups claim through a mapping, #2363; SCIM later): a grant **subject**, carrying no config. Members can be any user kind, in practice persons synced from the IdP. A grant attaches through the same `user_grant` table and every member **inherits** it (the grant loader unions group grants with direct grants, so an inherited grant resolves identically). Membership is static and flat (no nesting) in the first cut; a group grant is bounded by the same escalation cover-check as a direct one. A grant inherited from a group names its source by the identity triad: `group` (the group's name, which `/user-groups/{group}` takes), `group_id`, and `group_label` (the friendly string, absent when the group has none).
 
 So `group` appears on **both sides of authZ**: `user_group`s as subjects, entity-groups as object scopes.
 
