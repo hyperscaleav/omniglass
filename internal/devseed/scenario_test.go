@@ -447,7 +447,7 @@ func TestAlarmQueueAtStormScale(t *testing.T) {
 	timed := func(name string, f storage.AlarmFilter, limit int) ([]storage.Alarm, string) {
 		t.Helper()
 		start := time.Now()
-		got, next, err := gw.ListFleetAlarms(ctx, all, f, limit)
+		got, next, err := gw.ListFleetAlarms(ctx, all, all, f, limit)
 		took := time.Since(start)
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
@@ -472,7 +472,7 @@ func TestAlarmQueueAtStormScale(t *testing.T) {
 	timed("location subtree", storage.AlarmFilter{Location: first[0].LocationPath[0]}, 100)
 	total := 0
 	for token := ""; ; {
-		page, n, err := gw.ListFleetAlarms(ctx, all, storage.AlarmFilter{PageToken: token}, 100)
+		page, n, err := gw.ListFleetAlarms(ctx, all, all, storage.AlarmFilter{PageToken: token}, 100)
 		if err != nil {
 			t.Fatal(err)
 		}
