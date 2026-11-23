@@ -205,12 +205,17 @@ func TestFleetAlarmQueueFiltersPagesAndStaysInScope(t *testing.T) {
 		{"cam1only", []grant{{role: "viewer", scopeKind: "component", scopeID: cam1ID}}, ""},
 		{"cam1room", []grant{{role: "viewer", scopeKind: "component", scopeID: cam1ID}, {role: "viewer", scopeKind: "system", scopeID: boardroomID}}, "boardroom"},
 	} {
-		p := read(userWithGrants(t, ctx, dsn, tc.user, tc.grants), "", http.StatusOK)
-		if len(p.Alarms) != 1 || p.Alarms[0].Component != "cam-1" {
-			t.Fatalf("%s: queue = %q, want cam-1's alarm alone", tc.user, comps(p))
-		}
-		if got := strings.Join(p.Alarms[0].Systems, ","); got != tc.systems {
-			t.Errorf("%s: cam-1's systems = %q, want %q", tc.user, got, tc.systems)
+		tok := userWithGrants(t, ctx, dsn, tc.user, tc.grants)
+		// The location filter joins the same query, so it must keep the
+		// system read too.
+		for _, query := range []string{"", "?location=hq"} {
+			p := read(tok, query, http.StatusOK)
+			if len(p.Alarms) != 1 || p.Alarms[0].Component != "cam-1" {
+				t.Fatalf("%s: GET /alarms%s = %q, want cam-1's alarm alone", tc.user, query, comps(p))
+			}
+			if got := strings.Join(p.Alarms[0].Systems, ","); got != tc.systems {
+				t.Errorf("%s: GET /alarms%s names cam-1's systems %q, want %q", tc.user, query, got, tc.systems)
+			}
 		}
 	}
 }

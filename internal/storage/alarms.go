@@ -545,7 +545,7 @@ func (p *PG) ListFleetAlarms(ctx context.Context, read, systemRead scope.Set, fi
 	if filter.Location != "" {
 		// The components under the named location: its plane roots, then their
 		// descendants (a nested component sits where its plane root sits).
-		ctes = `, loc_t as (
+		ctes += `, loc_t as (
 				select id from location where name = ` + bind(filter.Location) + `
 				union all select l.id from location l join loc_t on l.parent_id = loc_t.id
 			), comp_t as (
