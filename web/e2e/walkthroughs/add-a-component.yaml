@@ -2,7 +2,7 @@
 # the Simulation page to values on the component's own page. A second Boreal
 # Edge 55 joins the Bay 1 signage system in its panel slot (the slot is
 # unbounded, so a replay on the same stack adds another), takes Bay 1 as its
-# place from the system, and answers as a new simulated device at the free
+# location from the system, and answers as a new simulated device at the free
 # address the server plans for it. Nothing is created until Create and test,
 # which creates the component and its endpoint and runs the driver's poll
 # through the outpost; Open the component lands on its Overview, where the
@@ -25,26 +25,25 @@ steps:
   - click: { role: option, name: Bay 1 }
     caption: The Bay 1 signage system.
   - select: { target: '[data-step=where] select', value: panel }
-    caption: It fills the system's panel slot. Only the slots a display may fill are offered, and its place comes from the system.
-    hold: 1500
+    caption: It fills the system's panel slot. Only the slots a display may fill are offered, and its location comes from the system.
   - click: { role: button, name: Next }
     caption: Next, how the outpost reaches it.
   - wait: { selector: '[data-testid=simulated-device]:has-text("in use")', timeout: 15000 }
     caption: The product's own driver is chosen, and a new simulated display fills in the outpost, its address and the driver's inputs.
-    hold: 2500
+    hold: 1000
   - click: { role: button, name: Next }
     caption: Next, its credential.
   - wait: { selector: '[data-step=credentials] [role=combobox]' }
     caption: The SNMP community is picked from the secrets of that kind, never typed. The simulator's is already chosen.
-    hold: 2000
+    hold: 800
   - click: { role: button, name: Create and test }
     caption: Create the component and its endpoint, and test them.
   - wait: { selector: '[data-step=test] [data-testid=poll-result][data-state=ok]', timeout: 30000 }
     caption: The outpost ran the driver's poll and shows what it read. A failure would name its cause and offer the step to fix.
-    hold: 2500
+    hold: 1500
   - click: { role: button, name: Open the component }
     caption: Done. The new display opens on its Overview.
   - wait: { selector: '[data-testid="leaf-vitals"]', timeout: 30000 }
     caption: Its first values are already collected, with no detour to another page.
-    hold: 2500
+    hold: 1500
     poster: true

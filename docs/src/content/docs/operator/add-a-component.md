@@ -18,6 +18,8 @@ also meet elsewhere (the create form's naming, the placement pickers, a driver's
 form, an endpoint's poll test), so what you learn here is what you read later. The model behind the
 pieces is [the model in one pass](/start/the-model/) and [data collection](/architecture/collection/).
 
+::walkthrough{#add-a-component}
+
 ## Where it starts
 
 - **Explore**, **New**, **Component** (or a location row's **+**, which starts it at that location).
