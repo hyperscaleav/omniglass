@@ -1,6 +1,6 @@
 import { createMemo, createSignal, For, Show, type JSX } from "solid-js";
 import { Dynamic } from "solid-js/web";
-import { Popover } from "@kobalte/core/popover";
+import Popover from "./ui/Popover";
 import { ChevronRight, CircleCheck, CircleDashed, LayoutDashboard, OctagonX, Plus, TriangleAlert, resolveIcon } from "./icons";
 import type { ComponentGroup, ComponentRow, Lights, LocationNode } from "../lib/outline";
 import { HEALTH_HUE, type HealthState } from "../lib/health";
@@ -37,8 +37,13 @@ const CHEV = 16;
 // deep row keeps room for its name beside an open sidebar.
 const INDENT_VARS = "[--og-indent:22px] @max-[28rem]:[--og-indent:12px]";
 
+// The expander's accessible name. Same-named places under different parents get
+// the parent path appended; the visible row text is unchanged.
+export const expanderName = (open: boolean, label: string, within: string) =>
+  `${open ? "Collapse" : "Expand"} ${label}${within ? ` in ${within}` : ""}`;
+
 export type Row =
-  | { kind: "location"; key: string; depth: number; node: LocationNode; parent: string | null }
+  | { kind: "location"; key: string; depth: number; node: LocationNode; parent: string | null; within: string }
   | { kind: "group"; key: string; depth: number; group: ComponentGroup; location: LocationNode; parent: string }
   | { kind: "component"; key: string; depth: number; row: ComponentRow; location: LocationNode; parent: string };
 
@@ -113,10 +118,11 @@ export default function Outline(props: {
   const grouped = (n: LocationNode) => n.id === "unplaced" || n.groups.filter((g) => g.system).length > 1;
   const rows = createMemo<Row[]>(() => {
     const out: Row[] = [];
-    const walk = (n: LocationNode, depth: number, parent: string | null) => {
-      out.push({ kind: "location", key: n.id, depth, node: n, parent });
+    const walk = (n: LocationNode, depth: number, parent: string | null, within: string) => {
+      out.push({ kind: "location", key: n.id, depth, node: n, parent, within });
+      const path = [within, ...n.chain.map((c) => c.label)].filter(Boolean).join(" / ");
       if (!props.expanded.has(n.id)) return;
-      for (const c of n.children) walk(c, depth + 1, n.id);
+      for (const c of n.children) walk(c, depth + 1, n.id, path);
       for (const g of n.groups) {
         const headed = grouped(n) && g.system !== null;
         if (headed) out.push({ kind: "group", key: `${n.id}:${g.system!.id}`, depth: depth + 1, group: g, location: n, parent: n.id });
@@ -125,7 +131,7 @@ export default function Outline(props: {
         }
       }
     };
-    for (const r of props.roots) walk(r, 0, null);
+    for (const r of props.roots) walk(r, 0, null, "");
     return out;
   });
   // The rows are rebuilt whenever anything changes (a toggle, a health read),
@@ -250,7 +256,7 @@ export default function Outline(props: {
                     type="button"
                     tabindex={-1}
                     class="grid h-4 w-4 flex-none cursor-pointer place-items-center rounded text-base-content/50 hover:text-base-content"
-                    aria-label={`${isOpen() ? "Collapse" : "Expand"} ${r().kind === "location" ? node()!.chain[node()!.chain.length - 1].label : ""}`}
+                    aria-label={expanderName(isOpen(), node()!.chain[node()!.chain.length - 1].label, (r() as { within: string }).within)}
                     onClick={(e) => { e.stopPropagation(); if (r().kind === "location") props.onToggle(node()!, e.altKey); }}
                   >
                     <span class="transition-transform" classList={{ "rotate-90": isOpen() }}><ChevronRight size={12} /></span>
@@ -343,18 +349,19 @@ type AddTarget = { id: string; label: string; kinds: AddKind[] };
 function AddMenu(props: { name: string; targets: AddTarget[]; onAdd: (locationId: string, kind: AddKind) => void }) {
   const [open, setOpen] = createSignal(false);
   return (
-    <Popover open={open()} onOpenChange={setOpen} placement="bottom-end" gutter={4}>
-      <Popover.Trigger
-        tabindex={-1}
-        data-add
-        class="grid h-6 w-6 cursor-pointer place-items-center rounded-md border border-base-content/15 text-base-content/70 opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100 data-[expanded]:opacity-100 hover:text-base-content"
-        aria-label={`Add under ${props.name}`}
-        title={`Add under ${props.name} (+)`}
-      >
-        <Plus size={13} />
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Content class="z-50 w-52 rounded-box border border-base-300 bg-base-100 p-1 shadow-2xl focus:outline-none">
+    <Popover
+      open={open()}
+      onOpenChange={setOpen}
+      placement="bottom-end"
+      gutter={4}
+      tabindex={-1}
+      data-add
+      class="grid h-6 w-6 cursor-pointer place-items-center rounded-md border border-base-content/15 text-base-content/70 opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100 data-[expanded]:opacity-100 hover:text-base-content"
+      aria-label={`Add under ${props.name}`}
+      title={`Add under ${props.name} (+)`}
+      contentClass="z-50 w-52 rounded-box border border-base-300 bg-base-100 p-1 shadow-2xl focus:outline-none"
+      content={
+        <>
           <For each={props.targets}>
             {(t, i) => (
               <div role="group" aria-label={`Under ${t.label}`} classList={{ "mt-1 border-t border-base-300 pt-1": i() > 0 }}>
@@ -373,8 +380,10 @@ function AddMenu(props: { name: string; targets: AddTarget[]; onAdd: (locationId
               </div>
             )}
           </For>
-        </Popover.Content>
-      </Popover.Portal>
+        </>
+      }
+    >
+      <Plus size={13} />
     </Popover>
   );
 }

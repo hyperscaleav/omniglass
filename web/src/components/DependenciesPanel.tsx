@@ -2,7 +2,7 @@ import { For, Show, createMemo, createSignal, createUniqueId, type JSX } from "s
 import { A } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
-import ConfirmDialog from "./ConfirmDialog";
+import ConfirmDialog from "./ui/ConfirmDialog";
 import Eyebrow from "./Eyebrow";
 import HealthBadge from "./HealthBadge";
 import { Check, Plus, RefreshCw, Trash, X } from "./icons";

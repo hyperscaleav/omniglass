@@ -1,7 +1,7 @@
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import { useQueries, useQuery } from "@tanstack/solid-query";
-import { Popover } from "@kobalte/core/popover";
+import Popover from "./ui/Popover";
 import ListShell from "./ListShell";
 import Button from "./Button";
 import Outline, { HealthSlots, OUTLINE_COLS, NARROW_HIDDEN, OUTLINE_FRAME, WIDE_ONLY, type AddKind, type OpenTarget } from "./Outline";
@@ -391,12 +391,15 @@ function NewMenu(props: { kinds: AddKind[]; onPick: (k: AddKind) => void }) {
   const [isOpen, setIsOpen] = createSignal(false);
   const LABEL: Record<AddKind, string> = { location: "Location", system: "System", component: "Component" };
   return (
-    <Popover open={isOpen()} onOpenChange={setIsOpen} placement="bottom-end" gutter={6}>
-      <Popover.Trigger class="btn btn-action btn-sm gap-1.5" aria-label="New">
-        <Plus size={15} />New
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Content class="z-50 w-44 rounded-box border border-base-300 bg-base-100 p-1 shadow-2xl focus:outline-none">
+    <Popover class="btn btn-action btn-sm gap-1.5"
+      open={isOpen()}
+      onOpenChange={setIsOpen}
+      placement="bottom-end"
+      gutter={6}
+      aria-label="New"
+      contentClass="z-50 w-44 rounded-box border border-base-300 bg-base-100 p-1 shadow-2xl focus:outline-none"
+      content={
+        <>
           <For each={props.kinds}>
             {(k) => (
               <button type="button" class="block w-full cursor-pointer rounded px-2.5 py-1.5 text-left text-sm hover:bg-base-content/[0.06]" onClick={() => { setIsOpen(false); props.onPick(k); }}>
@@ -404,8 +407,10 @@ function NewMenu(props: { kinds: AddKind[]; onPick: (k: AddKind) => void }) {
               </button>
             )}
           </For>
-        </Popover.Content>
-      </Popover.Portal>
+        </>
+      }
+    >
+      <Plus size={15} />New
     </Popover>
   );
 }
