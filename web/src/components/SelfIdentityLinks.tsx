@@ -35,7 +35,7 @@ export default function SelfIdentityLinks() {
     setPassword("");
     setErr(null);
   }
-  async function confirm() {
+  async function submitPassword() {
     const what = pending();
     if (!what) return;
     setBusy(true);
@@ -95,7 +95,7 @@ export default function SelfIdentityLinks() {
               </Show>
               <div class="flex justify-end gap-2">
                 <Button size="sm" onClick={() => setPending(null)} disabled={busy()}>Cancel</Button>
-                <Button size="sm" intent={pending() === "link" ? "action" : "danger"} loading={busy()} disabled={!password()} onClick={confirm}>
+                <Button size="sm" intent={pending() === "link" ? "action" : "danger"} loading={busy()} disabled={!password()} onClick={submitPassword}>
                   {pending() === "link" ? "Continue to the provider" : "Unlink"}
                 </Button>
               </div>

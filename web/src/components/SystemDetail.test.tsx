@@ -26,6 +26,7 @@ import { ME_KEY, type Me } from "../lib/auth";
 import { pendingTriage, requestTriage } from "../lib/handover";
 import { uuidFor } from "../lib/testids";
 import { seedSeverityLevels } from "../lib/testseverity";
+import { answerConfirms } from "../lib/confirm.testkit";
 
 // SystemDetail (#2423): the system page and the system blade render ONE body,
 // so a blade shows every section, tab and action its page shows.
@@ -223,8 +224,29 @@ describe("the blade's tab and edit are its own", () => {
     expect(window.location.search).toBe("?edit=location");
   });
 
+  // A sole system's location has no page of its own (its address lands on
+  // the system), so its section here carries the location's own Delete, on
+  // location:delete (#2463): without it a place holding one system could not
+  // be deleted from the console at all.
+  it("a sole system's location section carries the location's own Delete", async () => {
+    const qc = seed();
+    qc.setQueryData([...LOCATIONS_KEY], [{ id: uuidFor("sd-room"), name: "boardroom-a", label: "Boardroom A", location_type: "room", actions: ["update", "delete"] }]);
+    const asked = answerConfirms(false);
+    mountPage(`/web/systems/${SID}?tab=configure`, qc);
+    const face = await screen.findByTestId("configure-face-location");
+    fireEvent.click(await within(face).findByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(asked).toHaveBeenCalledWith(expect.stringContaining('Delete location "boardroom-a"?')));
+  });
+
+  it("the location section offers no Delete without location:delete", async () => {
+    mountPage(`/web/systems/${SID}?tab=configure`);
+    const face = await screen.findByTestId("configure-face-location");
+    await within(face).findByRole("button", { name: "Edit" });
+    expect(within(face).queryByRole("button", { name: "Delete" })).toBeNull();
+  });
+
   it("closing the blade with unsaved drafts asks first", async () => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const asked = answerConfirms(false);
     const r = mountBlade();
     const blade = await screen.findByRole("dialog");
     fireEvent.click(await within(blade).findByRole("tab", { name: "Configure" }));
@@ -232,12 +254,12 @@ describe("the blade's tab and edit are its own", () => {
     fireEvent.click(await within(face).findByRole("button", { name: "Edit" }));
     fireEvent.input(await within(face).findByDisplayValue("boardroom"), { target: { value: "boardroom-2" } });
     fireEvent.click(within(blade).getByRole("button", { name: "Close" }));
-    expect(confirm).toHaveBeenCalled();
+    await waitFor(() => expect(asked).toHaveBeenCalled());
     expect(r.controller().stack().length).toBe(1);
   });
 
   it("deletes from the blade's Configure and closes the stack", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    answerConfirms(true);
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(null, { status: 204 }));
     const r = mountBlade();
     const blade = await screen.findByRole("dialog");

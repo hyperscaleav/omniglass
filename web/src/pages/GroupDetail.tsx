@@ -23,6 +23,7 @@ import { listSystems } from "../lib/systems";
 import { listComponents } from "../lib/components";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
+import { confirmDelete } from "../lib/confirm";
 
 // GroupDetail is a group's blade body under the read -> Edit -> Save contract. Read
 // mode shows the profile, members (a drill to the member's user blade when the
@@ -133,7 +134,7 @@ export function GroupDetail(props: { id: string }) {
   useEditParam(edit, { ready: () => !!group.data && linked(), canUpdate: canManage });
 
   async function removeGroup() {
-    if (!confirm(`Delete the user group "${group.data ? groupName(group.data) : ""}"? Members keep their direct grants; they stop inheriting this group's.`)) return;
+    if (!(await confirmDelete({ kind: "user group", name: group.data ? groupName(group.data) : "", consequence: "Members keep their direct grants; they stop inheriting this group's." }))) return;
     try {
       await deleteGroup(props.id);
       // The group is gone, so close the blade first (unmounting its detail, members,
