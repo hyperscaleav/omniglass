@@ -45,7 +45,9 @@ import { spans as timelineSpans } from "../lib/timeline";
 import { systemEvents, systemEventsKey, systemLogs, systemLogsKey, type SystemLogs } from "../lib/system_activity";
 import type { LogFilter } from "../lib/logs";
 import LogFilters from "../components/LogFilters";
-import { SERIES_POLL_MS, metricBuckets, metricBucketsKey } from "../lib/series";
+import { SERIES_POLL_MS, metricBuckets, metricBucketsBetween, metricBucketsBetweenKey, metricBucketsKey } from "../lib/series";
+import { rangeHours, rangeStepSeconds, resolveRange, useTimeRange } from "../lib/time_range";
+import TimeRangePicker from "../components/TimeRangePicker";
 import { CalcRuleLink } from "../components/RuleLink";
 import { memberModel, systemCrumbs, systemsAtLocation, type MemberContext } from "../lib/detail";
 import TimeseriesChart from "../components/TimeseriesChart";
@@ -74,11 +76,10 @@ import { CLOCK_TICK_MS, createClock } from "../lib/clock";
 // is read once, for the location, the path and who the members are; nothing
 // polled grows with the fleet. TanStack holds every poll while the tab is
 // hidden.
-// The Data table reads a day at five-minute buckets (#1269): 288 of them, the
+// The Data table reads the page's time range (#2304), a day at five-minute
+// buckets by default (#1269): a few hundred buckets whatever the range, the
 // min/max band and the avg line, so a one-sample spike survives and the read
 // is the same size however busy the metric.
-const SERIES_HOURS = 24;
-const SERIES_RESOLUTION_S = 300;
 // HISTORY_TICK_MS is how often the history and the charts take a new now:
 // a thirty-day strip and a day's sparkline move too little in a second to
 // redraw on every tick.
@@ -190,19 +191,60 @@ export default function SystemZoom() {
     enabled: tab() === "activity",
     refetchInterval: LEAF_POLL_MS,
   }));
+  // The page's one time range (#2304), held in the address: a preset slides
+  // to now and reads `hours` back from it; an absolute range reads its own
+  // [from, to) through the views binding and holds still, so it never polls.
+  const { range, setRange } = useTimeRange();
+  const hours = () => rangeHours(range());
+  // A preset's window is fixed by its key, not the clock, so a tick never
+  // changes a query key.
+  const seriesWindowMs = () => {
+    const h = hours();
+    if (h !== undefined) return h * 3600_000;
+    const r = resolveRange(range(), 0);
+    return r.to - r.from;
+  };
+  // An absolute range reaching back past a day steps in whole hours: the
+  // views read answers the hours past the raw samples from the hourly trends
+  // only at a whole-hour step, where a finer one would read them as empty.
+  const seriesStepS = () => {
+    const r = range();
+    return r.kind === "absolute" ? rangeStepSeconds(seriesWindowMs(), r.from < Date.now() - 86400_000 || undefined) : rangeStepSeconds(seriesWindowMs());
+  };
+  const seriesColumn = () => {
+    const r = range();
+    return r.kind === "preset" ? `Last ${r.preset}` : "In range";
+  };
+  // The charts' right edge: now for a preset, the range's end otherwise.
+  const seriesNow = () => (hours() !== undefined ? historyNow() : resolveRange(range(), 0).to);
   // One series query per declared metric, alive only on Overview, where the
   // Data table draws every sparkline at once (#795 review).
   const seriesQueries = useQueries(() => ({
-    queries: kpiMetrics().map((m) => ({
+    queries: kpiMetrics().map((m) => {
       // The chart is the series whose latest value sits beside it: a bucket
       // is one instance (#1485), so a sampled row names the instance it shows.
-      queryKey: metricBucketsKey("systems", id(), m.metric_type_name, SERIES_HOURS, SERIES_RESOLUTION_S, m.is_sampled ? m.instance : undefined),
-      queryFn: () => metricBuckets("systems", id(), m.metric_type_name, SERIES_HOURS, SERIES_RESOLUTION_S, m.is_sampled ? m.instance : undefined),
-      enabled: tab() === "overview",
-      // A day's sparkline does not visibly move in five seconds; the latest
-      // value beside it rides the metrics read, which does.
-      refetchInterval: SERIES_POLL_MS,
-    })),
+      const instance = m.is_sampled ? m.instance : undefined;
+      const h = hours();
+      const step = seriesStepS();
+      if (h === undefined) {
+        const { from, to } = resolveRange(range(), 0);
+        return {
+          queryKey: metricBucketsBetweenKey("systems", id(), m.metric_type_name, from, to, step, instance),
+          queryFn: () => metricBucketsBetween("systems", id(), m.metric_type_name, from, to, step, instance),
+          enabled: tab() === "overview",
+          // A range ending in the future still fills; one wholly past holds.
+          refetchInterval: to > Date.now() ? SERIES_POLL_MS : false,
+        };
+      }
+      return {
+        queryKey: metricBucketsKey("systems", id(), m.metric_type_name, h, step, instance),
+        queryFn: () => metricBuckets("systems", id(), m.metric_type_name, h, step, instance),
+        enabled: tab() === "overview",
+        // A day's sparkline does not visibly move in five seconds; the latest
+        // value beside it rides the metrics read, which does.
+        refetchInterval: SERIES_POLL_MS,
+      };
+    }),
   }));
   const metricSeriesData = () => kpiMetrics().map((_, i) => seriesQueries[i]?.data);
   const eventsQ = useQuery(() => ({ queryKey: systemEventsKey(id()), queryFn: () => systemEvents(id()), enabled: tab() === "activity", refetchInterval: LEAF_POLL_MS }));
@@ -354,7 +396,15 @@ export default function SystemZoom() {
                 <span data-testid="slots-short" class="tabular-nums text-incomplete">{strip()!.filled} of {strip()!.total} slots filled</span>
               </Show>
             </div>
-            <TabRail tabs={tabs()} activeKey={tab} guard={leave} />
+            <TabRail
+              tabs={tabs()}
+              activeKey={tab}
+              guard={leave}
+              // The range governs Overview's charts. Activity's reads keep
+              // their own fixed windows (#2304's follow-up), so the control
+              // is not offered where it would be ignored.
+              end={tab() === "overview" ? <TimeRangePicker range={range()} onChange={setRange} allowCustom={can(me.data, "view", "read")} /> : undefined}
+            />
             <Show when={tab() === "configure"}>
               {/* A sole system's location has no page of its own: it configures
                   here, first, as the page reads (its card sits above the
@@ -612,13 +662,13 @@ export default function SystemZoom() {
                   </Show>
         <Show when={kpiMetrics().length > 0}>
           <section data-testid="data-tab" class="flex flex-col gap-3">
-            <Eyebrow label="Data" hint="Every metric the standard declares, stacked: the last 24 hours as a sparkline beside the latest value. Click a row for the full chart. Raw samples, capped; a series still on its contract default has nothing to chart yet." />
+            <Eyebrow label="Data" hint="Every metric the standard declares, stacked: the page's time range as a sparkline beside the latest value. Click a row for the full chart. Raw samples, capped; a series still on its contract default has nothing to chart yet." />
             <div class="overflow-x-auto rounded-box border border-base-300">
               <table class="table table-sm">
                 <thead>
                   <tr>
                     <th>Metric</th>
-                    <th>Last 24h</th>
+                    <th>{seriesColumn()}</th>
                     <th class="text-right">Latest</th>
                     <th></th>
                   </tr>
@@ -634,7 +684,7 @@ export default function SystemZoom() {
                         >
                           <td>{entityLabel({ name: m.metric_type_name, label: m.label })}</td>
                           <td>
-                            <TimeseriesChart spark buckets={metricSeriesData()[i()]?.buckets ?? []} resolutionMs={SERIES_RESOLUTION_S * 1000} now={historyNow()} windowMs={SERIES_HOURS * 3600_000} />
+                            <TimeseriesChart spark buckets={metricSeriesData()[i()]?.buckets ?? []} resolutionMs={seriesStepS() * 1000} now={seriesNow()} windowMs={seriesWindowMs()} />
                           </td>
                           <td class="text-right font-mono tabular-nums">{m.value === null || m.value === undefined ? "" : String(m.value)}</td>
                           <td class="text-right text-[10px] text-base-content/45">
@@ -646,7 +696,7 @@ export default function SystemZoom() {
                         <Show when={seriesPick() === m.metric_type_name}>
                           <tr>
                             <td colspan="4" class="bg-base-200/40">
-                              <TimeseriesChart buckets={metricSeriesData()[i()]?.buckets ?? []} resolutionMs={SERIES_RESOLUTION_S * 1000} now={historyNow()} windowMs={SERIES_HOURS * 3600_000} />
+                              <TimeseriesChart buckets={metricSeriesData()[i()]?.buckets ?? []} resolutionMs={seriesStepS() * 1000} now={seriesNow()} windowMs={seriesWindowMs()} />
                             </td>
                           </tr>
                         </Show>
