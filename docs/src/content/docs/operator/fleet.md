@@ -75,6 +75,11 @@ screenshots:
       - ".og-statestrip"
       # The logs under the health history render seed-run stamps.
       - "[data-testid=logs-tab]"
+      # A rule's event lands when its sustain passes after the seed (#2434),
+      # so its stamp is the capture's own; its left edge holds, so the box
+      # is declared wide enough for any stamp.
+      - selector: "[data-testid=events-tab] li span.tabular-nums"
+        width: 130
   - id: fleet-data
     path: /web/systems/huddle
     steps:
