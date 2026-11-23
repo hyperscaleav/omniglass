@@ -40,7 +40,7 @@ import { spans as timelineSpans } from "../lib/timeline";
 import { systemEvents, systemEventsKey, systemLogs, systemLogsKey, type SystemLogs } from "../lib/system_activity";
 import type { LogFilter } from "../lib/logs";
 import LogFilters from "./LogFilters";
-import { DEFAULT_RANGE, useTimeRange, type TimeRange } from "../lib/time_range";
+import { DEFAULT_RANGE, useHostTimeRange, type TimeRange } from "../lib/time_range";
 import TimeRangePicker from "./TimeRangePicker";
 import { memberModel, systemsAtLocation, type MemberContext } from "../lib/detail";
 import MetricsGrid from "./MetricsGrid";
@@ -170,11 +170,11 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
     refetchInterval: LEAF_POLL_MS,
   }));
   // The body's one time range (#2304). On a page it is held in the address,
-  // so a link carries it; in a blade it is the blade's own (#2423), so a
-  // blade never rewrites the page beneath it. A preset slides to now and
+  // so a link carries it; in a blade it opens on the page's and is then the
+  // blade's own (#2423, #2425), so a blade never rewrites the page beneath it. A preset slides to now and
   // reads `hours` back from it; an absolute range reads its own [from, to)
   // through the views binding (the metrics grid, #2424, reads it).
-  const { range: asked, setRange } = props.host === "page" ? useTimeRange() : bladeRange();
+  const { range: asked, setRange } = useHostTimeRange(props.host);
   // An absolute range reads through the views read, which needs view:read: a
   // shared link opened by a caller without it reads the default instead, and
   // the data section says why rather than drawing empty charts.
@@ -642,11 +642,4 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
       </div>
     </DetailGate>
   );
-}
-
-// A blade's own time range (#2423): the same shape useTimeRange gives a page,
-// held in a signal, so a range chosen in a blade never touches the address.
-function bladeRange(): { range: () => TimeRange; setRange: (r: TimeRange) => void } {
-  const [range, setRange] = createSignal<TimeRange>(DEFAULT_RANGE);
-  return { range, setRange };
 }
