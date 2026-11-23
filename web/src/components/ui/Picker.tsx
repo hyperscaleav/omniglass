@@ -39,6 +39,7 @@ interface PickerCommon {
   id?: string;
   "aria-label"?: string;
   "aria-labelledby"?: string;
+  "aria-required"?: boolean | "true" | "false";
   class?: string;
   onCreate?: (text: string) => void;
   createLabel?: (text: string) => string;
@@ -53,6 +54,10 @@ export type PickerProps =
 // always keeps it and a pick of it becomes onCreate instead of a value.
 type Row = PickerOption & { create?: true };
 const CREATE_KEY = "\u0000create";
+
+// The field's shell: a daisyUI input that grows to hold chips. A caller adds
+// to it (font-data for values that are identifiers), never restyles it whole.
+export const PICKER_CLASS = "input input-bordered flex h-auto min-h-10 w-full flex-wrap items-center gap-1 py-1";
 
 export const matches = (o: PickerOption, text: string): boolean => {
   const q = text.trim().toLowerCase();
@@ -124,6 +129,7 @@ export default function Picker(props: PickerProps) {
       id={props.id}
       aria-label={props["aria-label"]}
       aria-labelledby={props["aria-labelledby"]}
+      aria-required={props["aria-required"]}
       data-field-target=""
       class="min-w-24 flex-1 bg-transparent py-1 text-sm outline-none placeholder:text-base-content/40"
     />
@@ -142,7 +148,7 @@ export default function Picker(props: PickerProps) {
       </Content>
     </Portal>
   );
-  const shell = props.class ?? "input input-bordered flex h-auto min-h-10 w-full flex-wrap items-center gap-1 py-1";
+  const shell = props.class ?? PICKER_CLASS;
 
   if (props.multiple) {
     const p = props;
