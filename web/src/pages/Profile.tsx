@@ -8,6 +8,7 @@ import KVStacked from "../components/KVStacked";
 import FieldRow from "../components/FieldRow";
 import { useFormActions } from "../lib/formactions";
 import SessionsList from "../components/SessionsList";
+import SelfIdentityLinks from "../components/SelfIdentityLinks";
 import { passwordError, isPasswordPolicyMessage, tokenTtlError } from "../lib/validate";
 import { can, useMe, useUpdateProfile, useChangePassword, setMyAvatar, removeMyAvatar, fetchMyAvatar } from "../lib/auth";
 import { useSessions, useRevokeSession, useRevokeAllSelfSessions, createSelfToken, type Session } from "../lib/sessions";
@@ -425,6 +426,9 @@ export default function Profile() {
             </div>
           </div>
         </Show>
+
+        {/* Single sign-on (#2362): the caller's own identity links. */}
+        <SelfIdentityLinks />
 
         {/* Sessions: the browsers and devices the caller is signed in from, each revocable. */}
         <div class="card border border-base-300 bg-base-200">

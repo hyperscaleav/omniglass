@@ -551,3 +551,32 @@ func printable(b []byte) string {
 	}
 	return sb.String()
 }
+
+// HTTPClient is the client as a plain *http.Client, for a library that takes
+// one (the OIDC discovery, key set and token calls, #2362): every request it
+// sends has its URL judged by the policy first and its dial judged again,
+// follows no redirect, and is bounded as every send is. A refused URL is the
+// request's error, answering errors.Is(err, ErrRefused).
+func (c *Client) HTTPClient() *http.Client {
+	return &http.Client{
+		Transport:     checkedTransport{policy: c.policy, next: c.http.Transport},
+		Timeout:       c.http.Timeout,
+		CheckRedirect: c.http.CheckRedirect,
+	}
+}
+
+// checkedTransport judges each request's URL before handing it on.
+type checkedTransport struct {
+	policy Policy
+	next   http.RoundTripper
+}
+
+func (t checkedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if _, err := t.policy.CheckURL(req.URL.String()); err != nil {
+		if req.Body != nil {
+			_ = req.Body.Close()
+		}
+		return nil, err
+	}
+	return t.next.RoundTrip(req)
+}

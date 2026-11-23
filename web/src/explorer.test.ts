@@ -22,6 +22,7 @@ import {
   runLine,
   weekOf,
 } from "../e2e/explorerlib.mjs";
+import { run } from "../e2e/explorerrun.mjs";
 
 const mission = (id: string, surfaces: string[], lenses = ["ux"]) => ({ id, persona: "p", user: "operator", goal: "g", scenario: "dev", lenses, surfaces, done: "d" });
 
@@ -251,5 +252,12 @@ describe("planFiling's duplicate guard", () => {
       ["suggestion", "design:b"],
       ["same-run-duplicate", "ux:a"],
     ]);
+  });
+});
+
+describe("explorer run helper (#1777)", () => {
+  it("returns child output larger than Node's 1 MiB default without ENOBUFS", () => {
+    const out = run(process.execPath, ["-e", "process.stdout.write('x'.repeat(4 * 1024 * 1024))"]);
+    expect(out.length).toBe(4 * 1024 * 1024);
   });
 });

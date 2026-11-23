@@ -49,16 +49,18 @@ func (t *turns) resume(ctx context.Context, sess *assistant.Session, name string
 	t.conv, t.kept = conv, len(history)
 	t.loop.Resume(history)
 	fmt.Fprintf(stderr, "omnibot: conversation %s, %d messages kept\n", name, len(history))
-	if pending == nil {
-		return nil
-	}
 	// The stored pending only says a call waits; what is put to the person is
-	// the transcript's own open call, so the two cannot disagree.
+	// the transcript's own open call, so the two cannot disagree. An open call
+	// with no marker (a client kept the turn without it, #2129) is asked the
+	// same way, so a proposed write is never silently dropped.
 	waiting, ok, err := t.loop.Waiting(ctx, history)
 	if err != nil {
 		return err
 	}
-	if !ok || waiting.CallID != pending.CallID {
+	if pending == nil && !ok {
+		return nil
+	}
+	if !ok || (pending != nil && waiting.CallID != pending.CallID) {
 		return fmt.Errorf("omnibot: the conversation %s says a call waits, but its transcript has no such open call", name)
 	}
 	approved := false
