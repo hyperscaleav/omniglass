@@ -1243,3 +1243,51 @@ func mapEndpointWriteErr(err error) error {
 	}
 	return fmt.Errorf("storage: endpoint write: %w", err)
 }
+
+// EndpointTargetViolation is one stored bare dialed endpoint whose params fail
+// checkTarget: written before the write-time check (#1187), so the outpost
+// skips its task forever and its reachability never reads.
+type EndpointTargetViolation struct {
+	Endpoint  string // "<component>/<endpoint name>", or just the name when server-hosted
+	Transport string
+	Problem   string // checkTarget's message, which names the key to set
+}
+
+// StoredEndpointTargetViolations audits, for the boot audit (ADR-1100's pattern
+// for an invariant that only gates new writes), every stored bare dialed
+// endpoint with params through the same checkTarget a write is held to, and
+// returns each that fails. A row that passes is not touched, and neither is a
+// failing one: the audit only names it, so an operator can mend it. A row with
+// no params at all is #2228's. Ordered by endpoint name.
+func (p *PG) StoredEndpointTargetViolations(ctx context.Context) ([]EndpointTargetViolation, error) {
+	rows, err := p.pool.Query(ctx, `
+		select coalesce((select c.name from component c where c.id = e.component) || '/', '') || e.name,
+		       e.transport, e.params
+		from endpoint e
+		where e.driver_id is null and e.params is not null
+		order by 1`)
+	if err != nil {
+		return nil, fmt.Errorf("storage: audit the stored endpoint targets: %w", err)
+	}
+	type stored struct {
+		name, transport string
+		params          []byte
+	}
+	all, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (stored, error) {
+		var s stored
+		return s, r.Scan(&s.name, &s.transport, &s.params)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("storage: audit the stored endpoint targets: %w", err)
+	}
+	var out []EndpointTargetViolation
+	for _, s := range all {
+		if !transport.IsDialed(s.transport) {
+			continue
+		}
+		if err := checkTarget(s.transport, s.params); err != nil {
+			out = append(out, EndpointTargetViolation{Endpoint: s.name, Transport: s.transport, Problem: err.Error()})
+		}
+	}
+	return out, nil
+}

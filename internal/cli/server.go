@@ -354,4 +354,13 @@ func auditWriterRuling(ctx context.Context, log *slog.Logger, gw *storage.PG) {
 		log.Warn("a stored declaration names a key its writer class refuses; it is held inert",
 			"where", v.Where, "key", v.Key, "writer_class", string(v.Class))
 	}
+	evs, err := gw.StoredEndpointTargetViolations(ctx)
+	if err != nil {
+		log.Warn("endpoint target audit failed", "error", err.Error())
+		return
+	}
+	for _, v := range evs {
+		log.Warn("a stored endpoint has no target its outpost can dial, so its reachability never reads; edit its params",
+			"endpoint", v.Endpoint, "transport", v.Transport, "fix", v.Problem)
+	}
 }

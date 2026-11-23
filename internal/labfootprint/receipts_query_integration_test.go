@@ -98,7 +98,109 @@ func TestIntegrationReceiptsQueryHasNoSubPlan(t *testing.T) {
 	if err := conn.QueryRow(ctx, "explain (format json) "+ReceiptsQuery(from, to)).Scan(&plan); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(plan, `"Subplan Name"`) {
+	if strings.Contains(plan, `"Subplan Name": "SubPlan`) {
 		t.Fatalf("the plan runs a subquery per row:\n%s", plan)
+	}
+}
+
+// wholeTableReceiptsQuery is the query as it read before #1947: window
+// functions over every ledgered receipt. It is the oracle the bounded query
+// must return the same rows as.
+func wholeTableReceiptsQuery(from, to time.Time) string {
+	return fmt.Sprintf(`select row_to_json(r) from (
+		with ledgered as (
+			select outpost, boot, seq, minted, resolved, deliveries, ledger, outcome, outpost_loss,
+				min(seq) filter (where minted > to_timestamp(%[1]s) and minted <= to_timestamp(%[2]s))
+					over (partition by boot) as first_in,
+				min(seq) over (partition by boot) as boot_first
+			from telemetry_receipt where ledger is not null),
+		placed as (
+			select *, max(seq) filter (where seq < first_in) over (partition by boot) as below,
+				bool_or(first_in is not null) over (partition by outpost) as outpost_in
+			from ledgered)
+		select outpost, boot, seq, minted, resolved, deliveries, ledger, outcome, outpost_loss from placed
+		where (first_in is not null and (seq >= first_in or seq = below))
+			or (first_in is null and outpost_in and seq = boot_first and minted > to_timestamp(%[1]s))
+		order by outpost, boot, seq) r`,
+		epoch(from), epoch(to))
+}
+
+func readReceiptLines(t *testing.T, ctx context.Context, conn *pgx.Conn, q string) []string {
+	t.Helper()
+	rows, err := conn.Query(ctx, q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var lines []string
+	for rows.Next() {
+		var line string
+		if err := rows.Scan(&line); err != nil {
+			t.Fatal(err)
+		}
+		lines = append(lines, line)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	return lines
+}
+
+// The bounded read returns exactly what the whole-table read did, on the
+// fixture's boots before, across and after the window, a restarted boot, a
+// push-lane boot and a boot whose only receipt is after the window (#1947).
+func TestIntegrationReceiptsQueryMatchesTheWholeTableRead(t *testing.T) {
+	t.Parallel()
+	ctx, conn, from, to := receiptsDB(t)
+	for _, q := range []string{
+		`insert into telemetry_receipt (batch_id, boot, seq, minted, ledger) values
+			('p1', 'srv1', 1, $1, '{1,0,null,null,null,null,null,null}'),
+			('p2', 'srv1', 2, $2, '{1,0,null,null,null,null,null,null}'),
+			('p3', 'srv1', 3, $3, '{1,0,null,null,null,null,null,null}'),
+			('p4', 'srv2', 1, $3, '{1,0,null,null,null,null,null,null}')`,
+	} {
+		if _, err := conn.Exec(ctx, q, from.Add(-time.Hour), from.Add(time.Minute), to.Add(time.Minute)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := readReceiptLines(t, ctx, conn, wholeTableReceiptsQuery(from, to))
+	got := readReceiptLines(t, ctx, conn, ReceiptsQuery(from, to))
+	if len(want) == 0 || strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("bounded read:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+// The bounded read reaches the receipts by the minted and (boot, seq)
+// indexes, never by a sequential scan of the table, however many receipts it
+// holds (#1947). The table is grown and analyzed so the planner prefers the
+// indexes the way it does on a soak.
+func TestIntegrationReceiptsQueryUsesTheIndexes(t *testing.T) {
+	t.Parallel()
+	ctx, conn, from, to := receiptsDB(t)
+	if _, err := conn.Exec(ctx, `insert into telemetry_receipt (batch_id, outpost, boot, seq, minted, ledger)
+		select 'bulk-' || g, 'z', 'z' || (g / 100), g % 100 + 1, $1::timestamptz - (g || ' seconds')::interval,
+			'{1,0,null,null,null,null,null,null}'::bigint[]
+		from generate_series(1, 60000) g`, from.Add(-time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	// A toy table lets the planner call a sequential scan cheap; forbidding it
+	// asks whether the indexes can serve every arm of the read, which is what
+	// a table of millions of receipts then makes the cheaper plan.
+	for _, q := range []string{`analyze telemetry_receipt`, `set enable_seqscan = off`} {
+		if _, err := conn.Exec(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var plan string
+	if err := conn.QueryRow(ctx, "explain (format json) "+ReceiptsQuery(from, to)).Scan(&plan); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(plan, `"Seq Scan"`) {
+		t.Fatalf("the plan scans the whole table:\n%s", plan)
+	}
+	for _, idx := range []string{"telemetry_receipt_ledgered_minted_idx", "telemetry_receipt_ledgered_boot_seq_idx"} {
+		if !strings.Contains(plan, idx) {
+			t.Fatalf("the plan does not use %s:\n%s", idx, plan)
+		}
 	}
 }

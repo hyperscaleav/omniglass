@@ -124,3 +124,16 @@ func startBus(t *testing.T) *nats.Conn {
 	t.Cleanup(nc.Close)
 	return nc
 }
+
+// The wire lists the devices served, and past the cap says it did not (#1962).
+func TestObservationWireListsServedDevicesUpToTheCap(t *testing.T) {
+	w := observationWire("edge", sim.ObservationSnapshot{ServedIDs: []string{"a", "b"}}, 0)
+	if fmt.Sprint(w.ServedIDs) != "[a b]" || w.ServedTruncated {
+		t.Fatalf("served = %v truncated %v", w.ServedIDs, w.ServedTruncated)
+	}
+	ids := make([]string, collection.SimObservationServedCap+1)
+	w = observationWire("edge", sim.ObservationSnapshot{ServedIDs: ids}, 0)
+	if len(w.ServedIDs) != 0 || !w.ServedTruncated {
+		t.Fatalf("a fleet past the cap listed %d ids, truncated %v", len(w.ServedIDs), w.ServedTruncated)
+	}
+}
