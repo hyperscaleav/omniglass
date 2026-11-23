@@ -3,6 +3,7 @@ import { For, Show, createMemo, createSignal } from "solid-js";
 import { useQuery } from "@tanstack/solid-query";
 import KVStacked from "../components/KVStacked";
 import { type BladeDef } from "../lib/blades";
+import Tabs from "../components/ui/Tabs";
 import { type Role, ROLES_KEY, listRoles } from "../lib/users";
 
 // RoleDetail is a role's blade body: read-only this slice (custom-role editing is a
@@ -63,34 +64,31 @@ export function PermGrid(props: { universe: string[]; held: string[] }) {
     if (mode() === "held") return "Holds no permission.";
     return "No permissions.";
   });
-  const tabs: { key: PermMode; label: string; count: () => number }[] = [
-    { key: "all", label: "All", count: () => universe().length },
-    { key: "held", label: "Held", count: () => held().length },
-    { key: "missing", label: "Missing", count: () => missing().length },
-  ];
+  const tabs = [
+    { value: "all", label: "All", count: () => universe().length },
+    { value: "held", label: "Held", count: () => held().length },
+    { value: "missing", label: "Missing", count: () => missing().length },
+  ].map((t) => ({ value: t.value, label: <>{t.label}<span class="ml-1 tabular-nums text-base-content/50">{t.count()}</span></> }));
   return (
-    <div class="flex flex-col gap-2">
-      <div role="tablist" class="tabs tabs-box tabs-xs w-fit">
-        <For each={tabs}>
-          {(t) => (
-            <button
-              role="tab"
-              class="tab"
-              classList={{ "tab-active": mode() === t.key }}
-              onClick={() => setMode(t.key)}
-            >
-              {t.label}
-              <span class="ml-1 tabular-nums text-base-content/50">{t.count()}</span>
-            </button>
-          )}
-        </For>
-      </div>
-      <div class="flex max-h-80 flex-col gap-0.5 overflow-y-auto">
-        <For each={rows()} fallback={<span class="text-xs text-base-content/40">{emptyMsg()}</span>}>
-          {(row) => <PermRow perm={row.perm} held={row.held} />}
-        </For>
-      </div>
-    </div>
+    <Tabs
+      label="Permissions"
+      size="xs"
+      class="flex flex-col gap-2"
+      // The panel is the scroll box: Kobalte makes a panel with no control in
+      // it a tab stop, so a keyboard user can scroll a long list.
+      panelClass="max-h-80 overflow-y-auto rounded-field focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/60"
+      value={mode()}
+      onChange={(v) => setMode(v as PermMode)}
+      tabs={tabs}
+    >
+      {() => (
+        <div class="flex flex-col gap-0.5">
+          <For each={rows()} fallback={<span class="text-xs text-base-content/40">{emptyMsg()}</span>}>
+            {(row) => <PermRow perm={row.perm} held={row.held} />}
+          </For>
+        </div>
+      )}
+    </Tabs>
   );
 }
 

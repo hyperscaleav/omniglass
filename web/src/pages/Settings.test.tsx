@@ -6,6 +6,7 @@ import Settings from "./Settings";
 import { SETTINGS_KEY, type SettingsRead } from "../lib/settings";
 import { ME_KEY, type Me } from "../lib/auth";
 import { settingKeys } from "../lib/settingsValidation";
+import { clearToasts, toasts } from "../components/ui/Toast";
 
 // The Settings page renders the settings-engine read through the shared KVRow
 // primitive: one card per namespace, one KVRow per key. Read mode is a value scan
@@ -38,7 +39,10 @@ const defaultRead: SettingsRead = {
 const enterEdit = () => fireEvent.click(screen.getByRole("button", { name: /edit/i }));
 
 describe("Settings page", () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    clearToasts();
+  });
 
   it("read mode shows the namespace, key labels, and values with no badge for a declared default", async () => {
     mount(defaultRead);
@@ -80,6 +84,8 @@ describe("Settings page", () => {
     await waitFor(() => expect(calls.length).toBe(1));
     expect(calls[0].url).toContain("/settings/ui");
     expect(calls[0].body).toEqual({ theme: "omniglass-light" });
+    // The save lands as a success toast naming the setting (#2485).
+    await waitFor(() => expect(toasts().map((t) => [t.tone, t.title])).toEqual([["success", "ui.theme saved"]]));
   });
 
   it("sources the theme select options from the generated schema", async () => {
