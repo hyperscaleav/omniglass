@@ -30,6 +30,5 @@
   the code under test must be told, picked again on a collision). It reads `Listen*` calls and
   httptest servers only; a port released through a wrapper, a simulated face's `StopTCPSession` and
   a restart on the same port, is the guard `TestNoTestRestartsAFaceAtALiteralAddress`'s: it fails a
-  test that restarts a face at a literal loopback address (the sim package's own six are excused
-  until #1881). The testcontainer form of the class is
+  test that restarts a face at a literal loopback address. The testcontainer form of the class is
   `fixed-testcontainer-port`.
