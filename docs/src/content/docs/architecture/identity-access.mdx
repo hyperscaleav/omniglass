@@ -501,7 +501,7 @@ created under a parent resolves that parent within `visible_set(P, create)`, and
 refuses asks `visible_set(P, read)` which refusal is owed: a parent the caller can read is the
 **403**, and one outside read answers the same `404 parent location not found` as a parent that
 does not exist, byte for byte, so a create holder cannot probe location names it cannot read
-([ADR-1343](/architecture/decisions/#adr-1343-a-location-create-resolves-its-parent-under-read-before-create)).
+([ADR-1343](/architecture/decisions/#adr-1343-a-create-resolves-its-parent-under-read-before-create)).
 A root needs an all-scoped create grant (403 otherwise). Component and system create, a location
 `:move` and a `:renderLabel` draft still answer an existing parent outside their own scope with the
 403 ([#1964](https://github.com/hyperscaleav/omniglass/issues/1964)).
