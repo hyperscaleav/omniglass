@@ -300,6 +300,13 @@
       "setup": []
     },
     {
+      "id": "see-what-needs-attention",
+      "title": "See what needs attention",
+      "description": "Read Home's Need attention card, open it, and find Explore's chip saying the same words, with exactly that many rows beneath it.",
+      "lab": [],
+      "setup": []
+    },
+    {
       "id": "send-a-command-from-an-alarm",
       "title": "Send a command from an alarm",
       "description": "A display has an alarm. Send it the power command from the alarm's own row, picking the value from the list the command accepts, and follow it until the display's reply settles it.",
