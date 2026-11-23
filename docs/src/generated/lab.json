@@ -161,6 +161,13 @@
       "setup": []
     },
     {
+      "id": "learn-rules-and-alarms",
+      "title": "Learn: rules and alarms",
+      "description": "Open lesson 3 of Learn, preview a temperature threshold on a simulated amplifier over its real samples, then unplug it and watch the reachability rule open an alarm in the lesson.",
+      "lab": [],
+      "setup": []
+    },
+    {
       "id": "link-a-colleague-to-a-rule",
       "title": "Link a colleague to a rule",
       "description": "Open an event rule's drawer and see its address in the URL, close it with Back, and land on the same drawer from the address alone.",
