@@ -10,6 +10,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
+	"github.com/jackc/pgx/v5"
 )
 
 // A bare dialed endpoint's params must carry the one key the node dials
@@ -111,5 +112,61 @@ func TestABareDialedEndpointsParamsNameATarget(t *testing.T) {
 	}
 	if _, err := gw.UpdateEndpoint(ctx, "", ep.ID, storage.EndpointPatch{}, all, all); err != nil {
 		t.Errorf("an edit without params = %v, want accepted", err)
+	}
+}
+
+// Endpoints stored before the write-time target check (#1187) are named by the
+// boot audit (#2249): host and port keys, a bare host on a transport with no
+// default port. Rows that pass the check are not named, and nothing is rewritten.
+func TestStoredEndpointTargetViolations(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(gw.Close)
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatal(err)
+	}
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { conn.Close(ctx) })
+
+	plant := []struct{ name, transport, params string }{
+		{"hostport", "tcp", `{"host":"10.0.0.1","port":8080}`},
+		{"barehost", "tcp", `{"target":"10.0.0.1"}`},
+		{"okaytcp", "tcp", `{"target":"10.0.0.1:8080"}`},
+		{"okaysnmp", "snmp", `{"target":"10.0.0.1"}`},
+		{"okayicmp", "icmp", `{"target":"10.0.0.1"}`},
+		{"okayudp", "udp", `{"listen-port":4000}`},
+	}
+	for _, e := range plant {
+		mustCreateComponent(t, gw, storage.ComponentSpec{Name: "c-" + e.name}, all)
+		if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, params)
+			select $1, $2, id, $3::jsonb from component where name = $4`, e.name, e.transport, e.params, "c-"+e.name); err != nil {
+			t.Fatalf("plant %s: %v", e.name, err)
+		}
+	}
+
+	got, err := gw.StoredEndpointTargetViolations(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].Endpoint != "c-barehost/barehost" || got[1].Endpoint != "c-hostport/hostport" {
+		t.Fatalf("violations = %+v, want barehost and hostport only", got)
+	}
+	if !strings.Contains(got[1].Problem, "target") {
+		t.Errorf("problem %q does not name target", got[1].Problem)
+	}
+	var params string
+	if err := conn.QueryRow(ctx, `select params::text from endpoint where name = 'hostport'`).Scan(&params); err != nil || !strings.Contains(params, "host") {
+		t.Errorf("the audit rewrote a row: %q %v", params, err)
 	}
 }

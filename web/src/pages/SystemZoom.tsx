@@ -38,7 +38,7 @@ import { useSeverity } from "../lib/severity";
 import AlarmTimeline, { createTimelineToggles } from "../components/AlarmTimeline";
 import RuleLink from "../components/RuleLink";
 import SeverityBadge from "../components/SeverityBadge";
-import AcknowledgeButton from "../components/AcknowledgeButton";
+import AlarmActions from "../components/AlarmActions";
 import { stretchReasons, memberAlarmRows, stretchesOf, markerX, uptimePct, type MemberAlarms } from "../lib/system_history";
 import { spans as timelineSpans } from "../lib/timeline";
 import { systemEvents, systemEventsKey, systemLogs, systemLogsKey, type SystemLogs } from "../lib/system_activity";
@@ -570,8 +570,7 @@ export default function SystemZoom() {
                                   · acknowledged{a.acknowledgedBy ? ` by ${a.acknowledgedBy}` : ""}{a.acknowledgedAt ? ` ${fmtTime(a.acknowledgedAt)}` : ""}
                                 </span>
                               </Show>
-                              <Show when={a.componentId}>{(cid) => <AcknowledgeButton component={cid()} alarm={a} />}</Show>
-                              <Show when={a.componentId}>{timelines.button(a.id, a.message)}</Show>
+                              <Show when={a.componentId}>{(cid) => <AlarmActions componentId={cid()} alarm={a} show={{ ack: true, timeline: timelines }} />}</Show>
                             </div>
                             <Show when={a.componentId && timelines.isOpen(a.id)}>
                               <AlarmTimeline component={a.componentId!} alarmId={a.id} id={timelines.panelId(a.id)} label={timelines.label(a.message)} />
