@@ -40,18 +40,22 @@ export default function AlarmTimeline(props: { component: string; alarmId: strin
     queryFn: () => alarmTimeline(props.component, props.alarmId),
     refetchInterval: ALARM_TIMELINE_POLL_MS,
     refetchOnWindowFocus: false,
+    retry: false,
   }));
   const now = createMemo(() => (q.data, Date.now()));
   const [retryErr, setRetryErr] = createSignal<string | null>(null);
   return (
     <div id={props.id} class="flex flex-col gap-1 rounded-box bg-base-200/40 px-2.5 py-2">
       <Show when={q.error}>
-        <div role="alert" class="alert alert-error alert-soft py-1 text-xs"><span>{describeError(q.error)}</span></div>
+        <div role="alert" class="alert alert-error alert-soft flex items-center justify-between gap-2 py-1 text-xs">
+          <span class="min-w-0 truncate" title={describeError(q.error)}>Could not read this alarm's timeline.</span>
+          <Button size="xs" intent="quiet" onClick={() => void q.refetch()}>Retry</Button>
+        </div>
       </Show>
       <Show when={retryErr()}>
         <div role="alert" class="alert alert-error alert-soft py-1 text-xs"><span>{retryErr()}</span></div>
       </Show>
-      <Show when={q.isLoading}>
+      <Show when={q.isLoading && !q.error}>
         <span class="text-[11px] text-base-content/45">Reading the timeline…</span>
       </Show>
       <Show when={q.data}>

@@ -20,7 +20,7 @@ carry none at the end.
   yourself. The label is optional and free-form; the name is what every binding carries
   (lowercase letters, digits, and hyphens, no dots and no underscores, unique tenant-wide), check the
   entity kinds it **applies to** (leave
-  all unchecked for any), toggle whether its bindings **cascade**, and set its **value domain**, either free
+  all unchecked for any), switch **Cascades to descendants** on or off (on, a binding carries to every descendant of the tagged entity; off, it stays on that entity), and set its **value domain**, either free
   text or **constrained to a fixed set** (an enum, like `environment` being one of `prod`, `staging`, `dev`).
   An enum is enforced on every bind and shown as a strict dropdown; a free key autocompletes the values already
   in use. Minting the vocabulary is deliberately admin-gated; *setting a value* on a key is the ordinary entity

@@ -1,9 +1,9 @@
 import { Show, createMemo } from "solid-js";
-import { Select } from "@kobalte/core/select";
+import Select from "./ui/Select";
 import { useFieldLabelId } from "../lib/fieldlabel";
 import { flattenTree, type FlatOption, type TreeNode } from "../lib/treeselect";
 
-// TreeSelect: a Kobalte Select whose list reads as a tree. Options come out in
+// TreeSelect: a Select (ui/, over Kobalte) whose list reads as a tree. Options come out in
 // pre-order with each item padded by its depth and a guide glyph below the roots
 // (both drawn by CSS, app.css .tree-glyph), so an operator can tell what tier a
 // candidate sits at, which a flat alphabetical list cannot show. The closed
@@ -56,56 +56,23 @@ export default function TreeSelect(props: TreeSelectProps) {
     <Select<FlatOption>
       options={options()}
       optionValue="value"
-      optionTextValue="label"
+      optionLabel="label"
       value={selected()}
-      onChange={(o) => {
-        if (o) props.onChange(o.value);
-      }}
-      disallowEmptySelection
+      onChange={(o) => props.onChange(o.value)}
       disabled={props.disabled}
       // Kobalte reads the empty key as no selection and shows the placeholder, so
       // the root option's label is what stands in for it.
-      placeholder={props.rootLabel ?? "Select…"}
-      // Modal while open, as a native dropdown is: the list is portaled to the
-      // body, and a drawer (a modal Dialog) marks anything added outside it
-      // aria-hidden unless the list hides the page itself while it is open.
-      modal
-      sameWidth
-      gutter={4}
-      itemComponent={(p) => (
-        <Select.Item
-          item={p.item}
-          class="flex cursor-pointer items-center rounded-field py-1.5 pr-3 text-sm outline-none data-[highlighted]:bg-base-200 data-[selected]:font-semibold data-[disabled]:cursor-default data-[disabled]:text-base-content/40"
-          style={{ "padding-left": padFor(p.item.rawValue.depth) }}
-        >
-          <Select.ItemLabel classList={{ "tree-glyph": p.item.rawValue.depth > 0 }}>
-            {p.item.rawValue.label}
-          </Select.ItemLabel>
-        </Select.Item>
+      placeholder={props.rootLabel ?? "Select\u2026"}
+      optionStyle={(o) => ({ "padding-left": padFor(o.depth) })}
+      optionClass={(o) => (o.depth > 0 ? "tree-glyph" : undefined)}
+      id={props.id}
+      aria-labelledby={labelId}
+      class={props.class}
+      renderValue={(o) => (
+        <Show when={o.ancestors.length > 0} fallback={o.label}>
+          <span class="tree-path" data-path={o.ancestors.join(" / ")}>{o.label}</span>
+        </Show>
       )}
-    >
-      <Select.Trigger
-        id={props.id}
-        aria-labelledby={labelId}
-        data-field-target=""
-        class={props.class ?? "select select-bordered w-full text-left"}
-      >
-        <Select.Value<FlatOption> class="min-w-0 truncate">
-          {(state) => {
-            const o = state.selectedOption();
-            return (
-              <Show when={o.ancestors.length > 0} fallback={o.label}>
-                <span class="tree-path" data-path={o.ancestors.join(" / ")}>{o.label}</span>
-              </Show>
-            );
-          }}
-        </Select.Value>
-      </Select.Trigger>
-      <Select.Portal>
-        <Select.Content class="z-100 rounded-box border border-base-300 bg-base-100 shadow-lg">
-          <Select.Listbox class="max-h-72 overflow-y-auto p-1 focus:outline-none" />
-        </Select.Content>
-      </Select.Portal>
-    </Select>
+    />
   );
 }

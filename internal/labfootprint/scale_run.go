@@ -772,26 +772,61 @@ func (h *harness) readDelivery(ctx context.Context, w delivery.Window, bound tim
 	if w.To.Sub(w.From) > MaxDeliveryWindow {
 		return DeliveryRead{Reason: "the window is over 23 h, and receipts are pruned at a day"}
 	}
-	deadline := time.Now().Add(bound)
+	d, err := settleDelivery(ctx, w, bound, settlePoll, settleReads{
+		receipts: func(ctx context.Context) ([]delivery.Receipt, error) {
+			out, err := h.psql(ctx, ReceiptsQuery(w.From, w.To))
+			if err != nil {
+				return nil, fmt.Errorf("the receipts did not read (a lab from before this build's ledger has none: bring it up again): %w", err)
+			}
+			return ParseReceipts(out)
+		},
+		backlog: func(ctx context.Context) Backlog {
+			if out, err := h.psql(ctx, BacklogQuery(w.To)); err == nil {
+				return ParseBacklog(out)
+			}
+			return nil
+		},
+		now: time.Now, sleep: sleep,
+	})
+	if err != nil {
+		return DeliveryRead{Reason: err.Error()}
+	}
+	return h.readSchedule(ctx, d)
+}
+
+// settleReads is what the settle loop reads and waits on, so the loop is
+// testable without a database.
+type settleReads struct {
+	receipts func(context.Context) ([]delivery.Receipt, error)
+	backlog  func(context.Context) Backlog
+	now      func() time.Time
+	sleep    func(context.Context, time.Duration) error
+}
+
+// settleDelivery is the settle loop (#1947). Each poll reads the backlog, which
+// is cheap, and re-reads the receipts only when the ack floor has moved past
+// what the last receipts read saw: a batch lands only as the consumer acks it,
+// so with the floor where it was nothing can have settled. The receipts are
+// read once at the first poll whatever the floor.
+func settleDelivery(ctx context.Context, w delivery.Window, bound, poll time.Duration, r settleReads) (DeliveryRead, error) {
+	deadline := r.now().Add(bound)
+	var rs []delivery.Receipt
+	read, readFloor := false, 0.0
 	for {
-		out, err := h.psql(ctx, ReceiptsQuery(w.From, w.To))
-		if err != nil {
-			return DeliveryRead{Reason: fmt.Sprintf("the receipts did not read (a lab from before this build's ledger has none: bring it up again): %v", err)}
-		}
-		rs, err := ParseReceipts(out)
-		if err != nil {
-			return DeliveryRead{Reason: err.Error()}
-		}
-		var backlog Backlog
-		if out, err := h.psql(ctx, BacklogQuery(w.To)); err == nil {
-			backlog = ParseBacklog(out)
+		backlog := r.backlog(ctx)
+		if floor, seen := backlog.LatestFloor(); !read || seen && floor > readFloor {
+			var err error
+			if rs, err = r.receipts(ctx); err != nil {
+				return DeliveryRead{}, err
+			}
+			read, readFloor = true, floor
 		}
 		d := DeliveryReadOf(w, rs, backlog)
-		if d.StreamClear && len(delivery.Unsettled(w, rs)) == 0 || !time.Now().Before(deadline) {
-			return h.readSchedule(ctx, d)
+		if d.StreamClear && len(delivery.Unsettled(w, rs)) == 0 || !r.now().Before(deadline) {
+			return d, nil
 		}
-		if err := sleep(ctx, settlePoll); err != nil {
-			return DeliveryRead{Reason: err.Error()}
+		if err := r.sleep(ctx, poll); err != nil {
+			return DeliveryRead{}, err
 		}
 	}
 }

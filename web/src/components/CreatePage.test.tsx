@@ -102,7 +102,7 @@ function mount(path: string, me: Me = admin, standards: Standard[] = []) {
 }
 
 const fromTemplate = async () => {
-  fireEvent.click(await screen.findByRole("button", { name: "From a template" }));
+  fireEvent.click(await screen.findByRole("radio", { name: "From a template" }));
   return (await screen.findByLabelText("Template")) as HTMLSelectElement;
 };
 const offered = (picker: HTMLSelectElement) => Array.from(picker.options).map((o) => o.value).filter(Boolean);
@@ -113,7 +113,7 @@ describe("CreatePage's From a template", () => {
   it("starts From scratch, the kind's own form", async () => {
     api({});
     mount("/systems/create");
-    expect(await screen.findByRole("button", { name: "From scratch" })).toHaveAttribute("aria-pressed", "true");
+    expect(await screen.findByRole("radio", { name: "From scratch" })).toBeChecked();
     expect(screen.getByTestId("entity-create-form")).toBeInTheDocument();
     expect(screen.queryByTestId("template-create")).toBeNull();
   });
@@ -175,6 +175,6 @@ describe("CreatePage's From a template", () => {
     api({});
     mount("/systems/create", { ...admin, permissions: ["system:read", "system:create", "location:read"] });
     await screen.findByTestId("entity-create-form");
-    expect(screen.queryByRole("button", { name: "From a template" })).toBeNull();
+    expect(screen.queryByRole("radio", { name: "From a template" })).toBeNull();
   });
 });
