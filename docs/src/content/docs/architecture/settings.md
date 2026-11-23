@@ -94,8 +94,9 @@ Each namespace carries a `domain` classifier. The `platform` domain is **named a
 set only at the `platform` level, never further down.
 
 - **`profile`**: cascades platform to group to user, **client-visible**, lockable, settable per user
-  in the fast-follow. `ui` and `keybindings` are the two seeded `profile` namespaces (`ui.theme` and
-  `ui.default_landing`; the default keymap as data).
+  (`PATCH /settings/me/{namespace}`, #2450). `ui`, `keybindings` and `learn` are the `profile`
+  namespaces (`ui.theme` and `ui.default_landing`; the default keymap as data; `learn.done`, the
+  lessons a person has finished).
 - **`platform`**: platform-level only, does not cascade (for example `retention`, `integrations`).
   `label` is the first, holding the acronym dictionary the [label rule](/architecture/core-entities/)
   engine's `title` consults.
