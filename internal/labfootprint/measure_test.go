@@ -63,7 +63,7 @@ func TestMillicores(t *testing.T) {
 // The database counters come back from one psql row, pipe-separated, in the
 // order DBCountersQuery selects them.
 func TestParseDBCounters(t *testing.T) {
-	c, err := ParseDBCounters("1798545600.5|1200|30|81920|16384|9000000|4096|123456789|77|16:1000,17:200|18:30\n")
+	c, err := ParseDBCounters("1798545600.5|1200|30|81920|16384|9000000|4096|123456789|77|16:1000,17:200|18:30|16:100,17:50|18:5\n")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,19 +75,21 @@ func TestParseDBCounters(t *testing.T) {
 	}
 	want.MetricParts = map[uint32]int64{16: 1000, 17: 200}
 	want.PropertyParts = map[uint32]int64{18: 30}
+	want.MetricSizes = map[uint32]int64{16: 100, 17: 50}
+	want.PropertySizes = map[uint32]int64{18: 5}
 	if !reflect.DeepEqual(c, want) {
 		t.Fatalf("counters %+v, want %+v", c, want)
 	}
 	if _, err := ParseDBCounters("1|2|3"); err == nil {
 		t.Fatal("a short row parsed")
 	}
-	if _, err := ParseDBCounters("1798545600.5|1200|30|81920|16384|9000000|4096|123456789||"); err == nil {
+	if _, err := ParseDBCounters("1798545600.5|1200|30|81920|16384|9000000|4096|123456789||||"); err == nil {
 		t.Fatal("a row without the receipt count parsed")
 	}
-	if _, err := ParseDBCounters("1798545600.5|1200|30|81920|16384|9000000|4096|123456789|x||"); err == nil {
+	if _, err := ParseDBCounters("1798545600.5|1200|30|81920|16384|9000000|4096|123456789|x||||"); err == nil {
 		t.Fatal("a non-numeric receipt count parsed")
 	}
-	if _, err := ParseDBCounters("x|1|2|3|4|5|6|7|8||"); err == nil {
+	if _, err := ParseDBCounters("x|1|2|3|4|5|6|7|8||||"); err == nil {
 		t.Fatal("a non-numeric row parsed")
 	}
 }
@@ -322,11 +324,14 @@ func TestFootprintSystems(t *testing.T) {
 // backwards still is.
 func TestWindowOfAcrossDroppedPartition(t *testing.T) {
 	t0 := time.Date(2026, 11, 14, 23, 57, 0, 0, time.UTC)
+	// Partition 1 (6 GiB) is dropped, 3 (1 GiB) is new; 2 grows 4 GiB to 4 GiB + 1 MiB.
 	db0 := DBCounters{At: t0, MetricRows: 1500, MetricParts: map[uint32]int64{1: 1000, 2: 500},
+		MetricSizes: map[uint32]int64{1: 6 << 30, 2: 4 << 30},
 		MetricBytes: 10 << 30, PropertyBytes: 1 << 20, DatabaseBytes: 12 << 30, WALBytes: 100 << 20}
 	db1 := DBCounters{At: t0.Add(5 * time.Minute), MetricRows: 900,
-		MetricBytes: 4 << 30, PropertyBytes: 1 << 20, DatabaseBytes: 6 << 30, WALBytes: 110 << 20,
-		MetricParts: map[uint32]int64{2: 600, 3: 300}} // 1 dropped, 3 new
+		MetricBytes: 5<<30 + 1<<20, PropertyBytes: 1 << 20, DatabaseBytes: 7<<30 + 1<<20, WALBytes: 110 << 20,
+		MetricParts: map[uint32]int64{2: 600, 3: 300},
+		MetricSizes: map[uint32]int64{2: 4<<30 + 1<<20, 3: 1 << 30}}
 	w, err := WindowOf(db0, db1, nil, nil)
 	if err != nil {
 		t.Fatalf("a dropped partition failed the window: %v", err)
@@ -334,12 +339,14 @@ func TestWindowOfAcrossDroppedPartition(t *testing.T) {
 	if w.SamplesLanded != 400 {
 		t.Fatalf("landed %d, want 400", w.SamplesLanded)
 	}
-	if !w.PartitionDropped || w.MetricBytesPerDay != 0 || w.PropertyBytesPerDay != 0 || w.DatabaseBytesPerDay != 0 {
-		t.Errorf("size rates across a drop: metric %v property %v database %v, want 0 (no negative rate)",
-			w.MetricBytesPerDay, w.PropertyBytesPerDay, w.DatabaseBytesPerDay)
+	// 1 MiB over five minutes, a day: only partition 2 was there at both reads.
+	want := float64(1<<20) * 24 * 12
+	if !w.PartitionDropped || w.MetricBytesPerDay != want || w.DatabaseBytesPerDay != want {
+		t.Errorf("size rates across a drop: metric %v database %v, want %v (the surviving partition's growth)",
+			w.MetricBytesPerDay, w.DatabaseBytesPerDay, want)
 	}
-	if w.WALBytesPerDay <= 0 {
-		t.Errorf("WAL a day %v, want the monotone WAL rate kept", w.WALBytesPerDay)
+	if w.PropertyBytesPerDay < 0 || w.WALBytesPerDay <= 0 {
+		t.Errorf("property %v WAL %v a day, want no negative rate and the WAL kept", w.PropertyBytesPerDay, w.WALBytesPerDay)
 	}
 	reset := DBCounters{At: db1.At, MetricRows: 10, MetricParts: map[uint32]int64{2: 10}}
 	if _, err := WindowOf(db0, reset, nil, nil); err == nil {

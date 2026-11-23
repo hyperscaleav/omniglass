@@ -86,7 +86,9 @@ select extract(epoch from clock_timestamp()),
   pg_wal_lsn_diff(pg_current_wal_lsn(), '0/0')::bigint,
   coalesce((select s.n_tup_ins from pg_stat_user_tables s where s.relid = to_regclass('telemetry_receipt')), 0),
   coalesce((select string_agg(s.relid::oid || ':' || s.n_tup_ins, ',') from lane join pg_stat_user_tables s using (relid) where lane.name = 'metric'), ''),
-  coalesce((select string_agg(s.relid::oid || ':' || s.n_tup_ins, ',') from lane join pg_stat_user_tables s using (relid) where lane.name = 'property'), '')`
+  coalesce((select string_agg(s.relid::oid || ':' || s.n_tup_ins, ',') from lane join pg_stat_user_tables s using (relid) where lane.name = 'property'), ''),
+  coalesce((select string_agg(relid::oid || ':' || pg_total_relation_size(relid), ',') from lane where name = 'metric'), ''),
+  coalesce((select string_agg(relid::oid || ':' || pg_total_relation_size(relid), ',') from lane where name = 'property'), '')`
 
 // DBCounters is one reading of DBCountersQuery.
 type DBCounters struct {
@@ -105,6 +107,11 @@ type DBCounters struct {
 	// both ends: a dropped partition (retention rolling) contributes nothing
 	// and a new one counts from zero (#1956). Nil falls back to the totals.
 	MetricParts, PropertyParts map[uint32]int64
+	// MetricSizes and PropertySizes are the total size per partition (keyed
+	// by relid), so a size rate differences only the partitions present at
+	// both reads: a dropped partition's bytes leaving the total is not
+	// shrinkage. Nil falls back to the totals.
+	MetricSizes, PropertySizes map[uint32]int64
 }
 
 // parseParts reads "relid:n,relid:n" into a map.
@@ -156,6 +163,30 @@ func partitionDropped(p0, p1 map[uint32]int64) bool {
 	return false
 }
 
+// sizeBetween is a lane's growth in bytes across the window, over the
+// partitions present at both reads (so a dropped or new partition does not
+// read as shrinkage or growth), and the bytes of those present at one read
+// only: lost leaves the lane between the reads, gained arrives in it. With
+// no per-partition sizes it is the totals' difference and ok is false.
+func sizeBetween(t0, t1 int64, p0, p1 map[uint32]int64) (grew, lost, gained int64, ok bool) {
+	if p0 == nil || p1 == nil {
+		return t1 - t0, 0, 0, false
+	}
+	for id, v := range p1 {
+		if prev, in := p0[id]; in {
+			grew += v - prev
+		} else {
+			gained += v
+		}
+	}
+	for id, v := range p0 {
+		if _, in := p1[id]; !in {
+			lost += v
+		}
+	}
+	return grew, lost, gained, true
+}
+
 // rowsBetween is a lane's rows inserted across the window: per partition when
 // both readings carry them, else the totals' difference.
 func rowsBetween(r0, r1 int64, p0, p1 map[uint32]int64) (int64, bool) {
@@ -169,8 +200,8 @@ func rowsBetween(r0, r1 int64, p0, p1 map[uint32]int64) (int64, bool) {
 // (-At): pipe-separated, in the query's order.
 func ParseDBCounters(out string) (DBCounters, error) {
 	f := strings.Split(strings.TrimSpace(out), "|")
-	if len(f) != 11 {
-		return DBCounters{}, fmt.Errorf("database counters: %d fields in %q, want 11", len(f), out)
+	if len(f) != 13 {
+		return DBCounters{}, fmt.Errorf("database counters: %d fields in %q, want 13", len(f), out)
 	}
 	epoch, err := strconv.ParseFloat(f[0], 64)
 	if err != nil {
@@ -191,11 +222,19 @@ func ParseDBCounters(out string) (DBCounters, error) {
 	if err != nil {
 		return DBCounters{}, fmt.Errorf("database counters: %w", err)
 	}
+	ms, err := parseParts(f[11])
+	if err != nil {
+		return DBCounters{}, fmt.Errorf("database counters: %w", err)
+	}
+	ps, err := parseParts(f[12])
+	if err != nil {
+		return DBCounters{}, fmt.Errorf("database counters: %w", err)
+	}
 	at := time.Unix(sec, int64((epoch-float64(sec))*1e9+0.5)).UTC()
 	return DBCounters{
 		At: at, MetricRows: n[0], PropertyRows: n[1], MetricBytes: n[2], PropertyBytes: n[3],
 		DatabaseBytes: n[4], ReceiptBytes: n[5], WALBytes: n[6], ReceiptsInserted: n[7],
-		MetricParts: mp, PropertyParts: pp,
+		MetricParts: mp, PropertyParts: pp, MetricSizes: ms, PropertySizes: ps,
 	}, nil
 }
 
@@ -215,9 +254,10 @@ type Window struct {
 	DatabaseBytesPerDay   float64 `json:"database_bytes_per_day"`
 	WALBytesPerDay        float64 `json:"wal_bytes_per_day"`
 	// PartitionDropped is set when a partition went away inside the window
-	// (retention rolling): the table-size rates (metric, property, database)
-	// would read the drop as shrinkage, so they are left 0. The WAL is a
-	// monotone counter a drop does not move, so its rate stands.
+	// (retention rolling). The size rates then difference only the
+	// partitions present at both reads, and the database rate sets aside the
+	// bytes of those present at one, so none reads the drop as shrinkage. The
+	// WAL is a monotone counter a drop does not move, so its rate stands.
 	PartitionDropped bool `json:"partition_dropped,omitempty"`
 	// WALBytes is the WAL the window itself wrote, before extrapolation.
 	WALBytes int64 `json:"wal_bytes"`
@@ -286,6 +326,9 @@ func WindowOf(db0, db1 DBCounters, use0, use1 map[string]Usage) (Window, error) 
 	}
 	perMin := func(n int64) float64 { return float64(n) / dt.Minutes() }
 	perDay := func(a, b int64) float64 { return float64(b-a) / dt.Hours() * 24 }
+	bytesDay := func(n int64) float64 { return float64(n) / dt.Hours() * 24 }
+	mGrew, mLost, mGained, _ := sizeBetween(db0.MetricBytes, db1.MetricBytes, db0.MetricSizes, db1.MetricSizes)
+	pGrew, pLost, pGained, _ := sizeBetween(db0.PropertyBytes, db1.PropertyBytes, db0.PropertySizes, db1.PropertySizes)
 	batches := db1.ReceiptsInserted - db0.ReceiptsInserted
 	samples := metricRows + propertyRows
 	perBatch, perSecond := BatchRates(batches, samples, dt)
@@ -294,8 +337,8 @@ func WindowOf(db0, db1 DBCounters, use0, use1 map[string]Usage) (Window, error) 
 		SamplesPerBatch: perBatch, BatchesPerSecond: perSecond,
 		MetricRowsPerMinute:   perMin(metricRows),
 		PropertyRowsPerMinute: perMin(propertyRows),
-		MetricBytesPerDay:     perDay(db0.MetricBytes, db1.MetricBytes),
-		PropertyBytesPerDay:   perDay(db0.PropertyBytes, db1.PropertyBytes),
+		MetricBytesPerDay:     bytesDay(mGrew),
+		PropertyBytesPerDay:   bytesDay(pGrew),
 		ReceiptBytesPerDay:    perDay(db0.ReceiptBytes, db1.ReceiptBytes),
 		DatabaseBytesPerDay:   perDay(db0.DatabaseBytes, db1.DatabaseBytes),
 		WALBytesPerDay:        perDay(db0.WALBytes, db1.WALBytes),
@@ -304,7 +347,10 @@ func WindowOf(db0, db1 DBCounters, use0, use1 map[string]Usage) (Window, error) 
 	}
 	if partitionDropped(db0.MetricParts, db1.MetricParts) || partitionDropped(db0.PropertyParts, db1.PropertyParts) {
 		w.PartitionDropped = true
-		w.MetricBytesPerDay, w.PropertyBytesPerDay, w.DatabaseBytesPerDay = 0, 0, 0
+		// The database's size also lost the dropped partitions' bytes and
+		// gained the new ones'; take both out so the rate is the growth of
+		// what stayed.
+		w.DatabaseBytesPerDay = bytesDay(db1.DatabaseBytes - db0.DatabaseBytes + mLost + pLost - mGained - pGained)
 	}
 	for name, a := range use0 {
 		b, ok := use1[name]
