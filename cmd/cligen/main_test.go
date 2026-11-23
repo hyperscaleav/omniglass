@@ -577,3 +577,37 @@ func TestBuildCommandRepeatableQueryParam(t *testing.T) {
 		t.Errorf("generated source does not add each value as its own pair:\n%s", out)
 	}
 }
+
+// TestArgCommandWithChildNamesTheDoubleDashEscape is #1667: `node simulation
+// <name>` has a child group `observation`, and cobra matches the subcommand
+// first, so a node named `observation` is unreachable without `--`. The
+// generated help says so.
+func TestArgCommandWithChildNamesTheDoubleDashEscape(t *testing.T) {
+	op := func(id string, args []string, words ...string) command {
+		return command{Words: words, Args: args, OperationID: id, Method: "GET", APIPath: "/x"}
+	}
+	roots, err := tree([]command{
+		op("get-node-simulation", []string{"name"}, "node", "simulation"),
+		op("get-node-observation", []string{"name"}, "node", "simulation", "observation"),
+		op("list-nodes", nil, "node", "list"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sim *node
+	for _, k := range roots[0].Kids {
+		if k.Name == "simulation" {
+			sim = k
+		}
+	}
+	for _, w := range []string{"observation", "put -- before it", "`node simulation -- observation`"} {
+		if !strings.Contains(sim.Cmd.Long, w) {
+			t.Errorf("long help %q lacks %q", sim.Cmd.Long, w)
+		}
+	}
+	for _, k := range roots[0].Kids {
+		if k.Name == "list" && k.Cmd.Long != "" {
+			t.Errorf("a childless command gained help: %q", k.Cmd.Long)
+		}
+	}
+}
