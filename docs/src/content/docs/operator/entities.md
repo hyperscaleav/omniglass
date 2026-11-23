@@ -29,13 +29,16 @@ screenshots:
     # widest line a capture renders ("since May 28, 12:59 AM · 59m") is 164px
     # in the console's face; a line wider than 184px fails the capture by name.
     mask:
-      - selector: "[data-testid=location-detail] [data-testid=since-line]"
+      - selector: "[data-testid=since-line]"
         width: 184
   - id: entity-edit-face
     path: /web/locations/east?edit=1
     alt: "An ?edit=1 deep link lands a location's view on its Configure tab, already editing."
-    # No mask: the Configure tab replaces the overview (and its since-line
-    # clock), and the form renders from the seed deterministically.
+    # The location header's since line ages with the capture on every tab
+    # (#2423); the form below renders from the seed deterministically.
+    mask:
+      - selector: "[data-testid=since-line]"
+        width: 184
 ---
 
 Once you have [found an entity](/operator/fleet/), you open it, read it, and change

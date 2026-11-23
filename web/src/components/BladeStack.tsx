@@ -165,7 +165,15 @@ export default function BladeStack(props: {
                         <Button square icon={X} title="Close" label="Close" onClick={() => props.controller.close()} />
                       </div>
                     </header>
-                    <div class="flex-1 overflow-auto p-5" classList={{ "pointer-events-none opacity-55": !isTop() }}>
+                    {/* A covered blade's body is out of reach (inert, and out of
+                        the accessibility tree) until it is returned to, so two
+                        stacked detail bodies never offer two of every tab. */}
+                    <div
+                      class="flex-1 overflow-auto p-5"
+                      classList={{ "pointer-events-none opacity-55": !isTop() }}
+                      inert={isTop() ? undefined : true}
+                      aria-hidden={isTop() ? undefined : "true"}
+                    >
                       <Dynamic component={d().Body} id={ref.id} />
                     </div>
                     {/* The action bar: the entity's actions, not the blade's chrome.

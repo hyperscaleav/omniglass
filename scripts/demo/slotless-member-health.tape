@@ -1,15 +1,15 @@
 # A member outside a slot degrades its system
 #
 # A hand-built system has no standard, so no slots: until #2459 an alarm on its component left the
-# system and every place above it healthy. Ops builds one in Bay 5 with one amplifier, powers the
+# system and every place above it healthy. A technician builds one in Bay 5 with one amplifier, powers the
 # amplifier off with a high alarm, and reads the system and the place: degraded, never outage, with
 # the member, its alarm and the reason named. Clearing the alarm brings both back (ADR-2459).
 
 Hide
-Type `demo_hush 'omniglass user create --username ops --email ops@example.com && omniglass user grant create ops --role operator --scope-kind all'`
+Type `demo_hush 'omniglass user create --username tech --email tech@example.com && omniglass user grant create tech --role admin --scope-kind all'`
 Enter
 Wait
-Type `demo_hush 'export OMNIGLASS_TOKEN=$(omniglass user impersonate ops --mode act_as | jq -r .token)'`
+Type `demo_hush 'export OMNIGLASS_TOKEN=$(omniglass user impersonate tech --mode act_as | jq -r .token)'`
 Enter
 Wait
 Type "clear"
