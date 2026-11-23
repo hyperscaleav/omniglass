@@ -40,6 +40,9 @@ export const OVERLAY_CLASS = "fixed inset-0 z-60 bg-black/45";
 
 export default function ModalDialog(props: ModalDialogProps) {
   let panel: HTMLDivElement | undefined;
+  // A setter rather than ref={panel}: Solid compiles both to the same
+  // assignment, but a reader (or a linter) sees this one happen.
+  const setPanel = (el: HTMLDivElement) => (panel = el);
   // What had the focus when it opened, caught before Kobalte moves it. A
   // dialog opened by state (no Kobalte trigger) otherwise sent the focus to
   // the body on close: Esc out of the New outpost drawer left the keyboard
@@ -77,12 +80,12 @@ export default function ModalDialog(props: ModalDialogProps) {
     <Show
       when={props.alert}
       fallback={
-        <Content ref={panel} {...panelProps()} onOpenAutoFocus={onOpenAutoFocus} onCloseAutoFocus={onCloseAutoFocus}>
+        <Content ref={setPanel} {...panelProps()} onOpenAutoFocus={onOpenAutoFocus} onCloseAutoFocus={onCloseAutoFocus}>
           {props.children}
         </Content>
       }
     >
-      <AlertContent ref={panel} {...panelProps()} onOpenAutoFocus={onOpenAutoFocus} onCloseAutoFocus={onCloseAutoFocus}>
+      <AlertContent ref={setPanel} {...panelProps()} onOpenAutoFocus={onOpenAutoFocus} onCloseAutoFocus={onCloseAutoFocus}>
         {props.children}
       </AlertContent>
     </Show>
