@@ -385,7 +385,7 @@ axis, so the order of events reads straight off it: a property or metric moves, 
 alarm, health degrades, someone sends a command, the alarm clears. Lanes stack top down, each
 collapsible:
 
-- **Health**: the verdict in force across the range, one span per recorded change, so a range in
+- **Health**: the health in force across the range, one span per recorded change, so a range in
   which nothing changed is one span of the health that held. A system adds one row per member
   component.
 - **Alarms**: every alarm raised during the range on its own row, from raise to clear (or to now

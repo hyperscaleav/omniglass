@@ -13,11 +13,11 @@ clicking opens it (an alarm's history, the rows behind a marker, a command's arc
 cluster into a count. It is the first cut of #1832's timeline widget, on plain range reads rather
 than the live binding.
 
-The derivation is pure (`web/src/lib/timeline_lanes.ts`: verdict spans, alarm spans clipped to the
+The derivation is pure (`web/src/lib/timeline_lanes.ts`: health spans, alarm spans clipped to the
 range with their whole duration kept, value bands, clustered markers, a metric's line), and the
 component takes `{ kind, id, range }` with no page logic. Every read honors the range on the
 server: the component and system alarm lists gain `since`/`until` (an alarm is kept when it was
-raised by `until` and still raised at `since`), the health reads answer `carried_in` (the verdict in
-force when `since` opened the range, so a quiet range is one span of the health that held, not an
-empty lane), events, logs and property changes read through `POST /views:run` with `from`/`to`, and
+raised by `until` and still raised at `since`), the health lane draws from the health reads'
+`carried_in` (#2305: the health in force when `since` opened the range, so a quiet range is one span
+of the health that held, not an empty lane), events, logs and property changes read through `POST /views:run` with `from`/`to`, and
 commands through their `since`/`until`. A nested cursor provider now shares the outer cursor.
