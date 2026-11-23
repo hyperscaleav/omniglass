@@ -121,8 +121,8 @@ export default function Alarms() {
     {
       key: "location", label: "Location", cell: (a) => (
         <span class="font-data text-xs text-base-content/70" title={a.location_path}>
-          <Show when={a.location_path} fallback={a.location}>
-            {(path) => <A href={`/locations/${path()}`} class="hover:underline" onClick={(e) => e.stopPropagation()}>{a.location}</A>}
+          <Show when={a.location_id} fallback={a.location}>
+            {(id) => <A href={`/locations/${id()}`} class="hover:underline" onClick={(e) => e.stopPropagation()}>{a.location}</A>}
           </Show>
         </span>
       ),
@@ -138,7 +138,7 @@ export default function Alarms() {
     {
       key: "cleared", label: "Cleared", width: "110px", sortVal: (a) => (a.cleared_at ? ms(a.cleared_at) : Number.MAX_SAFE_INTEGER), cell: (a) => (
         <span class="inline-block w-[9ch] whitespace-nowrap text-xs tnum text-base-content/60" data-testid="alarm-cleared" title={a.cleared_at ? fmtTime(a.cleared_at) : "Still raised"}>
-          <Show when={a.cleared_at} fallback="still raised">{(at) => rel(at(), now())}</Show>
+          <Show when={a.cleared_at} fallback="open">{(at) => rel(at(), now())}</Show>
         </span>
       ),
     },

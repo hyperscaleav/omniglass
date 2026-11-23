@@ -70,6 +70,8 @@ type Alarm struct {
 	// room the component's plane root sits in (its name and its ancestor chain,
 	// root first), and the names of the systems the component is a member of.
 	LocationName string
+	// LocationID is that location's uuid, so a console link addresses it.
+	LocationID   string
 	LocationPath []string
 	Systems      []string
 	// SystemIDs are those systems' uuids, parallel to Systems, so a console link
@@ -653,7 +655,14 @@ func (p *PG) attachAlarmLocations(ctx context.Context, alarms []Alarm) error {
 	if err != nil {
 		return err
 	}
+	locIDs, err := planeRootLocationIDs(ctx, p.pool, componentTable, ids)
+	if err != nil {
+		return err
+	}
 	for i := range alarms {
+		if id := locIDs[alarms[i].ComponentID]; id != nil {
+			alarms[i].LocationID = *id
+		}
 		segs := paths[alarms[i].ComponentID]
 		var loc []string
 		for _, s := range segs {
@@ -713,6 +722,11 @@ func (p *PG) attachSystemLocations(ctx context.Context, alarms []Alarm) error {
 	if err != nil {
 		return err
 	}
+	sysLocs, err := planeRootLocationIDs(ctx, p.pool, systemTable, distinctIDs(sysIDs))
+	if err != nil {
+		return err
+	}
+	byCompID := map[string]string{}
 	byComp := map[string][]string{}
 	for _, pr := range pairs {
 		if _, done := byComp[pr.comp]; done {
@@ -727,12 +741,16 @@ func (p *PG) attachSystemLocations(ctx context.Context, alarms []Alarm) error {
 		}
 		if len(loc) > 0 {
 			byComp[pr.comp] = loc
+			if id := sysLocs[pr.sys]; id != nil {
+				byCompID[pr.comp] = *id
+			}
 		}
 	}
 	for i := range alarms {
 		if loc := byComp[alarms[i].ComponentID]; alarms[i].LocationName == "" && len(loc) > 0 {
 			alarms[i].LocationPath = loc
 			alarms[i].LocationName = loc[len(loc)-1]
+			alarms[i].LocationID = byCompID[alarms[i].ComponentID]
 		}
 	}
 	return nil

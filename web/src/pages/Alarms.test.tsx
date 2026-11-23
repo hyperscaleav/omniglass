@@ -200,7 +200,7 @@ describe("Alarms page", () => {
 // walk's cell fixes (a system-placed location, links, who acknowledged).
 describe("Alarms page history (#2426)", () => {
   const T0 = Date.now() - 3 * 3_600_000;
-  const open = alarm({ message: "still dark", raised_at: new Date(T0).toISOString(), system_ids: [uuidFor("boardroom")], location: "room-1", location_path: "hq.room-1" });
+  const open = alarm({ message: "still dark", raised_at: new Date(T0).toISOString(), system_ids: [uuidFor("boardroom")], location: "room-1", location_path: "hq.room-1", location_id: uuidFor("room-1") });
   const gone = alarm({
     message: "was dark",
     component: "dsp-1",
@@ -290,7 +290,7 @@ describe("Alarms page history (#2426)", () => {
     mountState("/?state=all");
     await screen.findByText("still dark");
     expect(screen.getByRole("link", { name: "boardroom" })).toHaveAttribute("href", `/systems/${uuidFor("boardroom")}`);
-    expect(screen.getAllByRole("link", { name: "room-1" })[0]).toHaveAttribute("href", "/locations/hq.room-1");
+    expect(screen.getAllByRole("link", { name: "room-1" })[0]).toHaveAttribute("href", `/locations/${uuidFor("room-1")}`);
     expect(screen.getByText("acked by ada")).toBeInTheDocument();
   });
 });

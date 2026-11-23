@@ -77,10 +77,11 @@ func TestFleetAlarmsReadHistoryOverARange(t *testing.T) {
 
 	names := map[string]string{before: "before", inside: "inside", across: "across", after: "after", hidden: "hidden", placed: "placed"}
 	type row struct {
-		ID        string     `json:"id"`
-		ClearedAt *time.Time `json:"cleared_at"`
-		Location  string     `json:"location"`
-		SystemIDs []string   `json:"system_ids"`
+		ID         string     `json:"id"`
+		ClearedAt  *time.Time `json:"cleared_at"`
+		Location   string     `json:"location"`
+		SystemIDs  []string   `json:"system_ids"`
+		LocationID string     `json:"location_id"`
 	}
 	read := func(tok, query string, want int) []row {
 		t.Helper()
@@ -131,9 +132,13 @@ func TestFleetAlarmsReadHistoryOverARange(t *testing.T) {
 		}
 	}
 	roomID := entityID(t, c, owner, "/systems", "hist-room")
+	hqID := entityID(t, c, owner, "/locations", "hist-hq")
 	for _, r := range read(owner, "?state=all", http.StatusOK) {
 		if names[r.ID] == "placed" && r.Location != "hist-hq" {
 			t.Errorf("a component placed through its system names location %q, want hist-hq", r.Location)
+		}
+		if r.LocationID != hqID {
+			t.Errorf("alarm %s names location id %q, want hist-hq's %s so the console can link it", names[r.ID], r.LocationID, hqID)
 		}
 		if names[r.ID] == "placed" && (len(r.SystemIDs) != 1 || r.SystemIDs[0] != roomID) {
 			t.Errorf("a placed alarm names system ids %v, want [%s] so the console can link the system", r.SystemIDs, roomID)

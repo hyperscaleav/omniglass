@@ -507,6 +507,8 @@ export type AlarmBody = {
   id: string;
   /** The name of the location the alarm's component sits in (its plane root's location); absent when the component is unplaced, and on every read but the fleet queue */
   location?: string;
+  /** That location's uuid, the stable form of location; only on the fleet queue */
+  location_id?: string;
   /** That location's dotted ancestor path, root first (for example boi.17c) */
   location_path?: string;
   message: string;

@@ -1,0 +1,31 @@
+# Find a cleared alarm and how long it lasted (#2426): an operator clears an
+# alarm from its component's page, then opens the alarm page's Cleared filter
+# to read when it cleared and how long it was raised, and opens the row to see
+# its history. The scene is a display of its own (the probe replays every
+# walkthrough on one stack, so the alarm's message is not another's and each
+# step names its row by it).
+title: Find a cleared alarm and how long it lasted
+description: Clear an alarm from its component, then read it in the alarm page's Cleared filter with when it cleared and how long it was raised, and open its history.
+setup:
+  - post: /components
+    body: { name: history-demo-display, label: History demo display, product: boreal-edge-55, location: bay-2 }
+  - post: /components/history-demo-display/alarms
+    body: { severity: high, message: History demo input lost, dedup_key: walkthrough-history-input }
+steps:
+  - goto: /components/history-demo-display?tab=configure
+    caption: The display has a High alarm, History demo input lost. Fix the fault, then clear it.
+  - click: { role: button, name: Edit, exact: true }
+    caption: Clearing is a write, so the page goes into edit mode first.
+  - click: 'button[aria-label^="Clear alarm"]'
+    caption: Clear the alarm. The row is kept rather than deleted, under Recently cleared.
+  - wait: { selector: '[role=group][aria-label="Recently cleared alarms"] >> text=lasted' }
+    caption: The component's own panel says how long it was raised.
+  - goto: /alarms?state=cleared
+    caption: The alarm page's Cleared filter is the fleet's history. The address carries the filter, so a link to it shows the same list.
+  - wait: { selector: 'tr:has-text("History demo input lost") >> [data-testid=alarm-duration]' }
+    caption: Raised, when it cleared and how long it lasted, one row each. Sort by Duration to find the long ones.
+    poster: true
+  - click: 'tr:has-text("History demo input lost")'
+    caption: Open the row for the same drawer the queue uses, with the alarm's history.
+  - wait: { text: Lasted }
+    caption: Its raise, who looked and when it cleared, and the time it lasted.

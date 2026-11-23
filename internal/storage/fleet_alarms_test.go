@@ -320,4 +320,7 @@ func TestFleetAlarmLocationFallsBackToTheSystemsLocation(t *testing.T) {
 	if rows[0].LocationName != "fb-r1" || strings.Join(rows[0].LocationPath, ".") != "fb-hq.fb-r1" {
 		t.Errorf("location %q path %v, want fb-r1 / fb-hq.fb-r1 through the system", rows[0].LocationName, rows[0].LocationPath)
 	}
+	if loc, err := gw.GetLocation(ctx, "fb-r1", all); err != nil || rows[0].LocationID != loc.ID {
+		t.Errorf("location id %q, want fb-r1's uuid (%v)", rows[0].LocationID, err)
+	}
 }
