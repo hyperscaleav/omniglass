@@ -143,7 +143,9 @@ export default function BladeStack(props: {
                     role="dialog"
                     aria-modal={isTop() ? "true" : undefined}
                     aria-labelledby={titleId}
-                    class="fixed inset-y-0 flex w-full max-w-md flex-col border-l border-base-300 bg-base-100 shadow-2xl outline-none"
+                    class="fixed inset-y-0 flex w-full flex-col border-l border-base-300 bg-base-100 shadow-2xl outline-none"
+                    classList={{ "max-w-md": d().width !== "wide", "max-w-[45rem]": d().width === "wide" }}
+                    data-blade-width={d().width ?? "narrow"}
                     style={{ right: `${(top() - i()) * 40}px`, "z-index": 61 + i() }}
                     onKeyDown={(e) => isTop() && trapTab(e, e.currentTarget)}
                   >

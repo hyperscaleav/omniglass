@@ -139,11 +139,11 @@ describe("AlarmsPanel", () => {
       }
       return json({ component: "disp-1", alarms });
     });
-    const { getByRole } = mount();
+    const { getByRole, getAllByText } = mount();
     fireEvent.click(getByRole("button", { name: "Timeline of HDMI board failed" }));
     const list = await waitFor(() => getByRole("list", { name: "Timeline of HDMI board failed" }));
     expect(within(list).getAllByRole("listitem")).toHaveLength(1);
-    fireEvent.click(getByRole("button", { name: "Acknowledge alarm a-2" }));
+    fireEvent.click(within(alarmRow(getAllByText("HDMI board failed")[0])).getByRole("button", { name: "Acknowledge" }));
     await waitFor(() => expect(within(getByRole("list", { name: "Timeline of HDMI board failed" })).getAllByRole("listitem")).toHaveLength(2));
   });
 
@@ -295,8 +295,8 @@ describe("AlarmsPanel", () => {
       return json({ component: "disp-1", alarms });
     });
 
-    const { getByLabelText } = mount();
-    fireEvent.click(getByLabelText("Acknowledge alarm a-2"));
+    const { getByText } = mount();
+    fireEvent.click(within(alarmRow(getByText("HDMI board failed"))).getByRole("button", { name: "Acknowledge" }));
 
     await waitFor(() => expect(post).toBeTruthy());
     expect(post!.url).toContain("/components/disp-1/alarms/a-2:acknowledge");
@@ -307,12 +307,12 @@ describe("AlarmsPanel", () => {
   // exists to guard the component's own data (ADR-0109).
   it("offers the acknowledgement outside edit mode, and only to a caller that holds it", () => {
     const viewing = mount({ canUpdate: false });
-    expect(viewing.getByLabelText("Acknowledge alarm a-2")).toBeTruthy();
+    expect(viewing.getByRole("button", { name: "Acknowledge" })).toBeTruthy();
     expect(viewing.queryByLabelText("Clear alarm a-2")).toBeNull();
     viewing.unmount();
 
     const uncapable = mount({ canAcknowledge: false });
-    expect(uncapable.queryByLabelText("Acknowledge alarm a-2")).toBeNull();
+    expect(uncapable.queryByRole("button", { name: "Acknowledge" })).toBeNull();
     // The indicator is a READ, so it stays: a caller who cannot acknowledge can
     // still see that nobody has.
     expect(uncapable.getByText("unacknowledged")).toBeTruthy();

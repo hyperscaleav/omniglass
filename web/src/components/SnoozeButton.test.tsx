@@ -22,8 +22,8 @@ function mount(me: Me, alarm: { id: string; snoozed_until?: string; snoozed_by?:
   qc.setQueryData([...ME_KEY], me);
   return render(() => (
     <QueryClientProvider client={qc}>
-      <SnoozeButton component="disp-1" alarm={alarm} surface="a" />
-      <SnoozeButton component="disp-1" alarm={alarm} surface="b" />
+      <SnoozeButton componentId="disp-1" alarm={alarm} surface="a" />
+      <SnoozeButton componentId="disp-1" alarm={alarm} surface="b" />
       <SnoozedBadge alarm={alarm} />
     </QueryClientProvider>
   ));
@@ -100,6 +100,9 @@ describe("SnoozeButton errors", () => {
     const until = new Date(Date.now() + 3_600_000).toISOString();
     const { getAllByRole, findByRole } = mount(operator, { id: "a-2", snoozed_until: until });
     fireEvent.click(getAllByRole("button", { name: "Unsnooze" })[0]);
-    expect((await findByRole("alert")).textContent).toMatch(/forbidden/i);
+    const alert = await findByRole("alert");
+    // One short line with Retry; the server's detail rides in the tooltip, never the row (#2441).
+    expect(alert.textContent).toMatch(/could not end the snooze/i);
+    expect(alert.getAttribute("title")).toMatch(/forbidden/i);
   });
 });
