@@ -243,6 +243,9 @@ func ambiguousRefError(e *storage.ErrUnresolvedRef) error {
 	if len(listed) > maxListedCandidates {
 		listed = listed[:maxListedCandidates]
 	}
+	if len(e.Candidates) == 0 {
+		return huma.Error409Conflict(msg)
+	}
 	return huma.Error409Conflict(msg, &huma.ErrorDetail{
 		Message:  msg,
 		Location: AmbiguousRefLocation,

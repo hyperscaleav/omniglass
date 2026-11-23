@@ -3740,7 +3740,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "get <endpoint>",
 					Short:   "Get an endpoint",
-					Long:    "Fetches an endpoint by its address (<component>/<endpoint name>) or uuid. An endpoint whose component is out of the caller's read scope is a non-disclosing 404, and a name no endpoint the caller can see answers to is a 404 naming what was looked up (listing each match when more than one does). Gated by endpoint:read.\n\nArguments:\n  <endpoint>  The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.",
+					Long:    "Fetches an endpoint by its address (<component>/<endpoint name>) or uuid. An endpoint whose component is out of the caller's read scope is a non-disclosing 404, and a name no endpoint the caller can see answers to is a 404 naming what was looked up, and a name more than one answers to is a 409 listing each match. Gated by endpoint:read.\n\nArguments:\n  <endpoint>  The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass endpoint get 'boi.17c.415a.$comp.display-1/https'",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {

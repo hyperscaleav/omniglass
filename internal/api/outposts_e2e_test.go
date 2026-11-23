@@ -224,7 +224,7 @@ func TestOutpostAPI(t *testing.T) {
 // through to the handler's own default, an unmapped 500, exactly like
 // mapInterfaceErr's component field before its own fix. Two locations sharing
 // a name is legal under #627 (one root, one nested), so this is a routine
-// state, not a corrupted one, and must 404 (#1134), not 500. Skipped under -short.
+// state, not a corrupted one, and must 409 (#2334), not 500. Skipped under -short.
 func TestOutpostCreateWithAmbiguousLocationIs409(t *testing.T) {
 	t.Parallel()
 	dsn := seededDSN(t)
@@ -263,7 +263,7 @@ func TestOutpostCreateWithAmbiguousLocationIs409(t *testing.T) {
 		t.Fatalf("create outpost with ambiguous location status = %d, want 409\nbody: %s", status, body)
 	}
 	if !strings.Contains(string(body), "dup-loc") {
-		t.Fatalf("404 body = %s, want it to name the ambiguous reference", body)
+		t.Fatalf("409 body = %s, want it to name the ambiguous reference", body)
 	}
 
 	// Same refusal on the patch path (UpdateOutpost calls the same resolver).

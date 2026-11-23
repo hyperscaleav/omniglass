@@ -237,7 +237,7 @@ func TestEndpointParamsMustNameATarget(t *testing.T) {
 // gateway resolves the create body's "component" field through
 // resolveScopedRef (ruling 2, #627), and on more than one in-scope match that
 // surfaces storage.ErrAmbiguousName, which mapEndpointErr translates through
-// its mapRefErr check into a 404 naming the reference. Before that check
+// its mapRefErr check into a 409 naming the reference. Before that check
 // existed, it fell through to the handler's default, an unmapped 500, for a
 // state #627 makes routine (two same-named components in different placement
 // buckets), not exceptional. Skipped under -short.
@@ -282,7 +282,7 @@ func TestEndpointCreateWithAmbiguousComponentIs409(t *testing.T) {
 		t.Fatalf("create endpoint with ambiguous component status = %d, want 409\nbody: %s", status, body)
 	}
 	if !strings.Contains(string(body), "dup-cmp") {
-		t.Fatalf("404 body = %s, want it to name the ambiguous reference", body)
+		t.Fatalf("409 body = %s, want it to name the ambiguous reference", body)
 	}
 }
 

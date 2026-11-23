@@ -256,7 +256,7 @@ func TestComponentRequiresProduct(t *testing.T) {
 
 // TestGetComponentByAmbiguousNameIs409 is the DDL-and-refusal-ship-together
 // half of #627 proved over HTTP: mapComponentErr must translate
-// storage.ErrAmbiguousName to a 404 (#1134, via the shared mapRefErr, moved into this
+// storage.ErrAmbiguousName to a 409 (#2334, was 404 in #1134, via the shared mapRefErr, moved into this
 // task from its original later slot) rather than falling through to its
 // default 500. Landing the migration without this wiring would turn a
 // routine duplicate-name lookup into an unmapped internal error the moment two
@@ -295,7 +295,7 @@ func TestGetComponentByAmbiguousNameIs409(t *testing.T) {
 		t.Fatalf("get ambiguous bare name status = %d, want 409\nbody: %s", status, body)
 	}
 	if !strings.Contains(string(body), "dup-1") {
-		t.Fatalf("404 body = %s, want it to name the ambiguous reference", body)
+		t.Fatalf("409 body = %s, want it to name the ambiguous reference", body)
 	}
 }
 
