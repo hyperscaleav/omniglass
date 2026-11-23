@@ -70,7 +70,7 @@ Ready means four things, each checked before the lab says so: the console answer
 address, the printed login signs in, the simulator reports every simulated component `running`, and
 every simulated endpoint reads up except the ones the seed breaks on purpose. Two kinds of endpoint
 are left out of that count: an endpoint that receives pushes (a webhook carries no reachability
-verdict to wait for), and the planted faults below, which the seed marks itself rather than a list
+health to wait for), and the planted faults below, which the seed marks itself rather than a list
 kept here. The lab is one compose project, so `docker compose ls`, `docker compose -p omniglass-lab
 ps` and `docker compose -p omniglass-lab logs server` all see it, and Docker Desktop groups it.
 

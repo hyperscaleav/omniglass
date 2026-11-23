@@ -27,7 +27,7 @@ component may be one symptom of a wider fault.
 
 Read `tool:get-component-reachability`. If it is unreachable:
 
-- the reachability answer is per endpoint: its verdict and the probe layers
+- the reachability answer is per endpoint: its reachability and the probe layers
   under it say whether the path failed (no answer to a ping or a port) or the
   endpoint answered and was refused. Read that endpoint with `tool:get-endpoint`
   for the outpost it is placed on and the driver it is attached through;

@@ -1281,7 +1281,7 @@ export const CommandBodySettledBy = {
 } as const;
 
 /**
- * On an issue's answer only: the computed settlement verdict at that moment (none/pending/settled/failed)
+ * On an issue's answer only: the computed settlement at that moment (none/pending/settled/failed)
  */
 export type CommandBodySettlement = typeof CommandBodySettlement[keyof typeof CommandBodySettlement];
 
@@ -1390,7 +1390,7 @@ export type CommandBody = {
   settled_by?: CommandBodySettledBy;
   /** The event its terminal status put there: command-settled, command-failed or command-timed-out */
   settled_event_id?: number;
-  /** On an issue's answer only: the computed settlement verdict at that moment (none/pending/settled/failed) */
+  /** On an issue's answer only: the computed settlement at that moment (none/pending/settled/failed) */
   settlement?: CommandBodySettlement;
   /** The recorded status: issued until a terminal settled, failed, or timed-out */
   status: CommandBodyStatus;
@@ -1409,7 +1409,7 @@ export type CommandTypeBody = {
   description?: string;
   /** The command takes its device down (reboot): its delivery closes the gates of the hold set on the delivering outpost until each reads up again. The hold set is the target and what it hosts (host dependencies, followed down), less any out-of-band endpoint of the target */
   disruptive: boolean;
-  /** A disruptive type's backstop: an endpoint with no up verdict this long after delivery reopens anyway, counted as hold-expiry-count. Not the settle window. 0 on a type that is not disruptive */
+  /** A disruptive type's backstop: an endpoint with no up reading this long after delivery reopens anyway, counted as hold-expiry-count. Not the settle window. 0 on a type that is not disruptive */
   hold_seconds: number;
   /** The command type's uuid, the stable form of name */
   id: string;
@@ -1935,7 +1935,7 @@ export type CreateCommandTypeInputBody = {
   /** The command takes its device down (reboot): its delivery closes the gates of the hold set (the target and what it hosts) on the delivering outpost until each reads up again */
   disruptive?: boolean;
   /**
-     * A disruptive type's backstop in seconds, greater than quiet_seconds: an endpoint with no up verdict by then reopens anyway, counted. Not the settle window. Only on a disruptive type
+     * A disruptive type's backstop in seconds, greater than quiet_seconds: an endpoint with no up reading by then reopens anyway, counted. Not the settle window. Only on a disruptive type
      * @minimum 0
      */
   hold_seconds?: number;
@@ -3970,7 +3970,7 @@ export type FireSimInputBody = {
 export type FleetDotBody = {
   /** The component's uuid: what a renderer navigates to when a dot is clicked */
   component: string;
-  /** healthy, incomplete, degraded, or outage: the component's own verdict, which is the only thing that colours the dot */
+  /** healthy, incomplete, degraded, or outage: the component's own health, which is the only thing that colours the dot */
   health: string;
   /** The component's name, for the dot's hover title */
   name: string;
@@ -3998,7 +3998,7 @@ export type HealthAlarmBody = {
 };
 
 export type HealthSlotBody = {
-  /** True for an unconditional slot, or a slot whose alternate is the one currently answering its choice. False means this slot's own impaired/short/spare figures did not contribute to the system's verdict */
+  /** True for an unconditional slot, or a slot whose alternate is the one currently answering its choice. False means this slot's own impaired/short/spare figures did not contribute to the system's health */
   active: boolean;
   /**
      * The active alarms on those down components
@@ -4012,7 +4012,7 @@ export type HealthSlotBody = {
   /** The choice this slot belongs to; absent when the slot is unconditional */
   choice?: string;
   /**
-     * The assigned components whose own verdict is outage; empty when the slot is merely short-staffed or only degraded
+     * The assigned components whose own health is outage; empty when the slot is merely short-staffed or only degraded
      * @nullable
      */
   down: string[] | null;
@@ -4023,9 +4023,9 @@ export type HealthSlotBody = {
   label: string;
   name: string;
   quorum: number;
-  /** How many assigned components currently occupy the slot (their own verdict is not outage; a degraded component still occupies) */
+  /** How many assigned components currently occupy the slot (their own health is not outage; a degraded component still occupies) */
   satisfying: number;
-  /** How many more occupants the slot needs to reach quorum, counting only those currently occupying (own verdict not outage); zero once it does. Diverges from the slots read's understaffed when an assigned component is down */
+  /** How many more occupants the slot needs to reach quorum, counting only those currently occupying (own health not outage); zero once it does. Diverges from the slots read's understaffed when an assigned component is down */
   short: number;
   /** How many occupants the slot has beyond quorum; zero at or below quorum */
   spare: number;
@@ -4054,7 +4054,7 @@ export type FleetHealthOutputBody = {
      */
   slots: HealthSlotBody[] | null;
   /**
-     * The systems beneath a location with their verdicts; empty for a system
+     * The systems beneath a location with their health; empty for a system
      * @nullable
      */
   systems: HealthSystemBody[] | null;
@@ -4066,7 +4066,7 @@ export type FleetHealthOutputBody = {
 };
 
 export type FleetLocationBody = {
-  /** The location's recorded verdict, worst-wins over the systems beneath it */
+  /** The location's recorded health, worst-wins over the systems beneath it */
   health: string;
   /** The location's uuid, the address a renderer navigates by */
   id: string;
@@ -4086,7 +4086,7 @@ export type FleetSystemBody = {
      * @nullable
      */
   dots: FleetDotBody[] | null;
-  /** The system's recorded verdict, the same one its health read serves */
+  /** The system's recorded health, the same one its health read serves */
   health: string;
   /** The system's uuid, the address a renderer navigates by */
   id: string;
@@ -4314,7 +4314,7 @@ export type ListAlarmsOutputBody = {
   /** @nullable */
   alarms: AlarmBody[] | null;
   component: string;
-  /** The component's own verdict, the one its active alarms make (healthy, degraded, or outage), whatever the filter: a component's view reads it here rather than off the whole fleet view. unknown when nothing has ever observed the component (no alarm raised, no endpoint delivered): there is nothing to call healthy on */
+  /** The component's own health, the one its active alarms make (healthy, degraded, or outage), whatever the filter: a component's view reads it here rather than off the whole fleet view. unknown when nothing has ever observed the component (no alarm raised, no endpoint delivered): there is nothing to call healthy on */
   health: string;
 };
 
@@ -4376,7 +4376,7 @@ export type ListComponentDependenciesOutputBody = {
 export type SystemMemberBody = {
   /** Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
   component: string;
-  /** The component's own recorded verdict (healthy, degraded, or outage), the one its active alarms make; never the system's */
+  /** The component's own recorded health (healthy, degraded, or outage), the one its active alarms make; never the system's */
   component_health: string;
   /** The component's uuid */
   component_id: string;
@@ -6287,7 +6287,7 @@ export type PlatformOutpostBody = {
   enrolled: boolean;
   /** The current figure per key, by key name: a gauge's latest sample, a window count only while its window is the newest. A key the outpost has never reported, or whose last window has passed, is absent, never zero; the whole map is absent without a fleet-wide component read */
   figures?: PlatformOutpostBodyFigures;
-  /** The outpost's platform component verdict, which tones the row; absent without a fleet-wide component read */
+  /** The outpost's platform component health, which tones the row; absent without a fleet-wide component read */
   health?: string;
   label: string;
   /** The outpost's last heartbeat; absent when it has never sent one */
@@ -6505,7 +6505,7 @@ export type PlatformServerBody = {
      * @nullable
      */
   groups: PlatformPanelBody[] | null;
-  /** The server component's recorded verdict */
+  /** The server component's recorded health */
   health: string;
   /** The server's platform component name */
   name: string;
@@ -6674,9 +6674,9 @@ export type PlatformSimulationViewOutputBody = {
 };
 
 export type PlatformSystemBody = {
-  /** The platform system's recorded verdict, the same one its health read serves */
+  /** The platform system's recorded health, the same one its health read serves */
   health: string;
-  /** The platform system's uuid: the page's verdict links to its system detail, where the verdict is explained */
+  /** The platform system's uuid: the page's health links to its system detail, where the health is explained */
   id: string;
   name: string;
 };
@@ -6684,7 +6684,7 @@ export type PlatformSystemBody = {
 export type PlatformViewOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
-  /** True when the caller's component read reached the platform components. False means the figures, verdicts and servers are left out because the caller may not read them, not because nothing was reported */
+  /** True when the caller's component read reached the platform components. False means the figures, health and servers are left out because the caller may not read them, not because nothing was reported */
   figures_read: boolean;
   /**
      * The outpost table's column groups, in order: the page renders these and has no key list of its own
@@ -6712,7 +6712,7 @@ export type PlatformViewOutputBody = {
      * @nullable
      */
   servers: PlatformServerBody[] | null;
-  /** The platform system and its verdict; absent without a fleet-wide system read */
+  /** The platform system and its health; absent without a fleet-wide system read */
   system?: PlatformSystemBody;
 };
 
@@ -7160,7 +7160,7 @@ export type RaiseAlarmInputBody = {
 };
 
 /**
- * Why reachability is null, present only while it is: no-outpost, the endpoint has no outpost assigned so nothing probes it (create and enroll an outpost, run it, then assign the endpoint to it); awaiting-probe, an outpost is assigned and its first probe has not landed. Absent once a verdict exists, and on a push endpoint, which has no verdict to wait for. Derived at read time, not stored
+ * Why reachability is null, present only while it is: no-outpost, the endpoint has no outpost assigned so nothing probes it (create and enroll an outpost, run it, then assign the endpoint to it); awaiting-probe, an outpost is assigned and its first probe has not landed. Absent once a reachability exists, and on a push endpoint, which has no reachability to wait for. Derived at read time, not stored
  */
 export type ReachEndpointBodyPending = typeof ReachEndpointBodyPending[keyof typeof ReachEndpointBodyPending];
 
@@ -7171,18 +7171,18 @@ export const ReachEndpointBodyPending = {
 } as const;
 
 export type ReachReadingBody = {
-  /** When the verdict last changed: one is stored only on a transition, so an endpoint's freshness is last_seen, not this */
+  /** When the reachability last changed: one is stored only on a transition, so an endpoint's freshness is last_seen, not this */
   ts: string;
-  /** The latest stored verdict value (up/down) */
+  /** The latest stored reachability value (up/down) */
   value: string;
 };
 
 export type ReachGateReasonBody = {
   /** An upstream reason only: the name of the component source names, when the caller may read it; absent otherwise, and for every other kind */
   component?: string;
-  /** The reason's kind: disrupted, a disruptive command (a reboot) delivered to the endpoint's component, which lifts on the endpoint's first up verdict after the command type's quiet period or at its hold backstop; unreachable, two consecutive down verdicts from the endpoint's reachability probe, which lifts on its next up verdict; upstream, a component the endpoint's component is reached through (a path dependency, #1652) has a closed gate on this outpost, which holds the endpoint's probes as well as its polls until the upstream opens, then lifts on the endpoint's own next up verdict (at once when it has no probe) */
+  /** The reason's kind: disrupted, a disruptive command (a reboot) delivered to the endpoint's component, which lifts on the endpoint's first up reading after the command type's quiet period or at its hold backstop; unreachable, two consecutive down readings from the endpoint's reachability probe, which lifts on its next up reading; upstream, a component the endpoint's component is reached through (a path dependency, #1652) has a closed gate on this outpost, which holds the endpoint's probes as well as its polls until the upstream opens, then lifts on the endpoint's own next up reading (at once when it has no probe) */
   kind: string;
-  /** When the reason began: for disrupted, the command's delivery; for unreachable, the first of the down verdicts that closed the gate; for upstream, when the upstream's gate closed this endpoint's */
+  /** When the reason began: for disrupted, the command's delivery; for unreachable, the first of the down readings that closed the gate; for upstream, when the upstream's gate closed this endpoint's */
   since: string;
   /** What added the reason: for disrupted, the command (command-<id>); for unreachable, the reachability probe's task id; for upstream, the uuid of the component it is held by: the root of the chain (a gateway behind a gateway names the one whose own gate is closed), or the direct upstream once that one opens and waits on its own probe */
   source: string;
@@ -7282,7 +7282,7 @@ export type ReachEndpointBody = {
      */
   gate_reasons?: ReachGateReasonBody[] | null;
   /**
-     * The recent verdict transitions, oldest first, for the availability strip
+     * The recent reachability transitions, oldest first, for the availability strip
      * @nullable
      */
   history: ReachHistoryBody[] | null;
@@ -7293,13 +7293,13 @@ export type ReachEndpointBody = {
   /** When the endpoint last delivered a batch, by the server's clock and to within a few seconds, whatever it carried (any lane, any series, an unchanged value); absent until one lands */
   last_seen?: string;
   /**
-     * The per-layer probe signals that compose the verdict
+     * The per-layer probe signals that compose the reachability
      * @nullable
      */
   layers: ReachLayerBody[] | null;
   /** The outpost that probes this endpoint */
   outpost?: string;
-  /** Why reachability is null, present only while it is: no-outpost, the endpoint has no outpost assigned so nothing probes it (create and enroll an outpost, run it, then assign the endpoint to it); awaiting-probe, an outpost is assigned and its first probe has not landed. Absent once a verdict exists, and on a push endpoint, which has no verdict to wait for. Derived at read time, not stored */
+  /** Why reachability is null, present only while it is: no-outpost, the endpoint has no outpost assigned so nothing probes it (create and enroll an outpost, run it, then assign the endpoint to it); awaiting-probe, an outpost is assigned and its first probe has not landed. Absent once a reachability exists, and on a push endpoint, which has no reachability to wait for. Derived at read time, not stored */
   pending?: ReachEndpointBodyPending;
   /** The latest reachability reading (up or down), or null if none yet (pending says why) */
   reachability: ReachReadingBody;
@@ -7313,7 +7313,7 @@ export type ReachEndpointBody = {
   tls?: ReachTLSBody;
   /** The transport (icmp, tcp, ...) */
   transport: string;
-  /** A webhook endpoint's block (#1024): a push endpoint has no ladder and reads last_seen (last heard) in place of a verdict, never down for silence; its scheme, whether it is signed, its token's secret and what its scheme refused. Absent on every dialed transport */
+  /** A webhook endpoint's block (#1024): a push endpoint has no ladder and reads last_seen (last heard) in place of a reachability, never down for silence; its scheme, whether it is signed, its token's secret and what its scheme refused. Absent on every dialed transport */
   webhook?: EndpointWebhookBody;
 };
 
@@ -12621,7 +12621,7 @@ export const getListComponentAlarmsUrl = (name: string,
 }
 
 /**
- * What is currently wrong with this component, newest first, with the component's own verdict those alarms make. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+ * What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
  * @summary List a component's alarms
  */
 export const listComponentAlarms = async (name: string,
@@ -12666,7 +12666,7 @@ export const getRaiseComponentAlarmUrl = (name: string,) => {
 }
 
 /**
- * Raises an alarm on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (an alarm at or above the high level), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser alarm degrades the component but leaves it occupying its slots. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+ * Raises an alarm on this component, then recomputes health in the same transaction: the component's own health moves, and if it is now outage (an alarm at or above the high level), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location health with it; a lesser alarm degrades the component but leaves it occupying its slots. Gated by component:update; read and update scopes drive the 404 versus 403 split.
  * @summary Raise an alarm on a component
  */
 export const raiseComponentAlarm = async (name: string,
@@ -13049,7 +13049,7 @@ export const getIssueComponentCommandUrl = (name: string,
 }
 
 /**
- * Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Answers with the command as it stands (as the command read returns it) and the computed settlement verdict; with wait, once it settles, fails or times out, or wait_timeout passes. Gated by command:issue, whose scope is resolved on the component tier from that permission (not from component:read); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not command is a 403.
+ * Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Answers with the command as it stands (as the command read returns it) and the computed settlement; with wait, once it settles, fails or times out, or wait_timeout passes. Gated by command:issue, whose scope is resolved on the component tier from that permission (not from component:read); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not command is a 403.
  * @summary Issue a command to a component
  */
 export const issueComponentCommand = async (name: string,
@@ -14256,7 +14256,7 @@ export const getMoveComponentUrl = (name: string,) => {
 }
 
 /**
- * Relocates and/or re-parents a component: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant (a location-scoped grant reaches a component for read and create only). A separate act from update, and a separately grantable one (component:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. Does not recompute health: a component's own verdict is purely its active alarms, unaffected by where it sits. A taken name at the destination is a 409. Gated by component:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).
+ * Relocates and/or re-parents a component: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant (a location-scoped grant reaches a component for read and create only). A separate act from update, and a separately grantable one (component:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. Does not recompute health: a component's own health is purely its active alarms, unaffected by where it sits. A taken name at the destination is a 409. Gated by component:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).
  * @summary Move a component
  */
 export const moveComponent = async (name: string,
@@ -15284,7 +15284,7 @@ export const getRunEndpointPollUrl = (endpoint: string,
 }
 
 /**
- * Runs one of an attached endpoint's polls now, on the outpost that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run waits for the endpoint's lane on the outpost, ahead of its scheduled polls and never beside another request to the endpoint; it borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409), a refusal, an unreachable verdict from the endpoint's probe, or a disruptive command (a reboot) the run was queued behind, and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no outpost is a 409. An outpost that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the outpost's operator lanes, is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.
+ * Runs one of an attached endpoint's polls now, on the outpost that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run waits for the endpoint's lane on the outpost, ahead of its scheduled polls and never beside another request to the endpoint; it borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409), a refusal, an unreachable reading from the endpoint's probe, or a disruptive command (a reboot) the run was queued behind, and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no outpost is a 409. An outpost that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the outpost's operator lanes, is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.
  * @summary Run an endpoint's poll now
  */
 export const runEndpointPoll = async (endpoint: string,
@@ -17063,7 +17063,7 @@ export const getGetLocationHealthUrl = (name: string,) => {
 }
 
 /**
- * The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+ * The location's current health, worst-wins over every system placed anywhere beneath it, with those systems and their health as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
  * @summary Read a location's health
  */
 export const getLocationHealth = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getLocationHealthResponse> => {
@@ -22416,7 +22416,7 @@ export const getGetSystemHealthUrl = (name: string,) => {
 }
 
 /**
- * The system's current verdict and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the verdict. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+ * The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
  * @summary Read a system's health
  */
 export const getSystemHealth = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getSystemHealthResponse> => {
@@ -22513,7 +22513,7 @@ export const getListSystemMembersUrl = (name: string,) => {
 }
 
 /**
- * The components bound into this system, ordered by name. Membership is what a slot attaches to: every component staffing a slot here is a member, and a member may also carry no slot at all (a power conditioner is in the room without filling a declared slot). Each member carries its own verdict, so a system's view can poll its members' health here rather than reading the whole fleet. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+ * The components bound into this system, ordered by name. Membership is what a slot attaches to: every component staffing a slot here is a member, and a member may also carry no slot at all (a power conditioner is in the room without filling a declared slot). Each member carries its own health, so a system's view can poll its members' health here rather than reading the whole fleet. Gated by system:read; an out-of-scope system is a non-disclosing 404.
  * @summary List the components in a system
  */
 export const listSystemMembers = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listSystemMembersResponse> => {
@@ -24196,7 +24196,7 @@ export const getPushTelemetryUrl = () => {
 }
 
 /**
- * Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Every key has one writer class, and a push writes only a collected key: a built-in key an outpost writes (a reachability verdict or rung, a probe metric or timing, a held session's state, collection-failed, an endpoint's collection telemetry) is an outpost's own observation and a platform key (health, the webhook receiver's counts) is the platform's, each rejected by name on every lane; a key a calc rule outputs is rejected naming the rule. The owner is a component or a system; a system batch carries no log lines (a log line is component-owned), refused with a 422. An observation's instance is the endpoint it came through: one naming no endpoint on the owner refuses the batch with a 422 naming it and listing the owner's endpoints, and a system has none, so a system's observations name no instance. Gated by telemetry:push, whose scope must cover the declared owner on its own tier (one check per batch): the push scope alone is enough to see the owner (no component:read or system:read is needed), an owner outside both the push scope and the caller's read of that kind is a non-disclosing 404, and one the caller can read but may not push to is a 403.
+ * Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Every key has one writer class, and a push writes only a collected key: a built-in key an outpost writes (a reachability or rung, a probe metric or timing, a held session's state, collection-failed, an endpoint's collection telemetry) is an outpost's own observation and a platform key (health, the webhook receiver's counts) is the platform's, each rejected by name on every lane; a key a calc rule outputs is rejected naming the rule. The owner is a component or a system; a system batch carries no log lines (a log line is component-owned), refused with a 422. An observation's instance is the endpoint it came through: one naming no endpoint on the owner refuses the batch with a 422 naming it and listing the owner's endpoints, and a system has none, so a system's observations name no instance. Gated by telemetry:push, whose scope must cover the declared owner on its own tier (one check per batch): the push scope alone is enough to see the owner (no component:read or system:read is needed), an owner outside both the push scope and the caller's read of that kind is a non-disclosing 404, and one the caller can read but may not push to is a 403.
  * @summary Push telemetry for an owner
  */
 export const pushTelemetry = async (pushInputBody: NonReadonly<PushInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<pushTelemetryResponse> => {
@@ -26315,7 +26315,7 @@ export const getGetFleetViewUrl = () => {
 }
 
 /**
- * Returns every in-scope location (flat, with parent and verdict), every in-scope system (with location and verdict), and one dot per component in each system. A dot carries the component id, its verdict, and the primary/shared flags, not a full component row. The open_alarms count is the alarms open on the components the caller may read. Each tier is scoped on its own read permission: a caller who can read locations but not components gets locations with empty systems, and a caller with no scope gets an empty result, not an error. Gated by location:read.
+ * Returns every in-scope location (flat, with parent and health), every in-scope system (with location and health), and one dot per component in each system. A dot carries the component id, its health, and the primary/shared flags, not a full component row. The open_alarms count is the alarms open on the components the caller may read. Each tier is scoped on its own read permission: a caller who can read locations but not components gets locations with empty systems, and a caller with no scope gets an empty result, not an error. Gated by location:read.
  * @summary Read the whole in-scope fleet in one call
  */
 export const getFleetView = async ( options?: Parameters<typeof ogFetch>[1]): Promise<getFleetViewResponse> => {
@@ -26359,7 +26359,7 @@ export const getGetPlatformViewUrl = () => {
 }
 
 /**
- * Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build, start time and panels (Requests, Ingest, Queues and Retention: each key's catalog facts and its latest sample per instance, a ranked key cut to the ten highest of its newest window in the database, and the open alarms on the server component with the key each one's rule samples), the outpost table's column groups with each key's catalog facts, and one row per outpost with its last heartbeat, its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest) and its loss over its own hops, and the pipeline: each hop an item crosses, in order, with its in, out and loss per kind and per component, newest window and last hour, and the end to end. The rows need a fleet-wide outpost:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers (with their panels) need a fleet-wide component:read and the system a fleet-wide system:read; short of that each (the pipeline and the outpost loss with them) is left out, never zeroed. Gated by outpost:read.
+ * Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its health, each server's running build, start time and panels (Requests, Ingest, Queues and Retention: each key's catalog facts and its latest sample per instance, a ranked key cut to the ten highest of its newest window in the database, and the open alarms on the server component with the key each one's rule samples), the outpost table's column groups with each key's catalog facts, and one row per outpost with its last heartbeat, its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest) and its loss over its own hops, and the pipeline: each hop an item crosses, in order, with its in, out and loss per kind and per component, newest window and last hour, and the end to end. The rows need a fleet-wide outpost:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, health and servers (with their panels) need a fleet-wide component:read and the system a fleet-wide system:read; short of that each (the pipeline and the outpost loss with them) is left out, never zeroed. Gated by outpost:read.
  * @summary Read Omniglass's own health in one call
  */
 export const getPlatformView = async ( options?: Parameters<typeof ogFetch>[1]): Promise<getPlatformViewResponse> => {

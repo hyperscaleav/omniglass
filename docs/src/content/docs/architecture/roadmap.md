@@ -39,7 +39,7 @@ per-slice detail is on [implementation status](/architecture/status/).
   the [settings](/architecture/settings/) engine (platform rung), and the unified resolution panel
   that explains which value won and why.
 - **The collection vertical.** The [outpost](/architecture/outposts/) runtime with enrollment and claim,
-  embedded NATS/JetStream with per-outpost subject isolation, the transition-only reachability verdict
+  embedded NATS/JetStream with per-outpost subject isolation, the transition-only reachability
   and its panel, endpoint and task authoring, and the raw-log lane with outpost self-logs
   ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)). The
   stateless arc of [#603](https://github.com/hyperscaleav/omniglass/issues/603) (#824) made transports
@@ -115,9 +115,9 @@ that describes the target:
    rest of the expression design (the Omniglass functions, unit conversion, and the sites beyond rule
    criteria and calc). [Templates](/architecture/templates/) (the clone model: standard, system,
    location and component templates an operator starts from, #827) landed.
-3. **Detection and verdict.** [Events](/architecture/events/) shipped (their catalog, sink, and
-   lineage columns), as did [commands](/architecture/commands/) with settlement, and the **verdict half
-   has landed**: an alarm impairs a component's own verdict, an impaired slot sinks its system by its
+3. **Detection and health.** [Events](/architecture/events/) shipped (their catalog, sink, and
+   lineage columns), as did [commands](/architecture/commands/) with settlement, and the **health half
+   has landed**: an alarm impairs a component's own health, an impaired slot sinks its system by its
    impact, and the transitions record when it changed. What **produces** an alarm has landed too: the
    `event_rule` tier raises and clears alarms at a severity level, and component
    [calc rules](/architecture/calculations/) derive the samples rules judge. What remains is what

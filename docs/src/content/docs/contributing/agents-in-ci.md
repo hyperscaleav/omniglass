@@ -35,7 +35,7 @@ merging it, and releasing it. Everything between the gates runs without a person
    agent-fix, whose push starts agent-review again. The loop ends when the reviewer says ship,
    which turns its check green, or after five fix rounds, when the PR parks with `needs-fred`.
 4. **Merge.** **Gate 2:** the architect approves a PR whose checks are all green, the reviewer's
-   verdict among them, and queues it; the [merge queue](/contributing/release-ci/#merging-through-the-queue)
+   ruling among them, and queues it; the [merge queue](/contributing/release-ci/#merging-through-the-queue)
    reruns the required checks on it on top of `main` and squash-merges it when they pass. There is
    no staging branch: `main` is the integration branch, a feature that is not ready ships dark
    behind a flag, and a bad merge is reverted on `main`.
@@ -76,8 +76,8 @@ does the same for the PR's own branch.
 
 Every same-repo PR that is not a draft or from dependabot gets one adversarial review: inline findings, each with
 its failure scenario, and one summary review that requests changes or comments. It never
-approves. Its check, `agent-review`, is the verdict: red while its latest review on the PR's
-head requests changes or opens with a blocking count, green when it says ship. The review is composed and the verdict read
+approves. Its check, `agent-review`, is the ruling: red while its latest review on the PR's
+head requests changes or opens with a blocking count, green when it says ship. The review is composed and the ruling read
 with the default branch's `scripts/agent-review.sh` and `scripts/agent-trust.sh`, so a PR
 cannot rewrite its own check. The one exception was the PR that added `agent-review.sh`
 (#2211): main had no copy yet, so its own review used the PR's. The check is not in either main ruleset yet; making it required
@@ -103,7 +103,7 @@ comments and opens with the blocking count), so agent-fix still sees one review 
 counts rounds, not lenses. A lens that fails, times out or runs out of its turns fails the check rather than passing
 without its part; rerunning the failed jobs retries it.
 
-The review is short to read (#2224). Its body opens with one verdict line, `✅ Ship · nothing found`,
+The review is short to read (#2224). Its body opens with one ruling line, `✅ Ship · nothing found`,
 `❌ Changes requested · N blocking · M advisory`, or `⚠️ N advisory` when every finding is advisory,
 then one strip with each lens's mark, then one line per finding that is not on a diff line. Each
 inline comment opens with its finding's title in bold. The failure, the fix and each lens's notes
@@ -121,7 +121,7 @@ plus the `recheck` lens when earlier findings are still open, and the turn limit
 diff, from 40 for up to 100 changed lines to 120 past 2,000.
 
 Open findings carry forward, and each one is rechecked. Every unresolved thread the reviewer
-opened, outdated ones included, still counts in the next verdict. When any are open, the re-review
+opened, outdated ones included, still counts in the next ruling. When any are open, the re-review
 adds a `recheck` lens that goes through them one by one against the PR as it is now and says fixed
 or open for each. The reviewer then replies on each thread (`✅ Verified fixed at <sha>` or
 `❌ Still open at <sha>`, with what it saw) and resolves the fixed ones. A thread stops counting only
@@ -132,9 +132,9 @@ not posted twice.
 The review posts as a second GitHub App, `hyperscale-reviewer`, when one is set up. GitHub lets
 no App request changes on a PR it wrote, and the agents' App writes most PRs here, so without
 the second App a blocking review on one of those can only comment. The check still fails, since
-the verdict reads the blocking count at the top of the comment, but agent-fix does not start.
+the ruling reads the blocking count at the top of the comment, but agent-fix does not start.
 
-In the merge queue the check reports without reviewing again: it reads the verdict already
+In the merge queue the check reports without reviewing again: it reads the ruling already
 given on the queued PR's head, so `agent-review` can be made required without holding the queue.
 A label other than `review:deep` does the same on the PR, so adding one never turns the check
 green.
@@ -159,7 +159,7 @@ catalog (#2250). The one-shot review does the same sweep in one model call. The 
   code it was shown is marked `verify`. Only then does a short read-only agent session (15 turns)
   read the code and run `go build`, `go vet` and `go test` to settle it. A finding it refutes is
   dropped. One it gives no word on still counts.
-- **Same verdict.** Its findings go through the same review, carry-forward, verdict and
+- **Same ruling.** Its findings go through the same review, carry-forward, ruling and
   five-round cap as the lenses'. A finding it raises on a thread it judged fixed in the same
   call is dropped, so it never blocks on what it just called fixed.
 - **A deep review on request.** A maintainer adds the label `review:deep` to run the lens
