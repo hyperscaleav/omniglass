@@ -2,7 +2,6 @@ import { createIdentity } from "../lib/entities";
 import { Show, For, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import ModalDialog, { DialogHeading } from "../components/ui/ModalDialog";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
-import { useSearchParams } from "@solidjs/router";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
 import BladeField from "../components/BladeField";
@@ -90,9 +89,8 @@ const columns: FlatColumn<Outpost>[] = [
 export default function Outposts() {
   const me = useMe();
   const outposts = useQuery(() => ({ queryKey: OUTPOSTS_KEY, queryFn: () => listOutposts() }));
-  // ?n=<name> deep-links to an outpost's blade (Platform health's row link, #1644).
-  const [params] = useSearchParams();
-  const openId = () => (Array.isArray(params.n) ? params.n[0] : params.n) || undefined;
+  // ?open=<name> deep-links to an outpost's blade (Platform health's row link, #1644);
+  // the older ?n=<name> still opens it.
 
   // One filter facet per tag key present across the outposts, derived from their
   // effective tags, so the bar can filter by any tag like any other field
@@ -128,7 +126,7 @@ export default function Outposts() {
           columns,
           empty: "No outposts yet.",
           rowId: (n) => n.name,
-          openId,
+          legacyParam: "n",
           blades: { registry: { outpost: outpostBlade }, rootKind: "outpost" },
           create: {
             label: "New outpost",

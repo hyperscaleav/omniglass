@@ -9,8 +9,8 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
-    exclude: [...configDefaults.exclude, "e2e/**"],
     setupFiles: ["./src/test-setup.ts"],
+    exclude: [...configDefaults.exclude, "e2e/**"],
   },
   resolve: { conditions: ["development", "browser"] },
 });

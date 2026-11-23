@@ -1,0 +1,18 @@
+# Link a colleague to a rule (#2429): an open drawer has an address. Opening a
+# row writes it to the URL as ?open=<the row's name>, Back closes the drawer, and
+# the same address, pasted, lands a colleague on the same drawer.
+title: Link a colleague to a rule
+description: Open an event rule's drawer and see its address in the URL, close it with Back, and land on the same drawer from the address alone.
+steps:
+  - goto: /event-rules
+    caption: The event rules catalog. Each row is a rule an operator can read and edit.
+  - click: { role: row, name: Disk nearly full }
+    caption: Open a rule. Its drawer reads the criteria and what it raises.
+  - wait: { selector: 'aside[data-blade]:has-text("Disk nearly full")' }
+    caption: The address bar now names the rule (?open=disk-nearly-full), so the page is a link a colleague can open.
+  - goto: /event-rules?open=disk-nearly-full
+    caption: Paste that address anywhere, and the list opens with the rule's drawer already showing.
+  - wait: { selector: 'aside[data-blade]:has-text("Disk nearly full")' }
+    caption: The same drawer, from the address alone. Back closes it and leaves the list.
+    poster: true
+    hold: 2000
