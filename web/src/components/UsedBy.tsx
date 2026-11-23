@@ -16,7 +16,7 @@ export type UsedByGroup = {
   count: number;
   rows: UsedByRow[];
   // Where the whole filtered list lives, for a group whose rows are a capped page.
-  seeAll?: { href: string; label?: string };
+  seeAll?: { href: string; text?: string };
   // The group's read has not answered yet.
   loading?: boolean;
   // What an empty group says; defaults to "None".
@@ -70,9 +70,9 @@ function Group(props: { group: UsedByGroup; limit: number }): JSX.Element {
           <Show when={props.group.seeAll && props.group.count > props.group.rows.length}>
             <Show
               when={inRouter}
-              fallback={<a class="link link-hover" href={props.group.seeAll!.href}>{props.group.seeAll!.label ?? `See all ${props.group.count}`}</a>}
+              fallback={<a class="link link-hover" href={props.group.seeAll!.href}>{props.group.seeAll!.text ?? `See all ${props.group.count}`}</a>}
             >
-              <A class="link link-hover" href={props.group.seeAll!.href}>{props.group.seeAll!.label ?? `See all ${props.group.count}`}</A>
+              <A class="link link-hover" href={props.group.seeAll!.href}>{props.group.seeAll!.text ?? `See all ${props.group.count}`}</A>
             </Show>
           </Show>
         </div>
