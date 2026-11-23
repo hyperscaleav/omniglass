@@ -1,5 +1,6 @@
 import { For, Show, createSignal, type JSX } from "solid-js";
 import { A } from "@solidjs/router";
+import Button from "./Button";
 import ReachLadder from "./ReachLadder";
 import { entityLabel } from "../lib/entities";
 import type { Step } from "../lib/assistant";
@@ -59,9 +60,9 @@ function ComponentRows(p: { list: Placed[] }) {
         </For>
       </ul>
       <Show when={p.list.length > LIST_CAP}>
-        <button type="button" class="btn btn-xs btn-ghost mt-1" onClick={() => setAll(!all())}>
+        <Button size="xs" intent="quiet" class="mt-1" onClick={() => setAll(!all())}>
           {all() ? "Show fewer" : `Show all ${p.list.length}`}
-        </button>
+        </Button>
       </Show>
     </>
   );
