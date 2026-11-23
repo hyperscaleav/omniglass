@@ -152,7 +152,7 @@ what each page draws itself.
 | `CalcRules.tsx` | `/calc-rules` | V13 |
 | `CatalogOverview.tsx` | `/catalog` | V09 |
 | `CommandTypes.tsx` | `/command-types` | none checked: config chips only |
-| `ComponentLeaf.tsx` | `/components/<id>` (via `Components.tsx`) | V08, V15, V24, V26, V27, V32, V33, V36, V37, V40, V42, V47, V51 |
+| `ComponentLeaf.tsx` | `/components/<id>` (via `Components.tsx`) | V04, V08, V15, V24, V26, V27, V32, V33, V36, V37, V40, V42, V47, V51 |
 | `ComponentTypes.tsx` | `/component-types` | none checked: config chips only |
 | `Components.tsx` | `/components/<id>` | wrapper: mounts `ComponentLeaf`, or the create form for the create route (`components/create`, no leading slash) |
 | `Drivers.tsx` | `/drivers` | none checked: config chips only |
@@ -190,7 +190,7 @@ what each page draws itself.
 | `Standards.tsx` | `/standards` | none checked: config chips only |
 | `Subscriptions.tsx` | `/profile/subscriptions` | none checked: `SeverityBadge` on the preview of what a draft subscription would match, and the active / paused flag, are config |
 | `SystemTypes.tsx` | `/system-types` | none checked: config chips only |
-| `SystemZoom.tsx` | `/systems/<id>` (via `Systems.tsx`) | V03, V04, V07, V10, V14, V19, V20, V29, V30, V31, V33, V34, V35, V39, V41, V49 |
+| `SystemZoom.tsx` | `/systems/<id>` (via `Systems.tsx`) | V03, V07, V10, V14, V19, V20, V29, V30, V31, V33, V34, V35, V39, V41, V49 |
 | `Systems.tsx` | `/systems/<id>` | wrapper: mounts `SystemZoom` |
 | `Tags.tsx` | `/tags` | none checked: config chips only |
 | `Templates.tsx` | `/templates` | none checked: config chips only |
