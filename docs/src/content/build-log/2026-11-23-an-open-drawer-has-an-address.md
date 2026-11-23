@@ -16,6 +16,6 @@ and stays out of the URL; the param composes with a page's filter, sort and `?ed
 `?u=`, `?g=` and `?n=` ids still open, and the Users, Groups and Outposts pages now write `?open=`.
 
 `drawerHref(kind, address)` is the one way to link into a drawer from another surface; the command
-palette's entity results use it (`Command.entity`). The route manifest's smoke tier visits one
+palette's `Command.entity` seam resolves through it. The palette does not yet produce entity results: its search is rebuilt in #2444, which fills the seam, so a rule or driver typed there opens at its address once that lands. The route manifest's smoke tier visits one
 `?open=` address. Tests: `DrawerAddress.test.tsx` (flat drawer, flat blade, tree) and
 `drawer_address.test.ts`.
