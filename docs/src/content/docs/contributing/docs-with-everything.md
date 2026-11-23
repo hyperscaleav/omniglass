@@ -248,7 +248,7 @@ A mask is painted over **the element the selector resolves to**, so what a `mask
 resolves to is the whole contract. A `text=/…/` selector resolves to the innermost element
 carrying the text, the value's own `<span>`, and so does a `data-testid` hook placed on that
 span, so the painted box is the size of the value. The console does not render a
-capture-relative value at one width (the audit trail's `toLocaleString` leaves the hour bare,
+capture-relative value at one width (a relative age in the audit trail reads 9m or 11h,
 `fmtTime` prints a month name, leaves the day bare and prints AM or PM, an age reads 9s or
 17s), which means the same unchanged page paints a box seven pixels narrower at 9 o'clock than
 at 11, and every recapture rewrites the baseline on a PR that changed no UI. So a mask over
