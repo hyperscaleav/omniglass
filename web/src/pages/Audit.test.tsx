@@ -78,10 +78,13 @@ describe("Audit page", () => {
     const region = table.parentElement!;
     expect(region.classList.contains("overflow-y-auto")).toBe(true);
     expect(region.contains(screen.getByText("No older events"))).toBe(false);
-    // The document scrolls, not the shell, so the list only fills a box with a
-    // definite height: without one it grows with its rows and the footer moves.
-    const shell = table.closest(".og-stack")!;
-    expect(shell.parentElement!.className).toMatch(/\bh-\[calc\(100dvh/);
+    // The list fills the box <main> gives the page (h-full), never a viewport
+    // height minus a guessed header: without a sized box it would grow with its rows.
+    // Under the Page header, the page section is that h-full box and the list takes the rest.
+    const page = table.closest("section")!;
+    expect(page.className).toMatch(/\bh-full\b/);
+    expect(page.className).not.toMatch(/vh/);
+    expect(page.querySelector(":scope > .flex-1")).toBeTruthy();
   });
 
   it("renders events with actor, verb, and resource", async () => {

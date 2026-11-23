@@ -246,12 +246,11 @@ export default function Audit() {
     return r.length ? r[r.length - 1].ts : undefined;
   };
 
-  // The document scrolls, so the list fills a box of definite height: the top
-  // bar, the main padding and room for the lab banner come off the viewport,
-  // and the rows scroll inside it (#1461).
+  // The list fills the box the shell gives the page (h-full of <main>), and
+  // the rows scroll inside it (#1461, #2433).
   return (
-    <Page route="/audit">
-    <div class="h-[calc(100dvh-14rem)] min-h-96">
+    <Page route="/audit" fill>
+    <div class="min-h-0 flex-1">
       <FlatList<AuditEvent>
         config={{
           entity: { name: "audit", plural: "events" },

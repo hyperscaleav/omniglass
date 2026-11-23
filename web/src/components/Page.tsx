@@ -14,6 +14,9 @@ export default function Page(props: {
   // from the nav metadata, so the page says what the sidebar says; an explicit
   // title or subtitle wins.
   route?: string;
+  // A page whose body fills the shell's height (a list in fill mode): the section takes
+  // the full height and the body the rest under the header.
+  fill?: boolean;
   title?: string | JSX.Element;
   name?: string;
   subtitle?: string;
@@ -27,7 +30,7 @@ export default function Page(props: {
   createEffect(() => namePage(props.name));
   onCleanup(() => namePage(undefined));
   return (
-    <section class="og-stack flex flex-col">
+    <section class="og-stack flex flex-col" classList={{ "h-full min-h-0": props.fill }}>
       <div data-testid="page-header">
         <Show when={props.breadcrumb}>
           <div class="mb-1 min-h-[18px]">{props.breadcrumb}</div>

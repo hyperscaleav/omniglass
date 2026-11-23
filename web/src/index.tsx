@@ -13,11 +13,13 @@ import { RouteGuard } from "./components/RouteGuard";
 import CatalogShell from "./components/CatalogShell";
 import { ROUTE_MANIFEST, type RouteEntry } from "./lib/routemanifest";
 import { PAGES } from "./routes";
+import { queryRetry } from "./lib/queryDefaults";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("missing #root element");
 
-const queryClient = new QueryClient();
+// A refusal (403) is never retried: see queryRetry (#2442).
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: queryRetry } } });
 
 // When a protected request 401s, the session has ended (expired, reset, or locked
 // out): drop any stale bearer and null the cached user so the AuthGuard
