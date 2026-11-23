@@ -131,7 +131,6 @@ screenshots:
     alt: "Explore: the outline of locations, Headquarters and West Building folded into one row and opened down to the Huddle Room, which wears its system with the components beneath it; every collapsed location says what it holds and counts its systems by health."
 walkthroughs:
   - id: find-and-fix-a-location
-  - id: read-what-happened-on-the-timeline
 ---
 
 The fleet has one door in the sidebar: **Explore**. It is an outline of every location you
@@ -407,8 +406,6 @@ raised, each property's value and each metric's reading), and the metrics grid u
 draws its crosshair at the same instant. The time range on the tab rail governs every lane, and
 changing it reads them all again. A read that stops at its cap says so on its lane rather than
 dropping rows silently.
-
-::walkthrough{#read-what-happened-on-the-timeline}
 
 ## Configure
 
