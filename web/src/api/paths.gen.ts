@@ -2288,6 +2288,16 @@ export interface paths {
       error: og.listRolesResponseError["data"];
     };
   };
+  "/search": {
+    get: {
+      path: never;
+      query: NonNullable<Parameters<typeof og.search>[0]>;
+      body: never;
+      bodyRequired: false;
+      data: og.searchResponseSuccess["data"];
+      error: og.searchResponseError["data"];
+    };
+  };
   "/secret-types": {
     get: {
       path: never;

@@ -54,15 +54,15 @@ func TestGroupGrantsInheritScopeAndPerms(t *testing.T) {
 	owner, _ := gw.AuthenticateBearer(ctx, zeros)
 
 	// A small location tree: hq (campus) > hq-b1 (building); lab is a sibling root.
-	hq, err := gw.CreateLocation(ctx, owner.ID, storage.LocationSpec{Name: "hq", LocationType: "campus"}, all)
+	hq, err := gw.CreateLocation(ctx, owner.ID, storage.LocationSpec{Name: "hq", LocationType: "campus"}, all, all)
 	if err != nil {
 		t.Fatalf("create hq: %v", err)
 	}
 	hqName := "hq"
-	if _, err := gw.CreateLocation(ctx, owner.ID, storage.LocationSpec{Name: "hq-b1", LocationType: "building", ParentName: &hqName}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, owner.ID, storage.LocationSpec{Name: "hq-b1", LocationType: "building", ParentName: &hqName}, all, all); err != nil {
 		t.Fatalf("create hq-b1: %v", err)
 	}
-	if _, err := gw.CreateLocation(ctx, owner.ID, storage.LocationSpec{Name: "lab", LocationType: "campus"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, owner.ID, storage.LocationSpec{Name: "lab", LocationType: "campus"}, all, all); err != nil {
 		t.Fatalf("create lab: %v", err)
 	}
 

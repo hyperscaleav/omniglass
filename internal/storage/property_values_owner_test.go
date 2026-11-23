@@ -89,11 +89,11 @@ func TestEffectivePropertiesByOwnerKind(t *testing.T) {
 		t.Fatalf("declare on location_type: %v", err)
 	}
 	// A room is not allowed at root (allowed_parent_types), so it hangs off a campus.
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq-campus", LocationType: "campus"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq-campus", LocationType: "campus"}, all, all); err != nil {
 		t.Fatalf("create campus: %v", err)
 	}
 	campus := "hq-campus"
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq-room-1", LocationType: "room", ParentName: &campus}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq-room-1", LocationType: "room", ParentName: &campus}, all, all); err != nil {
 		t.Fatalf("create location: %v", err)
 	}
 	loc := byName(mustResolveOwner(t, gw, "location", "hq-room-1", all))
