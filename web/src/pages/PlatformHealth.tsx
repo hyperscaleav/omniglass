@@ -325,7 +325,7 @@ function OutpostRow(props: { outpost: PlatformOutpost; view: PlatformView }) {
         {(c) => {
           const text = () => figureText(props.outpost, c());
           return (
-            <td class="tnum min-w-24 whitespace-nowrap text-right" data-figure={c().key} classList={{ "text-base-content/30": text() === NOT_REPORTED, "font-semibold text-error": figureTinted(props.outpost, c()) }}>{text()}</td>
+            <td class="tnum min-w-[4.5rem] whitespace-nowrap text-right" data-figure={c().key} classList={{ "text-base-content/30": text() === NOT_REPORTED, "font-semibold text-error": figureTinted(props.outpost, c()) }}>{text()}</td>
           );
         }}
       </KeyedFor>
