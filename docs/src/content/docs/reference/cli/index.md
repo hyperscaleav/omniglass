@@ -170,11 +170,16 @@ List the fleet's active alarms
 omniglass alarm list [flags]
 ```
 
-What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Pass unacknowledged for the queue nobody has looked at, and limit to cap it (default 200, at most 1000). It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.
+What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Each row names its component's location and the systems it belongs to that the caller may read. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--acknowledged` | string | (none) | true keeps the acknowledged alarms, false the unacknowledged ones; absent keeps both |
 | `--limit` | int | `0` | At most this many, the worst first; 0 or absent means 200 |
+| `--location` | string | (none) | Only alarms whose component sits in this location or any location below it, by name |
+| `--page-token` | string | (none) | The next_page_token of the previous page: resumes the same worst-first order after it, however many alarms there are |
+| `--severity` | stringSlice | `[]` | Only alarms at these severity levels, by name (see /severity-levels); repeat the parameter for several |
+| `--snoozed` | string | (none) | true keeps the snoozed alarms, false the ones not snoozed; absent keeps both |
 | `--unacknowledged` | bool | `false` | Only the alarms nobody has looked at: the queue an operator, or an agent, works |
 
 Example:
@@ -5446,6 +5451,7 @@ Populate a fresh dev database with a small example fleet so a dev stack comes up
   dev       the example fleet a lab comes up with
   empty     nothing beyond the boot seed: a fresh install's first run
   degraded  the example fleet with an open alarm on one in every 3 components
+  storm     the large fleet with an open alarm on one in every 3 components: an alarm storm of 150 or more, for the alarm queue's scale checks
   large     the example fleet plus its self-contained rooms copied 6 times under each of 5 replica sites (only the example fleet is simulated)
 
 | Flag | Type | Default | Description |

@@ -724,7 +724,12 @@ type Gateway interface {
 	// Gateway injecting the scope (#2025): worst severity first, then newest,
 	// capped at limit. Unacknowledged narrows it to the queue nobody has worked;
 	// IncludeCleared is ignored, since the fleet read is what is wrong now.
-	ListFleetAlarms(ctx context.Context, read scope.Set, filter AlarmFilter, limit int) ([]Alarm, error)
+	// The queue's filters (Severities, Location, Acknowledged, Snoozed) narrow
+	// it further and PageToken resumes after a prior page; the returned token
+	// is empty on the last page (#2333). A row's Systems are only those inside
+	// systemRead, so reading a component never names a system the caller may
+	// not read.
+	ListFleetAlarms(ctx context.Context, read, systemRead scope.Set, filter AlarmFilter, limit int) ([]Alarm, string, error)
 	// ListMetricSeries returns one metric series' raw samples newest first,
 	// windowed and capped: the rows behind the effective read (#794).
 	ListMetricSeries(ctx context.Context, ownerKind, ownerRef, key string, window time.Duration, limit int) ([]MetricSample, error)

@@ -532,6 +532,12 @@ components:
           type: string
         id:
           type: string
+        location:
+          description: The name of the location the alarm's component sits in (its plane root's location); absent when the component is unplaced, and on every read but the fleet queue
+          type: string
+        location_path:
+          description: That location's dotted ancestor path, root first (for example boi.17c)
+          type: string
         message:
           type: string
         raised_at:
@@ -553,6 +559,13 @@ components:
           description: "Until when the alarm (by component and dedup_key) is snoozed: its notifications are written suppressed until then. Null while it is not snoozed. Independent of acknowledged and cleared_at"
           format: date-time
           type: string
+        systems:
+          description: The names of the systems the alarm's component is a member of; only on the fleet queue
+          items:
+            type: string
+          type:
+            - array
+            - "null"
       required:
         - id
         - component
@@ -6289,6 +6302,9 @@ components:
           type:
             - array
             - "null"
+        next_page_token:
+          description: Pass as page_token for the next page; absent on the last page
+          type: string
       required:
         - alarms
       type: object
@@ -15437,7 +15453,7 @@ paths:
       x-omniglass-permission: notification:subscribe
   /alarms:
     get:
-      description: "What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Pass unacknowledged for the queue nobody has looked at, and limit to cap it (default 200, at most 1000). It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named."
+      description: "What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Each row names its component's location and the systems it belongs to that the caller may read. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named."
       operationId: list-alarms
       parameters:
         - description: "Only the alarms nobody has looked at: the queue an operator, or an agent, works"
@@ -15457,6 +15473,51 @@ paths:
             maximum: 1000
             minimum: 0
             type: integer
+        - description: Only alarms at these severity levels, by name (see /severity-levels); repeat the parameter for several
+          explode: true
+          in: query
+          name: severity
+          schema:
+            description: Only alarms at these severity levels, by name (see /severity-levels); repeat the parameter for several
+            items:
+              type: string
+            type:
+              - array
+              - "null"
+        - description: Only alarms whose component sits in this location or any location below it, by name
+          explode: false
+          in: query
+          name: location
+          schema:
+            description: Only alarms whose component sits in this location or any location below it, by name
+            type: string
+        - description: true keeps the acknowledged alarms, false the unacknowledged ones; absent keeps both
+          explode: false
+          in: query
+          name: acknowledged
+          schema:
+            description: true keeps the acknowledged alarms, false the unacknowledged ones; absent keeps both
+            enum:
+              - "true"
+              - "false"
+            type: string
+        - description: true keeps the snoozed alarms, false the ones not snoozed; absent keeps both
+          explode: false
+          in: query
+          name: snoozed
+          schema:
+            description: true keeps the snoozed alarms, false the ones not snoozed; absent keeps both
+            enum:
+              - "true"
+              - "false"
+            type: string
+        - description: "The next_page_token of the previous page: resumes the same worst-first order after it, however many alarms there are"
+          explode: false
+          in: query
+          name: page_token
+          schema:
+            description: "The next_page_token of the previous page: resumes the same worst-first order after it, however many alarms there are"
+            type: string
       responses:
         "200":
           content:

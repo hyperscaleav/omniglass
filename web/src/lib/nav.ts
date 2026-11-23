@@ -65,7 +65,7 @@ export const navItems: NavItem[] = [
   // the projection scopes each tier on its own read underneath.
   { label: "Explore", path: "/explore", icon: Icons.Compass, live: true, anyResource: ["location", "system", "component"], hint: "Every location in the fleet, the systems that sit there, and what is in them." },
   { label: "Dashboards", path: "/dashboards", icon: Icons.LayoutDashboard, hint: "Official, shared, and your own dashboards." },
-  { label: "Alarms", path: "/alarms", icon: Icons.Bell, hint: "What is firing now, with drill-down to the triggering sample." },
+  { label: "Alarms", path: "/alarms", icon: Icons.Bell, live: true, anyResource: ["component"], hint: "What is firing now across the fleet: acknowledge, snooze, or hand one to omnibot." },
   // The fleet has ONE door (#798, the reconciliation ruled on the #795 review):
   // the old fleet group dissolved into the entry above, whose outline lists
   // every location, system and component, and the old index URLs redirect
@@ -215,7 +215,7 @@ export const navByPath: Record<string, NavMeta> = (() => {
 // route-manifest-guard.test.ts pins the manifest's stub entries to this list,
 // so every unlive rail entry resolves to a registered stub rather than NotFound.
 export const STUBS = [
-  "/dashboards", "/alarms",
+  "/dashboards",
   "/learn",
   "/config", "/log-types",
 ];
