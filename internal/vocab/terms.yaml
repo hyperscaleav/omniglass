@@ -579,4 +579,4 @@ not_terms:
   - nav: /simulation
     reason: the lab simulator
   - nav: /platform
-    reason: Status, the platform's own health page
+    reason: Platform health, the platform's own health page (one name, ADR-2446)

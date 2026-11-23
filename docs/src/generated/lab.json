@@ -233,8 +233,8 @@
     },
     {
       "id": "open-status-under-admin",
-      "title": "Open Outposts and Status from Admin",
-      "description": "From Home, find Outposts and Status under Admin in the sidebar, open Outposts where a new outpost is set up, then open Status and read the build the server runs.",
+      "title": "Open Outposts and Platform health from Admin",
+      "description": "From Home, find Outposts and Platform health under Admin in the sidebar, open Outposts where a new outpost is set up, then open Platform health and read the build the server runs.",
       "lab": [],
       "setup": []
     },
@@ -281,7 +281,7 @@
     {
       "id": "read-platform-health",
       "title": "Read the platform's health",
-      "description": "From Home, open Platform health, read the build, open a hop under where work is lost, fold the server's panels to read the outposts and the simulator's gaps, open them on the Requests panel, then follow the slowest route's figure onto its series on the server's platform component.",
+      "description": "From Home, open Platform health, read each section's one-line verdict, open a hop under where work is lost, open the outposts and the simulator's gaps, then open the server's panels on the Requests panel and follow the slowest route's figure onto its series on the server's platform component.",
       "lab": [],
       "setup": []
     },

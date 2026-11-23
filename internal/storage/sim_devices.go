@@ -234,3 +234,96 @@ func webhookSenderSecret(scheme string, f map[string]string) string {
 	}
 	return ""
 }
+
+// ComponentPlace is where a component sits: its primary system's name and the
+// names of the locations from the root down to its location. Either is empty for a
+// component with no primary system or no location. The Platform health
+// simulation table reads it to tell repeated device names apart (#1724).
+type ComponentPlace struct {
+	System string
+	Path   []string
+}
+
+// ComponentPlaces reads the place of each component id, keyed by id; an id that
+// is no component has no entry. The caller's read scopes bound the names it
+// returns, the way the fleet view's dots are bounded: a component's primary
+// system is named only when systemRead admits that system, and its path holds
+// only the locations locationRead admits, so reading a component never
+// discloses a system or a place the caller cannot read.
+func (p *PG) ComponentPlaces(ctx context.Context, ids []string, systemRead, locationRead scope.Set) (map[string]ComponentPlace, error) {
+	out := map[string]ComponentPlace{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	sf := newReadFilter(systemTable, systemRead, 2)
+	rows, err := p.pool.Query(ctx, sf.With+`
+		select c.id::text, coalesce((select s.name from system s join system_member m on m.system_id = s.id
+		                              where m.component_id = c.id and m.is_primary and `+sf.Pred("s.id")+`), '')
+		from component c where c.id = any($1::uuid[])`, append([]any{ids}, sf.Args...)...)
+	if err != nil {
+		return nil, fmt.Errorf("storage: component places: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id, system string
+		if err := rows.Scan(&id, &system); err != nil {
+			return nil, fmt.Errorf("storage: scan component place: %w", err)
+		}
+		out[id] = ComponentPlace{System: system}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("storage: component places: %w", err)
+	}
+	if locationRead.Empty() {
+		return out, nil
+	}
+	locIDs, err := planeRootLocationIDs(ctx, p.pool, componentTable, ids)
+	if err != nil {
+		return nil, err
+	}
+	seeds := make([]string, 0, len(locIDs))
+	for _, l := range locIDs {
+		if l != nil {
+			seeds = append(seeds, *l)
+		}
+	}
+	if len(seeds) == 0 {
+		return out, nil
+	}
+	lf := newReadFilter(locationTable, locationRead, 2)
+	with := "with recursive "
+	if lf.cte != "" {
+		with += lf.cte + ", "
+	}
+	chain, err := p.pool.Query(ctx, with+`anc(origin, id, parent_id, name, depth) as (
+			select id, id, parent_id, name, 0 from location where id = any($1::uuid[])
+			union all
+			select anc.origin, l.id, l.parent_id, l.name, anc.depth + 1
+			from location l join anc on l.id = anc.parent_id
+		) cycle id set is_cycle using path
+		select origin::text, name from anc where `+lf.Pred("anc.id")+` order by origin, depth desc`, append([]any{seeds}, lf.Args...)...)
+	if err != nil {
+		return nil, fmt.Errorf("storage: component place paths: %w", err)
+	}
+	defer chain.Close()
+	byLoc := map[string][]string{}
+	for chain.Next() {
+		var origin, name string
+		if err := chain.Scan(&origin, &name); err != nil {
+			return nil, fmt.Errorf("storage: scan component place path: %w", err)
+		}
+		byLoc[origin] = append(byLoc[origin], name)
+	}
+	if err := chain.Err(); err != nil {
+		return nil, fmt.Errorf("storage: component place paths: %w", err)
+	}
+	for id, l := range locIDs {
+		cp, ok := out[id]
+		if !ok || l == nil {
+			continue
+		}
+		cp.Path = byLoc[*l]
+		out[id] = cp
+	}
+	return out, nil
+}
