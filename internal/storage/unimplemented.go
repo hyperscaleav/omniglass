@@ -563,6 +563,15 @@ func (UnimplementedGateway) CreateSimSystem(context.Context, string, SimSystemSp
 func (UnimplementedGateway) CreatePlan(context.Context, string, Plan, PlanScopes) (*Planned, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) BatchCreateLocations(context.Context, string, []LocationSpec, scope.Set, bool) ([]*Location, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) BatchCreateSystems(context.Context, string, []SystemSpec, scope.Set, scope.Set, bool) ([]*System, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) BatchCreateComponents(context.Context, string, []ComponentSpec, scope.Set, scope.Set, scope.Set, scope.Set, bool) ([]*Component, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) WithSimAddressLock(_ context.Context, fn func() error) error {
 	return fn()
 }
@@ -1067,8 +1076,8 @@ func (UnimplementedGateway) ListSystemAlarms(context.Context, string, time.Durat
 	return nil, nil
 }
 
-func (UnimplementedGateway) ListFleetAlarms(context.Context, scope.Set, AlarmFilter, int) ([]Alarm, error) {
-	return nil, nil
+func (UnimplementedGateway) ListFleetAlarms(context.Context, scope.Set, scope.Set, AlarmFilter, int) ([]Alarm, string, error) {
+	return nil, "", nil
 }
 
 func (UnimplementedGateway) ListSystemLogSources(context.Context, string, time.Duration) ([]string, error) {

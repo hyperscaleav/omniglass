@@ -131,10 +131,11 @@ component set; the surfaces below are where they are mounted.
 |---|---|---|---|---|---|---|
 | V48 | `PipelineFlow`, the "where work is lost" hop flow with a lane tab group and a per-hop loss figure (`components/PipelineFlow.tsx`) | `/platform` | derived (counts of metric, property, event and log samples per hop) | `view.pipeline` from `platformView` | follows parent (poll 5 s) | new: pipeline flow |
 | V49 | `SystemMap`, the top-down room map with health-coloured markers (`components/SystemMap.tsx`, `lib/system_map.ts`) | `/systems/<id>` | derived | `systemMembers`, `layoutMarkers` | poll 5 s | new: floor map |
+| V50 | The alarm queue: severity-badged alarm rows with component, systems, location, raised-at and ack and snooze state (`pages/Alarms.tsx`) | `/alarms` | event | `fleetAlarms` (`lib/alarms.ts`), paged by `page_token` | poll 5 s (the leaf cadence) | new: alarm queue |
 
 ## Every page
 
-Each of the 51 files under `pages/` is either a surface with entries or checked and without one.
+Each of the 52 files under `pages/` is either a surface with entries or checked and without one.
 The four fleet routes (`/explore`, `/locations/<id>`, `/systems/<id>`, `/components/<id>`) also host the
 blade entries V17, V26, V28, V29, V30, V32, V33 and V37 through `fleetRegistry`; the rows below list
 what each page draws itself.
@@ -143,6 +144,7 @@ what each page draws itself.
 | Page | Route | Result |
 |---|---|---|
 | `ActionRules.tsx` | `/action-rules` | V45 (the rule list's enabled flag is a config chip) |
+| `Alarms.tsx` | `/alarms` | V50 |
 | `Audit.tsx` | `/audit` | V46 |
 | `CalcRules.tsx` | `/calc-rules` | V13 |
 | `CatalogOverview.tsx` | `/catalog` | V09 |
@@ -178,7 +180,7 @@ what each page draws itself.
 | `Rules.tsx` | `/event-rules` | V12, V33, V38 |
 | `SecretTypes.tsx` | `/secret-types` | none checked: config chips only |
 | `Secrets.tsx` | `/secrets` | none checked: config chips only |
-| `SectionStub.tsx` | `/alarms`, `/config`, `/dashboards`, `/learn`, `/log-types` | none checked: placeholder page (`/dashboards` is where the canvas lands) |
+| `SectionStub.tsx` | `/config`, `/dashboards`, `/learn`, `/log-types` | none checked: placeholder page (`/dashboards` is where the canvas lands) |
 | `Settings.tsx` | `/settings` | none checked: effective and lock chips are config |
 | `SeverityLevels.tsx` | `/severity-levels` | none checked: `SeverityBadge` here previews a configured level's look, not an alarm's state |
 | `Simulation.tsx` | `/simulation` | V23, V24 (drawer) |
@@ -214,7 +216,7 @@ what each page draws itself.
 
 ## Widget types
 
-Deduplicated by widget, with the number of call sites (entries above; the 49 entries sum to 49). A `new:` row is a widget the
+Deduplicated by widget, with the number of call sites (entries above; the 50 entries sum to 50). A `new:` row is a widget the
 epic's vocabulary does not yet name; the count says how much of the console it would carry.
 
 | Widget | Call sites | Entries |
@@ -241,3 +243,4 @@ epic's vocabulary does not yet name; the count says how much of the console it w
 | new: command list | 1 | V47 |
 | new: pipeline flow | 1 | V48 |
 | new: floor map | 1 | V49 |
+| new: alarm queue | 1 | V50 |

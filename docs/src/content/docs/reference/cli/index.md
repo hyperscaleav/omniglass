@@ -170,11 +170,16 @@ List the fleet's active alarms
 omniglass alarm list [flags]
 ```
 
-What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Pass unacknowledged for the queue nobody has looked at, and limit to cap it (default 200, at most 1000). It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.
+What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Each row names its component's location and the systems it belongs to that the caller may read. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--acknowledged` | string | (none) | true keeps the acknowledged alarms, false the unacknowledged ones; absent keeps both |
 | `--limit` | int | `0` | At most this many, the worst first; 0 or absent means 200 |
+| `--location` | string | (none) | Only alarms whose component sits in this location or any location below it, by name |
+| `--page-token` | string | (none) | The next_page_token of the previous page: resumes the same worst-first order after it, however many alarms there are |
+| `--severity` | stringSlice | `[]` | Only alarms at these severity levels, by name (see /severity-levels); repeat the parameter for several |
+| `--snoozed` | string | (none) | true keeps the snoozed alarms, false the ones not snoozed; absent keeps both |
 | `--unacknowledged` | bool | `false` | Only the alarms nobody has looked at: the queue an operator, or an agent, works |
 
 Example:
@@ -1333,6 +1338,27 @@ Example:
 
 ```sh
 omniglass component alarm unsnooze <name> <id>
+```
+
+### `omniglass component batchCreate`
+
+Create many components in one write
+
+```
+omniglass component batchCreate [flags]
+```
+
+Creates components in one transaction: each request is the body POST /components takes, run as that create runs it, in order, so a component may name as its parent one an earlier request creates, and its system and location by name as the single create does. Every row writes its own audit row carrying the one batch_id the response returns, under from_batch. A refused request refuses the whole batch, mapped as POST /components maps it, with its position in the request (requests[3]) leading the detail; nothing lands. validate_only runs the same transaction and rolls it back, answering 200 with the names the write would mint and no ids. A batch carries at most 1000 requests; more is a 413 naming the limit, so split a bigger import (by building). Gated by component:create; each request is held to that scope, its location resolves within your location:read scope, and a request naming a system also needs system:update over it, as its single create does.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--requests` | string | (none) | The components to create, each the body POST /components takes, in order: a parent before its children |
+| `--validate-only` | bool | `false` | Run every request in the transaction and roll it back: the response is what the write would create (names minted, ids empty), or the row that would refuse it, and nothing is written |
+
+Example:
+
+```sh
+omniglass component batchCreate --requests <json>
 ```
 
 ### `omniglass component checkName`
@@ -3363,6 +3389,27 @@ With --record-dir it also writes the release record, one file named for the buil
 ## `omniglass location`
 
 Commands for the location resource
+
+### `omniglass location batchCreate`
+
+Create many locations in one write
+
+```
+omniglass location batchCreate [flags]
+```
+
+Creates locations in one transaction: each request is the body POST /locations takes, run as that create runs it, in order, so a location may name as its parent one an earlier request creates. Every row writes its own audit row carrying the one batch_id the response returns, under from_batch. A refused request refuses the whole batch, mapped as POST /locations maps it, with its position in the request (requests[3]) leading the detail; nothing lands. validate_only runs the same transaction and rolls it back, answering 200 with the names the write would mint and no ids. A batch carries at most 1000 requests; more is a 413 naming the limit, so split a bigger import (by building). Gated by location:create, and each request is held to that scope as its single create is.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--requests` | string | (none) | The locations to create, each the body POST /locations takes, in order: a parent before its children, which then name it as their parent |
+| `--validate-only` | bool | `false` | Run every request in the transaction and roll it back: the response is what the write would create (names minted, ids empty), or the row that would refuse it, and nothing is written |
+
+Example:
+
+```sh
+omniglass location batchCreate --requests <json>
+```
 
 ### `omniglass location checkName`
 
@@ -5465,6 +5512,7 @@ Populate a fresh dev database with a small example fleet so a dev stack comes up
   dev       the example fleet a lab comes up with
   empty     nothing beyond the boot seed: a fresh install's first run
   degraded  the example fleet with an open alarm on one in every 3 components
+  storm     the large fleet with an open alarm on one in every 3 components: an alarm storm of 150 or more, for the alarm queue's scale checks
   large     the example fleet plus its self-contained rooms copied 6 times under each of 5 replica sites (only the example fleet is simulated)
 
 | Flag | Type | Default | Description |
@@ -6227,6 +6275,27 @@ Example:
 
 ```sh
 omniglass system alarm list <name>
+```
+
+### `omniglass system batchCreate`
+
+Create many systems in one write
+
+```
+omniglass system batchCreate [flags]
+```
+
+Creates systems in one transaction: each request is the body POST /systems takes, run as that create runs it, in order, so a system may name as its parent one an earlier request creates, and its location by name as the single create does. Every row writes its own audit row carrying the one batch_id the response returns, under from_batch. A refused request refuses the whole batch, mapped as POST /systems maps it, with its position in the request (requests[3]) leading the detail; nothing lands. validate_only runs the same transaction and rolls it back, answering 200 with the names the write would mint and no ids. A batch carries at most 1000 requests; more is a 413 naming the limit, so split a bigger import (by building). Gated by system:create; each request is held to that scope, and its location resolves within your location:read scope, as its single create is.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--requests` | string | (none) | The systems to create, each the body POST /systems takes, in order: a parent before its children |
+| `--validate-only` | bool | `false` | Run every request in the transaction and roll it back: the response is what the write would create (names minted, ids empty), or the row that would refuse it, and nothing is written |
+
+Example:
+
+```sh
+omniglass system batchCreate --requests <json>
 ```
 
 ### `omniglass system checkName`

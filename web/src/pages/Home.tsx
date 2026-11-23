@@ -45,12 +45,12 @@ export default function Home() {
         <Suspense fallback={<Stat label="Locations" value="…" unit="in scope" />}>
           <Stat label="Locations" value={String(locs.data?.length ?? 0)} unit="in your scope" tone="text-primary" onClick={() => navigate("/locations")} />
         </Suspense>
-        {/* /alarms is a stub page until the alarm list lands, so this tile is a plain figure. */}
         <Suspense fallback={<Stat label="Open alarms" testid="home-open-alarms" value="…" unit="reading alarms" />}>
           <Stat
             label="Open alarms"
             testid="home-open-alarms"
             {...countOf(fleet.isError, fleet.data?.open_alarms, "open now in your scope", "needs a component read")}
+            onClick={() => navigate("/alarms")}
           />
         </Suspense>
         <Suspense fallback={<Stat label="Systems" testid="home-systems" value="…" unit="in scope" />}>

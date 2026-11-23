@@ -724,7 +724,12 @@ type Gateway interface {
 	// Gateway injecting the scope (#2025): worst severity first, then newest,
 	// capped at limit. Unacknowledged narrows it to the queue nobody has worked;
 	// IncludeCleared is ignored, since the fleet read is what is wrong now.
-	ListFleetAlarms(ctx context.Context, read scope.Set, filter AlarmFilter, limit int) ([]Alarm, error)
+	// The queue's filters (Severities, Location, Acknowledged, Snoozed) narrow
+	// it further and PageToken resumes after a prior page; the returned token
+	// is empty on the last page (#2333). A row's Systems are only those inside
+	// systemRead, so reading a component never names a system the caller may
+	// not read.
+	ListFleetAlarms(ctx context.Context, read, systemRead scope.Set, filter AlarmFilter, limit int) ([]Alarm, string, error)
 	// ListMetricSeries returns one metric series' raw samples newest first,
 	// windowed and capped: the rows behind the effective read (#794).
 	ListMetricSeries(ctx context.Context, ownerKind, ownerRef, key string, window time.Duration, limit int) ([]MetricSample, error)
@@ -829,6 +834,13 @@ type Gateway interface {
 	// in one transaction, each piece the ordinary create in the caller's
 	// scope with its own audit row (#827).
 	CreatePlan(ctx context.Context, actorID string, plan Plan, sc PlanScopes) (*Planned, error)
+	// BatchCreateLocations, BatchCreateSystems and BatchCreateComponents run
+	// the single create for each row, in order, in one transaction (#2368): a
+	// refused row refuses the batch as a BatchError naming it, and
+	// validateOnly rolls the transaction back.
+	BatchCreateLocations(ctx context.Context, actorID string, specs []LocationSpec, create scope.Set, validateOnly bool) ([]*Location, error)
+	BatchCreateSystems(ctx context.Context, actorID string, specs []SystemSpec, create, locationRead scope.Set, validateOnly bool) ([]*System, error)
+	BatchCreateComponents(ctx context.Context, actorID string, specs []ComponentSpec, create, locationRead, systemRead, systemUpdate scope.Set, validateOnly bool) ([]*Component, error)
 	// ResolveTaskOwner binds a task's owner component and confines the outpost to its
 	// own tasks, for the telemetry ingest consumer.
 	ResolveTaskOwner(ctx context.Context, taskID, outpostName string) (TaskOwner, bool, error)
