@@ -278,13 +278,13 @@ func TestTheDraftedLocationLabelIsTheOneTheCreateStores(t *testing.T) {
 	if drafted.Label != "North Boardroom" || drafted.Rule != "{{title (words .Name)}}" {
 		t.Errorf("drafted %+v, want the shipped location rule and the label it renders", drafted)
 	}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "building"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "building"}, all, all); err != nil {
 		t.Fatalf("create building: %v", err)
 	}
 	hq := "hq"
 	l, err := gw.CreateLocation(ctx, "", storage.LocationSpec{
 		Name: "north-boardroom", LocationType: "room", ParentName: &hq,
-	}, all)
+	}, all, all)
 	if err != nil {
 		t.Fatalf("create location: %v", err)
 	}
@@ -314,13 +314,13 @@ func TestTheDraftLabelIsEmptyWhereNoRuleResolves(t *testing.T) {
 	if drafted.Label != "" || drafted.Rule != "" {
 		t.Errorf("drafted %+v, want an empty label and an empty rule: no rule resolves at any tier", drafted)
 	}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "building"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "building"}, all, all); err != nil {
 		t.Fatalf("create building: %v", err)
 	}
 	hq := "hq"
 	l, err := gw.CreateLocation(ctx, "", storage.LocationSpec{
 		Name: "boardroom", LocationType: "room", ParentName: &hq,
-	}, all)
+	}, all, all)
 	if err != nil {
 		t.Fatalf("create location: %v", err)
 	}
@@ -500,13 +500,13 @@ func TestTheDraftLabelAllocatesNothing(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 	edge55 := storagetest.MintProduct(t, ctx, gw, "display").Name
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "building"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "building"}, all, all); err != nil {
 		t.Fatalf("create building: %v", err)
 	}
 	hq := "hq"
 	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{
 		Name: "room-1", LocationType: "room", ParentName: &hq,
-	}, all); err != nil {
+	}, all, all); err != nil {
 		t.Fatalf("create room: %v", err)
 	}
 	counter.Reset()
@@ -568,7 +568,7 @@ func TestTheDraftLabelAllocatesNothing(t *testing.T) {
 func TestTheDraftRefusesTheParentlessBucketItCannotCreateIn(t *testing.T) {
 	t.Parallel()
 	gw, ctx := seededGateway(t)
-	hq, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "campus"}, all)
+	hq, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "campus"}, all, all)
 	if err != nil {
 		t.Fatalf("create campus: %v", err)
 	}
@@ -593,7 +593,7 @@ func TestTheDraftRefusesTheParentlessBucketItCannotCreateIn(t *testing.T) {
 	// the create would do, so the two cannot disagree about whether it happens.
 	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{
 		LocationType: "deck",
-	}, subtree); !errors.Is(err, storage.ErrLocationForbidden) {
+	}, subtree, subtree); !errors.Is(err, storage.ErrLocationForbidden) {
 		t.Errorf("root-bucket location create = %v, want ErrLocationForbidden", err)
 	}
 

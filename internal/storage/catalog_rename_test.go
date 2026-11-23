@@ -202,7 +202,7 @@ func TestCatalogHandleRenameKeepsReferences(t *testing.T) {
 		PropertyTypeName: "serial_no", Required: true}); err != nil {
 		t.Fatalf("location type property: %v", err)
 	}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "west-wing", LocationType: "wing"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "west-wing", LocationType: "wing"}, all, all); err != nil {
 		t.Fatalf("location: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `update location_type set name = 'annex' where name = 'wing'`); err != nil {
