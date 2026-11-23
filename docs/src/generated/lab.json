@@ -89,6 +89,16 @@
       "setup": []
     },
     {
+      "id": "find-a-cleared-alarm",
+      "title": "Find a cleared alarm and how long it lasted",
+      "description": "Clear an alarm from its component, then read it in the alarm page's Cleared filter with when it cleared and how long it was raised, and open its history.",
+      "lab": [],
+      "setup": [
+        "omniglass component create --label 'History demo display' --location bay-2 --name history-demo-display --product boreal-edge-55",
+        "omniglass component alarm create history-demo-display --dedup-key walkthrough-history-input --message 'History demo input lost' --severity high"
+      ]
+    },
+    {
       "id": "find-a-device-from-the-keyboard",
       "title": "Find a device from the keyboard",
       "description": "Open the command palette with Ctrl-K, type part of a name, read which location each match sits under, narrow it to one device and press Enter to open it.",

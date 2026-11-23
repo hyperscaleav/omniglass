@@ -1284,7 +1284,7 @@ func (d *Device) serveHTTP(w http.ResponseWriter, r *http.Request, face *faceObs
 			IP:       d.LoopbackIP.String(),
 			Request:  reqCtx,
 		}
-		diffs, mutErrs := applyMutations(d.state, route.Mutations, data)
+		diffs, mutErrs := applyRouteMutations(d.state, route.Mutations, data)
 		for _, err := range mutErrs {
 			slog.Warn("mutation failed",
 				"device", d.DeviceID,
