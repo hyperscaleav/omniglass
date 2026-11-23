@@ -2311,6 +2311,13 @@ components:
           description: "What the simulator reports for the component: serving, hits, and its impairment."
         address:
           type: string
+        behaviors:
+          description: What the profile changes on the device by itself over time.
+          items:
+            $ref: "#/components/schemas/SimBehaviorBody"
+          type:
+            - array
+            - "null"
         connected:
           description: The outpost's simulator pulled recently.
           type: boolean
@@ -11830,6 +11837,28 @@ components:
         - rank
         - official
         - outage
+      type: object
+    SimBehaviorBody:
+      additionalProperties: false
+      properties:
+        emits:
+          description: Whether it posts a webhook each time.
+          type: boolean
+        interval:
+          description: "How often it runs, as a duration: 5s, 1m."
+          type: string
+        name:
+          type: string
+        writes:
+          description: The state paths it changes each time.
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+      required:
+        - name
+        - interval
       type: object
     SimCapabilities:
       additionalProperties: false

@@ -132,6 +132,23 @@ and `outpost:read`; `component:create` and `component:update` must reach the who
 components are created at the top level and each is then assigned its slot), named as any new system and
 component are named, and the simulator serves them from its next pull.
 
+## The drawer
+
+A row opens the component's drawer: its **Faults** (the named actions and the chip, below) on top, then five
+tabs, the last one chosen being remembered for the session.
+
+- **Info**: where the simulator serves it, its status, hits and product, and its **State**, a form
+  generated from its profile: each state path its API sets to a fixed list of values is a select showing
+  what it holds now. Choosing one sends the request a named fault sends, so the form, the chip and the
+  actions always agree.
+- **Impairments**: unplug, latency, jitter, loss and rate, with **Repair** to clear them all.
+- **Operations**: the API surface, below.
+- **Behaviors**: what the profile changes on the device by itself over time (a temperature that drifts),
+  read-only, or "No behaviors declared".
+- **Events**: the device's own log of what reached it is not kept yet ([#2524](https://github.com/hyperscaleav/omniglass/issues/2524));
+  the tab shows what the simulator does count, its hits and last hit. Terminal sessions on a line protocol
+  are also not built yet ([#2525](https://github.com/hyperscaleav/omniglass/issues/2525)).
+
 ## Break it in one click
 
 Every simulated component has a **Break** menu on its row and a **Faults** section in its drawer, with the

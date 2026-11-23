@@ -9,9 +9,10 @@ import InfoTip from "./InfoTip";
 import KVStacked from "./KVStacked";
 import SimStatusBadge from "./SimStatusBadge";
 import SimFaultChip from "./SimFaultChip";
+import Tabs from "./ui/Tabs";
 import SimFaultMenu from "./SimFaultMenu";
 import { ArrowUpRight, ChevronRight, RotateCcw, Save, Zap } from "./icons";
-import { activeFaults } from "../lib/simfaults";
+import { activeFaults, applyFaultSteps, stateFields, type HeldFault } from "../lib/simfaults";
 import { useFormActions } from "../lib/formactions";
 import { can, useMe } from "../lib/auth";
 import { describeError, rel } from "../lib/format";
@@ -91,6 +92,24 @@ export default function SimComponentDrawer(props: {
       </Show>
     </Drawer>
   );
+}
+
+// The drawer's tabs, as the lab console's device drawer had them. The chosen one
+// is remembered for the session, so the next device opens on it.
+const DRAWER_TABS = [
+  { value: "info", label: "Info" },
+  { value: "impairments", label: "Impairments" },
+  { value: "operations", label: "Operations" },
+  { value: "behaviors", label: "Behaviors" },
+  { value: "events", label: "Events" },
+];
+const TAB_KEY = "og-sim-drawer-tab";
+const [tab, setTab] = createSignal<string>(
+  (() => { try { const t = sessionStorage.getItem(TAB_KEY); return DRAWER_TABS.some((x) => x.value === t) ? (t as string) : "info"; } catch { return "info"; } })(),
+);
+export function chooseDrawerTab(t: string) {
+  setTab(t);
+  try { sessionStorage.setItem(TAB_KEY, t); } catch { /* storage may be off */ }
 }
 
 const KV_GRID = "grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3";
@@ -218,10 +237,29 @@ function ComponentBody(props: { id: string; onRemoved: () => void }): JSX.Elemen
       <Show when={sim.data}>
         {(s) => (
           <Show when={s().simulated} fallback={<p class="text-sm text-base-content/60">This component is not simulated.</p>}>
-            <StatusSection sim={s()} canReclassify={canReclassify()} busy={busy()} setBusy={setBusy} setErr={setErr} id={props.id} />
             <FaultSection sim={s()} id={props.id} />
-            <ImpairmentSection sim={s()} canImpair={canImpair()} draft={draft()} setDraft={setDraft} errors={parsed().errors} stored={stored()} loaded={!!imp.data} />
-            <SurfaceSection sim={s()} canFire={canImpair()} id={props.id} />
+            <Tabs tabs={DRAWER_TABS} value={tab()} onChange={chooseDrawerTab} label="Simulated component" variant="border" panelClass="flex flex-col gap-6 pt-4 focus:outline-none">
+              {(t) => (
+                <>
+                  <Show when={t === "info"}>
+                    <StatusSection sim={s()} canReclassify={canReclassify()} busy={busy()} setBusy={setBusy} setErr={setErr} id={props.id} />
+                    <StateSection sim={s()} canSet={canImpair()} id={props.id} />
+                  </Show>
+                  <Show when={t === "impairments"}>
+                    <ImpairmentSection sim={s()} canImpair={canImpair()} draft={draft()} setDraft={setDraft} errors={parsed().errors} stored={stored()} loaded={!!imp.data} />
+                  </Show>
+                  <Show when={t === "operations"}>
+                    <SurfaceSection sim={s()} canFire={canImpair()} id={props.id} />
+                  </Show>
+                  <Show when={t === "behaviors"}>
+                    <BehaviorsSection sim={s()} />
+                  </Show>
+                  <Show when={t === "events"}>
+                    <EventsSection sim={s()} />
+                  </Show>
+                </>
+              )}
+            </Tabs>
           </Show>
         )}
       </Show>
@@ -253,6 +291,98 @@ function FaultSection(props: { sim: ComponentSim; id: string }) {
         </Show>
       </div>
       <SimFaultMenu componentId={props.id} sim={a()} name={props.sim.activity?.component} surfaces={props.sim.surface ?? []} layout="inline" />
+    </section>
+  );
+}
+
+// StateSection: the device's state as a form generated from its profile: each
+// state path an API route sets to a fixed list of values is a select showing
+// what it holds now. Choosing one makes the same request a named action makes,
+// so the faults, the chip and this form always agree. A path with no route (a
+// temperature that drifts by itself) is not here: nothing can set it.
+function StateSection(props: { sim: ComponentSim; canSet: boolean; id: string }) {
+  const qc = useQueryClient();
+  const [err, setErr] = createSignal<string | null>(null);
+  const held = (): HeldFault[] => (props.sim.activity?.faults ?? []).map((f) => ({ path: f.path, value: f.value, default: f.default, since: f.since }));
+  const fields = createMemo(() => stateFields(props.sim.surface ?? [], held()));
+  const paths = createMemo(() => fields().map((f) => f.path), undefined, { equals: (a, b) => a.length === b.length && a.every((x, i) => x === b[i]) });
+  const fieldOf = (path: string) => fields().find((f) => f.path === path);
+  async function set(path: string, value: string) {
+    const f = fieldOf(path);
+    if (!f) return;
+    setErr(null);
+    try {
+      await applyFaultSteps(qc, props.id, [f.stepFor(value)]);
+    } catch (e) {
+      setErr(describeError(e));
+    }
+  }
+  return (
+    <Show when={paths().length > 0}>
+      <section class="flex flex-col gap-3" data-testid="sim-state-form">
+        <Eyebrow label="State" hint="The device's settable state, generated from its profile: each path its API sets to a fixed list of values. Setting one is the same request a named fault makes, so the chip above follows." />
+        <Show when={err()}><div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div></Show>
+        <div class="grid grid-cols-2 gap-3">
+          <For each={paths()}>
+            {(path) => (
+              <Show when={fieldOf(path)}>
+                {(f) => (
+                  <FieldRow label={f().name} eyebrow hint={f().current !== undefined && f().default !== undefined && f().current !== f().default ? `default ${f().default}` : undefined}>
+                    <select class="select select-bordered w-full font-data" disabled={!props.canSet} value={f().current ?? ""} onChange={(e) => void set(path, e.currentTarget.value)}>
+                      <Show when={f().current === undefined}><option value="" disabled>unknown</option></Show>
+                      <For each={f().values}>{(v) => <option value={v}>{v}</option>}</For>
+                    </select>
+                  </FieldRow>
+                )}
+              </Show>
+            )}
+          </For>
+        </div>
+      </section>
+    </Show>
+  );
+}
+
+// BehaviorsSection: what the profile changes on the device by itself over
+// time, read-only.
+function BehaviorsSection(props: { sim: ComponentSim }) {
+  const items = () => props.sim.behaviors ?? [];
+  return (
+    <section class="flex flex-col gap-3" data-testid="sim-behaviors">
+      <Eyebrow label="Behaviors" hint="What the device's profile changes on its own over time (a temperature that drifts, a heartbeat), so a collector sees live data without anyone touching it." />
+      <Show when={items().length > 0} fallback={<p class="text-sm text-base-content/60">No behaviors declared: this device changes only when something is sent to it.</p>}>
+        <ul class="divide-y divide-base-300 rounded-box border border-base-300">
+          <For each={items()}>
+            {(b) => (
+              <li class="flex flex-col gap-0.5 px-3 py-2 text-sm">
+                <span class="flex items-center gap-2"><span class="font-data font-medium">{b.name}</span><span class="badge badge-sm badge-ghost font-data">every {b.interval}</span><Show when={b.emits}><span class="badge badge-sm badge-ghost">posts a webhook</span></Show></span>
+                <Show when={(b.writes ?? []).length > 0}><span class="text-xs text-base-content/60">changes <span class="font-data">{(b.writes ?? []).join(", ")}</span></span></Show>
+              </li>
+            )}
+          </For>
+        </ul>
+      </Show>
+    </section>
+  );
+}
+
+// EventsSection: the device's own log of what reached it is not served yet; the
+// simulator counts what reached a device (hits, by protocol, the last) and
+// keeps no log of the requests. Said so, with what is real beside it.
+function EventsSection(props: { sim: ComponentSim }) {
+  const a = (): SimComponent | undefined => props.sim.activity;
+  return (
+    <section class="flex flex-col gap-3" data-testid="sim-events">
+      <Eyebrow label="Events" hint="This device's own log of what reached it: requests, state changes, sessions." />
+      <p class="text-sm text-base-content/60" data-testid="sim-events-gap">The simulator counts what reaches a device but keeps no log of it yet, so there is no per-request history to show (tracked in #2524).</p>
+      <Show when={a()}>
+        {(d) => (
+          <div class={KV_GRID}>
+            <KVStacked label="Hits" value={<span class="font-data tnum">{d().hits.toLocaleString()}</span>} />
+            <KVStacked label="Last hit" value={<Show when={d().last_hit_at} fallback={<span class="text-base-content/40">none yet</span>}><span class="tnum">{rel(d().last_hit_at!)}</span> <span class="font-data text-xs text-base-content/60">{d().last_protocol}</span></Show>} />
+          </div>
+        )}
+      </Show>
     </section>
   );
 }

@@ -57,6 +57,24 @@ function quickSets(surfaces: readonly SimSurface[]): QuickSet[] {
   return out;
 }
 
+// A settable state path as the Info tab's form shows it: what it is called, the
+// values the profile accepts, what it holds now and its default, and the steps
+// that set it to a value (the same fire a named action makes, so the faults
+// and the chip follow).
+export type StateField = { path: string; name: string; values: string[]; current: string | undefined; default: string | undefined; stepFor: (value: string) => FaultStep };
+
+// stateFields generates the state form from the profile's quick sets.
+export function stateFields(surfaces: readonly SimSurface[], faults: readonly HeldFault[]): StateField[] {
+  return quickSets(surfaces).map((q) => ({
+    path: q.statePath,
+    name: q.statePath.replace(/^status\./, ""),
+    values: q.values,
+    current: heldValue(q, faults),
+    default: q.default,
+    stepFor: (value: string) => fireStep(q, value),
+  }));
+}
+
 const lastSegment = (path: string) => path.slice(path.lastIndexOf(".") + 1);
 const isBool = (values: readonly string[]) => values.length === 2 && values.includes("true") && values.includes("false");
 

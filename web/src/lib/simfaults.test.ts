@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { HEALTHY, type SimComponent, type SimSurface } from "./simulation";
-import { activeFaults, faultActions, faultLabel, restoreSteps, type FaultAction } from "./simfaults";
+import { activeFaults, faultActions, stateFields, faultLabel, restoreSteps, type FaultAction } from "./simfaults";
 
 // A display's profile as the API lists it: an http surface with the power and
 // input routes (each declaring its quick sets), an snmp surface that has none.
@@ -115,5 +115,15 @@ describe("faultLabel", () => {
     expect(faultLabel({ path: "status.mic.mute", value: "true" })).toBe("muted");
     expect(faultLabel({ path: "status.display.input", value: "hdmi2" })).toBe("input hdmi2");
     expect(faultLabel({ path: "status.projector.shutter", value: "closed" })).toBe("shutter closed");
+  });
+});
+
+describe("stateFields", () => {
+  it("is the settable paths with what each holds now, and sets one through the same fire a named action makes", () => {
+    const held = [{ path: "status.device.power", value: "off", default: "on", since: "2026-11-23T12:00:00Z" }];
+    const f = stateFields(display, held);
+    expect(f.map((x) => [x.name, x.current, x.default])).toEqual([["device.power", "off", "on"], ["display.input", "hdmi1", "hdmi1"]]);
+    expect(f[0].values).toEqual(["on", "off", "standby"]);
+    expect(f[0].stepFor("standby")).toEqual({ kind: "fire", surface: "http", method: "POST", path: "/api/display/power", body: '{"power":"standby"}' });
   });
 });

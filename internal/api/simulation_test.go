@@ -167,3 +167,24 @@ func TestSimSurfaceCarriesTheRoutesQuickSets(t *testing.T) {
 		t.Fatalf("power set = %+v", got)
 	}
 }
+
+// A profile's behaviors (what changes on its own over time) reach the console
+// as read-only facts: the name, how often, which state paths it writes, and
+// whether it posts a webhook.
+func TestSimBehaviorsListWhatTheProfileDeclares(t *testing.T) {
+	t.Parallel()
+	p := &profile.DeviceProfile{Behaviors: []profile.Behavior{
+		{Name: "temperature_drift", Schedule: profile.Schedule{Interval: "5s"}, Mutations: []profile.Mutation{{Path: "status.display.temperature"}, {Path: "status.display.temperature"}, {Path: "status.fan"}}},
+		{Name: "heartbeat", Schedule: profile.Schedule{Interval: "30s"}, Emit: &profile.Emit{URL: "x"}},
+	}}
+	got := simBehaviors(p)
+	if len(got) != 2 || got[0].Name != "temperature_drift" || got[0].Interval != "5s" || !reflect.DeepEqual(got[0].Writes, []string{"status.display.temperature", "status.fan"}) || got[0].Emits {
+		t.Fatalf("behaviors = %+v", got)
+	}
+	if !got[1].Emits || len(got[1].Writes) != 0 {
+		t.Fatalf("heartbeat = %+v", got[1])
+	}
+	if simBehaviors(&profile.DeviceProfile{}) != nil {
+		t.Fatal("a profile with no behaviors lists some")
+	}
+}

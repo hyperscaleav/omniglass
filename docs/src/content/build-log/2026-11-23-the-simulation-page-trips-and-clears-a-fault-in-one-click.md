@@ -22,4 +22,9 @@ The list filters as you type (bare words search name, location, product and addr
 and keeps its filter in `?chips=` beside `?c=`, so a deep link reproduces the view. `ListShell` gained
 opt-in `live` and `pageSize`, and `FilterBar` an `onDraft` seam; no other list changes.
 
+The drawer is rebuilt on the shape of the archived lab console's: Faults on top, then Info (with a state
+form generated from the profile's quick sets), Impairments, Operations, Behaviors (`behaviors` on the
+component read) and Events. Events (#2524) and terminal sessions (#2525) need new simulator capability and
+are filed; their tabs say so.
+
 Stacked on #2499 (the component detail body) and the primitive wrappers (`claude/feat-primitive-wrappers`).

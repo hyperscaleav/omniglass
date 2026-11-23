@@ -4,7 +4,7 @@ import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Simulation from "./Simulation";
 import Sidebar from "../components/Sidebar";
-import SimComponentDrawer from "../components/SimComponentDrawer";
+import SimComponentDrawer, { chooseDrawerTab } from "../components/SimComponentDrawer";
 import SimulationSection from "../components/SimulationSection";
 import { SimFaultChipFor } from "../components/SimFaultChip";
 import { ME_KEY, type Me } from "../lib/auth";
@@ -134,6 +134,7 @@ function mount(node: () => import("solid-js").JSX.Element, me: Me = admin, url =
 
 afterEach(() => {
   cleanup();
+  chooseDrawerTab("info");
   vi.restoreAllMocks();
   current = { fleet: fleet([0, 0]) };
 });
@@ -315,6 +316,7 @@ describe("the simulated component drawer", () => {
   it("fires a chosen operation and renders the component's answer", async () => {
     stubFetch({ [`POST /components/${DISPLAY}/simulation:fire`]: { status: 200, body: "{\"device\":{\"model\":\"Edge 55\"}}", took_ms: 3 } });
     mount(() => <SimComponentDrawer id={DISPLAY} onClose={() => {}} />);
+    await openTab("Operations");
     fireEvent.click(await screen.findByRole("button", { name: /\/api\/status/ }));
     const panel = await screen.findByTestId("op-detail");
     fireEvent.click(within(panel).getByRole("button", { name: "Send" }));
@@ -330,6 +332,7 @@ describe("the simulated component drawer", () => {
     const saved = { unplugged: false, latency_ms: 120, jitter_ms: 10, loss_pct: 0, rate_kbit: 0 };
     stubFetch({ [`PUT /components/${DISPLAY}/impairment`]: saved });
     mount(() => <SimComponentDrawer id={DISPLAY} onClose={() => {}} />);
+    await openTab("Impairments");
     const latency = await screen.findByLabelText("Latency (ms)");
     fireEvent.input(latency, { target: { value: "120" } });
     fireEvent.input(screen.getByLabelText("Jitter (ms)"), { target: { value: "10" } });
@@ -345,6 +348,7 @@ describe("the simulated component drawer", () => {
   it("refuses jitter above latency before it is sent", async () => {
     stubFetch();
     mount(() => <SimComponentDrawer id={DISPLAY} onClose={() => {}} />);
+    await openTab("Impairments");
     fireEvent.input(await screen.findByLabelText("Jitter (ms)"), { target: { value: "50" } });
     expect(await screen.findByText("At most the latency.")).toBeTruthy();
     expect((screen.getByRole("button", { name: "Save impairment" }) as HTMLButtonElement).disabled).toBe(true);
@@ -353,6 +357,7 @@ describe("the simulated component drawer", () => {
   it("gives a reader the facts and no controls", async () => {
     stubFetch();
     mount(() => <SimComponentDrawer id={DISPLAY} onClose={() => {}} />, viewer);
+    await openTab("Impairments");
     await screen.findByTestId("sim-impairment");
     expect(screen.queryByRole("button", { name: "Save impairment" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();
@@ -360,7 +365,8 @@ describe("the simulated component drawer", () => {
     expect(screen.queryByLabelText("Latency (ms)")).toBeNull();
     expect(screen.queryByRole("button", { name: "Change" })).toBeNull();
     // The surface still reads, as plain rows.
-    expect(screen.getByText("/api/status")).toBeTruthy();
+    await openTab("Operations");
+    expect(await screen.findByText("/api/status")).toBeTruthy();
   });
 });
 
@@ -946,6 +952,11 @@ describe("removing from the component page", () => {
   });
 });
 
+// The drawer opens on Info; a test that wants another tab chooses it.
+async function openTab(name: string) {
+  fireEvent.click(await screen.findByRole("tab", { name }));
+}
+
 // One-click faults (#2462): the menu a profile generates, the chip the
 // simulator's own read raises, and the list that filters as it is typed and
 // keeps its view in the address.
@@ -1182,6 +1193,7 @@ describe("in-place operation rows", () => {
     stubFetch({ [fireUrl]: { status: 200, body: '{"ok":true}', took_ms: 4 }, [`GET /components/${DISPLAY}/simulation`]: twoRoutes() });
     const { qc } = mount(() => <SimComponentDrawer id={DISPLAY} onClose={() => {}} />);
     qc.setQueryData([...componentSimKey(DISPLAY)], twoRoutes());
+    await openTab("Operations");
     const status = await screen.findByRole("button", { name: /\/api\/status/ });
     const power = await screen.findByRole("button", { name: /\/api\/display\/power/ });
     expect(status.getAttribute("aria-expanded")).toBe("false");
@@ -1203,5 +1215,38 @@ describe("in-place operation rows", () => {
     // Clicking the open row closes it.
     fireEvent.click(power);
     expect(screen.queryByTestId("op-detail")).toBeNull();
+  });
+});
+
+describe("the drawer's tabs", () => {
+  it("opens on Info, offers the five tabs, remembers the chosen one, and a state form sets a path through the named-fault request", async () => {
+    const act = simRow(DISPLAY, "display-1", 7);
+    const full = { ...withSurface(act), behaviors: [{ name: "temperature_drift", interval: "5s", writes: ["status.display.temperature"] }] };
+    stubFetch({ [fireUrl]: { status: 200, body: "{}", took_ms: 2 }, [`GET /components/${DISPLAY}/simulation`]: full });
+    const { qc } = mount(() => <SimComponentDrawer id={DISPLAY} onClose={() => {}} />);
+    qc.setQueryData([...componentSimKey(DISPLAY)], full);
+    expect((await screen.findAllByRole("tab")).map((t) => t.textContent)).toEqual(["Info", "Impairments", "Operations", "Behaviors", "Events"]);
+    expect(screen.getByRole("tab", { name: "Info" }).getAttribute("aria-selected")).toBe("true");
+    const state = await screen.findByTestId("sim-state-form");
+    fireEvent.change(within(state).getAllByRole("combobox")[0], { target: { value: "off" } });
+    await waitFor(() => expect(fired()).toHaveLength(1));
+    expect(fired()[0]).toEqual({ surface: "web-admin", method: "POST", path: "/api/display/power", body: '{"power":"off"}' });
+    await openTab("Behaviors");
+    expect((await screen.findByTestId("sim-behaviors")).textContent).toContain("temperature_drift");
+    await openTab("Events");
+    expect((await screen.findByTestId("sim-events-gap")).textContent).toContain("#2524");
+    cleanup();
+    mount(() => <SimComponentDrawer id={DISPLAY} onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByRole("tab", { name: "Events" }).getAttribute("aria-selected")).toBe("true"));
+  });
+
+  it("says no behaviors are declared when the profile has none, and leaves a viewer's state read-only", async () => {
+    stubFetch();
+    const { qc } = mount(() => <SimComponentDrawer id={DISPLAY} onClose={() => {}} />, viewer);
+    qc.setQueryData([...componentSimKey(DISPLAY)], withSurface(simRow(DISPLAY, "display-1", 7)));
+    const state = await screen.findByTestId("sim-state-form");
+    expect((within(state).getAllByRole("combobox")[0] as HTMLSelectElement).disabled).toBe(true);
+    await openTab("Behaviors");
+    expect((await screen.findByTestId("sim-behaviors")).textContent).toContain("No behaviors declared");
   });
 });
