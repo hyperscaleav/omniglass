@@ -169,6 +169,8 @@ type authenticator struct {
 	secureCookies bool
 	// lab is reported by /auth/status (#1195).
 	lab bool
+	// sso dials the identity provider single sign-on goes through (#2362).
+	sso *ssoDialer
 
 	once   sync.Once
 	index  rbac.RoleIndex
@@ -351,10 +353,12 @@ var ceilingChannels = map[storage.AuditChannel]bool{storage.AuditChannelMCP: tru
 // person's password, or impersonate (a session whose grants are another
 // user's, not bounded by the agent's own).
 var agentRefusedOps = map[string]bool{
-	"create-auth-me-token":    true,
-	"change-auth-me-password": true,
-	"impersonate-user":        true,
-	"authorize-oauth-client":  true,
+	"create-auth-me-token":         true,
+	"change-auth-me-password":      true,
+	"impersonate-user":             true,
+	"authorize-oauth-client":       true,
+	"start-auth-me-identity-link":  true,
+	"unlink-auth-me-identity-link": true,
 }
 
 // agentCeiling reports whether a request is held to the agent ceiling: it
@@ -642,8 +646,9 @@ func (a *authenticator) clearedCookie() http.Cookie {
 // an owner yet. Public, so the login screen can hide the bootstrap hint.
 type authStatusOutput struct {
 	Body struct {
-		Bootstrapped bool `json:"bootstrapped"`
-		Lab          bool `json:"lab" doc:"Whether this server is a lab started by omniglass lab run: disposable data and a well-known login, never a real deployment"`
+		Bootstrapped bool     `json:"bootstrapped"`
+		Lab          bool     `json:"lab" doc:"Whether this server is a lab started by omniglass lab run: disposable data and a well-known login, never a real deployment"`
+		SSOProviders []string `json:"sso_providers" nullable:"false" doc:"The identity providers a person may sign in through, by the name /auth/oidc/start/{provider} takes; empty when single sign-on is not configured"`
 	}
 }
 
@@ -655,6 +660,11 @@ func (a *authenticator) statusHandler(ctx context.Context, _ *struct{}) (*authSt
 	out := &authStatusOutput{}
 	out.Body.Bootstrapped = exists
 	out.Body.Lab = a.lab
+	providers, err := a.gw.SSOProviders(ctx)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("status")
+	}
+	out.Body.SSOProviders = append([]string{}, providers...)
 	return out, nil
 }
 
@@ -1162,6 +1172,17 @@ func (a *authenticator) createMeTokenHandler(ctx context.Context, in *createMeTo
 	if err := a.validateAgentMint(ctx, in); err != nil {
 		return nil, err
 	}
+	// A session through an identity link whose provider issued no refresh
+	// token is never re-checked, so it mints nothing that would outlive it
+	// (ADR-2361 point 9). One that is re-checked mints a token through the
+	// same link, so the re-check that revokes the link revokes it too.
+	viaLink := ""
+	if pr.ViaLink != nil {
+		if !pr.ViaLink.Refreshable {
+			return nil, huma.Error403Forbidden("your identity provider issued no refresh token, so nothing would re-check an API token minted from this sign-in; sign in with a password, or ask an administrator to enable offline_access at the provider")
+		}
+		viaLink = pr.ViaLink.ID
+	}
 	ttl := auth.DefaultTokenLifetime
 	if in.Body.TTLDays > 0 {
 		ttl = time.Duration(in.Body.TTLDays) * 24 * time.Hour
@@ -1175,7 +1196,7 @@ func (a *authenticator) createMeTokenHandler(ctx context.Context, in *createMeTo
 	issued, err := a.gw.IssueBearerCredential(ctx, storage.BearerIssue{
 		ActorID: actorID(ctx), Username: pr.Person.Username, SecretHash: hash, Prefix: prefix, Purpose: "token",
 		ExpiresAt: &expiresAt, Description: in.Body.Description, UserAgent: ua, ClientIP: ip,
-		Agent: in.Body.Agent, AgentRoles: in.Body.Roles, AgentChannels: in.Body.Channels,
+		Agent: in.Body.Agent, AgentRoles: in.Body.Roles, AgentChannels: in.Body.Channels, ViaLink: viaLink,
 	})
 	if err != nil || !issued {
 		return nil, huma.Error500InternalServerError("create token")
