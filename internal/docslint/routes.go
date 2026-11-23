@@ -67,11 +67,14 @@ func LoadRoutes() (map[string]map[string]bool, error) {
 
 // protocolRoutes are served outside the OpenAPI document: the OAuth 2.1
 // endpoints an MCP client speaks (#2048), whose shapes the RFCs fix rather
-// than the Huma API. Each is a real route, so a mention resolves.
+// than the Huma API, and the single sign-on start and callback a browser
+// passes through (#2362). Each is a real route, so a mention resolves.
 var protocolRoutes = map[string]map[string]bool{
-	"/oauth/register":  {"post": true},
-	"/oauth/authorize": {"get": true},
-	"/oauth/token":     {"post": true},
+	"/oauth/register":     {"post": true},
+	"/oauth/authorize":    {"get": true},
+	"/oauth/token":        {"post": true},
+	"/auth/oidc/start/{}": {"get": true},
+	"/auth/oidc/callback": {"get": true},
 }
 
 func checkRoute(method, path string, routes map[string]map[string]bool) []string {

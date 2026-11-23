@@ -37,8 +37,9 @@ omniglass setting update retention --body '{"metric_days": null}'
 
 This page teaches the two namespaces that shape what your fleet keeps. The others are taught where
 they act: `notification` (the mail relay and `egress_allow`) on
-[notifications](/admin/notifications/), and `agent` (what an AI agent may do unasked) on
-[agents](/developer/agents/).
+[notifications](/admin/notifications/), `agent` (what an AI agent may do unasked) on
+[agents](/developer/agents/), and `sso` (the identity provider people sign in through) on
+[single sign-on](/deployment/production/#single-sign-on).
 
 ## How long data is kept
 

@@ -52,6 +52,11 @@ OUT="${DOCS_SHOTS_OUT:-docs/public/screenshots}"
 BASELINE="${DOCS_SHOTS_BASELINE:-docs/screenshots/baseline}"
 
 lab_init ogshots
+# Single sign-on (#2362): an issuer named from the environment (the env layer,
+# so no audit row moves the audit shot) makes the sign-in page offer Sign in
+# with SSO, as an install with a provider shows it. Nothing here signs in
+# through it: the capture never leaves the lab.
+export OMNIGLASS_SETTING__SSO__ISSUER=https://login.example.com
 # --platform-history: an hour of made-up server figures, so platform health's
 # sparklines draw full lines; for a capture only, never a learner's lab (#1790).
 STACK_SCENARIO=dev lab_up --no-outpost --platform-history

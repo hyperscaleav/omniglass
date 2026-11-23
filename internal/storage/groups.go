@@ -319,6 +319,9 @@ func (p *PG) AddGroupMember(ctx context.Context, actorID, groupRef, userRef stri
 	if err := writeAuditRes(ctx, tx, actorID, "create", "user_group_member", groupID, nil, map[string]string{"group_id": groupID, "user_id": userID}); err != nil {
 		return err
 	}
+	if err := dropForeignLinksOfOwners(ctx, tx, actorID); err != nil {
+		return err
+	}
 	return tx.Commit(ctx)
 }
 
@@ -473,6 +476,9 @@ func (p *PG) CreateGroupGrant(ctx context.Context, actorID, groupRef string, spe
 		g.ScopeID = &spec.ScopeID
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "create", "user_grant", gid, nil, g); err != nil {
+		return nil, err
+	}
+	if err := dropForeignLinksOfOwners(ctx, tx, actorID); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
