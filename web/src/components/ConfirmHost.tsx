@@ -114,14 +114,17 @@ export default function ConfirmHost(props: { navigate?: (href: string) => void }
       tone={pendingConfirm()?.tone ?? "action"}
       onConfirm={() => void act()}
       busy={busy()}
-      error={error()}
+      // A refusal that names its blockers reads as the list below, the
+      // server's sentence its lede; any other failure is the rail's alert.
+      error={refused() ? null : error()}
     >
       <Show when={pendingConfirm()?.body}>
         <p class="text-sm">{pendingConfirm()?.body}</p>
       </Show>
       <Show when={refused()}>
         <section class="mt-4" aria-label="In the way" data-testid="delete-blockers">
-          <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-base-content/60">In the way</h3>
+          <h3 class="mb-1 text-xs font-semibold uppercase tracking-wide text-base-content/60">In the way</h3>
+          <p role="status" class="mb-2 text-sm text-base-content/70">{error()}</p>
           <Show
             when={blockers().length > 0 || hidden() > 0}
             fallback={<p class="text-sm text-base-content/70">Nothing left in the way. Try again.</p>}
@@ -168,7 +171,7 @@ function BlockerRow(props: { blocker: DeleteBlocker; follow: (e: MouseEvent, hre
         <span class="badge badge-ghost badge-sm flex-none">{KIND_LABEL[props.blocker.kind]}</span>
         <span class="min-w-0 flex-1 truncate text-sm">
           <Show when={href()} fallback={<span>{props.blocker.label}</span>}>
-            <a class="link link-hover" href={href()} onClick={(e) => props.follow(e, href()!)}>
+            <a class="link" href={href()} onClick={(e) => props.follow(e, href()!)}>
               {props.blocker.label}
             </a>
           </Show>

@@ -84,7 +84,9 @@ describe("a refused delete in the dialog", () => {
     fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Delete component" }));
 
     const list = await within(dialog()).findByTestId("delete-blockers");
-    expect(within(dialog()).getByRole("alert").textContent).toContain("still owns 1 endpoint");
+    // The server's sentence is the list's lede, not an alert beside it.
+    expect(within(list).getByRole("status").textContent).toContain("still owns 1 endpoint");
+    expect(within(dialog()).queryByRole("alert")).toBeNull();
     const card = within(list).getByRole("link", { name: "Codec card" });
     expect(card.getAttribute("href")).toBe(`/components/${CARD}`);
     // An endpoint has no page of its own: named, not linked.

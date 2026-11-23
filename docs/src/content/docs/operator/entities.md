@@ -78,7 +78,7 @@ read-only reference.
 A blade opens **read-only**, and the header is chrome only (back, full-page, close). A fleet
 blade (a location, a system, a component) is its detail view, so it edits as the page does: on its
 **Configure** tab, whose footer carries **Edit** and, on the left, **Delete** behind a confirm (see
-[Configure](/operator/fleet/)). The rest of this section is the identity and catalog blades, whose
+[Configure](/operator/fleet/) and [what is in the way](#delete-and-what-is-in-the-way)). The rest of this section is the identity and catalog blades, whose
 actions live in the blade's own **footer action bar**: **Edit** turns the whole blade live in place,
 its profile, members and grants.
 On an identity blade, **Edit** (right) opens edit mode: the profile becomes inputs, the members and grants go live, and the right
@@ -98,6 +98,28 @@ The same bar carries **create**. A form that opens in a slide-over (New user, Ne
 file) or as its own blade (New endpoint) puts its **Create** button in the bar at the foot of the
 panel, never floating after the last field, and greys it out until the form is complete. **Cancel**
 sits beside it on the forms that offer one; where it does not, the header **x** closes the panel.
+
+## Delete, and what is in the way
+
+Every delete in the console asks first in the same dialog: its title names the thing (**Delete
+component "display-1"?**), its body says what goes with it, and the red button carries the verb
+(**Delete component**, **Remove simulated component**, **Withdraw slot**). Cancel holds the focus
+when it opens, so Enter never deletes by accident; Escape and the overlay close it too.
+
+A location, a system or a component cannot be deleted while something still depends on it: a
+child, an endpoint it owns, a system or component placed in it, a slot it staffs. The server
+refuses, and the dialog stays open and lists **In the way**, each row naming its kind and linking
+to its own page (an endpoint has no page, so it is named, not linked). Each row has its own
+**Delete**, which asks once more on the row and then deletes that row by its own kind's delete,
+under its own permission; a row that is itself refused says why on the row. Once nothing is left,
+press the dialog's **Delete** again: the retry happens in place, and nothing needs the API. Where a
+blocker should move rather than go (a system that belongs in another room), follow its link and
+move it there.
+
+The list names only what you may read. A blocker outside your scope is counted (**1 more you
+cannot see from here**), never named, so a refusal tells you no more about the fleet than your
+grants already do; someone who can see it has to clear it. Nothing here deletes in cascade: each
+row goes by its own delete. (Decommissioning a whole place, with what it holds, is a separate verb.)
 
 ## Deep-link the edit
 

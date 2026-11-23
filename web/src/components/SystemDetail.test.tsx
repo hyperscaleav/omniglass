@@ -212,6 +212,27 @@ describe("the blade's tab and edit are its own", () => {
     expect(window.location.search).toBe("?edit=location");
   });
 
+  // A sole system's location has no page of its own (its address lands on
+  // the system), so its section here carries the location's own Delete, on
+  // location:delete (#2463): without it a place holding one system could not
+  // be deleted from the console at all.
+  it("a sole system's location section carries the location's own Delete", async () => {
+    const qc = seed();
+    qc.setQueryData([...LOCATIONS_KEY], [{ id: uuidFor("sd-room"), name: "boardroom-a", label: "Boardroom A", location_type: "room", actions: ["update", "delete"] }]);
+    const asked = answerConfirms(false);
+    mountPage(`/web/systems/${SID}?tab=configure`, qc);
+    const face = await screen.findByTestId("configure-face-location");
+    fireEvent.click(await within(face).findByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(asked).toHaveBeenCalledWith(expect.stringContaining('Delete location "boardroom-a"?')));
+  });
+
+  it("the location section offers no Delete without location:delete", async () => {
+    mountPage(`/web/systems/${SID}?tab=configure`);
+    const face = await screen.findByTestId("configure-face-location");
+    await within(face).findByRole("button", { name: "Edit" });
+    expect(within(face).queryByRole("button", { name: "Delete" })).toBeNull();
+  });
+
   it("deletes from the blade's Configure and closes the stack", async () => {
     answerConfirms(true);
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(null, { status: 204 }));

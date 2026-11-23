@@ -28,9 +28,14 @@ export function useEntityDelete(opts: {
           label: "Delete",
           tone: "danger" as const,
           onClick: async () => {
+            // The id is read once, at the click: clearing a blocker in the
+            // dialog can refetch the body under it (a sole system's location
+            // section goes when its system does), and the retry must still
+            // address the row the operator asked to delete.
             const name = opts.name();
-            if (!name) return;
-            const done = await confirmDelete({ kind: opts.kindLabel, name, consequence: opts.consequence, run: () => opts.remove(opts.id) });
+            const id = opts.id;
+            if (!name || !id) return;
+            const done = await confirmDelete({ kind: opts.kindLabel, name, consequence: opts.consequence, run: () => opts.remove(id) });
             if (!done) return;
             opts.onDeleted();
             await opts.invalidate();

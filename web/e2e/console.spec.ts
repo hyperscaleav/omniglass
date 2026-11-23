@@ -326,7 +326,9 @@ test.describe("operator console", () => {
     await page.goto(`/web/explore?node=${buildingId}`);
     await rowOf(buildingLabel).click();
     await page.locator("aside[data-blade]").getByRole("tab", { name: "Configure" }).click();
-    await page.locator('aside[data-blade] button:text-is("Delete")').click();
+    // The system's own face: its location's section above carries the
+    // location's Delete (#2463).
+    await page.locator('aside[data-blade] [data-testid="configure-face"] button:text-is("Delete")').click();
     await confirmInDialog(page);
     await expect(page.locator("aside[data-blade]")).toHaveCount(0);
     await expect.poll(async () => (await page.request.get(`/api/v1/systems/${systemId}`)).status()).toBe(404);
@@ -373,20 +375,27 @@ test.describe("operator console", () => {
     await expect(dialog).toHaveCount(0);
     await expect.poll(async () => (await page.request.get(`/api/v1/components/${compId}`)).status()).toBe(404);
 
-    // The location still holds the system: named as a link to its own page.
+    // The location holds one system, so its address lands on the system,
+    // whose page carries the location's own section and Delete. Refused: the
+    // system is named as a link to its own page, deleted in place, and the
+    // location goes on the retry.
     await page.goto(`/web/locations/${site}?tab=configure`);
-    await page.getByTestId("configure-face").getByRole("button", { name: "Delete", exact: true }).click();
+    await page.getByTestId("configure-face-location").getByRole("button", { name: "Delete", exact: true }).click();
     await dialog.locator("footer").getByRole("button", { name: "Delete location" }).click();
-    await expect(blockers.getByRole("link", { name: sys })).toBeVisible();
-    await dialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(blockers.locator(`[data-blocker="system:${sys}"]`).getByRole("link")).toBeVisible();
+    await blockers.getByRole("button", { name: /^Delete system/ }).click();
+    await blockers.getByRole("button", { name: /^Confirm delete system/ }).click();
+    await expect(blockers).toContainText("Nothing left in the way");
+    await dialog.locator("footer").getByRole("button", { name: "Delete location" }).click();
+    await expect(dialog).toHaveCount(0);
 
-    // The system deletes from its own page; then the location goes.
-    await page.goto(`/web/systems/${sys}?tab=configure`);
+    // A system deletes from its own page too.
+    const lone = `e2e-del-lone-${stamp}`;
+    expect((await page.request.post("/api/v1/systems", { data: { name: lone } })).ok()).toBeTruthy();
+    await page.goto(`/web/systems/${lone}?tab=configure`);
     await page.getByTestId("configure-face").getByRole("button", { name: "Delete", exact: true }).click();
     await confirmInDialog(page);
-    await page.goto(`/web/locations/${site}?tab=configure`);
-    await page.getByTestId("configure-face").getByRole("button", { name: "Delete", exact: true }).click();
-    await confirmInDialog(page);
+    await expect.poll(async () => (await page.request.get(`/api/v1/systems/${lone}`)).status()).toBe(404);
     await expect.poll(async () => (await page.request.get(`/api/v1/locations/${site}`)).status()).toBe(404);
   });
 

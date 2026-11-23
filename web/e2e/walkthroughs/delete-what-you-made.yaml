@@ -35,9 +35,9 @@ steps:
   - wait: { role: tree, name: Locations }
     caption: The component is gone. The page leaves for Explore.
   - goto: /locations/pop-up-site?tab=configure
-    caption: Now the site itself.
-  - click: '[data-testid="configure-face"] >> role=button[name="Delete"s]'
-    caption: Delete it.
+    caption: Now the site. It holds one system, so its address opens the system, with the site's own section first.
+  - click: '[data-testid="configure-face-location"] >> role=button[name="Delete"s]'
+    caption: The site's own Delete.
   - click: '[role=alertdialog] footer >> role=button[name="Delete location"]'
     caption: Confirm.
   - wait: { selector: '[data-testid="delete-blockers"] a:has-text("Pop-up kiosk")' }
