@@ -117,7 +117,7 @@ func TestARetentionPassReportsOnItsPlatformComponent(t *testing.T) {
 		if err != nil {
 			t.Fatalf("pass: %v", err)
 		}
-		if err := recordRetention(ctx, gw, comp, rep, now, 0); err != nil {
+		if err := recordRetention(ctx, gw, comp, rep, nil, now, 0); err != nil {
 			t.Fatalf("record the pass: %v", err)
 		}
 		return rep
@@ -202,5 +202,108 @@ func TestARetentionPassReportsOnItsPlatformComponent(t *testing.T) {
 	}
 	if got := metricAlarms(storage.AlarmFilter{IncludeCleared: true}); len(got) != 1 || got[0].ClearedAt == nil {
 		t.Errorf("history %+v, want the one alarm, cleared", got)
+	}
+}
+
+// TestARetentionLaneThatStopsReportingOpensNoAlarm (#1673), against real
+// Postgres: a type override's lane reads behind, then the override is removed
+// and the lane drops out of the report. The pass that follows writes the lane
+// 0 (it was flagged last pass), so held past the sustain the sweep opens no
+// alarm for it; without the 0 the pending streak fires with no fresh sample.
+func TestARetentionLaneThatStopsReportingOpensNoAlarm(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+	outpost, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "srv-stand-in"}, all, all)
+	if err != nil || outpost.PlatformComponentID == nil {
+		t.Fatalf("create outpost: %v", err)
+	}
+	comp := *outpost.PlatformComponentID
+	const lane = "metric/held"
+	now := time.Now()
+
+	behind := retentionReport{Deleted: map[string]int64{lane: 10}, Behind: []string{lane}}
+	if err := recordRetention(ctx, gw, comp, behind, nil, now, 0); err != nil {
+		t.Fatal(err)
+	}
+	// The override is gone: the next pass does not report the lane.
+	gone := retentionReport{Deleted: map[string]int64{"metric": 0}}
+	if err := recordRetention(ctx, gw, comp, gone, behind.Behind, now.Add(time.Second), 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := gw.SweepEventRules(ctx, now.Add(6*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	alarms, err := gw.ListAlarms(ctx, "srv-stand-in", storage.AlarmFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range alarms {
+		if a.RaisedByRule != nil && *a.RaisedByRule == "retention-behind" {
+			t.Errorf("a retention-behind alarm %q is open for a lane that stopped reporting", a.DedupKey)
+		}
+	}
+}
+
+// TestARestartSeedsTheFlaggedLanesFromStoredFlags (#1673), against real
+// Postgres: a lane's newest stored retention-behind of 1 seeds the loop's
+// flagged set; a lane since written 0 does not. The pass after a restart then
+// writes 0 for the seeded lane that no longer reports.
+func TestARestartSeedsTheFlaggedLanesFromStoredFlags(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+	outpost, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "srv-stand-in"}, all, all)
+	if err != nil || outpost.PlatformComponentID == nil {
+		t.Fatalf("create outpost: %v", err)
+	}
+	comp := *outpost.PlatformComponentID
+	now := time.Now()
+	write := func(lane string, v float64, at time.Time) {
+		t.Helper()
+		if err := gw.RecordPlatformMetrics(ctx, []storage.PlatformMetric{{ComponentID: comp,
+			Key: writerclass.RetentionBehind, Instance: lane, Value: v, TS: at}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("metric/held", 1, now.Add(-3*time.Second))
+	write("property", 1, now.Add(-3*time.Second))
+	write("property", 0, now.Add(-2*time.Second))
+	write("metric", 0, now.Add(-2*time.Second))
+
+	flagged := seedFlaggedLanes(ctx, gw, comp, 0)
+	if len(flagged) != 1 || flagged[0] != "metric/held" {
+		t.Fatalf("seeded %v, want [metric/held]", flagged)
+	}
+	if got := seedFlaggedLanes(ctx, gw, "", 0); got != nil {
+		t.Errorf("no component seeded %v, want none", got)
+	}
+
+	gone := retentionReport{Deleted: map[string]int64{"metric": 0}}
+	if err := recordRetention(ctx, gw, comp, gone, flagged, now, 0); err != nil {
+		t.Fatal(err)
+	}
+	if got := seedFlaggedLanes(ctx, gw, comp, 0); len(got) != 0 {
+		t.Errorf("after the pass %v still flagged, want none", got)
 	}
 }
