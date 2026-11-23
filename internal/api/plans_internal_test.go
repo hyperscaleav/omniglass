@@ -1,7 +1,9 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"testing"
 )
 
@@ -50,5 +52,27 @@ func TestPlanNeedsWhatEachPieceNeeds(t *testing.T) {
 				t.Fatalf("planNeeds = %s, want %s", got, c.want)
 			}
 		})
+	}
+}
+
+// The dry run answers 200 and the apply 201, and the spec declares both.
+func TestApplyPlanDeclaresBothStatuses(t *testing.T) {
+	raw, err := os.ReadFile("../../api/openapi.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var spec struct {
+		Paths map[string]map[string]struct {
+			Responses map[string]json.RawMessage `json:"responses"`
+		} `json:"paths"`
+	}
+	if err := json.Unmarshal(raw, &spec); err != nil {
+		t.Fatal(err)
+	}
+	r := spec.Paths["/plans:apply"]["post"].Responses
+	for _, code := range []string{"200", "201"} {
+		if _, ok := r[code]; !ok {
+			t.Errorf("/plans:apply declares no %s response", code)
+		}
 	}
 }

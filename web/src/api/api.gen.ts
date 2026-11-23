@@ -19652,6 +19652,11 @@ export const claimOutpost = async (claimOutpostInputBody: NonReadonly<ClaimOutpo
 
 
 
+export type applyPlanResponse200 = {
+  data: ApplyPlanOutputBody
+  status: 200
+}
+
 export type applyPlanResponse201 = {
   data: ApplyPlanOutputBody
   status: 201
@@ -19659,10 +19664,10 @@ export type applyPlanResponse201 = {
 
 export type applyPlanResponseDefault = {
   data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 201>
+  status: Exclude<HTTPStatusCodes, 200 | 201>
 }
 
-export type applyPlanResponseSuccess = (applyPlanResponse201) & {
+export type applyPlanResponseSuccess = (applyPlanResponse200 | applyPlanResponse201) & {
   headers: Headers;
 };
 export type applyPlanResponseError = (applyPlanResponseDefault) & {

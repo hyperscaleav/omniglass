@@ -27,7 +27,7 @@ stored credential to a destination, the most sensitive class, whatever else it d
 `tools/list`, each tool's `_meta` carries `omniglass/agent_policy`, its class and the policy the install resolves
 for it: the strictest of the class, the caller's roles and an override on the tool itself.
 
-101 tools.
+100 tools.
 
 | Tool | What it does | Gate | Assume |
 |---|---|---|---|
@@ -105,7 +105,6 @@ for it: the strictest of the class, the caller's roles and an override on the to
 | [`list-outposts`](#list-outposts) | List outposts | `outpost:read` | read-only, idempotent |
 | [`get-outpost`](#get-outpost) | Get an outpost | `outpost:read` | read-only, idempotent |
 | [`list-outpost-logs`](#list-outpost-logs) | List an outpost's recent self-logs | `outpost:read` | read-only, idempotent |
-| [`apply-plan`](#apply-plan) | Create a plan of locations, systems and components in one write | `location:read` | read-only, idempotent |
 | [`list-products`](#list-products) | List products | `product:read` | read-only, idempotent |
 | [`get-product`](#get-product) | Get a product | `product:read` | read-only, idempotent |
 | [`list-secret-types`](#list-secret-types) | List secret types | `secret:read` | read-only, idempotent |
@@ -1335,25 +1334,6 @@ Returns the outpost's own recent operational log lines (the raw ingest lane of A
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | yes | The outpost's unique name |
-
-## `apply-plan`
-
-Create a plan of locations, systems and components in one write
-
-Lands a plan you built in one transaction: standards created from their templates (with any parent, unless you hold one of that name), locations parents first (a parent_key names an earlier location of the plan, a parent an existing one), systems at a location of the plan or an existing one with the components that staff their slots, standalone components, and the values declared on each. Every piece is the ordinary create in your own scope with its own audit row, and every row carries the one import_id the response returns, under from_import. A refused piece refuses the whole plan, mapped as its own route maps it, with its path in the plan (systems[3].components[1]) leading the detail; nothing lands. validate_only runs the same transaction and rolls it back, returning the counts and the names the apply would mint (200, no ids). A plan carries at most 1000 rows (each standard, location, system, component and declared value is one); a bigger one is a 413 naming the limit, so chunk an import (by building), one plan each. Gated by location:read, and each piece needs what its own create needs: location:create for locations, system:create for systems, component:create for components, system:read, system:update, component:read and component:update for a slot assignment, the update permission of what a value is declared on, and standard:create when a standard is created from its template. A location outside your scope for the piece there refuses that piece as its own create does (a location you cannot read reads as not found, 422; one you can read but not create in is a 403). A parent_key or location_key the plan does not hold, or a key given twice, is a 422 naming the row. The request body is held to the server's 1 MiB cap as every route's is, also a 413.
-
-- Route: `POST /api/v1/plans:apply`
-- Gate: `location:read`
-- Assume: read-only, idempotent
-- Agent class: read
-
-| Argument | Type | Required | Description |
-|---|---|---|---|
-| `components` | array | no | Standalone components, in no system |
-| `locations` | array | no | The locations to create, in order: a parent before its children |
-| `standards` | array | no | Standard templates to create standards from, by name, each with any parent it hangs off; one the fleet already holds is used as it is |
-| `systems` | array | no | The systems to create, each with the components that staff it |
-| `validate_only` | boolean | no | Run the whole plan and roll it back: the response says what an apply would create, or the piece that would refuse it, and nothing is written |
 
 ## `list-products`
 

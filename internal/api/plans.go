@@ -335,7 +335,6 @@ func appliedBody(out *applyPlanOutput, in *applyPlanInput, made *storage.Planned
 func registerPlanRoutes(api huma.API, a *authenticator, gw storage.Gateway, cat *template.Catalog) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "apply-plan",
-		Extensions:    mcpExposed(),
 		Method:        http.MethodPost,
 		Path:          "/plans:apply",
 		DefaultStatus: http.StatusCreated,
@@ -369,4 +368,17 @@ func registerPlanRoutes(api huma.API, a *authenticator, gw storage.Gateway, cat 
 		appliedBody(out, in, made)
 		return out, nil
 	})
+	declareDryRunStatus(api)
+}
+
+// declareDryRunStatus adds the 200 a validate_only call answers beside the 201
+// of an apply, with the same body, so the spec and the typed client name both.
+func declareDryRunStatus(api huma.API) {
+	item := api.OpenAPI().Paths["/plans:apply"]
+	if item == nil || item.Post == nil || item.Post.Responses["201"] == nil {
+		return
+	}
+	ok := *item.Post.Responses["201"]
+	ok.Description = "The dry run: the counts and names an apply would mint, nothing written"
+	item.Post.Responses["200"] = &ok
 }

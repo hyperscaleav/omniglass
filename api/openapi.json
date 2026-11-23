@@ -30613,6 +30613,16 @@
           "required": true
         },
         "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplyPlanOutputBody"
+                }
+              }
+            },
+            "description": "The dry run: the counts and names an apply would mint, nothing written"
+          },
           "201": {
             "content": {
               "application/json": {
@@ -30635,7 +30645,6 @@
           }
         },
         "summary": "Create a plan of locations, systems and components in one write",
-        "x-omniglass-mcp": {},
         "x-omniglass-permission": "location:read"
       }
     },

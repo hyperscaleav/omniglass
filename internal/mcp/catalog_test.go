@@ -50,3 +50,14 @@ func TestAPIBaseIsTheSpecsServer(t *testing.T) {
 		t.Errorf("spec server %q, dispatcher prefix %q", doc.Servers[0].URL, apiBase)
 	}
 }
+
+// apply-plan writes in bulk but is gated by a read, so the method-and-gate rule
+// would class it as a read-only, idempotent tool: it stays off MCP until the
+// stamp can say a read-gated POST writes.
+func TestApplyPlanIsNotATool(t *testing.T) {
+	for _, d := range catalog {
+		if d.Name == "apply-plan" {
+			t.Fatalf("apply-plan is a tool classed %s (read-only %t): it writes", d.Class, d.Annotations.ReadOnly)
+		}
+	}
+}
