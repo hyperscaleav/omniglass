@@ -2,9 +2,7 @@ import { Show, onCleanup } from "solid-js";
 import Button from "./Button";
 import EntityForm, { type EntityKind } from "./EntityForm";
 import SaveError from "./SaveError";
-import { createEditSlot, type BladeDestructive, type BladeEdit } from "../lib/blades";
-import { Trash } from "./icons";
-import type { DetailHost } from "../lib/tabstate";
+import { createEditSlot, type BladeEdit } from "../lib/blades";
 import { useEditParam } from "../lib/editurl";
 import { can, useMe } from "../lib/auth";
 import type { LeaveGuard } from "../lib/leave_guard";
@@ -27,11 +25,6 @@ function Footer(props: { slot: BladeEdit; onEdit: () => void }) {
     <div class="flex flex-col gap-2 border-t border-base-300 px-4 pb-4 pt-3">
       <SaveError slot={props.slot} />
       <div class="flex items-center gap-2">
-        {/* The entity's Delete sits left, as on every action bar, and only
-            while reading: Cancel is the way out of an edit. */}
-        <Show when={!props.slot.editing() && props.slot.destructive()}>
-          {(dst) => <Button intent="danger" icon={Trash} onClick={() => dst().onClick()}>{dst().label}</Button>}
-        </Show>
         <span class="flex-1" />
         <Show
           when={props.slot.editing()}
@@ -61,12 +54,6 @@ export default function ConfigureFace(props: {
   // The page's leave guard: this face's slot is tracked into it, so the page
   // can ask before a tab switch drops unsaved drafts.
   guard?: LeaveGuard;
-  // Which host the face sits in (#2423): a page's face answers the URL's edit
-  // intent (?edit=1); a blade's has no address of its own, so it never reads
-  // or writes the page's query, and Edit simply begins.
-  host?: DetailHost;
-  // The entity's Delete, folded into the form's bind and drawn in the footer.
-  destructive?: () => BladeDestructive | undefined;
 }) {
   const me = useMe();
   const slot = createEditSlot();
@@ -75,13 +62,10 @@ export default function ConfigureFace(props: {
   const value = props.editValue;
   // Ready once the form has bound the slot against a loaded row: editable()
   // is false until then, and false for good without the update verb.
-  const editUrl =
-    props.host === "blade"
-      ? { request: () => { if (slot.editable() && canUpdate()) slot.begin(); } }
-      : useEditParam(slot, { ready: () => slot.editable(), canUpdate, value });
+  const editUrl = useEditParam(slot, { ready: () => slot.editable(), canUpdate, value });
   return (
     <section data-testid={props.testid ?? "configure-face"} class="flex flex-col">
-      <EntityForm kind={props.kind} id={props.id} slot={slot} host="page" destructive={props.destructive} />
+      <EntityForm kind={props.kind} id={props.id} slot={slot} host="page" />
       <Footer slot={slot} onEdit={() => editUrl.request()} />
     </section>
   );

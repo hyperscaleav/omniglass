@@ -3,7 +3,6 @@ import { render, fireEvent, screen } from "@solidjs/testing-library";
 import { createSignal, Show } from "solid-js";
 import Drawer from "./Drawer";
 import { useFormActions } from "../lib/formactions";
-import { BladeEditContext, createEditSlot } from "../lib/blades";
 
 // The Drawer OWNS its action rail. A body registers what the buttons do and the
 // shell draws them, the same contract BladeStack uses for the blade footer. These
@@ -146,23 +145,5 @@ describe("Drawer action rail", () => {
     const overlay = content.previousElementSibling as HTMLElement;
     expect(Number(content.style.zIndex)).toBeGreaterThan(61 + 100);
     expect(Number(overlay.style.zIndex)).toBe(Number(content.style.zIndex));
-  });
-});
-
-// A Drawer opened from a body inside a blade (a detail body's Issue command or
-// Open simulation, #2423) rises over the blade stack, or it opens behind it.
-describe("Drawer inside a blade", () => {
-  it("layers over the stack when it sits in a blade", () => {
-    render(() => (
-      <BladeEditContext.Provider value={createEditSlot()}>
-        <Drawer open={true} onClose={() => {}} title="Issue a command"><div>fields</div></Drawer>
-      </BladeEditContext.Provider>
-    ));
-    expect((screen.getByRole("dialog") as HTMLElement).style.zIndex).toBe("1000");
-  });
-
-  it("outside a blade, stays on its own layer", () => {
-    render(() => <Drawer open={true} onClose={() => {}} title="New user"><div>fields</div></Drawer>);
-    expect((screen.getAllByRole("dialog").at(-1) as HTMLElement).style.zIndex).toBe("");
   });
 });

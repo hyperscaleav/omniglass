@@ -1,16 +1,28 @@
 import { For, Show } from "solid-js";
+import { useSearchParams } from "@solidjs/router";
 import type { LeaveGuard } from "../lib/leave_guard";
-import type { TabDef, TabState } from "../lib/tabstate";
 
-// TabRail: the workspace's facet switcher (#790). Which facet shows is the
-// HOST's fact (lib/tabstate, #2423): a page keeps it in the URL (`?tab=`, the
-// #763 deep-link rule, the default facet carrying no param), a blade in a
-// signal, so a blade over a page never rewrites the page's address. One facet
-// is no workspace: the rail renders only once there are two.
+// TabRail: the workspace's facet switcher (#790). A facet is a URL fact
+// (`?tab=<key>`, the #763 deep-link rule), so a reload or a pasted link lands
+// on the same view; the default facet carries no param at all, keeping the
+// canonical address clean. One facet is no workspace: the rail renders only
+// once there are two.
+// The rail's URL fact is `?tab=`.
 //
-// `guard` is the host's leave guard (lib/leave_guard): switching to ANOTHER
+// `guard` is the page's leave guard (lib/leave_guard): switching to ANOTHER
 // facet asks it first, so unsaved Configure drafts are not dropped silently.
-export default function TabRail(props: { tabs: TabDef[]; state: TabState; guard?: LeaveGuard }) {
+export default function TabRail(props: { tabs: { key: string; label: string }[]; activeKey?: () => string; guard?: LeaveGuard }) {
+  const [params, setParams] = useSearchParams();
+  const name = () => "tab";
+  const active = () => {
+    // A page whose default facet is DERIVED (the ?edit=1 landing on
+    // Configure, #800) passes its own resolver, so the rail and the body
+    // cannot disagree about which facet is showing.
+    if (props.activeKey) return props.activeKey();
+    const raw = params[name()];
+    const t = Array.isArray(raw) ? raw[0] : raw;
+    return t && props.tabs.some((x) => x.key === t) ? t : props.tabs[0]?.key;
+  };
   return (
     <Show when={props.tabs.length > 1}>
       <div data-testid="tab-rail" role="tablist" class="flex flex-wrap gap-1 border-b border-base-300 px-4 pt-2">
@@ -19,15 +31,19 @@ export default function TabRail(props: { tabs: TabDef[]; state: TabState; guard?
             <button
               type="button"
               role="tab"
-              aria-selected={props.state.active() === t.key ? "true" : "false"}
+              aria-selected={active() === t.key ? "true" : "false"}
               class="cursor-pointer rounded-t-md px-3 py-1.5 text-sm"
               classList={{
-                "border border-b-0 border-base-300 bg-base-100 font-medium": props.state.active() === t.key,
-                "text-base-content/60 hover:text-base-content": props.state.active() !== t.key,
+                "border border-b-0 border-base-300 bg-base-100 font-medium": active() === t.key,
+                "text-base-content/60 hover:text-base-content": active() !== t.key,
               }}
+              // Choosing a tab also ends an ?edit=1 landing (useEditParam's
+              // intent, consumed once): left in the address it pinned the page
+              // to Configure, so Overview, the bare address, resolved straight
+              // back to it and re-entered edit on every return.
               onClick={() => {
-                if (t.key !== props.state.active() && props.guard && !props.guard.confirmLeave()) return;
-                props.state.select(t.key);
+                if (t.key !== active() && props.guard && !props.guard.confirmLeave()) return;
+                setParams({ [name()]: t.key === props.tabs[0].key ? undefined : t.key, edit: undefined });
               }}
             >
               {t.label}

@@ -10,13 +10,13 @@ sidebar:
 screenshots:
   - id: entity-blade
     path: /web/explore
-    alt: "A location's blade slides in from the right with its detail page's card: type, health, since-when, tags, its tabs and what it holds."
+    alt: "A location's blade slides in from the right with its details and a footer action bar."
     # Harbor Point holds two buildings and no system, so its row opens the
     # location's own blade (a location holding one system opens that system).
     steps:
       - action: click
         selector: "[role=treeitem]:has-text('Harbor Point')"
-    # The blade renders one region no clock can pin: the header's since line's age
+    # The blade renders one region no clock can pin: the since line's age
     # counts from the capture's own seed-to-shoot latency.
     #
     # The mask DECLARES its box (`width`): painted at the since span's
@@ -29,16 +29,13 @@ screenshots:
     # widest line a capture renders ("since May 28, 12:59 AM · 59m") is 164px
     # in the console's face; a line wider than 184px fails the capture by name.
     mask:
-      - selector: "[data-testid=since-line]"
+      - selector: "[data-testid=blade-since]"
         width: 184
   - id: entity-edit-face
     path: /web/locations/east?edit=1
     alt: "An ?edit=1 deep link lands a location's view on its Configure tab, already editing."
-    # The location header's since line ages with the capture on every tab
-    # (#2423); the form below renders from the seed deterministically.
-    mask:
-      - selector: "[data-testid=since-line]"
-        width: 184
+    # No mask: the Configure tab replaces the overview (and its since-line
+    # clock), and the form renders from the seed deterministically.
 ---
 
 Once you have [found an entity](/operator/fleet/), you open it, read it, and change
@@ -57,15 +54,21 @@ Enter to open it.
 
 ::screenshot{#entity-blade}
 
-A fleet entity's blade (a location, a system, a component) is its detail page in a side
-panel: the same card, the same tabs (Overview, Activity, Configure) and the same actions,
-reflowed to the narrower panel, so you never leave Explore to answer a question about an
-entity. Switching a tab inside the blade changes only the blade; the page behind it keeps its
-own address. A blade has no breadcrumb, so where the entity sits is said by a location card
-with the path above it. Opening something from inside a blade (a system a component serves, a
-component on a system's Why) stacks another blade over it. Edit and Delete sit in the
-**Configure** tab's footer, as on the page; Delete asks first and is gated by your permissions
-on that row. **Expand** still opens the page, for its breadcrumb and its shareable address.
+A fleet entity's blade (a location, a system, a component) is the glance an operator lands on
+from a row. It leads with the health and since-when and the active alarms that say why, each
+with its severity, then the context you came for: a system's location (as a card saying where it
+sits, the path above it, since a blade has no breadcrumb) and its size;
+the systems a component serves, with the slot it fills in each, and its location when that is
+somewhere else; a location's systems, each with its health, one click from its own blade. Then
+the entity's **form**: its name, classification, a location's parent, and tags, read or edited
+in place. Each fact is said once: the blade's title is the label (the Label field appears only
+while editing), a location's only system is the location (its card names no location and offers no second
+blade for it, only **Configure location**), and the standard is in Classification, not repeated
+above it. Configuration (a
+system's slots, the properties and their cascade, the reconciliation, a component's
+endpoints) is the detail view's **Configure** tab, one **Expand** away, along with the
+components, the history and the vitals. Delete sits on the left of the footer behind a confirm, gated by your
+permissions on that row.
 
 The identity pages (Users, User groups, and Roles) use the same blade, and there drilling crosses entities: from a
 user you open a group's blade over it, and from a group you open a member's user blade, each stacking so you can

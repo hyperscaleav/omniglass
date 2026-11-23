@@ -24,9 +24,7 @@ import { durationText } from "../lib/timeline";
 // fresh fleet read can hand back a new object for the same system, and a
 // list iterating objects would rebuild the card (and refetch its reads) on
 // every one, which is a request storm.
-// `onOpen` lets a host open the system in place (a detail body pushes its
-// blade on the ambient stack); without it the card goes to the system's page.
-export default function SystemSummary(props: { systemId: string; onOpen?: (id: string) => void }) {
+export default function SystemSummary(props: { systemId: string }) {
   const navigate = useNavigate();
   const now = Date.now();
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
@@ -48,7 +46,7 @@ export default function SystemSummary(props: { systemId: string; onOpen?: (id: s
       type="button"
       data-testid={`system-summary-${props.systemId}`}
       class="card flex cursor-pointer flex-col gap-2 border border-base-300 bg-base-200 p-4 text-left text-sm hover:border-primary/50"
-      onClick={() => (props.onOpen ? props.onOpen(props.systemId) : navigate(`/systems/${props.systemId}`))}
+      onClick={() => navigate(`/systems/${props.systemId}`)}
     >
       <span class="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span class="font-semibold">{system() ? entityLabel(system()!) : ""}</span>

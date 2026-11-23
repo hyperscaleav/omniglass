@@ -1,17 +1,28 @@
-import { Show, createEffect, createMemo } from "solid-js";
-import { useLocation, useNavigate, useParams } from "@solidjs/router";
+import { For, Show, createEffect, createMemo } from "solid-js";
+import { Dynamic } from "solid-js/web";
+import { useLocation, useNavigate, useParams, useSearchParams } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
 import TemplateNotice from "../components/TemplateNotice";
 import Breadcrumb from "../components/Breadcrumb";
+import Eyebrow from "../components/Eyebrow";
+import TagPills from "../components/TagPills";
+import TabRail from "../components/TabRail";
+import ConfigureFace from "../components/ConfigureFace";
 import DetailGate from "../components/DetailGate";
-import LocationDetail from "../components/LocationDetail";
+import OutlineWorkspace from "../components/OutlineWorkspace";
+import SystemSummary from "../components/SystemSummary";
 import BladeStack from "../components/BladeStack";
+import { resolveIcon } from "../components/icons";
 import { BladesContext, createBladeController } from "../lib/blades";
+import { createLeaveGuard } from "../lib/leave_guard";
 import { fleetRegistry } from "../lib/fleetBlades";
-import { FLEET_VIEW_KEY, ancestors, fleetView, locationIndex } from "../lib/fleet";
-import { landingFor } from "../lib/detail";
+import { FLEET_VIEW_KEY, ancestors, childrenIndex, fleetView, locationIndex } from "../lib/fleet";
+import { LOCATIONS_KEY, listLocations } from "../lib/locations";
+import { LOCATION_TYPES_KEY, listLocationTypes } from "../lib/location_types";
+import { landingFor, systemsAtLocation } from "../lib/detail";
 import { entityLabel } from "../lib/entities";
+import { can, useMe } from "../lib/auth";
 import { describeError } from "../lib/format";
 
 // A location's detail view (#635, reoriented in #872). Systems are the unit
@@ -19,9 +30,9 @@ import { describeError } from "../lib/format";
 // exactly one system has no view of its own: its address lands on that
 // system, whose view shows the location as a card of context. What remains here
 // is the folder: a location holding no system (a campus, a building, a floor),
-// or one shared by several. The page is the address (the breadcrumb, the
-// name and sole-system landings, the miss faces) around LocationDetail, the
-// one body the fleet blade renders too (#2423).
+// or one shared by several. Its card is the subject, with its own tabs:
+// Overview (a brief card per system it holds, then what is beneath it as the
+// outline rooted here) and Configure (the one form).
 //
 // A location holding one system configures on that system's Configure tab, in a
 // Location section of its own (#872), so even an address asking to configure
@@ -34,11 +45,37 @@ export default function LocationZoom() {
   // window's query lags the route being rendered (#932).
   const route = useLocation();
   const id = () => params.id;
+  const leave = createLeaveGuard();
+  const me = useMe();
   const blades = createBladeController();
+  const [search] = useSearchParams();
+  const param = (k: string) => { const v = search[k]; return Array.isArray(v) ? v[0] : v; };
 
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
+  const types = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes }));
+  const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
 
   const location = createMemo(() => (view.data ? locationIndex(view.data).get(id()) : undefined));
+  const type = createMemo(() => (types.data ?? []).find((t) => t.name === location()?.location_type));
+  const tags = () => (locations.data ?? []).find((l) => l.id === id())?.effective_tags ?? {};
+  // By id, compared by value: the cards key on these strings, so a fresh
+  // fleet read updates a card in place rather than rebuilding it.
+  const systemsHere = createMemo(() => (view.data && location() ? systemsAtLocation(view.data, id()).map((s) => s.id) : []), undefined, {
+    equals: (a, b) => a.length === b.length && a.every((x, i) => x === b[i]),
+  });
+  const hasBeneath = createMemo(() => (view.data ? (childrenIndex(view.data).get(id()) ?? []).length > 0 : false));
+
+  const tabs = createMemo(() => [
+    { key: "overview", label: "Overview" },
+    ...(can(me.data, "location", "update") ? [{ key: "configure", label: "Configure" }] : []),
+  ]);
+  const tab = () => {
+    const t = param("tab");
+    if (t && tabs().some((x) => x.key === t)) return t;
+    if (param("edit") === "1" && tabs().some((x) => x.key === "configure")) return "configure";
+    return "overview";
+  };
+
   // A name-shaped address resolves to the uuid, query kept (#759's rule).
   // Only an unambiguous name resolves: names scope to placement, so a bare
   // name can legally be two rows.
@@ -93,8 +130,41 @@ export default function LocationZoom() {
           retrying={view.isFetching}
           onRetry={() => void view.refetch()}
         >
-          {/* Keyed on the id: another location is another body (#854). */}
-          <Show when={location()?.id} keyed>{(lid) => <LocationDetail id={lid} host="page" />}</Show>
+          <section data-testid="location-subject" class="card overflow-hidden border border-base-300 bg-base-200 p-0">
+            <div data-testid="location-header" class="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-base-300 px-4 py-3 text-sm">
+              <Eyebrow label="Location" hint="A location is a folder and its facts. The systems in it, and in the locations beneath it, are what Omniglass monitors." />
+              <span class="flex items-center gap-2">
+                <span class="flex-none text-base-content/50"><Dynamic component={resolveIcon(type()?.icon || "map-pin")} size={16} /></span>
+                <span data-testid="location-type" class="text-base-content/70">{type() ? entityLabel(type()!) : location()?.location_type}</span>
+              </span>
+              <Show when={Object.keys(tags()).length > 0}><TagPills tags={tags()} wrap /></Show>
+            </div>
+            <TabRail tabs={tabs()} activeKey={tab} guard={leave} />
+            <Show when={tab() === "configure"}>
+              {/* Keyed on the id: another location is another face (#854). */}
+              <Show when={id()} keyed>{(lid) => <ConfigureFace kind="location" id={lid} guard={leave} />}</Show>
+            </Show>
+            <Show when={tab() === "overview"}>
+              <div data-testid="location-overview" class="flex flex-col gap-4 p-4">
+                <Show when={systemsHere().length > 0}>
+                  <section class="flex flex-col gap-2">
+                    <Eyebrow label={systemsHere().length === 1 ? "System here" : "Systems here"} hint="Each system bound to this location, in brief. Open one for its components, map, data and history." />
+                    <div class="grid grid-cols-[repeat(auto-fill,minmax(18rem,1fr))] gap-3">
+                      <For each={systemsHere()}>{(sid) => <SystemSummary systemId={sid} />}</For>
+                    </div>
+                  </section>
+                </Show>
+                <Show when={hasBeneath() || systemsHere().length === 0}>
+                  <section data-testid="beneath" class="flex flex-col gap-2">
+                    <Show when={systemsHere().length > 0}>
+                      <Eyebrow label="Beneath" hint="The locations inside this one, as Explore draws them, counted by the systems they hold." />
+                    </Show>
+                    <OutlineWorkspace rootId={id()} />
+                  </section>
+                </Show>
+              </div>
+            </Show>
+          </section>
         </DetailGate>
       </Page>
       <BladeStack controller={blades} registry={fleetRegistry} />

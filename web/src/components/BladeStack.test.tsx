@@ -57,23 +57,6 @@ describe("BladeStack", () => {
     expect(asides(container).length).toBe(0);
   });
 
-  // A covered blade is out of reach until it is returned to (#2423): its body
-  // leaves the accessibility tree, so two stacked detail bodies never offer
-  // two "Configure" tabs, and only the covered blade's click-to-return stays.
-  it("takes a covered blade's body out of the accessibility tree, and gives it back on return", () => {
-    const ctl = createBladeController();
-    const reg: Record<string, BladeDef> = {
-      a: { Title: () => <>A</>, Body: () => <button type="button">Go</button> },
-      b: { Title: () => <>B</>, Body: () => <button type="button">Go</button> },
-    };
-    render(() => <BladeStack controller={ctl} registry={reg} />);
-    ctl.push({ kind: "a", id: "1" });
-    ctl.push({ kind: "b", id: "2" });
-    expect(screen.getAllByRole("button", { name: "Go" }).length).toBe(1);
-    ctl.pop();
-    expect(screen.getAllByRole("button", { name: "Go" }).length).toBe(1);
-  });
-
   it("ignores a ref whose kind is not in the registry", () => {
     const ctl = createBladeController();
     const { container } = render(() => <BladeStack controller={ctl} registry={registry} />);
