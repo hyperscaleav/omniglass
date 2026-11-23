@@ -46,7 +46,7 @@ import { systemEvents, systemEventsKey, systemLogs, systemLogsKey, type SystemLo
 import type { LogFilter } from "../lib/logs";
 import LogFilters from "../components/LogFilters";
 import { SERIES_POLL_MS, metricBuckets, metricBucketsBetween, metricBucketsBetweenKey, metricBucketsKey } from "../lib/series";
-import { rangeHours, rangeStepSeconds, resolveRange, useTimeRange } from "../lib/time_range";
+import { DEFAULT_RANGE, rangeHours, rangeStepSeconds, resolveRange, useTimeRange, type TimeRange } from "../lib/time_range";
 import TimeRangePicker from "../components/TimeRangePicker";
 import { CalcRuleLink } from "../components/RuleLink";
 import { memberModel, systemCrumbs, systemsAtLocation, type MemberContext } from "../lib/detail";
@@ -194,7 +194,13 @@ export default function SystemZoom() {
   // The page's one time range (#2304), held in the address: a preset slides
   // to now and reads `hours` back from it; an absolute range reads its own
   // [from, to) through the views binding and holds still, so it never polls.
-  const { range, setRange } = useTimeRange();
+  const { range: asked, setRange } = useTimeRange();
+  // An absolute range reads through the views read, which needs view:read: a
+  // shared link opened by a caller without it reads the default instead, and
+  // the data section says why rather than drawing empty charts.
+  const canViews = () => can(me.data, "view", "read");
+  const rangeDenied = () => asked().kind === "absolute" && !!me.data && !canViews();
+  const range = (): TimeRange => (rangeDenied() ? DEFAULT_RANGE : asked());
   const hours = () => rangeHours(range());
   // A preset's window is fixed by its key, not the clock, so a tick never
   // changes a query key.
@@ -231,7 +237,8 @@ export default function SystemZoom() {
         return {
           queryKey: metricBucketsBetweenKey("systems", id(), m.metric_type_name, from, to, step, instance),
           queryFn: () => metricBucketsBetween("systems", id(), m.metric_type_name, from, to, step, instance),
-          enabled: tab() === "overview",
+          // Not before the caller is known: the views read may be theirs to refuse.
+          enabled: tab() === "overview" && !!me.data,
           // A range ending in the future still fills; one wholly past holds.
           refetchInterval: to > Date.now() ? SERIES_POLL_MS : false,
         };
@@ -403,7 +410,7 @@ export default function SystemZoom() {
               // The range governs Overview's charts. Activity's reads keep
               // their own fixed windows (#2304's follow-up), so the control
               // is not offered where it would be ignored.
-              end={tab() === "overview" ? <TimeRangePicker range={range()} onChange={setRange} allowCustom={can(me.data, "view", "read")} /> : undefined}
+              end={tab() === "overview" ? <TimeRangePicker range={range()} onChange={setRange} allowCustom={canViews()} /> : undefined}
             />
             <Show when={tab() === "configure"}>
               {/* A sole system's location has no page of its own: it configures
@@ -663,6 +670,11 @@ export default function SystemZoom() {
         <Show when={kpiMetrics().length > 0}>
           <section data-testid="data-tab" class="flex flex-col gap-3">
             <Eyebrow label="Data" hint="Every metric the standard declares, stacked: the page's time range as a sparkline beside the latest value. Click a row for the full chart. Raw samples, capped; a series still on its contract default has nothing to chart yet." />
+            <Show when={rangeDenied()}>
+              <p data-testid="range-denied" role="status" class="text-xs text-warning">
+                This link's custom range is read through views, which needs view:read. Showing the last 24 hours instead.
+              </p>
+            </Show>
             <div class="overflow-x-auto rounded-box border border-base-300">
               <table class="table table-sm">
                 <thead>
