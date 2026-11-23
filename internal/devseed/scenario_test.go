@@ -5,8 +5,10 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/devseed"
+	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/jackc/pgx/v5"
@@ -412,5 +414,75 @@ func TestRunScenarioEmptySeedsNothing(t *testing.T) {
 	}
 	if got := countFleet(t, ctx, conn); got != (fleetCounts{}) {
 		t.Errorf("empty scenario seeded %+v", got)
+	}
+}
+
+// The storm scenario (#2333) is the alarm queue's scale fixture: the large
+// fleet in trouble, with at least StormFloor open alarms.
+func TestStormScenarioHoldsAnAlarmStorm(t *testing.T) {
+	t.Parallel()
+	if n := len(scenarioDoc(t, "storm").Alarms); n < devseed.StormFloor {
+		t.Fatalf("storm scenario has %d alarms, want at least %d", n, devseed.StormFloor)
+	}
+}
+
+// The alarm queue at scale (#2333): over the seeded storm the first page and a
+// filtered page each come back inside the stated budget, and the storm pages
+// through to its last alarm. The measured times are logged for the PR.
+func TestAlarmQueueAtStormScale(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("seeds the storm fleet")
+	}
+	const budget = 2 * time.Second
+	ctx, gw, _ := openSeededGateway(t)
+	s, err := devseed.LookupScenario("storm")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := devseed.RunScenario(ctx, gw, "", s, devseed.Options{}); err != nil {
+		t.Fatalf("seed storm: %v", err)
+	}
+	all := scope.Set{All: true}
+	timed := func(name string, f storage.AlarmFilter, limit int) ([]storage.Alarm, string) {
+		t.Helper()
+		start := time.Now()
+		got, next, err := gw.ListFleetAlarms(ctx, all, all, f, limit)
+		took := time.Since(start)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		t.Logf("%s: %d rows in %s", name, len(got), took)
+		if took > budget {
+			t.Errorf("%s took %s, over the %s budget", name, took, budget)
+		}
+		return got, next
+	}
+	first, next := timed("first page (100)", storage.AlarmFilter{}, 100)
+	if len(first) != 100 || next == "" {
+		t.Fatalf("first page = %d rows, next %q; want a full page with more behind it", len(first), next)
+	}
+	top := first[0].Severity
+	narrowed, _ := timed("filtered by severity "+top, storage.AlarmFilter{Severities: []string{top}}, 100)
+	if len(narrowed) == 0 {
+		t.Fatalf("no alarms at the worst severity %q", top)
+	}
+	unacked := false
+	timed("unacknowledged and not snoozed", storage.AlarmFilter{Acknowledged: &unacked, Snoozed: &unacked}, 100)
+	timed("location subtree", storage.AlarmFilter{Location: first[0].LocationPath[0]}, 100)
+	total := 0
+	for token := ""; ; {
+		page, n, err := gw.ListFleetAlarms(ctx, all, all, storage.AlarmFilter{PageToken: token}, 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		total += len(page)
+		if n == "" {
+			break
+		}
+		token = n
+	}
+	if total < devseed.StormFloor {
+		t.Errorf("paged the storm to %d alarms, want at least %d", total, devseed.StormFloor)
 	}
 }

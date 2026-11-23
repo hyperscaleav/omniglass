@@ -85,6 +85,13 @@ describe("client requests", () => {
     expect(new URL(seen[1].url).search).toBe("?limit=20");
   });
 
+  it("repeats a list param once per value, the form the API reads", async () => {
+    stub(() => json({}));
+    await api.GET("/alarms", { params: { query: { severity: ["disaster", "high"], limit: 5 } } });
+    expect(new URL(seen[0].url).searchParams.getAll("severity")).toEqual(["disaster", "high"]);
+    expect(new URL(seen[0].url).search).not.toContain("%2C");
+  });
+
   it("sends no query string when every param is unset", async () => {
     stub(() => json({}));
     await api.GET("/auth/me/notifications", { params: { query: { unread: undefined } } });

@@ -1,7 +1,7 @@
 import { Show, createSignal } from "solid-js";
 import { useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
-import { ALARM_TIMELINE_PREFIX, acknowledgeAlarm, componentAlarmsKey } from "../lib/alarms";
+import { ALARM_TIMELINE_PREFIX, FLEET_ALARMS_PREFIX, acknowledgeAlarm, componentAlarmsKey } from "../lib/alarms";
 import { FLEET_VIEW_KEY } from "../lib/fleet";
 import { SYSTEM_HEALTH_PREFIX } from "../lib/health";
 import { can, useMe } from "../lib/auth";
@@ -25,6 +25,8 @@ export default function AcknowledgeButton(props: { component: string; alarm: { i
       await Promise.all([
         qc.invalidateQueries({ queryKey: [...componentAlarmsKey(props.component)] }),
         qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] }),
+        // The alarm queue (#2333) reads the same fact fleet-wide.
+        qc.invalidateQueries({ queryKey: [...FLEET_ALARMS_PREFIX] }),
         qc.invalidateQueries({ queryKey: [...ALARM_TIMELINE_PREFIX] }),
         // The system page's Why strip reads the acknowledgement from the health
         // report (#990); keyed by system, so the prefix refreshes whichever is open.
