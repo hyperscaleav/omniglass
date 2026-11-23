@@ -120,6 +120,30 @@ await waitFor(() => expect(read(reads, "/systems/room-1/metrics/rtt/samples?hour
     expect(bodies[0].bindings[0]).toMatchObject({ keys: ["rtt"], from: new Date(from).toISOString(), to: new Date(to).toISOString(), step_seconds: 60 });
   });
 
+  // An absolute range still running (its end ahead of now) keeps polling, as
+  // a preset does; one wholly in the past is read once.
+  it("polls an absolute range whose end is still ahead, and reads a past one once", async () => {
+    const intervals = async (from: number, to: number) => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: RequestInfo | URL) => {
+          const req = input instanceof Request ? input : new Request(String(input));
+          const json = (b: unknown) => new Response(JSON.stringify(b), { status: 200, headers: { "content-type": "application/json" } });
+          if (req.method === "POST") return json({ results: [{ metric: [], cursor: "b.1", covered_from: "", entities: [], from: "", to: "" }], cursor: "b.1" });
+          return json({ metrics: [metrics[1]] });
+        }),
+      );
+      mount("systems", "room-1", () => ({ kind: "absolute", from, to }));
+      await waitFor(() => expect(lastClient!.getQueryCache().findAll({ queryKey: ["metric-buckets-between"] }).length).toBe(1));
+      const q = lastClient!.getQueryCache().findAll({ queryKey: ["metric-buckets-between"] })[0];
+      const iv = (q.observers[0].options as { refetchInterval?: unknown }).refetchInterval;
+      cleanup();
+      return iv;
+    };
+    expect(await intervals(Date.now() - HOUR, Date.now() + HOUR)).toBe(30_000);
+    expect(await intervals(Date.now() - 3 * HOUR, Date.now() - 2 * HOUR)).toBeFalsy();
+  });
+
   it("hovering one chart puts the crosshair at the same instant on every chart in the grid; leaving clears all", async () => {
     stub([]);
     mount("components", "cam-1", () => ({ kind: "preset", preset: "6h" }));

@@ -53,10 +53,12 @@ export default function MetricsGrid(props: { kind: "components" | "systems"; id:
       const instance = m.is_sampled ? m.instance : undefined;
       const w = win();
       if (w.hours === undefined) {
-        // An absolute range holds still, so it is read once, never polled.
+        // An absolute range wholly in the past holds still, so it is read
+        // once; one whose end is still ahead keeps polling, as a preset does.
         return {
           queryKey: metricBucketsBetweenKey(props.kind, props.id, m.metric_type_name, w.from, w.to, w.stepSeconds, instance),
           queryFn: () => metricBucketsBetween(props.kind, props.id, m.metric_type_name, w.from, w.to, w.stepSeconds, instance),
+          refetchInterval: w.to > Date.now() ? SERIES_POLL_MS : (false as const),
         };
       }
       const hours = w.hours;

@@ -68,13 +68,16 @@ export default function TimeseriesChart(props: {
   const fmtClock = (ts: string) => new Date(ts).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
   // The crosshair: at the shared cursor's instant, the sample nearest it, an
   // exact time and value where a sample exists, never an interpolation (#795
-  // review). A bucketed series has no point further than a bucket from the
-  // cursor, so its gap reads as a gap; a raw one snaps as it always has.
+  // review). A bucketed series reads only the bucket under the cursor, so
+  // its gap reads as a gap; a raw one snaps as it always has.
   const cursor = useCursor();
   const hover = createMemo(() => {
     const t = cursor.at();
     if (t === undefined || props.spark) return null;
-    const reach = props.buckets ? (props.resolutionMs ?? 3600_000) : Infinity;
+    // A bucket's point stands at its middle, so half a bucket either side
+    // is the bucket itself: past that the cursor is over another bucket, and
+    // an empty one reads as a gap, never as its neighbor's value.
+    const reach = props.buckets ? (props.resolutionMs ?? 3600_000) / 2 : Infinity;
     return { x: xAtTime(t, frame()), point: nearestByTime(layout().points, t, reach) };
   });
   // The handler reads the svg off the event it is attached to (the retired band canvas
