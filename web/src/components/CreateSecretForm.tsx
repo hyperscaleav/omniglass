@@ -12,6 +12,7 @@ import { SECRET_TYPES_KEY, listSecretTypes } from "../lib/secret_types";
 import { COMPONENTS_KEY, listComponents } from "../lib/components";
 import { useMe, platformTierGap, platformAuthorityHint } from "../lib/auth";
 import { describeError } from "../lib/format";
+import { bindSelectValue } from "../lib/selectvalue";
 
 const OWNER_KINDS: OwnerKind[] = ["platform", "location", "component"];
 
@@ -110,7 +111,7 @@ export default function CreateSecretForm(p: { onCreated: (s: Secret) => void; ty
         <input class="input input-bordered w-full font-data" value={name()} placeholder="poll-community" onInput={(e) => setName(e.currentTarget.value)} />
       </FieldRow>
       <FieldRow label="Type">
-        <select class="select select-bordered w-full" value={typeId()} onChange={(e) => { setTypeId(e.currentTarget.value); setFields({}); }}>
+        <select ref={bindSelectValue(typeId, () => types.data)} class="select select-bordered w-full" onChange={(e) => { setTypeId(e.currentTarget.value); setFields({}); }}>
           <option value="" disabled>Choose a type…</option>
           <For each={types.data}>{(t) => <option value={t.name}>{t.label}</option>}</For>
         </select>

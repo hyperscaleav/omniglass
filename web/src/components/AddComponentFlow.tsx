@@ -297,7 +297,7 @@ export default function AddComponentFlow(): JSX.Element {
         setStep(STEPS[stepIndex() + 1].key);
       },
       busy,
-      disabled: () => busy() || !ready(),
+      disabled: () => busy() || !ready() || (s === "test" && simWait()),
       cancel: () => void cancel(),
       secondary: () => (s === "product" ? undefined : { label: "Back", icon: ChevronLeft, onClick: () => void back() }),
     });
