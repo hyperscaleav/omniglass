@@ -110,7 +110,7 @@ describe("palette results", () => {
     const texts = await rowTexts();
     expect(texts).toContain("Components: panel-1hq / auditorium · in auditorium-av");
     expect(texts).toContain("Components: panel-1hq / boardroom");
-    expect(texts).toContain("Catalog: Boreal Edge SNMP (boreal-edge-snmp)Driver · 1.0.0");
+    expect(texts).toContain("Catalog: Boreal Edge SNMPDriver · 1.0.0");
     expect(texts.at(-1)).toBe("Actions: Ask omnibot: panel");
   });
 

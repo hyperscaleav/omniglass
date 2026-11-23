@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { askHit, entityDetail, fleetHref, layout, pageHit, readRecent, remember, searchHits, sections, type Hit } from "./palette";
+import { askHit, displayLabel, entityDetail, fleetHref, layout, pageHit, readRecent, remember, searchHits, sections, type Hit } from "./palette";
 
 const memory = (): Storage => {
   const m = new Map<string, string>();
@@ -36,6 +36,14 @@ describe("search hits", () => {
 
   it("has no detail when the entity has no place", () => {
     expect(entityDetail({ id: "x", name: "x" })).toBeUndefined();
+  });
+});
+
+describe("display label", () => {
+  it("reads the label alone when it only spells the name, and both when they differ", () => {
+    expect(displayLabel("videobar-1", "Video Bar 1")).toBe("Video Bar 1");
+    expect(displayLabel("amp-2", undefined)).toBe("amp-2");
+    expect(displayLabel("hq-r1", "Boardroom")).toBe("Boardroom (hq-r1)");
   });
 });
 

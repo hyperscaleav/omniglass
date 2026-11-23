@@ -1193,6 +1193,13 @@ very rows served beside it, so a report can never disagree with its own evidence
 Every read above answers "what is this row". A **view** answers "what does this screen need", and it
 earns its own tier only when composing the entity reads in the browser would be the wrong shape.
 
+- `GET /search?q=&limit=` (`location:read`, the floor of every fleet reader; the component group also needs
+  `component:read`) is the read behind the command palette (#2444): up to `limit` (default 8, at most 20)
+  locations, systems and components whose name or label holds `q`, best match first, and catalog entries
+  (products, drivers, calc rules, event rules, metrics) each only for a caller holding that catalog's read
+  permission. Each fleet kind is read through its own scope by the Storage Gateway's scoped list walk, with the
+  match and the limit applied in the database, so nothing outside the caller's scope is found. A hit carries
+  its `place` (the location chain above it) so same-named components are told apart.
 - `GET /views/fleet` (`location:read`) is the read behind Explore: every location flat
   with its `parent` and `health`, every system with its `location` and `health`, and one **dot**
   per component in each system. A dot is `{component, name, health, primary, shared}` and nothing

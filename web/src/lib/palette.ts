@@ -41,9 +41,14 @@ export function entityDetail(e: SearchEntity): string | undefined {
   return parts.length ? parts.join(" · ") : undefined;
 }
 
+// The words a row reads: the label alone when it is only the name spelled for people
+// (Video Bar 1 for videobar-1), the label with the name after it when they differ.
+const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+export const displayLabel = (name: string, label?: string): string => (label && squash(label) !== squash(name) ? `${label} (${name})` : (label ?? name));
+
 const fleetHit = (group: GroupName, kind: "locations" | "systems" | "components", e: SearchEntity): Hit => ({
   value: `${kind}:${e.id}`,
-  label: e.label && e.label !== e.name ? `${e.label} (${e.name})` : e.name,
+  label: displayLabel(e.name, e.label),
   detail: entityDetail(e),
   group,
   command: { label: e.name, path: fleetHref(kind, e.id), group },
@@ -58,7 +63,7 @@ export function searchHits(r: SearchResult | undefined): Hit[] {
     return [
       {
         value: `catalog:${c.kind}:${c.name}`,
-        label: c.label && c.label !== c.name ? `${c.label} (${c.name})` : c.name,
+        label: displayLabel(c.name, c.label),
         detail: [k.noun, c.detail].filter(Boolean).join(" · "),
         group: "Catalog" as const,
         command: { label: c.name, path: "", group: "Catalog", entity: { kind: k.drawer, address: c.name } },

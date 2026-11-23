@@ -28,12 +28,14 @@ test.describe("palette find", () => {
     const id = (await made.json()).id as string;
 
     await page.goto("/web/");
+    // The shortcut is bound once the shell has mounted; its Search button is the sign.
+    await expect(page.getByRole("button", { name: /^Search/ }).first()).toBeVisible();
     await page.keyboard.press("Control+k");
     const field = page.getByRole("combobox", { name: "Search the console" });
     await expect(field).toBeFocused();
     await page.keyboard.type(system);
 
-    const row = page.getByRole("option", { name: new RegExp(system) });
+    const row = page.getByRole("option", { name: new RegExp(`^Systems: .*${system}`) });
     await expect(row).toBeVisible();
     await expect(row).toContainText(loc);
     // The first match is the default; Ask omnibot, last, is never it.
@@ -45,6 +47,7 @@ test.describe("palette find", () => {
 
     // Reopened with nothing typed, the system is the first recent item.
     await page.keyboard.press("Control+k");
+    await expect(page.getByRole("combobox", { name: "Search the console" })).toBeFocused();
     await expect(page.locator("[data-group-start='Recent']")).toContainText(system);
   });
 
