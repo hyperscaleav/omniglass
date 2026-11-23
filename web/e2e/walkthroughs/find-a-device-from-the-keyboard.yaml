@@ -1,0 +1,28 @@
+# Find a device from the keyboard (#2444): open the command palette, type a name that
+# many components share and read the location each sits under, narrow it to one, and open it.
+title: Find a device from the keyboard
+description: Open the command palette with Ctrl-K, type part of a name, read which location each match sits under, narrow it to one device and press Enter to open it.
+steps:
+  - goto: /
+    caption: The console's home. The command palette is a keystroke away from every page.
+  - wait: { selector: 'button[title^="Search and jump"]' }
+    caption: The top bar's Search button is the same door, with its shortcut beside it.
+  - press: Control+k
+    caption: Ctrl-K (Cmd-K on a Mac) opens the command palette with the cursor already in its field.
+  - wait: { role: combobox, name: Search the console }
+    caption: Before you type, it lists the pages you may open.
+  - type: { target: { role: combobox, name: Search the console }, text: 'videobar-' }
+    caption: Type part of a name. Many components share the name videobar-1, one in every room.
+  - wait: { selector: "[data-group-start='Components']" }
+    caption: Matches come in groups. Each component shows the locations it sits under, so one name is told apart from the next.
+    hold: 1800
+  - press: '2'
+    caption: Keep typing to narrow it. Only one component is called videobar-2.
+  - wait: { selector: '[role=option][data-first]:has-text("Video Bar 2")' }
+    caption: The first match is the default, and Ask omnibot is only ever the last row.
+  - press: Enter
+    caption: Enter opens the highlighted match, here the component's own page.
+  - wait: { selector: 'h1:has-text("Video Bar 2")' }
+    caption: The component's page, reached without touching the mouse.
+    hold: 1500
+    poster: true

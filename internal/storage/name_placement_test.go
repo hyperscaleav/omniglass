@@ -41,11 +41,11 @@ func TestSameNameTwoRooms(t *testing.T) {
 	gw := openGateway(t)
 	ctx := context.Background()
 
-	roomA, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "room-a", LocationType: "campus"}, all)
+	roomA, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "room-a", LocationType: "campus"}, all, all)
 	if err != nil {
 		t.Fatalf("room-a: %v", err)
 	}
-	roomB, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "room-b", LocationType: "campus"}, all)
+	roomB, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "room-b", LocationType: "campus"}, all, all)
 	if err != nil {
 		t.Fatalf("room-b: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestSameNameSameRoomRefused(t *testing.T) {
 	gw := openGateway(t)
 	ctx := context.Background()
 
-	room, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "room", LocationType: "campus"}, all)
+	room, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "room", LocationType: "campus"}, all, all)
 	if err != nil {
 		t.Fatalf("room: %v", err)
 	}
@@ -126,10 +126,10 @@ func TestRootLocationNamesGloballyUnique(t *testing.T) {
 	gw := openGateway(t)
 	ctx := context.Background()
 
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "campus-one", LocationType: "campus"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "campus-one", LocationType: "campus"}, all, all); err != nil {
 		t.Fatalf("first root: %v", err)
 	}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "campus-one", LocationType: "campus"}, all); !errors.Is(err, storage.ErrLocationExistsAtRoot) {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "campus-one", LocationType: "campus"}, all, all); !errors.Is(err, storage.ErrLocationExistsAtRoot) {
 		t.Fatalf("second root with the same name = %v, want ErrLocationExistsAtRoot", err)
 	}
 }
@@ -149,19 +149,19 @@ func TestSubLocationScopesToParent(t *testing.T) {
 	gw := openGateway(t)
 	ctx := context.Background()
 
-	bldgA, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "bldg-a", LocationType: "campus"}, all)
+	bldgA, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "bldg-a", LocationType: "campus"}, all, all)
 	if err != nil {
 		t.Fatalf("bldg-a: %v", err)
 	}
-	bldgB, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "bldg-b", LocationType: "campus"}, all)
+	bldgB, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "bldg-b", LocationType: "campus"}, all, all)
 	if err != nil {
 		t.Fatalf("bldg-b: %v", err)
 	}
-	roomA, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "room-1", LocationType: "room", ParentName: strptr(bldgA.Name)}, all)
+	roomA, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "room-1", LocationType: "room", ParentName: strptr(bldgA.Name)}, all, all)
 	if err != nil {
 		t.Fatalf("room-1 under bldg-a: %v", err)
 	}
-	roomB, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "room-1", LocationType: "room", ParentName: strptr(bldgB.Name)}, all)
+	roomB, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "room-1", LocationType: "room", ParentName: strptr(bldgB.Name)}, all, all)
 	if err != nil {
 		t.Fatalf("room-1 under bldg-b: %v", err)
 	}
@@ -169,7 +169,7 @@ func TestSubLocationScopesToParent(t *testing.T) {
 		t.Fatal("the two room-1s did not actually land on different rows")
 	}
 
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "room-1", LocationType: "room", ParentName: strptr(bldgA.Name)}, all); !errors.Is(err, storage.ErrLocationExistsUnderParent) {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "room-1", LocationType: "room", ParentName: strptr(bldgA.Name)}, all, all); !errors.Is(err, storage.ErrLocationExistsUnderParent) {
 		t.Fatalf("second room-1 under bldg-a = %v, want ErrLocationExistsUnderParent", err)
 	}
 }
@@ -424,14 +424,14 @@ func TestOwnerScopedReadsResolveAmbiguousNameWithinScope(t *testing.T) {
 
 	// locationScope mirrors the system case for LocationHealth, which walks
 	// the location tree instead.
-	locZoneA, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "loc-zone-a", LocationType: "campus"}, all)
+	locZoneA, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "loc-zone-a", LocationType: "campus"}, all, all)
 	if err != nil {
 		t.Fatalf("loc-zone-a: %v", err)
 	}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "loc-shared", LocationType: "room", ParentName: strptr(locZoneA.Name)}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "loc-shared", LocationType: "room", ParentName: strptr(locZoneA.Name)}, all, all); err != nil {
 		t.Fatalf("loc-shared under loc-zone-a: %v", err)
 	}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "loc-shared", LocationType: "campus"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "loc-shared", LocationType: "campus"}, all, all); err != nil {
 		t.Fatalf("loc-shared outside loc-zone-a: %v", err)
 	}
 	readLocZoneA := scope.Set{IDs: []string{locZoneA.ID}}
@@ -514,11 +514,11 @@ func TestCheckNameIsScopedToPlacement(t *testing.T) {
 	gw := openGateway(t)
 	ctx := context.Background()
 
-	roomA, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "room-a", LocationType: "campus"}, all)
+	roomA, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "room-a", LocationType: "campus"}, all, all)
 	if err != nil {
 		t.Fatalf("room-a: %v", err)
 	}
-	roomB, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "room-b", LocationType: "campus"}, all)
+	roomB, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "room-b", LocationType: "campus"}, all, all)
 	if err != nil {
 		t.Fatalf("room-b: %v", err)
 	}
@@ -528,7 +528,7 @@ func TestCheckNameIsScopedToPlacement(t *testing.T) {
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av", LocationName: strptr(roomA.Name)}, all, all); err != nil {
 		t.Fatalf("av at room-a: %v", err)
 	}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "sub-room", LocationType: "room", ParentName: strptr(roomA.Name)}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "sub-room", LocationType: "room", ParentName: strptr(roomA.Name)}, all, all); err != nil {
 		t.Fatalf("sub-room under room-a: %v", err)
 	}
 
@@ -589,11 +589,11 @@ func TestScopedCreateBindsCrossTierSystemAndLocation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wing-sys: %v", err)
 	}
-	loc, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "wing-loc", LocationType: "campus"}, all)
+	loc, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "wing-loc", LocationType: "campus"}, all, all)
 	if err != nil {
 		t.Fatalf("wing-loc: %v", err)
 	}
-	loc2, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "wing-loc-2", LocationType: "campus"}, all)
+	loc2, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "wing-loc-2", LocationType: "campus"}, all, all)
 	if err != nil {
 		t.Fatalf("wing-loc-2: %v", err)
 	}
@@ -1034,7 +1034,7 @@ func TestAPlacementBindNamesTheCandidatesItMatched(t *testing.T) {
 	ctx := context.Background()
 
 	for _, campus := range []string{"bldg-a", "bldg-b"} {
-		if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: campus, LocationType: "campus"}, all); err != nil {
+		if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: campus, LocationType: "campus"}, all, all); err != nil {
 			t.Fatalf("create %s: %v", campus, err)
 		}
 	}
@@ -1042,7 +1042,7 @@ func TestAPlacementBindNamesTheCandidatesItMatched(t *testing.T) {
 	for _, campus := range []string{"bldg-a", "bldg-b"} {
 		floor, err := gw.CreateLocation(ctx, "", storage.LocationSpec{
 			Name: "1", LocationType: "floor", ParentName: strptr(campus),
-		}, all)
+		}, all, all)
 		if err != nil {
 			t.Fatalf("create %s floor 1: %v", campus, err)
 		}
@@ -1086,7 +1086,7 @@ func TestAPlacementBindStillFoldsAPathMiss(t *testing.T) {
 	gw := openGateway(t)
 	ctx := context.Background()
 
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "campus"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "campus"}, all, all); err != nil {
 		t.Fatalf("create hq: %v", err)
 	}
 	_, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{

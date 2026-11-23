@@ -273,3 +273,53 @@ func TestTheCrossTierReachIsOnlyASubtreeLocationGrants(t *testing.T) {
 	// root is refused before the location is resolved, as it always was.
 	f.c.do(sys, http.MethodPost, "/systems", map[string]any{"name": "lab-av", "location": "annex"}, http.StatusForbidden)
 }
+
+// TestALocationCreateParentOutsideReadIsNotDisclosed is #1343: a location
+// create resolves its parent under location:read before location:create, so a
+// parent the caller cannot read answers byte for byte what a parent that
+// exists nowhere answers, and a location:create holder cannot probe place
+// names outside their read. A parent the caller can read but not create under
+// is the truthful 403, and one inside the grant is served.
+func TestALocationCreateParentOutsideReadIsNotDisclosed(t *testing.T) {
+	t.Parallel()
+	f := newLocationGrantFixture(t)
+
+	// west exists (the owner placed it) but sits outside tech-east's read.
+	unreadStatus, unreadBody := f.c.send(f.techEast, http.MethodPost, "/locations", map[string]any{
+		"name": "probe", "location_type": "building", "parent": "west",
+	})
+	missingStatus, missingBody := f.c.send(f.techEast, http.MethodPost, "/locations", map[string]any{
+		"name": "probe", "location_type": "building", "parent": "nowhere",
+	})
+	if unreadStatus != http.StatusNotFound || missingStatus != http.StatusNotFound {
+		t.Fatalf("unreadable parent = %d, nonexistent parent = %d, want 404 for both\nunreadable: %s\nnonexistent: %s",
+			unreadStatus, missingStatus, unreadBody, missingBody)
+	}
+	if string(unreadBody) != string(missingBody) {
+		t.Errorf("unreadable and nonexistent parents answered differently, which discloses the location:\nunreadable:  %s\nnonexistent: %s", unreadBody, missingBody)
+	}
+
+	// The batch create runs each request as the single create runs it.
+	batch := func(parent string) (int, []byte) {
+		return f.c.send(f.techEast, http.MethodPost, "/locations:batchCreate", map[string]any{
+			"requests": []map[string]any{{"name": "probe", "location_type": "building", "parent": parent}},
+		})
+	}
+	bUnreadStatus, bUnreadBody := batch("west")
+	bMissingStatus, bMissingBody := batch("nowhere")
+	if bUnreadStatus != http.StatusNotFound || bMissingStatus != http.StatusNotFound || string(bUnreadBody) != string(bMissingBody) {
+		t.Errorf("batch: unreadable parent = %d %s, nonexistent parent = %d %s, want the same 404",
+			bUnreadStatus, bUnreadBody, bMissingStatus, bMissingBody)
+	}
+
+	// Readable through the viewer floor but outside the create scope: the
+	// caller already sees west, so the refusal names the missing authority.
+	f.c.do(f.floored, http.MethodPost, "/locations", map[string]any{
+		"name": "probe", "location_type": "building", "parent": "west",
+	}, http.StatusForbidden)
+
+	// Inside the grant: served.
+	f.c.do(f.techEast, http.MethodPost, "/locations", map[string]any{
+		"name": "closet", "location_type": "room", "parent": "annex",
+	}, http.StatusCreated)
+}
