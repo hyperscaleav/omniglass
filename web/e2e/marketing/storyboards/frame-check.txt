@@ -1,1 +1,0 @@
-shot omnibot-ask: step 4's frame does not show "Start with its health"; it shows: Omnibot | New conversation | page | /web/systems/hq-mr86-1 | Why is this room degraded? | Thinking | get-system-health | name | hq-mr86-1 | Result
