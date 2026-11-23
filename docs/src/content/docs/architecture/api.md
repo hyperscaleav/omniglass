@@ -149,6 +149,32 @@ have no name (a task's id is its content hash); a component-less (server-hosted)
 unique, since only a component makes it so; an outpost user on `/users` is reached by its name on
 `/outposts` instead.
 
+### A catalog key is a namespace and a key
+
+Every catalog row (the 18 that ship rows: metric, property, event and command types, component, system
+and location types, secret types, severity levels, notification types, event, action and calc rules,
+vendors, products, drivers, standards and roles) is addressed as exactly two path segments,
+`/<collection>/{namespace}/{key}` ([ADR-0318](/architecture/decisions/#adr-0318-every-catalog-key-is-a-namespace-and-a-key)):
+`og` for the platform's shipped rows, `local` for the operator's. So `GET /metric-types/og/rtt` and
+`GET /metric-types/local/rtt` each answer their own row even where the operator's `rtt` shadows the
+shipped one, and a child route reads each key in its own namespace,
+`PUT /products/local/panel/metrics/og/room-temperature`. The shape is fixed at two segments so a key
+never collides with a child collection and nothing is escaped; a custom method keeps its verb,
+`POST /calc-rules/local/mean:rename`.
+
+The key segment takes a name or a uuid. A uuid answers only under its row's namespace: the same uuid
+under another namespace is a 404, like a name that namespace does not hold. The edge resolves each
+pair once, after the permission check, so a caller without the read learns nothing of which keys
+exist. Each catalog body carries `namespace` beside `name`. A create lands in `local` when it names
+none; naming `og` is a 422, since only the boot seed writes the platform's rows. The CLI takes
+`ns/key` or a bare name, which it resolves along the search path (`local`, then `og`) before the call:
+
+```sh
+omniglass metric-type get og/icmp-rtt-avg
+omniglass metric-type get pump-speed            # local/pump-speed, else og/pump-speed
+omniglass product metric delete local/panel room-temperature
+```
+
 ## Lists: filter, order, page
 
 The built lists take a fixed query-param set (`kind`, `resource`, `verb`, `system`,

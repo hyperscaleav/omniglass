@@ -70,3 +70,24 @@ refs: [318, 1431, 1432, 1433, 1434, 1307, 144, 1447]
     reconciles to `writerclass.ReservedNames()` on every start.
   - **An operator's own create or rename never takes a name `og` holds** (a trigger raises the
     name's unique violation, as before): a shadow arises only from a release.
+  - **Every catalog route addresses a key as `{namespace}/{key}`** (#1434, slice 4, with #1433 and
+    #1457 in one rollup): the 18 catalogs' item, child and custom-method routes take the namespace as
+    its own segment (`/metric-types/og/icmp-rtt-avg`, `/products/local/panel/metrics/og/rtt`,
+    `/calc-rules/local/mean:rename`), so `og/x` and `local/x` each answer their own URL and the
+    single-segment item route is gone. The API edge resolves each pair once (`catalogKeyed`, attached
+    by `gated` after the permission check, through `ResolveCatalogKey`) into the ref that reaches
+    exactly that row: its name where the search path reaches it, else its uuid, so the handlers and
+    storage never parse a joined string. A uuid in the key segment answers only under its row's
+    namespace (404 under another), keeping ADR-0062's uuid addressing. A missing parent key is a 404;
+    a missing child key (the metric a contract line names) stays the 422 it was. Every catalog read
+    body carries `namespace`, and the generated CLI takes one positional per pair, `ns/key` or a bare
+    name it resolves along the search path (local, then og) by one lookup.
+  - **A catalog create lands in `local` and refuses `og`** (#1434): the create bodies carry an optional
+    `namespace`; absent or `local` creates, `og` is a 422. Divergence: the epic left any other
+    namespace the operator's to use, but no catalog create can yet land a row outside `local`, so one
+    is refused with a 422 rather than silently written to `local`; opening the other namespaces is
+    follow-up work.
+  - **A qualified sample is written in its namespace exactly** (#1457): the consumer always names the
+    namespace and flags `BareInEffect` where that row is also the bare name's, which the rule marks,
+    the evaluator and command settlement read; a row deleted after the kept catalog was read refuses
+    the sample rather than the search path landing it elsewhere.
