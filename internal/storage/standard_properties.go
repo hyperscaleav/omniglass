@@ -140,6 +140,10 @@ func (p *PG) SetStandardProperty(ctx context.Context, actorID, standardID string
 	if err := guardTypeMutable(ctx, tx, "standard", standardID); err != nil {
 		return nil, err
 	}
+	// A reserved key is refused as such before its default is judged.
+	if err := contractKey(spec.PropertyTypeName); err != nil {
+		return nil, err
+	}
 	if err := checkContractDefault(ctx, tx, spec.PropertyTypeName, spec.DefaultValue); err != nil {
 		return nil, err
 	}
