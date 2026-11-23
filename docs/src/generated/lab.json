@@ -69,6 +69,7 @@
       "id": "declare-a-first-slot",
       "title": "Declare a first slot",
       "description": "Give a one-off system its first slot from the console, name it, say what it accepts, and see the slot it opens.",
+      "lab": [],
       "setup": [
         "omniglass system create --label 'Lectern cart' --location media-lab --name lectern-cart"
       ]
@@ -77,36 +78,42 @@
       "id": "derive-a-value-with-a-calc-rule",
       "title": "Derive a value with a calc rule",
       "description": "Author a calc rule and the metric it writes in one drawer, write the expression that takes each component's slowest TCP connect time, preview and save it, and find the derived value on a component, linked to its rule.",
+      "lab": [],
       "setup": []
     },
     {
       "id": "find-and-fix-a-location",
       "title": "Find a location and fix its label",
       "description": "Drill Explore down to a location, open the system it holds, and rename the location from Configure. The new label follows everywhere the location is read.",
+      "lab": [],
       "setup": []
     },
     {
       "id": "find-where-work-is-lost",
       "title": "Find where work is lost",
       "description": "Read the platform's pipeline hop by hop at 0, open a hop's explainer, break a simulated panel and watch its failures land on the panel while the outpost hop stays at 0, then follow a component's row to its delivery series.",
+      "lab": [],
       "setup": []
     },
     {
       "id": "fix-a-refused-probe",
       "title": "Fix a refused probe",
       "description": "A touch panel's SNMP agent refused the endpoint's community, so the outpost stopped asking. Read why, point the endpoint at the right community, and watch the refusal lift.",
+      "lab": [],
       "setup": []
     },
     {
       "id": "fix-a-rejected-session",
       "title": "Fix a rejected session",
       "description": "A touch panel refused its console login, so the outpost stopped dialing it. Read why, point the endpoint at the rotated credential, and watch the session come up.",
+      "lab": [],
       "setup": []
     },
     {
       "id": "fix-an-endpoint-in-place",
       "title": "Fix an endpoint in place",
       "description": "Attach the SNMP driver with its host typed one octet short, then correct the host on the endpoint itself and watch samples arrive, with no re-attach.",
+      "lab": [],
       "setup": [
         "omniglass component create --label 'Bay 2 Display' --location bay-2 --name bay-2-display --product boreal-edge-55"
       ]
@@ -115,54 +122,63 @@
       "id": "fix-an-expression-with-a-quick-fix",
       "title": "Fix an expression with a quick fix",
       "description": "Write a calc rule's expression with a common mistake, read the plain-words diagnostic the field gives on the spot, apply its one-click fix, and save the rule.",
+      "lab": [],
       "setup": []
     },
     {
       "id": "issue-a-command",
       "title": "Issue a command and follow it",
       "description": "Tell a video bar its volume from its Activity tab, watch the toast follow the command until the bar's reply settles it, and open the command to read its reply and timing.",
+      "lab": [],
       "setup": []
     },
     {
       "id": "keep-data-for-a-week",
       "title": "Keep data for a week",
       "description": "Shorten how long metric samples are kept, from the default 14 days to 7, on the Settings page, and see the new window take the place of the default.",
+      "lab": [],
       "setup": []
     },
     {
       "id": "keep-outpost-logs-for-a-day",
       "title": "Keep an outpost's own logs for a day",
       "description": "Give an outpost's own debug log lines a window of their own, one day, on the Settings page, while a component's debug lines keep the shared three days.",
+      "lab": [],
       "setup": []
     },
     {
       "id": "move-a-location",
       "title": "Move a location to another building",
       "description": "Open a room's Configure, pick its new parent from the location tree, and save. The tree shows the nesting, and rooms (which a room may not sit under) stay in place but cannot be picked.",
+      "lab": [],
       "setup": []
     },
     {
       "id": "omnibot-panel",
       "title": "Ask omnibot from the console",
       "description": "Open omnibot from the top bar, ask it to tag a video bar, watch its reads arrive as cards, and confirm the write it asks about.",
+      "lab": [],
       "setup": []
     },
     {
       "id": "omnibot-reads-the-page",
       "title": "Omnibot reads the page",
       "description": "Open omnibot on a system page, see the page it will be handed, and ask about it without pointing at anything.",
+      "lab": [],
       "setup": []
     },
     {
       "id": "open-status-under-admin",
       "title": "Open Outposts and Status from Admin",
       "description": "From Home, find Outposts and Status under Admin in the sidebar, open Outposts where a new outpost is set up, then open Status and read the build the server runs.",
+      "lab": [],
       "setup": []
     },
     {
       "id": "preview-a-notification",
       "title": "Preview a notification",
       "description": "Open an operator's notification type, preview it against Touch Panel 2's open alarm, and try a draft subject before saving it.",
+      "lab": [],
       "setup": [
         "omniglass component alarm create panel-2 --dedup-key walkthrough-notification --message 'No touch input' --severity high",
         "omniglass notification-type create --description 'A terse page for the on-call phone' --label 'Page on-call' --name page-oncall --subject '{{.SeverityLabel | upper}} {{.ComponentLabel}}' --text '{{.Message}} since {{.RaisedAt}}'"
@@ -172,38 +188,53 @@
       "id": "read-a-multi-endpoint-vital",
       "title": "Read a vital two endpoints collect",
       "description": "Open the Boardroom DSP, read which endpoint its TCP connect time comes from and of how many, and open the row for each endpoint's latest value.",
+      "lab": [],
       "setup": []
     },
     {
       "id": "read-platform-health",
       "title": "Read the platform's health",
       "description": "From Home, open Platform health, read the build, open a hop under where work is lost, fold the server's panels to read the outposts and the simulator's gaps, open them on the Requests panel, then follow the slowest route's figure onto its series on the server's platform component.",
+      "lab": [],
       "setup": []
     },
     {
       "id": "sample-simulation",
       "title": "Read a simulated component's status",
       "description": "The Simulation page lists every component a simulator serves beside an outpost. Open one to see where it is served and what has reached it.",
+      "lab": [],
       "setup": []
     },
     {
       "id": "send-alarms-to-a-chat-channel",
       "title": "Send alarms to a chat channel",
       "description": "Make a webhook target, test it and read the receiver's answer, then write the action rule that sends high alarms to it.",
+      "lab": [],
       "setup": []
     },
     {
       "id": "set-up-monitoring",
       "title": "Set up monitoring on a component",
       "description": "Attach the SNMP driver and add a reachability probe to a component, both collected by an edge outpost, and watch reachability and samples arrive.",
+      "lab": [],
       "setup": [
         "omniglass component create --label 'Bay 2 Display' --location bay-2 --name bay-2-confidence-display --product boreal-edge-55"
       ]
     },
     {
+      "id": "sign-in-with-sso",
+      "title": "Sign in with single sign-on",
+      "description": "Sign in through the identity provider instead of a password, land in the console as the person your identity is linked to, and see that link on your profile.",
+      "lab": [
+        "sso"
+      ],
+      "setup": []
+    },
+    {
       "id": "snooze-an-alarm",
       "title": "Snooze an alarm",
       "description": "Silence a noisy alarm's notifications for an hour from its component's page, read the snooze on its timeline, and end it early.",
+      "lab": [],
       "setup": [
         "omniglass component alarm create panel-2 --dedup-key walkthrough-snooze --message 'Touch controller resetting' --severity high"
       ]
@@ -212,12 +243,14 @@
       "id": "start-from-template",
       "title": "Start a system from a template",
       "description": "From a location, create a new system from a template instead of from scratch, read what the template creates, and land on a system that is yours, with nothing pointing back at the template.",
+      "lab": [],
       "setup": []
     },
     {
       "id": "subscribe-to-alarms",
       "title": "Subscribe to alarms",
       "description": "Write a personal alarm subscription and test it against your own recent alarms before saving it.",
+      "lab": [],
       "setup": [
         "omniglass component alarm create panel-2 --dedup-key walkthrough-subscribe --message 'Touch input lost' --severity high"
       ]
@@ -226,6 +259,7 @@
       "id": "troubleshoot-an-alarm",
       "title": "Troubleshoot an alarm",
       "description": "Hand an alarm to omnibot from its row and read where it says the fault is.",
+      "lab": [],
       "setup": [
         "omniglass component alarm create 'hq.west.level-4.meeting-405.$comp.videobar-1' --dedup-key walkthrough-troubleshoot --message 'Video feed lost' --severity high"
       ]
@@ -234,24 +268,28 @@
       "id": "trust-a-changed-host-key",
       "title": "Trust a changed host key",
       "description": "A touch panel was reimaged, so it presents a new ssh host key and the outpost refused it. Read both keys, learn why a key changes, trust the new one, and watch the session come up.",
+      "lab": [],
       "setup": []
     },
     {
       "id": "watch-a-rule-raise-an-alarm",
       "title": "Watch a rule raise an alarm",
       "description": "Unplug a simulated touch panel from its page, open the system it serves, and watch the official reachability rule open a High alarm that takes the system to degraded while you look.",
+      "lab": [],
       "setup": []
     },
     {
       "id": "watch-an-impaired-device",
       "title": "Watch an impaired device",
       "description": "Drop a simulated device's packets from its drawer, watch Platform health read its protocol's gap as impaired, then repair it and watch the attribution clear as the window slides.",
+      "lab": [],
       "setup": []
     },
     {
       "id": "write-a-rule-as-an-expression",
       "title": "Write a rule as an expression",
       "description": "Author an event rule's criteria as an expression, see a mistake pointed at by line and column, fix it, preview what the rule would have done over the last day, and save it.",
+      "lab": [],
       "setup": []
     }
   ],

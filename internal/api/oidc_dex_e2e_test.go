@@ -15,23 +15,23 @@ import (
 	"time"
 
 	"github.com/testcontainers/testcontainers-go"
-	"golang.org/x/crypto/bcrypt"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/egress"
+	"github.com/hyperscaleav/omniglass/internal/lab"
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/sso"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
 // The smoke test against a real identity provider (#2362), per the
-// capability-wrapping rule: Dex in a testcontainer, its local password
-// connector signing alice in through its real login form, and a re-check
+// capability-wrapping rule: Dex in a testcontainer, run from the lab's own
+// configuration, its local password connector signing the lab's demo person
+// in through its real login form (linked here to alice), and a re-check
 // redeeming the refresh token Dex issued. The fake provider proves the
 // refusals; this proves the flow interoperates with a provider we did not
-// write. Skipped under -short.
-
-const dexImage = "ghcr.io/dexidp/dex:v2.44.0"
+// write, and that the identity the lab's seed links is the one Dex vouches
+// for. Skipped under -short.
 
 func TestSSOSignsInThroughARealDexProvider(t *testing.T) {
 	t.Parallel()
@@ -54,7 +54,7 @@ func TestSSOSignsInThroughARealDexProvider(t *testing.T) {
 
 	// Dex learns its issuer from the port it is mapped to, so it waits for its
 	// config, which is written once the port is known.
-	ctr, err := testcontainers.Run(ctx, dexImage,
+	ctr, err := testcontainers.Run(ctx, lab.DexImage,
 		testcontainers.WithExposedPorts("5556/tcp"),
 		testcontainers.WithEntrypoint("sh", "-c", "until [ -f /tmp/dex.yaml ]; do sleep 0.1; done; exec dex serve /tmp/dex.yaml"),
 	)
@@ -67,26 +67,9 @@ func TestSSOSignsInThroughARealDexProvider(t *testing.T) {
 		t.Fatal(err)
 	}
 	issuer := fmt.Sprintf("http://127.0.0.1:%s/dex", port.Port())
-	hash, err := bcrypt.GenerateFromPassword([]byte("dex-password"), bcrypt.DefaultCost)
-	if err != nil {
-		t.Fatal(err)
-	}
-	cfg := fmt.Sprintf(`issuer: %s
-storage: {type: memory}
-web: {http: 0.0.0.0:5556}
-oauth2: {skipApprovalScreen: true}
-enablePasswordDB: true
-staticPasswords:
-  - email: alice@example.com
-    hash: %q
-    username: alice
-    userID: 6a1b2c3d-0000-4000-8000-000000000001
-staticClients:
-  - id: omniglass
-    secret: dex-client-secret
-    name: Omniglass
-    redirectURIs: [%q]
-`, issuer, string(hash), srv.URL+sso.CallbackPath)
+	// The lab's own Dex configuration (internal/lab/sso.go), on this issuer:
+	// what a walkthrough lab runs is what this signs in through.
+	cfg := lab.DexConfig(issuer, srv.URL+sso.CallbackPath)
 	if err := ctr.CopyToContainer(ctx, []byte(cfg), "/tmp/dex.yaml", 0o644); err != nil {
 		t.Fatalf("write dex config: %v", err)
 	}
@@ -96,7 +79,7 @@ staticClients:
 	// is the only way the egress contract reaches either.
 	c.do(owner, http.MethodPatch, "/settings/notification", map[string]any{"egress_allow": []string{"127.0.0.1"}}, http.StatusOK)
 	c.do(owner, http.MethodPost, "/secrets", map[string]any{"name": "dex-client", "secret_type": "oauth2-client", "owner_kind": "platform",
-		"fields": map[string]string{"client_id": "omniglass", "client_secret": "dex-client-secret"}}, http.StatusCreated)
+		"fields": map[string]string{"client_id": lab.DexClientID, "client_secret": lab.DexClientSecret}}, http.StatusCreated)
 	c.do(owner, http.MethodPatch, "/settings/sso", map[string]any{"issuer": issuer, "client_secret": "dex-client"}, http.StatusOK)
 	s := &ssoStack{c: c, ctx: ctx, base: srv.URL, owner: owner, dsn: dsn, gw: gw}
 	alice := s.person(t, "alice")
@@ -107,9 +90,11 @@ staticClients:
 	if code := ssoError(t, dexSignIn(t, srv.URL)); code != string(sso.ErrUnlinked) {
 		t.Fatalf("unlinked sign-in: sso_error = %q, want %s", code, sso.ErrUnlinked)
 	}
+	// It is the identity the lab's seed links for its demo person (on the
+	// lab's issuer), so a walkthrough lab's sign-in finds its link.
 	ident, _ := lastRefusal(t, logs)["identity"].(string)
-	if !strings.HasPrefix(ident, issuer+"|") {
-		t.Fatalf("unlinked sign-in: logged identity %q, want %s|<sub>", ident, issuer)
+	if want := lab.DexDemoIdentity(issuer); ident != want {
+		t.Fatalf("unlinked sign-in: logged identity %q, want the lab's demo identity %s", ident, want)
 	}
 	c.do(owner, http.MethodPost, "/users/"+alice+"/identity-links", map[string]string{"identifier": ident}, http.StatusCreated)
 	jar := dexJar(t)
@@ -177,7 +162,7 @@ func dexSignInWith(t *testing.T, base string, jar *cookiejar.Jar) string {
 		_ = resp.Body.Close()
 		if resp.StatusCode == http.StatusOK && !posted && bytes.Contains(body, []byte(`name="password"`)) {
 			// Dex's login form posts back to the page it is on.
-			resp, err = hc.PostForm(next, url.Values{"login": {"alice@example.com"}, "password": {"dex-password"}})
+			resp, err = hc.PostForm(next, url.Values{"login": {lab.SSODemoEmail}, "password": {lab.SSODemoPassword}})
 			if err != nil {
 				t.Fatalf("post dex login: %v", err)
 			}

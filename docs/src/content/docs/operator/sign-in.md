@@ -47,7 +47,7 @@ turning you away, an answer from the provider that did not verify, or an account
 disabled. A disabled provider or a provider that cannot be reached leaves password sign-in working.
 
 A refusal carries only a short code back to the page (`?sso_error=unlinked`, for one), and the page
-shows its own fixed message for each code; anything else in that place shows one generic message. So
+shows its own fixed message for each code; any other value there shows one generic message. So
 a link someone crafted can never put words of its own on the sign-in page. The detail stays on the
 server: each refusal is one `sso: sign-in refused` line in the server's log, with the `code`, the
 `reason`, and, where the provider vouched for one, the `identity` (the `iss|sub` an administrator

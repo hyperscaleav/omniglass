@@ -27,3 +27,7 @@ New primitives: `egress.Client.HTTPClient` (a library's calls under the egress c
 `auth.JWTVerifier` (the JWKS-backed verifier #81 reuses) and `internal/auth/oidctest`, a fake
 provider for tests. Proven end to end against the fake and against a real Dex in a testcontainer.
 The verifier and nonce are derived from the browser binding rather than stored (ADR-2362).
+
+A script's lab runs that Dex too (`lab run --sso`): its seed configures single sign-on against it
+and links a demo person, and the sign-in-with-sso walkthrough, which declares `lab: [sso]`, signs
+in through Dex's own login form.
