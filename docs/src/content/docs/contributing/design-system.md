@@ -82,7 +82,7 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
   where healthy wears a muted green beside the full trouble hues (ADR-0154).
 - **A detail view is one per system, its location as context.** Systems are the unit; locations are
   folders and metadata; components are pieces of systems (#872). A system's view
-  (`pages/SystemZoom.tsx`) is a `LocationCard` (the location's type, tags and its own panel, never its
+  (`components/SystemDetail.tsx`, mounted by `pages/SystemZoom.tsx` and by the system blade) is a `LocationCard` (the location's type, tags and its own panel, never its
   name when the view is already titled by it) above the subject card (an eyebrow, the health, the
   facts said once) with its `TabRail` inside. A location holding exactly one system lands on it
   (`lib/detail.ts` `landingFor`), and its location configures in a second `ConfigureFace` on the
@@ -95,16 +95,20 @@ a location holding none or several renders its own subject card,
   line above a detail view: the subject card's header carries its facts. A list whose items hold
   their own queries iterates stable ids, never the objects a fresh read hands back: iterating
   objects rebuilt each card on every read, and each rebuilt card refetched, a request storm.
-- **The side panel is the glance, and says each fact once.** A fleet panel (`EntityBlade`) leads
-  with health, since and why (severity first), then the context the operator came for, then the
-  form's name, classification, a location's parent, and tags. Reading in a blade, the label is the
-  title and the form drops its Label row; a room holding one system is that system
-  (`lib/detail.ts` `isRoomOf`), so its `LocationCard` names no location and offers no second panel, and a
-  component in such a room shows no location card beside the system it serves. A blade has no
-  breadcrumb, so its `LocationCard` takes `path` and says where the location sits. `EntityForm` with `host="blade"` leaves out the
-  kind's configuration panels (slots, properties, reconciliation, endpoints), which the detail
-  view's Configure tab carries, and a system's or component's placement, which the panel's
-  location card already says.
+- **A fleet blade is its detail page, reflowed.** A component, system or location opened in a
+  blade renders the body its page renders (`ComponentDetail`, `SystemDetail`, `LocationDetail`,
+  each `{ id, host: "page" | "blade" }`, ADR-2423): the same sections, tabs and actions. The page
+  is the address around it (breadcrumb, landings, `DetailGate`'s miss faces); the blade adds its
+  title and Expand. The host holds the active tab (`lib/tabstate`: the page's `?tab=`, a blade's
+  own signal, so a blade never rewrites the page beneath it; `OutlineWorkspace` takes the same
+  `host` for its filter), whether Edit answers `?edit=`, and where Delete leaves to. Editing is
+  the Configure tab's `ConfigureFace` in both hosts, Delete in its footer. A body lays its
+  sections out by container query (the body root is `@container`; use `@3xl:` and the like,
+  never `md:`), so the wide fleet blade (`BladeDef.width: "wide"`, about 720 px) reads one
+  column and the page two. A body opens related entities on the ambient stack (`useBlades`),
+  never its own. Where a blade has no breadcrumb, its `LocationCard` takes `path`. A new section
+  goes into the shared body, once; `fleetBlades.guard.test.ts` fails if a kind forks a blade
+  body of its own.
 - **The Name column has a floor, and the card scrolls before it gives it up.** A list table is
   `table-layout: fixed`, every column but Name declares a width, and Name takes what is left, which
   is what lets the identifier grow into a wide screen. It also made Name the first column to give up

@@ -35,3 +35,7 @@ summary: "Systems are the unit Omniglass monitors; places are folders and metada
   should be stored or derived, and the inheritance of a component's place from its system
   (which the UI's old "location follows the primary system" claimed and the schema does not
   carry), stay with #862.
+- **Amended (#2423):** the side panel is no longer the glance. A fleet blade renders its detail
+  page's own body, every section, tab and action included
+  ([ADR-2423](#adr-2423-a-fleet-blade-renders-its-detail-pages-body)); the rest of this decision
+  stands.
