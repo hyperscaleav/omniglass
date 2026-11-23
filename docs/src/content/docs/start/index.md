@@ -20,3 +20,5 @@ Read it in order:
    travels.
 3. [Your first ten minutes](/start/first-ten-minutes/): a working Omniglass on your machine, signed
    in, walking a simulated fleet with planted faults.
+4. [Learn in the console](/start/learn/): six guided lessons in the console's Learn entry, each one
+   driving the live console over a simulated component.

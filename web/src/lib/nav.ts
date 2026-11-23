@@ -104,7 +104,9 @@ export const navItems: NavItem[] = [
   // route-guard gate. The per-catalog pages stay declared off-rail (OFF_RAIL
   // below): that carries their top-bar identity and their route-guard gates.
   { label: "Catalog", path: "/catalog", icon: Icons.Layers, live: true, public: true, hint: "Everything the fleet is typed by: every catalog, browsable in one place." },
-  { label: "Learn", path: "/learn", icon: Icons.GraduationCap, public: true, hint: "How collection turns a device into owned samples." },
+  // Learn (#2450): guided lessons in monitoring over the simulated fleet.
+  // Ungated like Home: each lesson's live elements and links gate themselves.
+  { label: "Learn", path: "/learn", icon: Icons.GraduationCap, live: true, public: true, hint: "Guided lessons in monitoring, each driving the live console over a simulated component." },
   {
     label: "Admin", icon: Icons.Settings,
     children: [
@@ -222,7 +224,6 @@ export const navByPath: Record<string, NavMeta> = (() => {
 // so every unlive rail entry resolves to a registered stub rather than NotFound.
 export const STUBS = [
   "/dashboards",
-  "/learn",
   "/config", "/log-types",
 ];
 

@@ -146,7 +146,7 @@ gen: gen-proto
 	go run ./cmd/configgen
 	go run ./cmd/identitygen
 	go run ./cmd/labgen
-	cd web && npm ci && npm run gen:api
+	cd web && npm ci && npm run gen:api && npm run gen:lessons
 
 # Run make gen twice and require the second run to leave the tree byte-identical
 # to the first (#1492): a generator that leaks map order, a timestamp or any

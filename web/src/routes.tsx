@@ -12,6 +12,7 @@ import Inbox from "./pages/Inbox";
 import Outposts from "./pages/Outposts";
 import PlatformHealth from "./pages/PlatformHealth";
 import Simulation from "./pages/Simulation";
+import Learn, { LessonPage } from "./pages/Learn";
 import Users from "./pages/Users";
 import Roles from "./pages/Roles";
 import Groups from "./pages/Groups";
@@ -66,6 +67,8 @@ export const PAGES: Record<string, Component> = {
   Outposts,
   PlatformHealth,
   Simulation,
+  Learn,
+  LessonPage,
   Users,
   Roles,
   Groups,

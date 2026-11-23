@@ -51,10 +51,16 @@ none and is absent until a level sets it. It is the **fall-through**, not the bo
 
 3. **`platform`**: the install-wide admin binding. **Slice-0.**
 
-:::design[The group and user binding rungs, tracked in #270]
+:::design[The group binding rung, tracked in #270]
 4. **`group`**: per user-group binding. **Fast-follow.**
-5. **`user`**: per-user binding. **Fast-follow.**
 :::
+
+5. **`user`**: per-user binding, for profile-domain namespaces only (#2450). A person writes their own
+   with `PATCH /settings/me/{namespace}` (a merge patch, `null` restores a key to the platform's value),
+   and `GET /settings/me` resolves it over the platform level. A platform-domain namespace is refused
+   (403), and so is a key an admin locked at the platform (409) rather than stored and silently
+   shadowed. The first consumer is `learn.done`, the lessons a person has finished in the console's
+   [Learn](/start/learn/) page; `ui.theme` is writable the same way, with no console control for it yet.
 
 ### Most-specific wins
 
@@ -113,7 +119,8 @@ The declared defaults, the file layer and the env layer live in memory, so Postg
 the binding levels**: a single `setting_binding(scope, user_id, namespace, doc, locks, ...)` table with a
 `unique nulls not distinct (scope, user_id, namespace)` identity (a surrogate `id` primary
 key; `user_id` is nullable, and Postgres forbids NULL in a PK column). `scope` is under a
-CHECK naming the persisted levels, today `platform` alone, so a level the resolver would
+CHECK naming the persisted levels, `platform` (no `user_id`) and `user` (its person's `user_id`, whose rows
+go with the person), so a level the resolver would
 never read cannot be written and a future tier rename fails loudly. Restore falls out of the layer
 model: **restore a namespace** is a `DELETE` of its row, **restore everything** truncates the
 scope, and the env layer, the file layer and the declared defaults re-supply the values. The table is **never
@@ -128,9 +135,9 @@ The two-layer authorization model has one exception here: Settings Gateway metho
 storage-scope invariant is **not applicable** (as with the catalog-type reads, `GET /property-types` and its catalog siblings);
 only the `settings:<action>` permission gates them, a recorded carve-out
 ([ADR-0034](/architecture/decisions/#adr-0034-the-settings-gateway-is-unscoped-only-the-permission-gates-it)),
-not a missed invariant. The group and user levels will constrain binding reads and writes by the
-acting user (a user edits only their own `user` row), a per-user ownership check distinct
-from fleet ABAC. Every binding write and delete writes an `audit_log` row in the same transaction
+not a missed invariant. The user level constrains binding reads and writes by the acting user (a
+person reads and writes only their own `user` rows, the route passing the caller's id), a per-user
+ownership check distinct from fleet ABAC; the group level will do the same by membership. Every binding write and delete writes an `audit_log` row in the same transaction
 (the existing `writeAuditRes` pattern).
 
 ## The single-source struct

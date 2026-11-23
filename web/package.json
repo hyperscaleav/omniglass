@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit",
     "gen:api": "orval --config orval.config.mjs && node scripts/gen-api-paths.mjs && npm run gen:settings-schema",
     "gen:settings-schema": "node scripts/gen-settings-schema.mjs",
+    "gen:lessons": "node --experimental-strip-types scripts/gen-lessons.mjs",
     "test:e2e": "playwright test"
   },
   "dependencies": {

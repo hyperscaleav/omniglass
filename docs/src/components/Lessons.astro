@@ -1,0 +1,47 @@
+---
+// The console's lessons (#2450), rendered from their definitions
+// (docs/src/generated/lessons.json, written by make gen via
+// web/scripts/gen-lessons.mjs from web/src/lib/lessons.ts), the same source
+// the console's Learn page renders, so the page and the console cannot drift.
+// Each step says what the console shows live and where its link opens.
+import facts from '../generated/lessons.json';
+
+if (facts.lessons.length !== 6) {
+  throw new Error('Lessons: lessons.json does not list the six lessons; run make gen');
+}
+
+const LIVE: Record<string, string> = {
+  samples: "the component's samples as they land",
+  pipeline: 'the delivery path, hop by hop, with its loss',
+  simulation: "the simulated component's state: its hits and impairment",
+  reach: "the component's reach ladder, rung by rung",
+  'rule-preview': "a threshold on one of the component's metrics, previewed over the last day",
+  alarms: "the component's open alarms",
+  health: 'the systems it serves, with their health',
+  commands: "the component's commands",
+  activity: "the component's activity",
+};
+const where = (to: string) => to.replace('{component}', '<component>');
+---
+
+{
+  facts.lessons.map((l) => (
+    <section class="lesson">
+      <h3 id={l.slug}>
+        {l.number}. {l.title}
+      </h3>
+      <p>
+        {l.teaches} About {l.minutes} minutes.
+      </p>
+      <ol>
+        {l.steps.map((s) => (
+          <li>
+            <strong>{s.title}.</strong> {s.prose}{' '}
+            {s.live && <>The console shows {LIVE[s.live] ?? s.live}, live. </>}
+            {s.link.label}: <code>{where(s.link.to)}</code>.
+          </li>
+        ))}
+      </ol>
+    </section>
+  ))
+}

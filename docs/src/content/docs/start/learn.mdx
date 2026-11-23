@@ -1,0 +1,49 @@
+---
+title: Learn in the console
+description: "Six guided lessons in monitoring, built into the console: each one drives the live console over a simulated component, from a device becoming samples to reading the history."
+sidebar:
+  order: 4
+  badge:
+    text: Built
+    variant: success
+walkthroughs:
+  - id: learn-rules-and-alarms
+---
+
+import Lessons from '../../../components/Lessons.astro';
+
+The console's **Learn** entry, in the sidebar, opens six short lessons in monitoring, in the order a
+fleet lives it: how a device becomes samples, how Omniglass decides it is reachable, how a rule turns
+samples into an alarm, how an alarm moves health, what to do about it, and how to read what happened
+afterwards.
+
+Each lesson is a few steps. A step explains one idea, shows it **live** with the console's own parts
+over a simulated component (the component's samples, the reach ladder, a rule preview over the last
+day of real samples, its alarms), and ends in a **Do it in the console** link that opens the real
+page with that component already chosen. Nothing in a lesson is a picture: what you see is the same
+engine and the same data the rest of the console reads.
+
+## What you need
+
+A simulator: the lessons walk a simulated component, and a [lab](/start/first-ten-minutes/) runs a
+simulator beside its outpost. With none connected, the Learn page says so, links the lab instructions,
+and a step's link that needs the component sends you there instead.
+
+## Your progress is yours
+
+Marking a lesson done is kept in your own settings (the `learn` namespace, set at the user level of
+the [settings cascade](/architecture/settings/)), so it follows you to any browser you sign in from,
+and nobody else's list changes.
+
+Here is lesson 3, rules and alarms, followed in a lab: a temperature threshold previewed over the
+amplifier's real samples, then the amplifier unplugged and the shipped reachability rule opening an
+alarm in the lesson.
+
+::walkthrough{#learn-rules-and-alarms}
+
+## The lessons
+
+This list is generated from the same definitions the console renders, so it always matches what the
+Learn page shows.
+
+<Lessons />

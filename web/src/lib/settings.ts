@@ -114,3 +114,22 @@ export function useRestoreAllDefaults() {
     return { ok: true };
   };
 }
+
+// usePatchMine merge-patches the caller's OWN binding for a profile-domain
+// namespace (the user level, #2450), then invalidates /settings/me. Any signed-in
+// person may write their own; a key an admin locked at the platform is a 409.
+export function usePatchMine() {
+  const qc = useQueryClient();
+  return async (
+    namespace: string,
+    patch: Record<string, unknown>,
+  ): Promise<{ ok: true } | { ok: false; message: string }> => {
+    const { error, response } = await api.PATCH("/settings/me/{namespace}", {
+      params: { path: { namespace } },
+      body: patch,
+    });
+    if (error) return { ok: false, message: response.status === 409 ? "An admin has locked this setting." : "Could not save your setting." };
+    await qc.invalidateQueries({ queryKey: SETTINGS_ME_KEY });
+    return { ok: true };
+  };
+}
