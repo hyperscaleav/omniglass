@@ -6,7 +6,7 @@ refs: [2444, 2485, 2429]
 
 Ctrl-K used to search only the navigation. Typing a name now also lists the locations, systems and
 components that hold it, and the products, drivers, rules and metrics, in groups, each fleet hit
-with the place it sits in so the many same-named components are told apart. Enter opens the
+with the locations it sits under so the many same-named components are told apart. Enter opens the
 highlighted row (a fleet entity at its page, a catalog entry at its drawer address through
 `drawerHref`); Ask omnibot stays the last row and is never the default when anything matched.
 

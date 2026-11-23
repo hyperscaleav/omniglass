@@ -9,14 +9,14 @@ import type { SearchResult } from "../lib/palette";
 
 // The palette finds things, not just pages (#2444): what is typed goes to the
 // server (debounced, the last request cancelled by the next keystroke), and what
-// comes back is laid out in groups, each component with its place, the first row
+// comes back is laid out in groups, each component with its location, the first row
 // the default, "Ask omnibot" always last.
 const HITS: SearchResult = {
-  locations: [{ id: "loc-aud", name: "auditorium", place: "hq" }],
-  systems: [{ id: "sys-1", name: "auditorium-av", place: "hq / auditorium" }],
+  locations: [{ id: "loc-aud", name: "auditorium", location_path: "hq" }],
+  systems: [{ id: "sys-1", name: "auditorium-av", location_path: "hq / auditorium" }],
   components: [
-    { id: "c-1", name: "panel-1", place: "hq / auditorium", system: "auditorium-av" },
-    { id: "c-2", name: "panel-1", place: "hq / boardroom" },
+    { id: "c-1", name: "panel-1", location_path: "hq / auditorium", system: "auditorium-av" },
+    { id: "c-2", name: "panel-1", location_path: "hq / boardroom" },
   ],
   catalog: [{ kind: "driver", name: "boreal-edge-snmp", label: "Boreal Edge SNMP", detail: "1.0.0" }],
 };
@@ -100,7 +100,7 @@ afterEach(() => {
 });
 
 describe("palette results", () => {
-  it("lays what the server found out in groups, each component with its place, Ask omnibot last", async () => {
+  it("lays what the server found out in groups, each component with its location, Ask omnibot last", async () => {
     mount();
     await type("panel");
     await settle();

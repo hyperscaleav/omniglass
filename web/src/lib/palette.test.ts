@@ -8,11 +8,11 @@ const memory = (): Storage => {
 
 describe("search hits", () => {
   const hits = searchHits({
-    locations: [{ id: "l1", name: "auditorium", place: "hq" }],
+    locations: [{ id: "l1", name: "auditorium", location_path: "hq" }],
     systems: [],
     components: [
-      { id: "c1", name: "panel-1", place: "hq / auditorium", system: "main-av" },
-      { id: "c2", name: "panel-1", place: "hq / boardroom" },
+      { id: "c1", name: "panel-1", location_path: "hq / auditorium", system: "main-av" },
+      { id: "c2", name: "panel-1", location_path: "hq / boardroom" },
     ],
     catalog: [
       { kind: "driver", name: "boreal-edge-snmp", label: "Boreal Edge SNMP", detail: "1.0.0" },
@@ -20,7 +20,7 @@ describe("search hits", () => {
     ],
   });
 
-  it("opens a fleet entity at its page and tells same-named components apart by place", () => {
+  it("opens a fleet entity at its page and tells same-named components apart by location", () => {
     const panels = hits.filter((h) => h.label === "panel-1");
     expect(panels.map((h) => h.detail)).toEqual(["hq / auditorium · in main-av", "hq / boardroom"]);
     expect(panels.map((h) => h.command?.path)).toEqual(["/components/c1", "/components/c2"]);
@@ -34,7 +34,7 @@ describe("search hits", () => {
     expect(hits.filter((h) => h.group === "Catalog")).toHaveLength(1);
   });
 
-  it("has no detail when the entity has no place", () => {
+  it("has no detail when the entity has no location", () => {
     expect(entityDetail({ id: "x", name: "x" })).toBeUndefined();
   });
 });

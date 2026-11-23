@@ -1,7 +1,7 @@
 # Find a device from the keyboard (#2444): open the command palette, type a name that
-# many components share and read each one's place, narrow it to one, and open it.
+# many components share and read the location each sits under, narrow it to one, and open it.
 title: Find a device from the keyboard
-description: Open the command palette with Ctrl-K, type part of a name, read which place each match sits in, narrow it to one device and press Enter to open it.
+description: Open the command palette with Ctrl-K, type part of a name, read which location each match sits under, narrow it to one device and press Enter to open it.
 steps:
   - goto: /
     caption: The console's home. The command palette is a keystroke away from every page.
@@ -14,7 +14,7 @@ steps:
   - type: { target: { role: combobox, name: Search the console }, text: 'videobar-' }
     caption: Type part of a name. Many components share the name videobar-1, one in every room.
   - wait: { selector: "[data-group-start='Components']" }
-    caption: Matches come in groups. Each component shows the place it sits in, so one name is told apart from the next.
+    caption: Matches come in groups. Each component shows the locations it sits under, so one name is told apart from the next.
     hold: 1800
   - press: '2'
     caption: Keep typing to narrow it. Only one component is called videobar-2.

@@ -25,10 +25,10 @@ type searchWire struct {
 }
 
 type searchEntityWire struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Place  string `json:"place"`
-	System string `json:"system"`
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	LocationPath string `json:"location_path"`
+	System       string `json:"system"`
 }
 
 func names(es []searchEntityWire) []string {
@@ -89,8 +89,8 @@ func (f *searchFixture) search(tok, q string, limit int, want int) searchWire {
 	return w
 }
 
-// A name search finds each kind, and a component carries its place: two
-// panel-1 come back and the place is what tells them apart.
+// A name search finds each kind, and a component carries its location_path: two
+// panel-1 come back and the location_path is what tells them apart.
 func TestSearchFindsEachKindWithItsPlace(t *testing.T) {
 	t.Parallel()
 	f := newSearchFixture(t)
@@ -107,17 +107,17 @@ func TestSearchFindsEachKindWithItsPlace(t *testing.T) {
 	if len(got.Components) != 2 {
 		t.Fatalf("components for panel = %v, want both panel-1", names(got.Components))
 	}
-	places := map[string]bool{}
+	paths := map[string]bool{}
 	for _, c := range got.Components {
-		places[c.Place] = true
+		paths[c.LocationPath] = true
 	}
-	if !places["east / east-auditorium"] || !places["west / west-auditorium"] {
-		t.Errorf("places = %v, want each panel-1 told apart by the chain it sits under", places)
+	if !paths["east / east-auditorium"] || !paths["west / west-auditorium"] {
+		t.Errorf("paths = %v, want each panel-1 told apart by the chain it sits under", paths)
 	}
 
 	got = f.search(f.owner, "AV-EAST", 0, http.StatusOK)
-	if len(got.Systems) != 1 || got.Systems[0].Name != "av-east" || got.Systems[0].Place != "east / east-auditorium" {
-		t.Errorf("systems = %+v, want av-east in its place (case-insensitive)", got.Systems)
+	if len(got.Systems) != 1 || got.Systems[0].Name != "av-east" || got.Systems[0].LocationPath != "east / east-auditorium" {
+		t.Errorf("systems = %+v, want av-east under its location (case-insensitive)", got.Systems)
 	}
 }
 
@@ -136,7 +136,7 @@ func TestSearchStaysInTheCallersScope(t *testing.T) {
 		t.Errorf("a viewer scoped to east found systems %v, want only av-east", n)
 	}
 	got = f.search(f.viewer, "panel", 0, http.StatusOK)
-	if len(got.Components) != 1 || got.Components[0].Place != "east / east-auditorium" {
+	if len(got.Components) != 1 || got.Components[0].LocationPath != "east / east-auditorium" {
 		t.Errorf("a viewer scoped to east found components %+v, want only the east panel-1", got.Components)
 	}
 	if n := names(f.search(f.viewer, "west", 0, http.StatusOK).Locations); len(n) != 0 {
@@ -177,7 +177,7 @@ func TestSearchFindsCatalogEntries(t *testing.T) {
 		t.Errorf("catalog hits for generic = %+v, want the generic-device product", got.Catalog)
 	}
 	// The east viewer has the floor's catalog reads, and still sees the same
-	// platform-wide catalog (it is not scoped to a place).
+	// platform-wide catalog (it is not scoped to a location).
 	if v := f.search(f.viewer, "generic", 0, http.StatusOK); len(v.Catalog) == 0 {
 		t.Errorf("a viewer's catalog hits are empty; the catalog is platform-wide")
 	}

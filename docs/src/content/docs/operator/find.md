@@ -18,7 +18,7 @@ screenshots:
         value: amp
       - action: wait
         selector: "[data-group-start='Components']"
-    alt: "The command palette with amp typed: a Locations group, a Components group listing several amp-1 rows each followed by the place it sits in and its system, a Catalog group with a product, a driver and a metric, and Ask omnibot as the last row."
+    alt: "The command palette with amp typed: a Locations group, a Components group listing several amp-1 rows each followed by the location it sits under and its system, a Catalog group with a product, a driver and a metric, and Ask omnibot as the last row."
 walkthroughs:
   - id: find-a-device-from-the-keyboard
 ---
@@ -38,7 +38,7 @@ Results come in groups, each shown only when something matched:
 | **Recent** | Before you type: the last few things you opened from the palette. |
 | **Pages** | Console pages and catalogs whose name or group matches (`products`, `telemetry`). |
 | **Locations**, **Systems** | By name or label. Each shows where it sits. |
-| **Components** | By name or label. Many components share a name (every huddle has a `videobar-1`), so each row shows the place it sits in and the system it belongs to. |
+| **Components** | By name or label. Many components share a name (every huddle has a `videobar-1`), so each row shows the location it sits under and the system it belongs to. |
 | **Catalog** | Products, drivers, calc rules, event rules and metrics, each tagged with its kind. |
 | **Actions** | **Ask omnibot**, which hands what you typed to [omnibot](/developer/agents/#omnibot-in-the-console) as a draft. It is always the last row and is never the default when anything matched. |
 

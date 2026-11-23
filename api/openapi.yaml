@@ -11346,11 +11346,11 @@ components:
         label:
           description: The entity's display label, when it has one
           type: string
-        name:
-          description: The entity's name; many components share one, the place tells them apart
+        location_path:
+          description: The locations it sits under, outermost first, joined with ' / '. Empty for a component that has no location of its own and is in a system; its system field says where it is
           type: string
-        place:
-          description: "Where it sits: the location chain it is placed under, outermost first, joined with ' / '. A component placed only by its system carries that system's name instead"
+        name:
+          description: The entity's name; many components share one, the location_path tells them apart
           type: string
         system:
           description: A component's primary system, when it has one
@@ -22756,7 +22756,7 @@ paths:
       x-omniglass-permission: role:read:admin
   /search:
     get:
-      description: The read behind the command palette. Returns up to limit hits of each kind whose name or label holds q, case-insensitively, best match first (exact, then prefix, then the rest by name). Locations, systems and components are searched inside the caller's own read scope for each kind, so nothing outside it appears; a caller with no scope for a kind gets an empty group, not an error. Each fleet hit carries its place, so many components with one name are told apart. Catalog hits cover products (product:read), drivers (driver:read), calc rules and event rules (rule:read) and metrics (metric_type:read), each only for a caller who holds that permission. Gated by location:read, the floor of every fleet reader; the component group also needs component:read.
+      description: The read behind the command palette. Returns up to limit hits of each kind whose name or label holds q, case-insensitively, best match first (exact, then prefix, then the rest by name). Locations, systems and components are searched inside the caller's own read scope for each kind, so nothing outside it appears; a caller with no scope for a kind gets an empty group, not an error. Each fleet hit carries its location_path, so many components with one name are told apart. Catalog hits cover products (product:read), drivers (driver:read), calc rules and event rules (rule:read) and metrics (metric_type:read), each only for a caller who holds that permission. Gated by location:read, the floor of every fleet reader; the component group also needs component:read.
       operationId: search
       parameters:
         - description: The text to find, matched case-insensitively anywhere in a name or label

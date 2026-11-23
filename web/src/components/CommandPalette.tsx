@@ -153,7 +153,7 @@ export default function CommandPalette(props: { open: boolean; onClose: () => vo
       <DialogHeading class="sr-only">Command palette</DialogHeading>
       <Search
         aria-label="Search the console"
-        placeholder="Jump to a page, place, system, component or catalog entry…"
+        placeholder="Jump to a page, location, system, component or catalog entry…"
         sections={shown()}
         loading={searching() && query().trim().length >= MIN_QUERY}
         onQuery={setQuery}

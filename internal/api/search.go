@@ -24,11 +24,11 @@ import (
 // permission.
 
 type searchEntityBody struct {
-	ID     string `json:"id" doc:"The entity's uuid, the address its page opens at"`
-	Name   string `json:"name" doc:"The entity's name; many components share one, the place tells them apart"`
-	Label  string `json:"label,omitempty" doc:"The entity's display label, when it has one"`
-	Place  string `json:"place,omitempty" doc:"Where it sits: the location chain it is placed under, outermost first, joined with ' / '. A component placed only by its system carries that system's name instead"`
-	System string `json:"system,omitempty" doc:"A component's primary system, when it has one"`
+	ID           string `json:"id" doc:"The entity's uuid, the address its page opens at"`
+	Name         string `json:"name" doc:"The entity's name; many components share one, the location_path tells them apart"`
+	Label        string `json:"label,omitempty" doc:"The entity's display label, when it has one"`
+	LocationPath string `json:"location_path,omitempty" doc:"The locations it sits under, outermost first, joined with ' / '. Empty for a component that has no location of its own and is in a system; its system field says where it is"`
+	System       string `json:"system,omitempty" doc:"A component's primary system, when it has one"`
 }
 
 type searchCatalogBody struct {
@@ -52,10 +52,10 @@ type searchOutput struct {
 	}
 }
 
-// placeOf is the location chain in a tree entity's address: the segments
+// locationPathOf is the location chain in a tree entity's address: the segments
 // before its own accessor, outermost first. A location's address is the chain
-// itself, so its place is everything above it.
-func placeOf(segments []string, isLocation bool) string {
+// itself, so its path is everything above it.
+func locationPathOf(segments []string, isLocation bool) string {
 	var chain []string
 	for _, s := range segments {
 		if strings.HasPrefix(s, "$") {
@@ -68,7 +68,6 @@ func placeOf(segments []string, isLocation bool) string {
 	}
 	return strings.Join(chain, " / ")
 }
-
 
 // rankCatalog keeps the hits whose name or label holds text and returns at
 // most limit, best first: exact, then prefix, then the rest by name.
@@ -114,7 +113,7 @@ func registerSearchRoutes(api huma.API, a *authenticator, gw storage.Gateway, lo
 		Method:      http.MethodGet,
 		Path:        "/search",
 		Summary:     "Find locations, systems, components and catalog entries by name",
-		Description: "The read behind the command palette. Returns up to limit hits of each kind whose name or label holds q, case-insensitively, best match first (exact, then prefix, then the rest by name). Locations, systems and components are searched inside the caller's own read scope for each kind, so nothing outside it appears; a caller with no scope for a kind gets an empty group, not an error. Each fleet hit carries its place, so many components with one name are told apart. Catalog hits cover products (product:read), drivers (driver:read), calc rules and event rules (rule:read) and metrics (metric_type:read), each only for a caller who holds that permission. Gated by location:read, the floor of every fleet reader; the component group also needs component:read.",
+		Description: "The read behind the command palette. Returns up to limit hits of each kind whose name or label holds q, case-insensitively, best match first (exact, then prefix, then the rest by name). Locations, systems and components are searched inside the caller's own read scope for each kind, so nothing outside it appears; a caller with no scope for a kind gets an empty group, not an error. Each fleet hit carries its location_path, so many components with one name are told apart. Catalog hits cover products (product:read), drivers (driver:read), calc rules and event rules (rule:read) and metrics (metric_type:read), each only for a caller who holds that permission. Gated by location:read, the floor of every fleet reader; the component group also needs component:read.",
 	}, "location", "read"), "component", "read"), func(ctx context.Context, in *searchInput) (*searchOutput, error) {
 		if strings.TrimSpace(in.Q) == "" {
 			return nil, huma.Error422UnprocessableEntity("q must name something to find")
@@ -137,13 +136,13 @@ func registerSearchRoutes(api huma.API, a *authenticator, gw storage.Gateway, lo
 			return nil, huma.Error500InternalServerError("search")
 		}
 		for _, l := range found.Locations {
-			out.Body.Locations = append(out.Body.Locations, searchEntityBody{ID: l.ID, Name: l.Name, Label: l.Label, Place: placeOf(l.PathSegments, true)})
+			out.Body.Locations = append(out.Body.Locations, searchEntityBody{ID: l.ID, Name: l.Name, Label: l.Label, LocationPath: locationPathOf(l.PathSegments, true)})
 		}
 		for _, s := range found.Systems {
-			out.Body.Systems = append(out.Body.Systems, searchEntityBody{ID: s.ID, Name: s.Name, Label: s.Label, Place: placeOf(s.PathSegments, false)})
+			out.Body.Systems = append(out.Body.Systems, searchEntityBody{ID: s.ID, Name: s.Name, Label: s.Label, LocationPath: locationPathOf(s.PathSegments, false)})
 		}
 		for _, c := range found.Components {
-			b := searchEntityBody{ID: c.ID, Name: c.Name, Label: c.Label, Place: placeOf(c.PathSegments, false)}
+			b := searchEntityBody{ID: c.ID, Name: c.Name, Label: c.Label, LocationPath: locationPathOf(c.PathSegments, false)}
 			if c.PrimarySystem != nil {
 				b.System = *c.PrimarySystem
 			}

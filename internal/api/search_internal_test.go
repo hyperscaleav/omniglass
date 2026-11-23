@@ -25,7 +25,7 @@ func TestRankCatalogOrdersExactThenPrefixThenRest(t *testing.T) {
 	}
 }
 
-func TestPlaceOfIsTheLocationChainAboveTheEntity(t *testing.T) {
+func TestLocationPathOfIsTheLocationChainAboveTheEntity(t *testing.T) {
 	cases := []struct {
 		segs []string
 		loc  bool
@@ -37,8 +37,8 @@ func TestPlaceOfIsTheLocationChainAboveTheEntity(t *testing.T) {
 		{[]string{"$comp", "panel-1"}, false, ""},
 	}
 	for _, c := range cases {
-		if got := placeOf(c.segs, c.loc); got != c.want {
-			t.Errorf("placeOf(%v) = %q, want %q", c.segs, got, c.want)
+		if got := locationPathOf(c.segs, c.loc); got != c.want {
+			t.Errorf("locationPathOf(%v) = %q, want %q", c.segs, got, c.want)
 		}
 	}
 }

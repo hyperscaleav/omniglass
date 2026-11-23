@@ -3,7 +3,7 @@ import { render, fireEvent, screen, waitFor, within } from "@solidjs/testing-lib
 import Search, { type SearchSection } from "./Search";
 
 const SECTIONS: SearchSection[] = [
-  { label: "Places", options: [{ value: "p1", label: "Auditorium", detail: "HQ" }] },
+  { label: "Pages", options: [{ value: "p1", label: "Auditorium", detail: "HQ" }] },
   { label: "Components", options: [{ value: "c1", label: "panel-1", detail: "HQ / Auditorium" }, { value: "c2", label: "panel-1", detail: "HQ / Boardroom" }] },
 ];
 
@@ -21,9 +21,9 @@ describe("Search", () => {
   it("draws the groups' names on their first rows and tells same-named rows apart by detail", async () => {
     mount();
     const list = await screen.findByRole("listbox");
-    expect([...list.querySelectorAll("[data-group-start]")].map((e) => e.getAttribute("data-group-start"))).toEqual(["Places", "Components"]);
+    expect([...list.querySelectorAll("[data-group-start]")].map((e) => e.getAttribute("data-group-start"))).toEqual(["Pages", "Components"]);
     expect(within(list).getAllByRole("option").map((o) => o.textContent)).toEqual([
-      "Places: AuditoriumHQ",
+      "Pages: AuditoriumHQ",
       "Components: panel-1HQ / Auditorium",
       "Components: panel-1HQ / Boardroom",
     ]);

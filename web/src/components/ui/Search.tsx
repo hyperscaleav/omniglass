@@ -24,7 +24,7 @@ export interface SearchOption {
   // Unique across every section: it is the row's identity.
   value: string;
   label: string;
-  // Secondary text that tells two same-named rows apart (a place).
+  // Secondary text that tells two same-named rows apart (where it sits).
   detail?: string;
   icon?: JSX.Element;
 }
