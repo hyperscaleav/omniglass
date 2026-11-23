@@ -59,8 +59,9 @@ why). Under it, a table lists every simulated component with its product, addres
 last hit. The **status** says what the simulator is doing with it: **running**; **starting** (added since
 the simulator's last pull, so it begins within about ten seconds); **failed** (handed to the simulator,
 which could not start it: a port it cannot bind, or an address that is not loopback); or **offline** (the
-simulator stopped reporting). Anything you broke on it shows as a chip beside the status
-(**unplugged**, or the delay and loss you set), with a note when the simulator could not apply it, and a row **lights up** each time the collector reaches the component: a
+simulator stopped reporting). Anything you broke on it shows as a fault chip in the **Faults** column
+(**unplugged**, or the delay and loss you set, or a held value such as **powered off**), with how long it
+has held, and a note under the status when the simulator could not apply an impairment, and a row **lights up** each time the collector reaches the component: a
 poll, a connect, a ping. A row that never lights up is a component nothing is collecting from.
 When no simulator is connected the entry is hidden, since there is nothing to show.
 
@@ -75,11 +76,13 @@ simulation drawer a row on the Simulation page opens.
 
 ## Exercise a component
 
-The drawer lists the component's whole **API surface**, read from its profile: each protocol surface it
-serves (its protocol and the port the simulator binds), with its HTTP routes, its commands, and the
-SNMP OIDs it answers. Choosing one loads the **Fire** form, and firing it (with `simulation:update`,
-which operators hold) sends the operation to the simulated component and shows the answer: the HTTP status and
-body, a command's response, an OID's value.
+The drawer lists the component's whole **API surface**, read from its profile, as **Operations**: each
+protocol surface it serves (its protocol and the port the simulator binds) is a group, and each HTTP route,
+command and SNMP OID it answers is one row. A row is a disclosure: it opens in place to its target, the
+state paths a route writes, the request (edit any of it), a **Send** button (with `simulation:update`, which
+operators hold) and, beneath it, the answer: the HTTP status and body, a command's response, an OID's
+value. One row is open at a time and nothing scrolls. The last row of each surface, **send your own
+request**, takes a request no profile lists.
 
 The simulator answers from the component's live state, so firing a command that changes it (a panel's
 `SET INPUT hdmi2`) changes what the collector reads on its next poll. A fire counts as a hit, so the
@@ -130,6 +133,59 @@ The system and its components land together or not at all (with `simulation:upda
 and `outpost:read`; `component:create` and `component:update` must reach the whole fleet, since the
 components are created at the top level and each is then assigned its slot), named as any new system and
 component are named, and the simulator serves them from its next pull.
+
+## The drawer
+
+A row opens the component's drawer: its **Faults** (the named actions and the chip, below) on top, then five
+tabs, the last one chosen being remembered for the session.
+
+- **Info**: where the simulator serves it, its status, hits and product, and its **State**, a form
+  generated from its profile: each state path its API sets to a fixed list of values is a select showing
+  what it holds now. Choosing one sends the request a named fault sends, so the form, the chip and the
+  actions always agree.
+- **Impairments**: unplug, latency, jitter, loss and rate, with **Repair** to clear them all.
+- **Operations**: the API surface, below.
+- **Behaviors**: what the profile changes on the device by itself over time (a temperature that drifts),
+  read-only, or "No behaviors declared".
+- **Events**: the device's own log of what reached it is not kept yet ([#2524](https://github.com/hyperscaleav/omniglass/issues/2524));
+  the tab shows what the simulator does count, its hits and last hit. Terminal sessions on a line protocol
+  are also not built yet ([#2525](https://github.com/hyperscaleav/omniglass/issues/2525)).
+
+## Break it in one click
+
+Every simulated component has a **Break** menu on its row and a **Faults** section in its drawer, with the
+named ways to break it and **Restore** (with `simulation:update`, which operators hold; a viewer sees
+what is broken and gets no controls). The actions are generated from what the component's profile can
+do, so a display and a microphone get different menus:
+
+- **Power off**, **Power on** and **Standby**, for a profile whose API sets its power.
+- **Unplug** and **Replug**, the [impairment](#break-it-on-purpose) every simulated component has.
+- A **quick set** for each other state path the profile's API sets to a fixed list of values: **Input:
+  hdmi2**, **Mute**, **Shutter: closed**. The menu leaves out the value a path already holds.
+- **Restore**, offered while anything is wrong: it repairs the impairment and sets every held path back
+  to its profile default.
+
+Nothing is typed: an action fires the profile's own route with the body it needs, the same request an
+operation row below would send. **Unplug** is what trips the reachability rule: once the component's
+endpoint has read down for the rule's sustain, it opens its alarm on the component, and **Restore** (or
+**Replug**) clears it on the next reading. **Power off** changes only the device's state (a powered-off
+simulated display still answers its probes, and no shipped rule reads a display's power yet), so it
+shows as a fault chip but raises no alarm of its own.
+
+What is broken shows as a **fault chip** (its words, how long it has held, and an **x** that clears it) in the
+**Faults** column of the row, in the drawer, and on the component's own page beside its health, where the
+alarm it causes is. The chip is the simulator's own account, not the browser's: the simulator reports every
+state path it holds off its default with each batch (and the impairment is stored), so a reload, or a
+second operator's console, shows the same faults. The age counts from when the server first heard the
+value, so a server restart starts it again. The **x** is **Restore**.
+
+Below the faults, the drawer's **Operations** are the general path, for an operation no profile names as a
+quick set (a command on a serial or SSH surface is one: quick sets are generated from HTTP routes only).
+
+The list takes what you type: words with no `key:` narrow the rows as you type them (name, location,
+product or address), and Enter keeps them as a chip beside the keyed filters (`status:failed`,
+`fault:unplugged`). It shows fifty rows at a time (**Show more** adds fifty). The filter and the open
+component are in the address (`?chips=` and `?c=`), so a copied link reproduces the view.
 
 ## Break it on purpose
 

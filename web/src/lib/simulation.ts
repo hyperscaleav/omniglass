@@ -21,6 +21,7 @@ export type SimProfile = S.SimProfileBody;
 export type ComponentSim = S.ComponentSimOutputBody;
 export type SimSurface = S.SimSurfaceBody;
 export type SimRoute = S.SimRouteBody;
+export type SimSet = S.SimSetBody;
 export type SimCommand = S.SimCommandBody;
 export type SimOID = S.SimOIDBody;
 export type SimResult = S.SimOperationResult;
@@ -85,6 +86,11 @@ export async function listSimProfiles(): Promise<SimProfile[]> {
   if (error) throw error;
   return data?.profiles ?? [];
 }
+
+// componentSimPollMs: a component's page refreshes its simulation while it is
+// simulated; a component that is not is read once and left alone, since the
+// chip and the section mount on every component page.
+export const componentSimPollMs = (d: Pick<ComponentSim, "simulated"> | undefined): number | false => (d?.simulated ? 5_000 : false);
 
 export async function getComponentSim(id: string): Promise<ComponentSim> {
   const { data, error } = await api.GET("/components/{name}/simulation", { params: { path: { name: id } } });

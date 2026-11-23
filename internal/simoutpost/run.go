@@ -246,14 +246,35 @@ func flush(nc *nats.Conn, name string, engine *sim.Engine, hits *hitBuffer, impa
 	}
 	st := impairs.status()
 	batch := collection.SimHitBatch{Hits: drained, Impairments: &st}
-	for _, d := range engine.Devices() {
+	devices := engine.Devices()
+	for _, d := range devices {
 		batch.Serving = append(batch.Serving, d.DeviceID)
 	}
+	batch.Faults = faultsOf(devices)
 	b, err := json.Marshal(batch)
 	if err != nil {
 		return
 	}
 	_ = nc.Publish(collection.SimHitSubject(name), b)
+}
+
+// faultsOf is each device's settable state paths held off their defaults, by
+// component id; a healthy device is left out (#2462).
+func faultsOf(devices []*sim.Device) map[string][]collection.SimFault {
+	var out map[string][]collection.SimFault
+	for _, d := range devices {
+		fs := d.Faults()
+		if len(fs) == 0 {
+			continue
+		}
+		if out == nil {
+			out = map[string][]collection.SimFault{}
+		}
+		for _, f := range fs {
+			out[d.DeviceID] = append(out[d.DeviceID], collection.SimFault{Path: f.Path, Value: f.Value, Default: f.Default})
+		}
+	}
+	return out
 }
 
 // maxBufferedHits bounds the hits held between flushes: below the server's

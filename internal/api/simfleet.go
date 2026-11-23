@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -80,11 +81,19 @@ type simProfilesOutput struct {
 }
 
 type simRouteBody struct {
-	Method  string `json:"method"`
-	Path    string `json:"path"`
-	Summary string `json:"summary,omitempty"`
-	Example string `json:"example,omitempty"`
-	Private bool   `json:"private,omitempty" doc:"A route the product's own web UI calls but does not advertise."`
+	Method  string       `json:"method"`
+	Path    string       `json:"path"`
+	Summary string       `json:"summary,omitempty"`
+	Example string       `json:"example,omitempty"`
+	Private bool         `json:"private,omitempty" doc:"A route the product's own web UI calls but does not advertise."`
+	Sets    []simSetBody `json:"sets,omitempty" doc:"The state paths the route sets from a field of its body, each to a fixed list of values: what the console offers as quick sets."`
+}
+
+type simSetBody struct {
+	Path    string   `json:"path" doc:"The state path the route writes."`
+	Field   string   `json:"field" doc:"The request body field its value comes from."`
+	Values  []string `json:"values" doc:"The values the route accepts."`
+	Default string   `json:"default,omitempty" doc:"What the profile defaults the path to, when it does."`
 }
 
 type simCommandBody struct {
@@ -114,6 +123,28 @@ type simSurfaceBody struct {
 	OIDs        []simOIDBody     `json:"oids,omitempty"`
 }
 
+type simBehaviorBody struct {
+	Name     string   `json:"name"`
+	Interval string   `json:"interval" doc:"How often it runs, as a duration: 5s, 1m."`
+	Writes   []string `json:"writes,omitempty" doc:"The state paths it changes each time."`
+	Emits    bool     `json:"emits,omitempty" doc:"Whether it posts a webhook each time."`
+}
+
+// simBehaviors lists what the profile changes on its own over time.
+func simBehaviors(p *profile.DeviceProfile) []simBehaviorBody {
+	var out []simBehaviorBody
+	for _, b := range p.Behaviors {
+		bb := simBehaviorBody{Name: b.Name, Interval: b.Schedule.Interval, Emits: b.Emit != nil}
+		for _, m := range b.Mutations {
+			if !slices.Contains(bb.Writes, m.Path) {
+				bb.Writes = append(bb.Writes, m.Path)
+			}
+		}
+		out = append(out, bb)
+	}
+	return out
+}
+
 type componentSimOutput struct {
 	Body struct {
 		Simulated   bool                           `json:"simulated" doc:"The component has an endpoint on an outpost and a product a profile simulates."`
@@ -127,6 +158,7 @@ type componentSimOutput struct {
 		Variants    []string                       `json:"variants,omitempty" doc:"The products the same profile simulates; changing among them keeps the component's endpoints valid."`
 		Impairments collection.SimImpairmentStatus `json:"impairments"`
 		Surface     []simSurfaceBody               `json:"surface,omitempty" doc:"Every protocol surface the simulated component serves, from its profile."`
+		Behaviors   []simBehaviorBody              `json:"behaviors,omitempty" doc:"What the profile changes on the device by itself over time."`
 	}
 }
 
@@ -202,8 +234,13 @@ func simSurface(p *profile.DeviceProfile, portOffset int) []simSurfaceBody {
 			if !ok {
 				method, path = "GET", r.Match
 			}
-			b.Routes = append(b.Routes, simRouteBody{Method: method, Path: path, Summary: r.Doc.Summary,
-				Example: r.Example, Private: r.Visibility == "private"})
+			rb := simRouteBody{Method: method, Path: path, Summary: r.Doc.Summary,
+				Example: r.Example, Private: r.Visibility == "private"}
+			for _, set := range r.Sets() {
+				def, _ := profile.DefaultAt(p.Defaults, set.Path)
+				rb.Sets = append(rb.Sets, simSetBody{Path: set.Path, Field: set.Field, Values: set.Values, Default: def})
+			}
+			b.Routes = append(b.Routes, rb)
 		}
 		for _, c := range iface.Commands {
 			match := c.Match
@@ -376,6 +413,7 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		b.Product, b.Profile, b.Address, b.Summary = s.device.Product, s.prof.Name, s.device.Address, s.prof.Doc.Summary
 		b.Variants, b.Impairments = variantsOf(s.prof), view.Impairments
 		b.Surface = simSurface(s.prof, view.Capabilities.PortOffset)
+		b.Behaviors = simBehaviors(s.prof)
 		return out, nil
 	})
 
