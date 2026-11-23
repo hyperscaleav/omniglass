@@ -54,6 +54,17 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
   whose loaded page outgrows its first paint (the audit trail) sets the shell's `fill` and sits in
   a box of definite height, so its rows scroll under sticky headers and its footer stays put; the
   console scrolls the document, so `fill` with no sized box around it grows like any other list.
+- **An open drawer has an address.** Opening a row on a list page (every catalog page, users,
+  roles, secrets, variables, outposts, files, alarms) writes it to the URL as
+  `?open=<row address>`, the same address the row's API route takes (a name or a uuid, ADR-0062).
+  Opening is a history push, so Back closes the drawer and leaves the list; closing clears the
+  param in place; loading the address opens the same drawer. It is one hook, `useDrawerAddress`
+  (`lib/drawer_address.ts`), mounted by `FlatList` and `TreeList`, never a per-page param: a page
+  that sets `rowId` and a detail or blade config gets it for free. An address that names no
+  visible row shows the list with a not-found notice (`ListShell`'s `missing`), the same words
+  whether the row is absent or out of scope. A blade drilled over the root keeps its own stack and
+  is not in the URL, and the param composes with the page's filter, sort and `?edit=1`. Every
+  link into a drawer from another surface is `drawerHref(kind, address)`, never a hand-built string.
 - **Lists render in server order; the SQL rule is the ordering primitive.** A catalog list the
   API serves arrives ordered by `order by label nulls last, name` (a row with no label last,
   otherwise by label, then by name), and the page renders the rows as received: `FlatList` sorts
