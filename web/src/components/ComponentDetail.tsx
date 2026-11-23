@@ -11,10 +11,9 @@ import HealthBadge from "./HealthBadge";
 import Eyebrow from "./Eyebrow";
 import DetailGate from "./DetailGate";
 import LocationCard from "./LocationCard";
-import AcknowledgeButton from "./AcknowledgeButton";
-import SnoozeButton, { SnoozedBadge } from "./SnoozeButton";
+import AlarmActions from "./AlarmActions";
+import { SnoozedBadge } from "./SnoozeButton";
 import AlarmTimeline, { createTimelineToggles } from "./AlarmTimeline";
-import TroubleshootButton from "./TroubleshootButton";
 import SeverityBadge from "./SeverityBadge";
 import SimulationSection from "./SimulationSection";
 import ReachLadder from "./ReachLadder";
@@ -306,10 +305,7 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
                             </span>
                             <span data-testid="alarm-controls" class="ml-auto flex shrink-0 items-center gap-1">
                               <SnoozedBadge alarm={a} />
-                              <AcknowledgeButton component={component()?.id ?? id()} alarm={a} />
-                              <SnoozeButton component={component()?.id ?? id()} alarm={a} surface={snoozeSurface} />
-                              <TroubleshootButton alarm={a} />
-                              {timelines.button(a.id, a.message)}
+                              <AlarmActions componentId={component()?.id ?? id()} alarm={a} surface={snoozeSurface} show={{ ack: true, snooze: true, troubleshoot: true, timeline: timelines }} />
                             </span>
                           </div>
                           <Show when={timelines.isOpen(a.id)}>

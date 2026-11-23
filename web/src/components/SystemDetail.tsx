@@ -34,7 +34,7 @@ import { useSeverity } from "../lib/severity";
 import AlarmTimeline, { createTimelineToggles } from "./AlarmTimeline";
 import RuleLink from "./RuleLink";
 import SeverityBadge from "./SeverityBadge";
-import AcknowledgeButton from "./AcknowledgeButton";
+import AlarmActions from "./AlarmActions";
 import { stretchReasons, memberAlarmRows, stretchesOf, markerX, uptimePct, type MemberAlarms } from "../lib/system_history";
 import { spans as timelineSpans } from "../lib/timeline";
 import { systemEvents, systemEventsKey, systemLogs, systemLogsKey, type SystemLogs } from "../lib/system_activity";
@@ -46,7 +46,6 @@ import { memberModel, systemsAtLocation, type MemberContext } from "../lib/detai
 import TimeseriesChart from "./TimeseriesChart";
 import { systemMembers, systemMembersKey } from "../lib/members";
 import { LEAF_POLL_MS } from "../lib/component_leaf";
-import TroubleshootButton from "./TroubleshootButton";
 import { useBlades } from "../lib/blades";
 import { type DetailHost } from "../lib/tabstate";
 import { useEntityDelete } from "../lib/entity_delete";
@@ -569,9 +568,11 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                                 </span>
                               </Show>
                               <span data-testid="alarm-controls" class="ml-auto flex shrink-0 items-center gap-1">
-                                <Show when={a.componentId}>{(cid) => <AcknowledgeButton component={cid()} alarm={a} />}</Show>
-                                <TroubleshootButton alarm={{ component: a.component, raised_at: a.raisedAt, message: a.message }} />
-                                <Show when={a.componentId}>{timelines.button(a.id, a.message)}</Show>
+                                <AlarmActions
+                                  componentId={a.componentId ?? a.component}
+                                  alarm={{ id: a.id, message: a.message, component: a.component, raised_at: a.raisedAt, acknowledged: a.acknowledged }}
+                                  show={{ ack: !!a.componentId, troubleshoot: true, timeline: a.componentId ? timelines : undefined }}
+                                />
                               </span>
                             </div>
                             <Show when={a.componentId && timelines.isOpen(a.id)}>
