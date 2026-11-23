@@ -62,17 +62,17 @@ func TestCalcWindowAverages(t *testing.T) {
 func TestCalcWindowAgesOut(t *testing.T) {
 	t.Parallel()
 	r := newEvalRig(t)
-	if _, err := r.create(windowSpec("temp-6s", 6)); err != nil {
+	if _, err := r.create(windowSpec("temp-8s", 8)); err != nil {
 		t.Fatal(err)
 	}
-	// The oldest sample ages out two seconds after now, and the window empties
-	// six seconds after it: margins wide enough that a host stalled between
+	// The oldest sample ages out three seconds after now, and the window empties
+	// eight seconds after now: margins wide enough that a host stalled between
 	// arranging and asserting (#2473) does not cross either boundary.
 	now := time.Now()
-	r.metricAt("room-temperature", 10, now.Add(-4*time.Second))
+	r.metricAt("room-temperature", 10, now.Add(-5*time.Second))
 	r.metricAt("room-temperature", 20, now)
 	r.drain()
-	if got := r.calculated("avg-temp"); len(got) != 1 || got[0] != "15 temp-6s 1" {
+	if got := r.calculated("avg-temp"); len(got) != 1 || got[0] != "15 temp-8s 1" {
 		t.Fatalf("avg-temp rows %v, want 15 over both samples", got)
 	}
 	due := scalar(t, r.conn, `select (window_due_at is not null)::text from calc_rule_state`)
@@ -83,14 +83,14 @@ func TestCalcWindowAgesOut(t *testing.T) {
 	if n := r.drain(); n != 0 {
 		t.Fatalf("served %d before the window moved, want 0", n)
 	}
-	time.Sleep(time.Until(now.Add(2200 * time.Millisecond)))
+	time.Sleep(time.Until(now.Add(3200 * time.Millisecond)))
 	if n := r.drain(); n != 1 {
 		t.Fatalf("served %d after the oldest sample aged out, want 1", n)
 	}
-	if got := r.calculated("avg-temp"); len(got) != 2 || got[1] != "20 temp-6s 1" {
+	if got := r.calculated("avg-temp"); len(got) != 2 || got[1] != "20 temp-8s 1" {
 		t.Fatalf("avg-temp rows %v, want a second, 20, with no new sample", got)
 	}
-	time.Sleep(time.Until(now.Add(6200 * time.Millisecond)))
+	time.Sleep(time.Until(now.Add(8200 * time.Millisecond)))
 	r.drain()
 	if got := r.calculated("avg-temp"); len(got) != 2 {
 		t.Fatalf("avg-temp rows %v after the window emptied, want still two", got)
