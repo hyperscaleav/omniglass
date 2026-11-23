@@ -94,18 +94,34 @@ type AlarmFilter struct {
 	// operator actually works; with IncludeCleared it also returns the alarms
 	// that came and went unattended.
 	Unacknowledged bool
+	// Since and Until bound the overlap of an alarm's raised-to-cleared interval
+	// with a range (#2425, #2426): kept when raised at or before Until and still
+	// active or cleared at or after Since, so an alarm raised before the range
+	// and open in it is kept. A zero value is no bound on that side.
+	Since time.Time
+	Until time.Time
 
 	// The fleet queue's filters (#2333), read by ListFleetAlarms alone.
 	// Severities keeps the named levels; Location keeps the alarms whose
 	// component sits in the named location or any below it; Acknowledged and
 	// Snoozed keep one side of the fact (nil keeps both). PageToken resumes
 	// after the page that returned it.
+	// State picks the fleet list's set: the active alarms (the default), the
+	// cleared ones, or all of them (#2426).
+	State        string
 	Severities   []string
 	Location     string
 	Acknowledged *bool
 	Snoozed      *bool
 	PageToken    string
 }
+
+// The fleet list's states (#2426). The empty state is AlarmStateActive.
+const (
+	AlarmStateActive  = "active"
+	AlarmStateCleared = "cleared"
+	AlarmStateAll     = "all"
+)
 
 // ErrPageToken is a page_token this server did not issue, or one cut off: the
 // caller's fault (a 422), never a silently restarted list.
@@ -529,7 +545,20 @@ func (p *PG) ListFleetAlarms(ctx context.Context, read, systemRead scope.Set, fi
 		args = append(args, v)
 		return "$" + strconv.Itoa(len(args))
 	}
-	where := []string{"a.cleared_at is null", "a.component_id in (select id from comp)"}
+	where := []string{"a.component_id in (select id from comp)"}
+	switch filter.State {
+	case AlarmStateCleared:
+		where = append(where, "a.cleared_at is not null")
+	case AlarmStateAll:
+	default:
+		where = append(where, "a.cleared_at is null")
+	}
+	if !filter.Since.IsZero() {
+		where = append(where, "(a.cleared_at is null or a.cleared_at >= "+bind(filter.Since)+"::timestamptz)")
+	}
+	if !filter.Until.IsZero() {
+		where = append(where, "a.raised_at <= "+bind(filter.Until)+"::timestamptz")
+	}
 	if filter.Unacknowledged {
 		where = append(where, "a.acknowledged_at is null")
 	}
@@ -628,6 +657,74 @@ func (p *PG) attachAlarmLocations(ctx context.Context, alarms []Alarm) error {
 			loc = append(loc, s)
 		}
 		if len(loc) > 0 {
+			alarms[i].LocationPath = loc
+			alarms[i].LocationName = loc[len(loc)-1]
+		}
+	}
+	return p.attachSystemLocations(ctx, alarms)
+}
+
+// attachSystemLocations names a location for the alarms whose component has
+// none of its own (#2426): a component placed only through its system sits
+// where that system does. The alarm's own Systems are the ones the caller may
+// read, so this discloses no system the caller could not already see; the first
+// by name wins. One query and one batched walk for the page.
+func (p *PG) attachSystemLocations(ctx context.Context, alarms []Alarm) error {
+	var comps, names []string
+	for _, a := range alarms {
+		if a.LocationName == "" && len(a.Systems) > 0 {
+			comps = append(comps, a.ComponentID)
+			names = append(names, a.Systems...)
+		}
+	}
+	if len(comps) == 0 {
+		return nil
+	}
+	rows, err := p.pool.Query(ctx, `
+		select m.component_id::text, s.id::text, s.name
+		from system_member m join system s on s.id = m.system_id
+		where m.component_id = any($1::uuid[]) and s.name = any($2::text[])
+		order by s.name, s.id`, distinctIDs(comps), names)
+	if err != nil {
+		return fmt.Errorf("storage: read alarm systems: %w", err)
+	}
+	defer rows.Close()
+	type pair struct{ comp, sys string }
+	var pairs []pair
+	var sysIDs []string
+	for rows.Next() {
+		var c, id, name string
+		if err := rows.Scan(&c, &id, &name); err != nil {
+			return fmt.Errorf("storage: scan alarm system: %w", err)
+		}
+		pairs = append(pairs, pair{c, id})
+		sysIDs = append(sysIDs, id)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	paths, err := PathsOf(ctx, p.pool, systemTable, distinctIDs(sysIDs))
+	if err != nil {
+		return err
+	}
+	byComp := map[string][]string{}
+	for _, pr := range pairs {
+		if _, done := byComp[pr.comp]; done {
+			continue
+		}
+		var loc []string
+		for _, s := range paths[pr.sys] {
+			if s == accessorSys {
+				break
+			}
+			loc = append(loc, s)
+		}
+		if len(loc) > 0 {
+			byComp[pr.comp] = loc
+		}
+	}
+	for i := range alarms {
+		if loc := byComp[alarms[i].ComponentID]; alarms[i].LocationName == "" && len(loc) > 0 {
 			alarms[i].LocationPath = loc
 			alarms[i].LocationName = loc[len(loc)-1]
 		}

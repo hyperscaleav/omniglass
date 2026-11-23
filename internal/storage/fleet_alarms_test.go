@@ -3,9 +3,12 @@ package storage_test
 import (
 	"context"
 	"errors"
+	"sort"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
@@ -193,5 +196,128 @@ func TestListFleetAlarmsFiltersPagesAndNamesLocationAndSystems(t *testing.T) {
 	eq(walked, "crit", "far", "warn")
 	if _, _, err := gw.ListFleetAlarms(ctx, all, all, storage.AlarmFilter{PageToken: "garbage"}, 1); !errors.Is(err, storage.ErrPageToken) {
 		t.Fatalf("bad token err = %v, want ErrPageToken", err)
+	}
+}
+
+// The fleet list reads the cleared alarms too (#2426): state picks the active
+// set (the default), the cleared ones, or all of them, and since/until bound the
+// overlap of each alarm's raised-to-cleared interval with the range, so an alarm
+// raised before the range and still open in it is kept, the same semantics the
+// component and system alarm reads take.
+func TestListFleetAlarmsReadsClearedAlarmsOverARange(t *testing.T) {
+	t.Parallel()
+	gw, dsn := secretGateway(t)
+	ctx := context.Background()
+	all := scope.Set{All: true}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "h-disp"}, all, all, all, all); err != nil {
+		t.Fatalf("component: %v", err)
+	}
+	raise := func(key string) string {
+		t.Helper()
+		a, err := gw.RaiseAlarm(ctx, "", "h-disp", storage.AlarmSpec{Severity: "high", Message: key, DedupKey: key})
+		if err != nil {
+			t.Fatalf("raise %s: %v", key, err)
+		}
+		return a.ID
+	}
+	before, inside, across, after := raise("before"), raise("inside"), raise("across"), raise("after")
+	for _, id := range []string{before, inside} {
+		if err := gw.ClearAlarm(ctx, "", "h-disp", id); err != nil {
+			t.Fatalf("clear: %v", err)
+		}
+	}
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(ctx)
+	place := func(id, raised, cleared string) {
+		t.Helper()
+		if _, err := conn.Exec(ctx, `update alarm set raised_at = now() - $2::interval,
+			cleared_at = case when $3 = '' then null else now() - $3::interval end where id = $1`, id, raised, cleared); err != nil {
+			t.Fatalf("place: %v", err)
+		}
+	}
+	// The range is 10h..2h ago.
+	place(before, "20 hours", "15 hours")
+	place(inside, "6 hours", "5 hours")
+	place(across, "12 hours", "")
+	place(after, "1 hour", "")
+
+	list := func(f storage.AlarmFilter) string {
+		t.Helper()
+		got, _, err := gw.ListFleetAlarms(ctx, all, all, f, 100)
+		if err != nil {
+			t.Fatalf("list %+v: %v", f, err)
+		}
+		names := []string{}
+		for _, a := range got {
+			names = append(names, a.Message)
+		}
+		sort.Strings(names)
+		return strings.Join(names, ",")
+	}
+	since, until := time.Now().Add(-10*time.Hour), time.Now().Add(-2*time.Hour)
+	for _, c := range []struct {
+		name string
+		f    storage.AlarmFilter
+		want string
+	}{
+		{"default is active", storage.AlarmFilter{}, "across,after"},
+		{"cleared", storage.AlarmFilter{State: storage.AlarmStateCleared}, "before,inside"},
+		{"all", storage.AlarmFilter{State: storage.AlarmStateAll}, "across,after,before,inside"},
+		{"all over the range", storage.AlarmFilter{State: storage.AlarmStateAll, Since: since, Until: until}, "across,inside"},
+		{"cleared over the range", storage.AlarmFilter{State: storage.AlarmStateCleared, Since: since, Until: until}, "inside"},
+		{"active over the range", storage.AlarmFilter{Since: since, Until: until}, "across"},
+		{"since only", storage.AlarmFilter{State: storage.AlarmStateAll, Since: since}, "across,after,inside"},
+		{"until only", storage.AlarmFilter{State: storage.AlarmStateAll, Until: until}, "across,before,inside"},
+	} {
+		if got := list(c.f); got != c.want {
+			t.Errorf("%s = %s, want %s", c.name, got, c.want)
+		}
+	}
+	// A cleared row carries when it cleared, for the duration the console shows.
+	got, _, _ := gw.ListFleetAlarms(ctx, all, all, storage.AlarmFilter{State: storage.AlarmStateCleared}, 100)
+	for _, a := range got {
+		if a.ClearedAt == nil {
+			t.Errorf("cleared alarm %s has no cleared_at", a.Message)
+		}
+	}
+}
+
+// A component placed only through its system has no location of its own: the
+// alarm row names the location of the system it sits in instead of a blank
+// (#2426).
+func TestFleetAlarmLocationFallsBackToTheSystemsLocation(t *testing.T) {
+	t.Parallel()
+	gw, _ := secretGateway(t)
+	ctx := context.Background()
+	all := scope.Set{All: true}
+	for _, l := range []storage.LocationSpec{
+		{Name: "fb-hq", LocationType: "campus"},
+		{Name: "fb-r1", LocationType: "room", ParentName: strptr("fb-hq")},
+	} {
+		if _, err := gw.CreateLocation(ctx, "", l, all); err != nil {
+			t.Fatalf("location %s: %v", l.Name, err)
+		}
+	}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "fb-comp"}, all, all, all, all); err != nil {
+		t.Fatalf("component: %v", err)
+	}
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "fb-sys", LocationName: strptr("fb-r1")}, all, all); err != nil {
+		t.Fatalf("system: %v", err)
+	}
+	if err := gw.AddMember(ctx, "", "fb-sys", "fb-comp", all, all, all, all); err != nil {
+		t.Fatalf("member: %v", err)
+	}
+	if _, err := gw.RaiseAlarm(ctx, "", "fb-comp", storage.AlarmSpec{Severity: "high", Message: "x", DedupKey: "x"}); err != nil {
+		t.Fatalf("raise: %v", err)
+	}
+	rows, _, err := gw.ListFleetAlarms(ctx, all, all, storage.AlarmFilter{}, 100)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("list = %d rows (%v)", len(rows), err)
+	}
+	if rows[0].LocationName != "fb-r1" || strings.Join(rows[0].LocationPath, ".") != "fb-hq.fb-r1" {
+		t.Errorf("location %q path %v, want fb-r1 / fb-hq.fb-r1 through the system", rows[0].LocationName, rows[0].LocationPath)
 	}
 }

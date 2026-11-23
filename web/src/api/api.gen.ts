@@ -9427,6 +9427,12 @@ export type ViewRowsEvent = {
 };
 
 export type ListAlarmsParams = {
+  /** Which alarms: active (still raised, the default), cleared (a cleared alarm is history, with when it cleared), or all */
+  state?: ListAlarmsState;
+  /** Only the alarms still raised at or after this RFC 3339 time: active, or cleared at or after it */
+  since?: string;
+  /** Only the alarms raised at or before this RFC 3339 time; must not be earlier than since */
+  until?: string;
   /** Only the alarms nobody has looked at: the queue an operator, or an agent, works */
   unacknowledged?: boolean;
   /**
@@ -9449,6 +9455,15 @@ export type ListAlarmsParams = {
   /** The next_page_token of the previous page: resumes the same worst-first order after it, however many alarms there are */
   page_token?: string;
 };
+
+export type ListAlarmsState = typeof ListAlarmsState[keyof typeof ListAlarmsState];
+
+
+export const ListAlarmsState = {
+  active: 'active',
+  cleared: 'cleared',
+  all: 'all',
+} as const;
 
 export type ListAlarmsAcknowledged = typeof ListAlarmsAcknowledged[keyof typeof ListAlarmsAcknowledged];
 
@@ -10175,8 +10190,8 @@ export const getListAlarmsUrl = (params?: ListAlarmsParams,) => {
 }
 
 /**
- * What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Each row names its component's location and the systems it belongs to that the caller may read. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.
- * @summary List the fleet's active alarms
+ * What is wrong now across every component the caller may read, in one read: by default the active alarms (state=cleared is the history, each row carrying when it cleared, and state=all both; since and until keep the alarms whose raised-to-cleared interval overlaps that range, so one raised before it and still open in it is kept, and since after until is a 400), worst severity first and newest first within a severity, each naming its component. Each row names its component's location and the systems it belongs to that the caller may read. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.
+ * @summary List the fleet's alarms
  */
 export const listAlarms = async (params?: ListAlarmsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listAlarmsResponse> => {
 
