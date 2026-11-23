@@ -24,7 +24,7 @@
 import { appendFileSync, existsSync, readFileSync, rmSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import {
-  CAPTURE_CSS, buildManifest, cameraTail, concatList, retime, budgetProblems, conditionMet, destProblem,
+  CAPTURE_CSS, beatStill, buildManifest, cameraTail, concatList, retime, budgetProblems, conditionMet, destProblem,
   expandAddress, frameFor, frameRect, missingText, parseShots, pick, shotFiles, referencedResources,
 } from './marketinglib.mjs';
 import { describeTarget, locate } from './walkthroughlib.mjs';
@@ -76,8 +76,9 @@ async function main() {
   } else if (mode === 't0') {
     console.log(JSON.parse(readFileSync(args[0], 'utf8'))[args[1]].t0);
   } else if (mode === 'beat-times') {
-    // One line per beat of a loop's beats.json: its number and the second it ends.
-    JSON.parse(readFileSync(args[0], 'utf8')).beats.forEach((/** @type {{ to: number }} */ b, /** @type {number} */ i) => console.log(i + 1, b.to));
+    // One line per beat of a loop's beats.json: its number and the second of the
+    // clip its storyboard still is taken at (the moment its frame was checked).
+    JSON.parse(readFileSync(args[0], 'utf8')).beats.forEach((/** @type {import('./marketinglib.mjs').BeatTimes} */ b, /** @type {number} */ i) => console.log(i + 1, beatStill(b)));
   } else if (mode === 'manifest') {
     const [file, dest, dims] = args;
     const list = readList(file);
@@ -343,10 +344,11 @@ async function record(browser, base, storageState, shot, out) {
       // The camera track's input: where each focus landed, in viewport pixels and
       // seconds from the clip's first frame. The compositor turns it into moves.
       writeFileSync(join(out, `${shot.id}.camera.json`), JSON.stringify({ viewport: { width, height }, events }, null, 2));
-      // Each beat: when it opened and ended, the part of the capture its frame
-      // shows, and the text on screen inside that frame as it ended. The
-      // storyboard takes one still per beat at its end from the finished clip.
-      const beats = cam.beats.map((b) => ({ ...b, from: round3(retime(b.from, cam.lapses)), to: round3(retime(b.to, cam.lapses)) }));
+      // Each beat: when it opened, was checked and ended, the part of the capture
+      // its frame shows, and the text on screen inside that frame once its step
+      // had played. The storyboard takes one still per beat from the finished clip.
+      const at = (/** @type {number} */ t) => round3(retime(t, cam.lapses));
+      const beats = cam.beats.map((b) => ({ ...b, from: at(b.from), at: at(b.at), to: at(b.to) }));
       writeFileSync(join(out, `${shot.id}.beats.json`), JSON.stringify({ viewport: { width, height }, beats }, null, 2));
       // A beat whose frame misses its expected text does not stop the run: every
       // shot is still recorded and encoded, with its storyboard, so one pass
@@ -406,8 +408,8 @@ function writeFrames(frames, out, id) {
   writeFileSync(join(out, `${id}.frames.txt`), concatList(frames, name));
 }
 
-/** @typedef {{ step: number, from: number, to: number, frame: import('./marketinglib.mjs').Box, seen: string[], expect?: string[], missing?: string[] }} Beat */
-/** @typedef {{ step: number, from: number, frame: import('./marketinglib.mjs').Box, onScreen: import('./marketinglib.mjs').Box, expect?: string[] }} OpenBeat */
+/** @typedef {{ step: number, from: number, at: number, to: number, frame: import('./marketinglib.mjs').Box, seen: string[], expect?: string[], missing?: string[] }} Beat */
+/** @typedef {{ step: number, from: number, frame: import('./marketinglib.mjs').Box, onScreen: import('./marketinglib.mjs').Box, expect?: string[], at?: number, seen?: string[] }} OpenBeat */
 /** @typedef {{ events: import('./marketinglib.mjs').FocusEvent[], lapses: import('./marketinglib.mjs').Lapse[], now: () => number, vp: { width: number, height: number }, beats: Beat[], open: OpenBeat | null }} Camera */
 
 const round3 = (/** @type {number} */ n) => Math.round(n * 1000) / 1000;
@@ -444,18 +446,34 @@ function textInside(page, r) {
 }
 
 /**
- * Ends the open beat, if any: reads the text its frame shows now, as the camera
- * is about to leave, and checks it against what the beat expects.
+ * Reads the text the open beat's frame shows now. It is read once, as the step
+ * that opened the beat finishes (its hold played out): the moment the beat is
+ * about. Later steps inside the beat (a click that opens a blade) change the page
+ * on their way to the next beat, so a read at the beat's end would check that.
+ * @param {import('@playwright/test').Page} page
+ * @param {Camera} cam
+ */
+async function checkBeat(page, cam) {
+  const b = cam.open;
+  if (!b || b.seen) return;
+  b.at = cam.now();
+  b.seen = await textInside(page, b.onScreen);
+}
+
+/**
+ * Ends the open beat, if any, and checks the text its frame showed against what
+ * the beat expects.
  * @param {import('@playwright/test').Page} page
  * @param {Camera} cam
  */
 async function closeBeat(page, cam) {
+  await checkBeat(page, cam);
   const b = cam.open;
   if (!b) return;
   cam.open = null;
-  const seen = await textInside(page, b.onScreen);
+  const seen = b.seen ?? [];
   const missing = b.expect ? missingText(seen, b.expect) : [];
-  cam.beats.push({ step: b.step, from: b.from, to: cam.now(), frame: b.frame, seen, ...(b.expect ? { expect: b.expect } : {}), ...(missing.length ? { missing } : {}) });
+  cam.beats.push({ step: b.step, from: b.from, at: b.at ?? b.from, to: cam.now(), frame: b.frame, seen, ...(b.expect ? { expect: b.expect } : {}), ...(missing.length ? { missing } : {}) });
 }
 
 /**
@@ -546,6 +564,8 @@ async function play(page, base, step, cursor, loop, cam) {
     }
   }
   if (step.hold) await page.waitForTimeout(step.hold);
+  // The step that opened a beat has played: check what its frame shows.
+  if (loop && cam.open?.step === step.n) await checkBeat(page, cam);
 }
 
 // Dispatch last: the definitions above (CURSOR, STYLE, consts) must exist first.

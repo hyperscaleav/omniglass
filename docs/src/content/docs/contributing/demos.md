@@ -461,17 +461,18 @@ A loop has a camera. A step's `focus` moves it: `here` frames the step's own tar
 (`text`, `role`, `selector`, as a step names one) frames that, and `out` returns to the whole frame. `zoom`
 (1 to 2) sets how close; without it the camera fits the target with a margin, never past 2x. The camera
 eases over 0.6 s and centres the target, even near the capture's edge, where the frame shows the console's
-own dark base past it; so focus the thing the beat is about, not the panel around it. It eases back to the whole frame before the loop
+own dark base past it; so focus the thing the beat is about, not the panel around it. A target bigger than
+the frame at its `zoom` (a whole card) keeps its top and left edges in view instead, so its heading shows. It eases back to the whole frame before the loop
 ends, so the loop's seam lands on the full view: the recorder keeps recording for that last ease when the
 final step leaves the camera zoomed. A focus on a still, or on a loop's prep, fails the parse.
 
 A focus opens a **beat**, which runs until the next focus or the clip's end. A step's `expect` lists the
-text its beat's frame must show: as the beat ends, the recorder reads the text on screen inside the frame
+text its beat's frame must show: once that step has played (its `hold` included), the recorder reads the text on screen inside the frame
 (each text node wholly inside it, and not covered by a backdrop or dialog) and checks every string. A
 miss does not stop the run: every shot is still written, and the run fails at its end, naming the shot,
 the step, what was missing and what the frame held. Each loop also gets a **storyboard**, one still per
-beat taken from the finished clip as the beat ends, in the storyboard folder of the run's output, with each
-beat's in-frame text in `<id>.beats.json` beside the clip. A loop's beats (when each opens and ends, and
+beat taken from the finished clip at that moment, in the storyboard folder of the run's output, with each
+beat's in-frame text in `<id>.beats.json` beside the clip. A loop's beats (when each opens, is checked and ends, and
 the part of the capture it frames) ride along in `shots.json`. Write an `expect` from the words the
 page's bullet rests on, as the console renders them (an input's value is not text on screen).
 The recorder takes the loop's frames as screenshots at twice the viewport, as fast as the page allows

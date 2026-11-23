@@ -130,14 +130,13 @@ encode_shot() {
 }
 
 # The storyboard of loop $1: one still per beat, taken from the finished clip
-# just before the beat ends (what the viewer sees as the camera leaves), side by
-# side in $OUT/storyboard/$1.png. A beat's in-frame text is in $OUT/$1.beats.json.
+# when the beat's frame was checked (once the camera has landed), side by side
+# in $OUT/storyboard/$1.png. A beat's in-frame text is in $OUT/$1.beats.json.
 storyboard_shot() {
   local id=$1 dir="$OUT/storyboard" k t inputs=() n=0
   [ -f "$OUT/$id.beats.json" ] || return 0
   mkdir -p "$dir"
   while read -r k t; do
-    t=$(awk -v t="$t" 'BEGIN { t -= 0.05; if (t < 0) t = 0; printf "%.3f", t }')
     ffmpeg_in "$OUT" "$FFMPEG_IMG" -hide_banner -loglevel error -y -ss "$t" -i "/o/$id.mp4" \
       -frames:v 1 -vf scale=720:-2 "/o/storyboard/$id-$k.png" </dev/null || return 1
     inputs+=(-i "/o/storyboard/$id-$k.png")

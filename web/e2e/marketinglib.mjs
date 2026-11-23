@@ -483,7 +483,10 @@ export function referencedResources(items, start) {
  * The frame a focus asks for: the scale that fits the box with a margin (or the
  * step's zoom), capped, centred on the box. The box is what the beat is about,
  * so it sits in the middle of the frame even near the capture's edge; past that
- * edge the frame shows the backdrop. A null box is the whole frame.
+ * edge the frame shows the backdrop. A box bigger than the frame at a step's
+ * zoom (a whole card) keeps its top and left edges in view, with the margin, as
+ * a reader starts there: centring it would cut its heading. A null box is the
+ * whole frame.
  * @param {Box | null} box in CSS pixels of the viewport
  * @param {Viewport} vp
  * @param {number} [zoom]
@@ -497,11 +500,31 @@ export function frameFor(box, vp, zoom) {
     (vp.height * (1 - 2 * CAMERA.margin)) / Math.max(box.height, 1),
   );
   const scale = Math.min(CAMERA.maxZoom, Math.max(CAMERA.minZoom, zoom ?? fit));
+  // Along one axis: the box's middle, or, when the box overflows the frame's
+  // inner span there, the point that puts its start a margin inside the frame.
+  const axis = (/** @type {number} */ start, /** @type {number} */ size, /** @type {number} */ view) => {
+    const span = view / scale;
+    return size > span * (1 - 2 * CAMERA.margin) ? start - span * CAMERA.margin + span / 2 : start + size / 2;
+  };
   return {
     scale: round(scale),
-    x: round(box.x + box.width / 2),
-    y: round(box.y + box.height / 2),
+    x: round(axis(box.x, box.width, vp.width)),
+    y: round(axis(box.y, box.height, vp.height)),
   };
+}
+
+/** @typedef {{ from: number, at: number, to: number }} BeatTimes */
+
+/**
+ * The second of the clip a beat's storyboard still is taken at: when its frame
+ * was checked, but not before the camera has landed (it eases for CAMERA.ease)
+ * and not past the beat's end.
+ * @param {BeatTimes} b seconds of the finished clip
+ * @returns {number}
+ */
+export function beatStill(b) {
+  const end = Math.max(b.from, b.to - 0.05);
+  return round(Math.min(end, Math.max(b.at ?? b.to, b.from + CAMERA.ease)));
 }
 
 const round = (/** @type {number} */ n) => Math.round(n * 1000) / 1000;

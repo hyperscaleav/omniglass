@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   CAMERA,
+  beatStill,
   CAPTURE_CSS,
   LOOP_MAX_BYTES,
   LOOP_MAX_SECONDS,
@@ -366,6 +367,23 @@ describe("frameFor", () => {
     // A chip in the top-left corner sits in the middle of the frame.
     const f = frameFor({ x: 10, y: 10, width: 40, height: 20 }, vp, 1.5);
     expect(f).toEqual({ scale: 1.5, x: 30, y: 20 });
+  });
+
+  it("keeps a box taller than the frame's top in view, a margin in", () => {
+    // At 1.2 the frame is 750 tall; a 1000-tall card at y=100 keeps its top 75 in.
+    const f = frameFor({ x: 400, y: 100, width: 600, height: 1000 }, vp, 1.2);
+    expect(f).toEqual({ scale: 1.2, x: 700, y: 100 - 75 + 375 });
+  });
+});
+
+describe("beatStill", () => {
+  it("takes the still when the frame was checked, once the camera has landed", () => {
+    expect(beatStill({ from: 1, at: 3, to: 5 })).toBe(3);
+    expect(beatStill({ from: 2.497, at: 2.499, to: 4.292 })).toBe(2.497 + CAMERA.ease);
+  });
+
+  it("never past the beat's end", () => {
+    expect(beatStill({ from: 1, at: 1.1, to: 1.3 })).toBe(1.25);
   });
 });
 
