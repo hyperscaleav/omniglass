@@ -167,6 +167,9 @@ type BearerIssue struct {
 	Agent         string
 	AgentRoles    []string
 	AgentChannels []string
+	// ViaLink names the identity link the minting session came through
+	// (#2362), so the re-check that revokes the link revokes this too.
+	ViaLink string
 }
 
 func (p *PG) IssueBearerCredential(ctx context.Context, spec BearerIssue) (bool, error) {
@@ -185,11 +188,11 @@ func (p *PG) IssueBearerCredential(ctx context.Context, spec BearerIssue) (bool,
 	defer func() { _ = tx.Rollback(ctx) }()
 	var credID string
 	if err := tx.QueryRow(ctx,
-		`insert into credential (user_id, kind, secret_hash, prefix, purpose, expires_at, description, user_agent, client_ip, agent, agent_roles, agent_channels)
-			values ($1, 'bearer', $2, $3, $4, $5, nullif($6,''), nullif($7,''), nullif($8,''), nullif($9,''), $10, $11)
+		`insert into credential (user_id, kind, secret_hash, prefix, purpose, expires_at, description, user_agent, client_ip, agent, agent_roles, agent_channels, via_link)
+			values ($1, 'bearer', $2, $3, $4, $5, nullif($6,''), nullif($7,''), nullif($8,''), nullif($9,''), $10, $11, $12)
 			returning id`,
 		pid, spec.SecretHash, spec.Prefix, spec.Purpose, spec.ExpiresAt, spec.Description, spec.UserAgent, spec.ClientIP,
-		spec.Agent, emptySliceNil(spec.AgentRoles), emptySliceNil(spec.AgentChannels)).Scan(&credID); err != nil {
+		spec.Agent, emptySliceNil(spec.AgentRoles), emptySliceNil(spec.AgentChannels), nullize(spec.ViaLink)).Scan(&credID); err != nil {
 		return false, fmt.Errorf("storage: issue credential: %w", err)
 	}
 	// A token is how an agent or a script is given access, so its minting is
@@ -327,6 +330,18 @@ type User struct {
 	// admin directory can show membership without a per-row fetch. The grants those
 	// groups confer already ride Grants (tagged with GroupID); this names them.
 	Groups []UserGroupRef
+	// ViaLink is set when the request authenticated with a credential minted
+	// through an identity link (#2362): a single sign-on session, or a token
+	// minted from one.
+	ViaLink *ViaLink
+}
+
+// ViaLink is the identity link a credential came through, and whether the
+// provider issued a refresh token for it (without one nothing re-checks a
+// long-lived token, so none is minted).
+type ViaLink struct {
+	ID          string
+	Refreshable bool
 }
 
 // AgentCredential is the agent half of an agent token (#1179): which agent it
@@ -449,14 +464,19 @@ func (p *PG) ResolveUsername(ctx context.Context, username string) (string, erro
 func (p *PG) AuthenticateBearer(ctx context.Context, hash []byte) (*User, error) {
 	var pr User
 	var credID string
-	var agent *string
+	var agent, viaLink *string
 	var agentRoles, agentChannels []string
+	var linkRefreshable bool
+	// A credential through an identity link (#2362) is refused once the link
+	// has gone its grace without a refresh the provider accepted.
 	err := p.pool.QueryRow(ctx, `
-		select pr.id, pr.kind, c.id, c.agent, c.agent_roles, c.agent_channels
+		select pr.id, pr.kind, c.id, c.agent, c.agent_roles, c.agent_channels, c.via_link::text, coalesce(l.refresh_sealed is not null, false)
 		from credential c
 		join users pr on pr.id = c.user_id
+		left join credential l on l.id = c.via_link
 		where c.kind = 'bearer' and c.secret_hash = $1 and pr.active
-			and (c.expires_at is null or c.expires_at > now())`, hash).Scan(&pr.ID, &pr.Kind, &credID, &agent, &agentRoles, &agentChannels)
+			and (c.expires_at is null or c.expires_at > now())
+			and (c.via_link is null or l.recheck_grace_until > now())`, hash).Scan(&pr.ID, &pr.Kind, &credID, &agent, &agentRoles, &agentChannels, &viaLink, &linkRefreshable)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return nil, ErrCredentialNotFound
@@ -474,6 +494,9 @@ func (p *PG) AuthenticateBearer(ctx context.Context, hash []byte) (*User, error)
 	}
 	if agent != nil {
 		pr.Agent = &AgentCredential{CredentialID: credID, Name: *agent, Roles: agentRoles, Channels: agentChannels}
+	}
+	if viaLink != nil {
+		pr.ViaLink = &ViaLink{ID: *viaLink, Refreshable: linkRefreshable}
 	}
 	return &pr, nil
 }
@@ -1348,6 +1371,9 @@ func (p *PG) CreateGrant(ctx context.Context, actorID, userID string, spec Grant
 		g.ScopeID = &spec.ScopeID
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "create", "user_grant", gid, nil, g); err != nil {
+		return nil, err
+	}
+	if err := dropForeignLinksOfOwners(ctx, tx, actorID); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {

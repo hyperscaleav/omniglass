@@ -25,6 +25,7 @@ import (
 	mcpserver "github.com/hyperscaleav/omniglass/internal/mcp"
 	"github.com/hyperscaleav/omniglass/internal/platformmetric"
 	"github.com/hyperscaleav/omniglass/internal/settings"
+	"github.com/hyperscaleav/omniglass/internal/sso"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/template"
 	"github.com/hyperscaleav/omniglass/internal/vocab"
@@ -103,6 +104,8 @@ type options struct {
 	// omnibotModel is the model a server-side omnibot run (#2121) asks. Nil
 	// answers :run 503: the server has no model to run omnibot with.
 	omnibotModel provider.Provider
+	// ssoDialer dials the identity provider (#2362); built by NewHandler.
+	ssoDialer *ssoDialer
 	// self is the handler being built, so a server-side run calls its tools
 	// back through the same router a direct call takes. Set at request time
 	// only: the spec dump has none.
@@ -210,6 +213,9 @@ func NewHandler(gw storage.Gateway, opts ...Option) http.Handler {
 	if o.log == nil {
 		o.log = slog.Default()
 	}
+	// One dialer for the API's self-link and the browser endpoints, so they
+	// share the dialed provider.
+	o.ssoDialer = &ssoDialer{gw: gw, eo: o.egressOpts, cache: sso.NewCache(ssoClientTTL)}
 	r := chi.NewRouter()
 	o.self = r
 	r.Route("/api/v1", func(sub chi.Router) {
@@ -251,6 +257,10 @@ func NewHandler(gw storage.Gateway, opts ...Option) http.Handler {
 	// registration, authorization and token endpoints, at the root beside /mcp.
 	mountOAuth(r, gw, o.trustedProxies, o.egressOpts, o.metadataPolicy)
 
+	// Single sign-on (#2362, ADR-2361): the start and callback a browser
+	// passes through, at the root beside /oauth.
+	mountOIDC(r, &authenticator{gw: gw, secureCookies: o.secureCookies, sso: o.ssoDialer}, o)
+
 	return r
 }
 
@@ -258,7 +268,10 @@ func NewHandler(gw storage.Gateway, opts ...Option) http.Handler {
 // (the live server) and OpenAPIJSON (the server-less spec dump), so the routed
 // surface and the generated spec can never drift.
 func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o options) {
-	a := &authenticator{gw: gw, api: api, secureCookies: o.secureCookies, lab: o.lab, perms: map[string]struct{}{}}
+	a := &authenticator{gw: gw, api: api, secureCookies: o.secureCookies, lab: o.lab, perms: map[string]struct{}{}, sso: o.ssoDialer}
+	if a.sso == nil {
+		a.sso = &ssoDialer{gw: gw, eo: o.egressOpts, cache: sso.NewCache(ssoClientTTL)}
+	}
 
 	huma.Register(api, huma.Operation{
 		OperationID: "get-healthz",
@@ -507,6 +520,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	registerTagRoutes(api, a, gw)
 	registerFileRoutes(api, a, gw)
 	registerUserRoutes(api, a, gw)
+	registerIdentityLinkRoutes(api, a, gw)
 	registerUserGroupRoutes(api, a, gw)
 	registerImpersonationRoutes(api, a, gw)
 	registerAuditRoutes(api, a, gw)
