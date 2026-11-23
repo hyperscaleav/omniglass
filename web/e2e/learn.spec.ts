@@ -48,7 +48,8 @@ async function walkEveryLesson(page: Page) {
     }
     const hrefs = await page.getByTestId("lesson-do-it").evaluateAll((els) => els.map((e) => e.getAttribute("href") ?? ""));
     for (const href of hrefs) {
-      await gotoSettled(page, "/web" + href);
+      // The router renders each link under its /web base already.
+      await gotoSettled(page, href.startsWith("/web/") ? href : "/web" + href);
       await expect(page.locator("#root > *").first()).toBeVisible();
       await expect(page.getByText("That page does not exist in the console."), `${lesson.slug} -> ${href}`).toHaveCount(0);
     }

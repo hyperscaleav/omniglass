@@ -1,4 +1,4 @@
-import { For, Match, Show, Switch, createMemo, createSignal, type JSX } from "solid-js";
+import { For, Match, Show, Switch, createEffect, createMemo, createSignal, type JSX } from "solid-js";
 import { A } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import SimulationSection from "./SimulationSection";
@@ -165,7 +165,13 @@ function ThresholdPreview(props: { componentId: string }): JSX.Element {
   const [picked, setPicked] = createSignal("");
   const [op, setOp] = createSignal<RuleOp>("gt");
   const [value, setValue] = createSignal("0");
-  const metric = () => picked() || metrics()[0] || "";
+  // The first metric is latched as the choice once one is known, so a metric
+  // sampled for the first time later (a fresh lab) cannot reorder the list
+  // under the learner and silently change the draft, which clears a preview.
+  createEffect(() => {
+    if (!picked() && metrics().length) setPicked(metrics()[0]);
+  });
+  const metric = () => picked();
   const draft = (): RuleDraft => ({
     ...emptyDraft(),
     sampleKey: metric(),

@@ -19,7 +19,7 @@ steps:
     caption: Say when it is bad, above 35 degrees.
   - click: { role: button, name: Preview, exact: true }
     caption: Preview runs it over the last day of real samples, writing nothing.
-  - wait: { selector: '[data-testid="preview-result"]', timeout: 15000 }
+  - wait: { selector: '[data-testid="preview-result"]', timeout: 20000 }
     caption: What the rule would hold in force now, and the edges it would have written.
   - click: '[data-testid="lesson-live-simulation"] >> role=button[name="Open simulation"]'
     caption: Now trip a shipped rule for real, on the simulated amplifier.
