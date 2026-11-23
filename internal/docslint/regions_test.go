@@ -163,3 +163,18 @@ func TestVocabularyFiresInsideFence(t *testing.T) {
 		t.Fatalf("got %d findings, want 1 (banned term inside a fence must still fire): %v", len(findings), findings)
 	}
 }
+
+// The alarm list's generated `state` parameter row is allowed under reference/
+// and nowhere else (#2426): the retired-table ban still holds for prose.
+func TestGeneratedStateParamRowIsAllowedOnlyInReference(t *testing.T) {
+	row := "| `state` | string | no | Which alarms |"
+	if !generatedParamRowAllowed(filepath.Join("reference", "mcp", "index.md"), row) {
+		t.Errorf("the generated parameter row should be allowed under reference/")
+	}
+	if generatedParamRowAllowed(filepath.Join("operator", "alarms.md"), row) {
+		t.Errorf("the parameter row must not be allowed outside reference/")
+	}
+	if generatedParamRowAllowed(filepath.Join("reference", "mcp", "index.md"), "write to the `state` table") {
+		t.Errorf("prose naming `state` must still fail under reference/")
+	}
+}
