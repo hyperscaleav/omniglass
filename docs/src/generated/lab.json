@@ -182,13 +182,6 @@
       "setup": []
     },
     {
-      "id": "pick-a-product-by-typing",
-      "title": "Pick a product by typing",
-      "description": "In the Add simulated component drawer, type part of a product or its profile, read the matches with the profile under each, and choose one from the keyboard.",
-      "lab": [],
-      "setup": []
-    },
-    {
       "id": "preview-a-notification",
       "title": "Preview a notification",
       "description": "Open an operator's notification type, preview it against Touch Panel 2's open alarm, and try a draft subject before saving it.",
