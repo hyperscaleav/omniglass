@@ -71,6 +71,10 @@ func TestSimImpairment(t *testing.T) {
 	if err != nil || len(devs) != 1 || devs[0].Impairment == nil || *devs[0].Impairment != want {
 		t.Fatalf("device list = %+v (%v), want the impairment carried", devs, err)
 	}
+	// The list says when the impairment was set, for the console's chip age (#2462).
+	if since := devs[0].ImpairedSince; since == nil || time.Since(*since) > time.Minute || time.Until(*since) > time.Minute {
+		t.Fatalf("impaired since = %v, want about now", since)
+	}
 
 	if _, err := gw.SetSimImpairment(ctx, "", id, impair.Impairment{LatencyMs: 10, JitterMs: 20}); !errors.Is(err, storage.ErrSimImpairmentInvalid) {
 		t.Fatalf("jitter above latency: err %v, want ErrSimImpairmentInvalid", err)

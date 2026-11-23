@@ -26,6 +26,7 @@ import { useMe, can } from "../lib/auth";
 import { catalogLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
+import { confirmDelete } from "../lib/confirm";
 
 // Metrics: the numeric lane of the signal catalog (Catalog > Metrics), the twin
 // of the Properties page. A metric type is a canonical numeric series a sample
@@ -141,7 +142,7 @@ function MetricBladeBody(p: { name: string }): JSX.Element {
   async function removeMetric() {
     const r = row();
     if (!r) return;
-    if (!confirm(`Delete metric "${r.name}"?`)) return;
+    if (!(await confirmDelete({ kind: "metric", name: r.name }))) return;
     setErr(null);
     try {
       await deleteMetricType(r.name);

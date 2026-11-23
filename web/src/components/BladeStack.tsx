@@ -144,7 +144,9 @@ export default function BladeStack(props: {
                     role="dialog"
                     aria-modal={isTop() ? "true" : undefined}
                     aria-labelledby={titleId}
-                    class="fixed inset-y-0 flex w-full max-w-md flex-col border-l border-base-300 bg-base-100 shadow-2xl outline-none"
+                    class="fixed inset-y-0 flex w-full flex-col border-l border-base-300 bg-base-100 shadow-2xl outline-none"
+                    classList={{ "max-w-md": d().width !== "wide", "max-w-[45rem]": d().width === "wide" }}
+                    data-blade-width={d().width ?? "narrow"}
                     style={{ right: `${(top() - i()) * 40}px`, "z-index": 61 + i() }}
                     onKeyDown={(e) => isTop() && trapTab(e, e.currentTarget)}
                   >
@@ -164,7 +166,15 @@ export default function BladeStack(props: {
                         <Button square icon={X} title="Close" label="Close" onClick={() => props.controller.close()} />
                       </div>
                     </header>
-                    <div class="flex-1 overflow-auto p-5" classList={{ "pointer-events-none opacity-55": !isTop() }}>
+                    {/* A covered blade's body is out of reach (inert, and out of
+                        the accessibility tree) until it is returned to, so two
+                        stacked detail bodies never offer two of every tab. */}
+                    <div
+                      class="flex-1 overflow-auto p-5"
+                      classList={{ "pointer-events-none opacity-55": !isTop() }}
+                      inert={isTop() ? undefined : true}
+                      aria-hidden={isTop() ? undefined : "true"}
+                    >
                       <Dynamic component={d().Body} id={ref.id} />
                     </div>
                     {/* The action bar: the entity's actions, not the blade's chrome.

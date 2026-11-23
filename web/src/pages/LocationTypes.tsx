@@ -29,6 +29,8 @@ import { catalogLock, catalogOrigin } from "../lib/catalog";
 import { createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
+import { confirmDelete } from "../lib/confirm";
+import { confirmAction } from "../lib/confirm";
 
 // Location types (Catalog > Locations): the location classifier catalog (campus, building, floor, room,
 // and your own) on the FlatList surface. The shipped rows are OFFICIAL and the
@@ -197,7 +199,7 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
   async function removeType() {
     const r = row();
     if (!r) return;
-    if (!confirm(`Delete location type "${r.name}"?`)) return;
+    if (!(await confirmDelete({ kind: "location type", name: r.name }))) return;
     setErr(null);
     try {
       await deleteLocationType(r.name);
@@ -213,7 +215,7 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
   async function restoreType() {
     const r = row();
     if (!r) return;
-    if (!confirm(`Discard your changes to "${r.name}" and go back to the shipped values?`)) return;
+    if (!(await confirmAction({ title: `Discard your changes to "${r.name}"?`, body: "It goes back to the shipped values.", confirmLabel: "Discard changes", tone: "danger" }))) return;
     setErr(null);
     try {
       await restoreLocationType(r.name);

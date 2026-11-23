@@ -13,9 +13,7 @@ import { entryCount, entryHref, visibleGroups, type CatalogEntry, type CatalogGr
 // no card, through the same visibleGroups over the same can() the rail uses.
 // Each card teaches its group (the sentence lives on the table) and counts its
 // catalogs live through the list pages' own query keys (learning-tool
-// doctrine: the numbers are this fleet's real rows, not decoration); a soon
-// entry reads soon without a count, linking when its stub page is routed
-// (Notifications) and inert when none exists. A filtered slot (the Templates
+// doctrine: the numbers are this fleet's real rows, not decoration). A filtered slot (the Templates
 // slots) links with its query and counts its own kinds of the shared list. One
 // query per catalog, so a failing fetch marks its own row and nothing else
 // (the #598 lesson).
@@ -58,23 +56,15 @@ function GroupCard(props: { group: CatalogGroup }) {
   );
 }
 
-// One catalog row: the label, then the live count (or the soon badge). An
-// entry with a route is a link, a pageless soon slot is inert. The inner
-// content is built per branch (a JSX element is a real DOM node; one node
+// One catalog row: the label, then the live count. An entry with a route is a
+// link. The inner content is built per branch (a JSX element is a real DOM node; one node
 // cannot stand in two places).
 function EntryRow(props: { entry: CatalogEntry; catalogName: string }) {
   const rowClass = "-mx-2 flex items-center justify-between gap-2 rounded-field px-2 py-1.5";
   const inner = (): JSX.Element => (
     <>
-      <span class="truncate text-sm" classList={{ "text-base-content/50": props.entry.soon }}>
-        {props.entry.label}
-      </span>
-      <Show
-        when={!props.entry.soon}
-        fallback={<span class="badge badge-ghost badge-sm text-base-content/40">soon</span>}
-      >
-        <Count entry={props.entry} name={props.catalogName} />
-      </Show>
+      <span class="truncate text-sm">{props.entry.label}</span>
+      <Count entry={props.entry} name={props.catalogName} />
     </>
   );
   return (

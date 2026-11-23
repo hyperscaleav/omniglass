@@ -22,6 +22,7 @@ import {
   addSystemBody,
   planShortfall,
   simStatus,
+  componentSimPollMs,
   type SimComponent,
   type SimSurface,
 } from "./simulation";
@@ -214,5 +215,13 @@ describe("planShortfall", () => {
     expect(s.slots.map((r) => r.slot)).toEqual(["camera"]);
     expect(s.missing).toBe(2);
     expect(planShortfall(undefined)).toEqual({ slots: [], missing: 0 });
+  });
+});
+
+describe("componentSimPollMs", () => {
+  it("polls a simulated component, and reads a component that is not simulated once, then stops", () => {
+    expect(componentSimPollMs(undefined)).toBe(false);
+    expect(componentSimPollMs({ simulated: false } as never)).toBe(false);
+    expect(componentSimPollMs({ simulated: true } as never)).toBe(5_000);
   });
 });

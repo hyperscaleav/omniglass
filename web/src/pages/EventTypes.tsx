@@ -22,6 +22,7 @@ import { useMe, can } from "../lib/auth";
 import { catalogLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
+import { confirmDelete } from "../lib/confirm";
 
 // Event Types: the occurrence-key catalog (Catalog > Events), the twin of the
 // Properties catalog. An event type names a discrete happening (call-started,
@@ -116,7 +117,7 @@ function EventTypeBladeBody(p: { name: string }): JSX.Element {
   async function removeEventType() {
     const r = row();
     if (!r) return;
-    if (!confirm(`Delete event type "${r.name}"?`)) return;
+    if (!(await confirmDelete({ kind: "event type", name: r.name }))) return;
     setErr(null);
     try {
       await deleteEventType(r.name);

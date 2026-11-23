@@ -79,9 +79,10 @@ model behind it is pure, in `lib/detail.ts` (where a location lands, the path th
 location once, the slots a component fills) and `lib/outline.ts` (`rootAt`). Since ADR-0129
 these faces ARE the identity routes' default, and since #800 the ONLY faces: one way to
 look, one altitude rule (Explore drills the location tree, systems open full screen,
-components open in blades), editing through the one `EntityForm` (ADR-0137). The side
-panel is the glance (health, why, context, identity and tags) and the configuration
-panels stay on Configure (ADR-0139). The classic detail face is retired; `?view=detail` is
+components open in blades), editing through the one `EntityForm` (ADR-0137). A fleet
+blade renders its detail page's own body (`ComponentDetail`, `SystemDetail`, `LocationDetail`,
+ADR-2423, reversing ADR-0139's glance): the host holds only the active tab, the edit intent and
+where a Delete leaves to. The classic detail face is retired; `?view=detail` is
 ignored and `?edit=1` lands Configure already editing.
 
 While a blade is open the shell (sidebar, top bar, banners and the routed page, the
@@ -217,13 +218,13 @@ Coded pages with rich interaction, all reading through views:
 Two layers, deliberately decoupled:
 
 1. **Routes are flat and identity-based.** Every entity page is a top-level path (`/systems`,
-   `/components`, `/templates`, `/config`); a URL addresses the *entity*, never its position in the
+   `/components`, `/templates`, `/variables`); a URL addresses the *entity*, never its position in the
    menu, so deep links stay stable however the menu is reorganized. No taxonomy-nested routes, no
    redirects to maintain.
 2. **The sidebar groups those flat routes into clusters for browsing**: Home, Explore (the one
    door into the fleet, #826: its outline lists every location, system and component, #861),
-   Dashboards, Alarms, Outposts, Values (variables, secrets, config, files),
-   Catalog (a single entry opening the catalog shell, next), Learn, Admin (users, roles,
+   Alarms, Outposts, Values (variables, secrets, files),
+   Catalog (a single entry opening the catalog shell, next), Admin (users, roles,
    groups, audit, and the Settings leaf). A cluster is pure presentation, not a destination:
    rearrangeable and user-customizable without touching a route.
 
@@ -290,8 +291,8 @@ them (#1346). Targets is the one Actions entry off the read floor: `notification
 sensitive resource, so only an admin sees it.
 
 **Values is its own top-level group**: values set on fleet entities and resolved
-down the cascade, a distinct kind of thing from the entities themselves. **Config is the CI store** (desired
-configuration, optionally observed back to detect drift and reconcile), distinct from platform
+down the cascade, a distinct kind of thing from the entities themselves. **Declared values** (desired
+configuration, optionally observed back to detect drift and reconcile) have no console page yet (#1248, #404), so the group holds no entry for them; they stay distinct from platform
 Settings (preferences: severity scales, schedules, retention, defaults) and Variables (free
 interpolated values, no observed side); the full split is
 [variables, secrets, and declared values](/architecture/variables/).

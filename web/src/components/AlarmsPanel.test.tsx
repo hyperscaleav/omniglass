@@ -184,6 +184,14 @@ describe("AlarmsPanel", () => {
     expect(messages).toEqual(["HDMI board failed", "Lamp hours exceeded"]);
   });
 
+  // How long it lasted (#2426), the same reading the alarms page gives.
+  it("says how long a cleared alarm was raised", () => {
+    const { getByRole } = mount();
+    const group = getByRole("group", { name: /recently cleared/i });
+    expect(within(group).getByTestId("alarm-duration")).toHaveTextContent("1d");
+    expect(within(group).getByText(/lasted/)).toBeTruthy();
+  });
+
   // Clearing keeps the row: what was wrong, and when, outlives the fix.
   it("keeps a cleared alarm in its own group rather than dropping it", () => {
     const { getByRole } = mount();
