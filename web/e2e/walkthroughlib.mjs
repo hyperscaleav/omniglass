@@ -51,6 +51,15 @@
 //     goto: /platform
 //     wait: { selector: '[data-testid=panel-row-x]', timeout: 120000 }
 //
+// An optional `lab` names what the walkthrough's lab runs beyond the dev fleet
+// (#2362), a list drawn from LAB_NEEDS: sso is the identity provider, which
+// walkthroughs.sh then has the lab run (lab run --sso, with single sign-on
+// configured against it and its demo person linked). Its issuer is on the lab
+// network, so only a script's lab runs it; the probe plays such a walkthrough
+// in a context of its own, since it signs in as someone else:
+//
+//   lab: [sso]
+//
 // Every step also takes `hold` (extra milliseconds to linger after it, for a
 // result worth reading) and `poster: true` (its still is the poster frame, at
 // most one step; default the last). Unknown keys, unknown kinds, and a step with two kinds
@@ -82,7 +91,8 @@ import { PREVIEW } from './walkthroughcore.mjs';
  */
 /** @typedef {{ method: 'POST', path: string, body: Record<string, unknown> }} SetupItem */
 /** @typedef {{ path: string, target: Target, timeout: number }} Ready */
-/** @typedef {{ title: string, description: string, setup: SetupItem[], ready: Ready | null, steps: Step[], poster: number }} Walkthrough */
+/** @typedef {'sso'} LabNeed */
+/** @typedef {{ title: string, description: string, lab: LabNeed[], setup: SetupItem[], ready: Ready | null, steps: Step[], poster: number }} Walkthrough */
 /**
  * Where a step failed: waiting for its target to be visible, scrolling to it,
  * acting on it, loading a page, or taking its still; with that phase's timeout
@@ -124,7 +134,29 @@ const MAX_READY_MS = 180_000;
 const MAX_HOLD_MS = 10_000;
 const COMMON = ['caption', 'hold', 'poster'];
 const MODIFIERS = ['Alt', 'Shift', 'Control', 'Meta'];
-const TOP = ['title', 'description', 'setup', 'ready', 'steps'];
+const TOP = ['title', 'description', 'lab', 'setup', 'ready', 'steps'];
+// What a walkthrough's lab runs beyond the dev fleet (#2362), each a lab run
+// flag a script's lab (walkthroughs.sh, probe.sh) always passes: sso is the
+// identity provider (--sso), which only a script's lab runs, since its issuer
+// is an address on the lab network a learner's browser does not reach.
+export const LAB_NEEDS = ['sso'];
+
+/**
+ * @param {unknown} raw
+ * @returns {[LabNeed[], string[]]}
+ */
+function validateLab(raw) {
+  if (raw === undefined) return [[], []];
+  if (!Array.isArray(raw) || raw.length === 0) return [[], [`lab must be a list drawn from ${LAB_NEEDS.join(', ')}`]];
+  const problems = [];
+  const seen = new Set();
+  for (const v of raw) {
+    if (typeof v !== 'string' || !LAB_NEEDS.includes(v)) problems.push(`lab: unknown need ${JSON.stringify(v)} (one of ${LAB_NEEDS.join(', ')})`);
+    else if (seen.has(v)) problems.push(`lab: ${v} is listed twice`);
+    seen.add(v);
+  }
+  return [/** @type {LabNeed[]} */ (problems.length ? [] : raw), problems];
+}
 
 /**
  * @param {unknown} v
@@ -320,6 +352,8 @@ export function validateWalkthrough(doc, file) {
   for (const k of Object.keys(doc)) if (!TOP.includes(k)) problems.push(`unknown key "${k}"`);
   if (!isStr(doc.title)) problems.push('needs a title');
   if ('description' in doc && !isStr(doc.description)) problems.push('description must be a non-empty string');
+  const [lab, labProblems] = validateLab(doc.lab);
+  problems.push(...labProblems);
   const [setup, setupProblems] = validateSetup(doc.setup);
   problems.push(...setupProblems);
   const [ready, readyProblems] = validateReady(doc.ready);
@@ -342,7 +376,7 @@ export function validateWalkthrough(doc, file) {
   const posters = steps.filter((s) => s.poster).map((s) => s.n);
   if (posters.length > 1) problems.push(`only one step may be the poster (steps ${posters.join(', ')} are)`);
   if (problems.length) throw new Error(problems.map((p) => `${file}: ${p}`).join('\n'));
-  return { title: doc.title, description: doc.description ?? '', setup, ready, steps, poster: posters[0] ?? steps.length };
+  return { title: doc.title, description: doc.description ?? '', lab, setup, ready, steps, poster: posters[0] ?? steps.length };
 }
 
 // Makes a walkthrough's setup through the API at base, with the owner token:

@@ -8,9 +8,11 @@ require (
 	github.com/antchfx/xmlquery v1.5.2
 	github.com/antchfx/xpath v1.3.9
 	github.com/containerd/errdefs v1.0.0
+	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/danielgtaylor/huma/v2 v2.40.0
 	github.com/expr-lang/expr v1.17.8
 	github.com/go-chi/chi/v5 v5.5.0
+	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/google/nftables v0.3.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
@@ -31,6 +33,7 @@ require (
 	golang.org/x/crypto v0.59.0
 	golang.org/x/image v0.48.0
 	golang.org/x/net v0.62.0
+	golang.org/x/oauth2 v0.38.0
 	golang.org/x/sys v0.50.0
 	golang.org/x/term v0.48.0
 	google.golang.org/protobuf v1.36.12
@@ -142,7 +145,6 @@ require (
 	go.opentelemetry.io/otel/trace v1.46.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
-	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.25.0 // indirect
 	golang.org/x/text v0.44.0 // indirect
 	golang.org/x/time v0.16.0 // indirect

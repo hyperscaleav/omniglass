@@ -45,11 +45,23 @@ the Storage Gateway across locations, systems, and components, **user groups** (
 Where the build differs from the present-tense design below (each logged in the
 [decision log](/architecture/decisions/)):
 
-- **`credential.kind` is `bearer` or `password`** (argon2id, PHC-encoded, one password per
-  user); the `nats` method and the full `(method, identifier)` lookup are deferred. Single sign-on
-  is decided but not built: [ADR-2361](/architecture/decisions/#adr-2361-single-sign-on-links-a-person-to-an-identity-provider-subject-never-by-email) settles the `oidc` credential (then `saml`), explicit
-  linking with no email match, IdP group mapping, and owner break-glass, and
-  [#2362](https://github.com/hyperscaleav/omniglass/issues/2362) onward build it.
+- **`credential.kind` is `bearer`, `password` or `oidc`** (argon2id, PHC-encoded, one password per
+  user); the `nats` method is deferred, and only `oidc` carries an `identifier` column (unique per
+  kind). **OIDC sign-in for linked persons is built**
+  ([#2362](https://github.com/hyperscaleav/omniglass/issues/2362), per
+  [ADR-2361](/architecture/decisions/#adr-2361-single-sign-on-links-a-person-to-an-identity-provider-subject-never-by-email)):
+  `GET /auth/oidc/start/{provider}` and `/auth/oidc/callback` (code flow, PKCE S256, nonce, a state
+  bound to the browser by a short-lived cookie), the id_token verified by the one JWKS-backed
+  `auth.JWTVerifier`, every provider call through `internal/egress` under the install's egress allow list;
+  the link (`oidc` row) keeps the provider's sealed refresh token, the session and any token minted
+  from it record `via_link`, and the re-check sweep revokes them when the provider refuses. Admin
+  linking (`/users/{id}/identity-links`, `user:link-identity` behind the takeover guard) and the
+  password-confirmed self-link (`/auth/me/identity-links:start`) are built; an owner grant deletes the
+  links others made for that person. The PKCE verifier and nonce are derived from the browser binding
+  rather than stored ([ADR-2362](/architecture/decisions/#adr-2362-a-sign-ins-pkce-verifier-and-nonce-are-derived-from-its-browser-binding-not-stored)).
+  Group mapping ([#2363](https://github.com/hyperscaleav/omniglass/issues/2363)), provisioning and
+  enforce mode ([#2364](https://github.com/hyperscaleav/omniglass/issues/2364)) and SAML
+  ([#2365](https://github.com/hyperscaleav/omniglass/issues/2365)) are not built.
   The minted bearer token prefix is `ogp_`.
 - **Every credential is time-bounded** ([ADR-0019](/architecture/decisions/#adr-0019-every-credential-is-time-bounded-token-purpose-not-expiry-shape),
   reversing tokens-never-expire), the lifetimes in the table below (the session cookie's `Max-Age`
