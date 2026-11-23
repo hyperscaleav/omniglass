@@ -228,6 +228,49 @@ test.describe("operator console", () => {
     });
   }
 
+  // #2438: a component serving two systems wears an "also in" chip; the chip
+  // gives way first, so the component's own name stays whole beside it.
+  for (const width of [1320, 1024]) {
+    test(`the outline keeps a shared component's name readable beside its also-in chip at ${width}px`, async ({ page }) => {
+      const stamp = Date.now();
+      const made: { kind: string; name: string }[] = [];
+      const post = async (kind: string, data: Record<string, unknown>) => {
+        const res = await page.request.post(`/api/v1/${kind}`, { data });
+        expect(res.ok(), `create ${kind}: ${res.status()}`).toBeTruthy();
+        made.push({ kind, name: data.name as string });
+        return (await res.json()) as { id: string };
+      };
+      try {
+        await post("locations", { name: `e2e-shared-${width}-${stamp}`, location_type: "campus" });
+        const sysA = `boardroom-conference-system-${stamp}`;
+        const sysB = `auditorium-presentation-system-${stamp}`;
+        const comp = `lifecycle-hub-${width}-${stamp}`;
+        for (const n of [sysA, sysB]) await post("systems", { name: n, location: `e2e-shared-${width}-${stamp}` });
+        const { id } = await post("components", { name: comp, product: "generic-device", location: `e2e-shared-${width}-${stamp}` });
+        for (const n of [sysA, sysB]) {
+          const put = await page.request.put(`/api/v1/systems/${n}/members/${comp}`);
+          expect(put.ok(), `bind ${n}: ${put.status()}`).toBeTruthy();
+        }
+        await page.setViewportSize({ width, height: 800 });
+        await page.goto(`/web/explore?node=${id}`);
+        // The component's label is its product's ("Generic Device"); the chip is what finds it.
+        const row = page.getByRole("treeitem").filter({ has: page.getByTitle(/^Also in/) }).first();
+        await expect(row).toBeVisible();
+        await expect(row.getByTitle(/^Also in/)).toBeVisible();
+        const name = row.locator("[data-label]");
+        const box = (await name.boundingBox())!;
+        expect(box.width, `the name is ${Math.round(box.width)}px beside the chip at ${width}px`).toBeGreaterThanOrEqual(64);
+        // Wide, the whole name fits beside the full chip; narrow, the chip is a count and the name keeps its minimum.
+        if (width >= 1320) {
+          const clipped = await name.evaluate((el) => el.scrollWidth > el.clientWidth);
+          expect(clipped, `the component's name is cut short at ${width}px`).toBe(false);
+        }
+      } finally {
+        for (const m of made.reverse()) await page.request.delete(`/api/v1/${m.kind}/${m.name}`);
+      }
+    });
+  }
+
   test("explore: create where you stand, the outline shows it, a link reveals it, a row opens it", async ({ page }) => {
     // The e2e database starts with the boot seed only, so the locations under
     // test are created here: a campus, two buildings under it from the row's

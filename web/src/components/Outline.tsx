@@ -29,7 +29,7 @@ export type OpenTarget = { kind: "location" | "system" | "component"; id: string
 // slots; Name keeps what is left. OUTLINE_FRAME marks the container.
 export const OUTLINE_FRAME = "@container";
 export const OUTLINE_COLS =
-  "grid-cols-[minmax(0,1fr)_7rem_12rem_14rem_9.5rem_2rem] @max-[56rem]:grid-cols-[minmax(0,1fr)_7rem_14rem_9.5rem_2rem] @max-[40rem]:grid-cols-[minmax(0,1fr)_7rem_9.5rem_2rem] @max-[28rem]:grid-cols-[minmax(0,1fr)_6rem_2rem]";
+  "grid-cols-[minmax(0,1fr)_7rem_12rem_10rem_9.5rem_2rem] @max-[56rem]:grid-cols-[minmax(0,1fr)_7rem_10rem_9.5rem_2rem] @max-[40rem]:grid-cols-[minmax(0,1fr)_7rem_9.5rem_2rem] @max-[28rem]:grid-cols-[minmax(0,1fr)_6rem_2rem]";
 export const WIDE_ONLY = "@max-[56rem]:hidden";
 export const ROOMY_ONLY = "@max-[40rem]:hidden";
 export const NARROW_HIDDEN = "@max-[28rem]:hidden";
@@ -313,9 +313,14 @@ export default function Outline(props: {
                       <>
                         <span class="flex-none text-base-content/35"><Dynamic component={resolveIcon(c().icon)} size={16} /></span>
                         <OutlineName kind="component" label={c().label} class="min-w-[4rem]" />
-                        {/* The chip gives way first, so the name stays readable beside it. */}
+                        {/* The chip gives way first, so the name stays readable beside it: it
+                            shrinks before the name does, and in a narrow outline it is a bare
+                            count whose title carries the systems. */}
                         <Show when={c().also.length > 0}>
-                          <span class="min-w-[2.5rem] shrink-[999] truncate rounded border border-base-content/15 px-1.5 text-[11px] leading-4 text-base-content/55" title={`Also in ${c().also.join(", ")}`}>also in {c().also.join(", ")}</span>
+                          <span class="shrink-[999] truncate rounded border border-base-content/15 px-1.5 text-[11px] leading-4 text-base-content/55 @max-[56rem]:px-1" title={`Also in ${c().also.join(", ")}`}>
+                            <span class="@max-[56rem]:hidden">also in {c().also.join(", ")}</span>
+                            <span class="hidden @max-[56rem]:inline">+{c().also.length}</span>
+                          </span>
                         </Show>
                       </>
                     );
