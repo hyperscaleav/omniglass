@@ -44,8 +44,7 @@ and three of the shipped official products bind a driver this way. See
   (with `driver:delete`) removes the row, behind a confirm. A verb you lack greys just that
   button, its hover reason naming the permission (`Requires driver:update`, `Requires driver:delete`);
   the pair never disappears.
-- An **official** row is always read-only: the blade keeps the Edit and Delete pair in place,
-  greyed, with the reason on hover: "Official: ships with Omniglass and updates with it."
+- An **official** row is always read-only: the blade footer shows one note, "Official, read-only", with the reason on hover: "Official: ships with Omniglass and updates with it."
   Omniglass ships a starter set of official drivers, each with a real spec (the set the binary
   seeds is rendered under [the declarative menu](/architecture/collection/#drivers-the-declarative-menu)),
   upserted idempotently at boot so the
