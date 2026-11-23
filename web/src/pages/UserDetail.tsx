@@ -25,6 +25,7 @@ import {
 } from "../lib/users";
 import { useMe, can } from "../lib/auth";
 import { useEditParam } from "../lib/editurl";
+import { firstParam } from "../lib/drawer_address";
 import { impersonate } from "../lib/impersonation";
 import { describeError } from "../lib/format";
 import { handleError, emailError, passwordError, isPasswordPolicyMessage } from "../lib/validate";
@@ -198,13 +199,13 @@ export function UserDetail(props: { id: string }) {
     },
   });
 
-  // The blade's edit mode composes with its id deep link (#759): ?u=<id>&edit=1
+  // The blade's edit mode composes with its id deep link (#759): ?open=<id>&edit=1
   // opens this blade already editing once its data has loaded (and the caller can
   // update it), which is also how the create flow hands off. Gated on the URL
   // naming THIS blade: a stale ?edit=1 beside another user's id (or none) must not
   // flip a blade the operator merely clicked open into edit.
   const [searchParams] = useSearchParams();
-  const linked = () => (Array.isArray(searchParams.u) ? searchParams.u[0] : searchParams.u) === props.id;
+  const linked = () => (firstParam(searchParams.open) ?? firstParam(searchParams.u)) === props.id;
   useEditParam(edit, { ready: () => !!user.data && linked(), canUpdate });
 
   async function toggleActive(pr: User) {

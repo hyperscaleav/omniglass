@@ -237,7 +237,7 @@ the last crumb, the current page, has none and renders as plain text marked `ari
 ([ADR-0120](/architecture/decisions/#adr-0120-the-edit-face-is-a-url-fact) established the rule;
 [ADR-0132](/architecture/decisions/#adr-0132-configure-is-the-one-deep-editor) retargets it):
 `?edit=1` beside a fleet address lands the detail view's Configure tab already editing, and beside
-an identity blade's id param (`?u=<id>&edit=1`) opens that blade editing, both behind the same
+an identity blade's id param (`?open=<id>&edit=1`) opens that blade editing, both behind the same
 `<resource>:update` permission the Edit button is behind; without it the link lands read-only.
 Leaving edit (Cancel or Save) strips the param via history replace, so a refresh mid-edit keeps the
 mode while Back never re-enters an edit the operator left. One hook (`web/src/lib/editurl.ts`) owns

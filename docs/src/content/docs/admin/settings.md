@@ -27,6 +27,10 @@ key a variable can set, one `OMNIGLASS_SETTING__*` row per key. A scalar or a co
 can come from a variable; a keyed map (`agent.roles`, `agent.tools`) cannot, and is set in the
 settings file or the console.
 
+In the console, **Settings** shows every namespace; **Edit** opens each key for change, its save
+button writes that one key, and a notice in the corner (`ui.theme saved`) confirms the save landed. A
+refused value stays on its row, beside the field.
+
 From the CLI, `omniglass setting list` reads every namespace, and `omniglass setting update` applies a
 merge patch to one, where a `null` restores a key:
 

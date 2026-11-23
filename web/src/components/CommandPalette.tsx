@@ -1,15 +1,21 @@
 import { For, Show, createMemo, createSignal, createEffect, createUniqueId } from "solid-js";
-import { Dialog } from "@kobalte/core/dialog";
+import ModalDialog, { DialogHeading } from "./ui/ModalDialog";
 import { useNavigate } from "@solidjs/router";
 import { navItems, filterNav } from "../lib/nav";
 import { entryHref, visibleGroups } from "../lib/catalog";
 import { useMe, can } from "../lib/auth";
+import { type DrawerKind, drawerHref } from "../lib/drawer_address";
 import { Search, ArrowRight, Bot } from "./icons";
 
 // The ⌘K command palette: a global jump across the whole app (distinct from a
 // page's own filter). Built on Kobalte Dialog (focus-trap, Esc, scroll-lock for
 // free). Arrow keys move the active row, Enter navigates.
-export type Command = { label: string; path: string; group?: string; section?: string };
+// A result for one catalog or admin entity sets `entity` instead of a hand-built
+// path: it opens that entity's drawer at its address (drawerHref, #2429).
+export type Command = { label: string; path: string; group?: string; section?: string; entity?: { kind: DrawerKind; address: string } };
+
+// commandPath is where a result goes: its entity's drawer address, else its path.
+export const commandPath = (c: Command): string => (c.entity ? drawerHref(c.entity.kind, c.entity.address) : c.path);
 
 // buildCommands is the palette's source: every destination the caller may
 // reach, flattened to one searchable list.
@@ -92,7 +98,7 @@ export default function CommandPalette(props: { open: boolean; onClose: () => vo
     if (!c) return;
     props.onClose();
     if ("ask" in c) props.onAsk?.(query().trim());
-    else navigate(c.path);
+    else navigate(commandPath(c));
   };
 
   const onKey = (e: KeyboardEvent) => {
@@ -109,63 +115,62 @@ export default function CommandPalette(props: { open: boolean; onClose: () => vo
   };
 
   return (
-    <Dialog open={props.open} onOpenChange={(o) => !o && props.onClose()}>
-      <Dialog.Portal>
-        <Dialog.Overlay class="fixed inset-0 z-60 bg-black/50" />
-        <div class="fixed inset-0 z-60 flex items-start justify-center px-4 pt-[15vh]">
-          <Dialog.Content class="w-full max-w-lg overflow-hidden rounded-box border border-base-300 bg-base-100 shadow-2xl">
-            <Dialog.Title class="sr-only">Command palette</Dialog.Title>
-            <div class="flex items-center gap-2 border-b border-base-300 px-4">
-              <Search size={16} />
-              <input
-                class="h-12 w-full bg-transparent text-sm outline-none placeholder:text-base-content/40"
-                placeholder="Jump to…"
-                value={query()}
-                role="combobox"
-                aria-expanded={results().length > 0}
-                aria-controls={listId}
-                aria-autocomplete="list"
-                aria-activedescendant={results().length ? optId(active()) : undefined}
-                onInput={(e) => setQuery(e.currentTarget.value)}
-                onKeyDown={onKey}
-                autofocus
-              />
-              <kbd class="kbd kbd-sm">esc</kbd>
-            </div>
-            <ul id={listId} role="listbox" class="max-h-80 overflow-y-auto p-2">
-              <Show when={results().length > 0} fallback={<li class="px-3 py-6 text-center text-sm text-base-content/40">No matches</li>}>
-                <For each={results()}>
-                  {(c, i) => (
-                    <li>
-                      <button
-                        id={optId(i())}
-                        role="option"
-                        aria-selected={i() === active()}
-                        class="flex w-full items-center gap-3 rounded-field px-3 py-2 text-left text-sm"
-                        classList={{ "bg-primary/15 text-primary": i() === active() }}
-                        onMouseEnter={() => setActive(i())}
-                        onClick={() => go(c)}
-                      >
-                        <Show when={"ask" in c}>
-                          <Bot size={14} />
-                        </Show>
-                        <Show when={"group" in c && c.group}>
-                          <span class="text-xs text-base-content/40">{"group" in c && c.group}</span>
-                          <span class="text-base-content/30">/</span>
-                        </Show>
-                        <span class="flex-1">{c.label}</span>
-                        <Show when={i() === active()}>
-                          <ArrowRight size={14} />
-                        </Show>
-                      </button>
-                    </li>
-                  )}
-                </For>
-              </Show>
-            </ul>
-          </Dialog.Content>
+    <ModalDialog
+      open={props.open}
+      onClose={props.onClose}
+      overlayClass="fixed inset-0 z-60 bg-black/50"
+      frameClass="fixed inset-0 z-60 flex items-start justify-center px-4 pt-[15vh]"
+      class="w-full max-w-lg overflow-hidden rounded-box border border-base-300 bg-base-100 shadow-2xl"
+    >
+        <DialogHeading class="sr-only">Command palette</DialogHeading>
+        <div class="flex items-center gap-2 border-b border-base-300 px-4">
+          <Search size={16} />
+          <input
+            class="h-12 w-full bg-transparent text-sm outline-none placeholder:text-base-content/40"
+            placeholder="Jump to…"
+            value={query()}
+            role="combobox"
+            aria-expanded={results().length > 0}
+            aria-controls={listId}
+            aria-autocomplete="list"
+            aria-activedescendant={results().length ? optId(active()) : undefined}
+            onInput={(e) => setQuery(e.currentTarget.value)}
+            onKeyDown={onKey}
+            autofocus
+          />
+          <kbd class="kbd kbd-sm">esc</kbd>
         </div>
-      </Dialog.Portal>
-    </Dialog>
+        <ul id={listId} role="listbox" class="max-h-80 overflow-y-auto p-2">
+          <Show when={results().length > 0} fallback={<li class="px-3 py-6 text-center text-sm text-base-content/40">No matches</li>}>
+            <For each={results()}>
+              {(c, i) => (
+                <li>
+                  <button
+                    id={optId(i())}
+                    role="option"
+                    aria-selected={i() === active()}
+                    class="flex w-full items-center gap-3 rounded-field px-3 py-2 text-left text-sm"
+                    classList={{ "bg-primary/15 text-primary": i() === active() }}
+                    onMouseEnter={() => setActive(i())}
+                    onClick={() => go(c)}
+                  >
+                    <Show when={"ask" in c}>
+                      <Bot size={14} />
+                    </Show>
+                    <Show when={"group" in c && c.group}>
+                      <span class="text-xs text-base-content/40">{"group" in c && c.group}</span>
+                      <span class="text-base-content/30">/</span>
+                    </Show>
+                    <span class="flex-1">{c.label}</span>
+                    <Show when={i() === active()}>
+                      <ArrowRight size={14} />
+                    </Show>
+                  </button>
+                </li>
+              )}
+            </For>
+          </Show>
+        </ul>
+    </ModalDialog>
   );
 }

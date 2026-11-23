@@ -13,7 +13,9 @@ describe("LabBanner", () => {
     const banner = getByRole("status");
     expect(banner.textContent).toContain("Lab instance");
     expect(banner.textContent).toMatch(/disposable/i);
-    expect(banner.textContent).toMatch(/well-known login/i);
+    // One thin line (#2433): the long explanation lives in the tooltip trigger.
+    expect(banner.className).toMatch(/\bh-6\b/);
+    expect(getByRole("button", { name: /about the lab instance/i })).toBeTruthy();
   });
   it("shows nothing on a server that is not a lab", () => {
     const { container } = render(() => <LabBanner lab={false} />);

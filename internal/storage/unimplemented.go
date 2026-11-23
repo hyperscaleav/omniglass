@@ -848,6 +848,9 @@ func (UnimplementedGateway) AgentSettings(context.Context) (settings.AgentSettin
 func (UnimplementedGateway) RecordPlatformMetrics(context.Context, []PlatformMetric) error {
 	return nil
 }
+func (UnimplementedGateway) PlatformMetricInstancesAt(context.Context, string, string, float64) ([]string, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) StampRuleSweep(context.Context, string) error   { return nil }
 func (UnimplementedGateway) MarkServerSeen(context.Context, string) error   { return nil }
 func (UnimplementedGateway) ReleaseRuleSweep(context.Context, string) error { return nil }
@@ -1036,13 +1039,16 @@ func (UnimplementedGateway) EndExpiredSnoozes(context.Context, int) (int, error)
 func (UnimplementedGateway) ListAlarms(context.Context, string, AlarmFilter) ([]Alarm, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) SystemHealth(context.Context, string, time.Duration, scope.Set) (*HealthReport, error) {
+func (UnimplementedGateway) SystemHealth(context.Context, string, HealthRange, scope.Set) (*HealthReport, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ComponentHealthReport(context.Context, string, HealthRange, scope.Set) (*HealthReport, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) SystemHealths(context.Context, scope.Set) ([]SystemHealthEntry, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) LocationHealth(context.Context, string, time.Duration, scope.Set) (*HealthReport, error) {
+func (UnimplementedGateway) LocationHealth(context.Context, string, HealthRange, scope.Set) (*HealthReport, error) {
 	return nil, nil
 }
 
