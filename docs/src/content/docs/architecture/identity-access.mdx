@@ -496,6 +496,16 @@ A refusal picks its status from the **difference between two scopes**, not from 
 | in `visible_set(P, read)`, outside `visible_set(P, action)` | **403** | the caller can already see this row, so naming the missing authority discloses nothing a `GET` would not, and it is the truth |
 | outside `visible_set(P, read)` | **404** | non-disclosing: the caller must not learn the row exists, not even through a different status |
 
+A **create** has no target yet, so the split is made on the row it is placed under. A location
+created under a parent resolves that parent within `visible_set(P, create)`, and only when that
+refuses asks `visible_set(P, read)` which refusal is owed: a parent the caller can read is the
+**403**, and one outside read answers the same `404 parent location not found` as a parent that
+does not exist, byte for byte, so a create holder cannot probe location names it cannot read
+([ADR-1343](/architecture/decisions/#adr-1343-a-location-create-resolves-its-parent-under-read-before-create)).
+A root needs an all-scoped create grant (403 otherwise). Component and system create, a location
+`:move` and a `:renderLabel` draft still answer an existing parent outside their own scope with the
+403 ([#1964](https://github.com/hyperscaleav/omniglass/issues/1964)).
+
 One primitive makes the split for every route that has one, `resolveScoped` in the Storage
 Gateway, so the ordering (read first, then action) exists in one place rather than once per
 route. Routes whose write takes no scope of its own, the alarm verbs, the system-slot
