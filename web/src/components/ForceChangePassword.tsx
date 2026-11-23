@@ -47,7 +47,7 @@ export default function ForceChangePassword() {
     !busy() && !!current() && !!next() && next() === confirmation() && !passwordError(next(), username());
 
   return (
-    <div class="flex min-h-screen items-center justify-center bg-base-100 p-4">
+    <div class="flex min-h-0 flex-1 items-center justify-center bg-base-100 p-4">
       <form onSubmit={submit} class="card w-full max-w-md border border-base-300 bg-base-200 shadow-lg">
         <div class="card-body gap-3">
           <h1 class="card-title text-base">Set a new password</h1>

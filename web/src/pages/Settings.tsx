@@ -1,5 +1,6 @@
 import { Show, For, createSignal, createEffect } from "solid-js";
 import Button from "../components/Button";
+import PageGate from "../components/PageGate";
 import KVRow from "../components/KVRow";
 import { toast } from "../components/ui/Toast";
 import { RotateCcw, Save, Pencil, Check } from "../components/icons";
@@ -139,18 +140,7 @@ export default function Settings() {
         <div class="alert alert-error text-sm" role="alert">{pageErr()}</div>
       </Show>
 
-      <Show when={settings.isPending}>
-        <div class="flex items-center gap-2 text-sm text-base-content/60">
-          <span class="loading loading-spinner loading-sm" /> Loading settings.
-        </div>
-      </Show>
-
-      <Show when={settings.isError}>
-        <div class="alert alert-warning text-sm" role="alert">
-          You do not have access to the platform settings, or they could not be loaded.
-        </div>
-      </Show>
-
+      <PageGate query={settings} section="Settings" needs={["settings:read"]} loading="Loading settings.">
       <Show when={settings.data}>
         {(data) => (
           <For each={Object.keys(data().values).sort()}>
@@ -187,6 +177,7 @@ export default function Settings() {
           </For>
         )}
       </Show>
+      </PageGate>
     </section>
   );
 }
