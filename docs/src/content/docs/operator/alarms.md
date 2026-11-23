@@ -215,8 +215,7 @@ words. It is one formatter everywhere, the coarsest two units (45s, 12m, 3h 12m,
 Over the API it is `GET /alarms?state=cleared` (`omniglass alarm list --state cleared`), with the state parameter one of
 `active` (the default), `cleared` or `all`, and `since` and `until` (RFC 3339) bounding the **overlap** of an
 alarm's raised-to-cleared interval with the range: an alarm raised before `since` and still open in the range
-is included, one cleared before `since` or raised after `until` is not, and `since` after `until` is a 400. The
-component and system alarm reads take the same range with the same meaning. Permission and scope are unchanged: you only read the
+is included, one cleared before `since` or raised after `until` is not, and `since` after `until` is a 400. Permission and scope are unchanged: you only read the
 history of components you can read. The history is kept; nothing prunes it.
 
 ::walkthrough{#find-a-cleared-alarm}

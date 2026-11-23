@@ -8,7 +8,7 @@ refs: [2426, 2333, 2425]
 bounding the overlap of an alarm's raised-to-cleared interval with the range: raised at or before `until` and
 still active or cleared at or after `since`, so one raised before the range and open in it is kept; `since`
 after `until` is a 400. Permission and scope are unchanged, and the keyset cursor pages a history the same way
-it pages the queue. The same names and semantics as the component and system alarm reads. Rows gained
+it pages the queue. The names and semantics follow the timeline work's component and system alarm reads (a012ff40f), which land separately. Rows gained
 `system_ids`, parallel to `systems`, so the console links the one system rather than a name two locations
 share, and a component placed only through its system is now named at that system's location instead of a
 blank (`attachSystemLocations`: one query and one batched path walk for the page).

@@ -371,3 +371,46 @@ func TestFleetAlarmLocationFallbackIgnoresHiddenSameNamedSystems(t *testing.T) {
 		t.Errorf("location %q (%s) leaked from the hidden twin in hid-vault", rows[0].LocationName, rows[0].LocationID)
 	}
 }
+
+// Two visible systems sharing a name come back in one fixed order, by name and
+// then id, in both parallel arrays, so system_ids[i] always names systems[i]
+// (#2426, agent-review).
+func TestFleetAlarmSystemsAndIDsStayAlignedForSameNamedSystems(t *testing.T) {
+	t.Parallel()
+	gw, dsn := secretGateway(t)
+	ctx := context.Background()
+	all := scope.Set{All: true}
+	for _, l := range []string{"al-a", "al-b", "al-c"} {
+		if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: l, LocationType: "campus"}, all); err != nil {
+			t.Fatalf("location: %v", err)
+		}
+	}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "al-comp"}, all, all, all, all); err != nil {
+		t.Fatalf("component: %v", err)
+	}
+	for _, l := range []string{"al-a", "al-b", "al-c"} {
+		if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "twin", LocationName: strptr(l)}, all, all); err != nil {
+			t.Fatalf("system: %v", err)
+		}
+	}
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(ctx)
+	if _, err := conn.Exec(ctx, `insert into system_member (system_id, component_id)
+		select s.id, c.id from system s, component c where s.name = 'twin' and c.name = 'al-comp'`); err != nil {
+		t.Fatalf("members: %v", err)
+	}
+	if _, err := gw.RaiseAlarm(ctx, "", "al-comp", storage.AlarmSpec{Severity: "high", Message: "x", DedupKey: "x"}); err != nil {
+		t.Fatalf("raise: %v", err)
+	}
+	rows, _, err := gw.ListFleetAlarms(ctx, all, all, storage.AlarmFilter{}, 100)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("list = %d rows (%v)", len(rows), err)
+	}
+	ids := rows[0].SystemIDs
+	if len(ids) != 3 || len(rows[0].Systems) != 3 || !sort.StringsAreSorted(ids) {
+		t.Errorf("system ids %v for systems %v, want three ids in ascending order under the tied name", ids, rows[0].Systems)
+	}
+}

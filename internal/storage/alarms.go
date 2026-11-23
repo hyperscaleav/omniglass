@@ -596,9 +596,9 @@ func (p *PG) ListFleetAlarms(ctx context.Context, read, systemRead scope.Set, fi
 	rows, err := p.pool.Query(ctx, `
 		with recursive comp as (`+scopedListSQL(componentTable, "id", read)+`)`+ctes+`
 		select `+alarmCols+`, coalesce(l.rank, 0),
-			coalesce((select array_agg(s.name order by s.name) from system_member m join system s on s.id = m.system_id
+			coalesce((select array_agg(s.name order by s.name, s.id) from system_member m join system s on s.id = m.system_id
 				where m.component_id = a.component_id and `+sf.Pred("s.id")+`), '{}'),
-			coalesce((select array_agg(s.id::text order by s.name) from system_member m join system s on s.id = m.system_id
+			coalesce((select array_agg(s.id::text order by s.name, s.id) from system_member m join system s on s.id = m.system_id
 				where m.component_id = a.component_id and `+sf.Pred("s.id")+`), '{}')
 		from alarm a
 		left join severity_level l on l.name = a.severity
