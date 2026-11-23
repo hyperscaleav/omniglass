@@ -48,14 +48,22 @@ export function CreateModeChoice(props: { mode: CreateMode; onChange: (m: Create
   );
 }
 
-export default function TemplateCreate(props: { kind: TemplateKind; location?: string; onDone: (href: string) => void }): JSX.Element {
+export default function TemplateCreate(props: { kind: TemplateKind; location?: string; onDone: (href: string) => void; onCancel?: () => void }): JSX.Element {
   const templates = useQuery(() => ({ queryKey: TEMPLATES_KEY, queryFn: listTemplates }));
   // byLabel stays here (#757): the template catalog is served by kind then name
   // from the binary, not by the SQL label rule, so the order is composed here.
   const options = createMemo(() => [...ofKinds(templates.data ?? [], [props.kind])].sort(byLabel));
   const [chosen, setChosen] = createSignal("");
   const picked = () => options().find((t) => t.name === chosen());
-  const { byName } = useHeldStandards();
+  const { byName, standards } = useHeldStandards();
+  // A system template is a system built to ONE standard, so only a standard that
+  // ships one is offered; the rest are not hidden, they just have no example yet.
+  const standardScope = () => {
+    if (props.kind !== "system_template" || !standards.data) return null;
+    const covered = new Set(options().map((t) => t.system?.standard).filter(Boolean)).size;
+    const total = standards.data.length;
+    return total > covered ? { covered, total } : null;
+  };
   const heldSlots = useHeldSlots(byName, () => picked()?.system?.standard ?? "");
   return (
     <div class="flex flex-col gap-4" data-testid="template-create">
@@ -75,6 +83,13 @@ export default function TemplateCreate(props: { kind: TemplateKind; location?: s
           <For each={options()}>{(t) => <option value={t.name}>{entityLabel(t)} ({templateSummary(t)})</option>}</For>
         </select>
       </FieldRow>
+      <Show when={standardScope()}>
+        {(sc) => (
+          <p class="-mt-2 text-[11px] text-base-content/50" data-testid="template-scope">
+            {sc().covered} of the {sc().total} standards ship a system template. A standard with none has no system template yet: start from scratch and choose that standard.
+          </p>
+        )}
+      </Show>
       <Show when={picked()} keyed>
         {(t) => (
           <>
@@ -83,7 +98,7 @@ export default function TemplateCreate(props: { kind: TemplateKind; location?: s
               <Show when={t.description}><p class="text-sm text-base-content/70">{t.description}</p></Show>
               <TemplatePreview template={t} all={templates.data ?? []} heldSlots={heldSlots()} />
             </section>
-            <StartFromTemplateForm template={t} all={templates.data ?? []} location={props.location} onDone={props.onDone} />
+            <StartFromTemplateForm template={t} all={templates.data ?? []} location={props.location} onDone={props.onDone} onCancel={props.onCancel} />
           </>
         )}
       </Show>

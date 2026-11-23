@@ -437,7 +437,7 @@ describe("a component's memberships, editable from its own face (#767)", () => {
 });
 
 describe("the one form, empty", () => {
-  function mountCreate(kind: "system" | "location" | "component", under?: string, onCancel: () => void = () => {}) {
+  function mountCreate(kind: "system" | "location" | "component", under?: string, onCancel: () => void = () => {}, locationTypes: unknown[] = [{ id: uuidFor("t-room"), name: "room", label: "Room", allowed_parent_types: ["building"] }]) {
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
     qc.setQueryData([...ME_KEY], owner);
     qc.setQueryData([...SYSTEMS_KEY], []);
@@ -445,7 +445,7 @@ describe("the one form, empty", () => {
       { id: uuidFor("ef-hq"), name: "hq", label: "Headquarters", location_type: "campus", parent_id: null, actions: ["update"] },
       { id: uuidFor("ef-west"), name: "west", label: "West Building", location_type: "building", parent_id: uuidFor("ef-hq"), actions: ["update"] },
     ]);
-    qc.setQueryData([...LOCATION_TYPES_KEY], [{ id: uuidFor("t-room"), name: "room", label: "Room", allowed_parent_types: ["building"] }]);
+    qc.setQueryData([...LOCATION_TYPES_KEY], locationTypes);
     qc.setQueryData([...STANDARDS_KEY], []);
     qc.setQueryData([...SYSTEM_TYPES_KEY], [{ id: uuidFor("st-collab"), name: "collaboration", label: "Collaboration" }]);
     qc.setQueryData([...PRODUCTS_KEY], []);
@@ -517,6 +517,52 @@ describe("the one form, empty", () => {
       await waitFor(() => expect(asked.length).toBe(1));
       expect(asked[0].name).toBe("one-off");
       expect(asked[0].system_type_id).toBeUndefined();
+    } finally { stub.mockRestore(); }
+  });
+
+  // #2465: every shipped location type carries no name rule, so a nameless
+  // :renderLabel for one is a guaranteed 422 the browser logs as a console
+  // error. The type list already says whether the type names rows
+  // (name_rule absent = an operator names every one), so the form does not ask.
+  it("asks no nameless draft for a location type with no name rule, and asks once a name is typed", async () => {
+    const asked: Record<string, unknown>[] = [];
+    const stub = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST" && req.url.includes("/locations:renderLabel")) {
+        asked.push(JSON.parse(await req.clone().text()));
+        return new Response(JSON.stringify({ name: "boardroom", label: "Boardroom", rule: "{{title (words .Name)}}" }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch in this test: ${req.method} ${req.url}`);
+    });
+    try {
+      mountCreate("location", uuidFor("ef-west"));
+      const form = await screen.findByTestId("entity-create-form");
+      fireEvent.change(within(form).getByRole("combobox", { name: /location type/i }), { target: { value: "room" } });
+      await waitFor(() => expect(within(form).getByText(/This type carries no name rule/)).toBeTruthy());
+      expect(asked).toEqual([]);
+
+      fireEvent.input(within(form).getByPlaceholderText("boardroom"), { target: { value: "boardroom" } });
+      await waitFor(() => expect(asked.length).toBe(1));
+      expect(asked[0].name).toBe("boardroom");
+    } finally { stub.mockRestore(); }
+  });
+
+  it("asks the nameless draft for a location type that has a name rule", async () => {
+    const asked: Record<string, unknown>[] = [];
+    const stub = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST" && req.url.includes("/locations:renderLabel")) {
+        asked.push(JSON.parse(await req.clone().text()));
+        return new Response(JSON.stringify({ name: "deck-1", ordinal: 1, label: "Deck 1", rule: "r" }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch in this test: ${req.method} ${req.url}`);
+    });
+    try {
+      mountCreate("location", uuidFor("ef-west"), () => {}, [{ id: uuidFor("t-deck"), name: "deck", label: "Deck", allowed_parent_types: ["building"], name_rule: { stem: "deck" } }]);
+      const form = await screen.findByTestId("entity-create-form");
+      fireEvent.change(within(form).getByRole("combobox", { name: /location type/i }), { target: { value: "deck" } });
+      await waitFor(() => expect(asked.length).toBe(1));
+      expect(asked[0].name).toBeUndefined();
     } finally { stub.mockRestore(); }
   });
 
