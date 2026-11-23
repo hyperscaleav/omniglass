@@ -28,6 +28,7 @@ import ReachLadder from "../components/ReachLadder";
 import SessionPill from "../components/SessionPill";
 import { ladderObserved } from "../lib/session";
 import SessionNotice from "../components/SessionNotice";
+import PollTest from "../components/PollTest";
 import { FLEET_VIEW_KEY, fleetView } from "../lib/fleet";
 import { COMPONENTS_KEY, listComponents, type Component as FleetComponent } from "../lib/components";
 import { componentSystemsKey, componentSystems } from "../lib/members";
@@ -545,6 +546,7 @@ export default function ComponentLeaf() {
                                 onFix={iface().id && can(me.data, "endpoint", "read") ? () => blades.push({ kind: "endpoint", id: iface().id! }) : undefined}
                                 fixLabel="Open endpoint"
                               />
+                              <Show when={iface().id}>{(eid) => <PollTest endpoint={eid()} />}</Show>
                             </li>
                           );
                         }}
