@@ -43,7 +43,7 @@ import TimeRangePicker from "./TimeRangePicker";
 import MetricsGrid from "./MetricsGrid";
 import TimelineOverlay from "./TimelineOverlay";
 import { CursorProvider } from "../lib/cursor";
-import { DEFAULT_RANGE, useTimeRange, type TimeRange } from "../lib/time_range";
+import { DEFAULT_RANGE, useHostTimeRange, type TimeRange } from "../lib/time_range";
 import { memberModel, systemsAtLocation, type MemberContext } from "../lib/detail";
 import { systemMembers, systemMembersKey } from "../lib/members";
 import { LEAF_POLL_MS } from "../lib/component_leaf";
@@ -170,8 +170,8 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
   }));
   // The one time range (#2304), held in the address: the metrics grid and the
   // timeline read over it, and the picker on the tab rail writes it. A blade
-  // shares its page's range.
-  const { range: asked, setRange } = useTimeRange();
+  // opens on its page's range and keeps its own.
+  const { range: asked, setRange } = useHostTimeRange(props.host);
   // An absolute range reads through the views read, which needs view:read: a
   // shared link opened by a caller without it reads the default instead, and
   // the host says why rather than drawing empty charts (#2304).

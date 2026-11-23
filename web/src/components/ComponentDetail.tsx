@@ -42,7 +42,7 @@ import MetricsGrid from "./MetricsGrid";
 import TimelineOverlay from "./TimelineOverlay";
 import TimeRangePicker from "./TimeRangePicker";
 import { CursorProvider } from "../lib/cursor";
-import { DEFAULT_RANGE, useTimeRange, type TimeRange } from "../lib/time_range";
+import { DEFAULT_RANGE, useHostTimeRange, type TimeRange } from "../lib/time_range";
 import { getOutpost, outpostKey } from "../lib/outposts";
 import { PRODUCTS_KEY, listProducts } from "../lib/products";
 import { LEAF_OUTPOST_POLL_MS, LEAF_POLL_MS, collectionState, dotHealth, identityRows, instanceName, leafAlarmSince, membershipRows, spreadSummary, vitalRows, vitalValueText } from "../lib/component_leaf";
@@ -109,8 +109,8 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
   const tabState = createTabState(props.host, leafTabs, { legacy: { events: "activity" } });
   const leafTab = tabState.active;
   // The time range (#2304): the metrics grid and the timeline read over it. A
-  // blade shares its page's range.
-  const { range: asked, setRange } = useTimeRange();
+  // blade opens on its page's range and keeps its own.
+  const { range: asked, setRange } = useHostTimeRange(props.host);
   // An absolute range reads through the views read, which needs view:read: a
   // shared link opened by a caller without it reads the default instead, and
   // the host says why rather than drawing empty charts (#2304).
