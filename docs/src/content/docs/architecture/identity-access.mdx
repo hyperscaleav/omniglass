@@ -315,6 +315,14 @@ its create scope, and a root with no location still needs the all-scoped grant (
 location grant reaches no system or component, and a `system` or `component` grant still confers no
 location access.
 
+The read reach holds for any role that carries the read, not only `deploy`: the dev seed's
+`viewer-hq` (the `viewer` role, so `*:read`, on the hq subtree) lists and opens exactly the systems
+and components placed under hq, by name or dotted address, and nothing outside it. A location's
+health drill-down names the systems beneath it, so for a subtree grant the roll-up, the list and the
+get agree; `internal/api/viewer_subtree_reach_e2e_test.go` pins that (#1774). A `self` location
+grant can still read its location's health, whose drill-down names systems the grant cannot open:
+that divergence is [#2487](https://github.com/hyperscaleav/omniglass/issues/2487).
+
 Everything else is still scoped by its own tier: the modify actions (update, rename, move, delete)
 on systems and components, a `location` scope against every other resource (only `secret` /
 `variable` / `endpoint` / `task` resolve through their owning entity's tier), a `system` scope

@@ -33,12 +33,12 @@ export default function ListShell<T>(props: {
   // instead of growing the page. The FilterBar header (and any footer) stay
   // pinned. Off (the default), the shell grows with content.
   fill?: boolean;
-  // The `?open=` address the list could not resolve (lib/drawer_address): shows a
-  // non-disclosing not-found notice above the list. The same words for a row that
-  // does not exist and one the caller may not see; `onDismiss` clears the param.
   // Show "n of m" in the filter bar while chips filter. Opt-in: a body that
   // filters for itself (the tree) cannot report the shell's filtered count.
   counted?: boolean;
+  // The `?open=` address the list could not resolve (lib/drawer_address): shows a
+  // non-disclosing not-found notice above the list. The same words for a row that
+  // does not exist and one the caller may not see; `onDismiss` clears the param.
   missing?: { noun: string; address: string; onDismiss: () => void };
   children: (filtered: Accessor<T[]>, chips: Accessor<Chip[]>) => JSX.Element;
 }) {
