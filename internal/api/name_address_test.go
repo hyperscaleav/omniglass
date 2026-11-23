@@ -101,6 +101,7 @@ var idOnlyIsCorrect = map[string]string{
 	"outpost_id":       "an outpost is addressed by its enrollment identity, which is its primary key",
 	"caused_event_id":  "an event is addressed by its bigint id; an occurrence has no name handle",
 	"settled_event_id": "an event is addressed by its bigint id; an occurrence has no name handle",
+	"batch_id":         "a batch is not an entity: the id is the provenance handle a batch create stamps into its audit rows, with no name to pair it with",
 	"correlation_id":   "a freeform string that threads related log lines and events, not a reference to a named entity",
 }
 

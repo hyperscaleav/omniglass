@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"strconv"
@@ -64,6 +65,13 @@ type Alarm struct {
 	// of who set it, resolved as AcknowledgedBy is.
 	SnoozedUntil *time.Time
 	SnoozedBy    string
+	// LocationName, LocationPath and Systems are the fleet queue's context
+	// (#2333), read by ListFleetAlarms alone and zero on every other read: the
+	// room the component's plane root sits in (its name and its ancestor chain,
+	// root first), and the names of the systems the component is a member of.
+	LocationName string
+	LocationPath []string
+	Systems      []string
 }
 
 // Active reports whether the alarm is still raised.
@@ -86,7 +94,22 @@ type AlarmFilter struct {
 	// operator actually works; with IncludeCleared it also returns the alarms
 	// that came and went unattended.
 	Unacknowledged bool
+
+	// The fleet queue's filters (#2333), read by ListFleetAlarms alone.
+	// Severities keeps the named levels; Location keeps the alarms whose
+	// component sits in the named location or any below it; Acknowledged and
+	// Snoozed keep one side of the fact (nil keeps both). PageToken resumes
+	// after the page that returned it.
+	Severities   []string
+	Location     string
+	Acknowledged *bool
+	Snoozed      *bool
+	PageToken    string
 }
+
+// ErrPageToken is a page_token this server did not issue, or one cut off: the
+// caller's fault (a 422), never a silently restarted list.
+var ErrPageToken = errors.New("storage: invalid page token")
 
 // AlarmSpec is the raise input: a severity, an operator's note on what is
 // wrong, and the dedup key that names what it is about.
@@ -138,13 +161,18 @@ func snoozeOf(col string) string {
 	return "(select s." + col + " from alarm_snooze s where s.component_id = a.component_id and s.dedup_key = a.dedup_key and s.snoozed_until > now())"
 }
 
-func scanAlarm(row pgx.Row) (*Alarm, error) {
+func scanAlarm(row pgx.Row) (*Alarm, error) { return scanAlarmWith(row) }
+
+// scanAlarmWith scans the alarmCols projection plus extra trailing columns a
+// read appended to it.
+func scanAlarmWith(row pgx.Row, extra ...any) (*Alarm, error) {
 	var a Alarm
 	var ackUsername, ackServiceName, ackOutpostName *string
 	var snzUsername, snzServiceName, snzOutpostName *string
-	if err := row.Scan(&a.ID, &a.ComponentID, &a.ComponentName, &a.Severity, &a.Message,
+	dest := append([]any{&a.ID, &a.ComponentID, &a.ComponentName, &a.Severity, &a.Message,
 		&a.DedupKey, &a.RaisedAt, &a.ClearedAt, &a.RaisedByRuleID, &a.RaisedByRule, &a.AcknowledgedAt, &ackUsername, &ackServiceName, &ackOutpostName,
-		&a.SnoozedUntil, &snzUsername, &snzServiceName, &snzOutpostName); err != nil {
+		&a.SnoozedUntil, &snzUsername, &snzServiceName, &snzOutpostName}, extra...)
+	if err := row.Scan(dest...); err != nil {
 		return nil, err
 	}
 	a.AcknowledgedBy = userIdent(ackUsername, ackServiceName, ackOutpostName)
@@ -469,40 +497,182 @@ func (p *PG) ListSystemAlarms(ctx context.Context, systemID string, window time.
 // scope is injected here through scopedListSQL, the same rooted walk every
 // scoped component list takes, so an out-of-scope alarm is never read at all.
 // An empty or wholly malformed scope is an empty list, not an error.
-func (p *PG) ListFleetAlarms(ctx context.Context, read scope.Set, filter AlarmFilter, limit int) ([]Alarm, error) {
+//
+// It is also the alarm queue (#2333): the filter narrows by severity, location
+// subtree, acknowledgement and snooze, each row carries its component's
+// location and systems (read in this query and one batched path walk, never
+// per row), and a non-empty second return is the page_token for the next page.
+// The cursor is keyset, on the same (rank, raised_at, id) the list orders by,
+// so a page costs the same however deep it is and an alarm raised mid-walk
+// never shifts the pages.
+func (p *PG) ListFleetAlarms(ctx context.Context, read, systemRead scope.Set, filter AlarmFilter, limit int) ([]Alarm, string, error) {
+	cur, err := decodeAlarmCursor(filter.PageToken)
+	if err != nil {
+		return nil, "", err
+	}
 	if read.Empty() {
-		return []Alarm{}, nil
+		return []Alarm{}, "", nil
 	}
 	args, ok := scopedListArgs(componentTable, read)
 	if !ok {
-		return []Alarm{}, nil
+		return []Alarm{}, "", nil
 	}
-	args = append(args, filter.Unacknowledged, limit)
-	unack, lim := "$"+strconv.Itoa(len(args)-1), "$"+strconv.Itoa(len(args))
+	ctes := ""
+	// A row names only the systems inside the caller's system read: reading a
+	// component never discloses the systems it belongs to.
+	sf := newNamedReadFilter(systemTable, systemRead, len(args)+1, "vis_sys")
+	args = append(args, sf.Args...)
+	if sf.cte != "" {
+		ctes += ", " + sf.cte
+	}
+	bind := func(v any) string {
+		args = append(args, v)
+		return "$" + strconv.Itoa(len(args))
+	}
+	where := []string{"a.cleared_at is null", "a.component_id in (select id from comp)"}
+	if filter.Unacknowledged {
+		where = append(where, "a.acknowledged_at is null")
+	}
+	if filter.Acknowledged != nil {
+		where = append(where, "(a.acknowledged_at is not null) = "+bind(*filter.Acknowledged))
+	}
+	if filter.Snoozed != nil {
+		where = append(where, "("+snoozeOf("snoozed_until")+" is not null) = "+bind(*filter.Snoozed))
+	}
+	if len(filter.Severities) > 0 {
+		where = append(where, "a.severity = any("+bind(filter.Severities)+"::text[])")
+	}
+	if filter.Location != "" {
+		// The components under the named location: its plane roots, then their
+		// descendants (a nested component sits where its plane root sits).
+		ctes += `, loc_t as (
+				select id from location where name = ` + bind(filter.Location) + `
+				union all select l.id from location l join loc_t on l.parent_id = loc_t.id
+			), comp_t as (
+				select id from component where parent_id is null and location_id in (select id from loc_t)
+				union all select c.id from component c join comp_t on c.parent_id = comp_t.id
+			)`
+		where = append(where, "a.component_id in (select id from comp_t)")
+	}
+	if cur != nil {
+		r, at, id := bind(cur.rank), bind(cur.raisedAt), bind(cur.id)
+		where = append(where, "(coalesce(l.rank, 0) < "+r+" or (coalesce(l.rank, 0) = "+r+" and (a.raised_at, a.id) < ("+at+"::timestamptz, "+id+"::uuid)))")
+	}
+	lim := bind(limit + 1)
 	rows, err := p.pool.Query(ctx, `
-		with comp as (`+scopedListSQL(componentTable, "id", read)+`)
-		select `+alarmCols+`
+		with recursive comp as (`+scopedListSQL(componentTable, "id", read)+`)`+ctes+`
+		select `+alarmCols+`, coalesce(l.rank, 0),
+			coalesce((select array_agg(s.name order by s.name) from system_member m join system s on s.id = m.system_id
+				where m.component_id = a.component_id and `+sf.Pred("s.id")+`), '{}')
 		from alarm a
 		left join severity_level l on l.name = a.severity
-		where a.cleared_at is null
-		  and a.component_id in (select id from comp)
-		  and (not `+unack+` or a.acknowledged_at is null)
+		where `+strings.Join(where, " and ")+`
 		order by coalesce(l.rank, 0) desc, a.raised_at desc, a.id desc
 		limit `+lim, args...)
 	if err != nil {
-		return nil, fmt.Errorf("storage: list fleet alarms: %w", err)
+		return nil, "", fmt.Errorf("storage: list fleet alarms: %w", err)
 	}
 	defer rows.Close()
 
 	out := []Alarm{}
+	ranks := []int{}
 	for rows.Next() {
-		a, err := scanAlarm(rows)
+		var rank int
+		var systems []string
+		a, err := scanAlarmWith(rows, &rank, &systems)
 		if err != nil {
-			return nil, fmt.Errorf("storage: scan fleet alarm: %w", err)
+			return nil, "", fmt.Errorf("storage: scan fleet alarm: %w", err)
 		}
+		a.Systems = systems
 		out = append(out, *a)
+		ranks = append(ranks, rank)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, "", err
+	}
+	next := ""
+	if len(out) > limit {
+		out, ranks = out[:limit], ranks[:limit]
+		last := out[limit-1]
+		next = encodeAlarmCursor(alarmCursor{rank: ranks[limit-1], raisedAt: last.RaisedAt, id: last.ID})
+	}
+	if err := p.attachAlarmLocations(ctx, out); err != nil {
+		return nil, "", err
+	}
+	return out, next, nil
+}
+
+// attachAlarmLocations fills each alarm's LocationName and LocationPath from
+// its component's address: the location chain of its plane root, which is the
+// address segments before the component accessor. One batched walk for the
+// whole page (PathsOf), so the cost does not grow with the rows.
+func (p *PG) attachAlarmLocations(ctx context.Context, alarms []Alarm) error {
+	if len(alarms) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(alarms))
+	for _, a := range alarms {
+		ids = append(ids, a.ComponentID)
+	}
+	paths, err := PathsOf(ctx, p.pool, componentTable, ids)
+	if err != nil {
+		return err
+	}
+	for i := range alarms {
+		segs := paths[alarms[i].ComponentID]
+		var loc []string
+		for _, s := range segs {
+			if s == accessorComp {
+				break
+			}
+			loc = append(loc, s)
+		}
+		if len(loc) > 0 {
+			alarms[i].LocationPath = loc
+			alarms[i].LocationName = loc[len(loc)-1]
+		}
+	}
+	return nil
+}
+
+// alarmCursor is the position a fleet page ended at: the sort key of its last
+// row. The token is that key, opaque to the client.
+type alarmCursor struct {
+	rank     int
+	raisedAt time.Time
+	id       string
+}
+
+func encodeAlarmCursor(c alarmCursor) string {
+	raw := strconv.Itoa(c.rank) + "|" + c.raisedAt.UTC().Format(time.RFC3339Nano) + "|" + c.id
+	return base64.RawURLEncoding.EncodeToString([]byte(raw))
+}
+
+// decodeAlarmCursor reads a token back; the empty token is the first page (nil).
+func decodeAlarmCursor(tok string) (*alarmCursor, error) {
+	if tok == "" {
+		return nil, nil
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(tok)
+	if err != nil {
+		return nil, ErrPageToken
+	}
+	parts := strings.Split(string(raw), "|")
+	if len(parts) != 3 {
+		return nil, ErrPageToken
+	}
+	rank, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return nil, ErrPageToken
+	}
+	at, err := time.Parse(time.RFC3339Nano, parts[1])
+	if err != nil {
+		return nil, ErrPageToken
+	}
+	if _, err := uuid.Parse(parts[2]); err != nil {
+		return nil, ErrPageToken
+	}
+	return &alarmCursor{rank: rank, raisedAt: at, id: parts[2]}, nil
 }
 
 // activeAlarms is the health report's read: what is currently wrong with a

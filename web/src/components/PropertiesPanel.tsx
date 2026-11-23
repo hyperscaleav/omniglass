@@ -220,7 +220,7 @@ export default function PropertiesPanel(
           // Override: set when new or the value changed (the set is idempotent).
           const current = p.is_set ? displayValue(p.set_value) : null;
           if (current === null || draft !== current) {
-            await setOwnerProperty(kind, name, p.property_type_name, parseInput(p.data_type as ValueType, draft));
+            await setOwnerProperty(kind, name, p.property_type_name, parseInput(p.data_type as ValueType, draft, p.property_type_name));
           }
         }
       } catch (e) {

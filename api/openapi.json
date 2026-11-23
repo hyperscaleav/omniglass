@@ -712,6 +712,14 @@
           "id": {
             "type": "string"
           },
+          "location": {
+            "description": "The name of the location the alarm's component sits in (its plane root's location); absent when the component is unplaced, and on every read but the fleet queue",
+            "type": "string"
+          },
+          "location_path": {
+            "description": "That location's dotted ancestor path, root first (for example boi.17c)",
+            "type": "string"
+          },
           "message": {
             "type": "string"
           },
@@ -739,6 +747,16 @@
             "description": "Until when the alarm (by component and dedup_key) is snoozed: its notifications are written suppressed until then. Null while it is not snoozed. Independent of acknowledged and cleared_at",
             "format": "date-time",
             "type": "string"
+          },
+          "systems": {
+            "description": "The names of the systems the alarm's component is a member of; only on the fleet queue",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
           }
         },
         "required": [
@@ -1367,6 +1385,216 @@
         },
         "required": [
           "image_base64"
+        ],
+        "type": "object"
+      },
+      "BatchCreateComponentsInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/BatchCreateComponentsInputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "requests": {
+            "description": "The components to create, each the body POST /components takes, in order: a parent before its children",
+            "items": {
+              "$ref": "#/components/schemas/CreateComponentInputBody"
+            },
+            "minItems": 1,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "validate_only": {
+            "description": "Run every request in the transaction and roll it back: the response is what the write would create (names minted, ids empty), or the row that would refuse it, and nothing is written",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "requests"
+        ],
+        "type": "object"
+      },
+      "BatchCreateComponentsOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/BatchCreateComponentsOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "batch_id": {
+            "description": "The batch id every audit row of this call carries as from_batch; omitted on a dry run",
+            "type": "string"
+          },
+          "components": {
+            "description": "The components created, each as POST /components answers it, in request order",
+            "items": {
+              "$ref": "#/components/schemas/ComponentBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "validate_only": {
+            "description": "Whether this was a dry run that wrote nothing",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "components",
+          "validate_only"
+        ],
+        "type": "object"
+      },
+      "BatchCreateLocationsInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/BatchCreateLocationsInputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "requests": {
+            "description": "The locations to create, each the body POST /locations takes, in order: a parent before its children, which then name it as their parent",
+            "items": {
+              "$ref": "#/components/schemas/CreateLocationInputBody"
+            },
+            "minItems": 1,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "validate_only": {
+            "description": "Run every request in the transaction and roll it back: the response is what the write would create (names minted, ids empty), or the row that would refuse it, and nothing is written",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "requests"
+        ],
+        "type": "object"
+      },
+      "BatchCreateLocationsOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/BatchCreateLocationsOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "batch_id": {
+            "description": "The batch id every audit row of this call carries as from_batch; omitted on a dry run",
+            "type": "string"
+          },
+          "locations": {
+            "description": "The locations created, each as POST /locations answers it, in request order",
+            "items": {
+              "$ref": "#/components/schemas/LocationBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "validate_only": {
+            "description": "Whether this was a dry run that wrote nothing",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "locations",
+          "validate_only"
+        ],
+        "type": "object"
+      },
+      "BatchCreateSystemsInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/BatchCreateSystemsInputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "requests": {
+            "description": "The systems to create, each the body POST /systems takes, in order: a parent before its children",
+            "items": {
+              "$ref": "#/components/schemas/CreateSystemInputBody"
+            },
+            "minItems": 1,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "validate_only": {
+            "description": "Run every request in the transaction and roll it back: the response is what the write would create (names minted, ids empty), or the row that would refuse it, and nothing is written",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "requests"
+        ],
+        "type": "object"
+      },
+      "BatchCreateSystemsOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/BatchCreateSystemsOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "batch_id": {
+            "description": "The batch id every audit row of this call carries as from_batch; omitted on a dry run",
+            "type": "string"
+          },
+          "systems": {
+            "description": "The systems created, each as POST /systems answers it, in request order",
+            "items": {
+              "$ref": "#/components/schemas/SystemBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "validate_only": {
+            "description": "Whether this was a dry run that wrote nothing",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "systems",
+          "validate_only"
         ],
         "type": "object"
       },
@@ -8187,6 +8415,10 @@
               "array",
               "null"
             ]
+          },
+          "next_page_token": {
+            "description": "Pass as page_token for the next page; absent on the last page",
+            "type": "string"
           }
         },
         "required": [
@@ -20629,7 +20861,7 @@
     },
     "/alarms": {
       "get": {
-        "description": "What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Pass unacknowledged for the queue nobody has looked at, and limit to cap it (default 200, at most 1000). It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.",
+        "description": "What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Each row names its component's location and the systems it belongs to that the caller may read. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.",
         "operationId": "list-alarms",
         "parameters": [
           {
@@ -20653,6 +20885,70 @@
               "maximum": 1000,
               "minimum": 0,
               "type": "integer"
+            }
+          },
+          {
+            "description": "Only alarms at these severity levels, by name (see /severity-levels); repeat the parameter for several",
+            "explode": true,
+            "in": "query",
+            "name": "severity",
+            "schema": {
+              "description": "Only alarms at these severity levels, by name (see /severity-levels); repeat the parameter for several",
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "Only alarms whose component sits in this location or any location below it, by name",
+            "explode": false,
+            "in": "query",
+            "name": "location",
+            "schema": {
+              "description": "Only alarms whose component sits in this location or any location below it, by name",
+              "type": "string"
+            }
+          },
+          {
+            "description": "true keeps the acknowledged alarms, false the unacknowledged ones; absent keeps both",
+            "explode": false,
+            "in": "query",
+            "name": "acknowledged",
+            "schema": {
+              "description": "true keeps the acknowledged alarms, false the unacknowledged ones; absent keeps both",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "true keeps the snoozed alarms, false the ones not snoozed; absent keeps both",
+            "explode": false,
+            "in": "query",
+            "name": "snoozed",
+            "schema": {
+              "description": "true keeps the snoozed alarms, false the ones not snoozed; absent keeps both",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "The next_page_token of the previous page: resumes the same worst-first order after it, however many alarms there are",
+            "explode": false,
+            "in": "query",
+            "name": "page_token",
+            "schema": {
+              "description": "The next_page_token of the previous page: resumes the same worst-first order after it, however many alarms there are",
+              "type": "string"
             }
           }
         ],
@@ -24693,7 +24989,7 @@
         "x-omniglass-permission": "component:update"
       },
       "put": {
-        "description": "Declares a value for the property on this component, overriding the product contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by component:update; read and update scopes drive the 404 versus 403 split.",
+        "description": "Declares a value for the property on this component, overriding the product contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise), and the value must satisfy the property type's data type and validation (422 otherwise). Gated by component:update; read and update scopes drive the 404 versus 403 split.",
         "operationId": "set-component-property",
         "parameters": [
           {
@@ -25326,6 +25622,58 @@
         "summary": "Set a tag value on a component",
         "x-omniglass-mcp": {},
         "x-omniglass-permission": "component:update"
+      }
+    },
+    "/components:batchCreate": {
+      "post": {
+        "description": "Creates components in one transaction: each request is the body POST /components takes, run as that create runs it, in order, so a component may name as its parent one an earlier request creates, and its system and location by name as the single create does. Every row writes its own audit row carrying the one batch_id the response returns, under from_batch. A refused request refuses the whole batch, mapped as POST /components maps it, with its position in the request (requests[3]) leading the detail; nothing lands. validate_only runs the same transaction and rolls it back, answering 200 with the names the write would mint and no ids. A batch carries at most 1000 requests; more is a 413 naming the limit, so split a bigger import (by building). Gated by component:create; each request is held to that scope, its location resolves within your location:read scope, and a request naming a system also needs system:update over it, as its single create does.",
+        "operationId": "batch-create-components",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchCreateComponentsInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchCreateComponentsOutputBody"
+                }
+              }
+            },
+            "description": "The dry run: what the write would create, nothing written"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchCreateComponentsOutputBody"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Create many components in one write",
+        "x-omniglass-conditional-permission": "system:update",
+        "x-omniglass-mcp": {},
+        "x-omniglass-permission": "component:create"
       }
     },
     "/components:checkName": {
@@ -27445,7 +27793,7 @@
         "x-omniglass-permission": "location_type:delete"
       },
       "put": {
-        "description": "Declares a catalog property on a location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). A shipped (official) type's contract is writable too: a contract line is a row in its own table and nothing seeds one, so every line is an operator's. An unknown type is a 404 and a property the catalog does not know is a 422. Gated by location_type:update.",
+        "description": "Declares a catalog property on a location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). A shipped (official) type's contract is writable too: a contract line is a row in its own table and nothing seeds one, so every line is an operator's. An unknown type is a 404 and a property the catalog does not know is a 422, as is a default its property type refuses. Gated by location_type:update.",
         "operationId": "set-location-type-property",
         "parameters": [
           {
@@ -27976,7 +28324,7 @@
         "x-omniglass-permission": "location:update"
       },
       "put": {
-        "description": "Declares a value for the property on this location, overriding the location type contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by location:update; read and update scopes drive the 404 versus 403 split.",
+        "description": "Declares a value for the property on this location, overriding the location type contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise), and the value must satisfy the property type's data type and validation (422 otherwise). Gated by location:update; read and update scopes drive the 404 versus 403 split.",
         "operationId": "set-location-property",
         "parameters": [
           {
@@ -28319,6 +28667,57 @@
         },
         "summary": "Set a tag value on a location",
         "x-omniglass-permission": "location:update"
+      }
+    },
+    "/locations:batchCreate": {
+      "post": {
+        "description": "Creates locations in one transaction: each request is the body POST /locations takes, run as that create runs it, in order, so a location may name as its parent one an earlier request creates. Every row writes its own audit row carrying the one batch_id the response returns, under from_batch. A refused request refuses the whole batch, mapped as POST /locations maps it, with its position in the request (requests[3]) leading the detail; nothing lands. validate_only runs the same transaction and rolls it back, answering 200 with the names the write would mint and no ids. A batch carries at most 1000 requests; more is a 413 naming the limit, so split a bigger import (by building). Gated by location:create, and each request is held to that scope as its single create is.",
+        "operationId": "batch-create-locations",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchCreateLocationsInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchCreateLocationsOutputBody"
+                }
+              }
+            },
+            "description": "The dry run: what the write would create, nothing written"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchCreateLocationsOutputBody"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Create many locations in one write",
+        "x-omniglass-mcp": {},
+        "x-omniglass-permission": "location:create"
       }
     },
     "/locations:checkName": {
@@ -30616,7 +31015,7 @@
         "x-omniglass-permission": "product:delete"
       },
       "put": {
-        "description": "Declares a catalog property on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422); an unknown product is a 404 and a property the catalog does not know is a 422. Gated by product:update.",
+        "description": "Declares a catalog property on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422); an unknown product is a 404 and a property the catalog does not know is a 422, as is a default its property type refuses. Gated by product:update.",
         "operationId": "set-product-property",
         "parameters": [
           {
@@ -32224,7 +32623,7 @@
         "x-omniglass-permission": "standard:delete"
       },
       "put": {
-        "description": "Declares a catalog property on a custom standard, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official standards are read-only (422); an unknown standard is a 404 and a property the catalog does not know is a 422. Gated by standard:update.",
+        "description": "Declares a catalog property on a custom standard, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official standards are read-only (422); an unknown standard is a 404 and a property the catalog does not know is a 422, as is a default its property type refuses. Gated by standard:update.",
         "operationId": "set-standard-property",
         "parameters": [
           {
@@ -33507,7 +33906,7 @@
         "x-omniglass-permission": "system:update"
       },
       "put": {
-        "description": "Declares a value for the property on this system, overriding the standard contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by system:update; read and update scopes drive the 404 versus 403 split.",
+        "description": "Declares a value for the property on this system, overriding the standard contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise), and the value must satisfy the property type's data type and validation (422 otherwise). Gated by system:update; read and update scopes drive the 404 versus 403 split.",
         "operationId": "set-system-property",
         "parameters": [
           {
@@ -34264,6 +34663,57 @@
         },
         "summary": "Set a tag value on a system",
         "x-omniglass-permission": "system:update"
+      }
+    },
+    "/systems:batchCreate": {
+      "post": {
+        "description": "Creates systems in one transaction: each request is the body POST /systems takes, run as that create runs it, in order, so a system may name as its parent one an earlier request creates, and its location by name as the single create does. Every row writes its own audit row carrying the one batch_id the response returns, under from_batch. A refused request refuses the whole batch, mapped as POST /systems maps it, with its position in the request (requests[3]) leading the detail; nothing lands. validate_only runs the same transaction and rolls it back, answering 200 with the names the write would mint and no ids. A batch carries at most 1000 requests; more is a 413 naming the limit, so split a bigger import (by building). Gated by system:create; each request is held to that scope, and its location resolves within your location:read scope, as its single create is.",
+        "operationId": "batch-create-systems",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchCreateSystemsInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchCreateSystemsOutputBody"
+                }
+              }
+            },
+            "description": "The dry run: what the write would create, nothing written"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchCreateSystemsOutputBody"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Create many systems in one write",
+        "x-omniglass-mcp": {},
+        "x-omniglass-permission": "system:create"
       }
     },
     "/systems:checkName": {

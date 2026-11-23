@@ -239,10 +239,15 @@ func generatedCommands() []*cobra.Command {
 			cmd := func() *cobra.Command {
 				var qUnacknowledged bool
 				var qLimit int
+				var qSeverity []string
+				var qLocation string
+				var qAcknowledged string
+				var qSnoozed string
+				var qPageToken string
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List the fleet's active alarms",
-					Long:    "What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Pass unacknowledged for the queue nobody has looked at, and limit to cap it (default 200, at most 1000). It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.",
+					Long:    "What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Each row names its component's location and the systems it belongs to that the caller may read. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.",
 					Example: "  omniglass alarm list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -254,6 +259,23 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("limit") {
 							q.Set("limit", fmt.Sprintf("%v", qLimit))
 						}
+						if cmd.Flags().Changed("severity") {
+							for _, v := range qSeverity {
+								q.Add("severity", v)
+							}
+						}
+						if cmd.Flags().Changed("location") {
+							q.Set("location", fmt.Sprintf("%v", qLocation))
+						}
+						if cmd.Flags().Changed("acknowledged") {
+							q.Set("acknowledged", fmt.Sprintf("%v", qAcknowledged))
+						}
+						if cmd.Flags().Changed("snoozed") {
+							q.Set("snoozed", fmt.Sprintf("%v", qSnoozed))
+						}
+						if cmd.Flags().Changed("page-token") {
+							q.Set("page_token", fmt.Sprintf("%v", qPageToken))
+						}
 						if enc := q.Encode(); enc != "" {
 							path += "?" + enc
 						}
@@ -262,6 +284,11 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().BoolVar(&qUnacknowledged, "unacknowledged", false, "Only the alarms nobody has looked at: the queue an operator, or an agent, works")
 				cmd.Flags().IntVar(&qLimit, "limit", 0, "At most this many, the worst first; 0 or absent means 200")
+				cmd.Flags().StringSliceVar(&qSeverity, "severity", nil, "Only alarms at these severity levels, by name (see /severity-levels); repeat the parameter for several")
+				cmd.Flags().StringVar(&qLocation, "location", "", "Only alarms whose component sits in this location or any location below it, by name")
+				cmd.Flags().StringVar(&qAcknowledged, "acknowledged", "", "true keeps the acknowledged alarms, false the unacknowledged ones; absent keeps both")
+				cmd.Flags().StringVar(&qSnoozed, "snoozed", "", "true keeps the snoozed alarms, false the ones not snoozed; absent keeps both")
+				cmd.Flags().StringVar(&qPageToken, "page-token", "", "The next_page_token of the previous page: resumes the same worst-first order after it, however many alarms there are")
 				return cmd
 			}()
 			return cmd
@@ -1852,6 +1879,35 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fRequests string
+				var fValidateOnly bool
+				cmd := &cobra.Command{
+					Use:     "batchCreate",
+					Short:   "Create many components in one write",
+					Long:    "Creates components in one transaction: each request is the body POST /components takes, run as that create runs it, in order, so a component may name as its parent one an earlier request creates, and its system and location by name as the single create does. Every row writes its own audit row carrying the one batch_id the response returns, under from_batch. A refused request refuses the whole batch, mapped as POST /components maps it, with its position in the request (requests[3]) leading the detail; nothing lands. validate_only runs the same transaction and rolls it back, answering 200 with the names the write would mint and no ids. A batch carries at most 1000 requests; more is a 413 naming the limit, so split a bigger import (by building). Gated by component:create; each request is held to that scope, its location resolves within your location:read scope, and a request naming a system also needs system:update over it, as its single create does.",
+					Example: "  omniglass component batchCreate --requests <json>",
+					Args:    pathArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/components:batchCreate")
+						body := map[string]any{}
+						if cmd.Flags().Changed("requests") {
+							body["requests"] = jsonOrString(fRequests)
+						}
+						if cmd.Flags().Changed("validate-only") {
+							body["validate_only"] = fValidateOnly
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fRequests, "requests", "", "The components to create, each the body POST /components takes, in order: a parent before its children")
+				_ = cmd.MarkFlagRequired("requests")
+				cmd.Flags().BoolVar(&fValidateOnly, "validate-only", false, "Run every request in the transaction and roll it back: the response is what the write would create (names minted, ids empty), or the row that would refuse it, and nothing is written")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
 				var fLocation string
 				var fName string
 				var fParent string
@@ -2763,7 +2819,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "update <name> <property>",
 						Short:   "Set a property on a component",
-						Long:    "Declares a value for the property on this component, overriding the product contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by component:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "Declares a value for the property on this component, overriding the product contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise), and the value must satisfy the property type's data type and validation (422 otherwise). Gated by component:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component property update <name> <property> --value <json>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -4399,6 +4455,35 @@ func generatedCommands() []*cobra.Command {
 		}
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fRequests string
+				var fValidateOnly bool
+				cmd := &cobra.Command{
+					Use:     "batchCreate",
+					Short:   "Create many locations in one write",
+					Long:    "Creates locations in one transaction: each request is the body POST /locations takes, run as that create runs it, in order, so a location may name as its parent one an earlier request creates. Every row writes its own audit row carrying the one batch_id the response returns, under from_batch. A refused request refuses the whole batch, mapped as POST /locations maps it, with its position in the request (requests[3]) leading the detail; nothing lands. validate_only runs the same transaction and rolls it back, answering 200 with the names the write would mint and no ids. A batch carries at most 1000 requests; more is a 413 naming the limit, so split a bigger import (by building). Gated by location:create, and each request is held to that scope as its single create is.",
+					Example: "  omniglass location batchCreate --requests <json>",
+					Args:    pathArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/locations:batchCreate")
+						body := map[string]any{}
+						if cmd.Flags().Changed("requests") {
+							body["requests"] = jsonOrString(fRequests)
+						}
+						if cmd.Flags().Changed("validate-only") {
+							body["validate_only"] = fValidateOnly
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fRequests, "requests", "", "The locations to create, each the body POST /locations takes, in order: a parent before its children, which then name it as their parent")
+				_ = cmd.MarkFlagRequired("requests")
+				cmd.Flags().BoolVar(&fValidateOnly, "validate-only", false, "Run every request in the transaction and roll it back: the response is what the write would create (names minted, ids empty), or the row that would refuse it, and nothing is written")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
 				var fLocation string
 				var fName string
 				var fParent string
@@ -4715,7 +4800,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "update <name> <property>",
 						Short:   "Set a property on a location",
-						Long:    "Declares a value for the property on this location, overriding the location type contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by location:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "Declares a value for the property on this location, overriding the location type contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise), and the value must satisfy the property type's data type and validation (422 otherwise). Gated by location:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass location property update <name> <property> --value <json>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -5115,7 +5200,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "update <id> <property>",
 						Short:   "Declare a property on a location type",
-						Long:    "Declares a catalog property on a location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). A shipped (official) type's contract is writable too: a contract line is a row in its own table and nothing seeds one, so every line is an operator's. An unknown type is a 404 and a property the catalog does not know is a 422. Gated by location_type:update.",
+						Long:    "Declares a catalog property on a location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). A shipped (official) type's contract is writable too: a contract line is a row in its own table and nothing seeds one, so every line is an operator's. An unknown type is a 404 and a property the catalog does not know is a 422, as is a default its property type refuses. Gated by location_type:update.",
 						Example: "  omniglass location-type property update room <property>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -6462,7 +6547,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "update <id> <property>",
 						Short:   "Declare a property on a product",
-						Long:    "Declares a catalog property on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422); an unknown product is a 404 and a property the catalog does not know is a 422. Gated by product:update.",
+						Long:    "Declares a catalog property on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422); an unknown product is a 404 and a property the catalog does not know is a 422, as is a default its property type refuses. Gated by product:update.",
 						Example: "  omniglass product property update boreal-edge-55 <property>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -7628,7 +7713,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "update <id> <property>",
 						Short:   "Declare a property on a standard",
-						Long:    "Declares a catalog property on a custom standard, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official standards are read-only (422); an unknown standard is a 404 and a property the catalog does not know is a 422. Gated by standard:update.",
+						Long:    "Declares a catalog property on a custom standard, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official standards are read-only (422); an unknown standard is a 404 and a property the catalog does not know is a 422, as is a default its property type refuses. Gated by standard:update.",
 						Example: "  omniglass standard property update meeting-room <property>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -7842,6 +7927,35 @@ func generatedCommands() []*cobra.Command {
 				return cmd
 			}())
 			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fRequests string
+				var fValidateOnly bool
+				cmd := &cobra.Command{
+					Use:     "batchCreate",
+					Short:   "Create many systems in one write",
+					Long:    "Creates systems in one transaction: each request is the body POST /systems takes, run as that create runs it, in order, so a system may name as its parent one an earlier request creates, and its location by name as the single create does. Every row writes its own audit row carrying the one batch_id the response returns, under from_batch. A refused request refuses the whole batch, mapped as POST /systems maps it, with its position in the request (requests[3]) leading the detail; nothing lands. validate_only runs the same transaction and rolls it back, answering 200 with the names the write would mint and no ids. A batch carries at most 1000 requests; more is a 413 naming the limit, so split a bigger import (by building). Gated by system:create; each request is held to that scope, and its location resolves within your location:read scope, as its single create is.",
+					Example: "  omniglass system batchCreate --requests <json>",
+					Args:    pathArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/systems:batchCreate")
+						body := map[string]any{}
+						if cmd.Flags().Changed("requests") {
+							body["requests"] = jsonOrString(fRequests)
+						}
+						if cmd.Flags().Changed("validate-only") {
+							body["validate_only"] = fValidateOnly
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fRequests, "requests", "", "The systems to create, each the body POST /systems takes, in order: a parent before its children")
+				_ = cmd.MarkFlagRequired("requests")
+				cmd.Flags().BoolVar(&fValidateOnly, "validate-only", false, "Run every request in the transaction and roll it back: the response is what the write would create (names minted, ids empty), or the row that would refuse it, and nothing is written")
+				return cmd
+			}()
+			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
@@ -8433,7 +8547,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "update <name> <property>",
 						Short:   "Set a property on a system",
-						Long:    "Declares a value for the property on this system, overriding the standard contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by system:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "Declares a value for the property on this system, overriding the standard contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise), and the value must satisfy the property type's data type and validation (422 otherwise). Gated by system:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass system property update <name> <property> --value <json>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {

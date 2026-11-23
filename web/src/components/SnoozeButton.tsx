@@ -3,7 +3,7 @@ import { Popover } from "@kobalte/core/popover";
 import { useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
 import { Moon } from "./icons";
-import { ALARM_TIMELINE_PREFIX, COMPONENT_ALARMS_PREFIX, SNOOZE_PRESETS, snoozeAlarm, snoozedUntilWords, unsnoozeAlarm } from "../lib/alarms";
+import { ALARM_TIMELINE_PREFIX, COMPONENT_ALARMS_PREFIX, FLEET_ALARMS_PREFIX, SNOOZE_PRESETS, snoozeAlarm, snoozedUntilWords, unsnoozeAlarm } from "../lib/alarms";
 import { FLEET_VIEW_KEY } from "../lib/fleet";
 import { can, useMe } from "../lib/auth";
 import { describeError, fmtTime } from "../lib/format";
@@ -89,6 +89,7 @@ export function SnoozeControl(props: { component: string; alarm: Snoozable; surf
         qc.invalidateQueries({ queryKey: [...COMPONENT_ALARMS_PREFIX] }),
         qc.invalidateQueries({ queryKey: ["system-alarms"] }),
         qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] }),
+        qc.invalidateQueries({ queryKey: [...FLEET_ALARMS_PREFIX] }),
         qc.invalidateQueries({ queryKey: [...ALARM_TIMELINE_PREFIX] }),
       ]);
     } catch (e) {

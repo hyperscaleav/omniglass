@@ -223,6 +223,17 @@
       ]
     },
     {
+      "id": "triage-the-alarm-queue",
+      "title": "Triage the alarm queue",
+      "description": "Filter the fleet's alarm queue to the worst severities, acknowledge one alarm, snooze another and hand a third to omnibot, from the rows.",
+      "setup": [
+        "omniglass component create --label 'Queue demo display' --location bay-2 --name queue-demo-display --product boreal-edge-55",
+        "omniglass component alarm create queue-demo-display --dedup-key walkthrough-queue-dark --message 'Queue demo panel dark' --severity disaster",
+        "omniglass component alarm create queue-demo-display --dedup-key walkthrough-queue-fan --message 'Queue demo fan failing' --severity high",
+        "omniglass component alarm create queue-demo-display --dedup-key walkthrough-queue-input --message 'Queue demo input lost' --severity high"
+      ]
+    },
+    {
       "id": "troubleshoot-an-alarm",
       "title": "Troubleshoot an alarm",
       "description": "Hand an alarm to omnibot from its row and read where it says the fault is.",

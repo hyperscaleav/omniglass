@@ -139,7 +139,7 @@ func registerComponentPropertyRoutes(api huma.API, a *authenticator, gw storage.
 		Method:      http.MethodPut,
 		Path:        "/components/{name}/properties/{property}",
 		Summary:     "Set a property on a component",
-		Description: "Declares a value for the property on this component, overriding the product contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by component:update; read and update scopes drive the 404 versus 403 split.",
+		Description: "Declares a value for the property on this component, overriding the product contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise), and the value must satisfy the property type's data type and validation (422 otherwise). Gated by component:update; read and update scopes drive the 404 versus 403 split.",
 	}, "component", "update"), func(ctx context.Context, in *setComponentPropertyInput) (*componentPropertyOutput, error) {
 		raw, err := encodePropertyJSON(in.Body.Value, "value")
 		if err != nil {
@@ -188,6 +188,8 @@ func mapComponentPropertyErr(err error) error {
 	switch {
 	case errors.Is(err, storage.ErrPropertyNotFound):
 		return huma.Error404NotFound("property not set on this component")
+	case errors.Is(err, storage.ErrPropertyValueInvalid):
+		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, storage.ErrPropertyRefNotFound):
 		return huma.Error422UnprocessableEntity("unknown property")
 	default:

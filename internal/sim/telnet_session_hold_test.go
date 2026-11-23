@@ -12,6 +12,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/driver"
+	"github.com/hyperscaleav/omniglass/internal/sim/simtest"
 )
 
 // A telnet session over the simulator's panel (#1033, the capability
@@ -79,7 +80,7 @@ func TestPanelTelnetSessionLogsInOperatesAndRecovers(t *testing.T) {
 	if testing.Short() {
 		t.Skip("real-wire telnet session test")
 	}
-	panel := servePanel(t, "127.88.9.5")
+	panel := servePanel(t, simtest.ClaimLoopback(t))
 	port := facePort(t, panel, "nvp-telnet")
 	target := faceAddr(t, panel, "nvp-telnet")
 

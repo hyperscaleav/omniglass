@@ -15,6 +15,7 @@ import type { ReachEndpoint } from "./reachability";
 import { STALENESS_WINDOW_MS, endpointWord, lastSeenAt } from "./reachability";
 import { pollsHeld } from "./session";
 import { entityLabel } from "./entities";
+import { isLifecycleDate, isLifecycleMetric } from "./lifecycle";
 
 // The leaf's poll (#934): a monitoring console's component view moves as
 // collection arrives. The component's own reads (reachability, vitals, and
@@ -124,7 +125,7 @@ export type IdentityRow = { name: string; label: string; value: unknown; sourceR
 // hand-kept key list.
 export function identityRows(props: EffectivePropertyBody[]): IdentityRow[] {
   return (props ?? [])
-    .filter((p) => p.value !== null && p.value !== undefined)
+    .filter((p) => p.value !== null && p.value !== undefined && !isLifecycleDate(p.property_type_name))
     .map((p) => {
       const row: IdentityRow = { name: p.property_type_name, label: entityLabel({ name: p.property_type_name, label: p.label }), value: p.value };
       if (p.source_rule && p.source_rule_id) Object.assign(row, { sourceRule: p.source_rule, sourceRuleId: p.source_rule_id });
@@ -152,7 +153,7 @@ export type VitalSpread = { shown: string; count: number; instances: VitalInstan
 // contract's default standing in.
 export function vitalRows(metrics: EffectiveMetricBody[]): VitalRow[] {
   return (metrics ?? [])
-    .filter((m) => m.value !== null && m.value !== undefined)
+    .filter((m) => m.value !== null && m.value !== undefined && !isLifecycleMetric(m.metric_type_name))
     .map((m) => {
       const row: VitalRow = { name: m.metric_type_name, label: entityLabel({ name: m.metric_type_name, label: m.label }), value: m.value, sampled: m.is_sampled };
       if (m.unit) row.unit = m.unit;

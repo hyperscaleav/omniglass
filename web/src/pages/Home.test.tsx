@@ -124,11 +124,12 @@ describe("Home count tiles", () => {
     await waitFor(() => expect(path()).toBe("/outposts"));
   });
 
-  // /alarms is a stub page until the alarm list lands, so the tile is not a link.
-  it("leaves Open alarms a plain figure, not a button", async () => {
-    mount(meWith(["location:read"]));
+  // The alarm queue is live (#2333), so the tile opens it.
+  it("opens the alarm queue from the Open alarms tile", async () => {
+    const { path } = mount(meWith(["location:read"]));
     await waitFor(() => expect(screen.getByTestId("home-open-alarms")).toHaveTextContent("4"));
-    expect(screen.getByTestId("home-open-alarms").tagName).toBe("DIV");
+    fireEvent.click(screen.getByTestId("home-open-alarms"));
+    await waitFor(() => expect(path()).toBe("/alarms"));
   });
 
   it("says why the alarm count is missing when the view carries none", async () => {

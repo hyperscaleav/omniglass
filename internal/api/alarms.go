@@ -58,6 +58,10 @@ type alarmBody struct {
 	// the same (component, dedup_key) reads the same pair.
 	SnoozedUntil *time.Time `json:"snoozed_until,omitempty" doc:"Until when the alarm (by component and dedup_key) is snoozed: its notifications are written suppressed until then. Null while it is not snoozed. Independent of acknowledged and cleared_at"`
 	SnoozedBy    string     `json:"snoozed_by,omitempty" doc:"Who snoozed the alarm, by name; empty while it is not snoozed, or once that user has been purged (the audit log keeps the name)"`
+	// The fleet queue's context (#2333): present on GET /alarms only.
+	Location     string   `json:"location,omitempty" doc:"The name of the location the alarm's component sits in (its plane root's location); absent when the component is unplaced, and on every read but the fleet queue"`
+	LocationPath string   `json:"location_path,omitempty" doc:"That location's dotted ancestor path, root first (for example boi.17c)"`
+	Systems      []string `json:"systems,omitempty" doc:"The names of the systems the alarm's component is a member of; only on the fleet queue"`
 }
 
 func toAlarmBody(a *storage.Alarm) alarmBody {
@@ -78,6 +82,9 @@ func toAlarmBody(a *storage.Alarm) alarmBody {
 		Acknowledged:   a.Acknowledged(),
 		SnoozedUntil:   a.SnoozedUntil,
 		SnoozedBy:      a.SnoozedBy,
+		Location:       a.LocationName,
+		LocationPath:   strings.Join(a.LocationPath, "."),
+		Systems:        a.Systems,
 	}
 }
 
@@ -165,14 +172,29 @@ const (
 )
 
 type listFleetAlarmsInput struct {
-	Unacknowledged bool `query:"unacknowledged" doc:"Only the alarms nobody has looked at: the queue an operator, or an agent, works"`
-	Limit          int  `query:"limit" minimum:"0" maximum:"1000" doc:"At most this many, the worst first; 0 or absent means 200"`
+	Unacknowledged bool     `query:"unacknowledged" doc:"Only the alarms nobody has looked at: the queue an operator, or an agent, works"`
+	Limit          int      `query:"limit" minimum:"0" maximum:"1000" doc:"At most this many, the worst first; 0 or absent means 200"`
+	Severity       []string `query:"severity,explode" doc:"Only alarms at these severity levels, by name (see /severity-levels); repeat the parameter for several"`
+	Location       string   `query:"location" doc:"Only alarms whose component sits in this location or any location below it, by name"`
+	Acknowledged   string   `query:"acknowledged" enum:"true,false" doc:"true keeps the acknowledged alarms, false the unacknowledged ones; absent keeps both"`
+	Snoozed        string   `query:"snoozed" enum:"true,false" doc:"true keeps the snoozed alarms, false the ones not snoozed; absent keeps both"`
+	PageToken      string   `query:"page_token" doc:"The next_page_token of the previous page: resumes the same worst-first order after it, however many alarms there are"`
 }
 
 type listFleetAlarmsOutput struct {
 	Body struct {
-		Alarms []alarmBody `json:"alarms"`
+		Alarms        []alarmBody `json:"alarms"`
+		NextPageToken string      `json:"next_page_token,omitempty" doc:"Pass as page_token for the next page; absent on the last page"`
 	}
+}
+
+// optBool reads an optional true/false query value: nil when absent.
+func optBool(v string) *bool {
+	if v == "" {
+		return nil
+	}
+	b := v == "true"
+	return &b
 }
 
 // registerAlarmRoutes wires the component alarm surface.
@@ -183,17 +205,24 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/alarms",
 		Summary:     "List the fleet's active alarms",
-		Description: "What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Pass unacknowledged for the queue nobody has looked at, and limit to cap it (default 200, at most 1000). It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.",
+		Description: "What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Each row names its component's location and the systems it belongs to that the caller may read. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.",
 	}, "component", "read"), func(ctx context.Context, in *listFleetAlarmsInput) (*listFleetAlarmsOutput, error) {
 		limit := in.Limit
 		if limit <= 0 {
 			limit = fleetAlarmDefault
 		}
-		alarms, err := gw.ListFleetAlarms(ctx, a.scopeFor(ctx, "component", "read"), storage.AlarmFilter{Unacknowledged: in.Unacknowledged}, min(limit, fleetAlarmMax))
+		alarms, next, err := gw.ListFleetAlarms(ctx, a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "system", "read"), storage.AlarmFilter{
+			Unacknowledged: in.Unacknowledged, Severities: in.Severity, Location: in.Location,
+			Acknowledged: optBool(in.Acknowledged), Snoozed: optBool(in.Snoozed), PageToken: in.PageToken,
+		}, min(limit, fleetAlarmMax))
+		if errors.Is(err, storage.ErrPageToken) {
+			return nil, huma.Error422UnprocessableEntity("page_token is not one this server issued; start again without it")
+		}
 		if err != nil {
 			return nil, huma.Error500InternalServerError("read fleet alarms")
 		}
 		out := &listFleetAlarmsOutput{}
+		out.Body.NextPageToken = next
 		out.Body.Alarms = make([]alarmBody, 0, len(alarms))
 		for i := range alarms {
 			out.Body.Alarms = append(out.Body.Alarms, toAlarmBody(&alarms[i]))
