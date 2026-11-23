@@ -648,7 +648,7 @@ func TestHealthInvariantAcrossEveryTrigger(t *testing.T) {
 		}},
 		{"open a second building for the room to move into", func() error {
 			_, err := f.gw.CreateLocation(ctx, "", storage.LocationSpec{
-				Name: "hq-b2", LocationType: "building", ParentName: ptrStr("hq")}, f.all)
+				Name: "hq-b2", LocationType: "building", ParentName: ptrStr("hq")}, f.all, f.all)
 			return err
 		}},
 		{"move the room holding both systems, which recomputes both ancestor chains", func() error {

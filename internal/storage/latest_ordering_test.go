@@ -45,7 +45,7 @@ func TestCalculatedSeriesIsCurrentAtHighestID(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{
-		Name: "site", LocationType: "campus"}, all); err != nil {
+		Name: "site", LocationType: "campus"}, all, all); err != nil {
 		t.Fatalf("campus: %v", err)
 	}
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{

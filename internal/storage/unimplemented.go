@@ -237,7 +237,7 @@ func (UnimplementedGateway) ListLocations(context.Context, scope.Set) ([]Locatio
 func (UnimplementedGateway) GetLocation(context.Context, string, scope.Set) (*Location, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) CreateLocation(context.Context, string, LocationSpec, scope.Set) (*Location, error) {
+func (UnimplementedGateway) CreateLocation(context.Context, string, LocationSpec, scope.Set, scope.Set) (*Location, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) UpdateLocation(context.Context, string, string, LocationPatch, scope.Set, scope.Set) (*Location, error) {
@@ -563,7 +563,7 @@ func (UnimplementedGateway) CreateSimSystem(context.Context, string, SimSystemSp
 func (UnimplementedGateway) CreatePlan(context.Context, string, Plan, PlanScopes) (*Planned, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) BatchCreateLocations(context.Context, string, []LocationSpec, scope.Set, bool) ([]*Location, error) {
+func (UnimplementedGateway) BatchCreateLocations(context.Context, string, []LocationSpec, scope.Set, scope.Set, bool) ([]*Location, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) BatchCreateSystems(context.Context, string, []SystemSpec, scope.Set, scope.Set, bool) ([]*System, error) {

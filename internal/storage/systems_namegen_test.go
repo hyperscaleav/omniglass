@@ -28,7 +28,7 @@ func newSystemNamegenDB(t *testing.T) (*storage.PG, context.Context, string) {
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "namegen-room", LocationType: "campus"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "namegen-room", LocationType: "campus"}, all, all); err != nil {
 		t.Fatalf("create location: %v", err)
 	}
 	return gw, ctx, "namegen-room"
@@ -79,7 +79,7 @@ func TestSystemCreateGeneratesFromTypeStem(t *testing.T) {
 
 	// A different LOCATION is a different bucket: the ordinal restarts, so the
 	// second room's only board-meeting is bare again.
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "namegen-room-b", LocationType: "campus"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "namegen-room-b", LocationType: "campus"}, all, all); err != nil {
 		t.Fatalf("create second location: %v", err)
 	}
 	elsewhere, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: strp("namegen-room-b")}, all, all)
@@ -227,7 +227,7 @@ func TestSystemRenameFreezesAndResetReturnsThePen(t *testing.T) {
 
 	// A move must not disturb an operator-owned name, which is the whole point
 	// of the pen being permanent.
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "namegen-room-c", LocationType: "campus"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "namegen-room-c", LocationType: "campus"}, all, all); err != nil {
 		t.Fatalf("create the second location: %v", err)
 	}
 	moved, err := gw.MoveSystem(ctx, "", renamed.ID, storage.SystemMove{LocationName: strp("namegen-room-c")}, all, all, all)
@@ -256,7 +256,7 @@ func TestSystemRenameFreezesAndResetReturnsThePen(t *testing.T) {
 func TestSystemMoveReMintsTheOrdinal(t *testing.T) {
 	t.Parallel()
 	gw, ctx, room := newSystemNamegenDB(t)
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "namegen-room-d", LocationType: "campus"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "namegen-room-d", LocationType: "campus"}, all, all); err != nil {
 		t.Fatalf("create the destination: %v", err)
 	}
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: strp("namegen-room-d")}, all, all); err != nil {
@@ -645,7 +645,7 @@ func TestSystemGeneratedNamesAreUniquePerBucket(t *testing.T) {
 func TestStoredSystemOrdinalsRecomputeToThemselves(t *testing.T) {
 	t.Parallel()
 	gw, ctx, room := newSystemNamegenDB(t)
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "invariant-room-b", LocationType: "campus"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "invariant-room-b", LocationType: "campus"}, all, all); err != nil {
 		t.Fatalf("create the second room: %v", err)
 	}
 

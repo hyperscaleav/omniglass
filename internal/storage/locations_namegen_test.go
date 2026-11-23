@@ -25,7 +25,7 @@ func TestLocationPenIsOperatorOwnedAndFrozenByRename(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	l, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "pen-campus", LocationType: "campus"}, all)
+	l, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "pen-campus", LocationType: "campus"}, all, all)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestResetLocationNameRefuses(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	l, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "reset-campus", LocationType: "campus"}, all)
+	l, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "reset-campus", LocationType: "campus"}, all, all)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -122,7 +122,7 @@ func TestLocationTypeWithNoNameRuleGeneratesNothing(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	_, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: "campus"}, all)
+	_, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: "campus"}, all, all)
 	if !errors.Is(err, storage.ErrLocationTypeNoNameRule) {
 		t.Fatalf("a nameless create under a rule-less type = %v, want ErrLocationTypeNoNameRule", err)
 	}
@@ -135,7 +135,7 @@ func TestLocationTypeWithNoNameRuleGeneratesNothing(t *testing.T) {
 		t.Fatalf("%d locations exist after a refused create, want 0", len(locs))
 	}
 	// The same type still takes a name an operator types, unchanged.
-	named, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "campus"}, all)
+	named, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "campus"}, all, all)
 	if err != nil {
 		t.Fatalf("create with a name: %v", err)
 	}
@@ -180,7 +180,7 @@ func TestPositionalLocationTypeAllocatesWithinItsParent(t *testing.T) {
 	b := mustCreateLocation(t, gw, storage.LocationSpec{Name: "17d", LocationType: "building", ParentName: &campus.Name})
 
 	for i, want := range []string{"1", "2", "3"} {
-		got, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: positionalType, ParentName: &a.Name}, all)
+		got, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: positionalType, ParentName: &a.Name}, all, all)
 		if err != nil {
 			t.Fatalf("create deck %d: %v", i+1, err)
 		}
@@ -196,7 +196,7 @@ func TestPositionalLocationTypeAllocatesWithinItsParent(t *testing.T) {
 	}
 	// The next building starts at 1 again: the bucket is the parent, which is
 	// the whole reason a bare ordinal is a usable name at all.
-	other, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: positionalType, ParentName: &b.Name}, all)
+	other, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: positionalType, ParentName: &b.Name}, all, all)
 	if err != nil {
 		t.Fatalf("create a deck in the second building: %v", err)
 	}
@@ -206,10 +206,10 @@ func TestPositionalLocationTypeAllocatesWithinItsParent(t *testing.T) {
 	// A hand-typed name in the mint's own shape holds its slot, exactly as it
 	// does on the other two tiers: the unique index is on the NAME, so an
 	// allocator reading only the ordinals it had recorded would remint it.
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "4", LocationType: positionalType, ParentName: &a.Name}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "4", LocationType: positionalType, ParentName: &a.Name}, all, all); err != nil {
 		t.Fatalf("create a hand-typed deck named 4: %v", err)
 	}
-	fifth, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: positionalType, ParentName: &a.Name}, all)
+	fifth, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: positionalType, ParentName: &a.Name}, all, all)
 	if err != nil {
 		t.Fatalf("create beside the hand-typed 4: %v", err)
 	}
@@ -252,14 +252,14 @@ func TestPositionalTypeAtRootAllocatesAcrossTheFleet(t *testing.T) {
 		t.Fatalf("create the second positional type: %v", err)
 	}
 
-	first, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: "pad"}, all)
+	first, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: "pad"}, all, all)
 	if err != nil {
 		t.Fatalf("create the first root pad: %v", err)
 	}
 	if first.Name != "1" || first.ParentID != nil {
 		t.Fatalf("the first root pad = (%q, parent %v), want (\"1\", root)", first.Name, first.ParentID)
 	}
-	second, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: "pad"}, all)
+	second, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: "pad"}, all, all)
 	if err != nil {
 		t.Fatalf("create the second root pad: %v", err)
 	}
@@ -269,7 +269,7 @@ func TestPositionalTypeAtRootAllocatesAcrossTheFleet(t *testing.T) {
 	// A DIFFERENT positional type at root shares the space, because the bucket
 	// is the placement. This is the fact that would look alarming at root and is
 	// proven below to be the ordinary rule.
-	berth, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: "berth"}, all)
+	berth, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: "berth"}, all, all)
 	if err != nil {
 		t.Fatalf("create a root berth: %v", err)
 	}
@@ -280,14 +280,14 @@ func TestPositionalTypeAtRootAllocatesAcrossTheFleet(t *testing.T) {
 	// The same two types under a parent behave identically, which is the proof
 	// that root is not a special case to be refused.
 	campus := mustCreateLocation(t, gw, storage.LocationSpec{Name: "boi", LocationType: "campus"})
-	nested, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: "pad", ParentName: &campus.Name}, all)
+	nested, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: "pad", ParentName: &campus.Name}, all, all)
 	if err != nil {
 		t.Fatalf("create a nested pad: %v", err)
 	}
 	if nested.Name != "1" {
 		t.Fatalf("the first pad under a campus = %q, want 1", nested.Name)
 	}
-	nestedBerth, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: "berth", ParentName: &campus.Name}, all)
+	nestedBerth, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: "berth", ParentName: &campus.Name}, all, all)
 	if err != nil {
 		t.Fatalf("create a nested berth: %v", err)
 	}
@@ -358,10 +358,10 @@ func TestLocationMoveReMintsInTheDestinationBucket(t *testing.T) {
 	b := mustCreateLocation(t, gw, storage.LocationSpec{Name: "17d", LocationType: "building", ParentName: &campus.Name})
 	// One deck already sitting in the destination, so a move that failed to
 	// re-mint could not pass by landing on the same ordinal it already held.
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: positionalType, ParentName: &b.Name}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: positionalType, ParentName: &b.Name}, all, all); err != nil {
 		t.Fatalf("create the sitting deck: %v", err)
 	}
-	moving, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: positionalType, ParentName: &a.Name}, all)
+	moving, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: positionalType, ParentName: &a.Name}, all, all)
 	if err != nil {
 		t.Fatalf("create the moving deck: %v", err)
 	}
@@ -408,11 +408,11 @@ func TestLocationUpdateWithoutAClassificationChangeKeepsTheName(t *testing.T) {
 	campus := mustCreateLocation(t, gw, storage.LocationSpec{Name: "boi", LocationType: "campus"})
 	building := mustCreateLocation(t, gw, storage.LocationSpec{Name: "17c", LocationType: "building", ParentName: &campus.Name})
 
-	first, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: positionalType, ParentName: &building.Name}, all)
+	first, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: positionalType, ParentName: &building.Name}, all, all)
 	if err != nil {
 		t.Fatalf("create the first deck: %v", err)
 	}
-	second, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: positionalType, ParentName: &building.Name}, all)
+	second, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: positionalType, ParentName: &building.Name}, all, all)
 	if err != nil {
 		t.Fatalf("create the second deck: %v", err)
 	}
@@ -504,7 +504,7 @@ func TestEditingANameRuleRenamesNothing(t *testing.T) {
 	mustPositionalType(t, gw)
 	campus := mustCreateLocation(t, gw, storage.LocationSpec{Name: "boi", LocationType: "campus"})
 	building := mustCreateLocation(t, gw, storage.LocationSpec{Name: "17c", LocationType: "building", ParentName: &campus.Name})
-	existing, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: positionalType, ParentName: &building.Name}, all)
+	existing, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: positionalType, ParentName: &building.Name}, all, all)
 	if err != nil {
 		t.Fatalf("create the deck: %v", err)
 	}
@@ -531,7 +531,7 @@ func TestEditingANameRuleRenamesNothing(t *testing.T) {
 
 	// The NEXT create takes the new rule, which is what makes the assertion
 	// above a statement about renaming rather than about the rule not landing.
-	next, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: positionalType, ParentName: &building.Name}, all)
+	next, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: positionalType, ParentName: &building.Name}, all, all)
 	if err != nil {
 		t.Fatalf("create under the new rule: %v", err)
 	}
@@ -584,7 +584,7 @@ func TestNameRuleIsRefusedAtEditTime(t *testing.T) {
 	// The deck type's own rule is untouched by the refusal, so a create still works.
 	campus := mustCreateLocation(t, gw, storage.LocationSpec{Name: "boi", LocationType: "campus"})
 	building := mustCreateLocation(t, gw, storage.LocationSpec{Name: "17c", LocationType: "building", ParentName: &campus.Name})
-	deck, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: positionalType, ParentName: &building.Name}, all)
+	deck, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: positionalType, ParentName: &building.Name}, all, all)
 	if err != nil {
 		t.Fatalf("create a deck after the refused patch: %v", err)
 	}
@@ -719,7 +719,7 @@ func TestAForkedNameRuleSurvivesTheAuthoritativeSeed(t *testing.T) {
 	// the generator, not only the list.
 	campus := mustCreateLocation(t, gw, storage.LocationSpec{Name: "boi", LocationType: "campus"})
 	building := mustCreateLocation(t, gw, storage.LocationSpec{Name: "17c", LocationType: "building", ParentName: &campus.Name})
-	floor, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: "floor", ParentName: &building.Name}, all)
+	floor, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: "floor", ParentName: &building.Name}, all, all)
 	if err != nil {
 		t.Fatalf("create a floor under the forked rule: %v", err)
 	}
@@ -781,12 +781,12 @@ func TestStoredLocationOrdinalsRecomputeToThemselves(t *testing.T) {
 	// Both buckets, both mints, and every pen: generated rows, an
 	// operator-typed one, a renamed one, a reset one, and a moved one.
 	for range 3 {
-		if _, err := pg.CreateLocation(ctx, "", storage.LocationSpec{LocationType: positionalType, ParentName: &a.Name}, all); err != nil {
+		if _, err := pg.CreateLocation(ctx, "", storage.LocationSpec{LocationType: positionalType, ParentName: &a.Name}, all, all); err != nil {
 			t.Fatalf("create a deck in 17c: %v", err)
 		}
 	}
 	for range 2 {
-		if _, err := pg.CreateLocation(ctx, "", storage.LocationSpec{LocationType: "wing", ParentName: &a.Name}, all); err != nil {
+		if _, err := pg.CreateLocation(ctx, "", storage.LocationSpec{LocationType: "wing", ParentName: &a.Name}, all, all); err != nil {
 			t.Fatalf("create a wing in 17c: %v", err)
 		}
 	}
@@ -794,26 +794,26 @@ func TestStoredLocationOrdinalsRecomputeToThemselves(t *testing.T) {
 	// on ordinal 2: without it the moved row's OLD ordinal would still equal
 	// what a recompute produces and a move that forgot to re-record would slip
 	// through.
-	if _, err := pg.CreateLocation(ctx, "", storage.LocationSpec{LocationType: positionalType, ParentName: &b.Name}, all); err != nil {
+	if _, err := pg.CreateLocation(ctx, "", storage.LocationSpec{LocationType: positionalType, ParentName: &b.Name}, all, all); err != nil {
 		t.Fatalf("create the sitting deck in 17d: %v", err)
 	}
-	moving, err := pg.CreateLocation(ctx, "", storage.LocationSpec{LocationType: positionalType, ParentName: &a.Name}, all)
+	moving, err := pg.CreateLocation(ctx, "", storage.LocationSpec{LocationType: positionalType, ParentName: &a.Name}, all, all)
 	if err != nil {
 		t.Fatalf("create the moving deck: %v", err)
 	}
-	if _, err := pg.CreateLocation(ctx, "", storage.LocationSpec{Name: "penthouse", LocationType: positionalType, ParentName: &a.Name}, all); err != nil {
+	if _, err := pg.CreateLocation(ctx, "", storage.LocationSpec{Name: "penthouse", LocationType: positionalType, ParentName: &a.Name}, all, all); err != nil {
 		t.Fatalf("create the hand-typed deck: %v", err)
 	}
 	// Generated and then renamed, and LEFT renamed: the row that catches a
 	// rename which hands over the name without giving up the number.
-	frozen, err := pg.CreateLocation(ctx, "", storage.LocationSpec{LocationType: "wing", ParentName: &a.Name}, all)
+	frozen, err := pg.CreateLocation(ctx, "", storage.LocationSpec{LocationType: "wing", ParentName: &a.Name}, all, all)
 	if err != nil {
 		t.Fatalf("create the to-be-frozen wing: %v", err)
 	}
 	if _, err := pg.RenameLocation(ctx, "", frozen.ID, "east-wing", all, all); err != nil {
 		t.Fatalf("freeze the wing: %v", err)
 	}
-	reset, err := pg.CreateLocation(ctx, "", storage.LocationSpec{LocationType: "wing", ParentName: &a.Name}, all)
+	reset, err := pg.CreateLocation(ctx, "", storage.LocationSpec{LocationType: "wing", ParentName: &a.Name}, all, all)
 	if err != nil {
 		t.Fatalf("create the to-be-reset wing: %v", err)
 	}
@@ -866,7 +866,7 @@ func TestStoredLocationOrdinalsRecomputeToThemselves(t *testing.T) {
 // whose creation is setup rather than the thing under test.
 func mustCreateLocation(t *testing.T, gw storage.Gateway, spec storage.LocationSpec) *storage.Location {
 	t.Helper()
-	l, err := gw.CreateLocation(context.Background(), "", spec, all)
+	l, err := gw.CreateLocation(context.Background(), "", spec, all, all)
 	if err != nil {
 		t.Fatalf("create location %q: %v", spec.Name, err)
 	}

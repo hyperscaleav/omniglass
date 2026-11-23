@@ -147,7 +147,7 @@ func TestPropertiesCarryEveryKeyAndItsReconciliation(t *testing.T) {
 	}
 
 	// A place: its rows carry the block, never an observed value.
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq-campus", LocationType: "campus"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq-campus", LocationType: "campus"}, all, all); err != nil {
 		t.Fatalf("create campus: %v", err)
 	}
 	if _, err := gw.SetProperty(ctx, "", "location", "hq-campus", "serial-number", "", json.RawMessage(`"L-1"`), all, all); err != nil {
