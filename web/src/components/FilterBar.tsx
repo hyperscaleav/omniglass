@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal, createUniqueId, type JSX } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, createUniqueId, type JSX } from "solid-js";
 import { OP, opsFor, tokenToChip, chipGlyph, valueless, type FilterKey, type Chip, type OpKey } from "../lib/predicate";
 import { Search, X } from "./icons";
 import Button from "./Button";
@@ -38,8 +38,12 @@ export default function FilterBar<T>(props: {
   bare?: boolean;
   clearable?: boolean;
   trailing?: JSX.Element;
+  // The text being typed, as it changes ("" once a chip commits or it is
+  // cleared): a body that narrows as you type reads it before Enter.
+  onDraft?: (text: string) => void;
 }) {
   const [text, setText] = createSignal("");
+  createEffect(() => props.onDraft?.(text()));
   const [open, setOpen] = createSignal(false);
   const [sel, setSel] = createSignal(-1);
   const listId = createUniqueId();

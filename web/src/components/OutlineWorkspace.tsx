@@ -4,8 +4,8 @@ import { useQueries, useQuery } from "@tanstack/solid-query";
 import { Popover } from "@kobalte/core/popover";
 import ListShell from "./ListShell";
 import Button from "./Button";
-import Outline, { HealthSlots, OUTLINE_COLS, NARROW_HIDDEN, OUTLINE_FRAME, WIDE_ONLY, type AddKind, type OpenTarget } from "./Outline";
-import { Plus, resolveIcon } from "./icons";
+import Outline, { DetailText, HealthSlots, OUTLINE_COLS, NARROW_HIDDEN, OUTLINE_FRAME, WIDE_ONLY, type AddKind, type OpenTarget } from "./Outline";
+import { LayoutDashboard, Plus, resolveIcon } from "./icons";
 import { can, useMe } from "../lib/auth";
 import { useBlades } from "../lib/blades";
 import { FLEET_VIEW_KEY, fleetView } from "../lib/fleet";
@@ -19,7 +19,9 @@ import { COMPONENT_TYPES_KEY, listComponentTypes, resolveComponentTypeIcon } fro
 import { systemHealth, systemHealthKey } from "../lib/health";
 import { canHoldChildren } from "../lib/location_type_graph";
 import { ancestorsOf, buildOutline, entriesOf, rootAt, type OutlineEntry, type LocationNode } from "../lib/outline";
-import { parseChips, tagFilterKeys, type Chip, type FilterKey } from "../lib/predicate";
+import { buildPredicate, parseChips, tagFilterKeys, tokenToChip, type Chip, type FilterKey } from "../lib/predicate";
+import { ATTENTION, ATTENTION_CHIP, attentionCount, attentionParts } from "../lib/attention";
+import OutlineName, { type NameKind } from "./OutlineName";
 import { describeError } from "../lib/format";
 import { entityLabel } from "../lib/entities";
 
@@ -39,7 +41,6 @@ import { entityLabel } from "../lib/entities";
 // whole-fleet outline only).
 
 const OPEN_KEY = "explore-open";
-const ATTENTION = ["outage", "degraded", "incomplete"];
 
 function readOpen(): Set<string> {
   try {
@@ -108,14 +109,39 @@ export default function OutlineWorkspace(props: { rootId?: string; host?: "page"
   });
   const entries = createMemo(() => entriesOf(outline(), props.rootId ? roots() : undefined));
 
+  const filterKeys = createMemo<FilterKey<OutlineEntry>[]>(() => {
+    const tagNames = [...new Set(entries().flatMap((e) => Object.keys(e.tags)))].sort();
+    return [
+      // The bare typed term lands on the first substring key: a name, a
+      // system, a standard or a product.
+      { key: "name", type: "string", hint: "substring", get: (e) => e.search },
+      { key: "health", type: "string", get: (e) => e.health ?? "", values: () => ["healthy", "incomplete", "degraded", "outage"] },
+      { key: "type", type: "string", get: (e) => e.type, values: (es) => [...new Set(es.map((e) => e.type).filter(Boolean))].sort() },
+      { key: "standard", type: "string", get: (e) => e.standard, values: (es) => [...new Set(es.map((e) => e.standard).filter(Boolean))].sort() },
+      { key: "product", type: "string", get: (e) => e.product, values: (es) => [...new Set(es.map((e) => e.product).filter(Boolean))].sort() },
+      { key: "path", type: "string", hint: "substring", get: (e) => e.path.join(" / ") },
+      ...tagFilterKeys<OutlineEntry>(tagNames, new Set(["name", "health", "type", "standard", "product", "path"])),
+    ];
+  });
+
   const chips = createMemo<Chip[]>(() => parseChips(param("chips")));
+  // The filter narrows as you type: what is typed is previewed as the chip
+  // Enter would commit (the same parse), and the results list answers to
+  // the committed chips and this one together.
+  const [draft, setDraft] = createSignal("");
+  const draftChip = createMemo<Chip | null>(() => {
+    const t = draft().trim();
+    return t ? tokenToChip(t, filterKeys(), "name") : null;
+  });
+  const effective = createMemo<Chip[]>(() => [...chips(), ...(draftChip() ? [draftChip()!] : [])]);
+  const shown = createMemo(() => entries().filter(buildPredicate(filterKeys(), effective())));
 
   // The alarm text behind a red light, read only for the troubled systems on
   // screen: those at a location the operator has opened, every location above it
   // open too, and none while the filter shows results instead of the tree.
   // Each read is shared with the system workspace's cache.
   const troubled = createMemo(() => {
-    if (chips().length > 0) return [];
+    if (effective().length > 0) return [];
     const o = open();
     const ids: string[] = [];
     const walk = (n: LocationNode) => {
@@ -141,7 +167,7 @@ export default function OutlineWorkspace(props: { rootId?: string; host?: "page"
   const attentionOn = () => chips().some((c) => c.key === "health" && ATTENTION.every((v) => c.values.includes(v)));
   const toggleAttention = () => {
     const rest = chips().filter((c) => c.key !== "health");
-    setChips(attentionOn() ? rest : [...rest, { key: "health", op: "eq", values: ATTENTION }]);
+    setChips(attentionOn() ? rest : [...rest, ATTENTION_CHIP]);
   };
   // Rooted, the counts cover what the list shows: the locations beneath the
   // root, never the root's own systems (their cards sit above the outline,
@@ -150,31 +176,18 @@ export default function OutlineWorkspace(props: { rootId?: string; host?: "page"
     healthy: a.healthy + n.lights.healthy, incomplete: a.incomplete + n.lights.incomplete,
     degraded: a.degraded + n.lights.degraded, outage: a.outage + n.lights.outage,
   }), { healthy: 0, incomplete: 0, degraded: 0, outage: 0 });
-  const needing = () => {
-    if (!props.rootId) return (view.data?.systems ?? []).filter((s) => ATTENTION.includes(s.health)).length;
-    const l = rootedLights();
-    return l.incomplete + l.degraded + l.outage;
-  };
+  // What the chip counts is what pressing it shows: the entries the attention
+  // filter leaves alongside the other chips on screen, tallied by the one pure
+  // count Home reads too (lib/attention).
+  const needing = createMemo(() => {
+    const others = effective().filter((c) => c.key !== "health");
+    return attentionCount(entries().filter(buildPredicate(filterKeys(), [...others, ATTENTION_CHIP])));
+  });
   const systemCount = () => {
     if (!props.rootId) return outline().systemCount;
     const l = rootedLights();
     return l.healthy + l.incomplete + l.degraded + l.outage;
   };
-
-  const filterKeys = createMemo<FilterKey<OutlineEntry>[]>(() => {
-    const tagNames = [...new Set(entries().flatMap((e) => Object.keys(e.tags)))].sort();
-    return [
-      // The bare typed term lands on the first substring key: a name, a
-      // system, a standard or a product.
-      { key: "name", type: "string", hint: "substring", get: (e) => e.search },
-      { key: "health", type: "string", get: (e) => e.health ?? "", values: () => ["healthy", "incomplete", "degraded", "outage"] },
-      { key: "type", type: "string", get: (e) => e.type, values: (es) => [...new Set(es.map((e) => e.type).filter(Boolean))].sort() },
-      { key: "standard", type: "string", get: (e) => e.standard, values: (es) => [...new Set(es.map((e) => e.standard).filter(Boolean))].sort() },
-      { key: "product", type: "string", get: (e) => e.product, values: (es) => [...new Set(es.map((e) => e.product).filter(Boolean))].sort() },
-      { key: "path", type: "string", hint: "substring", get: (e) => e.path.join(" / ") },
-      ...tagFilterKeys<OutlineEntry>(tagNames, new Set(["name", "health", "type", "standard", "product", "path"])),
-    ];
-  });
 
   // What may be created under a row: what the catalog lets sit there, and
   // what the caller may create.
@@ -260,10 +273,17 @@ export default function OutlineWorkspace(props: { rootId?: string; host?: "page"
             <div class="flex flex-col gap-3">
               <div data-testid="explore-counts" class="flex flex-wrap items-center gap-4 text-sm">
                 <span class="text-base-content/75"><span class="mr-1.5 font-data font-medium text-base-content">{systemCount()}</span>{systemCount() === 1 ? "system" : "systems"}</span>
-                <Show when={needing() > 0 || attentionOn()}>
+                <Show when={needing().total > 0 || attentionOn()}>
                   <Button size="sm" intent={attentionOn() ? "action" : "quiet"} pressed={attentionOn()} onClick={toggleAttention} title="Show only what needs attention">
-                    <Show when={!attentionOn()}><span class="h-[7px] w-[7px] rounded-full bg-warning" aria-hidden="true" /></Show>
-                    <span class="font-data">{needing()}</span> need attention
+                    <span data-testid="attention-dot" class="h-[7px] w-[7px] rounded-full bg-warning" aria-hidden="true" />
+                    <span>
+                      <Show when={needing().total > 0} fallback="Nothing needs attention">
+                        <For each={attentionParts(needing())}>
+                          {(p, i) => <>{i() > 0 ? ", " : ""}<span class="font-data">{p.n}</span> {p.noun}</>}
+                        </For>
+                        {needing().total === 1 ? " needs attention" : " need attention"}
+                      </Show>
+                    </span>
                   </Button>
                 </Show>
                 <span class="flex-1" />
@@ -302,11 +322,12 @@ export default function OutlineWorkspace(props: { rootId?: string; host?: "page"
                   rows={entries()}
                   chips={chips}
                   onChips={setChips}
-                  placeholder="Filter by name, location, health, type, standard, product or tag"
+                  onDraft={setDraft}
+                  placeholder="Filter by name, location, health, type, standard, product or tag; Enter pins it as a chip"
                 >
                   {(filtered) => (
                     <Show
-                      when={chips().length > 0}
+                      when={effective().length > 0}
                       fallback={
                         <Outline
                           roots={roots()}
@@ -320,8 +341,8 @@ export default function OutlineWorkspace(props: { rootId?: string; host?: "page"
                         />
                       }
                     >
-                      <Show when={filtered().length > 0} fallback={<p class="px-4 py-8 text-center text-sm text-base-content/60">Nothing matches the filter.</p>}>
-                        <Results entries={filtered()} outlineRoots={roots()} onOpen={(e) => {
+                      <Show when={shown().length > 0} fallback={<p class="px-4 py-8 text-center text-sm text-base-content/60">Nothing matches the filter.</p>}>
+                        <Results entries={shown()} outlineRoots={roots()} onOpen={(e) => {
                           const t = targetOfEntry(e, roots());
                           if (!t) return revealResult(e.id);
                           setSelected(e.id);
@@ -352,6 +373,7 @@ function findLocation(roots: LocationNode[], id: string): LocationNode | undefin
 }
 function targetOfEntry(e: OutlineEntry, roots: LocationNode[]): OpenTarget | null {
   if (e.kind === "component") return { kind: "component", id: e.id };
+  if (e.kind === "system") return { kind: "system", id: e.id };
   // The node of things out of sight is no location; it has no panel to open.
   if (e.id === "unplaced") return null;
   const n = findLocation(roots, e.id);
@@ -364,7 +386,8 @@ function Results(props: { entries: OutlineEntry[]; outlineRoots: LocationNode[];
       <For each={props.entries}>
         {(e) => {
           const location = () => (e.kind === "location" ? findLocation(props.outlineRoots, e.id) : undefined);
-          const Icon = resolveIcon(location()?.icon || (e.kind === "component" ? "box" : "map-pin"));
+          const Icon = e.kind === "system" ? LayoutDashboard : resolveIcon(location()?.icon || (e.kind === "component" ? "box" : "map-pin"));
+          const nameKind: NameKind = e.kind;
           return (
             <li
               role="listitem"
@@ -379,13 +402,13 @@ function Results(props: { entries: OutlineEntry[]; outlineRoots: LocationNode[];
             >
               <span class="col-span-2 flex min-w-0 items-center gap-2 pr-4 @max-[40rem]:col-span-1">
                 <span class="flex-none text-base-content/45"><Icon size={16} /></span>
-                <span class="truncate">
-                  <Show when={e.path.length > 0}><span class="text-base-content/40">{e.path.join(" / ")} / </span></Show>
-                  <span class={e.kind === "component" ? "font-data text-[13px]" : "font-semibold"}>{e.label}</span>
+                <span class="flex min-w-0 items-baseline">
+                  <Show when={e.path.length > 0}><span class="mr-1.5 min-w-0 shrink-[999] truncate text-base-content/40">{e.path.join(" / ")} /</span></Show>
+                  <OutlineName kind={nameKind} label={e.label} class="min-w-0 shrink-0 max-w-full" />
                 </span>
               </span>
               <span class={`truncate pr-4 text-base-content/75 ${WIDE_ONLY}`}>{e.kind === "component" ? e.product : e.standard}</span>
-              <span class={`truncate pr-4 text-base-content/55 ${NARROW_HIDDEN}`}>{location()?.contents ?? ""}</span>
+              <span class={`pr-4 text-[13px] leading-4 text-base-content/55 ${NARROW_HIDDEN}`}><DetailText text={location()?.contents ?? ""} /></span>
               <span>{e.health ? <HealthSlots single={e.health} /> : null}</span>
               <span />
             </li>
