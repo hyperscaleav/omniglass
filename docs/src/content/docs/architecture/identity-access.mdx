@@ -315,6 +315,14 @@ its create scope, and a root with no location still needs the all-scoped grant (
 location grant reaches no system or component, and a `system` or `component` grant still confers no
 location access.
 
+The read reach holds for any role that carries the read, not only `deploy`: the dev seed's
+`viewer-hq` (the `viewer` role, so `*:read`, on the hq subtree) lists and opens exactly the systems
+and components placed under hq, by name or dotted address, and nothing outside it. A location's
+health drill-down names the systems beneath it, so for a subtree grant the roll-up, the list and the
+get agree; `internal/api/viewer_subtree_reach_e2e_test.go` pins that (#1774). A `self` location
+grant can still read its location's health, whose drill-down names systems the grant cannot open:
+that divergence is [#2487](https://github.com/hyperscaleav/omniglass/issues/2487).
+
 Everything else is still scoped by its own tier: the modify actions (update, rename, move, delete)
 on systems and components, a `location` scope against every other resource (only `secret` /
 `variable` / `endpoint` / `task` resolve through their owning entity's tier), a `system` scope
@@ -495,6 +503,16 @@ A refusal picks its status from the **difference between two scopes**, not from 
 | in no grant carrying the action at all | **403** | the fast-reject, before the gateway is touched |
 | in `visible_set(P, read)`, outside `visible_set(P, action)` | **403** | the caller can already see this row, so naming the missing authority discloses nothing a `GET` would not, and it is the truth |
 | outside `visible_set(P, read)` | **404** | non-disclosing: the caller must not learn the row exists, not even through a different status |
+
+A **create** has no target yet, so the split is made on the row it is placed under. A location
+created under a parent resolves that parent within `visible_set(P, create)`, and only when that
+refuses asks `visible_set(P, read)` which refusal is owed: a parent the caller can read is the
+**403**, and one outside read answers the same `404 parent location not found` as a parent that
+does not exist, byte for byte, so a create holder cannot probe location names it cannot read
+([ADR-1343](/architecture/decisions/#adr-1343-a-location-create-resolves-its-parent-under-read-before-create)).
+A root needs an all-scoped create grant (403 otherwise). Component and system create, a location
+`:move` and a `:renderLabel` draft still answer an existing parent outside their own scope with the
+403 ([#1964](https://github.com/hyperscaleav/omniglass/issues/1964)).
 
 One primitive makes the split for every route that has one, `resolveScoped` in the Storage
 Gateway, so the ordering (read first, then action) exists in one place rather than once per

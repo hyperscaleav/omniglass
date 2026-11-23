@@ -101,7 +101,7 @@ func TestListFleetAlarmsFiltersPagesAndNamesLocationAndSystems(t *testing.T) {
 		{Name: "q-r1", LocationType: "room", ParentName: strptr("q-hq")},
 		{Name: "q-other", LocationType: "campus"},
 	} {
-		if _, err := gw.CreateLocation(ctx, "", l, all); err != nil {
+		if _, err := gw.CreateLocation(ctx, "", l, all, all); err != nil {
 			t.Fatalf("location %s: %v", l.Name, err)
 		}
 	}

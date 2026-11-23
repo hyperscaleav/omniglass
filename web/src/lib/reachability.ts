@@ -1,3 +1,4 @@
+import { drawerHref } from "./drawer_address";
 import { api } from "../api/client";
 import type { EndpointWebhookBody, ReachRejectionBody, ReachSessionBody, ReachTLSBody } from "../api/api.gen";
 import { share, spans } from "./timeline";
@@ -102,7 +103,7 @@ export function pendingNotice(iface: ReachEndpoint): PendingNotice | null {
     case "awaiting-probe":
       return {
         text: `Waiting for outpost ${iface.outpost}'s first probe of this endpoint.`,
-        href: `/outposts?n=${encodeURIComponent(iface.outpost ?? "")}`,
+        href: drawerHref("outpost", iface.outpost ?? ""),
         linkLabel: "Open outpost",
       };
     default:
