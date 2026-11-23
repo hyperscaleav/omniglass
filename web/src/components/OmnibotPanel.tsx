@@ -48,9 +48,9 @@ function RecordedPrompts(props: { prompts: string[]; disabled: boolean; onPick: 
     <div data-testid="omnibot-prompts" class="flex flex-wrap gap-1.5" aria-label="Questions this recording answers">
       <For each={props.prompts}>
         {(p) => (
-          <button type="button" class="btn btn-outline btn-xs h-auto min-h-0 py-1 text-left font-normal" disabled={props.disabled} onClick={() => props.onPick(p)}>
+          <Button intent="quiet" size="xs" class="h-auto min-h-0 py-1 text-left font-normal" disabled={props.disabled} onClick={() => props.onPick(p)}>
             {p}
-          </button>
+          </Button>
         )}
       </For>
     </div>
