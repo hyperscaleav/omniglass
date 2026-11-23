@@ -10,7 +10,8 @@ import Tooltip from "./ui/Tooltip";
 // The outline (#867): every location in the fleet as one tree, drawn as aligned
 // columns. A location wears its system (standard and health on its own row) and
 // lists the components beneath it directly; only a location holding several
-// systems shows a header per system. Health is four fixed slots, and only
+// systems shows a header per system. Health shows each count a row has, packed
+// left in severity order with no blank slots, and only
 // healthy wears a muted green beside the full trouble hues, so a healthy fleet
 // reads calm and the one degraded branch is the loudest colour on the page.
 //
@@ -25,8 +26,8 @@ export type OpenTarget = { kind: "location" | "system" | "component"; id: string
 // detail, health, action. The columns answer the width of the outline itself
 // (a container query), not the window, since the sidebar and the blade take
 // their share first: as it narrows, Standard or product goes, then Type
-// (Detail slims), then Detail, and at the narrowest Health drops its empty
-// slots; Name keeps what is left. OUTLINE_FRAME marks the container.
+// (Detail slims), then Detail; Health keeps its packed counts and Name keeps
+// what is left. OUTLINE_FRAME marks the container.
 export const OUTLINE_FRAME = "@container";
 export const OUTLINE_COLS =
   "grid-cols-[minmax(0,1fr)_7rem_12rem_10rem_9.5rem_2rem] @max-[56rem]:grid-cols-[minmax(0,1fr)_7rem_10rem_9.5rem_2rem] @max-[40rem]:grid-cols-[minmax(0,1fr)_7rem_9.5rem_2rem] @max-[28rem]:grid-cols-[minmax(0,1fr)_6rem_2rem]";
