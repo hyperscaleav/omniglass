@@ -188,6 +188,8 @@ func mapComponentPropertyErr(err error) error {
 	switch {
 	case errors.Is(err, storage.ErrPropertyNotFound):
 		return huma.Error404NotFound("property not set on this component")
+	case errors.Is(err, storage.ErrPropertyValueInvalid):
+		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, storage.ErrPropertyRefNotFound):
 		return huma.Error422UnprocessableEntity("unknown property")
 	default:
