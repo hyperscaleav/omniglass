@@ -600,6 +600,52 @@ describe("the history tab (#792)", () => {
     expect(figure().className).not.toContain("text-healthy");
   });
 
+  // #2435: the share is over the time the system has existed, and the card
+  // names that window. NOW is 2026-08-20T16:00Z here.
+  describe("a system recorded minutes ago (#2435)", () => {
+    const young = (over: Record<string, unknown>) =>
+      ({ ...health, health: "healthy", transitions: [], first_recorded_at: "2026-08-20T15:56:00Z", ...over }) as unknown as FleetHealth;
+    const card = () => screen.getByTestId("uptime-kpi");
+
+    it("reads 100% over a window it names, not of the last 30 days", () => {
+      mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`, young({ transitions: [{ ts: "2026-08-20T15:56:00Z", health: "healthy" }] }));
+      expect(card().textContent).toContain("100%");
+      expect(card().textContent).toMatch(/since Aug 20/);
+      expect(card().textContent).not.toContain("of the last 30 days");
+    });
+
+    it("a first-recorded owner with no edge in the range still reads 100%", () => {
+      mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`, young({}));
+      expect(card().textContent).toContain("100%");
+    });
+
+    it("no health recorded says so and shows no percentage", () => {
+      mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`, young({ first_recorded_at: undefined, health: undefined }));
+      expect(card().textContent).toContain("no health recorded yet");
+      expect(card().textContent).not.toContain("%");
+    });
+
+    it("lists no zero-length stretch", () => {
+      mount(
+        `/web/systems/${uuidFor("szp-sys")}?tab=history`,
+        young({ health: "degraded", transitions: [{ ts: "2026-08-20T15:56:00.000Z", health: "incomplete" }, { ts: "2026-08-20T15:56:00.300Z", health: "degraded" }] }),
+      );
+      const items = within(screen.getByTestId("stretch-list")).getAllByTestId(/^stretch-/);
+      expect(items.length).toBe(1);
+      expect(items[0].textContent).not.toMatch(/Commissioning/);
+    });
+
+    it("labels the strip's ends and each segment says verdict, from, to and duration", () => {
+      mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`, young({ health: "degraded", transitions: [{ ts: "2026-08-20T15:56:00Z", health: "healthy" }, { ts: "2026-08-20T15:58:00Z", health: "degraded" }] }));
+      const strip = screen.getByTestId("health-history-full");
+      expect(within(strip).getByTestId("strip-start").textContent).toMatch(/Aug 20/);
+      expect(within(strip).getByTestId("strip-end").textContent).toBe("now");
+      const seg = strip.querySelectorAll("[data-segment]");
+      expect(seg.length).toBe(2);
+      expect(seg[0].getAttribute("data-segment")).toMatch(/healthy.*2m/);
+    });
+  });
+
   it("renders the ongoing unhealthy stretch as the first entry, expandable to the alarms that explain it", async () => {
     const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`);
     seedAlarms(r.qc);

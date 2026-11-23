@@ -413,6 +413,13 @@ expanding to the health changes inside it and the alarms that explain them. An a
 system absorbed without going unhealthy lists under **other alarms**. A system that flaps
 weekly and a system that failed once look different here, which is the point.
 
+Uptime is the healthy share of the time the system has been recorded inside the last 30
+days, never of days it did not exist for. A system recorded minutes ago reads over those
+minutes and the card names its window ("since Nov 23, 01:56 PM"); with no health recorded
+yet it says so instead of showing a percentage. The timeline is labelled at both ends and each
+segment's hover gives its health, from, to and duration; the red and amber triangles under it
+are alarm raises on that same axis.
+
 ::screenshot{#fleet-history}
 
 Under the health history, the **events** are the system's story on the event lane: the system's
