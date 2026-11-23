@@ -187,10 +187,10 @@ automated. The steps, between a candidate and its final release:
    ```
 
 4. Commit the record the command wrote, by a PR to `main`. **No passing record for the
-   candidate's build, no final release.** A failing verdict exits 1, names every reason, and is also
+   candidate's build, no final release.** A failing soak verdict exits 1, names every reason, and is also
    recorded; fix the build and run a new week.
 
-The verdict is the platform's own, not a harness's figures derived again: it reads through the API
+The soak verdict is the platform's own, not a harness's figures derived again: it reads through the API
 the platform system's alarm history and the Platform health page's loss ratios, and nothing from
 the database. It passes when all of these hold:
 
@@ -205,11 +205,11 @@ A reading that cannot answer fails rather than passes: no build reported, two bu
 servers, no loss ratio on the page, a token that cannot read the whole page, or an alarm history
 that reached the API's 500-alarm cap. The thresholds are named in code (`SoakMinWindow`,
 `SoakAlarmTolerance` and `SoakLossCeiling` in `internal/lab/soak.go`), and the alarm history reaches back
-30 days, so a verdict is read within 30 days of the soak's start. It gets stricter as the
+30 days, so a soak verdict is read within 30 days of the soak's start. It gets stricter as the
 platform raises more alarms about itself: it judges by whatever the platform alarms on today.
 
 **The record** is one file per build, `docs/src/content/soak-records/<build>.md`, so the release's
-notes can link the soak it passed. Its front matter carries the facts and its body the verdict in
+notes can link the soak it passed. Its front matter carries the facts and its body the soak verdict in
 words (a failure lists its reasons):
 
 ```md
@@ -223,7 +223,7 @@ host: soak-1 linux/amd64 16 cpu machine-id:3f2a9c1d7b40
 ---
 ```
 
-The host is the machine the verdict ran on (name, platform, cores and a short digest of its
+The host is the machine the soak verdict ran on (name, platform, cores and a short digest of its
 machine id, never the id), which on a soak host is the machine the soak ran on.
 
 ## Binaries on the release

@@ -127,7 +127,7 @@ type listAlarmsOutput struct {
 	Body struct {
 		Component string      `json:"component"`
 		Alarms    []alarmBody `json:"alarms"`
-		Health    string      `json:"health" doc:"The component's own verdict, the one its active alarms make (healthy, degraded, or outage), whatever the filter: a component's view reads it here rather than off the whole fleet view. unknown when nothing has ever observed the component (no alarm raised, no endpoint delivered): there is nothing to call healthy on"`
+		Health    string      `json:"health" doc:"The component's own health, the one its active alarms make (healthy, degraded, or outage), whatever the filter: a component's view reads it here rather than off the whole fleet view. unknown when nothing has ever observed the component (no alarm raised, no endpoint delivered): there is nothing to call healthy on"`
 	}
 }
 
@@ -261,7 +261,7 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/alarms",
 		Summary:     "List a component's alarms",
-		Description: "What is currently wrong with this component, newest first, with the component's own verdict those alarms make. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+		Description: "What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
 	}, "component", "read"), func(ctx context.Context, in *listAlarmsInput) (*listAlarmsOutput, error) {
 		compID, err := requireComponentInScope(ctx, a, gw, in.Name, "read")
 		if err != nil {
@@ -276,7 +276,7 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		}
 		verdict, err := gw.ComponentHealth(ctx, compID)
 		if err != nil {
-			return nil, huma.Error500InternalServerError("read component verdict")
+			return nil, huma.Error500InternalServerError("read component health")
 		}
 		out := &listAlarmsOutput{}
 		out.Body.Component = in.Name
@@ -294,7 +294,7 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Path:          "/components/{name}/alarms",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Raise an alarm on a component",
-		Description:   "Raises an alarm on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (an alarm at or above the high level), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser alarm degrades the component but leaves it occupying its slots. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
+		Description:   "Raises an alarm on this component, then recomputes health in the same transaction: the component's own health moves, and if it is now outage (an alarm at or above the high level), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location health with it; a lesser alarm degrades the component but leaves it occupying its slots. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
 	}, "component", "update"), func(ctx context.Context, in *raiseAlarmInput) (*alarmOutput, error) {
 		compID, err := requireComponentInScope(ctx, a, gw, in.Name, "update")
 		if err != nil {

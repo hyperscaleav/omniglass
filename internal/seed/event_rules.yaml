@@ -10,7 +10,7 @@
 rules:
   # An endpoint that stops answering opens an alarm on its component: one
   # alarm per endpoint, at a level that puts the component in outage, after
-  # the verdict has read down for the sustain (so one failed poll does not
+  # the reachability has read down for the sustain (so one failed poll does not
   # page). It clears when the endpoint reads up again. It writes the generic
   # firing pair until a semantic one is ruled.
   - name: reachability-lost

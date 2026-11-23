@@ -41,6 +41,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -158,6 +159,33 @@ func runPostgresContainer(ctx context.Context) (*tcpostgres.PostgresContainer, e
 	)
 }
 
+// startAttempts bounds how many times a start that lost a host-port race is run.
+const startAttempts = 4
+
+// isPortCollision reports whether a container start failed because the host
+// port Docker picked was taken before the daemon could bind it (rootless Docker
+// on a busy host). It is the retry decision, kept pure so it is unit-testable.
+func isPortCollision(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "address already in use")
+}
+
+// RunWithPortRetry runs a container start, and runs it again (up to
+// startAttempts in all) while it fails on a host-port collision, terminating the
+// failed attempt's container each time. Any other error, or success, returns at
+// once. Other packages that call postgres.Run directly wrap it in this.
+func RunWithPortRetry(ctx context.Context, run func(context.Context) (*tcpostgres.PostgresContainer, error)) (*tcpostgres.PostgresContainer, error) {
+	var c *tcpostgres.PostgresContainer
+	var err error
+	for attempt := 1; attempt <= startAttempts; attempt++ {
+		c, err = run(ctx)
+		if err == nil || !isPortCollision(err) || attempt == startAttempts {
+			return c, err
+		}
+		_ = testcontainers.TerminateContainer(c)
+	}
+	return c, err
+}
+
 // startContainer starts one ephemeral Postgres container and returns it with
 // the admin DSN to its default database. It is the capability primitive behind
 // the shared harness: the single place that talks to Docker, isolated so the
@@ -166,7 +194,7 @@ func runPostgresContainer(ctx context.Context) (*tcpostgres.PostgresContainer, e
 // On any error it returns a nil container, having reclaimed whatever it was
 // handed. That is a contract its callers depend on, not a detail.
 func startContainer(ctx context.Context) (*tcpostgres.PostgresContainer, string, error) {
-	c, err := runPostgres(ctx)
+	c, err := RunWithPortRetry(ctx, runPostgres)
 	if err != nil {
 		// testcontainers returns the container alongside the error when the
 		// create succeeded and the start or the wait strategy did not, so the

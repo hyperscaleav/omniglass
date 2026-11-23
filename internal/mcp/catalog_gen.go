@@ -175,7 +175,7 @@ var catalog = []tooldef.Def{
 	{
 		Name:        "list-component-alarms",
 		Title:       "List a component's alarms",
-		Description: "What is currently wrong with this component, newest first, with the component's own verdict those alarms make. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+		Description: "What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
 		Method:      "GET",
 		Path:        "/components/{name}/alarms",
 		Permission:  "component:read",
@@ -262,7 +262,7 @@ var catalog = []tooldef.Def{
 	{
 		Name:        "issue-component-command",
 		Title:       "Issue a command to a component",
-		Description: "Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Answers with the command as it stands (as the command read returns it) and the computed settlement verdict; with wait, once it settles, fails or times out, or wait_timeout passes. Gated by command:issue, whose scope is resolved on the component tier from that permission (not from component:read); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not command is a 403.",
+		Description: "Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Answers with the command as it stands (as the command read returns it) and the computed settlement; with wait, once it settles, fails or times out, or wait_timeout passes. Gated by command:issue, whose scope is resolved on the component tier from that permission (not from component:read); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not command is a 403.",
 		Method:      "POST",
 		Path:        "/components/{name}/commands:issue",
 		Permission:  "command:issue",
@@ -644,7 +644,7 @@ var catalog = []tooldef.Def{
 	{
 		Name:        "run-endpoint-poll",
 		Title:       "Run an endpoint's poll now",
-		Description: "Runs one of an attached endpoint's polls now, on the outpost that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run waits for the endpoint's lane on the outpost, ahead of its scheduled polls and never beside another request to the endpoint; it borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409), a refusal, an unreachable verdict from the endpoint's probe, or a disruptive command (a reboot) the run was queued behind, and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no outpost is a 409. An outpost that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the outpost's operator lanes, is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.",
+		Description: "Runs one of an attached endpoint's polls now, on the outpost that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run waits for the endpoint's lane on the outpost, ahead of its scheduled polls and never beside another request to the endpoint; it borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409), a refusal, an unreachable reading from the endpoint's probe, or a disruptive command (a reboot) the run was queued behind, and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no outpost is a 409. An outpost that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the outpost's operator lanes, is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.",
 		Method:      "POST",
 		Path:        "/endpoints/{endpoint}/polls/{poll}:run",
 		Permission:  "endpoint:run",
@@ -800,7 +800,7 @@ var catalog = []tooldef.Def{
 	{
 		Name:        "get-location-health",
 		Title:       "Read a location's health",
-		Description: "The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.",
+		Description: "The location's current health, worst-wins over every system placed anywhere beneath it, with those systems and their health as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.",
 		Method:      "GET",
 		Path:        "/locations/{name}/health",
 		Permission:  "location:read",
@@ -1025,7 +1025,7 @@ var catalog = []tooldef.Def{
 	{
 		Name:        "get-system-health",
 		Title:       "Read a system's health",
-		Description: "The system's current verdict and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the verdict. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+		Description: "The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
 		Method:      "GET",
 		Path:        "/systems/{name}/health",
 		Permission:  "system:read",
@@ -1050,7 +1050,7 @@ var catalog = []tooldef.Def{
 	{
 		Name:        "list-system-members",
 		Title:       "List the components in a system",
-		Description: "The components bound into this system, ordered by name. Membership is what a slot attaches to: every component staffing a slot here is a member, and a member may also carry no slot at all (a power conditioner is in the room without filling a declared slot). Each member carries its own verdict, so a system's view can poll its members' health here rather than reading the whole fleet. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+		Description: "The components bound into this system, ordered by name. Membership is what a slot attaches to: every component staffing a slot here is a member, and a member may also carry no slot at all (a power conditioner is in the room without filling a declared slot). Each member carries its own health, so a system's view can poll its members' health here rather than reading the whole fleet. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
 		Method:      "GET",
 		Path:        "/systems/{name}/members",
 		Permission:  "system:read",

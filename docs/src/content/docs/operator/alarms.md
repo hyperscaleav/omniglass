@@ -52,7 +52,7 @@ Raising one takes two things:
 - a **severity**: one of the severity levels, listed with their rank, color and effect under **Catalog,
   under Actions: Severity** (the [rules guide](/admin/rules/#severity-levels) renders the shipped
   set, and an admin can add more between them on that page). Every alarm wears its level's label in its color. This is how loudly to treat it, and it sets the
-  **component's own** verdict (any active alarm makes the component degraded, one at a level marked
+  **component's own** health (any active alarm makes the component degraded, one at a level marked
   outage takes it out). Only an **outage** stops a component occupying a slot it fills: an info or warning
   alarm still degrades it, but the component keeps its slot, so a quiet issue does not short-staff
   a system on its own;
@@ -71,13 +71,13 @@ a new alarm. Fix the fault rather than clearing its alarm.
 **Clearing keeps the row.** The alarm moves to the history with the time it was cleared, so what was wrong
 and when survives the fix. Clearing one twice is a plain miss rather than a silent success.
 
-Both writes take effect immediately and completely: the system's verdict, the location above it, and the
+Both writes take effect immediately and completely: the system's health, the location above it, and the
 recorded history all move in the same transaction as the alarm. There is no wait and no refresh cycle.
 
 ### Acknowledging: saying you have seen it
 
 **Acknowledging an alarm records that a human has looked at it, and changes nothing else.** The alarm
-stays exactly as raised as it was, the component stays exactly as broken, and no verdict moves.
+stays exactly as raised as it was, the component stays exactly as broken, and no health moves.
 Acknowledging is not fixing; clearing is.
 
 That is why the two are independent, and the panel shows both facts at once:
@@ -190,10 +190,10 @@ you cannot read is never named. Acknowledging many at once is not built yet.
 
 ## Health on a system or location
 
-A **system** and a **location** each carry a **health verdict**, shown as a badge on its detail view and in
+A **system** and a **location** each carry a **health**, shown as a badge on its detail view and in
 the outline:
 
-| verdict | means |
+| health | means |
 |---|---|
 | **healthy** | nothing it depends on is impaired |
 | **incomplete** | something it needs was never installed |
@@ -206,8 +206,8 @@ reads incomplete, and it stays that way until somebody fills the slot. That is d
 different colour from a system that is broken, because during a rollout most of your fleet is in
 the first state and you need to be able to see past it to the second.
 
-A location's verdict is the **worst** of every system placed anywhere beneath it, so a top-level location reads red
-when one system anywhere beneath it is out. A system's verdict is the worst contribution among the **slots** it
+A location's health is the **worst** of every system placed anywhere beneath it, so a top-level location reads red
+when one system anywhere beneath it is out. A system's health is the worst contribution among the **slots** it
 needs filled.
 
 **The system's view is the answer to "why".** A bare "degraded" gives you nothing to do, so the
@@ -217,21 +217,21 @@ chain:
 
 ```text
 alarm on mic-pod-2 (high, "no audio on channel 1")
-  -> mic-pod-2 is down (its own verdict, from the alarm)
+  -> mic-pod-2 is down (its own health, from the alarm)
     -> slot room-mic wants 2, and mic-pod-2 no longer occupies its slot
       -> only 1 assigned component still occupies it
         -> slot impaired, impact degraded
           -> hq-r1 is degraded
 ```
 
-Read it bottom-up when you want the verdict and top-down when you want the fix. A slot can also be
+Read it bottom-up when you want the health and top-down when you want the fix. A slot can also be
 impaired with **no down component named**, which means it is **short-staffed** rather than broken:
 nobody is assigned. Those are two different jobs, and the view keeps them apart: an unstaffed seat
 reads **incomplete** as an empty slot, a down occupant keeps its seat and reads the impact its slot
 declared.
 
 **The History strip is the answer to "since when".** It is the same shape as the reachability
-availability strip: one segment per stretch the entity held a verdict, drawn from the **recorded edges**
+availability strip: one segment per stretch the entity held a health, drawn from the **recorded edges**
 over the last 30 days. It is not a sample and not a redraw of what somebody happened to look at; each edge
 was written at the moment the fleet changed, by the write that changed it. That is what makes "it broke
 Friday at 18:40 and came back Monday at 09:15" answerable on Tuesday.
@@ -248,7 +248,7 @@ Once, in order, on a real system:
    Every conforming system inherits both immediately.
 2. **Staff the system.** Assign components to each slot from the system's **Slots** panel. A component
    of the wrong type is refused by name (`component "panel-1" is a display; slot "Room Microphone"
-   wants a video-bar`), so a wrong assignment never becomes a wrong verdict.
+   wants a video-bar`), so a wrong assignment never becomes a wrong health.
 3. **Raise an alarm.** On one of the mic pods, raise a `high` alarm.
 4. **Watch the system move.** The system goes **degraded** (the `room-mic` slot now has one occupant
    against a quorum of 2, and its impact is `degraded`), and the location above it follows. Had
