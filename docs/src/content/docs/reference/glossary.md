@@ -23,6 +23,7 @@ carry (`component:read`); **Formerly** is a word it replaced, which no longer ap
 | **event** | One point-in-time occurrence on a component, typed by an event type. |  |  |  |
 | **file** | Uploaded content kept with the fleet, such as a firmware image, a config dump or a runbook. | `/files` | `file` |  |
 | **fleet** | Everything an install manages, the locations, the systems in them and the components that make them up. |  |  | estate, inventory |
+| **health** | What a system, a location or a component is, one of healthy, incomplete, degraded or outage (unknown when nothing says), and the one thing an operator reads first. |  |  | verdict |
 | **healthy** | The health of a system whose components are all present and well. |  |  |  |
 | **incomplete** | The health of a system still missing a component its standard requires, shown as Commissioning. |  |  |  |
 | **label** | The optional friendly string a person reads in place of a name. |  |  | display name, label template |

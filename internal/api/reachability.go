@@ -68,8 +68,8 @@ var reachLayers = []reachLayer{
 }
 
 type reachReadingBody struct {
-	Value string    `json:"value" doc:"The latest stored verdict value (up/down)"`
-	TS    time.Time `json:"ts" doc:"When the verdict last changed: one is stored only on a transition, so an endpoint's freshness is last_seen, not this"`
+	Value string    `json:"value" doc:"The latest stored reachability value (up/down)"`
+	TS    time.Time `json:"ts" doc:"When the reachability last changed: one is stored only on a transition, so an endpoint's freshness is last_seen, not this"`
 }
 
 type reachLayerBody struct {
@@ -109,8 +109,8 @@ type reachRejectionBody struct {
 // reachGateReasonBody is a reason other than a refusal the endpoint's gate
 // holds (#1650): its kind, since when, and the task that added it.
 type reachGateReasonBody struct {
-	Kind      string    `json:"kind" doc:"The reason's kind: disrupted, a disruptive command (a reboot) delivered to the endpoint's component, which lifts on the endpoint's first up verdict after the command type's quiet period or at its hold backstop; unreachable, two consecutive down verdicts from the endpoint's reachability probe, which lifts on its next up verdict; upstream, a component the endpoint's component is reached through (a path dependency, #1652) has a closed gate on this outpost, which holds the endpoint's probes as well as its polls until the upstream opens, then lifts on the endpoint's own next up verdict (at once when it has no probe)"`
-	Since     time.Time `json:"since" doc:"When the reason began: for disrupted, the command's delivery; for unreachable, the first of the down verdicts that closed the gate; for upstream, when the upstream's gate closed this endpoint's"`
+	Kind      string    `json:"kind" doc:"The reason's kind: disrupted, a disruptive command (a reboot) delivered to the endpoint's component, which lifts on the endpoint's first up reading after the command type's quiet period or at its hold backstop; unreachable, two consecutive down readings from the endpoint's reachability probe, which lifts on its next up reading; upstream, a component the endpoint's component is reached through (a path dependency, #1652) has a closed gate on this outpost, which holds the endpoint's probes as well as its polls until the upstream opens, then lifts on the endpoint's own next up reading (at once when it has no probe)"`
+	Since     time.Time `json:"since" doc:"When the reason began: for disrupted, the command's delivery; for unreachable, the first of the down readings that closed the gate; for upstream, when the upstream's gate closed this endpoint's"`
 	Source    string    `json:"source" doc:"What added the reason: for disrupted, the command (command-<id>); for unreachable, the reachability probe's task id; for upstream, the uuid of the component it is held by: the root of the chain (a gateway behind a gateway names the one whose own gate is closed), or the direct upstream once that one opens and waits on its own probe"`
 	Component string    `json:"component,omitempty" doc:"An upstream reason only: the name of the component source names, when the caller may read it; absent otherwise, and for every other kind"`
 }
@@ -135,16 +135,16 @@ type reachEndpointBody struct {
 	Outpost       string                `json:"outpost,omitempty" doc:"The outpost that probes this endpoint"`
 	LastSeen      *time.Time            `json:"last_seen,omitempty" doc:"When the endpoint last delivered a batch, by the server's clock and to within a few seconds, whatever it carried (any lane, any series, an unchanged value); absent until one lands"`
 	Reachability  *reachReadingBody     `json:"reachability" doc:"The latest reachability reading (up or down), or null if none yet (pending says why)"`
-	Pending       string                `json:"pending,omitempty" enum:"no-outpost,awaiting-probe" doc:"Why reachability is null, present only while it is: no-outpost, the endpoint has no outpost assigned so nothing probes it (create and enroll an outpost, run it, then assign the endpoint to it); awaiting-probe, an outpost is assigned and its first probe has not landed. Absent once a verdict exists, and on a push endpoint, which has no verdict to wait for. Derived at read time, not stored"`
+	Pending       string                `json:"pending,omitempty" enum:"no-outpost,awaiting-probe" doc:"Why reachability is null, present only while it is: no-outpost, the endpoint has no outpost assigned so nothing probes it (create and enroll an outpost, run it, then assign the endpoint to it); awaiting-probe, an outpost is assigned and its first probe has not landed. Absent once a reachability exists, and on a push endpoint, which has no reachability to wait for. Derived at read time, not stored"`
 	Responsive    *reachReadingBody     `json:"responsive,omitempty" doc:"The layer-7 responds rung (the protocol itself answered), when a probe has climbed it"`
 	Authenticated *reachReadingBody     `json:"authenticated,omitempty" doc:"The auth rung (the probe's credential was accepted, or a held session's login passed), present only when a credential was tried"`
 	Session       *reachSessionBody     `json:"session,omitempty" doc:"The endpoint's held session, while it is configured to hold one (a standing listen task, or a driver declaring a session): its latest state, when it changed, and why"`
 	Rejection     *reachRejectionBody   `json:"rejection,omitempty" doc:"The gate a terminal refusal holds on the endpoint, its rung, class and reason, whether or not the endpoint holds a session (a reachability probe's refusal gates it too); absent when none holds"`
 	GateReasons   []reachGateReasonBody `json:"gate_reasons,omitempty" doc:"Every reason other than a refusal the endpoint's gate holds (the gate is a reason set, #1650), most causal first as the outpost published them: while any holds, due polls are held (poll-held-count), and a command or run now answers at once with the reason. Absent when none holds; a refusal is rejection"`
 	TLS           *reachTLSBody         `json:"tls,omitempty" doc:"A tls or https endpoint's handshake and certificate: its verification mode, pinned key, handshake time, expiry and days left; absent on every other transport"`
-	Webhook       *endpointWebhookBody  `json:"webhook,omitempty" doc:"A webhook endpoint's block (#1024): a push endpoint has no ladder and reads last_seen (last heard) in place of a verdict, never down for silence; its scheme, whether it is signed, its token's secret and what its scheme refused. Absent on every dialed transport"`
-	Layers        []reachLayerBody      `json:"layers" doc:"The per-layer probe signals that compose the verdict"`
-	History       []reachHistoryBody    `json:"history" doc:"The recent verdict transitions, oldest first, for the availability strip"`
+	Webhook       *endpointWebhookBody  `json:"webhook,omitempty" doc:"A webhook endpoint's block (#1024): a push endpoint has no ladder and reads last_seen (last heard) in place of a reachability, never down for silence; its scheme, whether it is signed, its token's secret and what its scheme refused. Absent on every dialed transport"`
+	Layers        []reachLayerBody      `json:"layers" doc:"The per-layer probe signals that compose the reachability"`
+	History       []reachHistoryBody    `json:"history" doc:"The recent reachability transitions, oldest first, for the availability strip"`
 }
 
 type reachabilityOutput struct {

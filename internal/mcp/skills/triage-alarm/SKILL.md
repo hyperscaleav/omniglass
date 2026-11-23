@@ -12,7 +12,7 @@ arguments:
 
 # Triage an alarm
 
-An alarm is the component's own verdict that something is wrong. Triage answers
+An alarm says something is wrong with the component. Triage answers
 three questions in order: is it still true, what caused it, and what should
 happen now. Read everything first; change nothing until the operator agrees.
 

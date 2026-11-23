@@ -207,7 +207,7 @@ export const ROOT_STEM_HINT = "Leave blank to inherit the parent's; required on 
 export const TYPE_PARENT_HINT =
   "Where this type grafts in the tree. Root creates a new top-level type and then needs a stem of its own; the gateway has no reparent leg, so choose carefully.";
 
-// catalogLock is the catalog blades' one read-only verdict: the value the
+// catalogLock is the catalog blades' one read-only state: the value the
 // edit slot's `locked` binding carries, one voice on every catalog page. An
 // official row wears the OFFICIAL_LOCK string for everyone, owner included:
 // both buttons greyed with the one sentence. A custom row locks per verb: each
@@ -227,7 +227,7 @@ export const TYPE_PARENT_HINT =
 // sentence, because a shipped row still cannot be deleted (restoring, which
 // discards the operator's version, is the footer's destructive action
 // instead). Default false: the catalogs that have not adopted yet keep the
-// flat read-only verdict, which is still the truth for them.
+// flat read-only state, which is still the truth for them.
 export function catalogLock(
   row: { official?: boolean; forked?: boolean } | undefined,
   me: Me | null | undefined,

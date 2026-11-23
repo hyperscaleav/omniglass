@@ -734,7 +734,7 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
   });
 
   const errors = createMemo<DraftErrors>(() => validateDraft(d, p.rule?.name));
-  // The server's verdict on each criterion written as an expression (undefined
+  // The server's check of each criterion written as an expression (undefined
   // until a check answers): a source that does not compile refuses the submit.
   const [exprOk, setExprOk] = createStore<{ fire?: boolean; clear?: boolean }>({});
   // A side written as an expression must have compiled: pending or failed
