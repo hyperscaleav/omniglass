@@ -95,3 +95,10 @@ describe("a catalog result opens at its address (#2429)", () => {
     expect(commandPath({ label: "Drivers", path: "/drivers" })).toBe("/drivers");
   });
 });
+
+describe("a catalog result opens at its address (#2429)", () => {
+  it("routes an entity result to its drawer, and any other result to its path", () => {
+    expect(commandPath({ label: "av-offline", path: "/event-rules", entity: { kind: "event_rule", address: "av-offline" } })).toBe("/event-rules?open=av-offline");
+    expect(commandPath({ label: "Drivers", path: "/drivers" })).toBe("/drivers");
+  });
+});
