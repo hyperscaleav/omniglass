@@ -40,11 +40,11 @@ func TestOwnerArcsSurviveARename(t *testing.T) {
 
 	// A room needs a campus above it, per the location-type contract.
 	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{
-		Name: "site", LocationType: "campus"}, all); err != nil {
+		Name: "site", LocationType: "campus"}, all, all); err != nil {
 		t.Fatalf("campus: %v", err)
 	}
 	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{
-		Name: "old-room", LocationType: "room", ParentName: strptr("site")}, all); err != nil {
+		Name: "old-room", LocationType: "room", ParentName: strptr("site")}, all, all); err != nil {
 		t.Fatalf("location: %v", err)
 	}
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{

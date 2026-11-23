@@ -68,7 +68,7 @@ func probeHealthAtSize(t *testing.T, size int) {
 	bar := storagetest.MintProduct(t, ctx, gw, "video-bar").Name
 
 	location := func(name, kind string, parent *string) {
-		if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: name, LocationType: kind, ParentName: parent}, all); err != nil {
+		if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: name, LocationType: kind, ParentName: parent}, all, all); err != nil {
 			t.Fatalf("location %s: %v", name, err)
 		}
 	}
