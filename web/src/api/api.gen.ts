@@ -6381,38 +6381,6 @@ export type OwnerStruct = {
   ref: string;
 };
 
-/**
- * The driver's inputs the attach would send; a secret input holds the secret's NAME, never its value.
- */
-export type SimPlannedEndpointBodyInputs = {[key: string]: string};
-
-export type SimPlannedEndpointBody = {
-  /** The driver the endpoint would attach; empty for a reachability probe. */
-  driver?: string;
-  /** The driver's inputs the attach would send; a secret input holds the secret's NAME, never its value. */
-  inputs?: SimPlannedEndpointBodyInputs;
-  /** The host:port a reachability probe would reach; empty for a driver attach. */
-  target?: string;
-  /** The transport a reachability probe would speak; empty for a driver attach. */
-  transport?: string;
-};
-
-export type PlanSimComponentOutputBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  /** The loopback address the simulated component would answer on. */
-  address: string;
-  /**
-     * The endpoints an add would create for the collector to reach it.
-     * @nullable
-     */
-  endpoints: SimPlannedEndpointBody[] | null;
-  /** The outpost whose simulator would serve the component. */
-  outpost: string;
-  /** The simulated product planned. */
-  product: string;
-};
-
 export type PlatformAlarmBody = {
   /** The key the raising rule samples, which names the panel the alarm flags; absent for a hand-raised alarm */
   key?: string;
@@ -8218,6 +8186,60 @@ export type SSOSettings = {
   scopes: string;
 };
 
+/**
+ * Which catalog the entry belongs to; the console opens its drawer on that catalog's page
+ */
+export type SearchCatalogBodyKind = typeof SearchCatalogBodyKind[keyof typeof SearchCatalogBodyKind];
+
+
+export const SearchCatalogBodyKind = {
+  product: 'product',
+  driver: 'driver',
+  calc_rule: 'calc_rule',
+  event_rule: 'event_rule',
+  metric: 'metric',
+} as const;
+
+export type SearchCatalogBody = {
+  /** A short qualifier: a product's vendor, a driver's version, a metric's unit */
+  detail?: string;
+  /** Which catalog the entry belongs to; the console opens its drawer on that catalog's page */
+  kind: SearchCatalogBodyKind;
+  /** The entry's display label */
+  label?: string;
+  /** The entry's name, its address in the catalog */
+  name: string;
+};
+
+export type SearchEntityBody = {
+  /** The entity's uuid, the address its page opens at */
+  id: string;
+  /** The entity's display label, when it has one */
+  label?: string;
+  /** The locations it sits under, outermost first, joined with ' / '. Empty for a component that has no location of its own and is in a system; its system field says where it is */
+  location_path?: string;
+  /** The entity's name; many components share one, the location_path tells them apart */
+  name: string;
+  /** A component's primary system, when it has one */
+  system?: string;
+};
+
+export type SearchOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * Catalog hits across products, drivers, calc rules, event rules and metrics, best match first, at most limit of each kind
+     * @nullable
+     */
+  catalog: SearchCatalogBody[] | null;
+  /** @nullable */
+  components: SearchEntityBody[] | null;
+  /** @nullable */
+  locations: SearchEntityBody[] | null;
+  /** @nullable */
+  systems: SearchEntityBody[] | null;
+};
+
 export type SetAvatarInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -9739,12 +9761,19 @@ export const ListNotificationStatus = {
   '': '',
 } as const;
 
-export type PlanOutpostSimulationComponentParams = {
+export type SearchParams = {
   /**
-   * A product a simulator profile simulates
+   * The text to find, matched case-insensitively anywhere in a name or label
    * @minLength 1
+   * @maxLength 200
    */
-  product: string;
+  q?: string;
+  /**
+   * The most hits returned for each kind
+   * @minimum 1
+   * @maximum 20
+   */
+  limit?: number;
 };
 
 /**
@@ -19751,59 +19780,6 @@ export const addOutpostSimulationComponent = async (name: string,
 
 
 
-export type planOutpostSimulationComponentResponse200 = {
-  data: PlanSimComponentOutputBody
-  status: 200
-}
-
-export type planOutpostSimulationComponentResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 200>
-}
-
-export type planOutpostSimulationComponentResponseSuccess = (planOutpostSimulationComponentResponse200) & {
-  headers: Headers;
-};
-export type planOutpostSimulationComponentResponseError = (planOutpostSimulationComponentResponseDefault) & {
-  headers: Headers;
-};
-
-export type planOutpostSimulationComponentResponse = (planOutpostSimulationComponentResponseSuccess | planOutpostSimulationComponentResponseError)
-
-export const getPlanOutpostSimulationComponentUrl = (name: string,
-    params: PlanOutpostSimulationComponentParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value))
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/outposts/${name}/simulation/components:plan?${stringifiedParams}` : `/outposts/${name}/simulation/components:plan`
-}
-
-/**
- * Previews what adding a simulated component of a product would create (see add-outpost-simulation-component): the lowest free address in the simulated block (127.60.0.0/16) and the endpoints the collector would reach it through, a driver attach with its inputs (a secret input names the platform secret, never its value) or a reachability probe with its target, planned exactly as the add plans them. Creates nothing and reserves nothing: the address is not held, so an add or another plan in between may take it, and an add made after this plan then lands on the next free address instead. Gated by simulation:read, and needs outpost:read on the outpost. An outpost that does not exist is a 404, one with no simulator connected a 409, a product no profile simulates a 422, and a full block or a profile with no surface the collector can reach a 409.
- * @summary Plan a simulated component
- */
-export const planOutpostSimulationComponent = async (name: string,
-    params: PlanOutpostSimulationComponentParams, options?: Parameters<typeof ogFetch>[1]): Promise<planOutpostSimulationComponentResponse> => {
-
-  return ogFetch<planOutpostSimulationComponentResponse>(getPlanOutpostSimulationComponentUrl(name,params),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
 export type getOutpostSimulationObservationResponse200 = {
   data: EndpointObservation
   status: 200
@@ -20965,6 +20941,57 @@ export const getListRolesUrl = () => {
 export const listRoles = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listRolesResponse> => {
 
   return ogFetch<listRolesResponse>(getListRolesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type searchResponse200 = {
+  data: SearchOutputBody
+  status: 200
+}
+
+export type searchResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type searchResponseSuccess = (searchResponse200) & {
+  headers: Headers;
+};
+export type searchResponseError = (searchResponseDefault) & {
+  headers: Headers;
+};
+
+export type searchResponse = (searchResponseSuccess | searchResponseError)
+
+export const getSearchUrl = (params?: SearchParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/search?${stringifiedParams}` : `/search`
+}
+
+/**
+ * The read behind the command palette. Returns up to limit hits of each kind whose name or label holds q, case-insensitively, best match first (exact, then prefix, then the rest by name). Locations, systems and components are searched inside the caller's own read scope for each kind, so nothing outside it appears; a caller with no scope for a kind gets an empty group, not an error. Each fleet hit carries its location_path, so many components with one name are told apart. Catalog hits cover products (product:read), drivers (driver:read), calc rules and event rules (rule:read) and metrics (metric_type:read), each only for a caller who holds that permission. Gated by location:read, the floor of every fleet reader; the component group also needs component:read.
+ * @summary Find locations, systems, components and catalog entries by name
+ */
+export const search = async (params?: SearchParams, options?: Parameters<typeof ogFetch>[1]): Promise<searchResponse> => {
+
+  return ogFetch<searchResponse>(getSearchUrl(params),
   {
     ...options,
     method: 'GET'

@@ -5386,6 +5386,31 @@ Example:
 omniglass role list
 ```
 
+## `omniglass search`
+
+Commands for the search resource
+
+### `omniglass search list`
+
+Find locations, systems, components and catalog entries by name
+
+```
+omniglass search list [flags]
+```
+
+The read behind the command palette. Returns up to limit hits of each kind whose name or label holds q, case-insensitively, best match first (exact, then prefix, then the rest by name). Locations, systems and components are searched inside the caller's own read scope for each kind, so nothing outside it appears; a caller with no scope for a kind gets an empty group, not an error. Each fleet hit carries its location_path, so many components with one name are told apart. Catalog hits cover products (product:read), drivers (driver:read), calc rules and event rules (rule:read) and metrics (metric_type:read), each only for a caller who holds that permission. Gated by location:read, the floor of every fleet reader; the component group also needs component:read.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--limit` | int | `0` | The most hits returned for each kind |
+| `--q` | string | (none) | The text to find, matched case-insensitively anywhere in a name or label |
+
+Example:
+
+```sh
+omniglass search list
+```
+
 ## `omniglass secret`
 
 Commands for the secret resource
