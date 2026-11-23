@@ -10,6 +10,7 @@ import EventsPanel from "../components/EventsPanel";
 import LogsPanel from "../components/LogsPanel";
 import CommandsPanel from "../components/CommandsPanel";
 import IdentitiesPanel from "../components/IdentitiesPanel";
+import DependenciesPanel from "../components/DependenciesPanel";
 import { BladesContext, createBladeController } from "../lib/blades";
 import { createLeaveGuard } from "../lib/leave_guard";
 import { fleetRegistry } from "../lib/fleetBlades";
@@ -556,6 +557,15 @@ export default function ComponentLeaf() {
                 </ul>
               </Show>
             </section>
+            {/* What it needs and what needs it (#2428). */}
+            <Show when={component()}>
+              {(c) => (
+                <DependenciesPanel
+                  component={c().id}
+                  canUpdate={can(me.data, "component", "update") && (Array.isArray(c().actions) ? c().actions!.includes("update") : true)}
+                />
+              )}
+            </Show>
             {/* A component that speaks for many owners (a conduit, #1389):
                 the identities it fans out and the ones it heard unbound. It
                 renders nothing on a component that speaks only for itself. */}

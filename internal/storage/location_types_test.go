@@ -78,7 +78,7 @@ func TestLocationTypeCRUD(t *testing.T) {
 	}
 
 	// In-use delete is refused: place a location of type wing, then delete.
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "w1", LocationType: "wing"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "w1", LocationType: "wing"}, all, all); err != nil {
 		t.Fatalf("create location: %v", err)
 	}
 	if err := gw.DeleteLocationType(ctx, "", "wing"); !errors.Is(err, storage.ErrTypeInUse) {

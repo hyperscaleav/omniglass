@@ -49,7 +49,7 @@ func TestOutpostWorklistResolvesEachComponentsOwnSecret(t *testing.T) {
 		{Name: "bldg-b", LocationType: "building", ParentName: strptr("site-b")},
 		{Name: "room-b", LocationType: "room", ParentName: strptr("bldg-b")},
 	} {
-		if _, err := gw.CreateLocation(ctx, "", l, all); err != nil {
+		if _, err := gw.CreateLocation(ctx, "", l, all, all); err != nil {
 			t.Fatalf("create location %s: %v", l.Name, err)
 		}
 	}
