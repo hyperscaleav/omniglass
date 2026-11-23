@@ -89,6 +89,13 @@
       "setup": []
     },
     {
+      "id": "find-a-device-from-the-keyboard",
+      "title": "Find a device from the keyboard",
+      "description": "Open the command palette with Ctrl-K, type part of a name, read which location each match sits under, narrow it to one device and press Enter to open it.",
+      "lab": [],
+      "setup": []
+    },
+    {
       "id": "find-and-fix-a-location",
       "title": "Find a location and fix its label",
       "description": "Drill Explore down to a location, open the system it holds, and rename the location from Configure. The new label follows everywhere the location is read.",
@@ -218,6 +225,15 @@
       "description": "Open the Boardroom DSP, read which endpoint its TCP connect time comes from and of how many, and open the row for each endpoint's latest value.",
       "lab": [],
       "setup": []
+    },
+    {
+      "id": "read-an-entity-in-its-blade",
+      "title": "Read an entity in its blade",
+      "description": "Open a system from Explore, open one of its components over it, and read the component's whole detail without leaving the outline.",
+      "lab": [],
+      "setup": [
+        "omniglass component alarm create 'hq.west.level-4.meeting-405.$comp.videobar-1' --dedup-key walkthrough-blade-detail --message 'Video feed lost' --severity high"
+      ]
     },
     {
       "id": "read-platform-health",
