@@ -17,6 +17,7 @@ import { LEAF_POLL_MS } from "../lib/component_leaf";
 import { entityLabel } from "../lib/entities";
 import { healthOf } from "../lib/health";
 import type { OutpostStatus } from "../lib/outposts";
+import { drawerHref } from "../lib/drawer_address";
 import { createViewBinding } from "../lib/binding";
 import { OPEN_PARAM, isSectionOpen, outpostsSummary, pipelineSummary, serverSummary, setSectionOpen } from "../lib/platform_sections";
 import {
@@ -338,7 +339,7 @@ function OutpostRow(props: { outpost: PlatformOutpost; view: PlatformView }) {
         </td>
       </Show>
       <td class="text-right">
-        <A href={`/outposts?n=${encodeURIComponent(props.outpost.name)}`} class="btn btn-quiet btn-xs btn-square" aria-label={`Open ${props.outpost.name} in Outposts`} title="Open this outpost's blade on the Outposts page" onClick={(e) => e.stopPropagation()}>
+        <A href={drawerHref("outpost", props.outpost.name)} class="btn btn-quiet btn-xs btn-square" aria-label={`Open ${props.outpost.name} in Outposts`} title="Open this outpost's blade on the Outposts page" onClick={(e) => e.stopPropagation()}>
           <ArrowUpRight size={14} />
         </A>
       </td>
