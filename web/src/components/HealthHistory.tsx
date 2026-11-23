@@ -60,7 +60,7 @@ export default function HealthHistory(props: {
   );
   // Newest first for the reading order: what it is now, then what it was before.
   const rows = createMemo(() => [...list()].reverse());
-  // Each segment's hover: verdict, from, to, how long it held.
+  // Each segment's hover: health, from, to, how long it held.
   const segments = createMemo(() =>
     list().map((s) => ({
       ...s,
