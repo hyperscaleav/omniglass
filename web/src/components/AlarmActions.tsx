@@ -60,7 +60,19 @@ export default function AlarmActions(props: {
     props.show.troubleshoot && props.alarm.component && props.alarm.raised_at
       ? { component: props.alarm.component, raised_by_rule: props.alarm.raised_by_rule, raised_at: props.alarm.raised_at, message: props.alarm.message }
       : undefined;
+  // Members that will draw, by the same gates their own components apply: the
+  // group is not drawn at all when none will, so an empty flex item never takes
+  // a gap in its row.
+  const hasMember = () =>
+    !!(
+      (props.show.ack && !props.alarm.acknowledged && (props.allow?.ack ?? can(me.data, "alarm", "acknowledge"))) ||
+      (props.show.clear && props.show.clear.allowed) ||
+      (props.show.snooze && snoozeAllowed()) ||
+      (troubleshootable() && can(me.data, "assistant", "use")) ||
+      props.show.timeline
+    );
   return (
+    <Show when={hasMember()}>
     <div data-alarm-actions class="relative inline-flex shrink-0 flex-nowrap items-center gap-1.5 self-center">
       <Show when={props.show.ack}>
         <AcknowledgeButton componentId={props.componentId} alarm={props.alarm} allowed={props.allow?.ack} />
@@ -78,5 +90,6 @@ export default function AlarmActions(props: {
       <Show when={troubleshootable()}>{(t) => <TroubleshootButton alarm={t()} />}</Show>
       <Show when={props.show.timeline}>{(tl) => tl().button(props.alarm.id, props.alarm.message ?? "")}</Show>
     </div>
+    </Show>
   );
 }

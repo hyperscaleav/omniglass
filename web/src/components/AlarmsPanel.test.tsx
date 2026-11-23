@@ -409,4 +409,17 @@ describe("AlarmsPanel", () => {
     expect(within(active).getByRole("button", { name: /^Acknowledge/ })).toBeTruthy();
     expect(within(active).getByRole("button", { name: /with omnibot$/ })).toBeTruthy();
   });
+
+  // A failed Acknowledge or Snooze floats its one line under the group: no
+  // ancestor up to the panel may clip it (overflow-hidden on the list swallowed
+  // the line under the last row).
+  it("leaves a failed action's line unclipped by the alarm list", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => json({ title: "Bad", detail: "boom" }, 500));
+    const { getAllByRole, findByRole, container } = mount();
+    fireEvent.click(getAllByRole("button", { name: "Acknowledge" })[0]);
+    const alert = await findByRole("alert");
+    for (let n: HTMLElement | null = alert; n && n !== container; n = n.parentElement) {
+      expect(n.className).not.toContain("overflow-hidden");
+    }
+  });
 });
