@@ -6315,7 +6315,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "simulation <name>",
 					Short:   "Get an outpost's simulator",
-					Long:    "The devices a simulator beside the outpost serves (each component with an endpoint placed on the outpost, within the caller's component read scope), joined to the hits the server has seen and the simulator's capabilities. Hits are live and per server process, not stored. Requires an all-scope outpost read. Gated by outpost:read.",
+					Long:    "The devices a simulator beside the outpost serves (each component with an endpoint placed on the outpost, within the caller's component read scope), joined to the hits the server has seen and the simulator's capabilities. Hits are live and per server process, not stored. Requires an all-scope outpost read. Gated by outpost:read.\n\nA value equal to a subcommand name (observation) runs that subcommand; put -- before it to pass it as <name>, e.g. `outpost simulation -- observation`.",
 					Example: "  omniglass outpost simulation <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
