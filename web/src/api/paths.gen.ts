@@ -808,6 +808,16 @@ export interface paths {
       error: og.listComponentEventsResponseError["data"];
     };
   };
+  "/components/{name}/health": {
+    get: {
+      path: { "name": string };
+      query: NonNullable<Parameters<typeof og.getComponentHealth>[1]>;
+      body: never;
+      bodyRequired: false;
+      data: og.getComponentHealthResponseSuccess["data"];
+      error: og.getComponentHealthResponseError["data"];
+    };
+  };
   "/components/{name}/identity-bindings": {
     get: {
       path: { "name": string };
@@ -1583,7 +1593,7 @@ export interface paths {
   "/locations/{name}/health": {
     get: {
       path: { "name": string };
-      query: never;
+      query: NonNullable<Parameters<typeof og.getLocationHealth>[1]>;
       body: never;
       bodyRequired: false;
       data: og.getLocationHealthResponseSuccess["data"];
@@ -2278,6 +2288,16 @@ export interface paths {
       error: og.listRolesResponseError["data"];
     };
   };
+  "/search": {
+    get: {
+      path: never;
+      query: NonNullable<Parameters<typeof og.search>[0]>;
+      body: never;
+      bodyRequired: false;
+      data: og.searchResponseSuccess["data"];
+      error: og.searchResponseError["data"];
+    };
+  };
   "/secret-types": {
     get: {
       path: never;
@@ -2717,7 +2737,7 @@ export interface paths {
   "/systems/{name}/health": {
     get: {
       path: { "name": string };
-      query: never;
+      query: NonNullable<Parameters<typeof og.getSystemHealth>[1]>;
       body: never;
       bodyRequired: false;
       data: og.getSystemHealthResponseSuccess["data"];

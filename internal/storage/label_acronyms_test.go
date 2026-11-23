@@ -167,7 +167,7 @@ func TestRenderingALabelNeedsNoSecondConnection(t *testing.T) {
 	}
 	setLocationRule(t, gw, ctx, titleTheName)
 
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "dsp-closet", LocationType: "building"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "dsp-closet", LocationType: "building"}, all, all); err != nil {
 		t.Fatalf("create a location on a one-connection pool: %v", err)
 	}
 	l, err := gw.GetLocation(ctx, "dsp-closet", all)

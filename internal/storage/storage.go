@@ -279,7 +279,7 @@ type Gateway interface {
 	// drives the non-disclosing 404 versus the 403.
 	ListLocations(ctx context.Context, read scope.Set) ([]Location, error)
 	GetLocation(ctx context.Context, name string, read scope.Set) (*Location, error)
-	CreateLocation(ctx context.Context, actorID string, spec LocationSpec, create scope.Set) (*Location, error)
+	CreateLocation(ctx context.Context, actorID string, spec LocationSpec, read, create scope.Set) (*Location, error)
 	UpdateLocation(ctx context.Context, actorID, name string, patch LocationPatch, read, action scope.Set) (*Location, error)
 	// RenameLocation moves the location's name, scoped exactly as the update is.
 	// Its own function, not a patch field, because a rename breaks the references
@@ -844,7 +844,7 @@ type Gateway interface {
 	// the single create for each row, in order, in one transaction (#2368): a
 	// refused row refuses the batch as a BatchError naming it, and
 	// validateOnly rolls the transaction back.
-	BatchCreateLocations(ctx context.Context, actorID string, specs []LocationSpec, create scope.Set, validateOnly bool) ([]*Location, error)
+	BatchCreateLocations(ctx context.Context, actorID string, specs []LocationSpec, read, create scope.Set, validateOnly bool) ([]*Location, error)
 	BatchCreateSystems(ctx context.Context, actorID string, specs []SystemSpec, create, locationRead scope.Set, validateOnly bool) ([]*System, error)
 	BatchCreateComponents(ctx context.Context, actorID string, specs []ComponentSpec, create, locationRead, systemRead, systemUpdate scope.Set, validateOnly bool) ([]*Component, error)
 	// ResolveTaskOwner binds a task's owner component and confines the outpost to its
@@ -1013,6 +1013,7 @@ type Gateway interface {
 	// OutpostCheckins reads every claimed outpost's platform component and the time
 	// it last spoke, the check-in age's input (#1625).
 	OutpostCheckins(ctx context.Context) ([]OutpostCheckin, error)
+	PlatformMetricInstancesAt(ctx context.Context, componentID, key string, value float64) ([]string, error)
 	// StampRuleSweep records a completed event rule sweep on the server's
 	// platform component, MarkServerSeen that the server is alive,
 	// ReleaseRuleSweep clears both on a clean stop, and ServerSweepAges reads
@@ -1132,13 +1133,18 @@ type Gateway interface {
 	AlarmTimeline(ctx context.Context, componentID, alarmID string, view RecipientView) ([]AlarmTimelineEntry, error)
 	ListAlarms(ctx context.Context, componentName string, filter AlarmFilter) ([]Alarm, error)
 	// The health reads: the current verdict, why it is what it is, and the
-	// recorded transitions at or after since (a zero since is the whole history).
-	SystemHealth(ctx context.Context, systemName string, window time.Duration, read scope.Set) (*HealthReport, error)
+	// recorded transitions inside rng (the zero HealthRange is the whole history).
+	SystemHealth(ctx context.Context, systemName string, rng HealthRange, read scope.Set) (*HealthReport, error)
 	// SystemHealths is the BULK health read: every system in the read scope with
 	// its current verdict, in one statement. The read a LIST paints its health
 	// column from, where SystemHealth is the read one system's panel opens (#653).
 	SystemHealths(ctx context.Context, read scope.Set) ([]SystemHealthEntry, error)
-	LocationHealth(ctx context.Context, locationName string, window time.Duration, read scope.Set) (*HealthReport, error)
+	LocationHealth(ctx context.Context, locationName string, rng HealthRange, read scope.Set) (*HealthReport, error)
+	// ComponentHealthReport is a component's own current verdict beside its
+	// recorded transitions inside rng, in the report shape a system's read
+	// serves (no slots, no systems: a component's health is its own alarms).
+	// A component outside read is ErrComponentNotFound.
+	ComponentHealthReport(ctx context.Context, componentName string, rng HealthRange, read scope.Set) (*HealthReport, error)
 
 	// FleetProjection is the read behind the fleet canvas: the whole in-scope
 	// place tree, the systems on it, and one dot per component in each system.
@@ -1148,6 +1154,13 @@ type Gateway interface {
 	// three different permissions: a user who may read the place tree but
 	// not its components sees the shape of their fleet with no contents.
 	FleetProjection(ctx context.Context, locRead, sysRead, compRead scope.Set) (*FleetView, error)
+
+	// SearchFleet is the read behind the command palette's name search (#2444):
+	// the locations, systems and components whose name or label holds text, at
+	// most limit of each kind (capped at SearchMaxLimit), each kind through its
+	// own read scope so nothing outside the caller's reach is found. Blank text
+	// finds nothing.
+	SearchFleet(ctx context.Context, text string, limit int, locRead, sysRead, compRead scope.Set) (*FleetSearchResult, error)
 
 	// PlatformView is the read behind the Platform health page (#1644): the
 	// platform system's verdict, each server's identity, and one row per outpost

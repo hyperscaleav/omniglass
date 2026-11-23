@@ -1,7 +1,7 @@
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import { useQueries, useQuery } from "@tanstack/solid-query";
-import { Popover } from "@kobalte/core/popover";
+import Popover from "./ui/Popover";
 import ListShell from "./ListShell";
 import Button from "./Button";
 import Outline, { HealthSlots, OUTLINE_COLS, NARROW_HIDDEN, OUTLINE_FRAME, WIDE_ONLY, type AddKind, type OpenTarget } from "./Outline";
@@ -48,11 +48,18 @@ function readOpen(): Set<string> {
   } catch { return new Set(); }
 }
 
-export default function OutlineWorkspace(props: { rootId?: string }) {
+// `host` "blade" (#2423): a rooted outline inside a blade keeps its filter in
+// a signal of its own, so filtering it never rewrites (or reads) the page's
+// address, the Explore outline beneath it included.
+export default function OutlineWorkspace(props: { rootId?: string; host?: "page" | "blade" }) {
   const navigate = useNavigate();
   const me = useMe();
-  const [search, setSearch] = useSearchParams();
-  const param = (k: string) => { const v = search[k]; return Array.isArray(v) ? v[0] : v; };
+  const [urlSearch, setUrlSearch] = useSearchParams();
+  const [local, setLocal] = createSignal<Record<string, string | undefined>>({});
+  const inBlade = props.host === "blade";
+  const search = (): Record<string, string | string[] | undefined> => (inBlade ? local() : urlSearch);
+  const setSearch = (next: Record<string, string | undefined>) => (inBlade ? setLocal((p) => ({ ...p, ...next })) : setUrlSearch(next));
+  const param = (k: string) => { const v = search()[k]; return Array.isArray(v) ? v[0] : v; };
 
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents, enabled: can(me.data, "component", "read") }));
@@ -199,7 +206,9 @@ export default function OutlineWorkspace(props: { rootId?: string }) {
   const blades = useBlades();
   const openTarget = (t: OpenTarget, key: string) => {
     setSelected(key.split(":").pop() === t.id ? t.id : key);
-    blades.close();
+    // On a page a row opens a fresh stack; inside a blade the stack is the
+    // one this blade sits on, so the row stacks over it (#2423).
+    if (!inBlade) blades.close();
     blades.push(t);
   };
 
@@ -316,7 +325,7 @@ export default function OutlineWorkspace(props: { rootId?: string }) {
                           const t = targetOfEntry(e, roots());
                           if (!t) return revealResult(e.id);
                           setSelected(e.id);
-                          blades.close();
+                          if (!inBlade) blades.close();
                           blades.push(t);
                         }} onReveal={(e) => revealResult(e.id)} />
                       </Show>
@@ -391,12 +400,15 @@ function NewMenu(props: { kinds: AddKind[]; onPick: (k: AddKind) => void }) {
   const [isOpen, setIsOpen] = createSignal(false);
   const LABEL: Record<AddKind, string> = { location: "Location", system: "System", component: "Component" };
   return (
-    <Popover open={isOpen()} onOpenChange={setIsOpen} placement="bottom-end" gutter={6}>
-      <Popover.Trigger class="btn btn-action btn-sm gap-1.5" aria-label="New">
-        <Plus size={15} />New
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Content class="z-50 w-44 rounded-box border border-base-300 bg-base-100 p-1 shadow-2xl focus:outline-none">
+    <Popover class="btn btn-action btn-sm gap-1.5"
+      open={isOpen()}
+      onOpenChange={setIsOpen}
+      placement="bottom-end"
+      gutter={6}
+      aria-label="New"
+      contentClass="z-50 w-44 rounded-box border border-base-300 bg-base-100 p-1 shadow-2xl focus:outline-none"
+      content={
+        <>
           <For each={props.kinds}>
             {(k) => (
               <button type="button" class="block w-full cursor-pointer rounded px-2.5 py-1.5 text-left text-sm hover:bg-base-content/[0.06]" onClick={() => { setIsOpen(false); props.onPick(k); }}>
@@ -404,8 +416,10 @@ function NewMenu(props: { kinds: AddKind[]; onPick: (k: AddKind) => void }) {
               </button>
             )}
           </For>
-        </Popover.Content>
-      </Popover.Portal>
+        </>
+      }
+    >
+      <Plus size={15} />New
     </Popover>
   );
 }

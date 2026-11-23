@@ -10,13 +10,13 @@ sidebar:
 screenshots:
   - id: entity-blade
     path: /web/explore
-    alt: "A location's blade slides in from the right with its details and a footer action bar."
+    alt: "A location's blade slides in from the right with its detail page's card: type, health, since-when, tags, its tabs and what it holds."
     # Harbor Point holds two buildings and no system, so its row opens the
     # location's own blade (a location holding one system opens that system).
     steps:
       - action: click
         selector: "[role=treeitem]:has-text('Harbor Point')"
-    # The blade renders one region no clock can pin: the since line's age
+    # The blade renders one region no clock can pin: the header's since line's age
     # counts from the capture's own seed-to-shoot latency.
     #
     # The mask DECLARES its box (`width`): painted at the since span's
@@ -29,13 +29,16 @@ screenshots:
     # widest line a capture renders ("since May 28, 12:59 AM · 59m") is 164px
     # in the console's face; a line wider than 184px fails the capture by name.
     mask:
-      - selector: "[data-testid=blade-since]"
+      - selector: "[data-testid=since-line]"
         width: 184
   - id: entity-edit-face
     path: /web/locations/east?edit=1
     alt: "An ?edit=1 deep link lands a location's view on its Configure tab, already editing."
-    # No mask: the Configure tab replaces the overview (and its since-line
-    # clock), and the form renders from the seed deterministically.
+    # The location header's since line ages with the capture on every tab
+    # (#2423); the form below renders from the seed deterministically.
+    mask:
+      - selector: "[data-testid=since-line]"
+        width: 184
 ---
 
 Once you have [found an entity](/operator/fleet/), you open it, read it, and change
@@ -47,28 +50,23 @@ Click a row to open its **blade**, a panel that slides in from the right with th
 details. From a blade you can drill into a child (it stacks another blade behind the first),
 step back with the breadcrumb, or **Expand** to the entity's own page: a fleet entity opens
 its [detail view](/operator/fleet/#one-view-per-system), an identity entity its full detail. The page has its own URL, so it is
-shareable and bookmarkable; a blade opened by a click is a quick look that does not change
-the URL, though a blade can be addressed by one (a user's `?u=<id>` deep link, which the
-create flow uses for its own handoff). Rows are keyboard-operable: Tab to a row and press
+shareable and bookmarkable. A row opened on a list page (any catalog page, users, roles,
+secrets, variables, outposts, files, alarms) is addressed too: its drawer puts
+`?open=<the row's name or id>` in the URL, so you can [link a colleague to it](#link-a-colleague-to-an-open-drawer).
+Rows are keyboard-operable: Tab to a row and press
 Enter to open it.
 
 ::screenshot{#entity-blade}
 
-A fleet entity's blade (a location, a system, a component) is the glance an operator lands on
-from a row. It leads with the health and since-when and the active alarms that say why, each
-with its severity, then the context you came for: a system's location (as a card saying where it
-sits, the path above it, since a blade has no breadcrumb) and its size;
-the systems a component serves, with the slot it fills in each, and its location when that is
-somewhere else; a location's systems, each with its health, one click from its own blade. Then
-the entity's **form**: its name, classification, a location's parent, and tags, read or edited
-in place. Each fact is said once: the blade's title is the label (the Label field appears only
-while editing), a location's only system is the location (its card names no location and offers no second
-blade for it, only **Configure location**), and the standard is in Classification, not repeated
-above it. Configuration (a
-system's slots, the properties and their cascade, the reconciliation, a component's
-endpoints) is the detail view's **Configure** tab, one **Expand** away, along with the
-components, the history and the vitals. Delete sits on the left of the footer behind a confirm, gated by your
-permissions on that row.
+A fleet entity's blade (a location, a system, a component) is its detail page in a side
+panel: the same card, the same tabs (Overview, Activity, Configure) and the same actions,
+reflowed to the narrower panel, so you never leave Explore to answer a question about an
+entity. Switching a tab inside the blade changes only the blade; the page behind it keeps its
+own address. A blade has no breadcrumb, so where the entity sits is said by a location card
+with the path above it. Opening something from inside a blade (a system a component serves, a
+component on a system's Why) stacks another blade over it. Edit and Delete sit in the
+**Configure** tab's footer, as on the page; Delete asks first and is gated by your permissions
+on that row. **Expand** still opens the page, for its breadcrumb and its shareable address.
 
 The identity pages (Users, User groups, and Roles) use the same blade, and there drilling crosses entities: from a
 user you open a group's blade over it, and from a group you open a member's user blade, each stacking so you can
@@ -76,13 +74,28 @@ trace where access comes from without leaving the page. Each page roots one enti
 user's groups, a group's members), so the stack stays shallow and the reverse relation on the far blade is a
 read-only reference.
 
+## Link a colleague to an open drawer
+
+An open drawer has an address. Open a rule on **Event rules**, and the address bar reads
+`/event-rules?open=disk-nearly-full`: the row's name, the same one its API route and the CLI take
+(a user, role or secret is addressed by its id). Copy the address and send it, and your colleague
+lands on the list with the same drawer already open. A reload keeps your place, and **Back** closes
+the drawer and leaves you on the list, since opening is a step in your history. Closing the drawer
+clears the address. The address composes with the page's other state, so a filter or a sort in the
+address survives opening and closing. A blade you drill into from the drawer is a quick look and is
+not in the address.
+
+An address that names nothing (a rule that was deleted, or one you may not see) shows the list with a
+notice, not a blank drawer. The notice reads the same either way, so it does not reveal which.
+
 ## Edit through the footer action bar
 
-A blade opens **read-only**, and its actions live in the **footer action bar**; the header is
-chrome only (back, full-page, close). **Edit** turns the whole blade live in place, fleet
-and identity blades alike: a fleet blade's form (the identity, classification and tags of the
-same form the detail view's [Configure tab](/operator/fleet/) renders) and an identity blade's profile, members,
-and grants.
+A blade opens **read-only**, and the header is chrome only (back, full-page, close). A fleet
+blade (a location, a system, a component) is its detail view, so it edits as the page does: on its
+**Configure** tab, whose footer carries **Edit** and, on the left, **Delete** behind a confirm (see
+[Configure](/operator/fleet/)). The rest of this section is the identity and catalog blades, whose
+actions live in the blade's own **footer action bar**: **Edit** turns the whole blade live in place,
+its profile, members and grants.
 On an identity blade, **Edit** (right) opens edit mode: the profile becomes inputs, the members and grants go live, and the right
 cluster swaps to **Cancel** and **Save**. Changes stage locally so you can check your work first; **Save**
 commits them together, **Cancel** discards them. The **destructive** action sits on the **left** and is always
@@ -111,8 +124,8 @@ mid-edit keeps your place, while Back and a re-shared URL never reopen an edit y
 left. A location holding one system is configured on its system's view, so `?edit=1` on that
 location's address lands on the system's Configure with the location's own form editing
 (`?edit=location`). The console itself uses these links for its handoffs: creating an entity lands on
-`/…/<id>?edit=1`, and a user's `?u=<id>&edit=1` deep link keeps the same contract on the
-identity pages.
+`/…/<id>?edit=1`, and a user's `?open=<id>&edit=1` deep link keeps the same contract on the
+identity pages (the older `?u=<id>` still opens).
 
 ::screenshot{#entity-edit-face}
 

@@ -22,6 +22,7 @@ import { entityLabel } from "../lib/entities";
 import type { FilterKey } from "../lib/predicate";
 import { COMPONENTS_KEY, listComponents, type Component as FleetComponent } from "../lib/components";
 import LocationSelect from "../components/LocationSelect";
+import Picker, { PICKER_CLASS } from "../components/ui/Picker";
 import {
   BLINK_MS,
   PAGE_POLL_MS,
@@ -545,16 +546,15 @@ function AddComponentForm(props: { outposts: string[]; close: () => void }) {
         </select>
       </FieldRow>
       <FieldRow label="Product" info="What the component is. Each simulator profile answers for its own product and its variants, grouped here by profile; the product's driver decides how collection reads it." hint={shown("product")}>
-        <select class="select select-bordered w-full font-data" aria-required="true" value={draft().product} onChange={(e) => set("product", e.currentTarget.value)} disabled={busy() || profiles.isPending}>
-          <option value="" disabled>{profiles.isPending ? "Loading profiles..." : "Choose a product..."}</option>
-          <For each={groups()}>
-            {(g) => (
-              <optgroup label={g.label}>
-                <For each={g.products}>{(p) => <option value={p}>{p}</option>}</For>
-              </optgroup>
-            )}
-          </For>
-        </select>
+        <Picker
+          class={`${PICKER_CLASS} font-data`}
+          aria-required="true"
+          options={groups().flatMap((g) => g.products.map((p) => ({ value: p, label: p, detail: g.label })))}
+          value={draft().product || null}
+          onChange={(v) => set("product", v ?? "")}
+          disabled={busy() || profiles.isPending}
+          placeholder={profiles.isPending ? "Loading profiles..." : "Choose a product..."}
+        />
       </FieldRow>
       <FieldRow bind="name" info="The new component's name: lowercase letters, digits and hyphens. The address is chosen for you, the lowest free one in the simulated block." hint={shown("name")}>
         <input

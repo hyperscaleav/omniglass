@@ -1,15 +1,24 @@
-import { For, Show, createMemo, createSignal, createEffect, createUniqueId } from "solid-js";
-import { Dialog } from "@kobalte/core/dialog";
+import { batch, createMemo, createSignal, createEffect, onCleanup } from "solid-js";
+import ModalDialog, { DialogHeading } from "./ui/ModalDialog";
+import Search, { type SearchOption } from "./ui/Search";
 import { useNavigate } from "@solidjs/router";
 import { navItems, filterNav } from "../lib/nav";
 import { entryHref, visibleGroups } from "../lib/catalog";
 import { useMe, can } from "../lib/auth";
-import { Search, ArrowRight, Bot } from "./icons";
+import { type DrawerKind, drawerHref } from "../lib/drawer_address";
+import { Bot } from "./icons";
+import { api } from "../api/client";
+import { MIN_QUERY, type Hit, type SearchResult, layout, pageHit, readRecent, remember, searchHits, sections } from "../lib/palette";
 
 // The ⌘K command palette: a global jump across the whole app (distinct from a
 // page's own filter). Built on Kobalte Dialog (focus-trap, Esc, scroll-lock for
 // free). Arrow keys move the active row, Enter navigates.
-export type Command = { label: string; path: string; group?: string; section?: string };
+// A result for one catalog or admin entity sets `entity` instead of a hand-built
+// path: it opens that entity's drawer at its address (drawerHref, #2429).
+export type Command = { label: string; path: string; group?: string; section?: string; entity?: { kind: DrawerKind; address: string } };
+
+// commandPath is where a result goes: its entity's drawer address, else its path.
+export const commandPath = (c: Command): string => (c.entity ? drawerHref(c.entity.kind, c.entity.address) : c.path);
 
 // buildCommands is the palette's source: every destination the caller may
 // reach, flattened to one searchable list.
@@ -51,121 +60,109 @@ export function buildCommands(allow: (tokens: string[]) => boolean): Command[] {
 export const matches = (c: Command, q: string): boolean =>
   c.label.toLowerCase().includes(q) || (c.group ?? "").toLowerCase().includes(q) || (c.section ?? "").toLowerCase().includes(q);
 
-// An ask row hands the palette's query to omnibot (#1167) instead of jumping.
-export type AskRow = { label: string; ask: true };
-export type Row = Command | AskRow;
-
-// withAsk ends the results with the ask row, for a person who may run omnibot.
-export function withAsk(results: Command[], q: string, allowed: boolean): Row[] {
-  if (!allowed) return results;
-  return [...results, { label: q ? `Ask omnibot: ${q}` : "Ask omnibot", ask: true }];
-}
+// How long the palette waits after a keystroke before it asks the server.
+export const SEARCH_DEBOUNCE_MS = 200;
+// The most hits the server returns per kind (the palette shows a handful).
+const PER_KIND = 6;
 
 export default function CommandPalette(props: { open: boolean; onClose: () => void; onAsk?: (prompt: string) => void }) {
   const navigate = useNavigate();
   const me = useMe();
   const commands = createMemo(() => buildCommands((tokens) => can(me.data, ...tokens)));
   const [query, setQuery] = createSignal("");
-  const [active, setActive] = createSignal(0);
-  const listId = createUniqueId();
-  const optId = (i: number) => `${listId}-opt-${i}`;
+  const [found, setFound] = createSignal<SearchResult | undefined>();
+  const [searching, setSearching] = createSignal(false);
+  const userId = () => me.data?.user.id ?? "";
+  const [recent, setRecent] = createSignal<Hit[]>([]);
 
-  const results = createMemo(() => {
+  // Each keystroke cancels the last one's pending timer and in-flight request; the
+  // survivor searches after a pause. A query too short to search clears the hits.
+  createEffect(() => {
     const raw = query().trim();
-    const q = raw.toLowerCase();
-    const found = q ? commands().filter((c) => matches(c, q)) : commands();
-    return withAsk(found, raw, !!props.onAsk && can(me.data, "assistant", "use"));
+    if (!props.open || raw.length < MIN_QUERY) {
+      setFound(undefined);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    const ctrl = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const res = await api.GET("/search", { params: { query: { q: raw, limit: PER_KIND } }, signal: ctrl.signal });
+        if (ctrl.signal.aborted) return;
+        batch(() => {
+          setFound(res.data as SearchResult | undefined);
+          setSearching(false);
+        });
+      } catch {
+        if (ctrl.signal.aborted) return;
+        batch(() => {
+          setFound(undefined);
+          setSearching(false);
+        });
+      }
+    }, SEARCH_DEBOUNCE_MS);
+    onCleanup(() => {
+      clearTimeout(timer);
+      ctrl.abort();
+    });
   });
 
-  // Reset query + selection each time it opens; keep active in range as results change.
+  // A fresh open starts blank, with this person's recents.
   createEffect(() => {
     if (props.open) {
       setQuery("");
-      setActive(0);
+      setRecent(readRecent(userId()));
     }
   });
-  createEffect(() => {
-    if (active() >= results().length) setActive(Math.max(0, results().length - 1));
-  });
 
-  const go = (c: Row | undefined) => {
-    if (!c) return;
+  const canAsk = () => !!props.onAsk && can(me.data, "assistant", "use");
+  const rows = createMemo<Hit[]>(() => {
+    const raw = query().trim();
+    const q = raw.toLowerCase();
+    const pages = (q ? commands().filter((c) => matches(c, q)) : commands()).map(pageHit);
+    return layout({ pages, found: searchHits(found()), recent: recent(), query: raw, canAsk: canAsk(), searching: searching() });
+  });
+  const byValue = createMemo(() => new Map(rows().map((h) => [h.value, h])));
+  const shown = createMemo(() =>
+    sections(rows()).map((s) => ({
+      label: s.label as string,
+      options: s.options.map((h): SearchOption => ({ value: h.value, label: h.label, detail: h.detail, icon: h.ask !== undefined ? <Bot size={14} /> : undefined })),
+    })),
+  );
+
+  const go = (o: SearchOption) => {
+    const hit = byValue().get(o.value);
+    if (!hit) return;
+    if (hit.ask !== undefined) {
+      props.onClose();
+      return props.onAsk?.(hit.ask);
+    }
+    if (!hit.command) return;
+    const path = commandPath(hit.command);
+    remember(userId(), hit, path);
     props.onClose();
-    if ("ask" in c) props.onAsk?.(query().trim());
-    else navigate(c.path);
-  };
-
-  const onKey = (e: KeyboardEvent) => {
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setActive((i) => Math.min(i + 1, results().length - 1));
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setActive((i) => Math.max(i - 1, 0));
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      go(results()[active()]);
-    }
+    navigate(path);
   };
 
   return (
-    <Dialog open={props.open} onOpenChange={(o) => !o && props.onClose()}>
-      <Dialog.Portal>
-        <Dialog.Overlay class="fixed inset-0 z-60 bg-black/50" />
-        <div class="fixed inset-0 z-60 flex items-start justify-center px-4 pt-[15vh]">
-          <Dialog.Content class="w-full max-w-lg overflow-hidden rounded-box border border-base-300 bg-base-100 shadow-2xl">
-            <Dialog.Title class="sr-only">Command palette</Dialog.Title>
-            <div class="flex items-center gap-2 border-b border-base-300 px-4">
-              <Search size={16} />
-              <input
-                class="h-12 w-full bg-transparent text-sm outline-none placeholder:text-base-content/40"
-                placeholder="Jump to…"
-                value={query()}
-                role="combobox"
-                aria-expanded={results().length > 0}
-                aria-controls={listId}
-                aria-autocomplete="list"
-                aria-activedescendant={results().length ? optId(active()) : undefined}
-                onInput={(e) => setQuery(e.currentTarget.value)}
-                onKeyDown={onKey}
-                autofocus
-              />
-              <kbd class="kbd kbd-sm">esc</kbd>
-            </div>
-            <ul id={listId} role="listbox" class="max-h-80 overflow-y-auto p-2">
-              <Show when={results().length > 0} fallback={<li class="px-3 py-6 text-center text-sm text-base-content/40">No matches</li>}>
-                <For each={results()}>
-                  {(c, i) => (
-                    <li>
-                      <button
-                        id={optId(i())}
-                        role="option"
-                        aria-selected={i() === active()}
-                        class="flex w-full items-center gap-3 rounded-field px-3 py-2 text-left text-sm"
-                        classList={{ "bg-primary/15 text-primary": i() === active() }}
-                        onMouseEnter={() => setActive(i())}
-                        onClick={() => go(c)}
-                      >
-                        <Show when={"ask" in c}>
-                          <Bot size={14} />
-                        </Show>
-                        <Show when={"group" in c && c.group}>
-                          <span class="text-xs text-base-content/40">{"group" in c && c.group}</span>
-                          <span class="text-base-content/30">/</span>
-                        </Show>
-                        <span class="flex-1">{c.label}</span>
-                        <Show when={i() === active()}>
-                          <ArrowRight size={14} />
-                        </Show>
-                      </button>
-                    </li>
-                  )}
-                </For>
-              </Show>
-            </ul>
-          </Dialog.Content>
-        </div>
-      </Dialog.Portal>
-    </Dialog>
+    <ModalDialog
+      open={props.open}
+      onClose={props.onClose}
+      overlayClass="fixed inset-0 z-60 bg-black/50"
+      frameClass="fixed inset-0 z-60 flex items-start justify-center px-4 pt-[15vh]"
+      class="w-full max-w-lg rounded-box border border-base-300 bg-base-100 shadow-2xl"
+    >
+      <DialogHeading class="sr-only">Command palette</DialogHeading>
+      <Search
+        aria-label="Search the console"
+        placeholder="Jump to a page, location, system, component or catalog entry…"
+        sections={shown()}
+        loading={searching() && query().trim().length >= MIN_QUERY}
+        onQuery={setQuery}
+        onPick={go}
+        onEscape={props.onClose}
+      />
+    </ModalDialog>
   );
 }

@@ -445,7 +445,7 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 			p := parentID
 			spec.ParentName = &p
 		}
-		created, err := gw.CreateLocation(ctx, actorID, spec, all)
+		created, err := gw.CreateLocation(ctx, actorID, spec, all, all)
 		if err != nil {
 			return fmt.Errorf("devseed: create location %q: %w", l.Key, err)
 		}

@@ -32,10 +32,10 @@ func TestSystemScopeCRUD(t *testing.T) {
 	// A location to place a system at (exercises location_id resolution). hq2
 	// is a second placement, so the same-name-different-bucket case below has
 	// somewhere legal to land.
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "campus"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "campus"}, all, all); err != nil {
 		t.Fatalf("seed location: %v", err)
 	}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq2", LocationType: "campus"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq2", LocationType: "campus"}, all, all); err != nil {
 		t.Fatalf("seed location: %v", err)
 	}
 
