@@ -320,3 +320,41 @@ func TestRowBytesCountsWhatTheRowCarries(t *testing.T) {
 		t.Fatal("a sample's owner and key weigh nothing")
 	}
 }
+
+// A commit that is durable but not yet published when Mark's snapshot opens is
+// in that snapshot's history; a cursor that excludes it would deliver the row
+// again on the tail (#2357). Mark must not return until such a commit has
+// published, so the cursor it returns covers it.
+func TestMarkWaitsOutACommitDurableButNotPublished(t *testing.T) {
+	h := tail.New(8, 0)
+	durable, release, done := make(chan struct{}), make(chan struct{}), make(chan error, 1)
+	go func() {
+		done <- h.Commit(func() error { close(durable); <-release; return nil }, []tail.Row{metric("a", 1)})
+	}()
+	<-durable // the row is committed in the database, the ring does not hold it yet
+
+	attempts := 0
+	cur, err := h.Mark(func() error {
+		attempts++
+		if attempts == 2 { // the commit finishes publishing before the retry's snapshot
+			close(release)
+			if err := <-done; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("mark: %v", err)
+	}
+	if attempts < 2 {
+		t.Fatalf("mark returned on attempt %d with a durable, unpublished commit in flight", attempts)
+	}
+	commits, _, err := h.Read(cur, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(commits) != 0 {
+		t.Fatalf("the tail after the mark holds %d commits the snapshot already has", len(commits))
+	}
+}
