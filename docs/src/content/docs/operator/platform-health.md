@@ -404,7 +404,7 @@ infers. Only a simulator can say what a device was asked, so a fleet of real gea
 
 Each outpost with a simulator gets a card. Its first figures are the telemetry batches the server landed
 for the outpost over the window and the most requests the simulator held at once. **Queue depth** and
-**Busy workers** read `not wired yet`: the outpost does not report them to the server yet, and a blank
+**Busy workers** read `outpost does not report`: the outpost does not report them to the server yet, and a blank
 reads truer than a 0.
 
 The gap table is the loop itself, one row per hop a request or a batch travels:

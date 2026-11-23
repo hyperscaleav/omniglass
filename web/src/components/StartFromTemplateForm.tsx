@@ -52,7 +52,7 @@ import { standardSlots, standardSlotsKey } from "../lib/system_slots";
 // with the template's name riding along as ?from=, so the row's page can say it
 // is now the operator's. `location` is the default target a create flow carried in.
 
-export type StartFormProps = { template: Template; all: Template[]; location?: string; onDone: (href: string) => void };
+export type StartFormProps = { template: Template; all: Template[]; location?: string; onDone: (href: string) => void; onCancel?: () => void };
 
 export default function StartFromTemplateForm(props: StartFormProps): JSX.Element {
   return (
@@ -203,6 +203,7 @@ function StandardForm(props: StartFormProps): JSX.Element {
   useFormActions().bind({
     submitLabel: "Create standard",
     submitIcon: Plus,
+    cancel: props.onCancel,
     submit: () => void submit(),
     busy,
     disabled: () => missing().length > 0 || !!nameStemError(d().name.trim()),
@@ -257,6 +258,7 @@ function ComponentForm(props: StartFormProps): JSX.Element {
   useFormActions().bind({
     submitLabel: "Start component",
     submitIcon: Plus,
+    cancel: props.onCancel,
     submit: () => void submit(),
     busy,
     disabled: () => missing().length > 0 || noOutpost() || !!nameStemError(d().name.trim()),
@@ -339,6 +341,7 @@ function SystemForm(props: StartFormProps): JSX.Element {
   useFormActions().bind({
     submitLabel: "Start system",
     submitIcon: Plus,
+    cancel: props.onCancel,
     submit: () => void submit(),
     busy,
     disabled: () => missing().length > 0 || noOutpost() || !!nameStemError(d().name.trim()),
@@ -409,6 +412,7 @@ function LocationsForm(props: StartFormProps): JSX.Element {
   useFormActions().bind({
     submitLabel: "Start locations",
     submitIcon: Plus,
+    cancel: props.onCancel,
     submit: () => void submit(),
     busy,
     disabled: () => missing().length > 0 || !!nameStemError(d().name.trim()),

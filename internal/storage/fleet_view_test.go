@@ -55,7 +55,7 @@ func newFleetFixture(t *testing.T) *fleetFixture {
 
 	mk := func(name, kind string, parent *string) {
 		t.Helper()
-		if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: name, LocationType: kind, ParentName: parent}, f.all); err != nil {
+		if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: name, LocationType: kind, ParentName: parent}, f.all, f.all); err != nil {
 			t.Fatalf("create location %s: %v", name, err)
 		}
 	}

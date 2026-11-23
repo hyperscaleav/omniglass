@@ -37,10 +37,10 @@ describe("SystemEmpty", () => {
     expect(screen.getByTestId("system-empty").textContent).toMatch(/system is the thing Omniglass monitors/);
     expect(screen.getByTestId("system-empty").textContent).toMatch(/slot/);
   });
-  it("Add component opens the create page with the system prefilled", async () => {
+  it("Add component opens the add flow with the system prefilled", async () => {
     mount(admin);
     fireEvent.click(await screen.findByRole("button", { name: "Add component" }));
-    await waitFor(() => expect(landed).toBe("/components/create?system=sys-1"));
+    await waitFor(() => expect(landed).toBe("/components/add?system=sys-1"));
   });
   it("Start from a standard calls back, and hides once the system has a standard", async () => {
     const cb = vi.fn();

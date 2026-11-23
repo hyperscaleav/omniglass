@@ -22,6 +22,7 @@ import { useMe, can } from "../lib/auth";
 import { catalogLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
+import { confirmDelete } from "../lib/confirm";
 
 // Vendors: the vendor catalog (the vendor picker on the product form), on the
 // flat FlatList surface. A vendor is addressed by its kebab name (ADR-0062:
@@ -143,7 +144,7 @@ function VendorBladeBody(p: { id: string }): JSX.Element {
   async function removeVendor() {
     const r = row();
     if (!r) return;
-    if (!confirm(`Delete vendor "${r.name}"?`)) return;
+    if (!(await confirmDelete({ kind: "vendor", name: r.name }))) return;
     setErr(null);
     try {
       await deleteVendor(r.name);

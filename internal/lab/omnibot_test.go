@@ -143,9 +143,29 @@ func TestOmnibotReplayTriagesTheTriageSkill(t *testing.T) {
 		}
 	}
 
-	other, err := p.Next(context.Background(), []provider.Message{{Role: provider.RoleUser, Text: "tag the meeting 405 video bar AV-0415"}}, nil)
-	if err != nil || len(other.ToolCalls) != 1 || other.ToolCalls[0].Name != "get-component" {
-		t.Fatalf("another prompt plays %+v, %v, want the tag conversation's get-component", other, err)
+	assertRecordedPrompts(t, p, DefaultOmnibotReplay, "get-component")
+}
+
+// assertRecordedPrompts holds a recording to the contract the panel relies on
+// (#2443): it lists prompts, its first plays a read of tool first, each
+// listed prompt is played, and a question it was not recorded for is not.
+func assertRecordedPrompts(t *testing.T, p provider.Provider, name, first string) {
+	t.Helper()
+	sc, ok := p.(provider.Scripted)
+	if !ok || len(sc.Prompts()) == 0 {
+		t.Fatalf("%s lists no prompts, want the questions it answers", name)
+	}
+	for _, q := range sc.Prompts() {
+		if !sc.Plays(q) {
+			t.Errorf("%s lists %q but does not play it", name, q)
+		}
+	}
+	got, err := p.Next(context.Background(), []provider.Message{{Role: provider.RoleUser, Text: sc.Prompts()[0]}}, nil)
+	if err != nil || len(got.ToolCalls) != 1 || got.ToolCalls[0].Name != first {
+		t.Fatalf("%s's first prompt plays %+v, %v, want %s", name, got, err, first)
+	}
+	if sc.Plays("Which alarm is worst?") {
+		t.Errorf("%s plays a question it was not recorded for", name)
 	}
 }
 
@@ -198,8 +218,5 @@ func TestOmnibotCorporateOutageTriagesTheDisplay(t *testing.T) {
 			msgs = append(msgs, provider.Message{Role: provider.RoleTool, ToolCallID: c.ID, Text: "{}"})
 		}
 	}
-	other, err := p.Next(context.Background(), []provider.Message{{Role: provider.RoleUser, Text: "Why is this room down?"}}, nil)
-	if err != nil || len(other.ToolCalls) != 1 || other.ToolCalls[0].Name != "get-system-health" {
-		t.Fatalf("another prompt plays %+v, %v, want the room's get-system-health", other, err)
-	}
+	assertRecordedPrompts(t, p, "corporate-outage", "get-system-health")
 }

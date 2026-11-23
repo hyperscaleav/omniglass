@@ -4,9 +4,11 @@ import {
   layoutMarkers,
   mapMarkers,
   markerAnchor,
+  fitMarkers,
   parseStandardMap,
   rectsOverlap,
   type LabelSpec,
+  type MapMarker,
   type Rect,
   type Size,
 } from "./system_map";
@@ -204,5 +206,34 @@ describe("layoutMarkers", () => {
 
   it("an empty map is an empty layout", () => {
     expect(layoutMarkers([], { w: 320, h: 178 })).toEqual([]);
+  });
+});
+
+describe("fitMarkers (#2465): the map sizes to what it holds", () => {
+  const m = (x: number, y: number): MapMarker => ({ x, y, slot: "s", slotLabel: "S", position: 1 });
+
+  it("leaves a map that spans the room as it is", () => {
+    const fit = fitMarkers([m(0.05, 0.05), m(0.95, 0.95)], 1.8);
+    expect(fit.width).toBe(1);
+    expect(fit.aspect).toBeCloseTo(1.8);
+    expect(fit.markers.map((k) => [k.x, k.y])).toEqual([[0.05, 0.05], [0.95, 0.95]]);
+  });
+
+  it("crops a few clustered markers to a window around them, aspect following the crop", () => {
+    const fit = fitMarkers([m(0.45, 0.5), m(0.55, 0.5)], 1.8);
+    expect(fit.width).toBeLessThan(0.5);
+    // every marker still lands inside the box, and the pair keeps its spacing
+    for (const k of fit.markers) {
+      expect(k.x).toBeGreaterThan(0);
+      expect(k.x).toBeLessThan(1);
+      expect(k.y).toBeGreaterThan(0);
+      expect(k.y).toBeLessThan(1);
+    }
+    expect(fit.markers[1].x).toBeGreaterThan(fit.markers[0].x);
+    expect(fit.aspect).toBeCloseTo(1.8 * (fit.width / 0.4), 5);
+  });
+
+  it("passes an empty map through", () => {
+    expect(fitMarkers([], 1.8)).toEqual({ markers: [], aspect: 1.8, width: 1 });
   });
 });

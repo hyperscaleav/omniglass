@@ -528,8 +528,6 @@ export function EntityCreateForm(props: {
   kind: EntityKind;
   // A location uuid to prefill placement with: the explorer's create-where-you-stand.
   under?: string;
-  // A component created from a system's page starts in that system (#2464).
-  system?: string;
   onCreated: (created: { id: string }) => void;
   onCancel: () => void;
 }) {
@@ -570,7 +568,7 @@ export function EntityCreateForm(props: {
   const [locationType, setLocationType] = createSignal("");
   const [location, setLocation] = createSignal(isLocation() ? "" : (props.under ?? ""));
   const [parent, setParent] = createSignal(isLocation() ? (props.under ?? "") : "");
-  const [system, setSystem] = createSignal(props.system ?? "");
+  const [system, setSystem] = createSignal("");
   const [product, setProduct] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
@@ -583,13 +581,21 @@ export function EntityCreateForm(props: {
   // the answer is a known 422 and the browser would log it as a failed request
   // (#1548), so the form states the refusal itself (unclassifiedSystem below).
   const unclassifiedSystem = () => isSystem() && !systemType() && namePen.value().trim() === "";
+  // A location type with no name rule cannot mint a name, and the shipped
+  // vocabulary is all of them (#2465): the type list says so (name_rule absent),
+  // so the form states the refusal itself rather than ask for a guaranteed 422.
+  const unnamedLocation = () => {
+    if (!isLocation() || namePen.value().trim() !== "") return false;
+    const t = (locationTypes.data ?? []).find((x) => x.name === locationType().trim());
+    return !!t && !t.name_rule;
+  };
   const labelDraft = useLabelDraft(() => {
     if (isSystem()) {
       if (unclassifiedSystem()) return null;
       return { kind: "system" as const, body: { system_type_id: systemType() || undefined, standard_id: standard() || undefined, name: namePen.value().trim() || undefined, parent: parent() || undefined, location: location() || undefined } };
     }
     if (isLocation()) {
-      return locationType().trim()
+      return locationType().trim() && !unnamedLocation()
         ? { kind: "location" as const, body: { location_type: locationType().trim(), name: namePen.value().trim() || undefined, parent: parent() || undefined } }
         : null;
     }
@@ -766,7 +772,7 @@ export function EntityCreateForm(props: {
         kind={props.kind}
         draft={() => labelDraft.data}
         pending={() => labelDraft.isFetching}
-        nameRefused={() => unclassifiedSystem() || nameRefused(labelDraft.error)}
+        nameRefused={() => unclassifiedSystem() || unnamedLocation() || nameRefused(labelDraft.error)}
         bucket={bucketText}
         namePen={namePen}
         displayPen={displayPen}

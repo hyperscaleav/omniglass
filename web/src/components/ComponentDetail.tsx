@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createUniqueId } from "solid-js";
+import { For, Show, createMemo, createUniqueId, onCleanup } from "solid-js";
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/solid-query";
 import TabRail from "./TabRail";
@@ -6,6 +6,7 @@ import ConfigureFace from "./ConfigureFace";
 import EventsPanel from "./EventsPanel";
 import LogsPanel from "./LogsPanel";
 import CommandsPanel from "./CommandsPanel";
+import DependenciesPanel from "./DependenciesPanel";
 import IdentitiesPanel from "./IdentitiesPanel";
 import HealthBadge from "./HealthBadge";
 import Eyebrow from "./Eyebrow";
@@ -16,6 +17,7 @@ import { SnoozedBadge } from "./SnoozeButton";
 import AlarmTimeline, { createTimelineToggles } from "./AlarmTimeline";
 import SeverityBadge from "./SeverityBadge";
 import SimulationSection from "./SimulationSection";
+import { SimFaultChipFor } from "./SimFaultChip";
 import ReachLadder from "./ReachLadder";
 import SessionPill from "./SessionPill";
 import SessionNotice from "./SessionNotice";
@@ -93,12 +95,14 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
   // nested open stacks on whichever host it is in.
   const blades = useBlades();
   const leave = createLeaveGuard();
+  // In a blade, closing or popping it asks the same guard a tab switch does.
+  if (props.host === "blade") onCleanup(blades.guard({ kind: "component", id: props.id }, leave));
   // Three tabs (#826): Overview, Activity, Configure. A legacy ?tab=events
   // address lands on Activity, which absorbed it.
   const leafTabs = createMemo(() => [
     { key: "overview", label: "Overview" },
     { key: "activity", label: "Activity" },
-    ...(can(me.data, "component", "update") ? [{ key: "configure", label: "Configure" }] : []),
+    ...(can(me.data, "component", "update") || can(me.data, "component", "delete") ? [{ key: "configure", label: "Configure" }] : []),
   ]);
   const tabState = createTabState(props.host, leafTabs, { legacy: { events: "activity" } });
   const leafTab = tabState.active;
@@ -262,6 +266,7 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
               <Show when={since()}>
                 {(sc) => <span data-testid="since-line" class="tabular-nums text-base-content/70">since {fmtTime(sc().ts)} · {durationText(sc().ms)}</span>}
               </Show>
+              <SimFaultChipFor componentId={component()?.id ?? id()} name={component()?.name} />
               <span class="text-base-content/30">·</span>
               <span class="font-data text-xs text-base-content/60">{component()?.name}</span>
             </div>
@@ -558,6 +563,15 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
                 </ul>
               </Show>
             </section>
+            {/* What it needs and what needs it (#2428). */}
+            <Show when={component()}>
+              {(c) => (
+                <DependenciesPanel
+                  component={c().id}
+                  canUpdate={can(me.data, "component", "update") && (Array.isArray(c().actions) ? c().actions!.includes("update") : true)}
+                />
+              )}
+            </Show>
             {/* A component that speaks for many owners (a conduit, #1389):
                 the identities it fans out and the ones it heard unbound. It
                 renders nothing on a component that speaks only for itself. */}

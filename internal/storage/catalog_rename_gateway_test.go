@@ -217,13 +217,13 @@ func TestLocationTypeRenameRewritesPlacementRules(t *testing.T) {
 	}
 
 	// Placement keeps working under the new name.
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "west", LocationType: "east-wing"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "west", LocationType: "east-wing"}, all, all); err != nil {
 		t.Fatalf("a location of the renamed type: %v", err)
 	}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "suite-100", LocationType: "suite", ParentName: strptr("west")}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "suite-100", LocationType: "suite", ParentName: strptr("west")}, all, all); err != nil {
 		t.Errorf("a suite under the renamed type was refused: %v", err)
 	}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "room-100", LocationType: "room", ParentName: strptr("west")}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "room-100", LocationType: "room", ParentName: strptr("west")}, all, all); err != nil {
 		t.Errorf("a forked room under the renamed type was refused: %v", err)
 	}
 }

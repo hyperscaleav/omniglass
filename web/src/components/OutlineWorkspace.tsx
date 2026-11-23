@@ -19,7 +19,7 @@ import { COMPONENT_TYPES_KEY, listComponentTypes, resolveComponentTypeIcon } fro
 import { systemHealth, systemHealthKey } from "../lib/health";
 import { canHoldChildren } from "../lib/location_type_graph";
 import { ancestorsOf, buildOutline, entriesOf, rootAt, type OutlineEntry, type LocationNode } from "../lib/outline";
-import { buildPredicate, parseChips, tagFilterKeys, tokenToChip, type Chip, type FilterKey } from "../lib/predicate";
+import { buildPredicate, parseChips, tagFilterKeys, type Chip, type FilterKey } from "../lib/predicate";
 import { ATTENTION, ATTENTION_CHIP, attentionCount, attentionParts } from "../lib/attention";
 import OutlineName, { type NameKind } from "./OutlineName";
 import { describeError } from "../lib/format";
@@ -128,11 +128,7 @@ export default function OutlineWorkspace(props: { rootId?: string; host?: "page"
   // The filter narrows as you type: what is typed is previewed as the chip
   // Enter would commit (the same parse), and the results list answers to
   // the committed chips and this one together.
-  const [draft, setDraft] = createSignal("");
-  const draftChip = createMemo<Chip | null>(() => {
-    const t = draft().trim();
-    return t ? tokenToChip(t, filterKeys(), "name") : null;
-  });
+  const [draftChip, setDraftChip] = createSignal<Chip | null>(null);
   const effective = createMemo<Chip[]>(() => [...chips(), ...(draftChip() ? [draftChip()!] : [])]);
   const shown = createMemo(() => entries().filter(buildPredicate(filterKeys(), effective())));
 
@@ -205,7 +201,13 @@ export default function OutlineWorkspace(props: { rootId?: string; host?: "page"
     if (props.rootId) return r ? addOptions(r.chain[0]) : [];
     return (["location", "system", "component"] as AddKind[]).filter((k) => can(me.data, k, "create"));
   };
-  const create = (kind: AddKind, under?: string) => navigate(`/${kind}s/create${under ? `?under=${encodeURIComponent(under)}` : ""}`);
+  // A component is added through the guided flow (#2460), which ends on an
+  // endpoint that has answered; its plain form stays one link away there.
+  // A caller who may create a component but not its endpoint gets the plain
+  // form, since the flow ends on an endpoint they could not make.
+  const guided = () => can(me.data, "endpoint", "create");
+  const create = (kind: AddKind, under?: string) =>
+    navigate(`/${kind}s/${kind === "component" && guided() ? "add" : "create"}${under ? `?under=${encodeURIComponent(under)}` : ""}`);
 
   const subtree = (n: LocationNode): string[] => [n.id, ...n.children.flatMap(subtree)];
   const onToggle = (n: LocationNode, deep: boolean) => {
@@ -322,7 +324,7 @@ export default function OutlineWorkspace(props: { rootId?: string; host?: "page"
                   rows={entries()}
                   chips={chips}
                   onChips={setChips}
-                  onDraft={setDraft}
+                  onDraft={setDraftChip}
                   placeholder="Filter by name, location, health, type, standard, product or tag; Enter pins it as a chip"
                 >
                   {(filtered) => (

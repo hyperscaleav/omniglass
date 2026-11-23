@@ -244,7 +244,7 @@ func TestClearNameRuleOnBothTypeKinds(t *testing.T) {
 				}
 			}
 			// While the rule stands, the platform names a nameless create.
-			l, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: tc.typeName}, all)
+			l, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: tc.typeName}, all, all)
 			if err != nil {
 				t.Fatalf("nameless create under a rule: %v", err)
 			}
@@ -276,7 +276,7 @@ func TestClearNameRuleOnBothTypeKinds(t *testing.T) {
 			}
 			// And the generator sees it: this is the behavior an operator was
 			// stuck with, auto-naming they could not turn off.
-			if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: tc.typeName}, all); !errors.Is(err, storage.ErrLocationTypeNoNameRule) {
+			if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: tc.typeName}, all, all); !errors.Is(err, storage.ErrLocationTypeNoNameRule) {
 				t.Fatalf("a nameless create after the clear = %v, want ErrLocationTypeNoNameRule", err)
 			}
 		})
