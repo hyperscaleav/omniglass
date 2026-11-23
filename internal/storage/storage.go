@@ -378,6 +378,10 @@ type Gateway interface {
 	ResetComponentName(ctx context.Context, actorID, name string, read, action scope.Set) (*Component, error)
 	ComponentNameTaken(ctx context.Context, name string, parentRef, locationRef *string) (bool, error)
 	DeleteComponent(ctx context.Context, actorID, name string, read, action scope.Set) error
+	// DeleteBlockersOf names what stands in the way of a refused delete of a
+	// component, system or location (#2463): the rows the caller may read on
+	// each blocker's own kind, and a count of the rest. Read-only.
+	DeleteBlockersOf(ctx context.Context, kind, ref string, readOf func(kind string) scope.Set) (*DeleteBlockers, error)
 
 	// The component_make catalog: a flat manufacturer catalog (Cisco,
 	// Crestron, ...), same shape and official-read-only guard as the type
@@ -1148,6 +1152,13 @@ type Gateway interface {
 	// three different permissions: a user who may read the place tree but
 	// not its components sees the shape of their fleet with no contents.
 	FleetProjection(ctx context.Context, locRead, sysRead, compRead scope.Set) (*FleetView, error)
+
+	// SearchFleet is the read behind the command palette's name search (#2444):
+	// the locations, systems and components whose name or label holds text, at
+	// most limit of each kind (capped at SearchMaxLimit), each kind through its
+	// own read scope so nothing outside the caller's reach is found. Blank text
+	// finds nothing.
+	SearchFleet(ctx context.Context, text string, limit int, locRead, sysRead, compRead scope.Set) (*FleetSearchResult, error)
 
 	// PlatformView is the read behind the Platform health page (#1644): the
 	// platform system's verdict, each server's identity, and one row per outpost

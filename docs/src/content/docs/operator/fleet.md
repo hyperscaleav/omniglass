@@ -62,15 +62,19 @@ screenshots:
     path: /web/systems/huddle
     alt: "A system's view: the location as a card of context, the system's header (health, since, standard, size), then Overview: its components as rows naming each one's slot, slots grouped only where they say something."
     # The since-line ages with the capture; the history strip is Activity's
-    # now (#872), so nothing else on Overview moves.
+    # now (#872). The map is cropped to its members (#2465), so the Data
+    # section's first sparkline rises into the frame and plots like it ages.
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
+      - "[data-testid=sparkline]"
   - id: fleet-map
     path: /web/systems/huddle
     alt: "The map inside Overview: the standard's declared layout rendered top-down, one marker per slot position, each the type icon of the component holding it, in its health colour, with its label under it."
-    # The header's since-line ages with the capture.
+    # The header's since-line ages with the capture, and the cropped map
+    # (#2465) lifts the Data section's sparklines into the frame.
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
+      - "[data-testid=sparkline]"
   # The auditorium carries the fleet's live high-severity alarm, so the history
   # tab has something real to say. Its room holds that one system, so the
   # room's address lands on it.
@@ -106,8 +110,12 @@ screenshots:
       - "[data-testid=sparkline]"
   - id: fleet-location
     path: /web/locations/east
-    alt: "A location holding no system of its own: its card with its type and tags, its tabs, and the outline of what is beneath it, counted by systems."
-    # Nothing on a folder's view moves with the clock: no mask.
+    alt: "A location holding no system of its own: its card with its type, health, since-when and tags, its tabs, and the outline of what is beneath it, counted by systems."
+    # The header's since line ages with the capture (#2423): its box is
+    # declared, as the blade's is, so the clock never moves the baseline.
+    mask:
+      - selector: "[data-testid=since-line]"
+        width: 184
   # A room holding two systems keeps a view of its own: a brief card per
   # system.
   - id: fleet-location-systems
@@ -125,6 +133,8 @@ screenshots:
     # · 59m") is 186px in the console's face; a line wider than 208px fails
     # the capture by name.
     mask:
+      - selector: "[data-testid=since-line]"
+        width: 184
       - selector: "[data-testid=summary-since]"
         width: 208
   # Opened down to one room so the shot shows every rule at once: folded
@@ -336,6 +346,10 @@ its health colour (green, amber, red, as in the Health column) with the componen
 under it; hover or focus a marker for its slot, product, health and any alarm, and click it to
 open its panel. A dashed ring is a position nobody staffs, labelled with its slot.
 
+The map is cropped to the positions the system holds (#2465): a system with a few members shows a
+small map around them rather than the whole room with most of it empty, and a system spread across
+the room shows the whole room.
+
 The map redraws to the width it has. A label never runs past the edge of the map: a marker
 near a side hangs its label inward, one near the bottom puts it above its icon, and a phone
 anchors sooner than a desktop because the same position is fewer pixels from the edge. Where
@@ -398,8 +412,8 @@ permission and its own audit verb; systems and components read where they sit.
 together (the rename last, so a refusal leaves the rest saved), Cancel reverts. A
 `?edit=1` address lands already editing. A sole system's Configure also carries its location's
 form, in its own section with its own Edit (`?edit=location` opens that one). A location's and a
-component's views carry the same tab. The side panel carries the same form's identity, classification and tags; slots,
-properties and their cascade are configuration, and live here.
+component's views carry the same tab. A blade opened from Explore carries this same Configure
+tab, panels, Edit and Delete included: it is the detail view in a side panel (ADR-2423).
 
 ::screenshot{#fleet-configure}
 

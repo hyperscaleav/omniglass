@@ -237,6 +237,9 @@ func generatedCommands() []*cobra.Command {
 		}
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var qState string
+				var qSince string
+				var qUntil string
 				var qUnacknowledged bool
 				var qLimit int
 				var qSeverity []string
@@ -246,13 +249,22 @@ func generatedCommands() []*cobra.Command {
 				var qPageToken string
 				cmd := &cobra.Command{
 					Use:     "list",
-					Short:   "List the fleet's active alarms",
-					Long:    "What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Each row names its component's location and the systems it belongs to that the caller may read. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.",
+					Short:   "List the fleet's alarms",
+					Long:    "What is wrong now across every component the caller may read, in one read: by default the active alarms (state=cleared is the history, each row carrying when it cleared, and state=all both; since and until keep the alarms whose raised-to-cleared interval overlaps that range, so one raised before it and still open in it is kept, and since after until is a 400), worst severity first and newest first within a severity, each naming its component. Each row names its component's location and the systems it belongs to that the caller may read. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.",
 					Example: "  omniglass alarm list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/alarms")
 						q := url.Values{}
+						if cmd.Flags().Changed("state") {
+							q.Set("state", fmt.Sprintf("%v", qState))
+						}
+						if cmd.Flags().Changed("since") {
+							q.Set("since", fmt.Sprintf("%v", qSince))
+						}
+						if cmd.Flags().Changed("until") {
+							q.Set("until", fmt.Sprintf("%v", qUntil))
+						}
 						if cmd.Flags().Changed("unacknowledged") {
 							q.Set("unacknowledged", fmt.Sprintf("%v", qUnacknowledged))
 						}
@@ -282,6 +294,9 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
+				cmd.Flags().StringVar(&qState, "state", "", "Which alarms: active (still raised, the default), cleared (a cleared alarm is history, with when it cleared), or all")
+				cmd.Flags().StringVar(&qSince, "since", "", "Only the alarms still raised at or after this RFC 3339 time: active, or cleared at or after it")
+				cmd.Flags().StringVar(&qUntil, "until", "", "Only the alarms raised at or before this RFC 3339 time; must not be earlier than since")
 				cmd.Flags().BoolVar(&qUnacknowledged, "unacknowledged", false, "Only the alarms nobody has looked at: the queue an operator, or an agent, works")
 				cmd.Flags().IntVar(&qLimit, "limit", 0, "At most this many, the worst first; 0 or absent means 200")
 				cmd.Flags().StringSliceVar(&qSeverity, "severity", nil, "Only alarms at these severity levels, by name (see /severity-levels); repeat the parameter for several")
@@ -2242,7 +2257,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "delete <name>",
 					Short:   "Delete a component",
-					Long:    "Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+					Long:    "Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass component delete <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -4719,7 +4734,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "delete <name>",
 					Short:   "Delete a location",
-					Long:    "Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+					Long:    "Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass location delete <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -6974,6 +6989,44 @@ func generatedCommands() []*cobra.Command {
 	}())
 	roots = append(roots, func() *cobra.Command {
 		parent := &cobra.Command{
+			Use:   "search",
+			Short: "Commands for the search resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var qQ string
+				var qLimit int
+				cmd := &cobra.Command{
+					Use:     "list",
+					Short:   "Find locations, systems, components and catalog entries by name",
+					Long:    "The read behind the command palette. Returns up to limit hits of each kind whose name or label holds q, case-insensitively, best match first (exact, then prefix, then the rest by name). Locations, systems and components are searched inside the caller's own read scope for each kind, so nothing outside it appears; a caller with no scope for a kind gets an empty group, not an error. Each fleet hit carries its location_path, so many components with one name are told apart. Catalog hits cover products (product:read), drivers (driver:read), calc rules and event rules (rule:read) and metrics (metric_type:read), each only for a caller who holds that permission. Gated by location:read, the floor of every fleet reader; the component group also needs component:read.",
+					Example: "  omniglass search list",
+					Args:    pathArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/search")
+						q := url.Values{}
+						if cmd.Flags().Changed("q") {
+							q.Set("q", fmt.Sprintf("%v", qQ))
+						}
+						if cmd.Flags().Changed("limit") {
+							q.Set("limit", fmt.Sprintf("%v", qLimit))
+						}
+						if enc := q.Encode(); enc != "" {
+							path += "?" + enc
+						}
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				cmd.Flags().StringVar(&qQ, "q", "", "The text to find, matched case-insensitively anywhere in a name or label")
+				cmd.Flags().IntVar(&qLimit, "limit", 0, "The most hits returned for each kind")
+				return cmd
+			}()
+			return cmd
+		}())
+		return parent
+	}())
+	roots = append(roots, func() *cobra.Command {
+		parent := &cobra.Command{
 			Use:   "secret",
 			Short: "Commands for the secret resource",
 		}
@@ -8232,7 +8285,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "delete <name>",
 					Short:   "Delete a system",
-					Long:    "Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+					Long:    "Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass system delete <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {

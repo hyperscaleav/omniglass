@@ -507,6 +507,8 @@ export type AlarmBody = {
   id: string;
   /** The name of the location the alarm's component sits in (its plane root's location); absent when the component is unplaced, and on every read but the fleet queue */
   location?: string;
+  /** That location's uuid, the stable form of location; only on the fleet queue */
+  location_id?: string;
   /** That location's dotted ancestor path, root first (for example boi.17c) */
   location_path?: string;
   message: string;
@@ -521,6 +523,11 @@ export type AlarmBody = {
   snoozed_by?: string;
   /** Until when the alarm (by component and dedup_key) is snoozed: its notifications are written suppressed until then. Null while it is not snoozed. Independent of acknowledged and cleared_at */
   snoozed_until?: string;
+  /**
+     * Those systems' uuids, in the same order as systems; only on the fleet queue
+     * @nullable
+     */
+  system_ids?: string[] | null;
   /**
      * The names of the systems the alarm's component is a member of; only on the fleet queue
      * @nullable
@@ -3440,6 +3447,66 @@ export type DatabaseSettings = {
   slow_query_ms: number;
 };
 
+/**
+ * The blocking row's own resource, so a client can link it and offer that kind's own remove.
+ */
+export type DeleteBlockerKind = typeof DeleteBlockerKind[keyof typeof DeleteBlockerKind];
+
+
+export const DeleteBlockerKind = {
+  component: 'component',
+  endpoint: 'endpoint',
+  system: 'system',
+  location: 'location',
+} as const;
+
+export type DeleteBlocker = {
+  /** The blocking row's uuid. */
+  id: string;
+  /** The blocking row's own resource, so a client can link it and offer that kind's own remove. */
+  kind: DeleteBlockerKind;
+  /** What an operator reads for the blocking row: its label, or its name when it has none. */
+  label: string;
+  /** The blocking row's name, its operator-facing address (an endpoint's is unique within its component). */
+  name: string;
+};
+
+export type ErrorDetail = {
+  /** Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
+  location?: string;
+  /** Error message text */
+  message?: string;
+  /** The value at the given location */
+  value?: unknown;
+};
+
+export type DeleteRefusal = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The rows in the way that the caller may read, each to be removed or moved before the delete can succeed.
+     * @nullable
+     */
+  blockers?: DeleteBlocker[] | null;
+  /** How many more rows are in the way that are not listed: outside the caller's read scope, or past the listing cap. */
+  blockers_hidden?: number;
+  /** A human-readable explanation specific to this occurrence of the problem. */
+  detail?: string;
+  /**
+     * Optional list of individual error details
+     * @nullable
+     */
+  errors?: ErrorDetail[] | null;
+  /** A URI reference that identifies the specific occurrence of the problem. */
+  instance?: string;
+  /** HTTP status code */
+  status?: number;
+  /** A short, human-readable summary of the problem type. This value should not change between occurrences of the error. */
+  title?: string;
+  /** A URI reference to human-readable documentation for the error. */
+  type?: string;
+};
+
 export type DownloadFileOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -3815,15 +3882,6 @@ export type EntityTagsOutputBody = {
   readonly $schema?: string;
   /** @nullable */
   tags: TagBindingBody[] | null;
-};
-
-export type ErrorDetail = {
-  /** Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
-  location?: string;
-  /** Error message text */
-  message?: string;
-  /** The value at the given location */
-  value?: unknown;
 };
 
 export type ErrorModel = {
@@ -8186,6 +8244,60 @@ export type SSOSettings = {
   scopes: string;
 };
 
+/**
+ * Which catalog the entry belongs to; the console opens its drawer on that catalog's page
+ */
+export type SearchCatalogBodyKind = typeof SearchCatalogBodyKind[keyof typeof SearchCatalogBodyKind];
+
+
+export const SearchCatalogBodyKind = {
+  product: 'product',
+  driver: 'driver',
+  calc_rule: 'calc_rule',
+  event_rule: 'event_rule',
+  metric: 'metric',
+} as const;
+
+export type SearchCatalogBody = {
+  /** A short qualifier: a product's vendor, a driver's version, a metric's unit */
+  detail?: string;
+  /** Which catalog the entry belongs to; the console opens its drawer on that catalog's page */
+  kind: SearchCatalogBodyKind;
+  /** The entry's display label */
+  label?: string;
+  /** The entry's name, its address in the catalog */
+  name: string;
+};
+
+export type SearchEntityBody = {
+  /** The entity's uuid, the address its page opens at */
+  id: string;
+  /** The entity's display label, when it has one */
+  label?: string;
+  /** The locations it sits under, outermost first, joined with ' / '. Empty for a component that has no location of its own and is in a system; its system field says where it is */
+  location_path?: string;
+  /** The entity's name; many components share one, the location_path tells them apart */
+  name: string;
+  /** A component's primary system, when it has one */
+  system?: string;
+};
+
+export type SearchOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * Catalog hits across products, drivers, calc rules, event rules and metrics, best match first, at most limit of each kind
+     * @nullable
+     */
+  catalog: SearchCatalogBody[] | null;
+  /** @nullable */
+  components: SearchEntityBody[] | null;
+  /** @nullable */
+  locations: SearchEntityBody[] | null;
+  /** @nullable */
+  systems: SearchEntityBody[] | null;
+};
+
 export type SetAvatarInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -9455,6 +9567,12 @@ export type ViewRowsEvent = {
 };
 
 export type ListAlarmsParams = {
+  /** Which alarms: active (still raised, the default), cleared (a cleared alarm is history, with when it cleared), or all */
+  state?: ListAlarmsState;
+  /** Only the alarms still raised at or after this RFC 3339 time: active, or cleared at or after it */
+  since?: string;
+  /** Only the alarms raised at or before this RFC 3339 time; must not be earlier than since */
+  until?: string;
   /** Only the alarms nobody has looked at: the queue an operator, or an agent, works */
   unacknowledged?: boolean;
   /**
@@ -9477,6 +9595,15 @@ export type ListAlarmsParams = {
   /** The next_page_token of the previous page: resumes the same worst-first order after it, however many alarms there are */
   page_token?: string;
 };
+
+export type ListAlarmsState = typeof ListAlarmsState[keyof typeof ListAlarmsState];
+
+
+export const ListAlarmsState = {
+  active: 'active',
+  cleared: 'cleared',
+  all: 'all',
+} as const;
 
 export type ListAlarmsAcknowledged = typeof ListAlarmsAcknowledged[keyof typeof ListAlarmsAcknowledged];
 
@@ -9706,6 +9833,21 @@ export const ListNotificationStatus = {
   suppressed: 'suppressed',
   '': '',
 } as const;
+
+export type SearchParams = {
+  /**
+   * The text to find, matched case-insensitively anywhere in a name or label
+   * @minLength 1
+   * @maxLength 200
+   */
+  q?: string;
+  /**
+   * The most hits returned for each kind
+   * @minimum 1
+   * @maximum 20
+   */
+  limit?: number;
+};
 
 /**
  * an RFC 7386 JSON Merge Patch for the namespace; null on a key restores it
@@ -10224,8 +10366,8 @@ export const getListAlarmsUrl = (params?: ListAlarmsParams,) => {
 }
 
 /**
- * What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Each row names its component's location and the systems it belongs to that the caller may read. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.
- * @summary List the fleet's active alarms
+ * What is wrong now across every component the caller may read, in one read: by default the active alarms (state=cleared is the history, each row carrying when it cleared, and state=all both; since and until keep the alarms whose raised-to-cleared interval overlaps that range, so one raised before it and still open in it is kept, and since after until is a 400), worst severity first and newest first within a severity, each naming its component. Each row names its component's location and the systems it belongs to that the caller may read. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.
+ * @summary List the fleet's alarms
  */
 export const listAlarms = async (params?: ListAlarmsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listAlarmsResponse> => {
 
@@ -12881,15 +13023,20 @@ export type deleteComponentResponse204 = {
   status: 204
 }
 
+export type deleteComponentResponse409 = {
+  data: DeleteRefusal
+  status: 409
+}
+
 export type deleteComponentResponseDefault = {
   data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
+  status: Exclude<HTTPStatusCodes, 204 | 409>
 }
 
 export type deleteComponentResponseSuccess = (deleteComponentResponse204) & {
   headers: Headers;
 };
-export type deleteComponentResponseError = (deleteComponentResponseDefault) & {
+export type deleteComponentResponseError = (deleteComponentResponse409 | deleteComponentResponseDefault) & {
   headers: Headers;
 };
 
@@ -12904,7 +13051,7 @@ export const getDeleteComponentUrl = (name: string,) => {
 }
 
 /**
- * Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
+ * Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
  * @summary Delete a component
  */
 export const deleteComponent = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteComponentResponse> => {
@@ -17433,15 +17580,20 @@ export type deleteLocationResponse204 = {
   status: 204
 }
 
+export type deleteLocationResponse409 = {
+  data: DeleteRefusal
+  status: 409
+}
+
 export type deleteLocationResponseDefault = {
   data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
+  status: Exclude<HTTPStatusCodes, 204 | 409>
 }
 
 export type deleteLocationResponseSuccess = (deleteLocationResponse204) & {
   headers: Headers;
 };
-export type deleteLocationResponseError = (deleteLocationResponseDefault) & {
+export type deleteLocationResponseError = (deleteLocationResponse409 | deleteLocationResponseDefault) & {
   headers: Headers;
 };
 
@@ -17456,7 +17608,7 @@ export const getDeleteLocationUrl = (name: string,) => {
 }
 
 /**
- * Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
+ * Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
  * @summary Delete a location
  */
 export const deleteLocation = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteLocationResponse> => {
@@ -20882,6 +21034,57 @@ export const listRoles = async ( options?: Parameters<typeof ogFetch>[1]): Promi
 
 
 
+export type searchResponse200 = {
+  data: SearchOutputBody
+  status: 200
+}
+
+export type searchResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type searchResponseSuccess = (searchResponse200) & {
+  headers: Headers;
+};
+export type searchResponseError = (searchResponseDefault) & {
+  headers: Headers;
+};
+
+export type searchResponse = (searchResponseSuccess | searchResponseError)
+
+export const getSearchUrl = (params?: SearchParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/search?${stringifiedParams}` : `/search`
+}
+
+/**
+ * The read behind the command palette. Returns up to limit hits of each kind whose name or label holds q, case-insensitively, best match first (exact, then prefix, then the rest by name). Locations, systems and components are searched inside the caller's own read scope for each kind, so nothing outside it appears; a caller with no scope for a kind gets an empty group, not an error. Each fleet hit carries its location_path, so many components with one name are told apart. Catalog hits cover products (product:read), drivers (driver:read), calc rules and event rules (rule:read) and metrics (metric_type:read), each only for a caller who holds that permission. Gated by location:read, the floor of every fleet reader; the component group also needs component:read.
+ * @summary Find locations, systems, components and catalog entries by name
+ */
+export const search = async (params?: SearchParams, options?: Parameters<typeof ogFetch>[1]): Promise<searchResponse> => {
+
+  return ogFetch<searchResponse>(getSearchUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
 export type listSecretTypesResponse200 = {
   data: ListSecretTypesOutputBody
   status: 200
@@ -22756,15 +22959,20 @@ export type deleteSystemResponse204 = {
   status: 204
 }
 
+export type deleteSystemResponse409 = {
+  data: DeleteRefusal
+  status: 409
+}
+
 export type deleteSystemResponseDefault = {
   data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
+  status: Exclude<HTTPStatusCodes, 204 | 409>
 }
 
 export type deleteSystemResponseSuccess = (deleteSystemResponse204) & {
   headers: Headers;
 };
-export type deleteSystemResponseError = (deleteSystemResponseDefault) & {
+export type deleteSystemResponseError = (deleteSystemResponse409 | deleteSystemResponseDefault) & {
   headers: Headers;
 };
 
@@ -22779,7 +22987,7 @@ export const getDeleteSystemUrl = (name: string,) => {
 }
 
 /**
- * Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
+ * Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
  * @summary Delete a system
  */
 export const deleteSystem = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteSystemResponse> => {

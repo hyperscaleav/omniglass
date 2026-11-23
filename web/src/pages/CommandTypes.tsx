@@ -26,6 +26,7 @@ import { useMe, can } from "../lib/auth";
 import { catalogLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
+import { confirmDelete } from "../lib/confirm";
 
 // Command Types: the "do" catalog (Catalog > Command Types), the twin of the
 // Properties and Event Types catalogs. A command type names what a component can be
@@ -242,7 +243,7 @@ function CommandTypeBladeBody(p: { name: string }): JSX.Element {
   async function removeCommandType() {
     const r = row();
     if (!r) return;
-    if (!confirm(`Delete command type "${r.name}"?`)) return;
+    if (!(await confirmDelete({ kind: "command type", name: r.name }))) return;
     setErr(null);
     try {
       await deleteCommandType(r.name);
