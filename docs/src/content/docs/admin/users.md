@@ -86,8 +86,9 @@ users. Because a user is not part of any location or system tree, that grant is 
   sign-on** section: the identities at the identity provider the person signs in through, each shown
   as its subject and issuer with who made the link and when it was last used. Type an identity as
   `iss|sub` (the provider's issuer URL exactly as its tokens carry it, a bar, and the person's subject
-  there) and **Link**; the subject is in the provider's admin console, and an unlinked sign-in shows
-  the person the whole identifier on the sign-in page, so they can read it to you. An email address is
+  there) and **Link**; the subject is in the provider's admin console, and an unlinked sign-in names
+  the whole identifier in the server's log (the `sso: sign-in refused` line, code `unlinked`, its
+  `identity`), never on the sign-in page, where the person reads only that it is not linked. An email address is
   refused: email never links, since a matching address at a provider is not proof of the person.
   **Unlink** removes one and ends every session and token the person signed in through it. Linking is
   a way to sign in as the target, so it takes the same **takeover guard** as a password reset: refused

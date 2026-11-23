@@ -6,7 +6,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Login from "./Login";
 
 // The sign-in page offers single sign-on (#2362) when /auth/status names a
-// provider, and shows the reason a refused sign-in came back with (?sso_error=).
+// provider, and shows the fixed message for the code a refused sign-in came
+// back with (?sso_error=<code>), never words the link itself carries.
 afterEach(() => {
   vi.unstubAllGlobals();
   window.history.pushState({}, "", "/");
@@ -41,8 +42,15 @@ describe("Login", () => {
     expect(screen.queryByRole("button", { name: "Sign in with SSO" })).toBeNull();
   });
 
-  it("shows the reason a refused sign-in came back with", async () => {
-    mount({ bootstrapped: true, lab: false, sso_providers: ["default"] }, "/login?sso_error=Your%20identity%20is%20not%20linked");
-    expect(await screen.findByRole("alert")).toHaveTextContent("Your identity is not linked");
+  it("shows the message for the code a refused sign-in came back with", async () => {
+    mount({ bootstrapped: true, lab: false, sso_providers: ["default"] }, "/login?sso_error=unlinked");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Your identity at the provider is not linked to an Omniglass person.");
+  });
+
+  it("shows the generic message, not the link's words, for a code it does not know", async () => {
+    mount({ bootstrapped: true, lab: false, sso_providers: ["default"] }, "/login?sso_error=Your%20account%20is%20locked.%20Call%20555-0100");
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Single sign-on did not complete.");
+    expect(alert).not.toHaveTextContent("555-0100");
   });
 });

@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
@@ -44,7 +45,9 @@ func TestSSOSignsInThroughARealDexProvider(t *testing.T) {
 		t.Fatalf("open gateway: %v", err)
 	}
 	t.Cleanup(gw.Close)
-	srv := httptest.NewServer(api.NewHandler(gw, api.WithVersion("test"), api.WithEgressOptions(egress.Options{})))
+	logs := &lockedBuffer{}
+	srv := httptest.NewServer(api.NewHandler(gw, api.WithVersion("test"), api.WithEgressOptions(egress.Options{}),
+		api.WithLogger(slog.New(slog.NewJSONHandler(logs, nil)))))
 	t.Cleanup(srv.Close)
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 	owner := bootstrapOwnerTok(t, ctx, gw)
@@ -98,13 +101,15 @@ staticClients:
 	s := &ssoStack{c: c, ctx: ctx, base: srv.URL, owner: owner, dsn: dsn, gw: gw}
 	alice := s.person(t, "alice")
 
-	// Unlinked, the refusal names the identity Dex vouched for; an admin links
-	// exactly that, and the next sign-in lands alice in the console.
-	msg := ssoError(t, dexSignIn(t, srv.URL))
-	_, rest, ok := strings.Cut(msg, "(")
-	ident, _, _ := strings.Cut(rest, ")")
-	if !ok || !strings.HasPrefix(ident, issuer+"|") {
-		t.Fatalf("unlinked sign-in: sso_error = %q, want it to name %s|<sub>", msg, issuer)
+	// Unlinked, the page gets the code and the server's log names the
+	// identity Dex vouched for; an admin links exactly that, and the next
+	// sign-in lands alice in the console.
+	if code := ssoError(t, dexSignIn(t, srv.URL)); code != string(sso.ErrUnlinked) {
+		t.Fatalf("unlinked sign-in: sso_error = %q, want %s", code, sso.ErrUnlinked)
+	}
+	ident, _ := lastRefusal(t, logs)["identity"].(string)
+	if !strings.HasPrefix(ident, issuer+"|") {
+		t.Fatalf("unlinked sign-in: logged identity %q, want %s|<sub>", ident, issuer)
 	}
 	c.do(owner, http.MethodPost, "/users/"+alice+"/identity-links", map[string]string{"identifier": ident}, http.StatusCreated)
 	jar := dexJar(t)

@@ -38,13 +38,20 @@ The provider says who you are as two parts, its **issuer** (the provider's addre
 **subject** there (an id it never reuses), written `iss|sub`. Omniglass signs you in only when that
 identity is **linked** to your account. Nothing links by email: an address is only as trustworthy as
 whoever controls it at the provider, so a matching email signs no one in. If yours is not linked yet,
-you land back on the sign-in screen with a message naming the identity it saw; an administrator links
-it from your person page, or you link it yourself from your profile (below).
+you land back on the sign-in screen saying so; an administrator links it from your person page, or you
+link it yourself from your profile (below).
 
-Other refusals come back the same way, with the reason: a sign-in started in another browser (which
-is how a forged sign-in link is stopped), one that took longer than ten minutes, an answer from the
-provider that did not verify, or an account an administrator disabled. A disabled provider or a
-provider that cannot be reached leaves password sign-in working.
+Other refusals come back the same way: a sign-in started in another browser (which is how a forged
+sign-in link is stopped), one that took longer than ten minutes or was already used, the provider
+turning you away, an answer from the provider that did not verify, or an account an administrator
+disabled. A disabled provider or a provider that cannot be reached leaves password sign-in working.
+
+A refusal carries only a short code back to the page (`?sso_error=unlinked`, for one), and the page
+shows its own fixed message for each code; anything else in that place shows one generic message. So
+a link someone crafted can never put words of its own on the sign-in page. The detail stays on the
+server: each refusal is one `sso: sign-in refused` line in the server's log, with the `code`, the
+`reason`, and, where the provider vouched for one, the `identity` (the `iss|sub` an administrator
+links). A refused self-link from your profile lands back on your profile the same way.
 
 Your session through SSO is the ordinary 12-hour session. Omniglass asks the provider again every 15
 minutes (the default) whether you may still sign in, and when it refuses (you left the organization,

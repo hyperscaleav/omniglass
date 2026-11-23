@@ -4,6 +4,7 @@ import { api } from "../api/client";
 import Button from "./Button";
 import IdentityLinksList from "./IdentityLinksList";
 import { useMyIdentityLinks, useUnlinkSelf, startSelfLink, type IdentityLink } from "../lib/identityLinks";
+import { ssoErrorMessage } from "../lib/ssoErrors";
 
 // SelfIdentityLinks is the profile's single sign-on card (#2362): the
 // identities at the identity provider you sign in through, linking your own
@@ -24,7 +25,9 @@ export default function SelfIdentityLinks() {
   const [busy, setBusy] = createSignal(false);
   const [err, setErr] = createSignal<string | null>(null);
   const linked = () => params.sso_linked === "1";
-  const callbackError = () => (typeof params.sso_error === "string" ? params.sso_error : null);
+  // A refused self-link comes back with a code (?sso_error=), shown as its
+  // fixed message.
+  const callbackError = () => ssoErrorMessage(params.sso_error);
   const visible = () => (status() ?? []).length > 0 || (links.data ?? []).length > 0;
 
   function ask(what: "link" | IdentityLink) {

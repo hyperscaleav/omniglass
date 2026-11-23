@@ -129,14 +129,14 @@ func (a *authenticator) bindingCookie(value string, maxAge int) http.Cookie {
 // mountOIDC puts the sign-in endpoints on the root router.
 func mountOIDC(r chi.Router, a *authenticator, o options) {
 	r.Get("/auth/oidc/start/{provider}", func(w http.ResponseWriter, req *http.Request) {
-		to, cookie, err := a.beginOIDC(req.Context(), chi.URLParam(req, "provider"), requestOrigin(req, o.trustedProxies), "", nil)
+		provider := chi.URLParam(req, "provider")
+		to, cookie, err := a.beginOIDC(req.Context(), provider, requestOrigin(req, o.trustedProxies), "", nil)
 		if err != nil {
-			o.log.Warn("sso: sign-in could not start", "err", err.Error())
-			msg := "Single sign-on could not start: the identity provider is unreachable or misconfigured. Sign in with your password, or ask an administrator."
+			code := sso.ErrUnreachable
 			if errors.Is(err, errSSOOff) {
-				msg = "Single sign-on is not configured on this server."
+				code = sso.ErrNotConfigured
 			}
-			http.Redirect(w, req, withQuery(loginPath, "sso_error", msg), http.StatusFound)
+			refuseOIDC(w, req, o, loginPath, code, err.Error(), "provider", provider)
 			return
 		}
 		http.SetCookie(w, &cookie)
@@ -149,51 +149,59 @@ func mountOIDC(r chi.Router, a *authenticator, o options) {
 
 func withQuery(path, k, v string) string { return path + "?" + url.Values{k: {v}}.Encode() }
 
+// refuseOIDC sends a refused sign-in or self-link back to page with its code
+// (?sso_error=<code>, one of the closed set the console has a fixed message
+// for) and logs why: the detail (the provider's own error, a verification
+// failure, the identity it vouched for) stays in this log line, never in the
+// URL, so a crafted link cannot put words on the page (#2362).
+func refuseOIDC(w http.ResponseWriter, r *http.Request, o options, page string, code sso.ErrorCode, reason string, attrs ...any) {
+	o.log.Warn("sso: sign-in refused", append([]any{"code", string(code), "reason", reason}, attrs...)...)
+	http.Redirect(w, r, withQuery(page, "sso_error", string(code)), http.StatusFound)
+}
+
 // oidcCallback completes a sign-in or a self-link.
 func (a *authenticator) oidcCallback(w http.ResponseWriter, r *http.Request, o options) {
 	ctx := r.Context()
-	fail := func(msg string) {
-		http.Redirect(w, r, withQuery(loginPath, "sso_error", msg), http.StatusFound)
+	fail := func(code sso.ErrorCode, reason string, attrs ...any) {
+		refuseOIDC(w, r, o, loginPath, code, reason, attrs...)
 	}
 	clear := a.bindingCookie("", -1)
 	http.SetCookie(w, &clear)
 	q := r.URL.Query()
 	st, err := a.gw.ConsumeOIDCState(ctx, oidcHash(q.Get("state")))
 	if err != nil {
-		fail("This sign-in has expired or was already used. Start again.")
+		fail(sso.ErrState, "the state is unknown, expired or already spent: "+err.Error())
 		return
 	}
 	failTo := fail
 	if st.LinkUserID != "" {
-		failTo = func(msg string) {
-			http.Redirect(w, r, withQuery(profilePath, "sso_error", msg), http.StatusFound)
+		failTo = func(code sso.ErrorCode, reason string, attrs ...any) {
+			refuseOIDC(w, r, o, profilePath, code, reason, append([]any{"self_link_user", st.LinkUserID}, attrs...)...)
 		}
 	}
 	bc, err := r.Cookie(oidcBindingCookie)
 	if err != nil || subtle.ConstantTimeCompare(oidcHash(bc.Value), st.BindingHash) != 1 {
-		failTo("This sign-in was not started in this browser. Start again from the sign-in page.")
+		failTo(sso.ErrBrowser, "the browser holds no binding for this state, or another sign-in's (login CSRF)")
 		return
 	}
 	if e := q.Get("error"); e != "" {
-		failTo("The identity provider did not sign you in (" + e + ").")
+		failTo(sso.ErrProvider, "the provider answered with an error", "provider_error", e, "provider_error_description", q.Get("error_description"))
 		return
 	}
 	_, c, err := a.sso.dial(ctx, st.Provider, requestOrigin(r, o.trustedProxies))
 	if err != nil {
-		o.log.Warn("sso: callback could not reach the provider", "err", err.Error())
-		failTo("The identity provider is unreachable or misconfigured. Sign in with your password, or ask an administrator.")
+		failTo(sso.ErrUnreachable, "the callback could not reach the provider: "+err.Error())
 		return
 	}
 	verifier, nonce := sso.Derive(bc.Value)
 	in, err := c.Exchange(ctx, q.Get("code"), verifier, nonce)
 	if err != nil {
-		o.log.Warn("sso: the provider's answer was refused", "err", err.Error())
-		failTo("The identity provider's answer did not verify, so you are not signed in.")
+		failTo(sso.ErrToken, "the provider's answer was refused: "+err.Error())
 		return
 	}
 	identifier := in.Claims.Identifier()
 	if identifier == "" {
-		failTo("The identity provider's answer names no subject.")
+		failTo(sso.ErrNoSubject, "the verified id_token names no subject")
 		return
 	}
 	if st.LinkUserID != "" {
@@ -202,12 +210,12 @@ func (a *authenticator) oidcCallback(w http.ResponseWriter, r *http.Request, o o
 	}
 	p, err := a.gw.SSOProvider(ctx, st.Provider)
 	if err != nil || p == nil {
-		fail("Single sign-on is not configured on this server.")
+		fail(sso.ErrNotConfigured, fmt.Sprintf("the provider %q is no longer configured (%v)", st.Provider, err))
 		return
 	}
 	token, hash, prefix, err := auth.NewBearerToken()
 	if err != nil {
-		fail("Sign-in failed. Try again.")
+		fail(sso.ErrFailed, "mint the session: "+err.Error())
 		return
 	}
 	// A provider that issues no refresh token gets no long-lived access
@@ -222,18 +230,18 @@ func (a *authenticator) oidcCallback(w http.ResponseWriter, r *http.Request, o o
 		SessionHash: hash, Prefix: prefix, ExpiresAt: time.Now().Add(lifetime), UserAgent: ua, ClientIP: ip})
 	switch {
 	case errors.Is(err, storage.ErrIdentityNotLinked):
-		fail("Your identity at the provider (" + identifier + ") is not linked to an Omniglass person. " +
-			"An administrator links it from your person page, or sign in with your password and link it from your profile.")
+		// The identity is named here, in the log, for an administrator to
+		// link; the person's page says only that it is not linked.
+		fail(sso.ErrUnlinked, "the identity is linked to no person", "identity", identifier)
 		return
 	case errors.Is(err, storage.ErrAccountDisabled):
 		if u != nil {
 			_ = a.gw.WriteAuthEvent(ctx, u.ID, "login_denied")
 		}
-		fail("account disabled")
+		fail(sso.ErrDisabled, "the linked person's account is disabled", "identity", identifier)
 		return
 	case err != nil:
-		o.log.Error("sso: sign-in", "err", err.Error())
-		fail("Sign-in failed. Try again.")
+		fail(sso.ErrFailed, "sign in by identity: "+err.Error(), "identity", identifier)
 		return
 	}
 	cookie := a.sessionCookie(token)
@@ -244,24 +252,24 @@ func (a *authenticator) oidcCallback(w http.ResponseWriter, r *http.Request, o o
 
 // completeSelfLink links the identity to the person who started the flow,
 // only while the session that started it is still the one presented.
-func (a *authenticator) completeSelfLink(w http.ResponseWriter, r *http.Request, st *storage.OIDCState, identifier string, fail func(string)) {
+func (a *authenticator) completeSelfLink(w http.ResponseWriter, r *http.Request, st *storage.OIDCState, identifier string, fail func(sso.ErrorCode, string, ...any)) {
 	ctx := r.Context()
 	tok, ok := sessionCookieToken(r.Header.Get("Cookie"))
 	if !ok || subtle.ConstantTimeCompare(auth.HashToken(tok), st.LinkSessionHash) != 1 {
-		fail("Linking needs the session that started it. Sign in and start again from your profile.")
+		fail(sso.ErrSession, "the callback carries no session, or not the one that started the link")
 		return
 	}
 	u, err := a.gw.AuthenticateBearer(ctx, auth.HashToken(tok))
 	if err != nil || u.ID != st.LinkUserID {
-		fail("Linking needs the session that started it. Sign in and start again from your profile.")
+		fail(sso.ErrSession, "the session that started the link no longer authenticates as its person")
 		return
 	}
 	switch _, err := a.gw.LinkIdentity(ctx, u.ID, u.ID, identifier); {
 	case errors.Is(err, storage.ErrIdentityLinked):
-		fail("That identity is already linked to an Omniglass person.")
+		fail(sso.ErrAlreadyLinked, "the identity is linked to another person", "identity", identifier)
 		return
 	case err != nil:
-		fail("Linking failed. Try again.")
+		fail(sso.ErrFailed, "link the identity: "+err.Error(), "identity", identifier)
 		return
 	}
 	http.Redirect(w, r, withQuery(profilePath, "sso_linked", "1"), http.StatusFound)

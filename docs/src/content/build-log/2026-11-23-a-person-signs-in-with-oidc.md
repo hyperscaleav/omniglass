@@ -9,8 +9,10 @@ The first single sign-on slice of ADR-2361. With the `sso` settings naming an is
 `/auth/oidc/start/{provider}` sends the browser to the provider with PKCE (S256), a nonce and a state
 bound to the browser by a short-lived cookie, and `/auth/oidc/callback` spends the state once,
 exchanges the code, verifies the id_token's signature, issuer, audience, expiry and nonce, and signs
-the linked person in with the ordinary session, auditing the `login` with method `oidc`. An unlinked
-identity is refused with a message naming it. The migration adds `oidc` to `credential.kind`, an
+the linked person in with the ordinary session, auditing the `login` with method `oidc`. A refusal
+sends the browser back with one code of a closed set (`?sso_error=unlinked`), which the console maps to
+a fixed message (an unknown code to a generic one), so a crafted link puts no words on the page; the
+detail, the identity an unlinked sign-in vouched for included, is in the server's log line. The migration adds `oidc` to `credential.kind`, an
 `identifier` unique per kind, a nullable `secret_hash` under a per-kind check, the link's sealed
 refresh token and grace, `via_link` on the credentials minted through a link, and `oidc_state`.
 

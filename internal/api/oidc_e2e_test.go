@@ -6,10 +6,12 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -37,6 +39,8 @@ type ssoStack struct {
 	dsn   string
 	gw    *storage.PG
 	idp   *oidctest.Provider
+	// logs is the server's log, where a refusal's detail is kept.
+	logs *lockedBuffer
 }
 
 func newSSOStack(t *testing.T) *ssoStack {
@@ -52,9 +56,11 @@ func newSSOStack(t *testing.T) *ssoStack {
 		t.Fatalf("open gateway: %v", err)
 	}
 	t.Cleanup(gw.Close)
-	srv := httptest.NewServer(api.NewHandler(gw, api.WithVersion("test"), api.WithEgressOptions(egress.Options{RootCAs: idp.Roots()})))
+	logs := &lockedBuffer{}
+	srv := httptest.NewServer(api.NewHandler(gw, api.WithVersion("test"), api.WithEgressOptions(egress.Options{RootCAs: idp.Roots()}),
+		api.WithLogger(slog.New(slog.NewJSONHandler(logs, nil)))))
 	t.Cleanup(srv.Close)
-	s := &ssoStack{c: &apiClient{t: t, ctx: ctx, base: srv.URL}, ctx: ctx, base: srv.URL, dsn: dsn, gw: gw, idp: idp}
+	s := &ssoStack{c: &apiClient{t: t, ctx: ctx, base: srv.URL}, ctx: ctx, base: srv.URL, dsn: dsn, gw: gw, idp: idp, logs: logs}
 	s.owner = bootstrapOwnerTok(t, ctx, gw)
 	s.c.do(s.owner, http.MethodPatch, "/settings/notification", map[string]any{"egress_allow": []string{"127.0.0.1"}}, http.StatusOK)
 	s.c.do(s.owner, http.MethodPost, "/secrets", map[string]any{"name": "sso-client", "secret_type": "oauth2-client", "owner_kind": "platform",
@@ -146,14 +152,41 @@ func (b *browser) session() string {
 	return ""
 }
 
-// ssoError is the message a refused sign-in lands on the sign-in page with.
+// ssoError is the code a refused sign-in lands on the sign-in page with:
+// one of the closed set, the only thing the refusal puts in the URL.
 func ssoError(t *testing.T, to string) string {
 	t.Helper()
 	u, err := url.Parse(to)
 	if err != nil || !strings.HasSuffix(u.Path, "/web/login") {
 		t.Fatalf("landed on %q, want the sign-in page", to)
 	}
+	if len(u.Query()) != 1 || !slices.Contains(sso.ErrorCodes(), sso.ErrorCode(u.Query().Get("sso_error"))) {
+		t.Fatalf("landed on %q, want the sign-in page with only a refusal code", to)
+	}
 	return u.Query().Get("sso_error")
+}
+
+// refusals is every refusal the server logged, oldest first: the detail the
+// URL never carries.
+func refusals(logs *lockedBuffer) []map[string]any {
+	var out []map[string]any
+	for _, line := range strings.Split(logs.String(), "\n") {
+		var m map[string]any
+		if json.Unmarshal([]byte(line), &m) == nil && m["msg"] == "sso: sign-in refused" {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// lastRefusal is the refusal the server logged last.
+func lastRefusal(t *testing.T, logs *lockedBuffer) map[string]any {
+	t.Helper()
+	all := refusals(logs)
+	if len(all) == 0 {
+		t.Fatal("no refusal was logged")
+	}
+	return all[len(all)-1]
 }
 
 func (s *ssoStack) username(t *testing.T, tok string) (int, string) {
@@ -254,8 +287,11 @@ func TestSSORefusesEveryAnswerThatDoesNotVerify(t *testing.T) {
 		cb := b.toCallback()
 		tc.setup()
 		_, to := b.get(cb)
-		if msg := ssoError(t, to); !strings.Contains(msg, "did not verify") {
-			t.Errorf("%s: sso_error = %q, want the refusal", tc.name, msg)
+		if code := ssoError(t, to); code != string(sso.ErrToken) {
+			t.Errorf("%s: sso_error = %q, want %s", tc.name, code, sso.ErrToken)
+		}
+		if r := lastRefusal(t, s.logs); r["code"] != string(sso.ErrToken) || r["reason"] == "" {
+			t.Errorf("%s: logged refusal %v, want the code and why", tc.name, r)
 		}
 		if b.session() != "" {
 			t.Errorf("%s: a session cookie was set", tc.name)
@@ -277,8 +313,8 @@ func TestSSORefusesAReplayedStateAForeignBrowserAndAnUnlinkedIdentity(t *testing
 	}
 	b2 := s.browser(t)
 	_, to := b2.get(cb)
-	if msg := ssoError(t, to); !strings.Contains(msg, "expired or was already used") {
-		t.Fatalf("replayed state: sso_error = %q", msg)
+	if code := ssoError(t, to); code != string(sso.ErrState) {
+		t.Fatalf("replayed state: sso_error = %q, want %s", code, sso.ErrState)
 	}
 
 	// Login CSRF: a callback completed in one browser, presented by another
@@ -287,23 +323,46 @@ func TestSSORefusesAReplayedStateAForeignBrowserAndAnUnlinkedIdentity(t *testing
 	cb = attacker.toCallback()
 	victim := s.browser(t)
 	_, to = victim.get(cb)
-	if msg := ssoError(t, to); !strings.Contains(msg, "not started in this browser") || victim.session() != "" {
-		t.Fatalf("browser with no binding: sso_error = %q, session %q", msg, victim.session())
+	if code := ssoError(t, to); code != string(sso.ErrBrowser) || victim.session() != "" {
+		t.Fatalf("browser with no binding: sso_error = %q, session %q", code, victim.session())
 	}
 	// Nor when the victim's browser holds a binding of its own sign-in.
 	cb = attacker.toCallback()
 	victim.toCallback()
 	_, to = victim.get(cb)
-	if msg := ssoError(t, to); !strings.Contains(msg, "not started in this browser") || victim.session() != "" {
-		t.Fatalf("foreign browser: sso_error = %q, session %q", msg, victim.session())
+	if code := ssoError(t, to); code != string(sso.ErrBrowser) || victim.session() != "" {
+		t.Fatalf("foreign browser: sso_error = %q, session %q", code, victim.session())
+	}
+
+	// The provider's own error: its words (which a crafted link could choose)
+	// reach the log, never the page.
+	b4 := s.browser(t)
+	cbu, _ := url.Parse(b4.toCallback())
+	q := cbu.Query()
+	q.Del("code")
+	q.Set("error", "access_denied")
+	q.Set("error_description", "Your account is locked. Call 555-0100.")
+	cbu.RawQuery = q.Encode()
+	_, to = b4.get(cbu.String())
+	if code := ssoError(t, to); code != string(sso.ErrProvider) || strings.Contains(to, "555-0100") || b4.session() != "" {
+		t.Fatalf("provider error: landed on %q, want only the provider code", to)
+	}
+	if r := lastRefusal(t, s.logs); r["code"] != string(sso.ErrProvider) || r["provider_error"] != "access_denied" ||
+		r["provider_error_description"] != "Your account is locked. Call 555-0100." {
+		t.Fatalf("provider error: logged refusal %v, want the provider's error in the log", r)
 	}
 
 	// Unlinked: the provider vouches for a subject no person is linked to.
+	// The page says only that; the identity, for an administrator to link,
+	// is in the server's log.
 	s.idp.SignIn("mallory-sub", nil)
 	b3 := s.browser(t)
-	msg := ssoError(t, b3.signIn())
-	if !strings.Contains(msg, "not linked") || !strings.Contains(msg, s.idp.Issuer()+"|mallory-sub") || b3.session() != "" {
-		t.Fatalf("unlinked: sso_error = %q, want a refusal naming the identity", msg)
+	to = b3.signIn()
+	if code := ssoError(t, to); code != string(sso.ErrUnlinked) || strings.Contains(to, "mallory") || b3.session() != "" {
+		t.Fatalf("unlinked: landed on %q, want only the unlinked code", to)
+	}
+	if r := lastRefusal(t, s.logs); r["code"] != string(sso.ErrUnlinked) || r["identity"] != s.idp.Issuer()+"|mallory-sub" {
+		t.Fatalf("unlinked: logged refusal %v, want it to name the identity", r)
 	}
 }
 
@@ -365,22 +424,7 @@ func TestSSOSelfLinkConfirmsThePasswordAndBindsToTheSession(t *testing.T) {
 	if code, _ := s.c.send(sess, http.MethodPost, "/auth/me/identity-links:start", map[string]string{"current_password": "wrong"}); code != http.StatusForbidden {
 		t.Fatalf("a wrong password: %d, want 403", code)
 	}
-	b := s.browser(t)
-	base, _ := url.Parse(s.base)
-	b.hc.Jar.SetCookies(base, []*http.Cookie{{Name: "og-session", Value: sess, Path: "/"}})
-	req, _ := http.NewRequest(http.MethodPost, s.base+"/api/v1/auth/me/identity-links:start", strings.NewReader(`{"current_password":"orange-boat-42x"}`))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := b.hc.Do(req)
-	if err != nil || resp.StatusCode != http.StatusOK {
-		t.Fatalf("start self-link: %v %v", err, resp)
-	}
-	var out struct {
-		URL string `json:"url"`
-	}
-	_ = json.NewDecoder(resp.Body).Decode(&out)
-	_ = resp.Body.Close()
-	_, cb := b.get(out.URL)
-	if _, to := b.get(cb); to != s.base+"/web/profile?sso_linked=1" {
+	if to := s.selfLink(t, sess); to != s.base+"/web/profile?sso_linked=1" {
 		t.Fatalf("self-link landed on %q", to)
 	}
 	var links struct {
@@ -397,6 +441,40 @@ func TestSSOSelfLinkConfirmsThePasswordAndBindsToTheSession(t *testing.T) {
 	if to := s.browser(t).signIn(); to != s.base+"/web/" {
 		t.Fatalf("sign-in after self-link landed on %q", to)
 	}
+	// bob signing in at the provider as alice's identity links nothing: his
+	// profile gets the code, and the identity stays in the log.
+	s.person(t, "bob")
+	bobSess := loginBearer(t, s.c, "bob", "orange-boat-42x")
+	if to := s.selfLink(t, bobSess); to != s.base+"/web/profile?sso_error="+string(sso.ErrAlreadyLinked) {
+		t.Fatalf("a self-link of an identity alice holds landed on %q", to)
+	}
+	if r := lastRefusal(t, s.logs); r["identity"] != s.idp.Issuer()+"|alice-sub" {
+		t.Fatalf("logged refusal %v, want it to name the identity", r)
+	}
+}
+
+// selfLink starts a self-link with the session sess (its person's password is
+// the stack's) and follows it through the provider, returning where the
+// callback lands.
+func (s *ssoStack) selfLink(t *testing.T, sess string) string {
+	t.Helper()
+	b := s.browser(t)
+	base, _ := url.Parse(s.base)
+	b.hc.Jar.SetCookies(base, []*http.Cookie{{Name: "og-session", Value: sess, Path: "/"}})
+	req, _ := http.NewRequest(http.MethodPost, s.base+"/api/v1/auth/me/identity-links:start", strings.NewReader(`{"current_password":"orange-boat-42x"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := b.hc.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("start self-link: %v %v", err, resp)
+	}
+	var out struct {
+		URL string `json:"url"`
+	}
+	_ = json.NewDecoder(resp.Body).Decode(&out)
+	_ = resp.Body.Close()
+	_, cb := b.get(out.URL)
+	_, to := b.get(cb)
+	return to
 }
 
 // mintToken mints an API token with tok, returning the status and the token.
@@ -508,4 +586,41 @@ func TestSSOWithoutARefreshTokenGivesAShortSessionAndNoAPIToken(t *testing.T) {
 	if code, _ := s.mintToken(t, b.session()); code != http.StatusForbidden {
 		t.Fatalf("mint a token with no refresh token behind the session: %d, want 403", code)
 	}
+}
+
+// TestBindingTheSSOClientSecretTakesSecretBind: every sign-in sends the
+// client secret to the issuer's token endpoint, so naming it (or moving the
+// issuer while one is bound) is judged as binding a secret to a target is,
+// under secret:bind (#2047), never the right to reveal it: the gate mirrors
+// the mail relay's and omnibot's model key's.
+func TestBindingTheSSOClientSecretTakesSecretBind(t *testing.T) {
+	t.Parallel()
+	p := newPeople(t)
+	p.c.do(p.owner, http.MethodPost, "/secrets", map[string]any{"name": "sso-client", "secret_type": "oauth2-client", "owner_kind": "platform",
+		"fields": map[string]string{"client_id": "omniglass", "client_secret": "not-a-real-client-secret"}}, http.StatusCreated)
+	p.c.do(p.owner, http.MethodPost, "/secrets", map[string]any{"name": "relay-login", "secret_type": "basic-auth", "owner_kind": "platform",
+		"fields": map[string]string{"username": "omniglass", "password": "relay-pass-2362"}}, http.StatusCreated)
+	p.person("sam", "settings-admin", "all", "")
+	// sam may write settings and read secrets, but not bind one.
+	if b := p.c.do(p.toks["sam"], http.MethodPatch, "/settings/sso", map[string]any{"client_secret": "sso-client"}, http.StatusForbidden); !strings.Contains(string(b), "secret:bind") {
+		t.Fatalf("a refused client secret bind = %s, want it to name secret:bind", b)
+	}
+	// With nothing bound, the issuer moves freely.
+	p.c.do(p.toks["sam"], http.MethodPatch, "/settings/sso", map[string]any{"issuer": "https://login.example.com"}, http.StatusOK)
+	p.c.do(p.owner, http.MethodPatch, "/settings/sso", map[string]any{"client_secret": "no-such-secret"}, http.StatusNotFound)
+	p.c.do(p.owner, http.MethodPatch, "/settings/sso", map[string]any{"client_secret": "relay-login"}, http.StatusUnprocessableEntity)
+	p.c.do(p.owner, http.MethodPatch, "/settings/sso", map[string]any{"client_secret": "sso-client"}, http.StatusOK)
+	// With the secret bound, moving the issuer takes the same right; a
+	// setting that sends it nowhere new does not.
+	if b := p.c.do(p.toks["sam"], http.MethodPatch, "/settings/sso", map[string]any{"issuer": "https://evil.example.com"}, http.StatusForbidden); !strings.Contains(string(b), "secret:bind") {
+		t.Fatalf("a refused issuer move = %s, want it to name secret:bind", b)
+	}
+	p.c.do(p.toks["sam"], http.MethodPatch, "/settings/sso", map[string]any{"recheck_minutes": 30}, http.StatusOK)
+	p.c.do(p.owner, http.MethodPatch, "/settings/sso", map[string]any{"issuer": "https://login2.example.com"}, http.StatusOK)
+
+	// bea may bind it but never reveal it: she rebinds and moves the issuer.
+	p.person("bea", "settings-binder", "all", "")
+	p.c.do(p.toks["bea"], http.MethodPatch, "/settings/sso", map[string]any{"client_secret": "sso-client"}, http.StatusOK)
+	p.c.do(p.toks["bea"], http.MethodPatch, "/settings/sso", map[string]any{"issuer": "https://login.example.com"}, http.StatusOK)
+	p.c.do(p.toks["bea"], http.MethodPost, "/secrets/sso-client:reveal", nil, http.StatusForbidden)
 }
