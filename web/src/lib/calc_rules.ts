@@ -1,5 +1,6 @@
 import { api } from "../api/client";
 import type { CalcInputBody, CalcInputReadBody, CalcOwnerStateBody, CalcPreviewInputBody, CalcPreviewOutputBody, CalcPreviewOwnerBody, CalcReduceBody, CalcRuleBody, CalcSelectorBody, CreateCalcRuleInputBody, UpdateCalcRuleInputBody } from "../api/api.gen";
+import { drawerHref } from "./drawer_address";
 import { entityNameError } from "./names";
 import { CALC_ALIAS_MAX, CALC_RESERVED_NAMES } from "./calc_names.gen";
 
@@ -38,7 +39,7 @@ export const calcStateKey = (name: string, limit?: number) => ["calc_rules", nam
 
 // calcRuleHref is where a calc rule opens: the Calc rules page, its blade open.
 // The ref is the rule's name or its uuid; the page resolves either.
-export const calcRuleHref = (ref: string) => `/calc-rules?rule=${encodeURIComponent(ref)}`;
+export const calcRuleHref = (ref: string) => drawerHref("calc_rule", ref);
 
 export async function listCalcRules(): Promise<CalcRule[]> {
   const { data, error } = await api.GET("/calc-rules");

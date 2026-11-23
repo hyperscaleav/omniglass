@@ -4,12 +4,18 @@ import { useNavigate } from "@solidjs/router";
 import { navItems, filterNav } from "../lib/nav";
 import { entryHref, visibleGroups } from "../lib/catalog";
 import { useMe, can } from "../lib/auth";
+import { type DrawerKind, drawerHref } from "../lib/drawer_address";
 import { Search, ArrowRight, Bot } from "./icons";
 
 // The ⌘K command palette: a global jump across the whole app (distinct from a
 // page's own filter). Built on Kobalte Dialog (focus-trap, Esc, scroll-lock for
 // free). Arrow keys move the active row, Enter navigates.
-export type Command = { label: string; path: string; group?: string; section?: string };
+// A result for one catalog or admin entity sets `entity` instead of a hand-built
+// path: it opens that entity's drawer at its address (drawerHref, #2429).
+export type Command = { label: string; path: string; group?: string; section?: string; entity?: { kind: DrawerKind; address: string } };
+
+// commandPath is where a result goes: its entity's drawer address, else its path.
+export const commandPath = (c: Command): string => (c.entity ? drawerHref(c.entity.kind, c.entity.address) : c.path);
 
 // buildCommands is the palette's source: every destination the caller may
 // reach, flattened to one searchable list.
@@ -92,7 +98,7 @@ export default function CommandPalette(props: { open: boolean; onClose: () => vo
     if (!c) return;
     props.onClose();
     if ("ask" in c) props.onAsk?.(query().trim());
-    else navigate(c.path);
+    else navigate(commandPath(c));
   };
 
   const onKey = (e: KeyboardEvent) => {
