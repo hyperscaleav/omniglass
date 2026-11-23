@@ -406,6 +406,46 @@
    "family": "OMNIGLASS_SETTING__"
   },
   {
+   "key": "OMNIGLASS_SETTING__SSO__ISSUER",
+   "scope": "server",
+   "doc": "The identity provider's issuer URL exactly as its id_tokens carry it (https://login.example.com/realms/corp). Empty turns single sign-on off. An on-premises provider is reached only when the notification settings' egress_allow names it. Moving it from the console or API while client_secret is bound takes secret:bind on that secret; the settings file and environment are trusted as deployment config",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__SSO__CLIENT_SECRET",
+   "scope": "server",
+   "doc": "A platform oauth2-client secret, by name: its client_id field is the client id Omniglass is registered as, its client_secret field authenticates the token exchange. Setting it from the console or API takes secret:bind on it; the settings file and environment are trusted as deployment config",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__SSO__SCOPES",
+   "default": "openid email profile offline_access",
+   "scope": "server",
+   "doc": "The scopes a sign-in asks for, space-separated. offline_access asks for the refresh token the re-check redeems; a provider that issues none gives sessions of recheck_grace_minutes and no API tokens",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__SSO__GROUPS_CLAIM",
+   "default": "groups",
+   "scope": "server",
+   "doc": "The id_token claim carrying the person's groups at the provider (read by group mapping, #2363)",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__SSO__RECHECK_MINUTES",
+   "default": "15",
+   "scope": "server",
+   "doc": "Minutes between re-checks: each link with a live session or token through it redeems its refresh token at the provider, and a refusal revokes them",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
+   "key": "OMNIGLASS_SETTING__SSO__RECHECK_GRACE_MINUTES",
+   "default": "60",
+   "scope": "server",
+   "doc": "Minutes a link may go without a refresh the provider accepted (an outage) before its sessions and tokens are refused until one is; also the length of a session through a provider that issues no refresh token",
+   "family": "OMNIGLASS_SETTING__"
+  },
+  {
    "key": "OMNIGLASS_SECRET__\u003cNAME\u003e",
    "scope": "server",
    "doc": "declares a platform secret from the environment, named \u003cNAME\u003e lowercased with each underscore a hyphen (OMNIGLASS_SECRET__BEDROCK_KEY is bedrock-key); the value is a JSON object {\"type\": \"\u003csecret type\u003e\", \"fields\": {...}} checked against the type at boot. Held in memory, never sealed or written; listed with source env and changed only by its variable and a restart, and a stored platform secret of the same name fails the boot",

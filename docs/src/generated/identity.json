@@ -327,6 +327,13 @@
       "no_label": "no operator surface of its own: only the refresh grant reads a refresh token"
     },
     {
+      "table": "oidc_state",
+      "shape": "human identifier, not a name",
+      "reason": "keyed by the hash of a minted single sign-on state (#2362), not a name: it lives ten minutes and is spent by its one callback",
+      "labelled": false,
+      "no_label": "no operator surface of its own: only the sign-in callback reads a state"
+    },
+    {
       "table": "outpost",
       "shape": "key-bearing",
       "labelled": true
