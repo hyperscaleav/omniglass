@@ -555,6 +555,11 @@ config: {
     token_hash: bytea {constraint: primary_key}
     credential_id: uuid {constraint: foreign_key}
   }
+  oidc_state: {
+    shape: sql_table
+    state_hash: bytea {constraint: primary_key}
+    link_user_id: uuid {constraint: foreign_key}
+  }
   secret: {
     shape: sql_table
     id: uuid {constraint: primary_key}
@@ -618,14 +623,6 @@ audit: {
   }
 }
 
-unclustered: {
-  oidc_state: {
-    shape: sql_table
-    state_hash: bytea {constraint: primary_key}
-    link_user_id: uuid {constraint: foreign_key}
-  }
-}
-
 audit.audit_log.actor_user_id -> identity.users.id
 audit.audit_log.real_actor_user_id -> identity.users.id
 catalog.component_type.parent_id -> catalog.component_type.id
@@ -667,6 +664,7 @@ config.credential.via_link -> config.credential.id
 config.oauth_code.client_id -> config.oauth_client.id
 config.oauth_code.user_id -> identity.users.id
 config.oauth_refresh.credential_id -> config.credential.id
+config.oidc_state.link_user_id -> identity.users.id
 config.secret.component_id -> fleet.component.id
 config.secret.location_id -> fleet.location.id
 config.secret.secret_type -> config.secret_type.id
@@ -806,7 +804,6 @@ telemetry.property.location_id -> fleet.location.id
 telemetry.property.outpost_id -> collection.outpost.user_id
 telemetry.property.property_type_id -> telemetry.property_type.id
 telemetry.property.system_id -> fleet.system.id
-unclustered.oidc_state.link_user_id -> identity.users.id
 ```
 
 <!-- erd:end -->

@@ -1927,6 +1927,49 @@
      }
     ]
    },
+   "oidc_state": {
+    "columns": [
+     {
+      "name": "state_hash",
+      "type": "bytea",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "binding_hash",
+      "type": "bytea",
+      "nullable": false
+     },
+     {
+      "name": "provider",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "link_user_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "users.id"
+     },
+     {
+      "name": "link_session_hash",
+      "type": "bytea",
+      "nullable": true
+     },
+     {
+      "name": "expires_at",
+      "type": "timestamp with time zone",
+      "nullable": false
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ]
+   },
    "secret": {
     "columns": [
      {
@@ -6698,51 +6741,6 @@
       "name": "outpost_loss",
       "type": "jsonb",
       "nullable": true
-     }
-    ]
-   }
-  },
-  "unclustered": {
-   "oidc_state": {
-    "columns": [
-     {
-      "name": "state_hash",
-      "type": "bytea",
-      "nullable": false,
-      "pk": true
-     },
-     {
-      "name": "binding_hash",
-      "type": "bytea",
-      "nullable": false
-     },
-     {
-      "name": "provider",
-      "type": "text",
-      "nullable": false
-     },
-     {
-      "name": "link_user_id",
-      "type": "uuid",
-      "nullable": true,
-      "fk": true,
-      "fk_target": "users.id"
-     },
-     {
-      "name": "link_session_hash",
-      "type": "bytea",
-      "nullable": true
-     },
-     {
-      "name": "expires_at",
-      "type": "timestamp with time zone",
-      "nullable": false
-     },
-     {
-      "name": "created_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
      }
     ]
    }
