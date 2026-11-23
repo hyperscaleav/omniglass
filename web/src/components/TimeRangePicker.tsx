@@ -1,5 +1,5 @@
 import { For, Show, createSignal, createUniqueId } from "solid-js";
-import { Popover } from "@kobalte/core/popover";
+import Popover from "./ui/Popover";
 import { Clock } from "./icons";
 import Button from "./Button";
 import { MAX_CUSTOM_MS, PRESETS, rangeLabel, type TimeRange } from "../lib/time_range";
@@ -66,25 +66,22 @@ export default function TimeRangePicker(props: { range: TimeRange; onChange: (r:
         if (o) seed();
         setOpen(o);
       }}
-    >
-      <Popover.Trigger data-testid="time-range-trigger" class="btn btn-quiet btn-xs gap-1.5 font-normal" aria-label={`Time range: ${rangeLabel(props.range)}`}>
-        <Clock size={13} />
-        <span class="tabular-nums">{rangeLabel(props.range)}</span>
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Content
-          data-testid="time-range-panel"
-          // Focus lands on the range in force, not the first preset, so the
-          // ring never reads as a second selection.
-          onOpenAutoFocus={(e) => {
-            const checked = (e.currentTarget as HTMLElement | null)?.querySelector<HTMLElement>('[aria-checked="true"]');
-            if (checked) {
-              e.preventDefault();
-              checked.focus();
-            }
-          }}
-          class="z-50 flex w-72 max-w-[calc(100vw-1rem)] flex-col gap-2 rounded-box border border-base-300 bg-base-100 p-2 text-sm shadow-2xl focus:outline-none"
-        >
+      data-testid="time-range-trigger"
+      class="btn btn-quiet btn-xs gap-1.5 font-normal"
+      aria-label={`Time range: ${rangeLabel(props.range)}`}
+      contentTestId="time-range-panel"
+      // Focus lands on the range in force, not the first preset, so the
+      // ring never reads as a second selection.
+      onOpenAutoFocus={(e) => {
+        const checked = (e.currentTarget as HTMLElement | null)?.querySelector<HTMLElement>('[aria-checked="true"]');
+        if (checked) {
+          e.preventDefault();
+          checked.focus();
+        }
+      }}
+      contentClass="z-50 flex w-72 max-w-[calc(100vw-1rem)] flex-col gap-2 rounded-box border border-base-300 bg-base-100 p-2 text-sm shadow-2xl focus:outline-none"
+      content={
+        <>
           <p class="menu-title px-2 pt-1 pb-0 text-[10.5px]">Time range · every chart on this page</p>
           <div role="radiogroup" aria-label="Preset ranges" class="flex flex-col">
             <For each={PRESETS}>
@@ -127,8 +124,11 @@ export default function TimeRangePicker(props: { range: TimeRange; onChange: (r:
               <Button type="submit" intent="action" size="xs" class="self-end" disabled={!customOk()}>Apply</Button>
             </form>
           </Show>
-        </Popover.Content>
-      </Popover.Portal>
+        </>
+      }
+    >
+      <Clock size={13} />
+      <span class="tabular-nums">{rangeLabel(props.range)}</span>
     </Popover>
   );
 }

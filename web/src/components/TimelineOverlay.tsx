@@ -1,6 +1,6 @@
 import { For, Show, createMemo, createSignal, onCleanup, type JSX } from "solid-js";
 import { A } from "@solidjs/router";
-import { Popover } from "@kobalte/core/popover";
+import Popover from "./ui/Popover";
 import { keepPreviousData, useQueries, useQuery } from "@tanstack/solid-query";
 import Button from "./Button";
 import Eyebrow from "./Eyebrow";
@@ -740,13 +740,16 @@ function KeyPicker(props: { label: string; all: string[]; shown: string[]; onCha
     props.onChange(props.all.filter((x) => set.has(x)));
   };
   return (
-    <Popover placement="bottom-end" gutter={6}>
-      <Popover.Trigger class="btn btn-quiet btn-xs gap-1 font-normal" aria-label={`Pick ${props.label.toLowerCase()}`} disabled={props.all.length === 0}>
-        <Sliders size={12} />
-        Pick
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Content class="z-50 flex max-h-80 w-64 max-w-[calc(100vw-1rem)] flex-col gap-0.5 overflow-auto rounded-box border border-base-300 bg-base-100 p-2 text-sm shadow-2xl focus:outline-none">
+    <Popover
+      placement="bottom-end"
+      gutter={6}
+      class="btn btn-quiet btn-xs gap-1 font-normal"
+      aria-label={`Pick ${props.label.toLowerCase()}`}
+      disabled={props.all.length === 0}
+      contentLabel={`${props.label} on the timeline`}
+      contentClass="z-50 flex max-h-80 w-64 max-w-[calc(100vw-1rem)] flex-col gap-0.5 overflow-auto rounded-box border border-base-300 bg-base-100 p-2 text-sm shadow-2xl focus:outline-none"
+      content={
+        <>
           <p class="menu-title px-1 pt-0 pb-1 text-[10.5px]">{props.label} on the timeline</p>
           <For each={props.all}>
             {(k) => (
@@ -756,8 +759,11 @@ function KeyPicker(props: { label: string; all: string[]; shown: string[]; onCha
               </label>
             )}
           </For>
-        </Popover.Content>
-      </Popover.Portal>
+        </>
+      }
+    >
+      <Sliders size={12} />
+      Pick
     </Popover>
   );
 }
