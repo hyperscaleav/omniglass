@@ -503,15 +503,15 @@ func TestALocationScopedReaderIsPagedForAComponentPlacedInItsLocation(t *testing
 	t.Parallel()
 	f := newPeopleFixture(t)
 	f.groupRule(t)
-	east, err := f.gw.CreateLocation(f.ctx, "", storage.LocationSpec{Name: "east", LocationType: "campus"}, f.all)
+	east, err := f.gw.CreateLocation(f.ctx, "", storage.LocationSpec{Name: "east", LocationType: "campus"}, f.all, f.all)
 	if err != nil {
 		t.Fatal(err)
 	}
-	room, err := f.gw.CreateLocation(f.ctx, "", storage.LocationSpec{Name: "east-room", LocationType: "room", ParentName: &east.Name}, f.all)
+	room, err := f.gw.CreateLocation(f.ctx, "", storage.LocationSpec{Name: "east-room", LocationType: "room", ParentName: &east.Name}, f.all, f.all)
 	if err != nil {
 		t.Fatal(err)
 	}
-	west, err := f.gw.CreateLocation(f.ctx, "", storage.LocationSpec{Name: "west", LocationType: "campus"}, f.all)
+	west, err := f.gw.CreateLocation(f.ctx, "", storage.LocationSpec{Name: "west", LocationType: "campus"}, f.all, f.all)
 	if err != nil {
 		t.Fatal(err)
 	}
