@@ -1,4 +1,4 @@
-import { For, Show, createContext, createEffect, createMemo, createSignal, on, useContext, type JSX } from "solid-js";
+import { For, Show, createContext, createEffect, createMemo, createSignal, useContext, type JSX } from "solid-js";
 import { createStore } from "solid-js/store";
 import { A } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
