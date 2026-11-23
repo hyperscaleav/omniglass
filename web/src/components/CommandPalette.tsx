@@ -134,11 +134,14 @@ export default function CommandPalette(props: { open: boolean; onClose: () => vo
   const go = (o: SearchOption) => {
     const hit = byValue().get(o.value);
     if (!hit) return;
-    props.onClose();
-    if (hit.ask !== undefined) return props.onAsk?.(hit.ask);
+    if (hit.ask !== undefined) {
+      props.onClose();
+      return props.onAsk?.(hit.ask);
+    }
     if (!hit.command) return;
     const path = commandPath(hit.command);
     remember(userId(), hit, path);
+    props.onClose();
     navigate(path);
   };
 
