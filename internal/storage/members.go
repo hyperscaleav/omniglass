@@ -117,7 +117,7 @@ func (p *PG) AddMember(ctx context.Context, actorID, systemName, componentName s
 	}
 	// A member outside a slot moves its system's verdict (ADR-2459), so a bind
 	// is a health write: an alarmed component joining degrades the system.
-	if err := p.recomputeChain(ctx, tx, []ownerRef{{ID: componentID, Name: componentName}}, []ownerRef{{ID: systemID, Name: systemName}}, nil); err != nil {
+	if err := p.recomputeMembership(ctx, tx, componentID, systemID, systemName); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -240,7 +240,7 @@ func (p *PG) RemoveMember(ctx context.Context, actorID, systemName, componentNam
 		return err
 	}
 	// The unbound member no longer counts against the system (ADR-2459).
-	if err := p.recomputeChain(ctx, tx, []ownerRef{{ID: componentID, Name: componentName}}, []ownerRef{{ID: systemID, Name: systemName}}, nil); err != nil {
+	if err := p.recomputeMembership(ctx, tx, componentID, systemID, systemName); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -604,4 +604,19 @@ func requireComponentAction(ctx context.Context, q querier, componentID string, 
 		return ErrComponentForbidden
 	}
 	return nil
+}
+
+// recomputeMembership recomputes a system after a member joins or leaves it
+// (ADR-2459). It takes the component's health lock first, in the recompute's
+// lock order, without recording the component: an alarm write on the same
+// component holds that lock to commit, so the two serialize, and whichever runs
+// second sees the other's row (the alarm write finds the new membership, or the
+// bind finds the new alarm). Recording the component here would write it a
+// first healthy row, which is what marks a component observed (#1454), and a
+// bind observes nothing.
+func (p *PG) recomputeMembership(ctx context.Context, tx pgx.Tx, componentID, systemID, systemName string) error {
+	if err := lockHealthOwner(ctx, tx, "component", componentID); err != nil {
+		return err
+	}
+	return p.recomputeChain(ctx, tx, nil, []ownerRef{{ID: systemID, Name: systemName}}, nil)
 }
