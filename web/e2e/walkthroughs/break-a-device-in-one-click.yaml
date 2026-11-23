@@ -13,7 +13,7 @@ steps:
     caption: The Simulation page lists every simulated component. Each row has a Break menu.
   - type: { target: { role: combobox }, text: panel-2 }
     caption: The list filters as you type.
-  - click: { role: button, name: Break panel-2 }
+  - click: { role: button, name: Break panel-2, exact: true }
     caption: The menu is generated from what the panel's profile can do.
   - click: { role: button, name: Unplug }
     caption: Unplug it. No request typed, nothing to edit.
