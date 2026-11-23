@@ -59,16 +59,19 @@ type Reading struct {
 // spelling (internal/seed/event_rules.yaml). It is an operator's rule, not an
 // official one: seeded once by name, so an edit made in the console stands.
 type EventRule struct {
-	Name           string `yaml:"name"`
-	Label          string `yaml:"label"`
-	Description    string `yaml:"description"`
-	SampleKey      string `yaml:"sample_key"`
-	Fire           string `yaml:"fire"`
-	FireSustain    string `yaml:"fire_sustain"`
-	Clear          string `yaml:"clear"`
-	Severity       string `yaml:"severity"`
-	FireEventType  string `yaml:"fire_event_type"`
-	ClearEventType string `yaml:"clear_event_type"`
+	Name        string `yaml:"name"`
+	Label       string `yaml:"label"`
+	Description string `yaml:"description"`
+	SampleKey   string `yaml:"sample_key"`
+	// ComponentTypes narrows the rule to components of these types (each
+	// with its descendants); empty is every component.
+	ComponentTypes []string `yaml:"component_types"`
+	Fire           string   `yaml:"fire"`
+	FireSustain    string   `yaml:"fire_sustain"`
+	Clear          string   `yaml:"clear"`
+	Severity       string   `yaml:"severity"`
+	FireEventType  string   `yaml:"fire_event_type"`
+	ClearEventType string   `yaml:"clear_event_type"`
 }
 
 // seedEventRules creates the fleet's own rules. One that exists is left as
@@ -76,7 +79,8 @@ type EventRule struct {
 func seedEventRules(ctx context.Context, gw storage.Gateway, actorID string, doc Doc) error {
 	for _, r := range doc.EventRules {
 		spec := storage.EventRuleSpec{Name: r.Name, Label: r.Label, Description: r.Description, SampleKey: r.SampleKey,
-			Fire: rules.Criteria{Expr: r.Fire}, Severity: r.Severity, FireEventType: r.FireEventType, ClearEventType: r.ClearEventType}
+			Selector: storage.EventRuleSelector{ComponentTypes: r.ComponentTypes},
+			Fire:     rules.Criteria{Expr: r.Fire}, Severity: r.Severity, FireEventType: r.FireEventType, ClearEventType: r.ClearEventType}
 		if r.Clear != "" {
 			spec.Clear = &rules.Criteria{Expr: r.Clear}
 		}

@@ -2120,6 +2120,23 @@ event_rules:
     severity: warning
     fire_event_type: rule-fired
     clear_event_type: rule-cleared
+  # A display switched off (#2508's lifecycle: power one off from the
+  # Simulation page, the alarm raises, send set-power on from its Commands
+  # panel, the alarm clears). It reads the display's own power-state report:
+  # the Boreal Edge displays' driver reads it over SNMP, which keeps answering
+  # while the panel is off. Standby is a display's ordinary idle and pages no
+  # one. No display reads off on a fresh fleet, so it opens nothing until one
+  # is switched off. Displays only: a projector reports the same key, and its
+  # off is the lecture ending.
+  - name: display-powered-off
+    label: Display powered off
+    description: A display reports its power off, so its room shows nothing.
+    sample_key: power-state
+    component_types: [display]
+    fire: 'value == "off"'
+    severity: warning
+    fire_event_type: rule-fired
+    clear_event_type: rule-cleared
 
 # A lab's people subscribed to the fleet's alarms (personal action rules, the
 # Subscriptions page's rows), so a raised fault lights the bell and lands in

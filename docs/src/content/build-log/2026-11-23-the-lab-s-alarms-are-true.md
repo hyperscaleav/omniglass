@@ -22,4 +22,6 @@ firing and (for reachability) a component reading down, and one that lifting a f
 alarm. The degraded and storm scenarios keep their hand-raised alarm storm, now from
 `alarm_templates`. A lab's people (its owner `dev`, and `operator`) are seeded one subscription,
 Fleet alarms, raised and cleared, to the console inbox alone, so the seeded faults light the bell; a
-fleet seeded without the simulator (the docs' screenshots) subscribes no one. The docs capture waits for every rule streak to settle before shooting.
+fleet seeded without the simulator (the docs' screenshots) subscribes no one. The docs capture waits for every rule streak to settle before shooting. A second fleet rule, `display-powered-off` (a display's
+power-state reading off, warning, displays only), opens nothing on a fresh lab and makes powering a
+display off raise an alarm that a `set-power on` command clears.

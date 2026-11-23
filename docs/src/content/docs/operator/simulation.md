@@ -178,6 +178,11 @@ fault you repair stays repaired across a lab restart (`omniglass lab run --fresh
   than 250 ms, held 15 s) opens a **Warning**: the display reads degraded and keeps its slot, so the
   room above it stays healthy.
 
+The fleet also carries a rule for a fault it does not start with: `display-powered-off` opens a
+**Warning** on a display whose own power report reads `off` (standby pages no one, and a projector is
+not a display), and clears when it reads on again. Power a display off and the alarm raises; send
+it `set-power` `on` from its Commands panel and the alarm clears.
+
 **Repair** either one and the next healthy reading clears its alarm, with the clear event beside the
 fire on the component's activity. Neither the seed nor anyone else writes an alarm row: each is raised
 and cleared by its rule. The lab's readiness line counts an impaired device's endpoints as broken on

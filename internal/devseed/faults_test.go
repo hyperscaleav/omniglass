@@ -338,3 +338,57 @@ func landFaultReadings(t *testing.T, ctx context.Context, conn *pgx.Conn, gw sto
 		}
 	}
 }
+
+// The fleet's display-powered-off rule (#2508's lifecycle: power a display
+// off, the alarm raises, send set-power on, it clears) judges a display's own
+// power-state report: off raises a Warning, on clears it, and a projector,
+// which reports the same key, is not its to judge. No display reads off on a
+// fresh fleet, so the rule opens nothing there.
+func TestDisplayPoweredOffRaisesAndClears(t *testing.T) {
+	t.Parallel()
+	ctx, conn, gw := seededFleet(t)
+	ruled := func(compID string) *storage.Alarm {
+		for _, a := range openAlarms(t, ctx, gw) {
+			if a.ComponentID == compID && a.RaisedByRule != nil && *a.RaisedByRule == "display-powered-off" {
+				return &a
+			}
+		}
+		return nil
+	}
+	if err := gw.SweepEventRules(ctx, time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range openAlarms(t, ctx, gw) {
+		if a.RaisedByRule != nil && *a.RaisedByRule == "display-powered-off" {
+			t.Errorf("a fresh fleet holds a display-powered-off alarm on %s", a.ComponentName)
+		}
+	}
+	power := func(compID, value string) {
+		t.Helper()
+		if err := gw.InsertPropertySamples(ctx, storage.OutpostWriter(compID, "snmp"), []storage.PropertySampleWrite{
+			{OwnerKind: "component", OwnerID: compID, Key: "power-state", Instance: "snmp", Value: value, Source: "snmp", TS: time.Now().UTC()}}); err != nil {
+			t.Fatalf("land power-state %s: %v", value, err)
+		}
+		if err := gw.SweepEventRules(ctx, time.Now().Add(time.Hour)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	display := componentIn(t, ctx, conn, gw, "huddle", "display-1")
+	power(display.ID, "off")
+	a := ruled(display.ID)
+	if a == nil {
+		t.Fatal("a display reading off holds no display-powered-off alarm")
+	}
+	if a.Severity != "warning" {
+		t.Errorf("display-powered-off raised at %q, want warning", a.Severity)
+	}
+	power(display.ID, "on")
+	if ruled(display.ID) != nil {
+		t.Error("the display reads on again and its display-powered-off alarm is still open")
+	}
+	projector := componentIn(t, ctx, conn, gw, "auditorium", "projector-1")
+	power(projector.ID, "off")
+	if ruled(projector.ID) != nil {
+		t.Error("a projector reading off raised display-powered-off; the rule is a display's")
+	}
+}
