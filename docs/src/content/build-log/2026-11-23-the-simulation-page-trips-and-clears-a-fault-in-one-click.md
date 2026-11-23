@@ -8,8 +8,8 @@ Breaking a simulated device from the console took a raw HTTP request builder: pi
 `POST /api/display/power`, hand-edit the body to `{"power":"off"}`, Fire. Each simulated component now has
 a **Break** menu on its row and a **Faults** section in its drawer, generated from its profile: power
 off, on and standby, unplug and replug, a quick set for each state path an HTTP route sets from a body
-field to a fixed list (`Input: hdmi2`, `Mute`), and **Restore**. The raw builder moved under **Advanced:
-raw requests**.
+field to a fixed list (`Input: hdmi2`, `Mute`), and **Restore**. The drawer's shared fire box is gone: each
+operation of the API surface is a row that opens in place to its request and its answer.
 
 What is broken shows as a chip with its words, its age and a clear, on the row, in the drawer, and on the
 component's page beside its health. It reads the simulator's own account: a route's mutation `enum` is

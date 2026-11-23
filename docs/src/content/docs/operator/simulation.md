@@ -75,11 +75,13 @@ simulation drawer a row on the Simulation page opens.
 
 ## Exercise a component
 
-The drawer lists the component's whole **API surface**, read from its profile: each protocol surface it
-serves (its protocol and the port the simulator binds), with its HTTP routes, its commands, and the
-SNMP OIDs it answers. Choosing one loads the **Fire** form, and firing it (with `simulation:update`,
-which operators hold) sends the operation to the simulated component and shows the answer: the HTTP status and
-body, a command's response, an OID's value.
+The drawer lists the component's whole **API surface**, read from its profile, as **Operations**: each
+protocol surface it serves (its protocol and the port the simulator binds) is a group, and each HTTP route,
+command and SNMP OID it answers is one row. A row is a disclosure: it opens in place to its target, the
+state paths a route writes, the request (edit any of it), a **Send** button (with `simulation:update`, which
+operators hold) and, beneath it, the answer: the HTTP status and body, a command's response, an OID's
+value. One row is open at a time and nothing scrolls. The last row of each surface, **send your own
+request**, takes a request no profile lists.
 
 The simulator answers from the component's live state, so firing a command that changes it (a panel's
 `SET INPUT hdmi2`) changes what the collector reads on its next poll. A fire counts as a hit, so the
@@ -155,9 +157,8 @@ state path it holds off its default with each batch (and the impairment is store
 second operator's console, shows the same faults. The age counts from when the server first heard the
 value, so a server restart starts it again. The **x** is **Restore**.
 
-The raw request builder is still there, under **Advanced: raw requests** in the drawer, for an operation
-no profile names as a quick set. A command on a serial or SSH surface is one of those: quick sets are
-generated from HTTP routes only.
+Below the faults, the drawer's **Operations** are the general path, for an operation no profile names as a
+quick set (a command on a serial or SSH surface is one: quick sets are generated from HTTP routes only).
 
 The list takes what you type: words with no `key:` narrow the rows as you type them (name, location,
 product or address), and Enter keeps them as a chip beside the keyed filters (`status:failed`,

@@ -21,6 +21,7 @@ export type SimProfile = S.SimProfileBody;
 export type ComponentSim = S.ComponentSimOutputBody;
 export type SimSurface = S.SimSurfaceBody;
 export type SimRoute = S.SimRouteBody;
+export type SimSet = S.SimSetBody;
 export type SimCommand = S.SimCommandBody;
 export type SimOID = S.SimOIDBody;
 export type SimResult = S.SimOperationResult;

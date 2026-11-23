@@ -311,19 +311,13 @@ describe("the Simulation page", () => {
   });
 });
 
-// The raw request builder sits under Advanced (#2462): closed until opened.
-async function openAdvanced() {
-  fireEvent.click(await screen.findByRole("button", { name: /Advanced/ }));
-}
-
 describe("the simulated component drawer", () => {
   it("fires a chosen operation and renders the component's answer", async () => {
     stubFetch({ [`POST /components/${DISPLAY}/simulation:fire`]: { status: 200, body: "{\"device\":{\"model\":\"Edge 55\"}}", took_ms: 3 } });
     mount(() => <SimComponentDrawer id={DISPLAY} onClose={() => {}} />);
-    await openAdvanced();
     fireEvent.click(await screen.findByRole("button", { name: /\/api\/status/ }));
-    const panel = await screen.findByTestId("fire-panel");
-    fireEvent.click(within(panel).getByRole("button", { name: "Fire" }));
+    const panel = await screen.findByTestId("op-detail");
+    fireEvent.click(within(panel).getByRole("button", { name: "Send" }));
     const answer = await screen.findByTestId("fire-answer");
     expect(answer.textContent).toContain("Edge 55");
     expect(answer.textContent).toContain("200");
@@ -360,10 +354,9 @@ describe("the simulated component drawer", () => {
     stubFetch();
     mount(() => <SimComponentDrawer id={DISPLAY} onClose={() => {}} />, viewer);
     await screen.findByTestId("sim-impairment");
-    await openAdvanced();
     expect(screen.queryByRole("button", { name: "Save impairment" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();
-    expect(screen.queryByRole("button", { name: /^Fire/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Send/ })).toBeNull();
     expect(screen.queryByLabelText("Latency (ms)")).toBeNull();
     expect(screen.queryByRole("button", { name: "Change" })).toBeNull();
     // The surface still reads, as plain rows.
@@ -1050,7 +1043,7 @@ describe("one-click faults on the Simulation page", () => {
     expect(within(rows[0]).queryByRole("button", { name: /^Break/ })).toBeNull();
   });
 
-  it("lists the faults in the drawer with the profile's actions as buttons, and the raw builder closed under Advanced", async () => {
+  it("lists the faults in the drawer with the profile's actions as buttons, and the operations as closed rows", async () => {
     const act = simRow(DISPLAY, "display-1", 7, { faults: [poweredOff] });
     stubFetch({ [`GET /components/${DISPLAY}/simulation`]: withSurface(act), [fireUrl]: { status: 200, body: "{}", took_ms: 2 } });
     const { qc } = mount(() => <SimComponentDrawer id={DISPLAY} onClose={() => {}} />);
@@ -1060,10 +1053,9 @@ describe("one-click faults on the Simulation page", () => {
     fireEvent.click(await within(section).findByRole("button", { name: "Power on" }));
     await waitFor(() => expect(fired()).toHaveLength(1));
     expect(fired()[0]).toMatchObject({ body: '{"power":"on"}' });
-    // Closed until opened: the request builder does not crowd the faults.
-    expect(screen.queryByRole("button", { name: /Fire on/ })).toBeNull();
-    await openAdvanced();
-    expect(await screen.findByRole("button", { name: /Fire on web-admin/ })).toBeTruthy();
+    // The operations are rows, closed until opened: no shared fire box.
+    expect(screen.queryByTestId("op-detail")).toBeNull();
+    expect(screen.queryByTestId("fire-panel")).toBeNull();
   });
 
   it("says nothing is broken for a healthy device, and shows no chip", async () => {
@@ -1169,5 +1161,47 @@ describe("the Simulation list's filter and paging", () => {
     fireEvent.input(screen.getByRole("combobox"), { target: { value: "bulk-0" } });
     await waitFor(() => expect(screen.getByTestId("list-more").textContent).toContain("Showing 50 of 100"));
     expect(screen.getAllByTestId("sim-row")).toHaveLength(50);
+  });
+});
+
+describe("in-place operation rows", () => {
+  const twoRoutes = (): ComponentSim => ({
+    ...componentSim,
+    surface: [{
+      name: "web-admin", protocol: "http", port: 10080, fireable: true,
+      routes: [
+        { method: "GET", path: "/api/status", summary: "Identity" },
+        { method: "POST", path: "/api/display/power", sets: [{ path: "status.device.power", field: "power", values: ["on", "off"], default: "on" }], example: '{"power":"on"}' },
+      ],
+    }],
+  });
+
+  it("expands a row in place with its form and answer inside it, closes the other, and scrolls nothing", async () => {
+    const scroll = vi.fn();
+    (Element.prototype as unknown as { scrollIntoView: unknown }).scrollIntoView = scroll;
+    stubFetch({ [fireUrl]: { status: 200, body: '{"ok":true}', took_ms: 4 }, [`GET /components/${DISPLAY}/simulation`]: twoRoutes() });
+    const { qc } = mount(() => <SimComponentDrawer id={DISPLAY} onClose={() => {}} />);
+    qc.setQueryData([...componentSimKey(DISPLAY)], twoRoutes());
+    const status = await screen.findByRole("button", { name: /\/api\/status/ });
+    const power = await screen.findByRole("button", { name: /\/api\/display\/power/ });
+    expect(status.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(status);
+    const first = status.closest("li")!;
+    expect(status.getAttribute("aria-expanded")).toBe("true");
+    expect(within(first).getByTestId("op-detail")).toBeTruthy();
+    fireEvent.click(within(first).getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(within(first).getByTestId("fire-answer").textContent).toContain('"ok":true'));
+    // Another row opens: the first collapses, taking its form and answer.
+    fireEvent.click(power);
+    const second = power.closest("li")!;
+    expect(within(second).getByTestId("op-detail")).toBeTruthy();
+    expect(within(second).getByTestId("op-writes").textContent).toContain("status.device.power");
+    expect(status.getAttribute("aria-expanded")).toBe("false");
+    expect(within(first).queryByTestId("op-detail")).toBeNull();
+    expect(screen.getAllByTestId("op-detail")).toHaveLength(1);
+    expect(scroll).not.toHaveBeenCalled();
+    // Clicking the open row closes it.
+    fireEvent.click(power);
+    expect(screen.queryByTestId("op-detail")).toBeNull();
   });
 });

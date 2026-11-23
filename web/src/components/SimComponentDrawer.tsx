@@ -10,8 +10,7 @@ import KVStacked from "./KVStacked";
 import SimStatusBadge from "./SimStatusBadge";
 import SimFaultChip from "./SimFaultChip";
 import SimFaultMenu from "./SimFaultMenu";
-import Collapsible from "./ui/Collapsible";
-import { ArrowUpRight, RotateCcw, Save, Zap } from "./icons";
+import { ArrowUpRight, ChevronRight, RotateCcw, Save, Zap } from "./icons";
 import { activeFaults } from "../lib/simfaults";
 import { useFormActions } from "../lib/formactions";
 import { can, useMe } from "../lib/auth";
@@ -42,6 +41,7 @@ import {
   type ImpairmentDraft,
   type SimComponent,
   type SimResult,
+  type SimSet,
   type SimSurface,
 } from "../lib/simulation";
 
@@ -221,15 +221,7 @@ function ComponentBody(props: { id: string; onRemoved: () => void }): JSX.Elemen
             <StatusSection sim={s()} canReclassify={canReclassify()} busy={busy()} setBusy={setBusy} setErr={setErr} id={props.id} />
             <FaultSection sim={s()} id={props.id} />
             <ImpairmentSection sim={s()} canImpair={canImpair()} draft={draft()} setDraft={setDraft} errors={parsed().errors} stored={stored()} loaded={!!imp.data} />
-            <Collapsible
-              title={<span class="eyebrow">Advanced: raw requests</span>}
-              triggerClass="group flex w-fit cursor-pointer items-center gap-1 rounded-field text-left focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/60"
-              class="flex flex-col gap-3"
-            >
-              <div class="pt-3">
-                <SurfaceSection sim={s()} canFire={canImpair()} id={props.id} />
-              </div>
-            </Collapsible>
+            <SurfaceSection sim={s()} canFire={canImpair()} id={props.id} />
           </Show>
         )}
       </Show>
@@ -461,77 +453,95 @@ function ImpairmentSection(props: {
   );
 }
 
-// The operation an operator picked from the surface, keyed so the list can mark it.
-type Pick = { key: string; draft: FireDraft };
-
+// SurfaceSection: the component's API surface as in-place operations. Each
+// protocol surface is a group; each operation is one row (protocol pill, verb,
+// what it addresses, its summary, a caret) that is a disclosure: it expands in
+// place to its target, what it writes, the editable request and its answer, so
+// nothing scrolls and no shared box sits at the foot of the drawer. One row is
+// open at a time. The last row of each surface sends a request of the
+// operator's own.
 function SurfaceSection(props: { sim: ComponentSim; canFire: boolean; id: string }) {
-  const [pick, setPick] = createSignal<Pick | null>(null);
-  const surfaces = () => props.sim.surface ?? [];
-  const choose = (key: string, draft: FireDraft) => setPick({ key, draft });
-  const selectable = (s: SimSurface) => props.canFire && surfaceKind(s) !== "none";
-
+  const [open, setOpen] = createSignal<string | null>(null);
+  // Surfaces and rows are iterated by name and key, never by the objects a poll
+  // hands back: every read is a fresh object, and rebuilding a row would end
+  // the operation open in it, its draft and its answer, every two seconds.
+  const names = createMemo(() => (props.sim.surface ?? []).map((x) => x.name), undefined, { equals: sameStrings });
+  const surfaceBy = (name: string) => (props.sim.surface ?? []).find((x) => x.name === name);
+  const toggle = (key: string) => setOpen(open() === key ? null : key);
   return (
     <section class="flex flex-col gap-3" data-testid="sim-surface">
       <Eyebrow
-        label="API surface"
-        hint="Every protocol surface the component serves, from its profile: the HTTP routes, the command lines and the SNMP OIDs a driver can use. Choose one to fire it at the component and read its answer, exactly as a collector would."
+        label="Operations"
+        hint="Every protocol surface the component serves, from its profile: the HTTP routes, the command lines and the SNMP OIDs a driver can use. Open one to send it at the component and read its answer in place, exactly as a collector would."
       />
       <div class="flex flex-col gap-2">
-        <For each={surfaces()}>
-          {(s) => (
-            <div class="overflow-hidden rounded-box border border-base-300" data-surface={s.name}>
+        <For each={names()}>
+          {(name) => (
+            <Show when={surfaceBy(name)}>
+              {(s) => (
+            <div class="overflow-hidden rounded-box border border-base-300" data-surface={name}>
               <div class="flex flex-wrap items-center gap-x-2 gap-y-1 bg-base-200 px-3 py-2 text-sm">
-                <span class="font-data font-medium">{s.name}</span>
-                <Show when={s.protocol !== s.name}><span class="badge badge-sm badge-ghost font-data">{s.protocol}</span></Show>
-                <Show when={s.port > 0}><span class="font-data text-xs text-base-content/60">:{s.port}</span></Show>
-                <Show when={s.tls}><span class="badge badge-sm badge-ghost">tls</span></Show>
-                <Show when={s.auth_type}><span class="text-xs text-base-content/50">{s.auth_type}{s.default_user ? ` (${s.default_user})` : ""}</span></Show>
-                <span class="min-w-0 flex-1 truncate text-xs text-base-content/60">{s.summary}</span>
-                <Show when={selectable(s)}>
-                  <Button size="xs" icon={Zap} onClick={() => choose(`${s.name}:*`, fireDraftFor(s))} label={`Fire on ${s.name}`}>Fire</Button>
-                </Show>
+                <span class="font-data font-medium">{s().name}</span>
+                <Show when={s().protocol !== s().name}><span class="badge badge-sm badge-ghost font-data">{s().protocol}</span></Show>
+                <Show when={s().port > 0}><span class="font-data text-xs text-base-content/60">:{s().port}</span></Show>
+                <Show when={s().tls}><span class="badge badge-sm badge-ghost">tls</span></Show>
+                <Show when={s().auth_type}><span class="text-xs text-base-content/50">{s().auth_type}{s().default_user ? ` (${s().default_user})` : ""}</span></Show>
+                <span class="min-w-0 flex-1 truncate text-xs text-base-content/60">{s().summary}</span>
               </div>
-              <OperationList surface={s} selectable={selectable(s)} picked={pick()?.key} onPick={choose} />
+              <OperationList surface={s()} address={props.sim.address ?? ""} canFire={props.canFire} id={props.id} open={open()} onToggle={toggle} />
             </div>
+              )}
+            </Show>
           )}
         </For>
       </div>
-      <Show when={pick()} keyed>
-        {(p) => <FirePanel id={props.id} initial={p.draft} />}
-      </Show>
     </section>
   );
 }
 
-function OperationList(props: { surface: SimSurface; selectable: boolean; picked?: string; onPick: (key: string, d: FireDraft) => void }) {
+type OpRow = { key: string; lead: string; detail: string; summary?: string; sets?: SimSet[]; draft: () => FireDraft };
+
+function OperationList(props: { surface: SimSurface; address: string; canFire: boolean; id: string; open: string | null; onToggle: (key: string) => void }) {
   const s = () => props.surface;
-  type Row = { key: string; lead: string; detail: string; summary?: string; draft: () => FireDraft };
-  const rows = createMemo<Row[]>(() => [
-    ...(s().routes ?? []).map((r) => ({ key: `${s().name}:r:${r.method} ${r.path}`, lead: r.method, detail: r.path, summary: r.summary, draft: () => fireDraftFor(s(), { route: r }) })),
-    ...(s().commands ?? []).map((c) => ({ key: `${s().name}:c:${c.match}`, lead: c.action || "cmd", detail: c.match, summary: c.summary, draft: () => fireDraftFor(s(), { command: c }) })),
-    ...(s().oids ?? []).map((o) => ({ key: `${s().name}:o:${o.oid}`, lead: "oid", detail: o.oid, summary: o.path, draft: () => fireDraftFor(s(), { oid: o }) })),
-  ]);
+  const rows = createMemo<OpRow[]>(() => {
+    const own: OpRow[] = surfaceKind(s()) === "none" ? [] : [{ key: `${s().name}:own`, lead: "send", detail: "your own request", draft: () => fireDraftFor(s()) }];
+    return [
+      ...(s().routes ?? []).map((r) => ({ key: `${s().name}:r:${r.method} ${r.path}`, lead: r.method, detail: r.path, summary: r.summary, sets: r.sets ?? [], draft: () => fireDraftFor(s(), { route: r }) })),
+      ...(s().commands ?? []).map((c) => ({ key: `${s().name}:c:${c.match}`, lead: c.action || "cmd", detail: c.match, summary: c.summary, draft: () => fireDraftFor(s(), { command: c }) })),
+      ...(s().oids ?? []).map((o) => ({ key: `${s().name}:o:${o.oid}`, lead: "oid", detail: o.oid, summary: o.path, draft: () => fireDraftFor(s(), { oid: o }) })),
+      ...own,
+    ];
+  });
+  const keys = createMemo(() => rows().map((r) => r.key), undefined, { equals: sameStrings });
+  const rowBy = (key: string) => rows().find((r) => r.key === key);
   return (
-    <Show when={rows().length > 0}>
+    <Show when={keys().length > 0}>
       <ul class="divide-y divide-base-300 border-t border-base-300">
-        <For each={rows()}>
-          {(r) => (
-            <li>
+        <For each={keys()}>
+          {(key) => (
+            <Show when={rowBy(key)}>
+              {(r0) => { const r = r0(); return (
+            <li data-op={r.key} classList={{ "bg-base-200/40": props.open === r.key }}>
               <Show
-                when={props.selectable}
+                when={props.canFire && surfaceKind(s()) !== "none"}
                 fallback={<OperationLine lead={r.lead} detail={r.detail} summary={r.summary} />}
               >
                 <button
                   type="button"
-                  class="block w-full cursor-pointer text-left hover:bg-base-200 focus-visible:bg-base-200 focus-visible:outline-none"
-                  classList={{ "bg-primary/10": props.picked === r.key }}
-                  aria-pressed={props.picked === r.key}
-                  onClick={() => props.onPick(r.key, r.draft())}
+                  class="flex w-full cursor-pointer items-center text-left hover:bg-base-200 focus-visible:bg-base-200 focus-visible:outline-none"
+                  aria-expanded={props.open === r.key}
+                  onClick={() => props.onToggle(r.key)}
                 >
-                  <OperationLine lead={r.lead} detail={r.detail} summary={r.summary} />
+                  <span class="min-w-0 flex-1"><OperationLine lead={r.lead} detail={r.detail} summary={r.summary} /></span>
+                  <span class="flex-none pr-3 text-base-content/50 transition-transform" classList={{ "rotate-90": props.open === r.key }}><ChevronRight size={13} /></span>
                 </button>
+                <Show when={props.open === r.key}>
+                  <OperationBody id={props.id} initial={r.draft()} sets={r.sets ?? []} target={`${props.address}${s().port > 0 ? `:${s().port}` : ""}`} />
+                </Show>
               </Show>
             </li>
+              ); }}
+            </Show>
           )}
         </For>
       </ul>
@@ -549,15 +559,14 @@ function OperationLine(props: { lead: string; detail: string; summary?: string }
   );
 }
 
+const sameStrings = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
+
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"];
 
-// reveal brings a panel that just appeared into view: the fire form lands
-// below a long surface list, and its answer below the form.
-function reveal(el: HTMLElement) {
-  requestAnimationFrame(() => el.scrollIntoView?.({ block: "nearest", behavior: "smooth" }));
-}
-
-function FirePanel(props: { id: string; initial: FireDraft }) {
+// OperationBody: what an open row shows, in place: where the request goes,
+// what the route writes, the request the operator may edit, Send, and the
+// answer beneath. Nothing is scrolled into view.
+function OperationBody(props: { id: string; initial: FireDraft; sets: SimSet[]; target: string }) {
   const qc = useQueryClient();
   const [d, setD] = createSignal<FireDraft>(props.initial);
   const [busy, setBusy] = createSignal(false);
@@ -572,6 +581,7 @@ function FirePanel(props: { id: string; initial: FireDraft }) {
     try {
       setAnswer(await fireSim(props.id, fireBody(d())));
       void qc.invalidateQueries({ queryKey: componentSimKey(props.id) });
+      void qc.invalidateQueries({ queryKey: SIMULATION_KEY, exact: true });
     } catch (e) {
       setAnswer(null);
       setErr(describeError(e));
@@ -581,11 +591,21 @@ function FirePanel(props: { id: string; initial: FireDraft }) {
   }
 
   return (
-    <div ref={reveal} class="flex scroll-mt-4 flex-col gap-3 rounded-box border border-base-300 bg-base-200/50 p-3" data-testid="fire-panel">
-      <Eyebrow
-        label={`Fire on ${d().surface}`}
-        hint="Runs one operation against the component from the server, as its listeners would answer it. A command's change sticks, and collection sees it on its next poll."
-      />
+    <div class="flex flex-col gap-3 border-t border-base-300 bg-base-200/50 p-3" data-testid="op-detail">
+      <div class="text-xs text-base-content/60">target: <span class="font-data">{props.target || d().surface}</span></div>
+      <Show when={props.sets.length > 0}>
+        <div class="flex flex-col gap-1 text-xs" data-testid="op-writes">
+          <span class="eyebrow">Writes</span>
+          <For each={props.sets}>
+            {(w) => (
+              <span>
+                <span class="font-data">{w.path}</span> from <span class="font-data">{w.field}</span>: <span class="font-data">{(w.values ?? []).join(", ")}</span>
+                <Show when={w.default}> (default <span class="font-data">{w.default}</span>)</Show>
+              </span>
+            )}
+          </For>
+        </div>
+      </Show>
       <Show when={d().kind === "http"}>
         <div class="grid grid-cols-[7rem_1fr] gap-2">
           <FieldRow label="Method" eyebrow>
@@ -612,7 +632,7 @@ function FirePanel(props: { id: string; initial: FireDraft }) {
         </FieldRow>
       </Show>
       <div class="flex items-center gap-2">
-        <Button icon={Zap} loading={busy()} disabled={!fireReady(d())} onClick={() => void fire()}>Fire</Button>
+        <Button icon={Zap} loading={busy()} disabled={!fireReady(d())} onClick={() => void fire()}>{busy() ? "Sending" : "Send"}</Button>
       </div>
       <Show when={err()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
@@ -630,7 +650,7 @@ function statusPill(status: number): string {
 
 function Answer(props: { result: SimResult }) {
   return (
-    <div ref={reveal} class="flex flex-col gap-2" data-testid="fire-answer">
+    <div class="flex flex-col gap-2" data-testid="fire-answer">
       <div class="flex flex-wrap items-center gap-2 text-xs">
         <span class="eyebrow">Answer</span>
         <Show when={props.result.status}>
