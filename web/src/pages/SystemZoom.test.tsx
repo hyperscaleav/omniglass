@@ -23,6 +23,7 @@ import { COMPONENTS_KEY } from "../lib/components";
 import { PRODUCTS_KEY } from "../lib/products";
 import { COMPONENT_TYPES_KEY } from "../lib/component_types";
 import { uuidFor } from "../lib/testids";
+import { toLocalInput } from "../components/TimeRangePicker";
 import { seedSeverityLevels } from "../lib/testseverity";
 import type { EffectiveSlot } from "../lib/system_zoom";
 
@@ -784,23 +785,36 @@ describe("the data tab (#794, stacked per the #795 review)", () => {
 
     it("reads a custom absolute range through the views binding, from and to as given", async () => {
       const reads = stubReads();
-      const from = new Date("2026-11-01T08:00").getTime();
-      const to = new Date("2026-11-02T08:00").getTime();
+      // A recent range, inside the raw samples: read at its own fine step.
+      const minute = 60_000;
+      const to = Math.floor(Date.now() / minute) * minute - 3600_000;
+      const from = to - 2 * 3600_000;
       const r = mount(`/web/systems/${uuidFor("szp-sys")}`, health, METRICS);
       seedSeries(r.qc);
       fireEvent.click(screen.getByTestId("time-range-trigger"));
-      fireEvent.input(await screen.findByLabelText("From"), { target: { value: "2026-11-01T08:00" } });
-      fireEvent.input(screen.getByLabelText("To"), { target: { value: "2026-11-02T08:00" } });
+      fireEvent.input(await screen.findByLabelText("From"), { target: { value: toLocalInput(from) } });
+      fireEvent.input(screen.getByLabelText("To"), { target: { value: toLocalInput(to) } });
       fireEvent.click(screen.getByRole("button", { name: "Apply" }));
       await waitFor(() => expect(window.location.search).toContain(`from=${encodeURIComponent(new Date(from).toISOString())}`));
       for (const metric of ["room-temperature", "occupancy-count"]) {
         await waitFor(() => {
           const run = reads.find((x) => x.url.endsWith("/views:run") && (x.body as { bindings: { keys: string[] }[] }).bindings[0].keys[0] === metric);
           expect(run?.body).toEqual({
-            bindings: [{ primitive: "metric", kind: "system", refs: [uuidFor("szp-sys")], keys: [metric], from: new Date(from).toISOString(), to: new Date(to).toISOString(), step_seconds: 300 }],
+            bindings: [{ primitive: "metric", kind: "system", refs: [uuidFor("szp-sys")], keys: [metric], from: new Date(from).toISOString(), to: new Date(to).toISOString(), step_seconds: 60 }],
           });
         });
       }
+    });
+
+    it("reads an old custom range in whole hours, which the hourly trends can answer", async () => {
+      const reads = stubReads();
+      const from = Date.now() - 30 * 86400_000;
+      const to = from + 86400_000;
+      mount(`/web/systems/${uuidFor("szp-sys")}?from=${new Date(from).toISOString()}&to=${new Date(to).toISOString()}`, health, METRICS);
+      await waitFor(() => {
+        const run = reads.find((x) => x.url.endsWith("/views:run"));
+        expect((run?.body as { bindings: { step_seconds: number }[] }).bindings[0].step_seconds).toBe(3600);
+      });
     });
 
     it("offers no custom range to a caller who may not read views", async () => {

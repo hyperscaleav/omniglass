@@ -204,7 +204,13 @@ export default function SystemZoom() {
     const r = resolveRange(range(), 0);
     return r.to - r.from;
   };
-  const seriesStepS = () => rangeStepSeconds(seriesWindowMs());
+  // An absolute range reaching back past a day steps in whole hours: the
+  // views read answers the hours past the raw samples from the hourly trends
+  // only at a whole-hour step, where a finer one would read them as empty.
+  const seriesStepS = () => {
+    const r = range();
+    return r.kind === "absolute" ? rangeStepSeconds(seriesWindowMs(), r.from < Date.now() - 86400_000 || undefined) : rangeStepSeconds(seriesWindowMs());
+  };
   const seriesColumn = () => {
     const r = range();
     return r.kind === "preset" ? `Last ${r.preset}` : "In range";
@@ -226,6 +232,8 @@ export default function SystemZoom() {
           queryKey: metricBucketsBetweenKey("systems", id(), m.metric_type_name, from, to, step, instance),
           queryFn: () => metricBucketsBetween("systems", id(), m.metric_type_name, from, to, step, instance),
           enabled: tab() === "overview",
+          // A range ending in the future still fills; one wholly past holds.
+          refetchInterval: to > Date.now() ? SERIES_POLL_MS : false,
         };
       }
       return {
