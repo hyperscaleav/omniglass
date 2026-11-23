@@ -103,6 +103,8 @@ describe("a refused delete in the dialog", () => {
     fireEvent.click(within(list).getByRole("button", { name: "Delete component Codec card" }));
     fireEvent.click(within(list).getByRole("button", { name: "Confirm delete component Codec card" }));
     await waitFor(() => expect(deleteComponent).toHaveBeenCalledWith(CARD));
+    // Cleared, the refusal's sentence goes with the last row.
+    await waitFor(() => expect(list.textContent).toContain("1 more you cannot see"));
 
     // Retry in place: the same button runs the delete again.
     fireEvent.click(within(dialog()).getByRole("button", { name: "Delete component" }));

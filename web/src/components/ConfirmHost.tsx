@@ -124,7 +124,11 @@ export default function ConfirmHost(props: { navigate?: (href: string) => void }
       <Show when={refused()}>
         <section class="mt-4" aria-label="In the way" data-testid="delete-blockers">
           <h3 class="mb-1 text-xs font-semibold uppercase tracking-wide text-base-content/60">In the way</h3>
-          <p role="status" class="mb-2 text-sm text-base-content/70">{error()}</p>
+          {/* The server's sentence describes the refusal as it was; once the
+              list is cleared it would mislead, so it goes with the last row. */}
+          <Show when={blockers().length > 0 || hidden() > 0}>
+            <p role="status" class="mb-2 text-sm text-base-content/70">{error()}</p>
+          </Show>
           <Show
             when={blockers().length > 0 || hidden() > 0}
             fallback={<p class="text-sm text-base-content/70">Nothing left in the way. Try again.</p>}
