@@ -53,8 +53,8 @@ the average line; spark mode is 160 by 36 with no chrome. It is imported by exac
 |---|---|---|---|---|---|---|
 | V01 | `TimeseriesChart spark` in the server panel `Row` (`pages/PlatformHealth.tsx`) | `/platform` | metric | `metricBuckets("components", server, key, 1 h, 60 s)` via `panelSeriesRequest` (`lib/platformhealth.ts`, `lib/series.ts`) | poll 30 s, only while the server's disclosure is open and the key is reported | sparkline row |
 | V02 | `TimeseriesChart` full, the expanded panel row (`pages/PlatformHealth.tsx`) | `/platform` | metric | the same series query as V01 | poll 30 s, shares V01's query | metric chart |
-| V03 | `TimeseriesChart spark` in the data table (`pages/SystemZoom.tsx`, `data-testid="data-tab"`) | `/systems/<id>` | metric | `metricBuckets("systems", id, metric, 24 h, 300 s, instance)` per KPI metric, over `systemMetrics` (`lib/series.ts`) | poll 30 s; the metric list polls 5 s | sparkline row |
-| V04 | `TimeseriesChart` full, the expanded data row (`pages/SystemZoom.tsx`) | `/systems/<id>` | metric | the same series query as V03 | poll 30 s, shares V03's query | metric chart |
+| V03 | `TimeseriesChart spark` in the data table (`pages/SystemZoom.tsx`, `data-testid="data-tab"`) | `/systems/<id>` | metric | per KPI metric over the page range (`useTimeRange`, `rangeStepSeconds`): `metricBuckets("systems", id, metric, hours, step, instance)` for a preset, `metricBucketsBetween` (`/views:run`) for an absolute range (`lib/series.ts`) | poll 30 s, no poll for an absolute range already past; the metric list polls 5 s | sparkline row |
+| V04 | `TimeseriesChart` full, the expanded data row (`pages/SystemZoom.tsx`) | `/systems/<id>` | metric | the same series query as V03 | as V03, shares its query | metric chart |
 
 ## Metric cards and figures
 

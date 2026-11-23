@@ -56,4 +56,26 @@ describe("Popover keyboard contract", () => {
     expect(picked).toEqual(["1d"]);
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
+
+  // A panel whose choice is already made (the page's time range, #2304)
+  // opens with the focus on that choice, not on its first control.
+  it("opens with the focus on the element initialFocus names", async () => {
+    render(() => (
+      <Popover
+        aria-label="Range"
+        initialFocus={(panel) => panel.querySelector<HTMLElement>('[aria-checked="true"]')}
+        content={
+          <>
+            <button role="radio" aria-checked="false">1 hour</button>
+            <button role="radio" aria-checked="true">1 day</button>
+          </>
+        }
+      >
+        Range
+      </Popover>
+    ));
+    fireEvent.click(screen.getByRole("button", { name: "Range" }));
+    await screen.findByRole("dialog");
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByText("1 day")));
+  });
 });
