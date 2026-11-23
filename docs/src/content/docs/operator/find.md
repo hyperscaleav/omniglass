@@ -15,10 +15,10 @@ screenshots:
         value: Control+k
       - action: fill
         selector: "role=combobox[name='Search the console']"
-        value: videobar
+        value: amp
       - action: wait
         selector: "[data-group-start='Components']"
-    alt: "The command palette with videobar typed: a Components group listing several videobar-1 rows, each followed by the place it sits in, then a Catalog group with products and drivers, and Ask omnibot as the last row."
+    alt: "The command palette with amp typed: a Locations group, a Components group listing several amp-1 rows each followed by the place it sits in and its system, a Catalog group with a product, a driver and a metric, and Ask omnibot as the last row."
 walkthroughs:
   - id: find-a-device-from-the-keyboard
 ---
