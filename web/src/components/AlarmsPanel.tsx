@@ -150,7 +150,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
           </Show>
         }
       >
-        <div class="divide-y divide-base-300 overflow-hidden rounded-box border border-base-300">
+        <div class="divide-y divide-base-300 rounded-box border border-base-300">
           <For each={active()}>
             {(a) => (
               <div class="flex flex-col gap-1.5 px-3 py-2.5">
@@ -244,7 +244,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
             <span class="text-[10.5px] font-semibold uppercase tracking-wide text-base-content/50">Recently cleared</span>
             <span class="text-[10.5px] text-base-content/40">kept on purpose: the fix does not erase the fault</span>
           </div>
-          <div class="divide-y divide-base-300 overflow-hidden rounded-box border border-dashed border-base-300">
+          <div class="divide-y divide-base-300 rounded-box border border-dashed border-base-300">
             <For each={cleared()}>
               {(a) => (
                 <div class="flex flex-col gap-1.5 px-3 py-2">

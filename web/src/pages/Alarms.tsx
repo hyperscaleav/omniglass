@@ -132,7 +132,7 @@ export default function Alarms() {
                   <KVStacked label="Location" value={<span class="font-data text-xs">{a.location_path || "unplaced"}</span>} />
                   <KVStacked label="Systems" value={<span class="font-data text-xs">{(a.systems ?? []).join(", ") || "none"}</span>} />
                 </div>
-                <AlarmActions componentId={a.component_id} alarm={a} surface={`${ACTIONS_SURFACE}:drawer`} show={ROW_ACTIONS} allow={{ snooze: canSnooze() }} />
+                <div class="flex"><AlarmActions componentId={a.component_id} alarm={a} surface={`${ACTIONS_SURFACE}:drawer`} show={ROW_ACTIONS} allow={{ snooze: canSnooze() }} /></div>
                 <AlarmTimeline component={a.component_id} alarmId={a.id} label={a.message} />
               </div>
             ),
