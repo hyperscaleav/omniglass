@@ -151,7 +151,7 @@ what each page draws itself.
 | `CommandTypes.tsx` | `/command-types` | none checked: config chips only |
 | `ComponentLeaf.tsx` (the body is `components/ComponentDetail.tsx`, also the component blade) | `/components/<id>` (via `Components.tsx`) | V08, V15, V24, V26, V27, V32, V33, V36, V37, V40, V42, V47 |
 | `ComponentTypes.tsx` | `/component-types` | none checked: config chips only |
-| `Components.tsx` | `/components/<id>` | wrapper: mounts `ComponentLeaf`, or the create form for the create route (`components/create`, no leading slash) |
+| `Components.tsx` | `/components/<id>` | wrapper: mounts `ComponentLeaf`, the add-a-component flow for `components/add`, or the create form for the create route (`components/create`, no leading slash) |
 | `Drivers.tsx` | `/drivers` | none checked: config chips only |
 | `EventTypes.tsx` | `/event-types` | none checked: config chips only |
 | `Explore.tsx` | `/explore` | V10, V19 (blades only otherwise) |

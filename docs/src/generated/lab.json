@@ -66,6 +66,13 @@
   ],
   "walkthroughs": [
     {
+      "id": "add-a-component",
+      "title": "Add a component",
+      "description": "Add a display to a system from the Simulation page, with a simulated device as its address, pick its credential, test it, and land on its collected values.",
+      "lab": [],
+      "setup": []
+    },
+    {
       "id": "declare-a-first-slot",
       "title": "Declare a first slot",
       "description": "Give a one-off system its first slot from the console, name it, say what it accepts, and see the slot it opens.",
