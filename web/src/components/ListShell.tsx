@@ -43,6 +43,9 @@ export default function ListShell<T>(props: {
   // that says how many of how many and shows more. It starts over when the
   // filter changes. Omit it for the whole list, as every other body gets.
   pageSize?: number;
+  // The draft chip as it changes (see FilterBar), for a body that previews it
+  // itself instead of letting `live` narrow the rows.
+  onDraft?: (draft: Chip | null) => void;
   // The `?open=` address the list could not resolve (lib/drawer_address): shows a
   // non-disclosing not-found notice above the list. The same words for a row that
   // does not exist and one the caller may not see; `onDismiss` clears the param.
@@ -88,7 +91,7 @@ export default function ListShell<T>(props: {
             trailing={props.trailing}
             count={count()}
             placeholder={props.placeholder}
-            onDraft={props.live ? setDraft : undefined}
+            onDraft={props.live || props.onDraft ? (c) => { if (props.live) setDraft(c); props.onDraft?.(c); } : undefined}
           />
         </div>
         {props.children(filtered, chips)}

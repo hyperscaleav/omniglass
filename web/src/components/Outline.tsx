@@ -3,7 +3,10 @@ import { Dynamic } from "solid-js/web";
 import Popover from "./ui/Popover";
 import { ChevronRight, CircleCheck, CircleDashed, LayoutDashboard, OctagonX, Plus, TriangleAlert, resolveIcon } from "./icons";
 import type { ComponentGroup, ComponentRow, Lights, LocationNode } from "../lib/outline";
+import { NO_COMPONENTS } from "../lib/outline";
 import { HEALTH_HUE, type HealthState } from "../lib/health";
+import OutlineName from "./OutlineName";
+import Tooltip from "./ui/Tooltip";
 
 // The outline (#867): every location in the fleet as one tree, drawn as aligned
 // columns. A location wears its system (standard and health on its own row) and
@@ -67,33 +70,51 @@ export function HealthGlyph(props: { health: HealthState | null }) {
   );
 }
 
+// Health counts pack left in severity order, each with its count: a row shows
+// only the healths it has, so a lone warning sits first rather than in a third
+// slot after a blank. `single` is one thing's own verdict (a component), which
+// is a glyph and no count; `lights` is a place's systems by health.
 export function HealthSlots(props: { lights?: Lights; single?: HealthState | null }) {
   const counts = (): Partial<Record<HealthState, number>> => {
     if (props.single) return { [props.single]: 0 };
     const l = props.lights;
     return l ? { healthy: l.healthy, incomplete: l.incomplete, degraded: l.degraded, outage: l.outage } : {};
   };
+  const shown = () => HEALTHS.filter((v) => (props.single ? props.single === v : (counts()[v] ?? 0) > 0));
   const words = () => {
     if (props.single) return WORDS[props.single];
-    return HEALTHS.filter((v) => (counts()[v] ?? 0) > 0).map((v) => `${counts()[v]} ${WORDS[v]}`).join(", ");
+    return shown().map((v) => `${counts()[v]} ${WORDS[v]}`).join(", ");
   };
   return (
-    <span data-testid="health" class="grid grid-cols-[repeat(4,2.375rem)] font-data text-[12.5px] font-medium @max-[28rem]:flex @max-[28rem]:gap-2" aria-label={words() || undefined} title={words() || undefined}>
-      <For each={HEALTHS}>
+    <span data-testid="health" class="flex items-center gap-2.5 font-data text-[12.5px] font-medium" aria-label={words() || undefined} title={words() || undefined}>
+      <For each={shown()}>
         {(v) => {
-          const shown = () => (props.single ? props.single === v : (counts()[v] ?? 0) > 0);
           const Glyph = GLYPH[v];
           return (
-            <span data-slot={v} class={`inline-flex items-center gap-1.5 ${HUE[v]} @max-[28rem]:empty:hidden`} aria-hidden="true">
-              <Show when={shown()}>
-                <Glyph size={14} />
-                <Show when={!props.single}>{counts()[v]}</Show>
-              </Show>
+            <span data-slot={v} class={`inline-flex items-center gap-1 ${HUE[v]}`} aria-hidden="true">
+              <Glyph size={14} />
+              <Show when={!props.single}>{counts()[v]}</Show>
             </span>
           );
         }}
       </For>
     </span>
+  );
+}
+
+// A Detail longer than this wraps to its second line and may still be cut, so
+// it carries a tooltip with the whole of it; a short one needs neither.
+const DETAIL_TIP_AT = 28;
+
+// The Detail cell's text: up to two lines, and the whole text on hover or
+// focus when it is long enough to be cut.
+export function DetailText(props: { text: string }) {
+  return (
+    <Show when={props.text.length > DETAIL_TIP_AT} fallback={<span>{props.text}</span>}>
+      <Tooltip as="span" content={props.text} tabIndex={-1} class="line-clamp-2 cursor-default text-left">
+        {props.text}
+      </Tooltip>
+    </Show>
   );
 }
 
@@ -282,7 +303,7 @@ export default function Outline(props: {
                             </span>
                             <span class="mx-1.5 shrink-0 text-base-content/30 @max-[28rem]:hidden">/</span>
                           </Show>
-                          <span data-label class="min-w-0 max-w-full shrink-0 truncate font-semibold">{n().chain[n().chain.length - 1].label}</span>
+                          <OutlineName kind="location" label={n().chain[n().chain.length - 1].label} class="min-w-0 max-w-full shrink-0" />
                         </span>
                       </>
                     );
@@ -290,7 +311,7 @@ export default function Outline(props: {
                 </Show>
                 <Show when={r().kind === "group"}>
                   <span class="flex-none text-base-content/35"><LayoutDashboard size={16} /></span>
-                  <span data-label class="truncate text-[13px] font-medium text-base-content/60">{(r() as { group: ComponentGroup }).group.system!.label}</span>
+                  <OutlineName kind="group" label={(r() as { group: ComponentGroup }).group.system!.label} />
                 </Show>
                 <Show when={r().kind === "component"}>
                   {(() => {
@@ -298,9 +319,15 @@ export default function Outline(props: {
                     return (
                       <>
                         <span class="flex-none text-base-content/35"><Dynamic component={resolveIcon(c().icon)} size={16} /></span>
-                        <span data-label class="truncate font-data text-[13px]">{c().label}</span>
+                        <OutlineName kind="component" label={c().label} class="min-w-[4rem]" />
+                        {/* The chip gives way first, so the name stays readable beside it: it
+                            shrinks before the name does, and in a narrow outline it is a bare
+                            count whose title carries the systems. */}
                         <Show when={c().also.length > 0}>
-                          <span class="flex-none rounded border border-base-content/15 px-1.5 text-[11px] leading-4 text-base-content/55">also in {c().also.join(", ")}</span>
+                          <span class="shrink-[999] truncate rounded border border-base-content/15 px-1.5 text-[11px] leading-4 text-base-content/55 @max-[56rem]:px-1" title={`Also in ${c().also.join(", ")}`}>
+                            <span class="@max-[56rem]:hidden">also in {c().also.join(", ")}</span>
+                            <span class="hidden @max-[56rem]:inline">+{c().also.length}</span>
+                          </span>
                         </Show>
                       </>
                     );
@@ -310,19 +337,19 @@ export default function Outline(props: {
               <span class={`truncate pr-4 text-base-content/55 ${ROOMY_ONLY}`}>{r().kind === "location" ? node()!.type : ""}</span>
               <span data-testid={r().kind === "location" && node()!.systems.length === 1 ? "standard" : undefined} class={`truncate pr-4 text-base-content/75 ${WIDE_ONLY}`}>
                 {r().kind === "location"
-                  ? (node()!.systems.length === 1 ? node()!.systems[0].standard : node()!.systems.length > 1 ? `${node()!.systems.length} systems` : "")
+                  ? (node()!.systems.length === 1 ? node()!.systems[0].standard : "")
                   : r().kind === "component" ? comp()!.product : grp()!.system!.standard}
               </span>
               <span
-                class={`truncate pr-4 ${NARROW_HIDDEN}`}
-                classList={{ "text-error": !!issue(), "text-base-content/55": !issue() }}
+                class={`pr-4 text-[13px] leading-4 ${NARROW_HIDDEN}`}
+                classList={{ "text-error": !!issue(), "text-base-content/55": !issue(), truncate: r().kind !== "location" }}
                 title={issue()}
               >
-                {r().kind === "location" ? node()!.contents : (issue() ?? "")}
+                {r().kind === "location" ? <DetailText text={node()!.contents} /> : r().kind === "group" && grp()!.components.length === 0 ? NO_COMPONENTS : (issue() ?? "")}
               </span>
               <span>
                 {r().kind === "location"
-                  ? (node()!.systems.length === 1 && node()!.children.length === 0 ? <HealthSlots single={node()!.health} /> : <HealthSlots lights={node()!.lights} />)
+                  ? <HealthSlots lights={node()!.lights} />
                   : r().kind === "component" ? <HealthSlots single={comp()!.health} /> : <HealthSlots single={grp()!.system!.health} />}
               </span>
               <span class="grid place-items-center" onClick={(e) => e.stopPropagation()}>
