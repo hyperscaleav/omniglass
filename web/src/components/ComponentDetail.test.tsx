@@ -209,6 +209,23 @@ describe("one edit model", () => {
     expect(window.location.search).toBe("");
   });
 
+  it("closing or popping a blade with unsaved drafts asks first, and keeps the blade on No", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const r = mountBlade("/web/explore");
+    const blade = await screen.findByRole("dialog");
+    fireEvent.click(await within(blade).findByRole("tab", { name: "Configure" }));
+    fireEvent.click(await within(blade).findByRole("button", { name: "Edit" }));
+    fireEvent.input(await within(blade).findByDisplayValue("videobar-1"), { target: { value: "videobar-2" } });
+    fireEvent.click(within(blade).getByRole("button", { name: "Close" }));
+    expect(confirm).toHaveBeenCalled();
+    expect(r.controller().stack().length).toBe(1);
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(r.controller().stack().length).toBe(1);
+    confirm.mockReturnValue(true);
+    fireEvent.click(within(blade).getByRole("button", { name: "Close" }));
+    expect(r.controller().stack()).toEqual([]);
+  });
+
   it("the page's ?edit=1 lands on Configure, already editing", async () => {
     mountPage(`/web/components/${CID}?edit=1`);
     expect(await screen.findByDisplayValue("videobar-1")).toBeTruthy();

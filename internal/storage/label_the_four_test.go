@@ -324,7 +324,7 @@ func TestASecretsLabelReachesEveryProjectionThatCarriesItsName(t *testing.T) {
 		{Name: "bldg", LocationType: "building", ParentName: strptr("campus")},
 		{Name: "room", LocationType: "room", ParentName: strptr("bldg")},
 	} {
-		if _, err := gw.CreateLocation(ctx, "", l, all); err != nil {
+		if _, err := gw.CreateLocation(ctx, "", l, all, all); err != nil {
 			t.Fatalf("create location %q: %v", l.Name, err)
 		}
 	}
