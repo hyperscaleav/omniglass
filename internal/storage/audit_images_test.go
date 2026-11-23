@@ -194,6 +194,52 @@ func TestSettingsUpdateImageSurvivesAConcurrentReset(t *testing.T) {
 	}
 }
 
+// A factory reset that commits while a merge-patch is in flight must not have its
+// deleted keys written back (#2221): the patch's base doc comes from the locked
+// read, so it waits for the reset and merges onto an empty namespace.
+func TestMergePatchDoesNotResurrectKeysAConcurrentResetDeleted(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dsn, gw := newAuditGateway(t)
+
+	if _, err := gw.UpsertSettingBinding(ctx, "", "platform", "ui", map[string]any{"theme": "omniglass-light", "density": "compact"}, nil); err != nil {
+		t.Fatalf("seed binding: %v", err)
+	}
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(ctx)
+	reset, err := conn.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin reset: %v", err)
+	}
+	if _, err := reset.Exec(ctx, `delete from setting_binding where scope = 'platform' and user_id is null`); err != nil {
+		t.Fatalf("reset delete: %v", err)
+	}
+
+	type result struct {
+		b   *storage.SettingBinding
+		err error
+	}
+	done := make(chan result, 1)
+	go func() {
+		b, err := gw.MergePatchSettingBinding(ctx, "", "platform", "ui", map[string]any{"theme": "omniglass-dark"})
+		done <- result{b, err}
+	}()
+	time.Sleep(500 * time.Millisecond)
+	if err := reset.Commit(ctx); err != nil {
+		t.Fatalf("commit reset: %v", err)
+	}
+	r := <-done
+	if r.err != nil {
+		t.Fatalf("merge patch: %v", r.err)
+	}
+	if _, back := r.b.Doc["density"]; back {
+		t.Errorf("merge-patch wrote back %v, keys the reset had already deleted", r.b.Doc)
+	}
+}
+
 func TestTagAuditRowsCarryTheirImages(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

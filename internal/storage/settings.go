@@ -134,7 +134,7 @@ func (p *PG) mergePatchSettingBinding(ctx context.Context, actorID, scope, names
 
 	var docRaw []byte
 	err = tx.QueryRow(ctx,
-		`select doc from setting_binding where scope = $1 and user_id is null and namespace = $2`,
+		`select doc from setting_binding where scope = $1 and user_id is null and namespace = $2 for update`,
 		scope, namespace).Scan(&docRaw)
 	current := map[string]any{}
 	switch {
