@@ -58,7 +58,7 @@ export default function TimeRangePicker(props: { range: TimeRange; onChange: (r:
   };
 
   return (
-    <Popover
+    <Popover class="btn btn-quiet btn-xs gap-1.5 font-normal"
       placement="bottom-end"
       gutter={6}
       open={open()}
@@ -67,7 +67,6 @@ export default function TimeRangePicker(props: { range: TimeRange; onChange: (r:
         setOpen(o);
       }}
       data-testid="time-range-trigger"
-      class="btn btn-quiet btn-xs gap-1.5 font-normal"
       aria-label={`Time range: ${rangeLabel(props.range)}`}
       contentTestId="time-range-panel"
       // Focus lands on the range in force, not the first preset, so the

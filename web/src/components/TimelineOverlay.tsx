@@ -740,10 +740,9 @@ function KeyPicker(props: { label: string; all: string[]; shown: string[]; onCha
     props.onChange(props.all.filter((x) => set.has(x)));
   };
   return (
-    <Popover
+    <Popover class="btn btn-quiet btn-xs gap-1 font-normal"
       placement="bottom-end"
       gutter={6}
-      class="btn btn-quiet btn-xs gap-1 font-normal"
       aria-label={`Pick ${props.label.toLowerCase()}`}
       disabled={props.all.length === 0}
       contentLabel={`${props.label} on the timeline`}
