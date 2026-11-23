@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@solidjs/testing-library";
+import { cleanup, fireEvent, render, screen, waitFor } from "@solidjs/testing-library";
 import TimeRangePicker from "./TimeRangePicker";
 import type { TimeRange } from "../lib/time_range";
 
@@ -41,6 +41,13 @@ describe("TimeRangePicker", () => {
     expect(screen.getByTestId("time-range-preset-7d").getAttribute("aria-checked")).toBe("false");
     fireEvent.click(screen.getByTestId("time-range-preset-7d"));
     expect(r.picked).toEqual([{ kind: "preset", preset: "7d" }]);
+  });
+
+  it("lands focus on the range in force when it opens", async () => {
+    mount({ kind: "preset", preset: "7d" });
+    fireEvent.click(screen.getByTestId("time-range-trigger"));
+    await screen.findByTestId("time-range-panel");
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("time-range-preset-7d")));
   });
 
   it("applies a custom absolute range read as local time", async () => {

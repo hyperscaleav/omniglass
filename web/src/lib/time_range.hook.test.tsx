@@ -31,6 +31,14 @@ const mount = (path: string) => {
 afterEach(cleanup);
 
 describe("useTimeRange", () => {
+  // ?from= also names the template a row was created from (#1329): moving
+  // between presets leaves it alone; only an absolute range owns from and to.
+  it("moving between presets keeps a template's ?from=", async () => {
+    mount("/web/p?from=mr55-system");
+    fireEvent.click(screen.getByText("7d"));
+    await screen.findByText("?from=mr55-system&range=7d");
+  });
+
   it("reads the range the address carries", () => {
     mount("/web/p?range=6h");
     expect(screen.getByTestId("range").textContent).toBe(JSON.stringify({ kind: "preset", preset: "6h" }));

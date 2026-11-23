@@ -108,11 +108,24 @@ export function rangeLabel(r: TimeRange): string {
 }
 
 // useTimeRange reads and writes the page's range in the router's search
-// params. Setting it keeps every other param (the tab, a filter).
+// params. Setting it keeps every other param (the tab, a filter). `from` also
+// names the template a row was created from (?from=<template>, #1329), so
+// from and to are cleared only when leaving an absolute range, the one case
+// they are the range's own.
 export function useTimeRange(): { range: Accessor<TimeRange>; setRange: (r: TimeRange) => void } {
   const [params, setParams] = useSearchParams();
   const range = createMemo(() => parseRange(params as Record<string, string | string[] | undefined>), DEFAULT_RANGE, {
     equals: (a, b) => JSON.stringify(a) === JSON.stringify(b),
   });
-  return { range, setRange: (r) => setParams(serializeRange(r)) };
+  return {
+    range,
+    setRange: (r) => {
+      const patch: Record<string, string | undefined> = serializeRange(r);
+      if (r.kind === "preset" && range().kind === "preset") {
+        delete patch.from;
+        delete patch.to;
+      }
+      setParams(patch);
+    },
+  };
 }

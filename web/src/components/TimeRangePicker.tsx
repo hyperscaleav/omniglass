@@ -55,7 +55,16 @@ export default function TimeRangePicker(props: { range: TimeRange; onChange: (r:
       <Popover.Portal>
         <Popover.Content
           data-testid="time-range-panel"
-          class="z-50 flex w-64 max-w-[calc(100vw-1rem)] flex-col gap-2 rounded-box border border-base-300 bg-base-100 p-2 text-sm shadow-2xl focus:outline-none"
+          // Focus lands on the range in force, not the first preset, so the
+          // ring never reads as a second selection.
+          onOpenAutoFocus={(e) => {
+            const checked = (e.currentTarget as HTMLElement | null)?.querySelector<HTMLElement>('[aria-checked="true"]');
+            if (checked) {
+              e.preventDefault();
+              checked.focus();
+            }
+          }}
+          class="z-50 flex w-72 max-w-[calc(100vw-1rem)] flex-col gap-2 rounded-box border border-base-300 bg-base-100 p-2 text-sm shadow-2xl focus:outline-none"
         >
           <p class="menu-title px-2 pt-1 pb-0 text-[10.5px]">Time range · every chart on this page</p>
           <ul role="radiogroup" aria-label="Preset ranges" class="flex flex-col">
@@ -89,9 +98,9 @@ export default function TimeRangePicker(props: { range: TimeRange; onChange: (r:
               <span class="text-[10.5px] text-base-content/60">Custom range, your local time</span>
               <div class="grid grid-cols-[2.5rem_1fr] items-center gap-x-2 gap-y-1.5">
                 <label for={fromId} class="text-xs text-base-content/70">From</label>
-                <input id={fromId} type="datetime-local" class="input input-bordered input-xs w-full font-data" value={from()} onInput={(e) => setFrom(e.currentTarget.value)} />
+                <input id={fromId} type="datetime-local" class="input input-bordered input-xs w-full min-w-0 font-data" value={from()} onInput={(e) => setFrom(e.currentTarget.value)} />
                 <label for={toId} class="text-xs text-base-content/70">To</label>
-                <input id={toId} type="datetime-local" class="input input-bordered input-xs w-full font-data" value={to()} onInput={(e) => setTo(e.currentTarget.value)} />
+                <input id={toId} type="datetime-local" class="input input-bordered input-xs w-full min-w-0 font-data" value={to()} onInput={(e) => setTo(e.currentTarget.value)} />
               </div>
               <Show when={from() && to() && !customOk()}>
                 <p class="text-xs text-warning">The range must end after it starts.</p>
