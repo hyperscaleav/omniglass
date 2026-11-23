@@ -342,6 +342,54 @@ test.describe("operator console", () => {
   // expression editor, switches it off and on, and removes both. The e2e
   // server names no egress allow list and has no route to the world, so the
   // target's host never resolves: the test's answer is the honest reason.
+  // #2463: each tree tier deletes from its own page, and a refused delete
+  // names its blockers in the confirm, each with its own Delete, so the
+  // cleanup finishes in the same dialog. (The blade deletes are driven above.)
+  test("delete from the page: the confirm names what is in the way and clears it in place", async ({ page }) => {
+    const stamp = Date.now();
+    const site = `e2e-del-site-${stamp}`;
+    const sys = `e2e-del-sys-${stamp}`;
+    const comp = `e2e-del-comp-${stamp}`;
+    expect((await page.request.post("/api/v1/locations", { data: { name: site, location_type: "campus" } })).ok()).toBeTruthy();
+    expect((await page.request.post("/api/v1/systems", { data: { name: sys, location: site } })).ok()).toBeTruthy();
+    const made = await page.request.post("/api/v1/components", { data: { name: comp, product: "generic-device", location: site } });
+    expect(made.ok()).toBeTruthy();
+    const compId = ((await made.json()) as { id: string }).id;
+    expect((await page.request.post("/api/v1/endpoints", { data: { transport: "icmp", component: comp } })).ok()).toBeTruthy();
+    const dialog = page.getByRole("alertdialog");
+    const blockers = dialog.getByTestId("delete-blockers");
+
+    // The component owns an endpoint: refused, the endpoint named, deleted in
+    // place, and the retry from the same dialog succeeds.
+    await page.goto(`/web/components/${comp}?tab=configure`);
+    await page.getByTestId("configure-face").getByRole("button", { name: "Delete", exact: true }).click();
+    await expect(dialog).toHaveAccessibleName(`Delete component "${comp}"?`);
+    await dialog.locator("footer").getByRole("button", { name: "Delete component" }).click();
+    await expect(blockers.locator("[data-blocker^='endpoint:']")).toHaveCount(1);
+    await blockers.getByRole("button", { name: /^Delete endpoint/ }).click();
+    await blockers.getByRole("button", { name: /^Confirm delete endpoint/ }).click();
+    await expect(blockers).toContainText("Nothing left in the way");
+    await dialog.locator("footer").getByRole("button", { name: "Delete component" }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect.poll(async () => (await page.request.get(`/api/v1/components/${compId}`)).status()).toBe(404);
+
+    // The location still holds the system: named as a link to its own page.
+    await page.goto(`/web/locations/${site}?tab=configure`);
+    await page.getByTestId("configure-face").getByRole("button", { name: "Delete", exact: true }).click();
+    await dialog.locator("footer").getByRole("button", { name: "Delete location" }).click();
+    await expect(blockers.getByRole("link", { name: sys })).toBeVisible();
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+
+    // The system deletes from its own page; then the location goes.
+    await page.goto(`/web/systems/${sys}?tab=configure`);
+    await page.getByTestId("configure-face").getByRole("button", { name: "Delete", exact: true }).click();
+    await confirmInDialog(page);
+    await page.goto(`/web/locations/${site}?tab=configure`);
+    await page.getByTestId("configure-face").getByRole("button", { name: "Delete", exact: true }).click();
+    await confirmInDialog(page);
+    await expect.poll(async () => (await page.request.get(`/api/v1/locations/${site}`)).status()).toBe(404);
+  });
+
   test("notifications: a target is made, tested and revealed; an action rule sends to it", async ({ page }) => {
     const stamp = Date.now();
     const target = `e2e-hook-${stamp}`;
