@@ -1,7 +1,8 @@
-import { For, Show, createEffect, createMemo, createSignal, on as onChange, type JSX } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, on as onChange, type JSX, type Signal } from "solid-js";
 import { A } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import InfoTip from "../components/InfoTip";
+import KeyedFor from "../components/KeyedFor";
 import Pager from "../components/Pager";
 import PlatformSection from "../components/PlatformSection";
 import { deviceStateText, devicePlaceText, filterDevices, pageSlice, simulationSummary } from "../lib/platform_sections";
@@ -102,9 +103,9 @@ export default function PlatformSimulation(props: { open: boolean; onOpenChange:
             </Show>
             <Show when={sim.data}>
               {(v) => (
-                <For each={v().outposts} fallback={<div class="text-sm text-base-content/50">No outpost has a simulator checking in yet.</div>}>
-                  {(n) => <SimOutpost outpost={n} />}
-                </For>
+                <KeyedFor each={v().outposts} by={(n) => n.outpost} fallback={<div class="text-sm text-base-content/50">No outpost has a simulator checking in yet.</div>}>
+                  {(n) => <SimOutpost outpost={n()} />}
+                </KeyedFor>
               )}
             </Show>
           </div>
@@ -116,6 +117,11 @@ export default function PlatformSimulation(props: { open: boolean; onOpenChange:
 
 function SimOutpost(props: { outpost: PlatformSimOutpost }) {
   const note = () => simStateNote(props.outpost);
+  // The device table's filter and page live here, above the window's state: a
+  // window that flaps to warming up or restarted unmounts the table, and the
+  // operator's filter must be there when the figures come back.
+  const filter = createSignal("");
+  const paging = createSignal(0);
   return (
     <div class="card border border-base-300 bg-base-100" data-testid={`platform-sim-${props.outpost.outpost}`} data-state={props.outpost.state}>
       <div class="card-body gap-4 p-5">
@@ -141,7 +147,7 @@ function SimOutpost(props: { outpost: PlatformSimOutpost }) {
         <Show when={!note()}>
           <GapTable gaps={props.outpost.gaps} />
           <ProtocolTable outpost={props.outpost} />
-          <DeviceTable outpost={props.outpost} />
+          <DeviceTable outpost={props.outpost} query={filter} page={paging} />
         </Show>
       </div>
     </div>
@@ -263,9 +269,9 @@ function Head(props: { label: string; tip: string }): JSX.Element {
 // serve thousands, so the table is a page of them behind a filter, never all.
 const DEVICE_PAGE = 25;
 
-function DeviceTable(props: { outpost: PlatformSimOutpost }) {
-  const [query, setQuery] = createSignal("");
-  const [page, setPage] = createSignal(0);
+function DeviceTable(props: { outpost: PlatformSimOutpost; query: Signal<string>; page: Signal<number> }) {
+  const [query, setQuery] = props.query;
+  const [page, setPage] = props.page;
   const all = createMemo(() => sortDevices(props.outpost.devices));
   const matched = createMemo(() => filterDevices(all(), query()));
   const rows = createMemo(() => pageSlice(matched(), page(), DEVICE_PAGE));
@@ -289,7 +295,7 @@ function DeviceTable(props: { outpost: PlatformSimOutpost }) {
           <thead>
             <tr>
               <th>Device</th>
-              <th>System and place</th>
+              <th>System and location</th>
               <Head label="Received" tip="Requests the simulator saw for the device over the window, by protocol." />
               <th>State</th>
             </tr>

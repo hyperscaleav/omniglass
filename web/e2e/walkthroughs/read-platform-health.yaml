@@ -28,19 +28,17 @@ steps:
     hold: 1500
   - wait: { selector: '[data-testid=section-summary]:has-text("lost end to end")', timeout: 30000 }
     caption: A section's line is its verdict and the one number that matters, for where work is lost, the server's open alarms and how many outposts are up.
-    hold: 2000
+    hold: 1500
   - click: '[data-testid=section-pipeline] button[aria-expanded]'
     caption: Open where work is lost. What is open is held in the address, so a reload keeps it.
   - wait: { selector: '[data-testid=pipeline]:has([data-testid=pipeline-hop-outpost] [data-testid=hop-loss]:text-is("0%")):has([data-testid=pipeline-hop-ingest] [data-testid=hop-loss]:text-is("0%"))', timeout: 30000 }
     caption: Where work is lost follows a sample from its run to the store, hop by hop. Each hop reads a loss ratio, the share it took in and did not hand on. 0% is healthy.
-    hold: 2000
+    hold: 1500
   - click: '[data-testid=pipeline-hop-outpost]'
     caption: Open the outpost hop to read what counts as lost there.
   - wait: { selector: '[data-testid=pipeline-hop-detail]' }
     caption: The keys the hop is read from, and each outpost's own share of it. The same three keys read every hop.
-    hold: 2000
-  - click: '[data-testid=section-pipeline] button[aria-expanded]'
-    caption: Fold it again.
+    hold: 1500
   - click: '[data-testid=section-outposts] button[aria-expanded]'
     caption: Open the outposts.
   - wait: { selector: '[data-testid=platform-outpost-edge-hq]' }
@@ -50,9 +48,7 @@ steps:
     caption: Open the simulator's section.
   - wait: { selector: '[data-testid=platform-simulation] [data-testid=platform-sim-gaps]:has([data-testid=platform-sim-gap]) thead', timeout: 30000 }
     caption: With a simulator connected, each gap is what the devices saw against what the platform collected, a loss ratio where 0 is healthy.
-    hold: 2000
-  - click: '[data-testid=section-outposts] button[aria-expanded]'
-    caption: Fold the outposts to reach the server under them.
+    hold: 1500
   - click: '[data-testid=section-server-server] button[aria-expanded]'
     caption: Open the server's panels. Requests ranks the slowest routes of the newest report window, highest first.
     hold: 1500
@@ -66,4 +62,4 @@ steps:
   - wait: { selector: '[data-testid=vital-http-request-duration-max]' }
     caption: The server's platform component, the same detail as any device. Its request timing is a series like any other metric.
     poster: true
-    hold: 2000
+    hold: 1500

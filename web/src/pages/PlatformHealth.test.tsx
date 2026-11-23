@@ -633,4 +633,15 @@ describe("PlatformHealth simulator device table", () => {
     const states = rows.map((r) => r.querySelector("[data-testid=platform-sim-device-state]")!.textContent);
     expect(states).toEqual(expect.arrayContaining(["answering", "impaired", "due, never seen"]));
   });
+
+  it("keeps the filter when the window flaps to restarted and back, which unmounts the table", async () => {
+    const { qc } = mount(full, { fleet: connected, body: simBody([many(60)]) });
+    fireEvent.input(screen.getByRole("searchbox", { name: /Filter edge-alpha's devices/ }), { target: { value: "room-1" } });
+    await waitFor(() => expect(screen.getByTestId("pager-range")).toHaveTextContent("of 11"));
+    qc.setQueryData([...PLATFORM_SIM_KEY], simBody([{ ...many(60), state: "restarted" }]));
+    await waitFor(() => expect(screen.queryByTestId("platform-sim-devices")).toBeNull());
+    qc.setQueryData([...PLATFORM_SIM_KEY], simBody([many(60)]));
+    await waitFor(() => expect(screen.getByTestId("pager-range")).toHaveTextContent("1-11 of 11"));
+    expect((screen.getByRole("searchbox", { name: /Filter edge-alpha's devices/ }) as HTMLInputElement).value).toBe("room-1");
+  });
 });
