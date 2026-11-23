@@ -568,8 +568,18 @@ export default function SystemZoom() {
                 <div data-testid="overview-tab" class="flex flex-col gap-5 p-4">
                   {/* Cause before arithmetic (#785): what is wrong, on which
                       component, impairing which slot, since when. */}
-                  <Show when={alarms().length > 0}>
-                    <section data-testid="alarm-strip" class="flex flex-col gap-1.5 rounded-box border p-3" classList={{ "border-error/40 bg-error/5": inOutage(), "border-warning/40 bg-warning/5": !inOutage() }}>
+                  <Show
+                    when={alarms().length > 0}
+                    fallback={
+                      // The slot is held while quiet, one line tall like a
+                      // one-alarm strip, so an alarm opening moves nothing (#2006).
+                      <section data-testid="alarm-strip-clear" class="flex min-h-[4.25rem] flex-col gap-1.5 rounded-box border border-base-300 p-3">
+                        <h2 class="eyebrow">Why</h2>
+                        <p class="text-sm text-base-content/50">No active alarms.</p>
+                      </section>
+                    }
+                  >
+                    <section data-testid="alarm-strip" style={{ "min-height": "4.25rem" }} class="flex flex-col gap-1.5 rounded-box border p-3" classList={{ "border-error/40 bg-error/5": inOutage(), "border-warning/40 bg-warning/5": !inOutage() }}>
                       <h2 class="eyebrow">Why</h2>
                       <For each={alarms()}>
                         {(a) => (

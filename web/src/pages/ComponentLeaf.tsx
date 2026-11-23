@@ -118,6 +118,11 @@ export default function ComponentLeaf() {
     return byName.length === 1 ? byName[0] : undefined;
   });
 
+  // The queries key on the resolved uuid, so the name-to-uuid redirect below
+  // does not change their key, send them back to loading and collapse the
+  // sections they feed (#2006).
+  const dataId = () => component()?.id ?? id();
+
   // The leaf is addressed by uuid; a name-shaped address resolves through the
   // component list when unique, keeping the param (#759's rule).
   createEffect(() => {
@@ -127,30 +132,30 @@ export default function ComponentLeaf() {
   });
 
   const memberships = useQuery(() => ({
-    queryKey: componentSystemsKey(id()),
-    queryFn: () => componentSystems(id()),
+    queryKey: componentSystemsKey(dataId()),
+    queryFn: () => componentSystems(dataId()),
     enabled: !!component(),
   }));
   const reach = useQuery(() => ({
-    queryKey: REACHABILITY_KEY(id()),
-    queryFn: () => getReachability(id()),
+    queryKey: REACHABILITY_KEY(dataId()),
+    queryFn: () => getReachability(dataId()),
     enabled: !!component(),
     refetchInterval: LEAF_POLL_MS,
   }));
   const alarmsQ = useQuery(() => ({
-    queryKey: componentAlarmsReadKey(id()),
-    queryFn: () => componentAlarmsRead(id()),
+    queryKey: componentAlarmsReadKey(dataId()),
+    queryFn: () => componentAlarmsRead(dataId()),
     enabled: !!component(),
     refetchInterval: LEAF_POLL_MS,
   }));
   const propsQ = useQuery(() => ({
-    queryKey: effectivePropertiesKey(id()),
-    queryFn: () => effectiveProperties(id()),
+    queryKey: effectivePropertiesKey(dataId()),
+    queryFn: () => effectiveProperties(dataId()),
     enabled: !!component(),
   }));
   const metricsQ = useQuery(() => ({
-    queryKey: effectiveMetricsKey(id()),
-    queryFn: () => effectiveMetrics(id()),
+    queryKey: effectiveMetricsKey(dataId()),
+    queryFn: () => effectiveMetrics(dataId()),
     enabled: !!component(),
     refetchInterval: LEAF_POLL_MS,
   }));

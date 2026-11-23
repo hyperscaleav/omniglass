@@ -665,6 +665,22 @@ describe("the component leaf refreshes (#934)", () => {
     expect(count("/outposts")).toBe(0);
   });
 
+  // #2006: a name address redirects to the uuid; the reads keyed on the
+  // resolved uuid are already cached, so the redirect must not refetch them
+  // (a refetch sent the sections back to loading and collapsed them).
+  it("does not refetch its reads when a name address resolves to the uuid", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => json({}));
+    mount("/web/components/videobar-1");
+    await vi.waitFor(() => expect(window.location.pathname).toBe(`/web/components/${uuidFor("cf-c-bar")}`));
+    await new Promise((r) => setTimeout(r, 50));
+    const paths = fetchSpy.mock.calls.map((c) => new URL((c[0] as Request).url).pathname);
+    // Every read keyed on the component is already cached under its uuid.
+    // (The sections the mount does not seed read once either way.)
+    const seeded = ["/systems", "/reachability", "/alarms", "/properties", "/metrics"];
+    expect(paths.filter((x) => x.includes("/components/") && seeded.some((p) => x.endsWith(p)))).toEqual([]);
+    expect(screen.getByTestId("leaf-alarms").textContent).toContain("No route to host");
+  });
+
   it("holds the poll while the tab is hidden", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => json({}));
