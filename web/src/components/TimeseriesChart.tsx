@@ -1,4 +1,4 @@
-import { For, Show, createMemo } from "solid-js";
+import { For, Show, createMemo, createSignal, onCleanup } from "solid-js";
 import { bucketLayout, chartLayout, nearestByTime, timeAtX, xAtTime, type ChartBucket, type ChartPoint, type ChartSample } from "../lib/chart";
 import { useCursor } from "../lib/cursor";
 import { fmtTime } from "../lib/format";
@@ -31,8 +31,19 @@ export default function TimeseriesChart(props: {
   windowMs: number;
   unit?: string;
   spark?: boolean;
+  // `fluid` draws at the width it is given instead of scaling a 640-wide
+  // frame (#2424): in a narrow card a scaled frame shrinks its text below
+  // reading size, so a fluid chart measures itself and lays out at 1:1.
+  fluid?: boolean;
 }) {
-  const W = () => (props.spark ? 160 : 640);
+  const [measured, setMeasured] = createSignal<number | undefined>(undefined);
+  const W = () => (props.spark ? 160 : (props.fluid && measured()) || 640);
+  const observe = (el: SVGSVGElement) => {
+    if (!props.fluid || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => setMeasured(Math.round(e.contentRect.width) || undefined));
+    ro.observe(el);
+    onCleanup(() => ro.disconnect());
+  };
   const H = () => (props.spark ? 36 : 170);
   const frame = createMemo(() => ({
     width: W(),
@@ -110,7 +121,8 @@ export default function TimeseriesChart(props: {
       <svg
         data-testid={props.spark ? "sparkline" : "timeseries-chart"}
         viewBox={`0 0 ${W()} ${H()}`}
-        class={props.spark ? "h-9 w-40" : "w-full max-w-3xl rounded-field focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"}
+        ref={observe}
+        class={props.spark ? "h-9 w-40" : `w-full ${props.fluid ? "" : "max-w-3xl "}rounded-field focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50`}
         role="img"
         aria-label={hover()?.point ? `The series over the window, newest at the right. At the cursor: ${tip(hover()!.point!)}` : "The series over the window, newest at the right"}
         tabindex={props.spark ? undefined : 0}
@@ -176,9 +188,11 @@ export default function TimeseriesChart(props: {
                     <circle cx={p().x} cy={p().y} r="4" class="fill-primary stroke-base-100" stroke-width="1.5" />
                     <text
                       data-testid="cursor-value"
-                      x={Math.min(Math.max(h().x, 70), W() - 70)}
+                      // Beside the line, on the side with room: a readout
+                      // centered on a line near an edge runs off the frame.
+                      x={h().x < W() / 2 ? h().x + 6 : h().x - 6}
                       y="10"
-                      text-anchor="middle"
+                      text-anchor={h().x < W() / 2 ? "start" : "end"}
                       class="fill-base-content"
                       font-size="10"
                       style={{ "font-variant-numeric": "tabular-nums" }}

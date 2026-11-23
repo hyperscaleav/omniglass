@@ -36,6 +36,8 @@ import { componentAlarmsRead, componentAlarmsReadKey, splitAlarms } from "../lib
 import { lifecycleRows } from "../lib/lifecycle";
 import { effectiveProperties, effectivePropertiesKey } from "../lib/component_properties";
 import { effectiveMetrics, effectiveMetricsKey } from "../lib/component_metrics";
+import MetricsGrid from "../components/MetricsGrid";
+import { useTimeRange } from "../lib/time_range";
 import { CalcRuleLink } from "../components/RuleLink";
 import { durationText } from "../lib/timeline";
 import { getOutpost, outpostKey } from "../lib/outposts";
@@ -173,6 +175,8 @@ export default function ComponentLeaf() {
   const identity = createMemo(() => identityRows(propsQ.data ?? []));
   const lifecycle = createMemo(() => lifecycleRows(propsQ.data ?? [], metricsQ.data ?? []));
   const vitals = createMemo(() => vitalRows(metricsQ.data ?? []));
+  // The page's time range (#2304): the metrics grid charts over it.
+  const { range } = useTimeRange();
   // The vitals rows are kept by metric name, never by the objects a poll
   // hands back (each poll is fresh), so an opened row and its tooltip survive
   // the next poll, the rule the collection rows below follow (#1059).
@@ -484,6 +488,7 @@ export default function ComponentLeaf() {
                 </dl>
               </section>
             </Show>
+            <MetricsGrid kind="components" id={id()} range={range()} />
             <section data-testid="leaf-collection" class="rounded-box border border-base-300 bg-base-100 p-3.5 text-sm">
               <Eyebrow label="Collection" hint="How this component is read: each endpoint, the outpost collecting it, and the ladder it climbs bottom up (a ping, informational only; the transport answering, the gate; then the login). A held session's state sits beside it. A stale sample under a healthy outpost points at the component or the path, not at collection." />
               <Show when={reach.data && (reach.data.endpoints ?? []).length > 0} fallback={<p class="text-base-content/60">No endpoint declared yet, so nothing collects from this component.</p>}>

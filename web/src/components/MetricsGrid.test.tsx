@@ -1,0 +1,127 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@solidjs/testing-library";
+import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
+import { createSignal } from "solid-js";
+import MetricsGrid from "./MetricsGrid";
+import type { TimeRange } from "../lib/time_range";
+
+// The metrics grid (#2424): one card per effective metric of a component or a
+// system over the page's range, every chart on one shared cursor. It takes
+// plain props and holds no page logic, so it is tested on its own, against the
+// real reads (fetch stubbed at the wire).
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
+const HOUR = 3600_000;
+const metrics = [
+  { metric_type_name: "cpu-load", label: "CPU load", unit: "percent", value: 42.5, is_sampled: true, from_contract: true, instance: "" },
+  { metric_type_name: "rtt", label: "Round trip", unit: "ms", value: 3, is_sampled: true, from_contract: true, instance: "" },
+  { metric_type_name: "fan-speed", label: "Fan speed", value: 0, is_sampled: false, from_contract: true, instance: "" },
+];
+
+// Buckets ending now, one every `res` seconds, the last few hours filled.
+function buckets(hours: number, res: number, base: number) {
+  const now = Date.now();
+  const n = Math.floor((hours * HOUR) / (res * 1000));
+  const start = Math.floor((now - hours * HOUR) / (res * 1000)) * res * 1000;
+  return Array.from({ length: n }, (_, i) => {
+    const v = base + (i % 7);
+    return { ts: new Date(start + i * res * 1000).toISOString(), count: 1, min: v, max: v, avg: v, last: v };
+  });
+}
+
+function stub(reads: string[]) {
+  const json = (b: unknown) => Promise.resolve(new Response(JSON.stringify(b), { status: 200, headers: { "content-type": "application/json" } }));
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((input: RequestInfo | URL) => {
+      const req = input instanceof Request ? input : new Request(String(input));
+      const u = new URL(req.url);
+      const path = u.pathname.replace(/^\/api\/v1/, "");
+      reads.push(path + u.search);
+      if (path === "/components/cam-1/metrics" || path === "/systems/room-1/metrics") return json({ metrics });
+      const m = path.match(/\/metrics\/([^/]+)\/samples$/);
+      if (m) {
+        const hours = Number(u.searchParams.get("hours"));
+        const res = Number(u.searchParams.get("resolution"));
+        if (m[1] === "fan-speed") return json({ buckets: [] });
+        return json({ buckets: buckets(hours, res, m[1] === "cpu-load" ? 40 : 2) });
+      }
+      return json({});
+    }),
+  );
+}
+
+function mount(kind: "components" | "systems", id: string, range: () => TimeRange) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(() => (
+    <QueryClientProvider client={qc}>
+      <MetricsGrid kind={kind} id={id} range={range()} />
+    </QueryClientProvider>
+  ));
+}
+
+describe("MetricsGrid", () => {
+  it("draws one card per effective metric, a metric with no data in range included and marked", async () => {
+    stub([]);
+    mount("components", "cam-1", () => ({ kind: "preset", preset: "6h" }));
+    await waitFor(() => expect(screen.getAllByTestId("timeseries-chart")).toHaveLength(2));
+    const cards = screen.getAllByTestId(/^metric-card-/);
+    expect(cards.map((c) => c.dataset.testid)).toEqual(["metric-card-cpu-load", "metric-card-rtt", "metric-card-fan-speed"]);
+    const cpu = screen.getByTestId("metric-card-cpu-load");
+    expect(within(cpu).getByText("CPU load")).toBeTruthy();
+    expect(within(cpu).getByText("42.5")).toBeTruthy();
+    expect(within(cpu).getByText("percent")).toBeTruthy();
+    const fan = screen.getByTestId("metric-card-fan-speed");
+    expect(within(fan).getByText("No data in range")).toBeTruthy();
+    expect(within(fan).queryByTestId("timeseries-chart")).toBeNull();
+  });
+
+  // A sampled metric names its instance (here the owner-level "").
+  const read = (reads: string[], prefix: string) => reads.some((r) => r.startsWith(prefix));
+
+  it("re-reads every series when the page range changes", async () => {
+    const reads: string[] = [];
+    stub(reads);
+    const [range, setRange] = createSignal<TimeRange>({ kind: "preset", preset: "24h" });
+    mount("systems", "room-1", range);
+await waitFor(() => expect(read(reads, "/systems/room-1/metrics/rtt/samples?hours=24&resolution=300")).toBe(true));
+    setRange({ kind: "preset", preset: "1h" });
+    await waitFor(() => expect(read(reads, "/systems/room-1/metrics/rtt/samples?hours=1&resolution=60")).toBe(true));
+    await waitFor(() => expect(read(reads, "/systems/room-1/metrics/fan-speed/samples?hours=1&resolution=60")).toBe(true));
+  });
+
+  it("an absolute range reads back to its start and draws only its own window", async () => {
+    const reads: string[] = [];
+    stub(reads);
+    const to = Date.now() - 2 * HOUR;
+    mount("systems", "room-1", () => ({ kind: "absolute", from: to - 3 * HOUR, to }));
+    await waitFor(() => expect(reads.some((r) => /rtt\/samples\?hours=[56]&resolution=60&/.test(r))).toBe(true));
+    await waitFor(() => expect(screen.getAllByTestId("timeseries-chart")).toHaveLength(2));
+  });
+
+  it("hovering one chart puts the crosshair at the same instant on every chart in the grid; leaving clears all", async () => {
+    stub([]);
+    mount("components", "cam-1", () => ({ kind: "preset", preset: "6h" }));
+    await waitFor(() => expect(screen.getAllByTestId("timeseries-chart")).toHaveLength(2));
+    const [a] = screen.getAllByTestId("timeseries-chart");
+    (a as unknown as SVGSVGElement).getBoundingClientRect = () => ({ left: 0, top: 0, width: 640, height: 170, right: 640, bottom: 170, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+    fireEvent.mouseMove(a, { clientX: 320 });
+    const hairs = screen.getAllByTestId("chart-crosshair");
+    expect(hairs).toHaveLength(2);
+    expect(hairs.every((h) => h.querySelector("[data-testid=cursor-value]"))).toBe(true);
+    const x = (h: Element) => h.querySelector("[data-testid=cursor-line]")!.getAttribute("x1");
+    expect(x(hairs[1])).toBe(x(hairs[0]));
+    fireEvent.mouseLeave(a);
+    expect(screen.queryAllByTestId("chart-crosshair")).toHaveLength(0);
+  });
+
+  it("draws nothing when the entity has no metrics", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify({ metrics: [] }), { status: 200, headers: { "content-type": "application/json" } }))));
+    mount("components", "cam-1", () => ({ kind: "preset", preset: "6h" }));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByTestId("metrics-grid")).toBeNull();
+  });
+});

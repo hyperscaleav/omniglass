@@ -10,6 +10,7 @@ import { REACHABILITY_KEY, type Reachability } from "../lib/reachability";
 import { componentAlarmsReadKey } from "../lib/alarms";
 import { effectivePropertiesKey } from "../lib/component_properties";
 import { effectiveMetricsKey } from "../lib/component_metrics";
+import { metricBucketsKey } from "../lib/series";
 import { outpostKey, type Outpost } from "../lib/outposts";
 import { PRODUCTS_KEY } from "../lib/products";
 import { LOCATIONS_KEY } from "../lib/locations";
@@ -335,6 +336,21 @@ describe("the leaf's dispatch facts (#786)", () => {
     const card = screen.getByTestId("leaf-vitals");
     expect(within(card).getByText("RTT avg")).toBeTruthy();
     expect(within(card).getByText("6.1")).toBeTruthy();
+  });
+
+  // #2424: the component page charts what Vitals lists, over the page's
+  // range (the address's ?range), one card per effective metric.
+  it("charts every effective metric in the metrics grid over the page's range", async () => {
+    mount(`/web/components/${uuidFor("cf-c-bar")}?range=1h`);
+    const t = new Date(Date.now() - 10 * 60_000).toISOString();
+    leafClient!.setQueryData([...metricBucketsKey("components", uuidFor("cf-c-bar"), "icmp-rtt-avg", 1, 60)], {
+      coveredFrom: null,
+      buckets: [{ ts: t, count: 2, min: 5.9, max: 6.3, avg: 6.1, last: 6.1 }],
+    });
+    const grid = await screen.findByTestId("metrics-grid");
+    expect(within(grid).getByText("Last 1 hour")).toBeTruthy();
+    const card = within(grid).getByTestId("metric-card-icmp-rtt-avg");
+    expect(await within(card).findByTestId("timeseries-chart")).toBeTruthy();
   });
 
   // #1550: a metric's unit rides after its value in the muted style, and a
