@@ -1,6 +1,6 @@
 import { createMemo, createSignal, For, Show, type JSX } from "solid-js";
 import { Dynamic } from "solid-js/web";
-import { Popover } from "@kobalte/core/popover";
+import Popover from "./ui/Popover";
 import { ChevronRight, CircleCheck, CircleDashed, LayoutDashboard, OctagonX, Plus, TriangleAlert, resolveIcon } from "./icons";
 import type { ComponentGroup, ComponentRow, Lights, LocationNode } from "../lib/outline";
 import { NO_COMPONENTS } from "../lib/outline";
@@ -376,18 +376,19 @@ type AddTarget = { id: string; label: string; kinds: AddKind[] };
 function AddMenu(props: { name: string; targets: AddTarget[]; onAdd: (locationId: string, kind: AddKind) => void }) {
   const [open, setOpen] = createSignal(false);
   return (
-    <Popover open={open()} onOpenChange={setOpen} placement="bottom-end" gutter={4}>
-      <Popover.Trigger
-        tabindex={-1}
-        data-add
-        class="grid h-6 w-6 cursor-pointer place-items-center rounded-md border border-base-content/15 text-base-content/70 opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100 data-[expanded]:opacity-100 hover:text-base-content"
-        aria-label={`Add under ${props.name}`}
-        title={`Add under ${props.name} (+)`}
-      >
-        <Plus size={13} />
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Content class="z-50 w-52 rounded-box border border-base-300 bg-base-100 p-1 shadow-2xl focus:outline-none">
+    <Popover
+      open={open()}
+      onOpenChange={setOpen}
+      placement="bottom-end"
+      gutter={4}
+      tabindex={-1}
+      data-add
+      class="grid h-6 w-6 cursor-pointer place-items-center rounded-md border border-base-content/15 text-base-content/70 opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100 data-[expanded]:opacity-100 hover:text-base-content"
+      aria-label={`Add under ${props.name}`}
+      title={`Add under ${props.name} (+)`}
+      contentClass="z-50 w-52 rounded-box border border-base-300 bg-base-100 p-1 shadow-2xl focus:outline-none"
+      content={
+        <>
           <For each={props.targets}>
             {(t, i) => (
               <div role="group" aria-label={`Under ${t.label}`} classList={{ "mt-1 border-t border-base-300 pt-1": i() > 0 }}>
@@ -406,8 +407,10 @@ function AddMenu(props: { name: string; targets: AddTarget[]; onAdd: (locationId
               </div>
             )}
           </For>
-        </Popover.Content>
-      </Popover.Portal>
+        </>
+      }
+    >
+      <Plus size={13} />
     </Popover>
   );
 }

@@ -219,8 +219,8 @@ describe("Standards page", () => {
     });
     mount();
     fireEvent.click(screen.getByRole("button", { name: /new standard/i }));
-    expect(await screen.findByRole("button", { name: "From scratch" })).toHaveAttribute("aria-pressed", "true");
-    fireEvent.click(screen.getByRole("button", { name: "From a template" }));
+    expect(await screen.findByRole("radio", { name: "From scratch" })).toBeChecked();
+    fireEvent.click(screen.getByRole("radio", { name: "From a template" }));
     const picker = (await screen.findByLabelText("Template")) as HTMLSelectElement;
     // Only this kind's templates.
     expect(Array.from(picker.options).map((o) => o.value)).toEqual(["", "huddle"]);
@@ -237,7 +237,7 @@ describe("Standards page", () => {
     mount({ ...admin, permissions: ["standard:read", "standard:create"] });
     fireEvent.click(screen.getByRole("button", { name: /new standard/i }));
     expect(await screen.findByText("Create standard")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "From a template" })).toBeNull();
+    expect(screen.queryByRole("radio", { name: "From a template" })).toBeNull();
   });
 
   // A standard created from a template lands here (#1329): ?open= opens its blade and
