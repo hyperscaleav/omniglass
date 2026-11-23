@@ -167,7 +167,7 @@ a location holding none or several renders its own subject card,
   the left, the primary at the right. A locked official row replaces both with one note, "Official,
   read-only"; a kind whose API has no write route (secret types, templates) draws no write button
   at all and says why in one line. `catalog_readonly.test.tsx` reads "has a write route" from the
-  generated route table (`api/paths.gen.ts`) and fails a disabled button on a kind without one. A
+  generated route table (`web/src/api/paths.gen.ts`) and fails a disabled button on a kind without one. A
   lock for a missing permission still greys its button, with the permission it needs on the tooltip,
   because that button works for someone else. Where the app rail plus the catalog subrail would leave
   a list under about 300 px (below 1100 px wide) the subrail folds behind one button that names the
