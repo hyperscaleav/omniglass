@@ -1,12 +1,13 @@
 import { For, Index, Show, createContext, createEffect, createMemo, createSignal, createUniqueId, on, useContext, type JSX } from "solid-js";
 import { createStore } from "solid-js/store";
-import { A, useSearchParams } from "@solidjs/router";
+import { A } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import Drawer from "../components/Drawer";
 import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
 import KVStacked from "../components/KVStacked";
+import CatalogRef, { KeyRef } from "../components/CatalogRef";
 import Eyebrow from "../components/Eyebrow";
 import InfoTip from "../components/InfoTip";
 import ExpressionField from "../components/ExpressionField";
@@ -186,28 +187,9 @@ export default function CalcRules(): JSX.Element {
     setEditing(null);
     blades.push({ kind: "calc-rule", id: name });
   };
-  // A link may name a rule (/calc-rules?rule=<name or uuid>): a calculated
-  // value on a component or a system points at the rule that derived it.
-  const [search, setSearch] = useSearchParams();
-  const linked = () => (typeof search.rule === "string" && search.rule ? search.rule : undefined);
-  createEffect(
-    on(linked, (ref) => {
-      if (!ref) return;
-      const top = blades.stack().at(-1);
-      if (top?.kind === "calc-rule" && top.id === ref) return;
-      blades.close();
-      blades.push({ kind: "calc-rule", id: ref });
-    }),
-  );
-  createEffect(
-    on(
-      () => blades.stack().length,
-      (n, prev) => {
-        if (n === 0 && (prev ?? 0) > 0 && linked()) setSearch({ rule: undefined });
-      },
-      { defer: true },
-    ),
-  );
+  // A link names a calc rule through the list's drawer address (/calc-rules?open=<name
+  // or uuid>, drawerHref): a calculated value on a component or a system points at the
+  // rule that derived it. The older ?rule= still opens.
 
   const columns: FlatColumn<CalcRule>[] = [
     identityColumn<CalcRule>(),
@@ -238,6 +220,8 @@ export default function CalcRules(): JSX.Element {
             columns,
             empty: "No calc rules yet. A calc rule derives a value from others: whether a component is busy from its call state and occupancy, a system's average temperature from its members.",
             rowId: (r) => r.name,
+            rowAlt: (r) => r.id,
+            legacyParam: "rule",
             blades: { registry: { "calc-rule": calcRuleBlade }, rootKind: "calc-rule", controller: blades },
             railExtra: () => (
               <span class="mr-1 inline-flex items-center gap-1.5 text-[12px] text-base-content/50">
@@ -306,7 +290,7 @@ function SelectorFacts(p: { rule: CalcRule }): JSX.Element {
   return (
     <Show when={types().length + ids().length > 0} fallback={<span class="text-sm text-base-content/60">{sys() ? "Every system" : "Every component"}</span>}>
       <div class="flex flex-wrap gap-1.5">
-        <For each={types()}>{(t) => <span class="badge badge-ghost badge-sm font-data" title={sys() ? "System type" : "Component type"}>{t}</span>}</For>
+        <For each={types()}>{(t) => <span class="badge badge-ghost badge-sm" title={sys() ? "System type" : "Component type"}><CatalogRef kind={sys() ? "system_type" : "component_type"} name={t} /></span>}</For>
         <For each={ids()}>
           {(id) => <A href={`/${sys() ? "systems" : "components"}/${id}`} class="badge badge-outline badge-sm hover:underline">{nameOf(id)}</A>}
         </For>
@@ -510,7 +494,7 @@ function CalcBladeBody(p: { name: string }): JSX.Element {
               }
             />
             <KVStacked label="Version" value={<span class="tabular-nums">{r().version}</span>} />
-            <KVStacked label="Writes" value={<span class="inline-flex items-center gap-1.5"><span class="font-data">{r().output_key}</span><span class="text-[11px] text-base-content/40">{r().output_lane}</span><InfoTip label="output" text={CALC_HINTS.output} /></span>} />
+            <KVStacked label="Writes" value={<span class="inline-flex items-center gap-1.5"><CatalogRef kind={r().output_lane === "property" ? "property" : "metric"} name={r().output_key} /><span class="text-[11px] text-base-content/40">{r().output_lane}</span><InfoTip label="output" text={CALC_HINTS.output} /></span>} />
           </div>
           <Show when={r().description}>
             <KVStacked label="Description" value={<span class="text-base-content/80">{r().description}</span>} />
@@ -525,7 +509,7 @@ function CalcBladeBody(p: { name: string }): JSX.Element {
                 {(i) => (
                   <>
                     <code class="font-data text-[12px] text-base-content/60">{i.alias}</code>
-                    <span class="font-data text-[12px]">{i.key}</span>
+                    <span class="text-[12px]"><KeyRef name={i.key} /></span>
                   </>
                 )}
               </For>

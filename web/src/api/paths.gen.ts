@@ -601,7 +601,7 @@ export interface paths {
   "/components": {
     get: {
       path: never;
-      query: never;
+      query: NonNullable<Parameters<typeof og.listComponents>[0]>;
       body: never;
       bodyRequired: false;
       data: og.listComponentsResponseSuccess["data"];
@@ -2117,7 +2117,7 @@ export interface paths {
   "/products": {
     get: {
       path: never;
-      query: never;
+      query: NonNullable<Parameters<typeof og.listProducts>[0]>;
       body: never;
       bodyRequired: false;
       data: og.listProductsResponseSuccess["data"];
@@ -2663,7 +2663,7 @@ export interface paths {
   "/systems": {
     get: {
       path: never;
-      query: never;
+      query: NonNullable<Parameters<typeof og.listSystems>[0]>;
       body: never;
       bodyRequired: false;
       data: og.listSystemsResponseSuccess["data"];

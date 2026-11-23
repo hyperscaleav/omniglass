@@ -221,7 +221,6 @@ test.describe("operator console", () => {
     await page.getByRole("button", { name: /create location/i }).click();
     await page.waitForURL(/\/web\/locations\/[0-9a-f-]{36}/);
     const campusId = page.url().match(/locations\/([0-9a-f-]{36})/)![1];
-    await page.getByRole("button", { name: /^cancel$/i }).first().click();
 
     // Create where you stand: the row's + places the new row under it. Once
     // the campus holds one building the two fold into one row ("Campus /
@@ -236,7 +235,7 @@ test.describe("operator console", () => {
       await page.getByLabel("Location type").selectOption("building");
       await page.getByLabel("Name", { exact: true }).fill(`${campus}-${suffix}`);
       await page.getByRole("button", { name: /create location/i }).click();
-      await page.waitForURL(/\/web\/locations\/[0-9a-f-]{36}\?edit=1/);
+      await page.waitForURL(/\/web\/locations\/[0-9a-f-]{36}$/);
       buildingIds.push(page.url().match(/locations\/([0-9a-f-]{36})/)![1]);
     }
     const [buildingId, secondId] = buildingIds;
@@ -257,7 +256,7 @@ test.describe("operator console", () => {
     await page.waitForURL(/\/web\/systems\/create\?under=/);
     await page.getByLabel("Name", { exact: true }).fill(`${campus}-sys`);
     await page.getByRole("button", { name: /create system/i }).click();
-    await page.waitForURL(/\/web\/systems\/[0-9a-f-]{36}\?edit=1/);
+    await page.waitForURL(/\/web\/systems\/[0-9a-f-]{36}$/);
     const systemId = page.url().match(/systems\/([0-9a-f-]{36})/)![1];
 
     // The outline: the campus says what it holds in the catalog's words, and

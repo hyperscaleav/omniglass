@@ -8,6 +8,7 @@ import BladeField, { EMPTY_VALUE } from "../components/BladeField";
 import InheritedField from "../components/InheritedField";
 import InheritedCell from "../components/InheritedCell";
 import KVStacked from "../components/KVStacked";
+import CatalogRef from "../components/CatalogRef";
 import { useFormActions } from "../lib/formactions";
 import SystemTypeSelect from "../components/SystemTypeSelect";
 import { Plus, resolveIcon } from "../components/icons";
@@ -239,7 +240,7 @@ function SystemTypeBladeBody(p: { id: string }): JSX.Element {
             <KVStacked label="Id" value={<span class="font-data text-xs text-base-content/60">{r().id}</span>} />
             <KVStacked
               label="Parent"
-              value={r().parent ? <span class="font-data">{r().parent}</span> : <span class="text-base-content/50">Root</span>}
+              value={r().parent ? <CatalogRef kind="system_type" name={r().parent} /> : <span class="text-base-content/50">Root</span>}
             />
           </div>
           <BladeField

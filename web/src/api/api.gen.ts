@@ -4646,6 +4646,8 @@ export type ListComponentsOutputBody = {
   readonly $schema?: string;
   /** @nullable */
   components: ComponentBody[] | null;
+  /** How many components matched the filters, before limit capped the page. With no filter, how many the caller may read. */
+  total: number;
 };
 
 export type ListDriversOutputBody = {
@@ -5643,6 +5645,8 @@ export type ListSystemsOutputBody = {
   readonly $schema?: string;
   /** @nullable */
   systems: SystemBody[] | null;
+  /** How many systems matched the filter, before limit capped the page. With no filter, how many the caller may read. */
+  total: number;
 };
 
 /**
@@ -9516,6 +9520,20 @@ export type GetCalcRuleStateParams = {
   limit?: number;
 };
 
+export type ListComponentsParams = {
+  /** Only components of this product (name or uuid) */
+  product?: string;
+  /** Only components of a product this driver serves (name or uuid) */
+  driver?: string;
+  /** Only components of a product classified under exactly this component type (name or uuid) */
+  component_type?: string;
+  /**
+   * Cap the page at this many rows; 0 or absent is no cap. total still counts every match.
+   * @minimum 0
+   */
+  limit?: number;
+};
+
 export type ListComponentAlarmsParams = {
   /** Include cleared alarms, so the list is the history rather than what is wrong now */
   include_cleared?: boolean;
@@ -9683,10 +9701,27 @@ export const ListNotificationStatus = {
   '': '',
 } as const;
 
+export type ListProductsParams = {
+  /** Only products whose contract declares this metric (name or uuid) */
+  declares_metric?: string;
+  /** Only products whose contract declares this property (name or uuid) */
+  declares_property?: string;
+};
+
 /**
  * an RFC 7386 JSON Merge Patch for the namespace; null on a key restores it
  */
 export type PatchSettingsNamespaceBody = {[key: string]: unknown};
+
+export type ListSystemsParams = {
+  /** Only systems built to this standard (name or uuid) */
+  standard?: string;
+  /**
+   * Cap the page at this many rows; 0 or absent is no cap. total still counts every match.
+   * @minimum 0
+   */
+  limit?: number;
+};
 
 export type GetSystemHealthParams = {
   /** Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent */
@@ -12783,21 +12818,28 @@ export type listComponentsResponseError = (listComponentsResponseDefault) & {
 
 export type listComponentsResponse = (listComponentsResponseSuccess | listComponentsResponseError)
 
-export const getListComponentsUrl = () => {
+export const getListComponentsUrl = (params?: ListComponentsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/components`
+  return stringifiedParams.length > 0 ? `/components?${stringifiedParams}` : `/components`
 }
 
 /**
- * Lists the components the caller may read, each filtered to its scope subtree. Gated by component:read.
+ * Lists the components the caller may read, each filtered to its scope subtree. Optional product, driver and component_type filters narrow to the components a catalog row classifies or a driver serves, and limit caps the page while total counts every match (the catalog drawers' used-by reads). Gated by component:read.
  * @summary List components in scope
  */
-export const listComponents = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listComponentsResponse> => {
+export const listComponents = async (params?: ListComponentsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listComponentsResponse> => {
 
-  return ogFetch<listComponentsResponse>(getListComponentsUrl(),
+  return ogFetch<listComponentsResponse>(getListComponentsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -20027,21 +20069,28 @@ export type listProductsResponseError = (listProductsResponseDefault) & {
 
 export type listProductsResponse = (listProductsResponseSuccess | listProductsResponseError)
 
-export const getListProductsUrl = () => {
+export const getListProductsUrl = (params?: ListProductsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/products`
+  return stringifiedParams.length > 0 ? `/products?${stringifiedParams}` : `/products`
 }
 
 /**
- * Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
+ * Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. declares_metric and declares_property narrow it to the products whose contract declares that key. Gated by product:read.
  * @summary List products
  */
-export const listProducts = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listProductsResponse> => {
+export const listProducts = async (params?: ListProductsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listProductsResponse> => {
 
-  return ogFetch<listProductsResponse>(getListProductsUrl(),
+  return ogFetch<listProductsResponse>(getListProductsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -22658,21 +22707,28 @@ export type listSystemsResponseError = (listSystemsResponseDefault) & {
 
 export type listSystemsResponse = (listSystemsResponseSuccess | listSystemsResponseError)
 
-export const getListSystemsUrl = () => {
+export const getListSystemsUrl = (params?: ListSystemsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/systems`
+  return stringifiedParams.length > 0 ? `/systems?${stringifiedParams}` : `/systems`
 }
 
 /**
- * Lists the systems the caller may read, each filtered to its scope subtree. Gated by system:read.
+ * Lists the systems the caller may read, each filtered to its scope subtree. An optional standard filter narrows to the systems built to one standard, and limit caps the page while total counts every match. Gated by system:read.
  * @summary List systems in scope
  */
-export const listSystems = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listSystemsResponse> => {
+export const listSystems = async (params?: ListSystemsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listSystemsResponse> => {
 
-  return ogFetch<listSystemsResponse>(getListSystemsUrl(),
+  return ogFetch<listSystemsResponse>(getListSystemsUrl(params),
   {
     ...options,
     method: 'GET'

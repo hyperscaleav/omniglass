@@ -1,6 +1,7 @@
 import { For, Show, createEffect, createMemo, createSignal, useContext, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
+import CatalogRef from "./CatalogRef";
 import { Check, Pencil, Plus, Trash, X } from "./icons";
 import { COMPONENT_TYPES_KEY, listComponentTypes } from "../lib/component_types";
 import { PRODUCTS_KEY, listProducts } from "../lib/products";
@@ -583,13 +584,13 @@ export default function SlotEditor(props: { id: string; official: boolean }): JS
                           when={(r.accepted_types ?? []).length}
                           fallback={<span class="text-[11px] italic text-base-content/40">any type</span>}
                         >
-                          <For each={r.accepted_types ?? []}>{(c) => <span class="badge badge-ghost badge-sm font-data">{c}</span>}</For>
+                          <For each={r.accepted_types ?? []}>{(c) => <span class="badge badge-ghost badge-sm"><CatalogRef kind="component_type" name={c} /></span>}</For>
                         </Show>
                       </div>
                       <Show when={(r.pinned_products ?? []).length}>
                         <div class="flex flex-wrap items-center gap-1.5">
                           <span class="text-[10.5px] uppercase tracking-wide text-base-content/40">pinned to</span>
-                          <For each={r.pinned_products ?? []}>{(c) => <span class="badge badge-ghost badge-sm font-data">{c}</span>}</For>
+                          <For each={r.pinned_products ?? []}>{(c) => <span class="badge badge-ghost badge-sm"><CatalogRef kind="product" name={c} /></span>}</For>
                         </div>
                       </Show>
                     </div>

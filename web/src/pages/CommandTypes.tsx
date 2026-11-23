@@ -7,6 +7,8 @@ import FieldRow from "../components/FieldRow";
 import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
+import CatalogRef from "../components/CatalogRef";
+import { CommandTypeUsedBy } from "../components/CatalogUsage";
 import { useFormActions } from "../lib/formactions";
 import { bindSelectValue } from "../lib/selectvalue";
 import { Plus } from "../components/icons";
@@ -44,12 +46,15 @@ function originBadge(official: boolean): JSX.Element {
 // different stores and must be distinguishable at a glance.
 type TargetArms = { target_property_type?: string; target_metric_type?: string };
 
-function targetCell(arms: TargetArms): JSX.Element {
+function targetCell(arms: TargetArms, linked = false): JSX.Element {
   const name = arms.target_property_type || arms.target_metric_type;
   if (!name) return <span class="text-base-content/30">fire-and-forget</span>;
   return (
     <span class="inline-flex items-baseline gap-1.5">
-      <span class="font-data text-[12px]">{name}</span>
+      {/* The drawer opens the property or metric the command sets; a list row stays plain text, since a row click already opens this drawer. */}
+      {linked
+        ? <CatalogRef kind={arms.target_property_type ? "property" : "metric"} name={name} />
+        : <span class="font-data text-[12px]">{name}</span>}
       <span class="text-[10px] text-base-content/40">{arms.target_property_type ? "property" : "metric"}</span>
     </span>
   );
@@ -303,7 +308,7 @@ function CommandTypeBladeBody(p: { name: string }): JSX.Element {
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
             <KVStacked bind="name" value={<span class="font-data">{r().name}</span>} />
-            <KVStacked label="Target" value={targetCell(r())} />
+            <KVStacked label="Target" value={targetCell(r(), true)} />
             <KVStacked label="Settle window" value={<span class="tabular-nums">{r().settle_window_seconds}s</span>} />
             <KVStacked label="Origin" value={originBadge(r().official)} />
           </div>
@@ -326,6 +331,7 @@ function CommandTypeBladeBody(p: { name: string }): JSX.Element {
             </FieldRow>
             <SettleWindowField value={settle()} onInput={setSettle} targeted={targeted()} draft={settleDraft()} eyebrow />
           </Show>
+          <CommandTypeUsedBy name={r().name} />
         </div>
       )}
     </Show>

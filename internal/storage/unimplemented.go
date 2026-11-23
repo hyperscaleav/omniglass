@@ -669,6 +669,9 @@ func (UnimplementedGateway) ResolveSystemTypeFacts(context.Context, uuid.UUID) (
 
 func (UnimplementedGateway) UpsertProduct(context.Context, Product) error    { return nil }
 func (UnimplementedGateway) ListProducts(context.Context) ([]Product, error) { return nil, nil }
+func (UnimplementedGateway) ListProductsDeclaring(context.Context, string, string) ([]Product, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) GetProduct(context.Context, string) (*Product, error) {
 	return nil, nil
 }

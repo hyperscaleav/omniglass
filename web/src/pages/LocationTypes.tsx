@@ -6,6 +6,7 @@ import FieldRow from "../components/FieldRow";
 import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
+import CatalogRef from "../components/CatalogRef";
 import { useFormActions } from "../lib/formactions";
 import ContractEditor from "../components/ContractEditor";
 import { Plus } from "../components/icons";
@@ -335,7 +336,9 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
                   <For each={r().allowed_parent_types}>
                     {(pid) => (
                       <span class="badge badge-outline badge-sm">
-                        {parentTypeLabel(pid)}
+                        <Show when={pid !== ROOT_PLACEMENT} fallback={parentTypeLabel(pid)}>
+                          <CatalogRef kind="location_type" name={pid} />
+                        </Show>
                       </span>
                     )}
                   </For>

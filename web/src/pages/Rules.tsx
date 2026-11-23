@@ -1,6 +1,6 @@
 import { For, Show, createContext, createEffect, createMemo, createSignal, on, useContext, type JSX } from "solid-js";
 import { createStore } from "solid-js/store";
-import { A, useSearchParams } from "@solidjs/router";
+import { A } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import Drawer from "../components/Drawer";
@@ -15,6 +15,7 @@ import Button from "../components/Button";
 import AlarmTimeline, { createTimelineToggles } from "../components/AlarmTimeline";
 import { EVENT_TYPES_KEY, listEventTypes } from "../lib/event_types";
 import SeverityBadge from "../components/SeverityBadge";
+import CatalogRef from "../components/CatalogRef";
 import ComponentTypeSelect from "../components/ComponentTypeSelect";
 import { identityColumn } from "../components/IdentityCell";
 import { Pencil, Plus, Save, Trash, X } from "../components/icons";
@@ -130,10 +131,13 @@ function useMetricUnit(): (r: EventRule) => string | undefined {
   return (r) => (r.sample_lane === "metric" ? byName().get(r.sample_key) || undefined : undefined);
 }
 
-function readsCell(r: EventRule): JSX.Element {
+function readsCell(r: EventRule, linked = false): JSX.Element {
   return (
     <span class="flex min-w-0 flex-col leading-snug">
-      <span class="truncate font-data text-[12px]" title={r.sample_key}>{r.sample_key}</span>
+      {/* The drawer opens the metric or property the rule judges; a list row stays plain text, since a row click already opens this drawer. */}
+      <Show when={linked} fallback={<span class="truncate font-data text-[12px]" title={r.sample_key}>{r.sample_key}</span>}>
+        <CatalogRef kind={r.sample_lane === "property" ? "property" : "metric"} name={r.sample_key} />
+      </Show>
       <span class="text-[11px] text-base-content/40">{r.sample_lane}</span>
     </span>
   );
@@ -208,31 +212,9 @@ export default function Rules(): JSX.Element {
     setEditing(null);
     blades.push({ kind: "rule", id: name });
   };
-  // A link may name a rule (/event-rules?rule=<name or uuid>): an event row on Activity
-  // points at the rule that wrote it, and lands on its blade. The page follows
-  // the param as it changes (back and forward open the rule it names), and
-  // lets go of it when the blade stack closes, so a reload does not reopen a
-  // blade the operator closed.
-  const [search, setSearch] = useSearchParams();
-  const linked = () => (typeof search.rule === "string" && search.rule ? search.rule : undefined);
-  createEffect(
-    on(linked, (name) => {
-      if (!name) return;
-      const top = blades.stack().at(-1);
-      if (top?.kind === "rule" && top.id === name) return;
-      blades.close();
-      blades.push({ kind: "rule", id: name });
-    }),
-  );
-  createEffect(
-    on(
-      () => blades.stack().length,
-      (n, prev) => {
-        if (n === 0 && (prev ?? 0) > 0 && linked()) setSearch({ rule: undefined });
-      },
-      { defer: true },
-    ),
-  );
+  // A link names a rule through the list's drawer address (/event-rules?open=<name or
+  // uuid>, drawerHref): an event row on Activity points at the rule that wrote it. The
+  // older ?rule= still opens, and a uuid (an event written before a rename) resolves too.
 
   const columns: FlatColumn<EventRule>[] = [
     identityColumn<EventRule>(),
@@ -285,6 +267,8 @@ export default function Rules(): JSX.Element {
             columns,
             empty: "No rules yet.",
             rowId: (r) => r.name,
+            rowAlt: (r) => r.id,
+            legacyParam: "rule",
             blades: { registry: { rule: ruleBlade }, rootKind: "rule", controller: blades },
             railExtra: () => (
               <span class="mr-1 inline-flex items-center gap-1.5 text-[12px] text-base-content/50">
@@ -357,7 +341,7 @@ function SelectorFacts(p: { rule: EventRule }): JSX.Element {
   return (
     <Show when={types().length + comps().length > 0} fallback={<span class="text-sm text-base-content/60">Every component</span>}>
       <div class="flex flex-wrap gap-1.5">
-        <For each={types()}>{(t) => <span class="badge badge-ghost badge-sm font-data" title="Component type">{t}</span>}</For>
+        <For each={types()}>{(t) => <span class="badge badge-ghost badge-sm" title="Component type"><CatalogRef kind="component_type" name={t} /></span>}</For>
         <For each={comps()}>
           {(id) => (
             <A href={`/components/${id}`} class="badge badge-outline badge-sm hover:underline">
@@ -530,6 +514,9 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
                 <span class="inline-flex items-center gap-1.5">
                   {severityCell(r().severity)}
                   <InfoTip label="severity" text={RULE_HINTS.severity} />
+                  <Show when={r().severity}>
+                    <span class="text-[11px]"><CatalogRef kind="severity_level" name={r().severity} /></span>
+                  </Show>
                   <A href="/severity-levels" class="link text-[11px] text-base-content/50 hover:text-base-content">All levels</A>
                 </span>
               }
@@ -566,7 +553,7 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
 
           <section class="flex flex-col gap-2">
             <Eyebrow label="Reads" hint={RULE_HINTS.reads} />
-            <div>{readsCell(r())}</div>
+            <div>{readsCell(r(), true)}</div>
             <Eyebrow label="Watches" hint={RULE_HINTS.selector} class="mt-1" />
             <SelectorFacts rule={r()} />
           </section>
@@ -611,10 +598,10 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
             <Eyebrow label="Writes" hint={RULE_HINTS.events} />
             <div class="grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-1 text-sm">
               <span class="text-[12px] text-base-content/50">Starts</span>
-              <span class="font-data" data-testid="rule-fire-type">{r().fire_event_type}</span>
+              <span data-testid="rule-fire-type"><CatalogRef kind="event_type" name={r().fire_event_type} /></span>
               <span class="text-[12px] text-base-content/50">Ends</span>
               <span data-testid="rule-clear-type">
-                {r().clear_event_type ? <span class="font-data">{r().clear_event_type}</span> : <span class="text-base-content/50">no clear event</span>}
+                {r().clear_event_type ? <CatalogRef kind="event_type" name={r().clear_event_type} /> : <span class="text-base-content/50">no clear event</span>}
               </span>
             </div>
           </section>

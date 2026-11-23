@@ -4,6 +4,7 @@ import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
+import { VendorUsedBy } from "../components/CatalogUsage";
 import BladeField, { EMPTY_VALUE } from "../components/BladeField";
 import FieldRow from "../components/FieldRow";
 import { createIdentity, entityLabel } from "../lib/entities";
@@ -236,6 +237,7 @@ function VendorBladeBody(p: { id: string }): JSX.Element {
               </Show>
             }
           />
+          <VendorUsedBy name={r().name} />
         </div>
       )}
     </Show>

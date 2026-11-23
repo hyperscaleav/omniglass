@@ -390,6 +390,14 @@ func TestRunIdempotent(t *testing.T) {
 	if locs != len(fixtures.Locations) {
 		t.Errorf("locations = %d, want %d (seed not idempotent or incomplete)", locs, len(fixtures.Locations))
 	}
+	// The calc rule (#2430) landed once, enabled, writing its own metric.
+	var calcRules int
+	if err := conn.QueryRow(ctx, `select count(*) from calc_rule where not official and enabled`).Scan(&calcRules); err != nil {
+		t.Fatalf("count calc rules: %v", err)
+	}
+	if calcRules != len(fixtures.CalcRules) || calcRules == 0 {
+		t.Errorf("operator calc rules = %d, want %d (the Calc rules page must come up populated, once)", calcRules, len(fixtures.CalcRules))
+	}
 	var comps, systems, alarms int
 	if err := conn.QueryRow(ctx, fleetComponentCount).Scan(&comps); err != nil {
 		t.Fatalf("count components: %v", err)
