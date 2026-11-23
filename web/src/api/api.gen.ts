@@ -1920,6 +1920,17 @@ export type ComponentPropertyBody = {
   value_id: string;
 };
 
+export type SimFaultBody = {
+  /** What the profile defaults it to. */
+  default: string;
+  /** The state path, as the profile names it. */
+  path: string;
+  /** When the server first heard the device hold this value. */
+  since: string;
+  /** What it holds now. */
+  value: string;
+};
+
 export type ImpairmentFields = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -1971,6 +1982,11 @@ export type SimDeviceBody = {
   /** The component's name. */
   component: string;
   component_id: string;
+  /**
+     * The device's settable state paths the simulator reports held off their profile defaults (a display powered off), each with when the server first heard it. In memory, per server process, like the hits.
+     * @nullable
+     */
+  faults?: SimFaultBody[] | null;
   /** Connections and requests the simulated device has answered since the server started. */
   hits: number;
   hits_by_protocol: SimDeviceBodyHitsByProtocol;
@@ -1978,6 +1994,8 @@ export type SimDeviceBody = {
   impaired: boolean;
   /** What an operator has broken on the device; absent when healthy. */
   impairment?: ImpairmentFields;
+  /** When the impairment was last set; absent when healthy. */
+  impairment_since?: string;
   last_hit_at?: string;
   last_protocol?: string;
   /** The component's product; its name selects the simulator profile. */
@@ -2010,12 +2028,31 @@ export type SimOIDBody = {
   path: string;
 };
 
+export type SimSetBody = {
+  /** What the profile defaults the path to, when it does. */
+  default?: string;
+  /** The request body field its value comes from. */
+  field: string;
+  /** The state path the route writes. */
+  path: string;
+  /**
+     * The values the route accepts.
+     * @nullable
+     */
+  values: string[] | null;
+};
+
 export type SimRouteBody = {
   example?: string;
   method: string;
   path: string;
   /** A route the product's own web UI calls but does not advertise. */
   private?: boolean;
+  /**
+     * The state paths the route sets from a field of its body, each to a fixed list of values: what the console offers as quick sets.
+     * @nullable
+     */
+  sets?: SimSetBody[] | null;
   summary?: string;
 };
 

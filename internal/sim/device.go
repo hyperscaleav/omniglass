@@ -279,6 +279,10 @@ type Device struct {
 	// templateData passed into every render. Read-only by convention: the
 	// simulator never writes here, only the loader sets it once.
 	defaults map[string]any
+	// setPaths are the state paths the profile's routes set from a request
+	// body, in the order first declared; Faults reads them. Set while the
+	// profile loads, before the device serves.
+	setPaths []string
 
 	routes   []routeEntry
 	commands []commandEntry
@@ -1079,7 +1083,11 @@ func (d *Device) AddRoute(match, tmplPath string, tmplContent string, mutate map
 // list with list items running first. Pattern regex compile errors
 // surface here so a malformed profile fails loudly at load time.
 func (d *Device) AddRouteFromProfile(route *profile.Route, tmplContent string) error {
-	return d.addRoute(route.Match, route.Template, tmplContent, route.Mutate, route.Mutations, route.Events, route.Emit)
+	if err := d.addRoute(route.Match, route.Template, tmplContent, route.Mutate, route.Mutations, route.Events, route.Emit); err != nil {
+		return err
+	}
+	d.registerSets(route.Sets())
+	return nil
 }
 
 func (d *Device) addRoute(match, tmplPath, tmplContent string, mutate map[string]any, items []profile.Mutation, events []profile.RouteEvent, emit *profile.Emit) error {

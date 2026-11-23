@@ -80,11 +80,19 @@ type simProfilesOutput struct {
 }
 
 type simRouteBody struct {
-	Method  string `json:"method"`
-	Path    string `json:"path"`
-	Summary string `json:"summary,omitempty"`
-	Example string `json:"example,omitempty"`
-	Private bool   `json:"private,omitempty" doc:"A route the product's own web UI calls but does not advertise."`
+	Method  string       `json:"method"`
+	Path    string       `json:"path"`
+	Summary string       `json:"summary,omitempty"`
+	Example string       `json:"example,omitempty"`
+	Private bool         `json:"private,omitempty" doc:"A route the product's own web UI calls but does not advertise."`
+	Sets    []simSetBody `json:"sets,omitempty" doc:"The state paths the route sets from a field of its body, each to a fixed list of values: what the console offers as quick sets."`
+}
+
+type simSetBody struct {
+	Path    string   `json:"path" doc:"The state path the route writes."`
+	Field   string   `json:"field" doc:"The request body field its value comes from."`
+	Values  []string `json:"values" doc:"The values the route accepts."`
+	Default string   `json:"default,omitempty" doc:"What the profile defaults the path to, when it does."`
 }
 
 type simCommandBody struct {
@@ -202,8 +210,13 @@ func simSurface(p *profile.DeviceProfile, portOffset int) []simSurfaceBody {
 			if !ok {
 				method, path = "GET", r.Match
 			}
-			b.Routes = append(b.Routes, simRouteBody{Method: method, Path: path, Summary: r.Doc.Summary,
-				Example: r.Example, Private: r.Visibility == "private"})
+			rb := simRouteBody{Method: method, Path: path, Summary: r.Doc.Summary,
+				Example: r.Example, Private: r.Visibility == "private"}
+			for _, set := range r.Sets() {
+				def, _ := profile.DefaultAt(p.Defaults, set.Path)
+				rb.Sets = append(rb.Sets, simSetBody{Path: set.Path, Field: set.Field, Values: set.Values, Default: def})
+			}
+			b.Routes = append(b.Routes, rb)
 		}
 		for _, c := range iface.Commands {
 			match := c.Match

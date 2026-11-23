@@ -27,18 +27,27 @@ func WithSimStatus(f SimStatusFunc) Option {
 const simConnectedWindow = 90 * time.Second
 
 type simDeviceBody struct {
-	ComponentID    string            `json:"component_id"`
-	Component      string            `json:"component" doc:"The component's name."`
-	Product        string            `json:"product" doc:"The component's product; its name selects the simulator profile."`
-	Address        string            `json:"address" doc:"The host the component's endpoints target."`
-	Serving        bool              `json:"serving" doc:"Whether the simulator reported serving this component in its latest batch."`
-	Status         string            `json:"status" enum:"running,starting,failed,offline" doc:"What the simulator is doing with the component, most urgent first: offline (its simulator stopped reporting), starting (added since the simulator's last pull, or handed over moments ago), failed (handed to the simulator but not started), running."`
-	Hits           int               `json:"hits" doc:"Connections and requests the simulated device has answered since the server started."`
-	HitsByProtocol map[string]int    `json:"hits_by_protocol"`
-	LastHitAt      *time.Time        `json:"last_hit_at,omitempty"`
-	LastProtocol   string            `json:"last_protocol,omitempty"`
-	Impairment     *impairmentFields `json:"impairment,omitempty" doc:"What an operator has broken on the device; absent when healthy."`
-	Impaired       bool              `json:"impaired" doc:"Whether the simulator reported applying an impairment to the device in its latest batch."`
+	ComponentID     string            `json:"component_id"`
+	Component       string            `json:"component" doc:"The component's name."`
+	Product         string            `json:"product" doc:"The component's product; its name selects the simulator profile."`
+	Address         string            `json:"address" doc:"The host the component's endpoints target."`
+	Serving         bool              `json:"serving" doc:"Whether the simulator reported serving this component in its latest batch."`
+	Status          string            `json:"status" enum:"running,starting,failed,offline" doc:"What the simulator is doing with the component, most urgent first: offline (its simulator stopped reporting), starting (added since the simulator's last pull, or handed over moments ago), failed (handed to the simulator but not started), running."`
+	Hits            int               `json:"hits" doc:"Connections and requests the simulated device has answered since the server started."`
+	HitsByProtocol  map[string]int    `json:"hits_by_protocol"`
+	LastHitAt       *time.Time        `json:"last_hit_at,omitempty"`
+	LastProtocol    string            `json:"last_protocol,omitempty"`
+	Impairment      *impairmentFields `json:"impairment,omitempty" doc:"What an operator has broken on the device; absent when healthy."`
+	ImpairmentSince *time.Time        `json:"impairment_since,omitempty" doc:"When the impairment was last set; absent when healthy."`
+	Impaired        bool              `json:"impaired" doc:"Whether the simulator reported applying an impairment to the device in its latest batch."`
+	Faults          []simFaultBody    `json:"faults,omitempty" doc:"The device's settable state paths the simulator reports held off their profile defaults (a display powered off), each with when the server first heard it. In memory, per server process, like the hits."`
+}
+
+type simFaultBody struct {
+	Path    string    `json:"path" doc:"The state path, as the profile names it."`
+	Value   string    `json:"value" doc:"What it holds now."`
+	Default string    `json:"default" doc:"What the profile defaults it to."`
+	Since   time.Time `json:"since" doc:"When the server first heard the device hold this value."`
 }
 
 type simulationOutput struct {
@@ -108,6 +117,10 @@ func simulationBody(devices []storage.SimDevice, st simhub.Status, seen bool, no
 		if d.Impairment != nil {
 			f := impairmentFields(*d.Impairment)
 			b.Impairment = &f
+			b.ImpairmentSince = d.ImpairedSince
+		}
+		for _, f := range st.Faults[d.ComponentID] {
+			b.Faults = append(b.Faults, simFaultBody{Path: f.Path, Value: f.Value, Default: f.Default, Since: f.Since})
 		}
 		if h, ok := st.Devices[d.ComponentID]; ok {
 			b.Hits = h.Count

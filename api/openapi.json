@@ -15952,6 +15952,16 @@
           "component_id": {
             "type": "string"
           },
+          "faults": {
+            "description": "The device's settable state paths the simulator reports held off their profile defaults (a display powered off), each with when the server first heard it. In memory, per server process, like the hits.",
+            "items": {
+              "$ref": "#/components/schemas/SimFaultBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "hits": {
             "description": "Connections and requests the simulated device has answered since the server started.",
             "format": "int64",
@@ -15971,6 +15981,11 @@
           "impairment": {
             "$ref": "#/components/schemas/ImpairmentFields",
             "description": "What an operator has broken on the device; absent when healthy."
+          },
+          "impairment_since": {
+            "description": "When the impairment was last set; absent when healthy.",
+            "format": "date-time",
+            "type": "string"
           },
           "last_hit_at": {
             "format": "date-time",
@@ -16042,6 +16057,35 @@
           "protocol",
           "received",
           "overlapped"
+        ],
+        "type": "object"
+      },
+      "SimFaultBody": {
+        "additionalProperties": false,
+        "properties": {
+          "default": {
+            "description": "What the profile defaults it to.",
+            "type": "string"
+          },
+          "path": {
+            "description": "The state path, as the profile names it.",
+            "type": "string"
+          },
+          "since": {
+            "description": "When the server first heard the device hold this value.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "value": {
+            "description": "What it holds now.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "value",
+          "default",
+          "since"
         ],
         "type": "object"
       },
@@ -16463,6 +16507,16 @@
             "description": "A route the product's own web UI calls but does not advertise.",
             "type": "boolean"
           },
+          "sets": {
+            "description": "The state paths the route sets from a field of its body, each to a fixed list of values: what the console offers as quick sets.",
+            "items": {
+              "$ref": "#/components/schemas/SimSetBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "summary": {
             "type": "string"
           }
@@ -16470,6 +16524,39 @@
         "required": [
           "method",
           "path"
+        ],
+        "type": "object"
+      },
+      "SimSetBody": {
+        "additionalProperties": false,
+        "properties": {
+          "default": {
+            "description": "What the profile defaults the path to, when it does.",
+            "type": "string"
+          },
+          "field": {
+            "description": "The request body field its value comes from.",
+            "type": "string"
+          },
+          "path": {
+            "description": "The state path the route writes.",
+            "type": "string"
+          },
+          "values": {
+            "description": "The values the route accepts.",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "path",
+          "field",
+          "values"
         ],
         "type": "object"
       },
