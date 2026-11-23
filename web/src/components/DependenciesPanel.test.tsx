@@ -112,6 +112,13 @@ describe("DependenciesPanel", () => {
     expect(within(q.getByTestId("dep-downstream")).queryByTestId("dep-holding")).toBeNull();
   });
 
+  it("names a holder further up the chain that is not a direct upstream", () => {
+    const q = mount({ holdBy: SWITCH });
+    expect(within(q.getByTestId("dep-upstream")).queryByTestId("dep-holding")).toBeNull();
+    const note = q.getByTestId("dep-held-through");
+    expect(within(note).getByRole("link", { name: "Core switch" }).getAttribute("href")).toBe(`/components/${SWITCH}`);
+  });
+
   it("shows no hold when nothing gates it", () => {
     const q = mount();
     expect(q.queryByTestId("dep-holding")).toBeNull();

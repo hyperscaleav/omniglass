@@ -17,6 +17,7 @@ import {
   addDependency,
   dependenciesKey,
   dependencyChoices,
+  distantHolders,
   edgeKey,
   groupDependents,
   kindLabel,
@@ -60,6 +61,7 @@ export default function DependenciesPanel(props: { component: string; canUpdate:
   const downstream = createMemo(() => groupDependents(dependents()));
   const hidden = () => depsQ.data?.hidden ?? 0;
   const holds = createMemo(() => upstreamHolds(reach.data));
+  const further = createMemo(() => distantHolders(holds(), upstreams()));
 
   const labelOf = (id: string, name: string) => {
     const hit = (components.data ?? []).find((c) => c.id === id);
@@ -236,6 +238,11 @@ export default function DependenciesPanel(props: { component: string; canUpdate:
               <ul data-testid="dep-upstream" class="divide-y divide-base-300 rounded-field border border-base-300">
                 <For each={upstreams()}>{(d) => <UpstreamRow d={d} />}</For>
               </ul>
+            </Show>
+            <Show when={further().length > 0}>
+              <p data-testid="dep-held-through" class="text-xs text-base-content/70">
+                Held through <For each={further()}>{(h, i) => <>{i() > 0 ? ", " : ""}<A href={`/components/${h.id}`} class="underline">{labelOf(h.id, h.name)}</A></>}</For>, further up the chain.
+              </p>
             </Show>
           </div>
           <div class="flex min-w-0 flex-col gap-1.5">

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { groupDependents, dependencyChoices, refusalWords, upstreamHolds, kindLabel } from "./dependencies";
+import { distantHolders, groupDependents, dependencyChoices, refusalWords, upstreamHolds, kindLabel } from "./dependencies";
 import type { Component } from "./components";
 import type { Reachability } from "./reachability";
 
@@ -52,5 +52,13 @@ describe("groupDependents", () => {
       ({ component: name, component_id: id, upstream: "bar", upstream_id: "b", kind, created_at: "" }) as never;
     const rows = groupDependents([e("p", "panel-1", "host"), e("d", "display-1", "path"), e("p", "panel-1", "path")]);
     expect(rows.map((r) => [r.name, r.kinds])).toEqual([["display-1", ["path"]], ["panel-1", ["host", "path"]]]);
+  });
+});
+
+describe("distantHolders", () => {
+  it("names a holder that is not a direct upstream (the root of a chain)", () => {
+    const holds = new Map([["core", "core-switch"], ["sw", "switch-1"]]);
+    expect(distantHolders(holds, [{ upstream_id: "sw" }])).toEqual([{ id: "core", name: "core-switch" }]);
+    expect(distantHolders(new Map(), [])).toEqual([]);
   });
 });

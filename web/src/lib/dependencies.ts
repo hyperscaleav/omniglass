@@ -124,3 +124,12 @@ export function groupDependents(edges: Dependency[]): Dependent[] {
   }
   return [...out.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
+
+// distantHolders are the components holding this one that are not among its
+// direct upstreams: a gate reason names the root of a chain (a switch behind
+// a core), so with the core down the bar's own upstream, the switch, carries
+// no mark and the root is named beside the list instead.
+export function distantHolders(holds: Map<string, string>, upstreams: { upstream_id: string }[]): { id: string; name: string }[] {
+  const direct = new Set(upstreams.map((u) => u.upstream_id));
+  return [...holds].filter(([id]) => !direct.has(id)).map(([id, name]) => ({ id, name }));
+}

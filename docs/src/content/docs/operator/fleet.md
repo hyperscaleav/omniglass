@@ -464,7 +464,7 @@ dependency edge is one of three kinds: **power** (fed from an outlet of the upst
 through the upstream, a gateway or a switch). **Upstream** lists what this component depends on,
 each linked, with its kind (and the outlet, on a power edge), its health, and **holding this** when
 that upstream's gate is closed on this component's endpoints right now, so they are held until it
-opens. **Downstream** lists what depends on this component, one row for each, with every kind it
+opens; when the holder is further up a chain (a core switch behind the switch this one depends on), it is named under the list as **Held through**. **Downstream** lists what depends on this component, one row for each, with every kind it
 depends by: when this one goes down it holds them, so "the switch is down, which holds these six
 devices" reads off the switch's page. A component outside your read is counted (**and 2 more you
 cannot see**), never named. A component with no edges says so in one line.
