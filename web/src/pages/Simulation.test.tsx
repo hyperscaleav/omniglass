@@ -24,6 +24,7 @@ import {
   type SimFleet,
 } from "../lib/simulation";
 import { uuidFor } from "../lib/testids";
+import { pickInPicker } from "../components/ui/Picker.testkit";
 import type { SimProfile } from "../lib/simulation";
 
 // The simulation console (#890): the sidebar door that follows a connected
@@ -550,7 +551,7 @@ describe("the Simulation page's writes and stale state", () => {
   it("adds a simulated component with a POST to the outpost, then closes", async () => {
     stubFetch({ "POST /outposts/edge-hq/simulation/components": { component: "lab-display-1", address: "127.60.0.4" } });
     await openAdd();
-    fireEvent.change(await screen.findByLabelText("Product"), { target: { value: "boreal-edge-55" } });
+    await pickInPicker(await screen.findByLabelText("Product"), "boreal-edge-55");
     fireEvent.input(screen.getByLabelText("Name"), { target: { value: "lab-display-1" } });
     const add = screen.getByRole("button", { name: "Add component" }) as HTMLButtonElement;
     await waitFor(() => expect(add.disabled).toBe(false));
@@ -563,7 +564,7 @@ describe("the Simulation page's writes and stale state", () => {
   it("surfaces the server's refusal of an add and keeps the form open", async () => {
     stubFetch({ "POST /outposts/edge-hq/simulation/components": new Answer(409, { title: "Conflict", status: 409, detail: "component lab-display-1 already exists" }) });
     await openAdd();
-    fireEvent.change(await screen.findByLabelText("Product"), { target: { value: "boreal-edge-55" } });
+    await pickInPicker(await screen.findByLabelText("Product"), "boreal-edge-55");
     fireEvent.input(screen.getByLabelText("Name"), { target: { value: "lab-display-1" } });
     const add = screen.getByRole("button", { name: "Add component" }) as HTMLButtonElement;
     await waitFor(() => expect(add.disabled).toBe(false));
