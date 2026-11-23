@@ -437,6 +437,47 @@ Only a leaf directive alone on its line embeds (`::walkthrough{#id}`, attributes
 directive quoted in code or inside an HTML comment, an inline `:walkthrough`, or a `:::` container
 is not counted as using the declaration.
 
+## Marketing captures
+
+The stills and loops on the hyperscaleav.com Omniglass page are recorded from a real corporate lab, not
+mocked, so a UI change is one command away from a reshoot (#2299). `make marketing-shots
+MARKETING_DEST=<dir>` brings up a corporate lab (`omniglass lab run --scenario corporate --systems 1000`,
+playing the `corporate-outage` omnibot recording, so no capture does live inference), plays every shot in
+[`web/e2e/marketing/shots.yaml`](https://github.com/hyperscaleav/omniglass/blob/main/web/e2e/marketing/shots.yaml),
+and writes the files and a `shots.json` manifest into the directory. The landing repo points it at
+`public/images/omniglass/shots/` and reads only the manifest, so a reshoot that keeps the shot ids updates
+every image, loop, poster and alt text with no code change there.
+
+A shot is **data**: an id, a kind, a viewport, an `alt`, setup, and steps. A `still` is one 2x WebP. A
+`loop` is an H.264 MP4 of 8 to 15 seconds and at most 1.5 MB, with a WebP poster; the recorder re-encodes
+a loop smaller until it fits, and a loop that cannot fit, or is too short or too long, fails the run
+naming the shot and the limit. Steps use the walkthrough grammar (`goto`, `click`, `hover`, `type`,
+`select`, `press`, `wait`, and `hold` to linger) with no captions: a capture speaks for itself, and the
+page that hosts it writes the words. A step that never finds its target fails the run, naming the shot,
+the step and what it waited for, and keeps the frame it failed on.
+
+Setup runs off camera, in order, as the lab's owner. `put`, `post` and `patch` call the API (a `{braced}`
+part of a path is one address, percent-encoded whole, so a component's path address names one route
+segment), and `wait` polls a GET until a dotted field equals a value. This is how a fault is staged on the
+fleet: the main display of `hq-mr86-1` unplugged through the impairment route, a video bar's login
+repointed at a secret the device refuses. The shipped reachability rule needs about a minute to hold its
+alarm, so a loop never records the fault arriving; it records the console reading a fault that is already
+true. The shots run in the order listed on one lab, and a later shot relies on the state an earlier setup
+left.
+
+Two things are hidden and nothing else: the lab banner, and a sidebar item still marked `soon`. The
+capture-only stylesheet (`CAPTURE_CSS` in
+[`web/e2e/marketinglib.mjs`](https://github.com/hyperscaleav/omniglass/blob/main/web/e2e/marketinglib.mjs))
+removes placeholders, never data: no rule reaches a table, a row, a figure or a state. The sidebar marks
+each `soon` badge with `data-soon` so the rule has a stable hook.
+
+`MARKETING_DEST` must be set, absolute and an existing directory, and the shot list must parse, with an
+omnibot recording the lab ships; all of that is checked before the lab starts. Once the lab is up and
+before the first shot plays, every component, system and endpoint the list names is checked on that
+lab, so a typo or a fleet that changed fails in seconds, naming the shot. `make test-marketing-shots`
+proves each of those failures, and the shot list's parsing, budget and manifest are unit tested in
+`web/src/marketing-shots.test.ts`.
+
 ## Recording details
 
 Each recorder runs on a lab of its own. `make demo ID=<id>` records one demo of either kind

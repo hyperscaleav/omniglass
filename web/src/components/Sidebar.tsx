@@ -143,7 +143,7 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
 // navigable (its stub page explains what is coming); it just reads as pending.
 // Exported so subrails (the Catalog shell's) wear the same treatment.
 export function Soon() {
-  return <span class="ml-auto flex-none rounded bg-base-content/5 px-1 py-px text-[9px] font-semibold uppercase tracking-wider text-base-content/40">soon</span>;
+  return <span data-soon class="ml-auto flex-none rounded bg-base-content/5 px-1 py-px text-[9px] font-semibold uppercase tracking-wider text-base-content/40">soon</span>;
 }
 
 function Leaf(props: { item: NavItem; collapsed: boolean }) {

@@ -1,0 +1,14 @@
+---
+title: "make marketing-shots records the landing page's captures"
+date: 2026-11-23
+refs: [2299]
+---
+
+`make marketing-shots MARKETING_DEST=<dir>` records the captures the hyperscaleav.com Omniglass page
+plays, from a corporate lab at 1,000 systems with the `corporate-outage` omnibot recording: seven shots
+(two stills, five loops) and a `shots.json` manifest the landing page reads. The shot list is data
+(`web/e2e/marketing/shots.yaml`): steps in the walkthrough grammar without captions, and off-camera
+setup that stages the faults through the API. Loops are H.264 MP4s of 8 to 15 seconds and at most
+1.5 MB with a WebP poster; stills are 2x WebP. A capture-only stylesheet hides the lab banner and the
+sidebar's `soon` items (marked `data-soon`) and nothing else. Preconditions fail before the lab
+starts, and a setup that names a component the lab does not have fails before the first shot.

@@ -3,7 +3,7 @@
 # #1193). Production deploy is BYO Postgres; tests use ephemeral testcontainer
 # Postgres.
 
-.PHONY: preflight all lab test-lab test-lab-image scale-lab scale-measure perf-check perf-baseline footprint lab-footprint compress-bench build build-web web image gen gen-twice gen-proto gen-web adr-renumber migration migration-check test test-web test-short test-go test-go-storage test-go-devseed test-go-rest test-go-shards-check test-e2e bench clean-testcontainers tidy dev release-plan release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs bench-sim test-netadmin walkthroughs test-walkthroughs demo test-demos probe
+.PHONY: preflight all lab test-lab test-lab-image scale-lab scale-measure perf-check perf-baseline footprint lab-footprint compress-bench build build-web web image gen gen-twice gen-proto gen-web adr-renumber migration migration-check test test-web test-short test-go test-go-storage test-go-devseed test-go-rest test-go-shards-check test-e2e bench clean-testcontainers tidy dev release-plan release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs bench-sim test-netadmin walkthroughs test-walkthroughs marketing-shots test-marketing-shots demo test-demos probe
 
 # The bare `make` (#1196) needs only Docker. From one Dockerfile and one tree
 # it builds the image and exports this machine's own binary to
@@ -466,6 +466,19 @@ walkthroughs: all
 
 test-walkthroughs: all
 	bash web/e2e/walkthroughs.sh selftest
+
+# Marketing captures (#2299): the stills and loops the hyperscaleav.com Omniglass
+# page plays, recorded from a corporate lab by web/e2e/marketing.sh from
+# web/e2e/marketing/shots.yaml (the shot list, as data). MARKETING_DEST names the
+# directory they are written to, by absolute path; it is checked before the lab
+# starts. make marketing-shots MARKETING_DEST=/path/to/landing/public/images/omniglass/shots
+# test-marketing-shots is the recorder's own test: each precondition fails up
+# front, naming its cause.
+marketing-shots: all
+	bash web/e2e/marketing.sh record
+
+test-marketing-shots: all
+	bash web/e2e/marketing.sh selftest
 
 # Demos (#1132): a demo is a recording of a feature working, by one of two
 # recorders. A terminal demo is a VHS tape, scripts/demo/<id>.tape, for CLI and

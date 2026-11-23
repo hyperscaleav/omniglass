@@ -1,0 +1,163 @@
+# The marketing captures (#2299): the shots the hyperscaleav.com Omniglass page
+# plays, recorded from a corporate lab by `make marketing-shots`. The list is
+# data; web/e2e/marketinglib.mjs parses and validates it, web/e2e/marketing.mjs
+# plays it, and web/e2e/marketing.sh brings the lab up and encodes the results.
+#
+# A `still` is one 2x WebP of a console state; a `loop` is a 8 to 15 second
+# H.264 MP4 of an interaction, with a WebP poster. Steps use the walkthrough
+# grammar (goto, click, hover, type, select, press, wait; `hold` lingers after a
+# step) without captions. Setup items run off camera: `put`/`post`/`patch` call
+# the API as the lab's owner, and `wait` polls a GET until a dotted field equals
+# a value. A {braced} part of a path is one address, percent-encoded whole.
+#
+# The shots run in the order listed, on one lab, and later shots rely on the
+# state earlier setup left (the outage is staged once, for the three shots that
+# show it). Corporate names are deterministic: a scenario and a size resolve to
+# the same rooms every run, so hq-mr86-1 is the first 86-inch meeting room at
+# the headquarters.
+lab:
+  scenario: corporate
+  systems: 1000
+  # The recording omnibot plays (internal/lab/omnibot): its calls run for real
+  # against the lab, its words are recorded, so no capture does live inference.
+  omnibot_replay: corporate-outage
+
+viewport: { width: 1440, height: 900 }
+
+# Off camera, before the first shot: the main display of five rooms at other
+# sites unplugged, so the fleet reads mixed (some healthy rooms, some degraded,
+# each display down) rather than uniformly green. The shipped reachability rule
+# raises its High alarm on each; the wait holds until the fifth is open.
+setup:
+  - put: /components/{branch-03.branch-03-main.branch-03-main-1.branch-03-main-1-01.$comp.display-1}/impairment
+    body: { unplugged: true }
+  - put: /components/{branch-09.branch-09-main.branch-09-main-1.branch-09-main-1-01.$comp.display-1}/impairment
+    body: { unplugged: true }
+  - put: /components/{regional-01.regional-01-main.regional-01-main-1.regional-01-main-1-01.$comp.display-1}/impairment
+    body: { unplugged: true }
+  - put: /components/{regional-04.regional-04-main.regional-04-main-1.regional-04-main-1-01.$comp.display-1}/impairment
+    body: { unplugged: true }
+  - put: /components/{regional-06.regional-06-main.regional-06-main-1.regional-06-main-1-01.$comp.display-1}/impairment
+    body: { unplugged: true }
+  - wait: { get: /alarms?limit=50, field: alarms.4.active, equals: true, timeout: 180000 }
+
+shots:
+  # The fleet at a glance: the outline, then only what needs attention, then
+  # back to the whole outline.
+  - id: fleet-overview
+    kind: loop
+    alt: "The Omniglass Explore view of a 1,000-system corporate fleet: campuses with their system counts and health, then the same list filtered to the rooms that need attention, each with its down display."
+    start: /explore
+    ready: { selector: '[role=treeitem]:has-text("Headquarters")' }
+    steps:
+      - hover: '[role=treeitem]:has-text("Regional Office 01")'
+        hold: 1200
+      - click: { role: button, name: need attention }
+        hold: 400
+      - wait: { text: Regional Office 06 }
+        hold: 3200
+      - click: { role: button, name: Clear }
+      - wait: { selector: '[role=treeitem]:has-text("Headquarters")' }
+        hold: 2400
+
+  # Down the tree: a campus, its building, a floor, then a meeting room, opened
+  # to its system page.
+  - id: fleet-explore
+    kind: loop
+    alt: "Expanding Headquarters in the Omniglass fleet outline to its building, a floor and its rooms, then opening a meeting room to its system with the components it holds."
+    start: /explore
+    ready: { selector: '[role=treeitem]:has-text("Headquarters")' }
+    steps:
+      - click: '[role=treeitem][aria-level="1"]:has(:text-is("Headquarters")) svg >> nth=0'
+        hold: 500
+      - click: '[role=treeitem][aria-level="2"]:has(:text-is("Hq Annex")) svg >> nth=0'
+        hold: 500
+      - click: '[role=treeitem][aria-level="3"]:has(:text-is("Hq Annex 1")) svg >> nth=0'
+        hold: 700
+      - click: '[role=treeitem][aria-level="4"]:has(:text-is("Hq Annex 1 03"))'
+        hold: 800
+      - click: 'aside[data-blade] button[aria-label=Expand]'
+      - wait: { text: Main Display }
+        hold: 3000
+
+  # The fleet at full size: every campus on the page, the count, and the
+  # attention markers the staged faults put there.
+  - id: fleet-scale
+    kind: still
+    alt: "The Omniglass Explore view of a 1,000-system corporate lab: eighteen campuses each with its system count, and warning markers on the sites with a room that needs attention."
+    start: /explore
+    ready: { selector: '[role=treeitem]:has-text("Regional Office 04")' }
+
+  # A refused credential, fixed in place. The video bar's login is repointed at a
+  # secret the device refuses (a 401 on every poll), so the endpoint reads
+  # rejected and the outpost stops asking; the fix is one edit on the endpoint.
+  - id: credential-fix
+    kind: loop
+    alt: "A video bar whose login the device refuses: the endpoint reads rejected and polls stop, the login is corrected in place on the endpoint, and its collection resumes."
+    setup:
+      - post: /secrets
+        body: { name: retired-video-bar-login, label: Retired video bar login, secret_type: basic-auth, owner_kind: platform, fields: { username: admin, password: retired } }
+      - patch: /endpoints/{hq.hq-annex.hq-annex-1.hq-annex-1-04.$comp.videobar-1/https}
+        body: { inputs: { login: retired-video-bar-login } }
+      - wait: { get: '/components/{hq.hq-annex.hq-annex-1.hq-annex-1-04.$comp.videobar-1}/reachability', field: endpoints.0.session.state, equals: rejected, timeout: 180000 }
+    start: /systems/hq-mr65-59
+    ready: { text: Video Bar 1 }
+    # Off camera: open the video bar to its own page, where its refusal reads.
+    prep:
+      - click: 'button:has([data-label]:text-is("Video Bar 1"))'
+      - click: 'aside[data-blade] button[aria-label=Expand]'
+      - wait: { selector: '[data-testid=session-notice][data-state=rejected]' }
+    steps:
+      - hover: '[data-testid=session-notice]'
+        hold: 1000
+      - click: { role: button, name: Open endpoint }
+      - click: { role: button, name: Edit credential }
+      - type: { target: '#edit-iface-input-login', text: sim-kestrel-login, replace: true }
+      - click: 'aside[data-blade] button:has-text("Save")'
+      - wait: { selector: 'aside[data-blade] [data-testid=endpoint-session]:not(:has([data-testid=session-notice])):has([data-testid=ladder-rung][data-rung=authenticated][data-status=pass])', timeout: 30000 }
+        hold: 1200
+
+  # The outage: the main display of hq-mr86-1 unplugged (staged off camera: the
+  # shipped rule needs about a minute to hold its alarm), the room degraded with
+  # its Why card, and the alarm opening to the component it names.
+  - id: alarm-outage
+    kind: loop
+    alt: "A High reachability alarm held on the main display of a headquarters boardroom, the room reading degraded with its Why card, and the alarm opening to the component it names."
+    setup:
+      - put: /components/{hq.hq-annex.hq-annex-1.hq-annex-1-05.$comp.display-1}/impairment
+        body: { unplugged: true }
+      - wait: { get: /systems/hq-mr86-1/alarms, field: alarms.0.active, equals: true, timeout: 180000 }
+      - wait: { get: /systems/hq-mr86-1/health, field: health, equals: degraded, timeout: 180000 }
+    start: /systems/hq-mr86-1
+    ready: { text: Reachability lost }
+    steps:
+      - hover: '[data-testid=alarm-strip]'
+        hold: 1800
+      - click: '[data-testid=alarm-strip] button:text-is("display-1")'
+        hold: 1200
+      - click: 'aside[data-blade] button[aria-label=Expand]'
+      - wait: { text: What it is }
+        hold: 3200
+
+  # The same room, still: degraded, its Why card naming the alarm and the slot
+  # it impairs, and the components that still answer.
+  - id: system-why
+    kind: still
+    alt: "An Omniglass system view reading degraded: the Why card naming the High reachability alarm on the main display and the slot it impairs, above the components that still answer."
+    start: /systems/hq-mr86-1
+    ready: { text: Reachability lost }
+
+  # Omnibot, asked in plain words. The recording plays; its tool calls run for
+  # real against the outage staged above and show as cards.
+  - id: omnibot-ask
+    kind: loop
+    alt: "Asking Omniglass's assistant which systems have open alarms: it reads the degraded boardroom's health and the display's reachability, then names the display as the cause and the next step."
+    start: /explore
+    ready: { selector: '[role=treeitem]:has-text("Headquarters")' }
+    steps:
+      - click: 'button[aria-label="Ask omnibot"]'
+        hold: 600
+      - type: { target: 'textarea[aria-label="Ask omnibot"]', text: "which systems have open alarms?" }
+      - press: Enter
+      - wait: { selector: '[data-testid=omnibot-step] >> nth=1', timeout: 30000 }
+        hold: 5500
