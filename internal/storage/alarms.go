@@ -70,8 +70,13 @@ type Alarm struct {
 	// room the component's plane root sits in (its name and its ancestor chain,
 	// root first), and the names of the systems the component is a member of.
 	LocationName string
+	// LocationID is that location's uuid, so a console link addresses it.
+	LocationID   string
 	LocationPath []string
 	Systems      []string
+	// SystemIDs are those systems' uuids, parallel to Systems, so a console link
+	// addresses the one system rather than a name two locations may share.
+	SystemIDs []string
 }
 
 // Active reports whether the alarm is still raised.
@@ -94,18 +99,34 @@ type AlarmFilter struct {
 	// operator actually works; with IncludeCleared it also returns the alarms
 	// that came and went unattended.
 	Unacknowledged bool
+	// Since and Until bound the overlap of an alarm's raised-to-cleared interval
+	// with a range (#2425, #2426): kept when raised at or before Until and still
+	// active or cleared at or after Since, so an alarm raised before the range
+	// and open in it is kept. A zero value is no bound on that side.
+	Since time.Time
+	Until time.Time
 
 	// The fleet queue's filters (#2333), read by ListFleetAlarms alone.
 	// Severities keeps the named levels; Location keeps the alarms whose
 	// component sits in the named location or any below it; Acknowledged and
 	// Snoozed keep one side of the fact (nil keeps both). PageToken resumes
 	// after the page that returned it.
+	// State picks the fleet list's set: the active alarms (the default), the
+	// cleared ones, or all of them (#2426).
+	State        string
 	Severities   []string
 	Location     string
 	Acknowledged *bool
 	Snoozed      *bool
 	PageToken    string
 }
+
+// The fleet list's states (#2426). The empty state is AlarmStateActive.
+const (
+	AlarmStateActive  = "active"
+	AlarmStateCleared = "cleared"
+	AlarmStateAll     = "all"
+)
 
 // ErrPageToken is a page_token this server did not issue, or one cut off: the
 // caller's fault (a 422), never a silently restarted list.
@@ -529,7 +550,20 @@ func (p *PG) ListFleetAlarms(ctx context.Context, read, systemRead scope.Set, fi
 		args = append(args, v)
 		return "$" + strconv.Itoa(len(args))
 	}
-	where := []string{"a.cleared_at is null", "a.component_id in (select id from comp)"}
+	where := []string{"a.component_id in (select id from comp)"}
+	switch filter.State {
+	case AlarmStateCleared:
+		where = append(where, "a.cleared_at is not null")
+	case AlarmStateAll:
+	default:
+		where = append(where, "a.cleared_at is null")
+	}
+	if !filter.Since.IsZero() {
+		where = append(where, "(a.cleared_at is null or a.cleared_at >= "+bind(filter.Since)+"::timestamptz)")
+	}
+	if !filter.Until.IsZero() {
+		where = append(where, "a.raised_at <= "+bind(filter.Until)+"::timestamptz")
+	}
 	if filter.Unacknowledged {
 		where = append(where, "a.acknowledged_at is null")
 	}
@@ -562,7 +596,9 @@ func (p *PG) ListFleetAlarms(ctx context.Context, read, systemRead scope.Set, fi
 	rows, err := p.pool.Query(ctx, `
 		with recursive comp as (`+scopedListSQL(componentTable, "id", read)+`)`+ctes+`
 		select `+alarmCols+`, coalesce(l.rank, 0),
-			coalesce((select array_agg(s.name order by s.name) from system_member m join system s on s.id = m.system_id
+			coalesce((select array_agg(s.name order by s.name, s.id) from system_member m join system s on s.id = m.system_id
+				where m.component_id = a.component_id and `+sf.Pred("s.id")+`), '{}'),
+			coalesce((select array_agg(s.id::text order by s.name, s.id) from system_member m join system s on s.id = m.system_id
 				where m.component_id = a.component_id and `+sf.Pred("s.id")+`), '{}')
 		from alarm a
 		left join severity_level l on l.name = a.severity
@@ -578,12 +614,13 @@ func (p *PG) ListFleetAlarms(ctx context.Context, read, systemRead scope.Set, fi
 	ranks := []int{}
 	for rows.Next() {
 		var rank int
-		var systems []string
-		a, err := scanAlarmWith(rows, &rank, &systems)
+		var systems, systemIDs []string
+		a, err := scanAlarmWith(rows, &rank, &systems, &systemIDs)
 		if err != nil {
 			return nil, "", fmt.Errorf("storage: scan fleet alarm: %w", err)
 		}
 		a.Systems = systems
+		a.SystemIDs = systemIDs
 		out = append(out, *a)
 		ranks = append(ranks, rank)
 	}
@@ -618,7 +655,14 @@ func (p *PG) attachAlarmLocations(ctx context.Context, alarms []Alarm) error {
 	if err != nil {
 		return err
 	}
+	locIDs, err := planeRootLocationIDs(ctx, p.pool, componentTable, ids)
+	if err != nil {
+		return err
+	}
 	for i := range alarms {
+		if id := locIDs[alarms[i].ComponentID]; id != nil {
+			alarms[i].LocationID = *id
+		}
 		segs := paths[alarms[i].ComponentID]
 		var loc []string
 		for _, s := range segs {
@@ -630,6 +674,57 @@ func (p *PG) attachAlarmLocations(ctx context.Context, alarms []Alarm) error {
 		if len(loc) > 0 {
 			alarms[i].LocationPath = loc
 			alarms[i].LocationName = loc[len(loc)-1]
+		}
+	}
+	return p.attachSystemLocations(ctx, alarms)
+}
+
+// attachSystemLocations names a location for the alarms whose component has
+// none of its own (#2426): a component placed only through its system sits
+// where that system does. It reads only each alarm's own SystemIDs, the
+// systems the caller may read, so a hidden system, even one sharing a visible
+// system's name, never names a location; the first by name with a location
+// wins. One batched walk for the page.
+func (p *PG) attachSystemLocations(ctx context.Context, alarms []Alarm) error {
+	var sysIDs []string
+	for _, a := range alarms {
+		if a.LocationName == "" {
+			sysIDs = append(sysIDs, a.SystemIDs...)
+		}
+	}
+	if len(sysIDs) == 0 {
+		return nil
+	}
+	sysIDs = distinctIDs(sysIDs)
+	paths, err := PathsOf(ctx, p.pool, systemTable, sysIDs)
+	if err != nil {
+		return err
+	}
+	locIDs, err := planeRootLocationIDs(ctx, p.pool, systemTable, sysIDs)
+	if err != nil {
+		return err
+	}
+	for i := range alarms {
+		if alarms[i].LocationName != "" {
+			continue
+		}
+		for _, id := range alarms[i].SystemIDs {
+			var loc []string
+			for _, seg := range paths[id] {
+				if seg == accessorSys {
+					break
+				}
+				loc = append(loc, seg)
+			}
+			if len(loc) == 0 {
+				continue
+			}
+			alarms[i].LocationPath = loc
+			alarms[i].LocationName = loc[len(loc)-1]
+			if lid := locIDs[id]; lid != nil {
+				alarms[i].LocationID = *lid
+			}
+			break
 		}
 	}
 	return nil

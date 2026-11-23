@@ -62,6 +62,8 @@ type alarmBody struct {
 	Location     string   `json:"location,omitempty" doc:"The name of the location the alarm's component sits in (its plane root's location); absent when the component is unplaced, and on every read but the fleet queue"`
 	LocationPath string   `json:"location_path,omitempty" doc:"That location's dotted ancestor path, root first (for example boi.17c)"`
 	Systems      []string `json:"systems,omitempty" doc:"The names of the systems the alarm's component is a member of; only on the fleet queue"`
+	LocationID   string   `json:"location_id,omitempty" doc:"That location's uuid, the stable form of location; only on the fleet queue"`
+	SystemIDs    []string `json:"system_ids,omitempty" doc:"Those systems' uuids, in the same order as systems; only on the fleet queue"`
 }
 
 func toAlarmBody(a *storage.Alarm) alarmBody {
@@ -85,6 +87,8 @@ func toAlarmBody(a *storage.Alarm) alarmBody {
 		Location:       a.LocationName,
 		LocationPath:   strings.Join(a.LocationPath, "."),
 		Systems:        a.Systems,
+		SystemIDs:      a.SystemIDs,
+		LocationID:     a.LocationID,
 	}
 }
 
@@ -172,13 +176,16 @@ const (
 )
 
 type listFleetAlarmsInput struct {
-	Unacknowledged bool     `query:"unacknowledged" doc:"Only the alarms nobody has looked at: the queue an operator, or an agent, works"`
-	Limit          int      `query:"limit" minimum:"0" maximum:"1000" doc:"At most this many, the worst first; 0 or absent means 200"`
-	Severity       []string `query:"severity,explode" doc:"Only alarms at these severity levels, by name (see /severity-levels); repeat the parameter for several"`
-	Location       string   `query:"location" doc:"Only alarms whose component sits in this location or any location below it, by name"`
-	Acknowledged   string   `query:"acknowledged" enum:"true,false" doc:"true keeps the acknowledged alarms, false the unacknowledged ones; absent keeps both"`
-	Snoozed        string   `query:"snoozed" enum:"true,false" doc:"true keeps the snoozed alarms, false the ones not snoozed; absent keeps both"`
-	PageToken      string   `query:"page_token" doc:"The next_page_token of the previous page: resumes the same worst-first order after it, however many alarms there are"`
+	State          string    `query:"state" enum:"active,cleared,all" default:"active" doc:"Which alarms: active (still raised, the default), cleared (a cleared alarm is history, with when it cleared), or all"`
+	Since          time.Time `query:"since" doc:"Only the alarms still raised at or after this RFC 3339 time: active, or cleared at or after it" example:"2026-11-23T00:00:00Z"`
+	Until          time.Time `query:"until" doc:"Only the alarms raised at or before this RFC 3339 time; must not be earlier than since" example:"2026-11-23T12:00:00Z"`
+	Unacknowledged bool      `query:"unacknowledged" doc:"Only the alarms nobody has looked at: the queue an operator, or an agent, works"`
+	Limit          int       `query:"limit" minimum:"0" maximum:"1000" doc:"At most this many, the worst first; 0 or absent means 200"`
+	Severity       []string  `query:"severity,explode" doc:"Only alarms at these severity levels, by name (see /severity-levels); repeat the parameter for several"`
+	Location       string    `query:"location" doc:"Only alarms whose component sits in this location or any location below it, by name"`
+	Acknowledged   string    `query:"acknowledged" enum:"true,false" doc:"true keeps the acknowledged alarms, false the unacknowledged ones; absent keeps both"`
+	Snoozed        string    `query:"snoozed" enum:"true,false" doc:"true keeps the snoozed alarms, false the ones not snoozed; absent keeps both"`
+	PageToken      string    `query:"page_token" doc:"The next_page_token of the previous page: resumes the same worst-first order after it, however many alarms there are"`
 }
 
 type listFleetAlarmsOutput struct {
@@ -204,14 +211,18 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/alarms",
-		Summary:     "List the fleet's active alarms",
-		Description: "What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Each row names its component's location and the systems it belongs to that the caller may read. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.",
+		Summary:     "List the fleet's alarms",
+		Description: "What is wrong now across every component the caller may read, in one read: by default the active alarms (state=cleared is the history, each row carrying when it cleared, and state=all both; since and until keep the alarms whose raised-to-cleared interval overlaps that range, so one raised before it and still open in it is kept, and since after until is a 400), worst severity first and newest first within a severity, each naming its component. Each row names its component's location and the systems it belongs to that the caller may read. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.",
 	}, "component", "read"), func(ctx context.Context, in *listFleetAlarmsInput) (*listFleetAlarmsOutput, error) {
 		limit := in.Limit
 		if limit <= 0 {
 			limit = fleetAlarmDefault
 		}
+		if !in.Since.IsZero() && !in.Until.IsZero() && in.Since.After(in.Until) {
+			return nil, huma.Error400BadRequest("since must not be after until")
+		}
 		alarms, next, err := gw.ListFleetAlarms(ctx, a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "system", "read"), storage.AlarmFilter{
+			State: in.State, Since: in.Since, Until: in.Until,
 			Unacknowledged: in.Unacknowledged, Severities: in.Severity, Location: in.Location,
 			Acknowledged: optBool(in.Acknowledged), Snoozed: optBool(in.Snoozed), PageToken: in.PageToken,
 		}, min(limit, fleetAlarmMax))

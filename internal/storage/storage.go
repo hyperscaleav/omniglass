@@ -378,6 +378,10 @@ type Gateway interface {
 	ResetComponentName(ctx context.Context, actorID, name string, read, action scope.Set) (*Component, error)
 	ComponentNameTaken(ctx context.Context, name string, parentRef, locationRef *string) (bool, error)
 	DeleteComponent(ctx context.Context, actorID, name string, read, action scope.Set) error
+	// DeleteBlockersOf names what stands in the way of a refused delete of a
+	// component, system or location (#2463): the rows the caller may read on
+	// each blocker's own kind, and a count of the rest. Read-only.
+	DeleteBlockersOf(ctx context.Context, kind, ref string, readOf func(kind string) scope.Set) (*DeleteBlockers, error)
 
 	// The component_make catalog: a flat manufacturer catalog (Cisco,
 	// Crestron, ...), same shape and official-read-only guard as the type

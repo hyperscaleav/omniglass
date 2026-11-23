@@ -35,6 +35,7 @@ import {
   type ActionRule,
   type ActionRuleDraft,
 } from "../lib/action_rules";
+import { confirmDelete } from "../lib/confirm";
 
 // Action rules (Catalog > Actions > Action rules, #1346): when a message about
 // an alarm is sent. On an alarm's raise, clear or both, when the rule's
@@ -206,7 +207,7 @@ function ActionRuleBladeBody(p: { name: string }): JSX.Element {
   }
 
   async function remove(r: ActionRule) {
-    if (!confirm(`Delete action rule "${r.name}"? What it already queued still delivers, and keeps its name.`)) return;
+    if (!(await confirmDelete({ kind: "action rule", name: r.name, consequence: "What it already queued still delivers, and keeps its name." }))) return;
     setErr(null);
     try {
       await deleteActionRule(r.name);

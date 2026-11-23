@@ -13,6 +13,7 @@ import { COMPONENTS_KEY, type Component as Comp } from "../lib/components";
 import { SYSTEMS_KEY, type System } from "../lib/systems";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
+import { answerConfirms } from "../lib/confirm.testkit";
 
 // The Identities panel on a conduit component's page (#1389): the identities
 // it fans out (each bound value and the owner it lands on), the ones it heard
@@ -207,7 +208,7 @@ describe("IdentitiesPanel", () => {
   });
 
   it("removes a binding after a confirm, and the identity reads as unbound again", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const asked = answerConfirms(true);
     let del: string | undefined;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
@@ -220,7 +221,7 @@ describe("IdentitiesPanel", () => {
     });
     const q = mount();
     fireEvent.click(q.getByRole("button", { name: "Unbind zr-boardroom-a" }));
-    expect(window.confirm).toHaveBeenCalled();
+    expect(asked).toHaveBeenCalled();
     await waitFor(() => expect(del).toBeTruthy());
     expect(del).toContain(`/components/${CONDUIT}/identity-bindings/ucc-room-id/zr-boardroom-a`);
     await waitFor(() => expect(q.getByTestId("unbound-ucc-room-id-zr-boardroom-a")).toBeTruthy());
@@ -228,7 +229,7 @@ describe("IdentitiesPanel", () => {
   });
 
   it("does nothing when the remove is not confirmed", () => {
-    vi.spyOn(window, "confirm").mockReturnValue(false);
+    answerConfirms(false);
     const spy = vi.spyOn(globalThis, "fetch");
     const q = mount();
     fireEvent.click(q.getByRole("button", { name: "Unbind zr-boardroom-a" }));
@@ -283,7 +284,7 @@ describe("IdentitiesPanel", () => {
   });
 
   it("says an unbind of a binding already gone in its own words, and reads the lists again", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    answerConfirms(true);
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       if (req.method === "DELETE") return json({ status: 404, title: "Not Found", detail: "no binding of this identity on this conduit" }, 404);

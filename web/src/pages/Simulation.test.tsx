@@ -27,6 +27,7 @@ import {
 import { uuidFor } from "../lib/testids";
 import { pickInPicker } from "../components/ui/Picker.testkit";
 import type { SimProfile } from "../lib/simulation";
+import { answerConfirms } from "../lib/confirm.testkit";
 
 // The simulation console (#890): the sidebar door that follows a connected
 // simulator, the live table and its highlight, the simulated component drawer's fire and
@@ -475,7 +476,7 @@ describe("the simulated component drawer's writes", () => {
 
   it("removes after a confirm: DELETE by uuid, the fleet invalidated, the drawer closed", async () => {
     stubFetch({ [`DELETE /components/${DISPLAY}`]: {} });
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const confirm = answerConfirms(true);
     const onClose = vi.fn();
     const { qc } = mount(() => <SimComponentDrawer id={DISPLAY} onClose={onClose} />);
     const invalidate = vi.spyOn(qc, "invalidateQueries");
@@ -492,7 +493,7 @@ describe("the simulated component drawer's writes", () => {
 
   it("sends nothing when the remove is not confirmed", async () => {
     stubFetch();
-    vi.spyOn(window, "confirm").mockReturnValue(false);
+    answerConfirms(false);
     const onClose = vi.fn();
     mount(() => <SimComponentDrawer id={DISPLAY} onClose={onClose} />);
     fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
@@ -933,7 +934,7 @@ describe("adding a simulated system", () => {
 describe("removing from the component page", () => {
   it("leaves for the Simulation page once the component is gone", async () => {
     stubFetch({ [`DELETE /components/${DISPLAY}`]: {} });
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    answerConfirms(true);
     const qc = client(admin);
     window.history.pushState({}, "", `/components/${DISPLAY}`);
     render(() => (
