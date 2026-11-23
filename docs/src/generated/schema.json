@@ -1609,7 +1609,7 @@
      {
       "name": "secret_hash",
       "type": "bytea",
-      "nullable": false
+      "nullable": true
      },
      {
       "name": "prefix",
@@ -1673,15 +1673,57 @@
       "nullable": true,
       "fk": true,
       "fk_target": "oauth_client.id"
+     },
+     {
+      "name": "identifier",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "linked_by",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "users.id"
+     },
+     {
+      "name": "refresh_sealed",
+      "type": "jsonb",
+      "nullable": true
+     },
+     {
+      "name": "refresh_accepted_at",
+      "type": "timestamp with time zone",
+      "nullable": true
+     },
+     {
+      "name": "recheck_grace_until",
+      "type": "timestamp with time zone",
+      "nullable": true
+     },
+     {
+      "name": "via_link",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "credential.id"
      }
     ],
     "checks": [
      {
       "name": "credential_kind_check",
-      "expr": "CHECK ((kind = ANY (ARRAY['bearer'::text, 'password'::text])))"
+      "expr": "CHECK ((kind = ANY (ARRAY['bearer'::text, 'password'::text, 'oidc'::text])))"
+     },
+     {
+      "name": "credential_secret_shape_check",
+      "expr": "CHECK (\nCASE\n    WHEN (kind = 'oidc'::text) THEN ((identifier IS NOT NULL) AND (secret_hash IS NULL))\n    ELSE (secret_hash IS NOT NULL)\nEND)"
      }
     ],
     "uniques": [
+     {
+      "name": "credential_kind_identifier_key",
+      "definition": "CREATE UNIQUE INDEX credential_kind_identifier_key ON public.credential USING btree (kind, identifier) WHERE (identifier IS NOT NULL)"
+     },
      {
       "name": "credential_one_password",
       "definition": "CREATE UNIQUE INDEX credential_one_password ON public.credential USING btree (user_id) WHERE (kind = 'password'::text)"
@@ -1876,6 +1918,49 @@
       "name": "spent_at",
       "type": "timestamp with time zone",
       "nullable": true
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ]
+   },
+   "oidc_state": {
+    "columns": [
+     {
+      "name": "state_hash",
+      "type": "bytea",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "binding_hash",
+      "type": "bytea",
+      "nullable": false
+     },
+     {
+      "name": "provider",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "link_user_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "users.id"
+     },
+     {
+      "name": "link_session_hash",
+      "type": "bytea",
+      "nullable": true
+     },
+     {
+      "name": "expires_at",
+      "type": "timestamp with time zone",
+      "nullable": false
      },
      {
       "name": "created_at",
