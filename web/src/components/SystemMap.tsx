@@ -1,7 +1,7 @@
 import { createMemo, createSignal, Index, onCleanup, onMount, Show } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import { useNavigate } from "@solidjs/router";
-import { Tooltip } from "@kobalte/core/tooltip";
+import Tooltip from "./ui/Tooltip";
 import { layoutMarkers, type MapMarker, type Rect, type StandardMapDecl } from "../lib/system_map";
 import { healthHue } from "../lib/health";
 import type { MemberContext } from "../lib/detail";
@@ -109,22 +109,25 @@ export default function SystemMap(props: {
               <Show
                 when={m().occupant}
                 fallback={
-                  <Tooltip openDelay={150} closeDelay={100} placement="top" gutter={4}>
-                    <Tooltip.Trigger as="span" tabIndex={0} data-testid={testid()} data-empty aria-label={slot()} class={`${place()} cursor-default`} style={at()}>
-                      <span data-glyph class={`inline-flex ${healthHue(null)}`}>
-                        <CircleDashed size={18} />
-                      </span>
-                      <Show when={placed().label}>
-                        {(b) => (
-                          <span data-maplabel data-label-box={box(b())} class="line-clamp-2 w-max max-w-28 text-balance text-[11px] leading-tight text-base-content/50">{slot()}</span>
-                        )}
-                      </Show>
-                    </Tooltip.Trigger>
-                    <Tooltip.Portal>
-                      <Tooltip.Content class="z-100 max-w-56 rounded-box border border-base-300 bg-base-100 px-2.5 py-1.5 text-xs leading-snug shadow-lg">
-                        {slot()}: nobody staffs this position.
-                      </Tooltip.Content>
-                    </Tooltip.Portal>
+                  <Tooltip
+                    as="span"
+                    tabIndex={0}
+                    data-testid={testid()}
+                    data-empty
+                    aria-label={slot()}
+                    class={`${place()} cursor-default`}
+                    style={at()}
+                    contentClass="z-100 max-w-56 rounded-box border border-base-300 bg-base-100 px-2.5 py-1.5 text-xs leading-snug shadow-lg"
+                    content={<>{slot()}: nobody staffs this position.</>}
+                  >
+                    <span data-glyph class={`inline-flex ${healthHue(null)}`}>
+                      <CircleDashed size={18} />
+                    </span>
+                    <Show when={placed().label}>
+                      {(b) => (
+                        <span data-maplabel data-label-box={box(b())} class="line-clamp-2 w-max max-w-28 text-balance text-[11px] leading-tight text-base-content/50">{slot()}</span>
+                      )}
+                    </Show>
                   </Tooltip>
                 }
               >
@@ -136,29 +139,16 @@ export default function SystemMap(props: {
                   const alarm = () => props.member?.alarm(id());
                   const health = () => memberHealth() ?? (occ().down ? "outage" : "unknown");
                   return (
-                    <Tooltip openDelay={150} closeDelay={100} placement="top" gutter={4}>
-                      <Tooltip.Trigger
-                        type="button"
-                        data-testid={testid()}
-                        aria-label={`${label()}, ${slot()}, ${health()}`}
-                        class={`${place()} cursor-pointer hover:bg-base-content/10`}
-                        style={at()}
-                        onClick={() => (props.onOpen ? props.onOpen(id()) : navigate(`/components/${id()}`))}
-                      >
-                        <span data-glyph class={`inline-flex ${healthHue(memberHealth(), occ().down)}`}>
-                          <Dynamic component={resolveIcon(props.member?.icon(id()))} size={18} />
-                        </span>
-                        <Show when={placed().label}>
-                          {(b) => (
-                            <span data-maplabel data-label-box={box(b())} class="line-clamp-2 w-max max-w-28 text-balance font-data text-[11px] leading-tight">{label()}</span>
-                          )}
-                        </Show>
-                      </Tooltip.Trigger>
-                      <Tooltip.Portal>
-                        <Tooltip.Content
-                          data-testid="mapmarker-detail"
-                          class="z-100 flex max-w-64 flex-col gap-0.5 rounded-box border border-base-300 bg-base-100 px-2.5 py-1.5 text-xs leading-snug shadow-lg"
-                        >
+                    <Tooltip
+                      data-testid={testid()}
+                      aria-label={`${label()}, ${slot()}, ${health()}`}
+                      class={`${place()} cursor-pointer hover:bg-base-content/10`}
+                      style={at()}
+                      onClick={() => (props.onOpen ? props.onOpen(id()) : navigate(`/components/${id()}`))}
+                      contentTestId="mapmarker-detail"
+                      contentClass="z-100 flex max-w-64 flex-col gap-0.5 rounded-box border border-base-300 bg-base-100 px-2.5 py-1.5 text-xs leading-snug shadow-lg"
+                      content={
+                        <>
                           <span class="font-medium">{label()}</span>
                           <span class="text-base-content/70">{slot()}</span>
                           <Show when={product()}>
@@ -168,8 +158,17 @@ export default function SystemMap(props: {
                           <Show when={alarm()}>
                             <span class="text-error">{alarm()}</span>
                           </Show>
-                        </Tooltip.Content>
-                      </Tooltip.Portal>
+                        </>
+                      }
+                    >
+                      <span data-glyph class={`inline-flex ${healthHue(memberHealth(), occ().down)}`}>
+                        <Dynamic component={resolveIcon(props.member?.icon(id()))} size={18} />
+                      </span>
+                      <Show when={placed().label}>
+                        {(b) => (
+                          <span data-maplabel data-label-box={box(b())} class="line-clamp-2 w-max max-w-28 text-balance font-data text-[11px] leading-tight">{label()}</span>
+                        )}
+                      </Show>
                     </Tooltip>
                   );
                 }}

@@ -27,7 +27,7 @@ stored credential to a destination, the most sensitive class, whatever else it d
 `tools/list`, each tool's `_meta` carries `omniglass/agent_policy`, its class and the policy the install resolves
 for it: the strictest of the class, the caller's roles and an override on the tool itself.
 
-103 tools.
+104 tools.
 
 | Tool | What it does | Gate | Assume |
 |---|---|---|---|
@@ -58,6 +58,7 @@ for it: the strictest of the class, the caller's roles and an override on the to
 | [`delete-component-dependency`](#delete-component-dependency) | Remove a component's dependency on another | `component:update` | destructive, idempotent |
 | [`effective-tags`](#effective-tags) | Effective tags for a component | `component:read` | read-only, idempotent |
 | [`list-component-events`](#list-component-events) | List a component's recent events | `component:read` | read-only, idempotent |
+| [`get-component-health`](#get-component-health) | Read a component's health | `component:read` | read-only, idempotent |
 | [`list-identity-bindings`](#list-identity-bindings) | List the identities a conduit component fans out | `component:read` | read-only, idempotent |
 | [`put-identity-binding`](#put-identity-binding) | Bind an identity a conduit reports to its owner | `component:update` | destructive, idempotent |
 | [`delete-identity-binding`](#delete-identity-binding) | Unbind an identity a conduit reports | `component:update` | destructive, idempotent |
@@ -578,6 +579,23 @@ Returns the component's recent log occurrences (the log-kind sink), newest first
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
+
+## `get-component-health`
+
+Read a component's health
+
+The component's own current health (healthy, degraded or outage from its active alarms; unknown for a device nothing has observed) beside the recorded edges that got it there, in the shape the system health read returns: slots and systems are empty, transitions are one entry per change inside since..until (default the last 30 days), oldest first. since after until is a 400. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+
+- Route: `GET /api/v1/components/{name}/health`
+- Gate: `component:read`
+- Assume: read-only, idempotent
+- Agent class: read
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
+| `since` | string | no | Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent |
+| `until` | string | no | Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since |
 
 ## `list-identity-bindings`
 
@@ -1223,7 +1241,7 @@ Patches a location's label or location_type. The name is not patchable: renaming
 
 Read a location's health
 
-The location's current health, worst-wins over every system placed anywhere beneath it, with those systems and their health as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+The location's current health, worst-wins over every system placed anywhere beneath it, with those systems and their health as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges inside since..until (default the last 30 days); since after until is a 400. Gated by location:read; an out-of-scope location is a non-disclosing 404.
 
 - Route: `GET /api/v1/locations/{name}/health`
 - Gate: `location:read`
@@ -1233,6 +1251,8 @@ The location's current health, worst-wins over every system placed anywhere bene
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | yes | The location's name, or a dotted address (e.g. boi.17c.415a) |
+| `since` | string | no | Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent |
+| `until` | string | no | Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since |
 
 ## `list-location-metrics`
 
@@ -1526,7 +1546,7 @@ Returns the system's own events and its members', newest first, bounded to the l
 
 Read a system's health
 
-The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Transitions are the recorded edges inside since..until (default the last 30 days), one entry per change; since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.
 
 - Route: `GET /api/v1/systems/{name}/health`
 - Gate: `system:read`
@@ -1536,6 +1556,8 @@ The system's current health and why: every slot it needs filled, whether it is i
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | yes | The system's name, or a dotted address (e.g. boi.17c.$sys.av) |
+| `since` | string | no | Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent |
+| `until` | string | no | Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since |
 
 ## `list-system-logs`
 
