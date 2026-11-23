@@ -600,3 +600,60 @@ func TestServeHTTP_VroomDialRefusedLeavesStateUntouched(t *testing.T) {
 		t.Errorf("refused dial wrote state: %v", call)
 	}
 }
+
+// A participants count outside 1..64 is refused the same way (#1445).
+func TestServeHTTP_VroomDialRefusesOutOfBoundParticipants(t *testing.T) {
+	store, err := profile.LoadStoreFS(profiles.FS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dp := store.Devices["kestrel-vroom"]
+	var route *profile.Route
+	for i := range dp.Interfaces {
+		for j := range dp.Interfaces[i].Routes {
+			if dp.Interfaces[i].Routes[j].Match == "POST /api/call/dial" {
+				route = &dp.Interfaces[i].Routes[j]
+			}
+		}
+	}
+	if route == nil {
+		t.Fatal("dial route not found")
+	}
+	for _, body := range []string{
+		`{"id":"c1","participants":-3}`,
+		`{"id":"c1","participants":65}`,
+		`{"id":"c1","participants":1000000}`,
+	} {
+		initial := map[string]any{"status": map[string]any{"call": map[string]any{
+			"id": "", "active": false, "participants": int64(0)}}}
+		dev := NewDevice("d", "h", net.ParseIP("127.0.0.1"), "kestrel-vroom", 1, initial)
+		if err := dev.AddRouteFromProfile(route, `{"ok":true}`); err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest("POST", "/api/call/dial", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		dev.ServeHTTP(w, req)
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("%s: status = %d, want 400; %s", body, w.Code, w.Body.String())
+		}
+		call := dev.State()["status"].(map[string]any)["call"].(map[string]any)
+		if call["active"] != false || call["participants"] != int64(0) || call["id"] != "" {
+			t.Errorf("%s: refused dial wrote state: %v", body, call)
+		}
+	}
+	// In bound still dials.
+	initial := map[string]any{"status": map[string]any{"call": map[string]any{
+		"id": "", "active": false, "participants": int64(0)}}}
+	dev := NewDevice("d", "h", net.ParseIP("127.0.0.1"), "kestrel-vroom", 1, initial)
+	if err := dev.AddRouteFromProfile(route, `{"ok":true}`); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("POST", "/api/call/dial", strings.NewReader(`{"id":"c1","participants":5}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	dev.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Errorf("in-bound dial status = %d, want 200; %s", w.Code, w.Body.String())
+	}
+}
