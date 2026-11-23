@@ -142,6 +142,7 @@ screenshots:
     alt: "Explore: the outline of locations, Headquarters and West Building folded into one row and opened down to the Huddle Room, which wears its system with the components beneath it; every collapsed location says what it holds and counts its systems by health."
 walkthroughs:
   - id: find-and-fix-a-location
+  - id: add-a-dependency
 ---
 
 The fleet has one door in the sidebar: **Explore**. It is an outline of every location you
