@@ -4245,6 +4245,13 @@ export type HealthTransitionBody = {
 export type FleetHealthOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
+  /** The health in force when since opened the range: the last recorded edge before it. Absent without since, or when nothing was recorded before it. A timeline draws the stretch before the first transition from it */
+  carried_in?: string;
+  /**
+     * When this owner's health was first recorded; null if never. How long it has been watched, whatever the range
+     * @nullable
+     */
+  first_recorded_at: string | null;
   /** healthy, incomplete, degraded, or outage: the rollup of the slots or systems served beside it. incomplete is a commissioning gap, a slot short because the hardware was never installed rather than because installed hardware is failing, and it ranks between healthy and degraded */
   health: string;
   owner: string;

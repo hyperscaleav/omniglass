@@ -1165,7 +1165,11 @@ The reports are one shape over three owners:
   entry per change, never a sample. All three reads take `since` and `until` (RFC 3339); the default
   is the last 30 days (measured on the database's clock), an absent `since` with an `until` is the
   30 days before it, and `since` after `until` is a **400**. A range holds only edges recorded
-  inside it, so a quiet range is empty rather than carrying the health it began with.
+  inside it. A quiet range is empty, so when `since` is given `carried_in` names the health in force
+  when it opened (the newest edge strictly before `since`; absent when nothing was recorded before
+  it, and absent with no `since`), which lets a timeline draw the stretch before the first edge.
+  `first_recorded_at` is when the owner's health was first recorded (null if never), so a reader can
+  tell a young owner from a quiet one.
 - `GET /systems/{name}/members` (`system:read`) carries each member's own `component_health`, the
   same recorded value a fleet view dot reads. It is the per-system read of the members' health, so a
   system's view polls it with the system's health report rather than the whole fleet view
