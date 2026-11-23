@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { alarmFilterKeys, chipsFromParams, paramsFromChips, queryFromChips } from "./alarmqueue";
+import { alarmFilterKeys, alarmsForRuleHref, chipsFromParams, paramsFromChips, queryFromChips } from "./alarmqueue";
 import { buildPredicate } from "./predicate";
 import type { Alarm } from "./alarms";
 
@@ -11,7 +11,7 @@ describe("the alarm queue's filter, in the address", () => {
       { key: "location", op: "eq", values: ["hq"] },
       { key: "ack", op: "eq", values: ["no"] },
     ]);
-    expect(paramsFromChips(chips)).toEqual({ state: "active", severity: "critical,high", location: "hq", ack: "no", snoozed: undefined });
+    expect(paramsFromChips(chips)).toEqual({ state: "active", severity: "critical,high", location: "hq", ack: "no", snoozed: undefined, rule: undefined });
   });
 
   it("takes a repeated severity parameter as well as a comma list", () => {
@@ -37,5 +37,27 @@ describe("the alarm queue's filter, in the address", () => {
     const other = { location: "annex", location_path: "annex" } as Alarm;
     expect(keep(room)).toBe(true);
     expect(keep(other)).toBe(false);
+  });
+});
+
+describe("the queue narrowed to one rule (#2432)", () => {
+  it("reads the rule from the address, writes it back, and leaves the server's filter alone", () => {
+    const chips = chipsFromParams({ state: "active", rule: "catalog-cpu-hot" });
+    expect(chips).toEqual([{ key: "rule", op: "eq", values: ["catalog-cpu-hot"] }]);
+    expect(paramsFromChips(chips)).toMatchObject({ state: "active", rule: "catalog-cpu-hot" });
+    expect(paramsFromChips([])).toMatchObject({ rule: undefined });
+    expect(queryFromChips(chips)).toEqual({});
+  });
+
+  it("keeps the alarms the rule raised, by its name", () => {
+    const chips = chipsFromParams({ rule: "too-hot" });
+    const keep = buildPredicate(alarmFilterKeys(() => chips, () => []), chips);
+    expect(keep({ raised_by_rule: "too-hot" } as Alarm)).toBe(true);
+    expect(keep({ raised_by_rule: "other" } as Alarm)).toBe(false);
+    expect(keep({} as Alarm)).toBe(false);
+  });
+
+  it("links to the queue filtered to a rule", () => {
+    expect(alarmsForRuleHref("too-hot")).toBe("/alarms?state=active&rule=too-hot");
   });
 });

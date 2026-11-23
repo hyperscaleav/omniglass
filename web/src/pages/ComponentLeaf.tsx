@@ -36,6 +36,7 @@ import { REACHABILITY_KEY, getReachability, lastSeenAt, type ReachEndpoint } fro
 import { componentAlarmsRead, componentAlarmsReadKey, splitAlarms } from "../lib/alarms";
 import { lifecycleRows } from "../lib/lifecycle";
 import { effectiveProperties, effectivePropertiesKey } from "../lib/component_properties";
+import AlarmOnThis from "../components/AlarmOnThis";
 import { effectiveMetrics, effectiveMetricsKey } from "../lib/component_metrics";
 import { CalcRuleLink } from "../components/RuleLink";
 import { durationText } from "../lib/timeline";
@@ -428,6 +429,7 @@ export default function ComponentLeaf() {
                               <Show when={row().sourceRuleId}>
                                 <CalcRuleLink name={row().sourceRule!} id={row().sourceRuleId!} />
                               </Show>
+                              <AlarmOnThis reads={key} componentId={component()?.id ?? id()} label={row().label} />
                             </dd>
                             {/* Several endpoints collect it (#1020): the row
                                 shows the newest, says which and of how many,

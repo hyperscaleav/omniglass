@@ -27,7 +27,7 @@ const alarm = (over: Record<string, unknown>) => ({
 });
 const seed = [
   alarm({ message: "no signal" }),
-  alarm({ message: "fan slow", component: "dsp-1", severity: "warning", location: "room-2", location_path: "hq.room-2", systems: [] }),
+  alarm({ message: "fan slow", raised_by_rule: "fan-slow-rule", raised_by_rule_id: uuidFor("fan-slow-rule"), component: "dsp-1", severity: "warning", location: "room-2", location_path: "hq.room-2", systems: [] }),
 ];
 const me = (permissions: string[]): Me => ({ user: { id: "p", kind: "person" }, person: { username: "ada" }, permissions, grants: [] });
 const OPERATOR = ["component:read", "alarm:acknowledge", "alarm:snooze", "assistant:use"];
@@ -79,6 +79,21 @@ describe("Alarms page", () => {
     expect(screen.getByText("boardroom")).toBeInTheDocument();
     expect(screen.getByText("room-2")).toBeInTheDocument();
     expect(screen.getAllByText("new").length).toBe(2);
+  });
+
+  it("links an alarm back to the rule that raised it, and holds the rows to one rule from the address (#2432)", async () => {
+    mount(me(OPERATOR));
+    await screen.findByText("no signal");
+    const link = screen.getByRole("link", { name: "fan-slow-rule" });
+    expect(link).toHaveAttribute("href", "/event-rules?open=fan-slow-rule");
+    // A hand-raised alarm has no rule to link.
+    expect(screen.getAllByRole("link", { name: /rule/i })).toHaveLength(1);
+  });
+
+  it("narrows the loaded rows to the rule the address names (#2432)", async () => {
+    mount(me(OPERATOR), "/?state=active&rule=fan-slow-rule");
+    await screen.findByText("fan slow");
+    expect(screen.queryByText("no signal")).toBeNull();
   });
 
   it("reads its filter from the address and asks the server for exactly that", async () => {
