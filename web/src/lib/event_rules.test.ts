@@ -22,6 +22,7 @@ import {
   toBuilder,
   toExpression,
   validateDraft,
+  conditionWords,
   withLane,
 } from "./event_rules";
 import { uuidFor } from "./testids";
@@ -135,6 +136,8 @@ describe("the form's rules", () => {
     expect(e.sampleKey).toBeTruthy();
     expect(e.fireSustain).toBeTruthy();
     expect(e.fireEventType).toBeTruthy();
+    // The value is asked for even before a key is chosen, so an empty submit names every gap at once (#2432).
+    expect(e.fireValue).toBeTruthy();
     // An edit judges the name too: it may rename the rule (#977).
     expect(validateDraft({ ...draftFromRule(hot), name: "" }).name).toBeTruthy();
     expect(validateDraft({ ...draftFromRule(hot), name: "Hot Room" }).name).toMatch(/Lowercase/);
@@ -351,5 +354,21 @@ describe("criteria that do not compile, and expressions the builder cannot say",
     // One the builder can say is the builder's: switching back lowers the comparison.
     const simple = toBuilder({ ...d, fireExpr: "value >= 45.0" }, "fire");
     expect(toExpression({ ...simple, fireValue: "50" }, "fire").fireExpr).toBe("value >= 50.0");
+  });
+});
+
+describe("conditionWords: the draft's condition in the operator's words (#2432)", () => {
+  const d = (over: object) => ({ ...emptyDraft(), sampleKey: "temperature-c", ...over });
+  it("reads a metric's comparison with its unit", () => {
+    expect(conditionWords(d({ lane: "metric", fireOp: "gt", fireValue: "40" }), "Temperature", "°C")).toBe("Temperature above 40 °C");
+    expect(conditionWords(d({ lane: "metric", fireOp: "le", fireValue: "5" }), "Latency", "ms")).toBe("Latency at or below 5 ms");
+    expect(conditionWords(d({ lane: "metric", fireOp: "eq", fireValue: "0" }), "Loss")).toBe("Loss equals 0");
+  });
+  it("reads a property as is / is anything but", () => {
+    expect(conditionWords(d({ lane: "property", fireOp: "eq", fireValue: "down" }), "Endpoint reachable")).toBe("Endpoint reachable is down");
+    expect(conditionWords(d({ lane: "property", fireOp: "ne", fireValue: "up" }), "Endpoint reachable")).toBe("Endpoint reachable is anything but up");
+  });
+  it("quotes an expression the builder cannot say", () => {
+    expect(conditionWords(d({ fireExpr: "value > 40 && instance != \"aux\"" }), "Temperature")).toBe('Temperature where value > 40 && instance != "aux"');
   });
 });

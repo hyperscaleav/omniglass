@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { filterNav, filterWhen, lookupNav, navItems, OFF_RAIL, routeAllowed, routeTokens, sectionLabel, type NavItem } from "./nav";
+import { filterNav, filterWhen, lookupNav, navByPath, navItems, OFF_RAIL, PLATFORM_HEALTH_NAME, routeAllowed, routeTokens, sectionLabel, type NavItem } from "./nav";
 import { can, type Me } from "./auth";
 
 const Dummy = () => null;
@@ -52,9 +52,8 @@ describe("filterNav", () => {
 
   // Outposts and Platform health (#1644) are administration, so both doors sit
   // under Admin (#1767) behind outpost:read: enrolling an outpost is an admin's job,
-  // and Status's rows are the outpost list. Platform health keeps its page name;
-  // only the door is one word.
-  it("keeps Outposts and Status under Admin, and only for an outpost:read holder", () => {
+  // and the page's rows are the outpost list.
+  it("keeps Outposts and Platform health under Admin, and only for an outpost:read holder", () => {
     expect(rail([">"])).not.toContain("Outposts");
     expect(section("Admin", ["outpost:read"])).toContain("Outposts");
     expect(section("Admin", ["component:read", "system:read"])).not.toContain("Outposts");
@@ -62,19 +61,31 @@ describe("filterNav", () => {
     expect(sectionLabel("/web/outposts")).toBe("Outposts");
     expect(rail([">"])).not.toContain("Status");
     expect(rail([">"])).not.toContain("Platform health");
-    expect(section("Admin", ["outpost:read"])).toContain("Status");
-    expect(section("Admin", ["component:read", "system:read"])).not.toContain("Status");
+    expect(section("Admin", ["outpost:read"])).toContain("Platform health");
+    expect(section("Admin", ["component:read", "system:read"])).not.toContain("Platform health");
     expect(routeTokens("/web/platform")).toEqual(["outpost", "read"]);
-    expect(sectionLabel("/web/platform")).toBe("Status");
+  });
+
+  // One name (#2446): the sidebar door, the top bar's section and the page's own
+  // heading are the same string, and the old one-word door is gone.
+  it("names the Platform health page once, in the door, the top bar and the heading", () => {
+    expect(PLATFORM_HEALTH_NAME).toBe("Platform health");
+    expect(lookupNav("/web/platform").label).toBe(PLATFORM_HEALTH_NAME);
+    expect(sectionLabel("/web/platform")).toBe(PLATFORM_HEALTH_NAME);
+    const labels = Object.values(navByPath).map((m) => m.label);
+    expect(labels).not.toContain("Status");
+    expect(labels.filter((l) => l === PLATFORM_HEALTH_NAME)).toHaveLength(1);
   });
 
   // Every sidebar tab is one word (#1767): a group, a leaf, and a group's child.
   // A tab needing two words is a sign it names a page rather than a door.
   // User groups is the one exception: IAM gave up the bare word group (ADR-2036)
   // and no single word names a set of users without colliding with the fleet's.
+  // Platform health is the other (ADR-2446): the page's own name beats the bare
+  // "Status", which the top bar and the heading had to be taught to share.
   it("labels every sidebar tab with one word", () => {
     const labels = navItems.flatMap((i) => [i.label, ...(i.children ?? []).map((c) => c.label)]);
-    expect(labels.filter((l) => /\s/.test(l) && l !== "User groups")).toEqual([]);
+    expect(labels.filter((l) => /\s/.test(l) && l !== "User groups" && l !== PLATFORM_HEALTH_NAME)).toEqual([]);
   });
 
   it("on the real nav, a user who can read none of the fleet kinds loses Explore but keeps Outposts", () => {
@@ -227,11 +238,11 @@ describe("nav IA rework", () => {
   });
 
   it("keeps governance plus Settings under Admin for an owner", () => {
-    expect(section("Admin", [">"])).toEqual(["Users", "Roles", "User groups", "Audit", "Outposts", "Status", "Settings"]);
+    expect(section("Admin", [">"])).toEqual(["Users", "Roles", "User groups", "Audit", "Outposts", "Platform health", "Settings"]);
   });
 
-  it("shows a bare *:read viewer only Outposts and Status under Admin: settings:read is sensitive (#2442)", () => {
-    expect(section("Admin", ["*:read"])).toEqual(["Outposts", "Status"]);
+  it("shows a bare *:read viewer only Outposts and Platform health under Admin: settings:read is sensitive (#2442)", () => {
+    expect(section("Admin", ["*:read"])).toEqual(["Outposts", "Platform health"]);
     expect(section("Admin", ["settings:read"])).toContain("Settings");
     expect(routeTokens("/web/settings")).toEqual(["settings", "read"]);
   });

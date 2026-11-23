@@ -1,0 +1,30 @@
+# Send a command from the alarm it concerns (#2466): Boardroom A's display has an
+# alarm, raised off camera. The alarm's row offers Send command, the same form as
+# the component's Activity tab with the component filled in; its value is a
+# select of what set-power accepts, never free text. Sending the command settles
+# from the display's reply and its toast follows it.
+#
+# The alarm is raised by hand so the scene fits the recorder's budget. That a
+# command clears an alarm a rule raised on the state it sets (a display switched
+# off through the Simulation API surface, then switched on from the row) takes
+# longer than the budget allows and is proved in the PR's transcript instead.
+title: Send a command from an alarm
+description: A display has an alarm. Send it the power command from the alarm's own row, picking the value from the list the command accepts, and follow it until the display's reply settles it.
+setup:
+  - post: '/components/hq.west.level-2.boardroom-a.$comp.display-1/alarms'
+    body: { severity: high, message: Display left on after hours, dedup_key: walkthrough-send-command }
+steps:
+  - goto: /locations/boardroom-a
+    caption: Boardroom A's system. Its display has an alarm.
+  - wait: { text: Display left on after hours }
+    caption: The alarm is listed with the controls that act on it.
+  - click: { role: button, name: Send command }
+    caption: Send command is on the alarm's own row, offered because a driver on this display's endpoints binds a command. It opens the Activity tab's form with this display filled in.
+  - select: { target: { role: combobox, name: Value }, value: 'off' }
+    caption: The value is a list of what set-power accepts, so nothing has to be known or typed.
+  - click: { role: button, name: Issue, exact: true }
+    caption: Issue it. The outpost carries it to the display.
+  - wait: { selector: '[data-testid=command-toast]:has-text("settled")', timeout: 20000 }
+    caption: The display's reply named the state it entered, so the command settled.
+    poster: true
+    hold: 1500

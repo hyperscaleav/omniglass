@@ -25,6 +25,9 @@ this page is what an admin does with the catalog around it.
 
 ## The catalog
 
+A driver's drawer lists the products that use it and the components it serves, and links each metric,
+property and command type its spec names: see [Follow the catalog](/admin/catalog-links/).
+
 A driver is consumed by the [product](/admin/products/) catalog: a product references its driver
 through an optional `driver_id`, chosen from the driver picker on the product's create and edit forms,
 and three of the shipped official products bind a driver this way. See

@@ -123,7 +123,7 @@ func TestSetupFactsListOnlyTheCreates(t *testing.T) {
 	fsys := fstest.MapFS{"w.yaml": {Data: []byte(`title: W
 setup:
   - post: /components
-    body: { name: bay-2-display, product: boreal-edge-55 }
+    body: { name: bay-2-display, product: any-product }
   - put: /components/bay-2-display/impairment
     body: { unplugged: true }
   - until: { get: /components/bay-2-display/alarms, contains: raised_at }

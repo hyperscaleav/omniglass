@@ -9,6 +9,7 @@ sidebar:
 walkthroughs:
   - id: watch-a-rule-raise-an-alarm
   - id: write-a-rule-as-an-expression
+  - id: alarm-on-what-you-are-looking-at
 ---
 
 import SeededSet from '../../../components/SeededSet.astro';
@@ -132,10 +133,16 @@ sits.
 
 - **Name**: a lowercase kebab name (`input-moved`), the address you type and a link carries. It can
   be renamed later (see [Rename](#rename-a-rule)).
-- **Label**: optional; it is also the alarm's message when **Message** is blank.
-- **Reads**: one property or metric from the catalogs. Its **lane** decides how it compares: a
-  property is text, compared only for equality; a metric is a number, compared any way. The
-  comparison list beside the value offers exactly what the chosen key's lane allows, in words.
+- **Label**: optional; it is also the alarm's message when **Message** is blank. It follows the name
+  as you type it (`catalog-cpu-hot` suggests `Catalog cpu hot`: the hyphens become spaces and the
+  first letter is capitalised, nothing else, so an acronym you wrote is left as typed) until you write one of your own, so a rule saved without a
+  second thought still reads as words in the list.
+- **Reads**: one property or metric from the catalogs, found by typing: the list filters on the
+  label and the name, groups metrics and properties under their own headings, and shows each
+  option's name and unit beside its label. When the rule watches exactly one component, that
+  component's own metrics and properties come first under **On** its name. Its **lane** decides how it
+  compares: a property is text, compared only for equality; a metric is a number, compared any way.
+  The comparison list beside the value offers exactly what the chosen key's lane allows, in words.
 - **Fires when it reads**: the comparison and the value that open an alarm. The value is used exactly
   as typed: a property value with leading or trailing spaces is refused rather than trimmed (it would
   never match), and a metric value must be a plain decimal (`40`, `-2.5`). Beneath it the form shows
@@ -178,31 +185,57 @@ sits.
   the generic pair; a pair the catalog already models (`call-started` / `call-ended`) says what
   happened instead.
 - **Watches component types** and **Watches components**: the components it selects. A type
-  includes every type beneath it. Leave both empty to watch every component.
+  includes every type beneath it. Leave both empty to watch every component. Components are found by
+  typing too, and each option shows where the component sits (its location and system), since a
+  fleet repeats labels: forty panels can all be `Display 1`.
 - **Message**, **Description**, **Enabled**.
 
-Every field is checked as you type and **Create rule** stays refused until the rule is whole. When it
-is created, the rule judges the newest sample of every series it selects at once, so criteria
+Every field is checked as you type. **Create rule** is never greyed: pressed with the rule not
+whole, it says so in one sentence above the form (**To create the rule, fill in Name, Reads and Fires
+when it reads.**), puts the focus on the first field that needs fixing, and each name in the sentence
+takes you to its field, with the reason beside it. When it is created, the rule judges the newest sample of every series it selects at once, so criteria
 that already hold start their sustain then rather than waiting for the next change.
 
 **Preview**, at the foot of the drawer, runs the draft against the last day of its key's samples on
-the components you can read, without saving or writing anything: where it would be firing (**in force now**),
-each linked to its component, and the **edges** it would have written, fire and clear, newest last.
-Each sample is judged as the server judged it, but alone, so a sustain that would have held an edge
-back is not applied, which the panel says. A series with nothing deciding in the week before the window
-started unknown, and the panel counts those; on a fleet with more samples than the preview's cap it
-judges whole series up to it and says how many of how many.
+the components you can read, without saving or writing anything. It opens with a sentence in the
+words you entered: *In the last 24h, Temperature above 40 °C would have fired 3 times on 2 of 40
+series (Display 1, Display 7) and cleared twice. Right now 1 series (Display 7) would be in force.*
+Under it, where it would be firing (**in force now**) and the **edges** it would have written, fire and
+clear, newest last. Every series is named by its component and the metric, linked to the component,
+with where it sits.
+
+The preview judges each sample alone and cannot wait out a sustain. When you typed one (**For at
+least** or **Clears after at least**) it says so beside the sentence, in your words (*You asked for it to
+hold for at least 30s before firing. The preview cannot apply that...*), and the counts read as the
+most the rule would have done: a reading that passed within the sustain still shows as a firing. A
+series with nothing deciding in the week before the window started unknown, and the panel names those;
+on a fleet with more samples than the preview's cap it judges whole series up to it and says how many
+of how many.
 
 A preview refuses a [trend rule](#write-a-trend-rule)'s criteria (those that read `window` or `age`):
 it judges each sample alone, so it could only ever answer that a trend never fires.
 
-A rule's blade shows its criteria in words and, beneath, as the expressions it judges by (an absent
-clear is `!(fire)`).
+A rule's blade states its criteria in words (**Fires**, **Clears**) and keeps the expressions it
+judges by behind **Show expression** (an absent clear is `!(fire)`). Its **Open alarms** section links
+to **the alarms page** narrowed to that rule, and each alarm on that page links back to its rule (the
+rule's name beside the message, and **Raised by rule** in the alarm's drawer). The alarms page filters
+the rows it has loaded by `rule`; narrowing on the server, and showing the rule's cleared alarms too,
+follow the alarm history work.
 
 The walkthrough below writes a rule's criteria as an expression: the builder's comparison first, then
 the expression itself, an unfinished line pointed at, the fix, a preview of the last day, and the save.
 
 ::walkthrough{#write-a-rule-as-an-expression}
+
+### Alarm on this
+
+A component's page has an **Alarm on this** link beside each metric in its **Vitals** (with `rule:create`).
+It opens **New rule** with **Reads** and **Watches components** already filled in, so only the
+condition is left to write. The same form opens from any address of the shape
+`/event-rules?new=1&reads=<key>&component=<id>`; the intent is read once and then removed from the
+address, so a reload does not reopen it. Properties and the other places a component lists its keys do not have the link yet.
+
+::walkthrough{#alarm-on-what-you-are-looking-at}
 
 ### Write a trend rule
 

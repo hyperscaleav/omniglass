@@ -14,6 +14,8 @@ import { lifecycleRows } from "../lib/lifecycle";
 import { classifierProperties, classifierPropertiesKey } from "../lib/classifier_properties";
 import { classifierMetrics, classifierMetricsKey } from "../lib/classifier_metrics";
 import ProductContractEditor from "../components/ProductContractEditor";
+import CatalogRef from "../components/CatalogRef";
+import { CollectedByDriver, ProductUsedBy } from "../components/CatalogUsage";
 import ComponentTypeSelect from "../components/ComponentTypeSelect";
 import { Plus, resolveIcon } from "../components/icons";
 import {
@@ -224,7 +226,7 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
               <For each={PRODUCT_KINDS}>{(k) => <option value={k}>{k}</option>}</For>
             </select>
           </BladeField>
-          <BladeField label="Type" mono value={() => r().component_type}>
+          <BladeField label="Type" mono value={() => r().component_type} read={<CatalogRef kind="component_type" name={r().component_type} />}>
             <TypeSelect value={componentType()} onChange={setComponentType} />
           </BladeField>
           <BladeField
@@ -233,15 +235,19 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
           >
             <IconOverrideField componentType={componentType()} value={icon()} onChange={setIcon} />
           </BladeField>
-          <BladeField label="Vendor" mono value={() => r().vendor ?? ""}>
+          <BladeField label="Vendor" mono value={() => r().vendor ?? ""} read={r().vendor ? <CatalogRef kind="vendor" name={r().vendor} /> : undefined}>
             <VendorSelect value={vendorId()} onChange={setVendorId} />
           </BladeField>
-          <BladeField label="Driver" mono value={() => r().driver ?? ""}>
+          <BladeField label="Driver" mono value={() => r().driver ?? ""} read={r().driver ? <CatalogRef kind="driver" name={r().driver} /> : undefined}>
             <DriverSelect value={driverId()} onChange={setDriverId} />
           </BladeField>
           <ProductLifecycle productId={r().name} />
           <ProductContractEditor productId={r().name} official={r().official} />
           <ProductContractEditor productId={r().name} official={r().official} lane="metric" />
+          <Show when={r().driver}>
+            <CollectedByDriver driver={r().driver!} title="Collected by its driver" />
+          </Show>
+          <ProductUsedBy name={r().name} />
         </div>
       )}
     </Show>

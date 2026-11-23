@@ -7,6 +7,7 @@ import Drawer from "../components/Drawer";
 import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
 import KVStacked from "../components/KVStacked";
+import CatalogRef, { KeyRef } from "../components/CatalogRef";
 import Eyebrow from "../components/Eyebrow";
 import InfoTip from "../components/InfoTip";
 import ExpressionField from "../components/ExpressionField";
@@ -290,7 +291,7 @@ function SelectorFacts(p: { rule: CalcRule }): JSX.Element {
   return (
     <Show when={types().length + ids().length > 0} fallback={<span class="text-sm text-base-content/60">{sys() ? "Every system" : "Every component"}</span>}>
       <div class="flex flex-wrap gap-1.5">
-        <For each={types()}>{(t) => <span class="badge badge-ghost badge-sm font-data" title={sys() ? "System type" : "Component type"}>{t}</span>}</For>
+        <For each={types()}>{(t) => <span class="badge badge-ghost badge-sm" title={sys() ? "System type" : "Component type"}><CatalogRef kind={sys() ? "system_type" : "component_type"} name={t} /></span>}</For>
         <For each={ids()}>
           {(id) => <A href={`/${sys() ? "systems" : "components"}/${id}`} class="badge badge-outline badge-sm hover:underline">{nameOf(id)}</A>}
         </For>
@@ -494,7 +495,7 @@ function CalcBladeBody(p: { name: string }): JSX.Element {
               }
             />
             <KVStacked label="Version" value={<span class="tabular-nums">{r().version}</span>} />
-            <KVStacked label="Writes" value={<span class="inline-flex items-center gap-1.5"><span class="font-data">{r().output_key}</span><span class="text-[11px] text-base-content/40">{r().output_lane}</span><InfoTip label="output" text={CALC_HINTS.output} /></span>} />
+            <KVStacked label="Writes" value={<span class="inline-flex items-center gap-1.5"><CatalogRef kind={r().output_lane === "property" ? "property" : "metric"} name={r().output_key} /><span class="text-[11px] text-base-content/40">{r().output_lane}</span><InfoTip label="output" text={CALC_HINTS.output} /></span>} />
           </div>
           <Show when={r().description}>
             <KVStacked label="Description" value={<span class="text-base-content/80">{r().description}</span>} />
@@ -509,7 +510,7 @@ function CalcBladeBody(p: { name: string }): JSX.Element {
                 {(i) => (
                   <>
                     <code class="font-data text-[12px] text-base-content/60">{i.alias}</code>
-                    <span class="font-data text-[12px]">{i.key}</span>
+                    <span class="text-[12px]"><KeyRef name={i.key} /></span>
                   </>
                 )}
               </For>

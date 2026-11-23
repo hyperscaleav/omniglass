@@ -183,13 +183,15 @@ system, so a location where one system sits shows that system on its own row: th
 [standard](/admin/standards/) it conforms to, and **Health** its health. Open it and
 the system's components are directly beneath, each with its product and health, and a
 component's active alarm reads in the **Detail** column. A location holding two systems lists a
-row per system, with its components under each. A component two systems share appears under
+row per system, with its components under each, and counts them in its own **Detail** (**2 systems, 4 components**), never in the Standard column. A component two systems share appears under
 both, marked **also in** the other; a component in no system sits directly under its location.
 
 **A collapsed row says what it holds.** The Detail column counts what is inside in your
 catalog's own words (**2 buildings, 1 floor**, **19 components**, **Empty**), and the Health
-column counts the systems beneath it by health, in four fixed slots: healthy, incomplete,
-degraded, outage. Healthy is a muted green and each kind of trouble wears its full colour, so a
+column counts the systems beneath it by health, each with its count and packed to the left in
+that order (healthy, incomplete, degraded, outage), so a lone warning is the first thing in the
+column, never a gap and then a glyph. A row whose system has nothing in its slots reads **no components yet**, never Empty: **Empty** means no system lives there, and a system whose last component was deleted stays on its row (a row holding several systems lists it under its own header with the same words). Opening that system, in its page or its drawer, shows what a system and a slot are and offers **Add component** (the create form with this system filled in) and **Start from a standard** (the Configure tab, where the standard is chosen). A long Detail wraps to a second line and carries a
+tooltip with the whole of it. Healthy is a muted green and each kind of trouble wears its full colour, so a
 red count stands out down the page without being read. The counts include everything beneath the row, so a
 collapsed branch cannot hide an outage. They are counts rather than one worst-case colour
 because at any real failure rate almost every large location holds one fault somewhere, and a
@@ -239,11 +241,15 @@ value; each commit becomes a chip.
   location, not only one set on it directly). **is set** and **is absent** take no value and
   find the rows that carry the tag at all, or lack it.
 
+The list narrows **as you type**, before Enter; **Enter** pins what you typed as a chip.
 While a filter is on, the outline becomes a flat list of matches, each with the path above
-it. **Enter** on a match shows it in the tree, opened down to it and selected, with the filter
+it. On a match, **Enter** shows it in the tree, opened down to it and selected, with the filter
 cleared; **Space** or a click opens its side panel. The counts line's **need attention** is
 itself the filter: it keeps what is in outage, degraded or incomplete, and it is the same
-health chip the bar shows, so the two can never disagree.
+health chip the bar shows. Its words are what it counts (**2 systems, 3 components need
+attention**) and its number is the number of rows pressing it leaves, from one count that
+Home's **Need attention** card reads too, so the two cannot disagree. The chip keeps its amber
+dot while pressed.
 
 What the filter bar does **not** offer is a location facet. Filtering on live state (a
 health, a standard, a type, a name) is exploring; naming the part of your fleet to include

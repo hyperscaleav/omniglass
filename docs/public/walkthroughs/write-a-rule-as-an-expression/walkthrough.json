@@ -23,76 +23,94 @@
     },
     {
       "n": 4,
-      "kind": "select",
-      "caption": "It reads whether an endpoint answers, which every component reports.",
+      "kind": "type",
+      "caption": "Find what it reads by typing. Each match shows its name and the kind it is, grouped as metrics and properties.",
       "still": "step-04.png"
     },
     {
       "n": 5,
-      "kind": "type",
-      "caption": "The builder compares one value. Beneath it is the expression it is stored as.",
+      "kind": "press",
+      "caption": "Move to the match you mean.",
       "still": "step-05.png"
     },
     {
       "n": 6,
-      "kind": "click",
-      "caption": "Write the expression itself instead, starting from the builder's own.",
+      "kind": "press",
+      "caption": "It reads whether an endpoint answers, which every component reports.",
       "still": "step-06.png"
     },
     {
       "n": 7,
       "kind": "type",
-      "caption": "Leave the aux endpoint out. The field offers the names it may use, and checks the expression as it is typed.",
+      "caption": "The builder compares one value. Beneath it is the expression it is stored as.",
       "still": "step-07.png"
     },
     {
       "n": 8,
-      "kind": "wait",
-      "caption": "Unfinished, so the field underlines the fault and points at it by line and column.",
+      "kind": "click",
+      "caption": "Write the expression itself instead, starting from the builder's own.",
       "still": "step-08.png"
     },
     {
       "n": 9,
       "kind": "type",
-      "caption": "Finish it. Beneath are the names it may use and the functions it may call.",
+      "caption": "Leave the aux endpoint out. The field offers the names it may use, and checks the expression as it is typed.",
       "still": "step-09.png"
     },
     {
       "n": 10,
       "kind": "wait",
-      "caption": "It compiles and yields true or false, as a rule's criteria must.",
+      "caption": "Unfinished, so the field underlines the fault and points at it by line and column.",
       "still": "step-10.png"
     },
     {
       "n": 11,
-      "kind": "click",
-      "caption": "Preview runs the draft against the last day of samples, writing nothing.",
+      "kind": "type",
+      "caption": "Finish it. Beneath are the names it may use and the functions it may call.",
       "still": "step-11.png"
     },
     {
       "n": 12,
       "kind": "wait",
-      "caption": "What it would hold in force now, and the edges it would have written. Sustains are ignored.",
+      "caption": "It compiles and yields true or false, as a rule's criteria must.",
       "still": "step-12.png"
     },
     {
       "n": 13,
       "kind": "click",
-      "caption": "Save it. The rule judges every sample from now on.",
+      "caption": "Preview runs the draft against the last day of samples, writing nothing.",
       "still": "step-13.png"
     },
     {
       "n": 14,
       "kind": "wait",
-      "caption": "Its blade shows the criteria as the expressions it judges by.",
+      "caption": "In words, what the rule would have done over the day, with the series it names. A sustain you typed is named as not applied.",
       "still": "step-14.png"
+    },
+    {
+      "n": 15,
+      "kind": "click",
+      "caption": "Save it. The rule judges every sample from now on.",
+      "still": "step-15.png"
+    },
+    {
+      "n": 16,
+      "kind": "click",
+      "caption": "The drawer states the criteria in words first. Show expression opens the ones it judges by.",
+      "still": "step-16.png"
+    },
+    {
+      "n": 17,
+      "kind": "wait",
+      "caption": "The expressions it judges by, as written.",
+      "still": "step-17.png"
     }
   ],
-  "poster": "step-12.png",
+  "poster": "step-14.png",
   "preview": "preview.webp",
   "budget": {
-    "seconds": 49.2,
-    "bytes": 841945,
-    "previewBytes": 583146
+    "seconds": 57.8,
+    "bytes": 1050759,
+    "previewBytes": 703072
   }
 }

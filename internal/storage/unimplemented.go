@@ -581,6 +581,9 @@ func (UnimplementedGateway) WithSimAddressLock(_ context.Context, fn func() erro
 func (UnimplementedGateway) OutpostSimDevices(context.Context, string, scope.Set) ([]SimDevice, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) ComponentPlaces(context.Context, []string, scope.Set, scope.Set) (map[string]ComponentPlace, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) WorklistChanges(context.Context) (<-chan string, error) {
 	return nil, nil
 }
@@ -672,6 +675,9 @@ func (UnimplementedGateway) ResolveSystemTypeFacts(context.Context, uuid.UUID) (
 
 func (UnimplementedGateway) UpsertProduct(context.Context, Product) error    { return nil }
 func (UnimplementedGateway) ListProducts(context.Context) ([]Product, error) { return nil, nil }
+func (UnimplementedGateway) ListProductsDeclaring(context.Context, string, string) ([]Product, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) GetProduct(context.Context, string) (*Product, error) {
 	return nil, nil
 }

@@ -4,6 +4,7 @@ import { pageHere, pendingTriage } from "./lib/handover";
 import Sidebar from "./components/Sidebar";
 import TopBar from "./components/TopBar";
 import CommandPalette from "./components/CommandPalette";
+import { SendCommandHost } from "./components/SendCommandButton";
 import { Toaster } from "./components/ui/Toast";
 import OmnibotPanel from "./components/OmnibotPanel";
 import { can, useMe } from "./lib/auth";
@@ -74,6 +75,7 @@ const App: ParentComponent = (props) => {
     <Show when={mayAsk()}>
       <OmnibotPanel open={omnibotOpen()} onClose={() => setOmnibotOpen(false)} prompt={omnibotPrompt()} page={pageHere(location.pathname, location.search)} />
     </Show>
+    <SendCommandHost />
     <Toaster />
     </>
   );
