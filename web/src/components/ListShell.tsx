@@ -1,4 +1,5 @@
 import { type Accessor, type JSX, Show, createMemo, createSignal } from "solid-js";
+import Button from "./Button";
 import FilterBar from "./FilterBar";
 import { buildPredicate, type Chip, type FilterKey } from "../lib/predicate";
 import { describeError } from "../lib/format";
@@ -32,6 +33,10 @@ export default function ListShell<T>(props: {
   // instead of growing the page. The FilterBar header (and any footer) stay
   // pinned. Off (the default), the shell grows with content.
   fill?: boolean;
+  // The `?open=` address the list could not resolve (lib/drawer_address): shows a
+  // non-disclosing not-found notice above the list. The same words for a row that
+  // does not exist and one the caller may not see; `onDismiss` clears the param.
+  missing?: { noun: string; address: string; onDismiss: () => void };
   children: (filtered: Accessor<T[]>, chips: Accessor<Chip[]>) => JSX.Element;
 }) {
   const [ownChips, setOwnChips] = createSignal<Chip[]>(props.initialChips ?? []);
@@ -46,6 +51,14 @@ export default function ListShell<T>(props: {
         <div role="alert" class="alert alert-error alert-soft text-sm">
           <span>{props.errorLabel ? `${props.errorLabel}: ` : ""}{describeError(props.error)}</span>
         </div>
+      </Show>
+      <Show when={props.missing}>
+        {(m) => (
+          <div role="status" data-testid="drawer-miss" class="alert alert-warning alert-soft flex items-center justify-between text-sm">
+            <span>No {m().noun} at “{m().address}”, or you cannot see it. The list is showing instead.</span>
+            <Button size="xs" onClick={m().onDismiss}>Dismiss</Button>
+          </div>
+        )}
       </Show>
       <div class="card overflow-hidden border border-base-300 bg-base-200 p-0" classList={{ "flex min-h-0 flex-1 flex-col": props.fill }}>
         <div class="border-b border-base-300 px-3 py-2.5">

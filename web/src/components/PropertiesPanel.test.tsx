@@ -111,7 +111,7 @@ describe("PropertiesPanel", () => {
     const calc = getByRole("group", { name: /calculated/i });
     expect(within(calc).getByText("Busy")).toBeTruthy();
     expect(within(calc).getByText("true")).toBeTruthy();
-    expect(within(calc).getByRole("link", { name: "busy" }).getAttribute("href")).toBe(`/calc-rules?rule=${ruleID}`);
+    expect(within(calc).getByRole("link", { name: "busy" }).getAttribute("href")).toBe(`/calc-rules?open=${ruleID}`);
     expect(within(getByRole("group", { name: /off contract/i })).queryByText("Busy")).toBeNull();
     const contractRow = getByText("Room state").closest("[data-property]") as HTMLElement;
     expect(within(contractRow).getByRole("link", { name: "room-state" })).toBeTruthy();
