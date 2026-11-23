@@ -20,8 +20,11 @@ import (
 // and partition roll; each compaction's mark lag behind now, when it has a
 // mark; and, from the status read after the pass (nil when that read
 // failed), the partitions held, the oldest day's age and the sizes. A server
-// with no platform component writes none.
-func retentionSamples(component string, rep retentionReport, status *storage.RetentionStatus, now time.Time) []storage.PlatformMetric {
+// with no platform component writes none. A lane in prior (flagged behind by
+// the last pass) that this pass did not report reads 0, so a lane that went
+// away (an override removed, a window out of range) clears its warning
+// instead of holding its last 1 (#1673).
+func retentionSamples(component string, rep retentionReport, prior []string, status *storage.RetentionStatus, now time.Time) []storage.PlatformMetric {
 	if component == "" {
 		return nil
 	}
@@ -44,6 +47,17 @@ func retentionSamples(component string, rep retentionReport, status *storage.Ret
 			add(writerclass.RetentionBehind, c, behind(c))
 		}
 		add(writerclass.RetentionWindowDays, "metric", float64(rep.MetricDays))
+	}
+	reported := func(lane string) bool {
+		if _, ok := rep.Deleted[lane]; ok {
+			return true
+		}
+		return rep.Compacted && (lane == "metric_trend compaction" || lane == "metric_block compaction")
+	}
+	for _, lane := range slices.Sorted(slices.Values(prior)) {
+		if !reported(lane) {
+			add(writerclass.RetentionBehind, lane, 0)
+		}
 	}
 	add(writerclass.RetentionPassDuration, "", rep.Duration.Seconds())
 	add(writerclass.RetentionPassFailureCount, "", float64(rep.Failures))
@@ -78,7 +92,7 @@ type retentionRecorder interface {
 // only the status rows; the pass's own still land. No component, no write.
 // The read and the write share one deadline of timeout (none when zero), as
 // a lane does, so a hung store costs the loop one record, not the loop.
-func recordRetention(ctx context.Context, store retentionRecorder, component string, rep retentionReport, now time.Time, timeout time.Duration) error {
+func recordRetention(ctx context.Context, store retentionRecorder, component string, rep retentionReport, prior []string, now time.Time, timeout time.Duration) error {
 	if component == "" {
 		return nil
 	}
@@ -94,7 +108,7 @@ func recordRetention(ctx context.Context, store retentionRecorder, component str
 	} else {
 		status = &st
 	}
-	if err := store.RecordPlatformMetrics(ctx, retentionSamples(component, rep, status, now)); err != nil {
+	if err := store.RecordPlatformMetrics(ctx, retentionSamples(component, rep, prior, status, now)); err != nil {
 		errs = append(errs, fmt.Errorf("record retention figures: %w", err))
 	}
 	return errors.Join(errs...)
