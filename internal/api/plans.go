@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/google/uuid"
@@ -278,6 +279,9 @@ func mapPlanErr(err error) error {
 		return huma.Error500InternalServerError("apply plan")
 	}
 	mapped := mapFromTemplateErr(err)
+	if errors.Is(err, storage.ErrPlanKey) {
+		mapped = huma.Error422UnprocessableEntity(strings.TrimPrefix(pe.Err.Error(), storage.ErrPlanKey.Error()+": "))
+	}
 	var em *huma.ErrorModel
 	if pe.Path != "" && errors.As(mapped, &em) {
 		em.Errors = append(em.Errors, &huma.ErrorDetail{Location: "body." + pe.Path, Message: em.Detail})
@@ -338,7 +342,7 @@ func registerPlanRoutes(api huma.API, a *authenticator, gw storage.Gateway, cat 
 		Summary:       "Create a plan of locations, systems and components in one write",
 		Description: "Lands a plan you built in one transaction: standards created from their templates (with any parent, unless you hold one of that name), locations parents first (a parent_key names an earlier location of the plan, a parent an existing one), systems at a location of the plan or an existing one with the components that staff their slots, standalone components, and the values declared on each. Every piece is the ordinary create in your own scope with its own audit row, and every row carries the one import_id the response returns, under from_import. A refused piece refuses the whole plan, mapped as its own route maps it, with its path in the plan (systems[3].components[1]) leading the detail; nothing lands. validate_only runs the same transaction and rolls it back, returning the counts and the names the apply would mint (200, no ids). " +
 			fmt.Sprintf("A plan carries at most %d rows (each standard, location, system, component and declared value is one); a bigger one is a 413 naming the limit, so chunk an import (by building), one plan each. ", planRowLimit) +
-			"Gated by location:read, and each piece needs what its own create needs: location:create for locations, system:create for systems, component:create for components, system:read, system:update, component:read and component:update for a slot assignment, the update permission of what a value is declared on, and standard:create when a standard is created from its template. A location outside your scope for the piece there refuses that piece (404 when you cannot read it, 403 when you cannot create in it).",
+			"Gated by location:read, and each piece needs what its own create needs: location:create for locations, system:create for systems, component:create for components, system:read, system:update, component:read and component:update for a slot assignment, the update permission of what a value is declared on, and standard:create when a standard is created from its template. A location outside your scope for the piece there refuses that piece as its own create does (a location you cannot read reads as not found, 422; one you can read but not create in is a 403). A parent_key or location_key the plan does not hold, or a key given twice, is a 422 naming the row. The request body is held to the server's 1 MiB cap as every route's is, also a 413.",
 	}, "location", "read"), func(ctx context.Context, in *applyPlanInput) (*applyPlanOutput, error) {
 		if n := planRows(in); n > planRowLimit {
 			return nil, huma.NewError(http.StatusRequestEntityTooLarge, fmt.Sprintf("the plan carries %d rows, over the limit of %d; split it into plans of at most %d rows (by building) and apply each", n, planRowLimit, planRowLimit))

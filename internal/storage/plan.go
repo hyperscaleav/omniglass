@@ -98,6 +98,12 @@ type PlanScopes struct {
 // who may not create a standard.
 var ErrPlanStandardForbidden = errors.New("storage: creating the standard from its template needs standard:create")
 
+// ErrPlanKey is a plan that refers to its own pieces wrongly: a parent_key
+// that names no earlier location of the plan, a location key no location of
+// the plan holds, or one key given to two locations. It is the plan's own
+// mistake, not a refusal of any piece's create.
+var ErrPlanKey = errors.New("storage: plan key")
+
 // PlanError says which piece of a plan failed, so a caller maps the cause
 // the way that piece's own route maps it. Stage is standard, location, system,
 // component, endpoint, slot, property (a component's declared value) or
@@ -209,10 +215,13 @@ func (p *PG) createPlanTx(ctx context.Context, tx pgx.Tx, actorID string, plan P
 		if pl.ParentKey != "" {
 			parent, ok := locations[pl.ParentKey]
 			if !ok {
-				return nil, &PlanError{Stage: "location", Ref: pl.Key, Path: at, Err: fmt.Errorf("parent %q is not an earlier place of the plan", pl.ParentKey)}
+				return nil, &PlanError{Stage: "location", Ref: pl.Key, Path: at, Err: fmt.Errorf("%w: parent %q is not an earlier location of the plan", ErrPlanKey, pl.ParentKey)}
 			}
 			id := parent.ID
 			spec.ParentName = &id
+		}
+		if _, dup := locations[pl.Key]; dup {
+			return nil, &PlanError{Stage: "location", Ref: pl.Key, Path: at, Err: fmt.Errorf("%w: key %q is given to an earlier location of the plan", ErrPlanKey, pl.Key)}
 		}
 		l, err := p.createLocationTx(ctx, tx, actorID, spec, sc.LocationCreate)
 		if err != nil {
@@ -227,7 +236,7 @@ func (p *PG) createPlanTx(ctx context.Context, tx pgx.Tx, actorID string, plan P
 		}
 		l, ok := locations[key]
 		if !ok {
-			return nil, fmt.Errorf("location %q is not a location of the plan", key)
+			return nil, fmt.Errorf("%w: location %q is not a location of the plan", ErrPlanKey, key)
 		}
 		id := l.ID
 		return &id, nil

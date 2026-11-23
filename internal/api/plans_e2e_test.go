@@ -153,6 +153,25 @@ func TestApplyPlanRefusesWhole(t *testing.T) {
 		t.Fatalf("refused plans left %d rows", n-before)
 	}
 
+	// A key the plan does not hold, or one it holds twice, is the client's
+	// mistake: a 422 naming the row, never a 500.
+	for _, c := range []struct {
+		body map[string]any
+		path string
+	}{
+		{map[string]any{"locations": []map[string]any{{"key": "f", "parent_key": "b", "type": "floor"}, {"key": "b", "type": "building"}}}, "locations[0]"},
+		{map[string]any{"systems": []map[string]any{{"location_key": "nope", "type": "meeting"}}}, "systems[0]"},
+		{map[string]any{"components": []map[string]any{{"location_key": "nope", "product": disp.Name}}}, "components[0]"},
+		{map[string]any{"locations": []map[string]any{{"key": "b", "name": "twice-a", "type": "building"}, {"key": "b", "name": "twice-b", "type": "building"}}}, "locations[1]"},
+	} {
+		if detail := string(f.c.do(f.owner, http.MethodPost, "/plans:apply", c.body, http.StatusUnprocessableEntity)); !strings.Contains(detail, c.path) {
+			t.Fatalf("bad key refusal = %s, want it to name %s", detail, c.path)
+		}
+	}
+	if n := rows(); n != before {
+		t.Fatalf("plans with bad keys left %d rows", n-before)
+	}
+
 	// component:create reaches only annex: a component at hq is refused, and
 	// the one the plan placed at annex before it rolls back with it.
 	annexOnly := f.split("annex-placer", "annex")

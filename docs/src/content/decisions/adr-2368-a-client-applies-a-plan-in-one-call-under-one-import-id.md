@@ -23,7 +23,9 @@ refs: [2368, 827, 522, 2369]
      is a uuidv7 the handler mints per apply and returns; nothing else stores it.
   4. **A refusal names its piece.** `PlanError.Path` is the piece's place in the plan
      (`locations[2]`, `systems[1].components[0]`, `components[3]`), leading the mapped detail and
-     set as the error's location; the status is the piece's own route's.
+     set as the error's location; the status is the piece's own route's. A plan that refers to
+     its own pieces wrongly (a `parent_key` or `location_key` it does not hold, a key given twice)
+     is `storage.ErrPlanKey`, a 422 naming the row.
   5. **Bounded.** At most 1000 rows (each standard, location, system, component and declared value
      one); over it is a 413 naming the limit. A client chunks by building, each chunk its own plan
      and import id.
