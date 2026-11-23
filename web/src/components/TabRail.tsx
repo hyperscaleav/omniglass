@@ -1,4 +1,4 @@
-import { For, Show } from "solid-js";
+import { For, Show, children, type JSX } from "solid-js";
 import { useSearchParams } from "@solidjs/router";
 import type { LeaveGuard } from "../lib/leave_guard";
 
@@ -11,8 +11,14 @@ import type { LeaveGuard } from "../lib/leave_guard";
 //
 // `guard` is the page's leave guard (lib/leave_guard): switching to ANOTHER
 // facet asks it first, so unsaved Configure drafts are not dropped silently.
-export default function TabRail(props: { tabs: { key: string; label: string }[]; activeKey?: () => string; guard?: LeaveGuard }) {
+//
+// `end` is a page-wide control the rail carries at its far end, outside the
+// tablist (the page's time range, #2304): it governs every facet's content,
+// so it sits on the rail rather than inside one facet.
+export default function TabRail(props: { tabs: { key: string; label: string }[]; activeKey?: () => string; guard?: LeaveGuard; end?: JSX.Element }) {
   const [params, setParams] = useSearchParams();
+  // Resolved once: reading props.end twice would build the control twice.
+  const end = children(() => props.end);
   const name = () => "tab";
   const active = () => {
     // A page whose default facet is DERIVED (the ?edit=1 landing on
@@ -25,7 +31,8 @@ export default function TabRail(props: { tabs: { key: string; label: string }[];
   };
   return (
     <Show when={props.tabs.length > 1}>
-      <div data-testid="tab-rail" role="tablist" class="flex flex-wrap gap-1 border-b border-base-300 px-4 pt-2">
+      <div data-testid="tab-rail" class="flex flex-wrap items-end gap-x-2 gap-y-1 border-b border-base-300 px-4 pt-2">
+      <div role="tablist" class="flex flex-wrap gap-1">
         <For each={props.tabs}>
           {(t) => (
             <button
@@ -50,6 +57,10 @@ export default function TabRail(props: { tabs: { key: string; label: string }[];
             </button>
           )}
         </For>
+      </div>
+      <Show when={end()}>
+        <div class="ml-auto pb-1">{end()}</div>
+      </Show>
       </div>
     </Show>
   );

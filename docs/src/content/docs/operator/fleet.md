@@ -260,7 +260,7 @@ outline rooted there.
 
 The system's view refreshes on its own while it is open, every 5 seconds: its health, **Why**,
 the slots and who is staffing them, each component's health light, and the data section's latest
-values (the 24 hour sparklines every 30), and on **Activity** the health history, events and logs. A component going down shows up as the system's new
+values (a preset range's sparklines every 30), and on **Activity** the health history, events and logs. A component going down shows up as the system's new
 health and the alarm in Why without a reload, and every age on the page (since when, how long an
 alarm has been raised) keeps counting. It reads only this system and its members, never the whole
 fleet, and stops while the browser tab is hidden.
@@ -330,15 +330,26 @@ and health as any other marker.
 ::screenshot{#fleet-map}
 
 Below the map, when the standard declares metrics, the **data** section stacks every one
-of them, the only place a metric's latest value is said: a sparkline of the last 24 hours beside the latest value, one row per series, so
+of them, the only place a metric's latest value is said: a sparkline of the page's time range beside the latest value, one row per series, so
 the system's numbers read together. Click a row for the full chart, newest at the right,
-the newest bucket's last value floating on its dot. The day is drawn in five-minute buckets, so
-however busy the metric the whole day is there: the line is each bucket's average and the shaded band
+the newest bucket's last value floating on its dot. The range is drawn in a few hundred buckets
+(a day in five-minute buckets, a week or a month in hours), so however busy the metric the whole
+range is there: the line is each bucket's average and the shaded band
 behind it runs from its lowest to its highest reading, so a one-sample spike shows at any zoom. Hover a
 point for the bucket's average, range and sample count. A series still on its contract default has
 nothing to chart yet, and says so.
 
 ::screenshot{#fleet-data}
+
+The **time range** at the end of Overview's tab rail sets that window for every chart on the
+page: the last 1 hour, 6 hours, 24 hours (the default), 7 days or 30 days, each sliding to now,
+or a custom range with a fixed start and end in your local time. The range is part of the
+address (`?range=7d`, or `?from=` and `?to=` for a custom range), so a link you copy opens on
+the same window for whoever follows it, and an address with a range it cannot read opens on the
+default rather than failing. A custom range is read through the [views](/architecture/views/)
+read, so it is offered only to a caller who holds `view:read`; a preset needs only the
+system's own read. Activity keeps its fixed windows for now (30 days of health history, 24 hours
+of events and logs), so the control is not on that tab.
 
 ## Activity: the history, the events, the logs
 
