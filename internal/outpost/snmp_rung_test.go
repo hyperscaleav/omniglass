@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -154,11 +155,11 @@ func TestAnSNMPAuthorizationErrorGatesTheSessionRungAndHoldsTheGet(t *testing.T)
 	// fingerprint, and the agent's state is unobserved: the rung reads down,
 	// rejected, so the verdict follows rather than freezing at the last
 	// answer (review of #821, finding 1).
-	if r := held[collection.SignalEndpointResponsive]; r.Text != "down" || r.Labels[collection.ReasonLabel] != "rejected: auth" {
-		t.Fatalf("held responsive = %+v, want down, rejected: auth", r)
+	if r := held[collection.SignalEndpointResponsive]; r.Text != "up" || !strings.HasPrefix(r.Labels[collection.ReasonLabel], "held: auth since ") {
+		t.Fatalf("held responsive = %+v, want up, held: auth since <ts> (#2294)", r)
 	}
-	if up, ok := collection.EndpointReachability(dps); !ok || up {
-		t.Fatalf("held verdict = %v, %v, want down", up, ok)
+	if _, ok := probeReachability(dps); ok {
+		t.Fatal("a held rung gave the gate a verdict")
 	}
 	poll := collection.TaskSpec{ID: "p1", Mode: "poll", Transport: "snmp", EndpointID: "ep-s", EndpointName: "snmp", Fingerprint: "fp-1",
 		EndpointParams: json.RawMessage(`{"target":"10.0.0.9:161"}`),
