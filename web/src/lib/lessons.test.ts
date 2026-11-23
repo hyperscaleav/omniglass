@@ -42,8 +42,13 @@ describe("the lessons", () => {
     }
   });
 
-  it("ship with every sibling capability off, so no step links ahead of its surface", () => {
-    expect(Object.values(CAPABILITIES).every((v) => v === false)).toBe(true);
+  it("turn a sibling's capability on only once its surface is on main", () => {
+    expect(CAPABILITIES).toEqual({
+      "endpoint-test": true, // #2494
+      "overlay-timeline": false, // #2425
+      "sim-faults": false, // #2462
+      "metrics-grid": false, // #2424
+    });
   });
 });
 

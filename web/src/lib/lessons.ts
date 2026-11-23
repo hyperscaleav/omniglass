@@ -35,7 +35,7 @@ export type Capability =
   | "metrics-grid"; // #2424: the synced-cursor metrics grid
 
 export const CAPABILITIES: Record<Capability, boolean> = {
-  "endpoint-test": false,
+  "endpoint-test": true, // #2427 landed (#2494): the Collection section's poll test
   "overlay-timeline": false,
   "sim-faults": false,
   "metrics-grid": false,
@@ -117,8 +117,8 @@ export const LESSONS: Lesson[] = [
         better: {
           needs: "endpoint-test",
           prose:
-            "Reach is judged in rungs, in order: reachable, responsive, authenticated. Test an endpoint to run one poll now and see which rung answers.",
-          link: { label: "Test an endpoint", to: "/components/{component}?tab=configure" },
+            "Reach is judged in rungs, in order: reachable (the address answers), responsive (the protocol speaks back), authenticated (the device accepts our credentials). The first rung that fails is where to look. On the component's page, test an endpoint's poll to run one now and see what it read, or the real cause it was refused.",
+          link: { label: "Test its poll", to: "/components/{component}" },
         },
       },
       {

@@ -47,11 +47,11 @@
       "steps": [
         {
           "title": "The reach ladder",
-          "prose": "Reach is judged in rungs, in order: reachable (the address answers), responsive (the protocol speaks back), authenticated (the device accepts our credentials). The first rung that fails is where to look: a network problem stops low, a device or credential problem higher. Expand an endpoint to read its rungs.",
+          "prose": "Reach is judged in rungs, in order: reachable (the address answers), responsive (the protocol speaks back), authenticated (the device accepts our credentials). The first rung that fails is where to look. On the component's page, test an endpoint's poll to run one now and see what it read, or the real cause it was refused.",
           "live": "reach",
           "link": {
-            "label": "Open its endpoints",
-            "to": "/components/{component}?tab=configure"
+            "label": "Test its poll",
+            "to": "/components/{component}"
           }
         },
         {

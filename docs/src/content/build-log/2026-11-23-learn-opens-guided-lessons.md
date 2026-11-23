@@ -23,5 +23,6 @@ caller's own binding (a platform-domain namespace is a 403, a platform-locked ke
 Four steps would be better with surfaces siblings are building (test an endpoint #2427, the overlay
 timeline #2425, one-click simulated faults #2462, the metrics grid #2424). Each is written against
 what the console has today and carries its better form behind a capability that is off until that
-surface lands. With no simulator connected, the page says so and links the lab instructions. The
+surface lands. Test an endpoint landed while this was in review (#2494), so lesson 2's first step
+already sends the learner to the component's poll test. With no simulator connected, the page says so and links the lab instructions. The
 rule preview moved out of the event rules page into its own component so the lesson reuses it.
