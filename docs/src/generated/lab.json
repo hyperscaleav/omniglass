@@ -245,7 +245,7 @@
     {
       "id": "read-what-happened-on-the-timeline",
       "title": "Read what happened on the timeline",
-      "description": "Open a system's Timeline over the last six hours, rest the pointer on the lanes, and read every lane at that instant, the metrics grid's crosshair standing at the same moment.",
+      "description": "A display drops off the network and recovers; open its system's Timeline, rest the pointer on the alarm's span to read when it was raised, when it cleared and for how long, then on the command sent while it was down.",
       "lab": [],
       "setup": []
     },
