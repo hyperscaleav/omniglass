@@ -10,21 +10,23 @@ sidebar:
 screenshots:
   - id: alarm-troubleshoot
     path: /web/systems/auditorium
-    alt: "The auditorium DSP's blade: its Why strip holds the high alarm, No route to host on the control interface, with the bot button that asks omnibot to troubleshoot it."
-    # The auditorium is degraded on its DSP's high alarm; the alarm opens the
-    # DSP's blade, whose Why row carries the troubleshoot button.
+    alt: "The auditorium DSP's blade, its detail page in a side panel: the Why strip holds the high alarm, No route to host on the control interface, with Acknowledge, Snooze, the bot button that asks omnibot to troubleshoot it and its timeline, then what it is, the systems it serves, its vitals and collection."
+    # The auditorium is degraded on its DSP's high alarm; the alarm's component
+    # opens the DSP's blade, whose Why row carries the troubleshoot button.
     steps:
       - action: click
-        selector: "[data-testid=alarm-strip] button"
+        selector: "[data-testid=alarm-strip] button:has-text('dsp-1')"
       - action: wait
-        selector: "[data-testid=blade-why] button[aria-label*='with omnibot']"
-    # The blade's since line, and behind it the system's since line and its
-    # alarm strip (the row's age), all count from the capture's own clock.
+        selector: "aside[data-blade] [data-testid=leaf-alarms] button[aria-label*='with omnibot']"
+    # The blade's since line and alarm ages, its live vitals and collection
+    # ages, and behind it the system's since line and its alarm strip, all
+    # count from the capture's own clock.
     mask:
-      - selector: "[data-testid=blade-since]"
-        width: 184
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
       - "[data-testid=alarm-strip]"
+      - "[data-testid=leaf-alarms]"
+      - "aside[data-blade] [data-testid=leaf-vitals]"
+      - "aside[data-blade] [data-testid=leaf-collection]"
   - id: alarm-queue
     path: /web/alarms?state=active
     alt: "The Alarms page: the fleet's active alarms, worst first, one row each with its component, system, location, when it was raised and whether it is acknowledged or snoozed, and the Acknowledge, Snooze and omnibot buttons on each row."

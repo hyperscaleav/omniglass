@@ -50,7 +50,7 @@ export default function ComponentLeaf() {
     if (c && c.id !== id()) navigate(`/components/${c.id}${location.search}`, { replace: true });
   });
 
-  // The path: the component's place, or its primary system's standing in.
+  // The path: the component's location, or its primary system's standing in.
   const memberships = useQuery(() => ({
     queryKey: componentSystemsKey(component()?.id ?? id()),
     queryFn: () => componentSystems(component()?.id ?? id()),
