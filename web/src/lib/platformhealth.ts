@@ -222,7 +222,7 @@ export function simStateNote(n: Pick<PlatformSimOutpost, "state">): string | nul
   return null;
 }
 
-export const NOT_WIRED = "not wired yet";
+export const NOT_WIRED = "outpost does not report";
 
 // wiredText is a figure the outpost does not report yet (its dispatch queue depth
 // and busy workers): no number until it does.

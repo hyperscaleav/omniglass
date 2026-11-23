@@ -10,14 +10,9 @@ import { join } from "node:path";
 // "not wired yet" placeholders, outside the allowlist below.
 //
 // Allowlist (each entry is file + the exact line, so a new marker in the same
-// file still fails):
-//  - lib/platformhealth.ts NOT_WIRED "not wired yet": Platform health's Queue
-//    depth and Busy workers figures. Owned by #2446, which replaces them.
-//  - lib/tape.ts / lib/binding.ts style prose "as soon as" is a comment and is
-//    stripped; no code-line prose is allowlisted.
-const ALLOW: { file: string; line: string; why: string }[] = [
-  { file: "lib/platformhealth.ts", line: 'export const NOT_WIRED = "not wired yet";', why: "#2446 owns Platform health's unwired figures" },
-];
+// file still fails). Empty: prose "as soon as" in a comment is stripped, and no
+// code-line prose is allowlisted.
+const ALLOW: { file: string; line: string; why: string }[] = [];
 
 const PATTERN = /\bsoon\b|not (?:built|wired) yet/i;
 const SRC = join(__dirname);
