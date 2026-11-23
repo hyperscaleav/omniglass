@@ -681,76 +681,51 @@ func (p *PG) attachAlarmLocations(ctx context.Context, alarms []Alarm) error {
 
 // attachSystemLocations names a location for the alarms whose component has
 // none of its own (#2426): a component placed only through its system sits
-// where that system does. The alarm's own Systems are the ones the caller may
-// read, so this discloses no system the caller could not already see; the first
-// by name wins. One query and one batched walk for the page.
+// where that system does. Only the alarm's SystemIDs (the systems the caller
+// may read) are consulted, by id, so a hidden same-named system lends nothing;
+// the first by name wins. One batched walk for the page.
 func (p *PG) attachSystemLocations(ctx context.Context, alarms []Alarm) error {
-	var comps, names []string
+	var sysIDs []string
 	for _, a := range alarms {
-		if a.LocationName == "" && len(a.Systems) > 0 {
-			comps = append(comps, a.ComponentID)
-			names = append(names, a.Systems...)
+		if a.LocationName == "" {
+			sysIDs = append(sysIDs, a.SystemIDs...)
 		}
 	}
-	if len(comps) == 0 {
+	if len(sysIDs) == 0 {
 		return nil
 	}
-	rows, err := p.pool.Query(ctx, `
-		select m.component_id::text, s.id::text, s.name
-		from system_member m join system s on s.id = m.system_id
-		where m.component_id = any($1::uuid[]) and s.name = any($2::text[])
-		order by s.name, s.id`, distinctIDs(comps), names)
-	if err != nil {
-		return fmt.Errorf("storage: read alarm systems: %w", err)
-	}
-	defer rows.Close()
-	type pair struct{ comp, sys string }
-	var pairs []pair
-	var sysIDs []string
-	for rows.Next() {
-		var c, id, name string
-		if err := rows.Scan(&c, &id, &name); err != nil {
-			return fmt.Errorf("storage: scan alarm system: %w", err)
-		}
-		pairs = append(pairs, pair{c, id})
-		sysIDs = append(sysIDs, id)
-	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	paths, err := PathsOf(ctx, p.pool, systemTable, distinctIDs(sysIDs))
+	sysIDs = distinctIDs(sysIDs)
+	paths, err := PathsOf(ctx, p.pool, systemTable, sysIDs)
 	if err != nil {
 		return err
 	}
-	sysLocs, err := planeRootLocationIDs(ctx, p.pool, systemTable, distinctIDs(sysIDs))
+	sysLocs, err := planeRootLocationIDs(ctx, p.pool, systemTable, sysIDs)
 	if err != nil {
 		return err
-	}
-	byCompID := map[string]string{}
-	byComp := map[string][]string{}
-	for _, pr := range pairs {
-		if _, done := byComp[pr.comp]; done {
-			continue
-		}
-		var loc []string
-		for _, s := range paths[pr.sys] {
-			if s == accessorSys {
-				break
-			}
-			loc = append(loc, s)
-		}
-		if len(loc) > 0 {
-			byComp[pr.comp] = loc
-			if id := sysLocs[pr.sys]; id != nil {
-				byCompID[pr.comp] = *id
-			}
-		}
 	}
 	for i := range alarms {
-		if loc := byComp[alarms[i].ComponentID]; alarms[i].LocationName == "" && len(loc) > 0 {
+		if alarms[i].LocationName != "" {
+			continue
+		}
+		// SystemIDs are the caller-readable systems in name order: the first
+		// that sits at a location lends it.
+		for _, sys := range alarms[i].SystemIDs {
+			var loc []string
+			for _, s := range paths[sys] {
+				if s == accessorSys {
+					break
+				}
+				loc = append(loc, s)
+			}
+			if len(loc) == 0 {
+				continue
+			}
 			alarms[i].LocationPath = loc
 			alarms[i].LocationName = loc[len(loc)-1]
-			alarms[i].LocationID = byCompID[alarms[i].ComponentID]
+			if id := sysLocs[sys]; id != nil {
+				alarms[i].LocationID = *id
+			}
+			break
 		}
 	}
 	return nil

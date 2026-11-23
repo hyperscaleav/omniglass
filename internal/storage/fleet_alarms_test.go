@@ -324,3 +324,52 @@ func TestFleetAlarmLocationFallsBackToTheSystemsLocation(t *testing.T) {
 		t.Errorf("location id %q, want fb-r1's uuid (%v)", rows[0].LocationID, err)
 	}
 }
+
+// The fallback looks only at the systems the caller may read: a hidden system
+// that shares a readable system's name must not lend its location (#2426).
+func TestFleetAlarmLocationFallbackIgnoresAHiddenSameNamedSystem(t *testing.T) {
+	t.Parallel()
+	gw, _ := secretGateway(t)
+	ctx := context.Background()
+	all := scope.Set{All: true}
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hid-room", LocationType: "campus"}, all); err != nil {
+		t.Fatalf("location: %v", err)
+	}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "hid-comp"}, all, all, all, all); err != nil {
+		t.Fatalf("component: %v", err)
+	}
+	visible, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "hid-dup"}, all, all)
+	if err != nil {
+		t.Fatalf("visible system: %v", err)
+	}
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "hid-dup", LocationName: strptr("hid-room")}, all, all); err != nil {
+		t.Skipf("same-named system not creatable here: %v", err)
+	}
+	for _, id := range []string{visible.ID} {
+		if err := gw.AddMember(ctx, "", id, "hid-comp", all, all, all, all); err != nil {
+			t.Fatalf("member: %v", err)
+		}
+	}
+	rows, err := gw.ListSystems(ctx, all)
+	if err != nil {
+		t.Fatalf("systems: %v", err)
+	}
+	for _, s := range rows {
+		if s.ID != visible.ID && s.Name == "hid-dup" {
+			if err := gw.AddMember(ctx, "", s.ID, "hid-comp", all, all, all, all); err != nil {
+				t.Fatalf("hidden member: %v", err)
+			}
+		}
+	}
+	if _, err := gw.RaiseAlarm(ctx, "", "hid-comp", storage.AlarmSpec{Severity: "high", Message: "x", DedupKey: "x"}); err != nil {
+		t.Fatalf("raise: %v", err)
+	}
+	seeing := scope.Set{IDs: []string{visible.ID}}
+	got, _, err := gw.ListFleetAlarms(ctx, all, seeing, storage.AlarmFilter{}, 100)
+	if err != nil || len(got) != 1 {
+		t.Fatalf("list = %d (%v)", len(got), err)
+	}
+	if got[0].LocationName != "" || got[0].LocationID != "" {
+		t.Errorf("location %q leaked from a system the caller cannot read", got[0].LocationName)
+	}
+}
