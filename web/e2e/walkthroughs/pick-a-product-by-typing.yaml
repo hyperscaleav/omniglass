@@ -1,0 +1,26 @@
+# Pick from a long list by typing (#2485): the Product field of a new simulated
+# component is a Picker, which filters on the product and its profile as you
+# type, draws the profile under each product, and works from the keyboard
+# inside the drawer.
+title: Pick a product by typing
+description: In the Add simulated component drawer, type part of a product or its profile, read the matches with the profile under each, and choose one from the keyboard.
+steps:
+  - goto: /simulation
+    caption: The Simulation page. Its simulators answer for well over a hundred products.
+  - click: { role: button, name: Add simulated component }
+    caption: Add a simulated component. The form opens in a drawer.
+  - click: { role: combobox, name: Product }
+    caption: The Product field takes typing, not scrolling.
+  - type: { target: 'role=combobox[name="Product"]', text: census }
+    caption: Type any part of the product or of the profile that serves it.
+  - wait: { text: Tessellate Census C1 (people-counter) }
+    caption: Only the matches remain, each with its profile beneath it, so two similar names are easy to tell apart.
+    hold: 1200
+    poster: true
+  - press: ArrowDown
+    caption: The arrow keys move through the matches while the typing stays in the field.
+  - press: Enter
+    caption: Enter chooses it.
+  - wait: { selector: 'input[data-field-target][aria-expanded="false"]' }
+    caption: The product is chosen and the list closes; the rest of the form is next.
+    hold: 1200
