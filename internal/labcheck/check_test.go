@@ -7,6 +7,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
 	"github.com/hyperscaleav/omniglass/internal/devseed"
 	"github.com/hyperscaleav/omniglass/internal/labcheck"
+	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/transport"
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
@@ -229,7 +230,7 @@ func TestATelnetEndpointWithItsSessionUpOwesNoProbeTiming(t *testing.T) {
 func TestAPlatformComponentWithNoEndpointIsNotAFindingButAFleetOneIs(t *testing.T) {
 	s := healthy()
 	s.Components = append(s.Components, labcheck.Component{
-		Name: "server", Product: "omniglass-server",
+		Name: "server", Product: storage.ServerProductName,
 		Values: []labcheck.Value{{Key: "uptime", Class: writerclass.Platform}},
 	})
 	if fs := labcheck.Evaluate(s, nil); len(fs) != 0 {
