@@ -177,3 +177,11 @@ model, and [Drivers](/admin/drivers/) for the other leaf catalog beside it.
 Minting a vendor is admin-gated; the picker that consumes it lives on the
 product create and edit forms. The same operations are `omniglass vendor
 list/get/create/update/delete` from the CLI (see the [CLI reference](/reference/cli/)).
+
+## Lifecycle on a product
+
+A product's contract carries the six official lifecycle fields as defaults (see
+[Lifecycle fields](/admin/properties/#lifecycle-fields)): `install-date`, `warranty-end`,
+`end-of-support` and `end-of-life` as properties, `replacement-cost` and `expected-life-years` as
+metrics. What you set shows in the product's **Lifecycle** group and is each component's effective
+value until that component overrides a date.
