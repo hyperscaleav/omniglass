@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { uuidFor } from "./testids";
 import { componentOptions, humanizeName, readsKeyFromParam, readsOptions, ruleFormPrefill, alarmOnThisHref } from "./rule_form";
 
 const metrics = [
@@ -35,14 +36,14 @@ describe("readsOptions", () => {
 describe("componentOptions", () => {
   it("tells same-named components apart by their place", () => {
     const o = componentOptions([
-      { id: "a", name: "display-1", label: "Display 1", location: "Room A", system: "Sys A" },
-      { id: "b", name: "display-1", label: "Display 1", location: "Room B" },
-      { id: "c", name: "orphan" },
+      { id: uuidFor("a"), name: "display-1", label: "Display 1", location: "Room A", system: "Sys A" },
+      { id: uuidFor("b"), name: "display-1", label: "Display 1", location: "Room B" },
+      { id: uuidFor("c"), name: "orphan" },
     ]);
     expect(o.map((x) => [x.value, x.label, x.detail])).toEqual([
-      ["a", "Display 1", "Room A · Sys A"],
-      ["b", "Display 1", "Room B"],
-      ["c", "orphan", "unplaced"],
+      [uuidFor("a"), "Display 1", "Room A · Sys A"],
+      [uuidFor("b"), "Display 1", "Room B"],
+      [uuidFor("c"), "orphan", "unplaced"],
     ]);
   });
 });
