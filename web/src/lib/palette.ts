@@ -1,4 +1,5 @@
 import type { DrawerKind } from "./drawer_address";
+import { entityLabel } from "./entities";
 import type { Command } from "../components/CommandPalette";
 
 // The command palette's results (#2444): the pure half. What the server found
@@ -44,7 +45,10 @@ export function entityDetail(e: SearchEntity): string | undefined {
 // The words a row reads: the label alone when it is only the name spelled for people
 // (Video Bar 1 for videobar-1), the label with the name after it when they differ.
 const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
-export const displayLabel = (name: string, label?: string): string => (label && squash(label) !== squash(name) ? `${label} (${name})` : (label ?? name));
+export const displayLabel = (name: string, label?: string): string => {
+  const shown = entityLabel({ name, label });
+  return squash(shown) === squash(name) ? shown : `${shown} (${name})`;
+};
 
 const fleetHit = (group: GroupName, kind: "locations" | "systems" | "components", e: SearchEntity): Hit => ({
   value: `${kind}:${e.id}`,

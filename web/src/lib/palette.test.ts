@@ -1,3 +1,4 @@
+import { uuidFor } from "./testids";
 import { describe, it, expect } from "vitest";
 import { askHit, displayLabel, entityDetail, fleetHref, layout, pageHit, readRecent, remember, searchHits, sections, type Hit } from "./palette";
 
@@ -8,11 +9,11 @@ const memory = (): Storage => {
 
 describe("search hits", () => {
   const hits = searchHits({
-    locations: [{ id: "l1", name: "auditorium", location_path: "hq" }],
+    locations: [{ id: uuidFor("l1"), name: "auditorium", location_path: "hq" }],
     systems: [],
     components: [
-      { id: "c1", name: "panel-1", location_path: "hq / auditorium", system: "main-av" },
-      { id: "c2", name: "panel-1", location_path: "hq / boardroom" },
+      { id: uuidFor("c1"), name: "panel-1", location_path: "hq / auditorium", system: "main-av" },
+      { id: uuidFor("c2"), name: "panel-1", location_path: "hq / boardroom" },
     ],
     catalog: [
       { kind: "driver", name: "boreal-edge-snmp", label: "Boreal Edge SNMP", detail: "1.0.0" },
@@ -23,7 +24,7 @@ describe("search hits", () => {
   it("opens a fleet entity at its page and tells same-named components apart by location", () => {
     const panels = hits.filter((h) => h.label === "panel-1");
     expect(panels.map((h) => h.detail)).toEqual(["hq / auditorium · in main-av", "hq / boardroom"]);
-    expect(panels.map((h) => h.command?.path)).toEqual(["/components/c1", "/components/c2"]);
+    expect(panels.map((h) => h.command?.path)).toEqual([`/components/${uuidFor("c1")}`, `/components/${uuidFor("c2")}`]);
     expect(fleetHref("locations", "a/b")).toBe("/locations/a%2Fb");
   });
 
@@ -35,7 +36,7 @@ describe("search hits", () => {
   });
 
   it("has no detail when the entity has no location", () => {
-    expect(entityDetail({ id: "x", name: "x" })).toBeUndefined();
+    expect(entityDetail({ id: uuidFor("x"), name: "x" })).toBeUndefined();
   });
 });
 

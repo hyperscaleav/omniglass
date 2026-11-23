@@ -1,3 +1,4 @@
+import { uuidFor } from "../lib/testids";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createSignal } from "solid-js";
 import { render, fireEvent, screen, waitFor, within } from "@solidjs/testing-library";
@@ -12,17 +13,17 @@ import type { SearchResult } from "../lib/palette";
 // comes back is laid out in groups, each component with its location, the first row
 // the default, "Ask omnibot" always last.
 const HITS: SearchResult = {
-  locations: [{ id: "loc-aud", name: "auditorium", location_path: "hq" }],
-  systems: [{ id: "sys-1", name: "auditorium-av", location_path: "hq / auditorium" }],
+  locations: [{ id: uuidFor("loc-aud"), name: "auditorium", location_path: "hq" }],
+  systems: [{ id: uuidFor("sys-1"), name: "auditorium-av", location_path: "hq / auditorium" }],
   components: [
-    { id: "c-1", name: "panel-1", location_path: "hq / auditorium", system: "auditorium-av" },
-    { id: "c-2", name: "panel-1", location_path: "hq / boardroom" },
+    { id: uuidFor("c-1"), name: "panel-1", location_path: "hq / auditorium", system: "auditorium-av" },
+    { id: uuidFor("c-2"), name: "panel-1", location_path: "hq / boardroom" },
   ],
   catalog: [{ kind: "driver", name: "boreal-edge-snmp", label: "Boreal Edge SNMP", detail: "1.0.0" }],
 };
 const EMPTY: SearchResult = { locations: [], systems: [], components: [], catalog: [] };
 
-const ME: Me = { user: { id: "u-1", kind: "person" }, person: { username: "op" }, permissions: [">", "assistant:use"], grants: [] };
+const ME: Me = { user: { id: uuidFor("u-1"), kind: "person" }, person: { username: "op" }, permissions: [">", "assistant:use"], grants: [] };
 
 type Call = { q: string; signal: AbortSignal };
 let calls: Call[];
@@ -122,7 +123,7 @@ describe("palette results", () => {
     expect(document.querySelector("[data-first]")?.textContent).toContain("auditorium");
     expect(document.querySelector("[data-first]")?.textContent).not.toContain("Ask omnibot");
     fireEvent.keyDown(f, { key: "Enter" });
-    await waitFor(() => expect(screen.getByTestId("where").textContent).toBe("/locations/loc-aud"));
+    await waitFor(() => expect(screen.getByTestId("where").textContent).toBe(`/locations/${uuidFor("loc-aud")}`));
   });
 
   it("is the Ask row alone when nothing matched, and Enter hands the query to omnibot", async () => {
@@ -146,7 +147,7 @@ describe("palette results", () => {
     fireEvent.keyDown(f, { key: "ArrowDown" });
     await waitFor(() => expect(document.querySelector("[role=option][data-highlighted]")?.textContent).toContain("panel-1hq / auditorium"));
     fireEvent.keyDown(f, { key: "Enter" });
-    await waitFor(() => expect(screen.getByTestId("where").textContent).toBe("/components/c-1"));
+    await waitFor(() => expect(screen.getByTestId("where").textContent).toBe(`/components/${uuidFor("c-1")}`));
   });
 
   it("opens a catalog entry at its drawer address", async () => {
@@ -216,7 +217,7 @@ describe("recent items", () => {
     await waitFor(async () => expect((await rowTexts()).length).toBeGreaterThan(2));
     fireEvent.keyDown(f, { key: "Enter" });
     await waitFor(() => expect(first.onClose).toHaveBeenCalled());
-    expect(JSON.parse(sessionStorage.getItem("og-palette-recent:u-1") ?? "[]")[0]).toMatchObject({ path: "/locations/loc-aud" });
+    expect(JSON.parse(sessionStorage.getItem("og-palette-recent:u-1") ?? "[]")[0]).toMatchObject({ path: `/locations/${uuidFor("loc-aud")}` });
 
     fireEvent.click(first.trigger);
     await waitFor(async () => expect((await rowTexts())[0]).toContain("auditorium"));
