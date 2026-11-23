@@ -296,15 +296,78 @@ func TestLocationReclassifyEnforcement(t *testing.T) {
 	if placementErr.ChildType != "t-noroot" || placementErr.ParentType != "" {
 		t.Errorf("placement error = %+v, want child=t-noroot parent=\"\"", placementErr)
 	}
-	// A root location retyped to a root-allowing type succeeds.
-	if _, err := gw.UpdateLocation(ctx, "", "hq", storage.LocationPatch{LocationType: strptr("t-building")}, all, all); err != nil {
+	// A root location with no children retyped to a root-allowing type succeeds.
+	mustCreate(t, gw, storage.LocationSpec{Name: "solo", LocationType: "t-campus"}, all)
+	if _, err := gw.UpdateLocation(ctx, "", "solo", storage.LocationPatch{LocationType: strptr("t-building")}, all, all); err != nil {
 		t.Fatalf("reclassify root to root-allowing type: %v", err)
 	}
 
 	// Resending the current type is not a change: a grandfathered placement
-	// (hq-b1 sits under hq, now a t-building, which t-building does not allow)
-	// is untouched by a save that restates its type.
+	// (the type narrows to root-only while hq-b1 still sits under hq) is
+	// untouched by a save that restates its type.
+	if _, err := gw.UpdateLocationType(ctx, "", "t-building", storage.LocationTypePatch{AllowedParentTypes: &[]string{storage.RootPlacement}}); err != nil {
+		t.Fatalf("narrow t-building: %v", err)
+	}
 	if _, err := gw.UpdateLocation(ctx, "", "hq-b1", storage.LocationPatch{LocationType: strptr("t-building"), Label: strptr("Building 1")}, all, all); err != nil {
 		t.Fatalf("resend current type on grandfathered placement: %v", err)
+	}
+}
+
+// TestLocationReclassifyChecksChildren: retyping a location in place also
+// checks its direct children (#1854), so a reclassify cannot strand a child
+// under a parent type its own type refuses.
+func TestLocationReclassifyChecksChildren(t *testing.T) {
+	t.Parallel()
+	gw := storagetest.NewDB(t)
+	ctx := context.Background()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	for _, lt := range []storage.LocationType{
+		{Name: "c-building", Label: "C-Building", AllowedParentTypes: []string{storage.RootPlacement}},
+		{Name: "c-floor", Label: "C-Floor", AllowedParentTypes: []string{storage.RootPlacement}},
+		{Name: "c-wing", Label: "C-Wing", AllowedParentTypes: []string{storage.RootPlacement}},
+		{Name: "c-room", Label: "C-Room", AllowedParentTypes: []string{"c-building", "c-wing"}},
+		{Name: "c-desk", Label: "C-Desk"},
+	} {
+		if _, err := gw.CreateLocationType(ctx, "", lt); err != nil {
+			t.Fatalf("create %s type: %v", lt.Name, err)
+		}
+	}
+	mustCreate(t, gw, storage.LocationSpec{Name: "b1", LocationType: "c-building"}, all)
+	mustCreate(t, gw, storage.LocationSpec{Name: "b1-r1", LocationType: "c-room", ParentName: strptr("b1")}, all)
+	mustCreate(t, gw, storage.LocationSpec{Name: "b1-r1-d1", LocationType: "c-desk", ParentName: strptr("b1-r1")}, all)
+	mustCreate(t, gw, storage.LocationSpec{Name: "leaf", LocationType: "c-building"}, all)
+
+	// A room allows only building or wing: retyping its parent to a floor is refused.
+	_, err := gw.UpdateLocation(ctx, "", "b1", storage.LocationPatch{LocationType: strptr("c-floor")}, all, all)
+	var pe *storage.PlacementError
+	if !errors.As(err, &pe) {
+		t.Fatalf("retype under child err = %v, want *storage.PlacementError", err)
+	}
+	if pe.ChildType != "c-room" || pe.ParentType != "c-floor" {
+		t.Errorf("placement error = %+v, want child=c-room parent=c-floor", pe)
+	}
+	got, err := gw.GetLocation(ctx, "b1", all)
+	if err != nil {
+		t.Fatalf("get b1: %v", err)
+	}
+	if got.LocationType != "c-building" {
+		t.Errorf("type after refused retype = %q, want c-building", got.LocationType)
+	}
+
+	// A type every child allows succeeds; grandchildren are not checked.
+	if _, err := gw.UpdateLocation(ctx, "", "b1", storage.LocationPatch{LocationType: strptr("c-wing")}, all, all); err != nil {
+		t.Fatalf("retype to child-allowed type: %v", err)
+	}
+	// A restated type is a no-op even though the child placement is now stale.
+	mustCreate(t, gw, storage.LocationSpec{Name: "w2", LocationType: "c-wing"}, all)
+	mustCreate(t, gw, storage.LocationSpec{Name: "w2-r1", LocationType: "c-room", ParentName: strptr("w2")}, all)
+	if _, err := gw.UpdateLocation(ctx, "", "w2", storage.LocationPatch{LocationType: strptr("c-wing"), Label: strptr("Wing 2")}, all, all); err != nil {
+		t.Fatalf("restated type: %v", err)
+	}
+	// A location with no children is unaffected.
+	if _, err := gw.UpdateLocation(ctx, "", "leaf", storage.LocationPatch{LocationType: strptr("c-floor")}, all, all); err != nil {
+		t.Fatalf("retype childless: %v", err)
 	}
 }

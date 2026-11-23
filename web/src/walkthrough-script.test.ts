@@ -166,6 +166,23 @@ describe("walkthrough setup", () => {
 
 });
 
+// What a walkthrough's lab runs beyond the dev fleet (#2362): a closed list,
+// so a script that needs the identity provider says so and the lab facts can
+// tell a learner it is a script lab's.
+describe("walkthrough lab", () => {
+  const done = [{ wait: { text: "x" }, caption: "a" }];
+  it("is empty unless the script names what its lab runs", () => {
+    expect(ok(done).lab).toEqual([]);
+    expect(ok(done, { lab: ["sso"] }).lab).toEqual(["sso"]);
+  });
+  it("refuses a need outside the list, a repeat, or a list that is not one", () => {
+    expect(bad({ title: "T", steps: done, lab: ["kafka"] })).toContain('w.yaml: lab: unknown need "kafka" (one of sso)');
+    expect(bad({ title: "T", steps: done, lab: ["sso", "sso"] })).toContain("w.yaml: lab: sso is listed twice");
+    expect(bad({ title: "T", steps: done, lab: "sso" })).toContain("w.yaml: lab must be a list drawn from sso");
+    expect(bad({ title: "T", steps: done, lab: [] })).toContain("w.yaml: lab must be a list drawn from sso");
+  });
+});
+
 // A walkthrough's ready condition (#1645): a state the scene needs that only
 // time makes (the server's first report window), waited for in the console off
 // camera before the title card, so the wait never counts against the budget.

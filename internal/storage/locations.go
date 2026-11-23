@@ -1133,6 +1133,9 @@ func (p *PG) UpdateLocation(ctx context.Context, actorID, name string, patch Loc
 		if err := p.validateReclassify(ctx, tx, *typePatchID, before.ParentID); err != nil {
 			return nil, err
 		}
+		if err := p.validateChildrenUnder(ctx, tx, before.ID, *typePatchID); err != nil {
+			return nil, err
+		}
 	}
 	if typePatchID != nil && before.NameGenerated && *typePatchID != before.LocationTypeID {
 		newName, newOrdinal, err := generateNameForLocationType(ctx, tx, *typePatchID, before.ParentID, &before.ID)
@@ -1204,6 +1207,34 @@ func (p *PG) validateReclassify(ctx context.Context, q querier, newTypeID string
 		parentType = &pt
 	}
 	return p.validatePlacement(ctx, q, newType, parentType)
+}
+
+// validateChildrenUnder checks the direct children of a location being retyped
+// in place: each child's type must admit newTypeID as a parent (an empty
+// allowed set is unconstrained). The first offending child type, in name order,
+// is the PlacementError. Grandchildren sit under their own parent, not this
+// one, so they are not checked.
+func (p *PG) validateChildrenUnder(ctx context.Context, q querier, id, newTypeID string) error {
+	var newType string
+	if err := q.QueryRow(ctx, `select name from location_type where id = $1`, newTypeID).Scan(&newType); err != nil {
+		return fmt.Errorf("storage: load location_type %q: %w", newTypeID, err)
+	}
+	rows, err := q.Query(ctx, `
+		select distinct t.name from location c join location_type t on t.id = c.location_type
+		where c.parent_id = $1 order by t.name`, id)
+	if err != nil {
+		return fmt.Errorf("storage: load child types of location %q: %w", id, err)
+	}
+	childTypes, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return fmt.Errorf("storage: load child types of location %q: %w", id, err)
+	}
+	for _, ct := range childTypes {
+		if err := p.validatePlacement(ctx, q, ct, &newType); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // restatedType returns nil for a type ref that re-states what the row already

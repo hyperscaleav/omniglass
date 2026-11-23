@@ -218,11 +218,12 @@ func (d *dockerEngine) RunContainer(ctx context.Context, svc Service, net string
 // own.
 func createOptions(svc Service, net string) (client.ContainerCreateOptions, error) {
 	cfg := &container.Config{
-		Image:  svc.Image,
-		Cmd:    svc.Cmd,
-		Env:    svc.Env,
-		User:   svc.User,
-		Labels: svc.Labels,
+		Image:      svc.Image,
+		Entrypoint: svc.Entrypoint,
+		Cmd:        svc.Cmd,
+		Env:        svc.Env,
+		User:       svc.User,
+		Labels:     svc.Labels,
 	}
 	if len(svc.Health) > 0 {
 		cfg.Healthcheck = &container.HealthConfig{
