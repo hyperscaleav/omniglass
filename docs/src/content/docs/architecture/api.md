@@ -1167,10 +1167,11 @@ The reports are one shape over three owners:
   entry per change, never a sample. All three reads take `since` and `until` (RFC 3339); the default
   is the last 30 days (measured on the database's clock), an absent `since` with an `until` is the
   30 days before it, and `since` after `until` is a **400**. A range holds only edges recorded
-  inside it. A quiet range is empty, so when `since` is given `carried_in` names the health in force
-  when it opened (the newest edge strictly before `since`; absent when nothing was recorded before
-  it, and absent with no `since`), which lets a timeline draw the stretch before the first edge.
-  `first_recorded_at` is when the owner's health was first recorded (null if never), so a reader can
+  inside it. A quiet range is empty, so when the caller bounded the range's start `carried_in` names the
+  health in force when it opened (the newest edge strictly before that start, whether an explicit
+  `since` or the one derived from an `until` alone; absent when nothing was recorded before it, and
+  absent on the default window), which lets a timeline draw the stretch before the first edge.
+  `first_recorded_at` is when the owner's health was first recorded (absent if never), so a reader can
   tell a young owner from a quiet one.
 - `GET /systems/{name}/members` (`system:read`) carries each member's own `component_health`, the
   same recorded value a fleet view dot reads. It is the per-system read of the members' health, so a
@@ -1185,8 +1186,8 @@ The reports are one shape over three owners:
   same overlap rule as the component's read (#2425). A system's health history explains its unhealthy
   stretches with it, one request however many members the system has.
 
-Both resolve their owner **within the caller's scope first** (an out-of-scope system or location is a
-**non-disclosing 404**), and **neither read writes anything**: the health served is computed from the
+All three resolve their owner **within the caller's scope first** (an out-of-scope system, location or component is a
+**non-disclosing 404**), and **no read writes anything**: the health served is computed from the
 very rows served beside it, so a report can never disagree with its own evidence
 ([ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain)).
 

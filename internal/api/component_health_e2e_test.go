@@ -106,8 +106,17 @@ func TestComponentHealthHistoryRange(t *testing.T) {
 	}
 	// Only until: the default span is the 30 days before it, so ten days ago
 	// reaches back past the 40-day edge's neighbours but not to it.
-	if got := read(owner, "/components/mine/health?until="+at(-5*24*time.Hour), http.StatusOK); len(got.Transitions) != n-1 {
+	got := read(owner, "/components/mine/health?until="+at(-5*24*time.Hour), http.StatusOK)
+	if len(got.Transitions) != n-1 {
 		t.Errorf("until alone returned %d transitions, want %d", len(got.Transitions), n-1)
+	}
+	// The derived start is a range start the caller bounded, so the 40-day-old
+	// edge is carried in; the default window has no such start and carries none.
+	if got.CarriedIn == "" {
+		t.Errorf("until alone: carried_in is absent, want the 40-day-old edge carried in")
+	}
+	if def := read(owner, "/components/mine/health", http.StatusOK); def.CarriedIn != "" {
+		t.Errorf("default window: carried_in = %q, want absent", def.CarriedIn)
 	}
 	if got := read(owner, "/components/mine/health?since="+at(-1*time.Hour), http.StatusOK); len(got.Transitions) != 0 {
 		t.Errorf("a range after every edge returned %d transitions, want 0", len(got.Transitions))
