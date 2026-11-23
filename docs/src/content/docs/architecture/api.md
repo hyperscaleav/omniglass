@@ -132,13 +132,13 @@ it (`/endpoints/boi.17c.415a.$comp.display-1%2Fhttps:retry`); the generated CLI 
 **Scope decides before ambiguity does**, for every form. A name's candidates are narrowed to the rows
 the caller may read first (for a secret, also to its admin tier), so a name an out-of-scope row shares
 never makes an in-scope one ambiguous, and an absent row and an out-of-scope one give the same refusal.
-A name that no visible row answers to, or that more than one does, is a **404 naming what was looked
-up**; when more than one answers, the 404 lists each in the spelling that does resolve
+A name that no visible row answers to is a **404 naming what was looked up**; a name that more than
+one does is a **409** (#2334, reversing ADR-1134) that lists each in the spelling that does resolve
 (`$platform/demo-panel-login`, `boi.17c/demo-panel-login`). Resolution runs inside the request's own
 transaction and yields the uuid; the permission check, the read-then-action scope split, and the audit
 row then run on that resolved row exactly as they do for a uuid. The tree entities answer the
-same way (#1134): a bare name that more than one visible component, system or location answers to is a
-404 naming the reference, each candidate spelled as its dotted address with its uuid beside it
+same way (#1134, status reversed by #2334): a bare name that more than one visible component, system or location answers to is a
+409 naming the reference, each candidate spelled as its dotted address with its uuid beside it
 (`boi.17c.415a.$comp.display-1 (<uuid>)`), and either half resolves on the same route. A candidate the
 caller cannot read is neither listed nor counted. A write answers with
 the row it reached (a secret's or variable's `owner_kind`, `owner_id` and `owner_name`), because a

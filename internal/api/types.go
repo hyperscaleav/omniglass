@@ -49,8 +49,8 @@ import (
 // storage.ErrUnresolvedRef is a name reference to one of the resources #1133
 // made addressable by name (an endpoint, a secret, a variable, a file, a
 // user group, a user) that resolves to no single row the caller may
-// see: a 404 naming what was looked up, and, when more than one visible row
-// answers to it, every one of them in the spelling that does resolve. Those
+// see: a 404 naming what was looked up when no row resolves, a 409 listing
+// every candidate in the spelling that does resolve when more than one does. Those
 // candidates are built after the scope filter, so an absent row and an
 // out-of-scope one read identically.
 func mapRefErr(err error) (error, bool) {
