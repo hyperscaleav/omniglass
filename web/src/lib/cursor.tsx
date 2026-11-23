@@ -11,7 +11,10 @@ import { createContext, createSignal, useContext, type Accessor, type JSX } from
 //                          undefined; set(t) moves it, set(undefined) clears
 //   createCursor()         a fresh cursor
 //   <CursorProvider>       shares one cursor with everything beneath it
-//                          (pass `cursor` to share one you hold)
+//                          (pass `cursor` to share one you hold); inside
+//                          another provider it shares the outer one, so a
+//                          page's timeline and its metrics grid read one
+//                          instant (#2425)
 //   useCursor()            the provider's cursor, else a private one, so a
 //                          chart alone on a page still has its crosshair
 //
@@ -28,7 +31,7 @@ export function createCursor(): Cursor {
 const CursorContext = createContext<Cursor>();
 
 export function CursorProvider(props: { cursor?: Cursor; children: JSX.Element }): JSX.Element {
-  const cursor = props.cursor ?? createCursor();
+  const cursor = props.cursor ?? useContext(CursorContext) ?? createCursor();
   return <CursorContext.Provider value={cursor}>{props.children}</CursorContext.Provider>;
 }
 

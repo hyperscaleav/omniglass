@@ -127,6 +127,15 @@ function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: un
 afterEach(cleanup);
 
 describe("the component leaf", () => {
+  // The Timeline view (#2425): the overlay and the metrics grid on one cursor,
+  // under the page's one time range.
+  it("offers a Timeline view with the time range, the overlay and the metrics on it", () => {
+    mount(`/web/components/${uuidFor("cf-c-bar")}?tab=timeline`);
+    expect(screen.getByRole("tab", { name: "Timeline" })).toBeTruthy();
+    expect(screen.getByTestId("timeline-overlay")).toBeTruthy();
+    expect(screen.getByTestId("time-range-trigger")).toBeTruthy();
+  });
+
   // The path names the room once (#872): the room holds one system, so the
   // room's crumb IS the system's, whose view is the room's.
   it("arriving directly walks the places to its one-system room, named once, as the system", () => {

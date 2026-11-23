@@ -411,11 +411,11 @@ describe("the map tab (#791)", () => {
     ] },
   }];
 
-  it("a standard with a map draws it inside Overview; without one there is no map, and the rail stays three tabs", () => {
+  it("a standard with a map draws it inside Overview; without one there is no map, and the rail stays four tabs", () => {
     mount(undefined, health, [], MAPPED);
     expect(screen.getByTestId("system-map")).toBeTruthy();
     expect(screen.queryByRole("tab", { name: "Map" })).toBeNull();
-    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Overview", "Activity", "Configure"]);
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Overview", "Activity", "Timeline", "Configure"]);
     cleanup();
     mount();
     expect(screen.getByTestId("tab-rail")).toBeTruthy();

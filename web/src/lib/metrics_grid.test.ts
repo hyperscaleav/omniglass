@@ -26,4 +26,11 @@ describe("hasData", () => {
     expect(hasData([b(0), b(0)])).toBe(false);
     expect(hasData([b(0), b(3)])).toBe(true);
   });
+
+  it("steps an absolute range reaching back past a day in whole hours", () => {
+    const now = Date.UTC(2026, 10, 23);
+    const from = now - 30 * 86400_000;
+    expect(gridWindow({ kind: "absolute", from, to: from + 86400_000 }, now).stepSeconds).toBe(3600);
+    expect(gridWindow({ kind: "absolute", from: now - 3600_000, to: now }, now).stepSeconds).toBe(60);
+  });
 });

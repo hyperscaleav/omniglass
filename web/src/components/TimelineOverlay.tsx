@@ -243,7 +243,9 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
   const shownMetrics = createMemo(() => pickedMetrics() ?? inputs().metrics.filter((k) => metricNames().includes(k)), [], {
     equals: (a, b) => a.join() === b.join(),
   });
-  const stepS = () => rangeStepSeconds(win().to - win().from);
+  // An absolute range reaching back past a day steps in whole hours, which the
+  // hourly trends answer (#2304).
+  const stepS = () => rangeStepSeconds(win().to - win().from, props.range.kind === "absolute" && win().from < Date.now() - 86400_000 ? true : undefined);
   const metricQ = useQueries(() => ({
     queries: shownMetrics().map((m) => ({
       queryKey: metricBucketsBetweenKey(props.kind, props.id, m, win().from, win().to, stepS()),

@@ -47,6 +47,8 @@ import LogFilters from "../components/LogFilters";
 import TimeRangePicker from "../components/TimeRangePicker";
 import { memberModel, systemCrumbs, systemsAtLocation, type MemberContext } from "../lib/detail";
 import MetricsGrid from "../components/MetricsGrid";
+import TimelineOverlay from "../components/TimelineOverlay";
+import { CursorProvider } from "../lib/cursor";
 import { useTimeRange } from "../lib/time_range";
 import { systemMembers, systemMembersKey } from "../lib/members";
 import { LEAF_POLL_MS } from "../lib/component_leaf";
@@ -150,6 +152,7 @@ export default function SystemZoom() {
   const tabs = createMemo(() => [
     { key: "overview", label: "Overview" },
     { key: "activity", label: "Activity" },
+    { key: "timeline", label: "Timeline" },
     ...(can(me.data, "system", "update") ? [{ key: "configure", label: "Configure" }] : []),
   ]);
   const LEGACY_TAB: Record<string, string> = { map: "overview", data: "overview", history: "activity", events: "activity", logs: "activity" };
@@ -337,7 +340,7 @@ export default function SystemZoom() {
               // The range governs Overview's charts. Activity's reads keep
               // their own fixed windows (#2304's follow-up), so the control
               // is not offered where it would be ignored.
-              end={tab() === "overview" ? <TimeRangePicker range={range()} onChange={setRange} allowCustom={can(me.data, "view", "read")} /> : undefined}
+              end={tab() === "overview" || tab() === "timeline" ? <TimeRangePicker range={range()} onChange={setRange} allowCustom={can(me.data, "view", "read")} /> : undefined}
             />
             <Show when={tab() === "configure"}>
               {/* A sole system's location has no page of its own: it configures
@@ -361,6 +364,15 @@ export default function SystemZoom() {
                   slot and drafts never carry over (#854). */}
               <Show when={id()} keyed>{(sid) => <ConfigureFace kind="system" id={sid} guard={leave} />}</Show>
             </Show>
+        {/* One axis of what happened (#2425), above the metrics on the same cursor. */}
+        <Show when={tab() === "timeline"}>
+          <CursorProvider>
+            <div data-testid="timeline-tab" class="flex min-w-0 flex-col gap-5 p-4">
+              <TimelineOverlay kind="systems" id={id()} range={range()} />
+              <MetricsGrid kind="systems" id={id()} range={range()} />
+            </div>
+          </CursorProvider>
+        </Show>
         <Show when={tab() === "activity"}>
           <section data-testid="history-tab" class="flex flex-col gap-4 p-4">
             <div class="flex flex-wrap items-stretch gap-3">

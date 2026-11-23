@@ -37,6 +37,8 @@ import { lifecycleRows } from "../lib/lifecycle";
 import { effectiveProperties, effectivePropertiesKey } from "../lib/component_properties";
 import { effectiveMetrics, effectiveMetricsKey } from "../lib/component_metrics";
 import MetricsGrid from "../components/MetricsGrid";
+import TimelineOverlay from "../components/TimelineOverlay";
+import { CursorProvider } from "../lib/cursor";
 import TimeRangePicker from "../components/TimeRangePicker";
 import { useTimeRange } from "../lib/time_range";
 import { CalcRuleLink } from "../components/RuleLink";
@@ -91,6 +93,7 @@ export default function ComponentLeaf() {
   const leafTabs = createMemo(() => [
     { key: "overview", label: "Overview" },
     { key: "activity", label: "Activity" },
+    { key: "timeline", label: "Timeline" },
     ...(can(me.data, "component", "update") ? [{ key: "configure", label: "Configure" }] : []),
   ]);
   const LEGACY_TAB: Record<string, string> = { events: "activity" };
@@ -283,11 +286,20 @@ export default function ComponentLeaf() {
               activeKey={leafTab}
               guard={leave}
               // The range governs Overview's metrics grid (#2424), as on a system.
-              end={leafTab() === "overview" ? <TimeRangePicker range={range()} onChange={setRange} allowCustom={can(me.data, "view", "read")} /> : undefined}
+              end={leafTab() === "overview" || leafTab() === "timeline" ? <TimeRangePicker range={range()} onChange={setRange} allowCustom={can(me.data, "view", "read")} /> : undefined}
             />
             <Show when={leafTab() === "configure"}>
               {/* Keyed on the id: another component is another face (#854). */}
               <Show when={id()} keyed>{(cid) => <ConfigureFace kind="component" id={cid} guard={leave} />}</Show>
+            </Show>
+            {/* One axis of what happened (#2425), above the metrics on the same cursor. */}
+            <Show when={leafTab() === "timeline"}>
+              <CursorProvider>
+                <div data-testid="timeline-tab" class="flex min-w-0 flex-col gap-5 p-4">
+                  <TimelineOverlay kind="components" id={id()} range={range()} />
+                  <MetricsGrid kind="components" id={id()} range={range()} />
+                </div>
+              </CursorProvider>
             </Show>
             <Show when={leafTab() === "activity"}>
               <div data-testid="activity-tab" class="flex flex-col gap-5 p-4">
