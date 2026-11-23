@@ -111,7 +111,7 @@ export default function Alarms() {
   const shownColumns = () => (canAck() || canSnooze() || can(me.data, "assistant", "use") ? columns : columns.filter((c) => c.key !== "actions"));
 
   return (
-    <div class="h-[calc(100dvh-9rem)] min-h-96" data-testid="alarm-queue">
+    <div class="h-full min-h-96" data-testid="alarm-queue">
       <FlatList<Alarm>
         config={{
           entity: { name: "alarm", plural: "alarms" },
