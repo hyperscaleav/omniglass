@@ -596,7 +596,10 @@ func TestSSOWithoutARefreshTokenGivesAShortSessionAndNoAPIToken(t *testing.T) {
 func TestBindingTheSSOClientSecretTakesSecretBind(t *testing.T) {
 	t.Parallel()
 	p := newPeople(t)
-	p.c.do(p.owner, http.MethodPost, "/secrets", map[string]any{"name": "sso-client", "secret_type": "oauth2-client", "owner_kind": "platform",
+	// An oauth2-client secret is admin-sensitive by default, which hides it
+	// from sam altogether (a 404); this one is not, so the bind gate is what
+	// refuses the caller.
+	p.c.do(p.owner, http.MethodPost, "/secrets", map[string]any{"name": "sso-client", "secret_type": "oauth2-client", "owner_kind": "platform", "admin_sensitive": false,
 		"fields": map[string]string{"client_id": "omniglass", "client_secret": "not-a-real-client-secret"}}, http.StatusCreated)
 	p.c.do(p.owner, http.MethodPost, "/secrets", map[string]any{"name": "relay-login", "secret_type": "basic-auth", "owner_kind": "platform",
 		"fields": map[string]string{"username": "omniglass", "password": "relay-pass-2362"}}, http.StatusCreated)
