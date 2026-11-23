@@ -5,6 +5,8 @@ import { api } from "../api/client";
 // (platform, or one of the location / system / component trees) and resolved down
 // the cascade. Unlike a secret, the value is shown in the clear.
 
+import { isIsoDate, isLifecycleDate } from "./lifecycle";
+
 export type ValueType = "string" | "int" | "float" | "bool" | "json";
 
 export const VALUE_TYPES: ValueType[] = ["string", "int", "float", "bool", "json"];
@@ -81,7 +83,9 @@ export function displayValue(value: unknown): string {
 // value_type: an int/float to a number, a bool to true/false, json parsed, a
 // string left as text. A number or json that will not parse throws, so the caller
 // surfaces the error instead of sending a malformed value.
-export function parseInput(valueType: ValueType, text: string): unknown {
+export function parseInput(valueType: ValueType, text: string, typeName?: string): unknown {
+  // A lifecycle date (#2366) is a string the catalog holds to an ISO-8601 date.
+  if (typeName && isLifecycleDate(typeName) && !isIsoDate(text.trim())) throw new Error(`not a date (YYYY-MM-DD): ${text}`);
   switch (valueType) {
     case "int":
     case "float": {

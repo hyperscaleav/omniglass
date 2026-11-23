@@ -150,6 +150,26 @@ property_types:
     validation: { pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?Z$" }
     label: Server Started At
     description: When this server last booted, an RFC 3339 UTC timestamp its boot writes; the server's uptime is the time since.
+  - name: install-date
+    data_type: string
+    validation: { pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$", format: date }
+    label: Install Date
+    description: The date this was installed, an ISO-8601 calendar date (YYYY-MM-DD). Set on a product it applies to its components; a component overrides it where it differs.
+  - name: warranty-end
+    data_type: string
+    validation: { pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$", format: date }
+    label: Warranty End
+    description: The date the warranty ends, an ISO-8601 calendar date (YYYY-MM-DD).
+  - name: end-of-support
+    data_type: string
+    validation: { pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$", format: date }
+    label: End of Support
+    description: The date the vendor stops supporting it, an ISO-8601 calendar date (YYYY-MM-DD).
+  - name: end-of-life
+    data_type: string
+    validation: { pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$", format: date }
+    label: End of Life
+    description: The date it reaches end of life and is due for replacement, an ISO-8601 calendar date (YYYY-MM-DD).
   - name: video-input
     data_type: string
     validation: { enum: [hdmi1, hdmi2, hdmi3, dp1, usbc] }
