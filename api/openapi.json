@@ -1388,6 +1388,216 @@
         ],
         "type": "object"
       },
+      "BatchCreateComponentsInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/BatchCreateComponentsInputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "requests": {
+            "description": "The components to create, each the body POST /components takes, in order: a parent before its children",
+            "items": {
+              "$ref": "#/components/schemas/CreateComponentInputBody"
+            },
+            "minItems": 1,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "validate_only": {
+            "description": "Run every request in the transaction and roll it back: the response is what the write would create (names minted, ids empty), or the row that would refuse it, and nothing is written",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "requests"
+        ],
+        "type": "object"
+      },
+      "BatchCreateComponentsOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/BatchCreateComponentsOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "batch_id": {
+            "description": "The batch id every audit row of this call carries as from_batch; omitted on a dry run",
+            "type": "string"
+          },
+          "components": {
+            "description": "The components created, each as POST /components answers it, in request order",
+            "items": {
+              "$ref": "#/components/schemas/ComponentBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "validate_only": {
+            "description": "Whether this was a dry run that wrote nothing",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "components",
+          "validate_only"
+        ],
+        "type": "object"
+      },
+      "BatchCreateLocationsInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/BatchCreateLocationsInputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "requests": {
+            "description": "The locations to create, each the body POST /locations takes, in order: a parent before its children, which then name it as their parent",
+            "items": {
+              "$ref": "#/components/schemas/CreateLocationInputBody"
+            },
+            "minItems": 1,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "validate_only": {
+            "description": "Run every request in the transaction and roll it back: the response is what the write would create (names minted, ids empty), or the row that would refuse it, and nothing is written",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "requests"
+        ],
+        "type": "object"
+      },
+      "BatchCreateLocationsOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/BatchCreateLocationsOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "batch_id": {
+            "description": "The batch id every audit row of this call carries as from_batch; omitted on a dry run",
+            "type": "string"
+          },
+          "locations": {
+            "description": "The locations created, each as POST /locations answers it, in request order",
+            "items": {
+              "$ref": "#/components/schemas/LocationBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "validate_only": {
+            "description": "Whether this was a dry run that wrote nothing",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "locations",
+          "validate_only"
+        ],
+        "type": "object"
+      },
+      "BatchCreateSystemsInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/BatchCreateSystemsInputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "requests": {
+            "description": "The systems to create, each the body POST /systems takes, in order: a parent before its children",
+            "items": {
+              "$ref": "#/components/schemas/CreateSystemInputBody"
+            },
+            "minItems": 1,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "validate_only": {
+            "description": "Run every request in the transaction and roll it back: the response is what the write would create (names minted, ids empty), or the row that would refuse it, and nothing is written",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "requests"
+        ],
+        "type": "object"
+      },
+      "BatchCreateSystemsOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/BatchCreateSystemsOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "batch_id": {
+            "description": "The batch id every audit row of this call carries as from_batch; omitted on a dry run",
+            "type": "string"
+          },
+          "systems": {
+            "description": "The systems created, each as POST /systems answers it, in request order",
+            "items": {
+              "$ref": "#/components/schemas/SystemBody"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "validate_only": {
+            "description": "Whether this was a dry run that wrote nothing",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "systems",
+          "validate_only"
+        ],
+        "type": "object"
+      },
       "CalcErrorBody": {
         "additionalProperties": false,
         "properties": {
@@ -25414,6 +25624,58 @@
         "x-omniglass-permission": "component:update"
       }
     },
+    "/components:batchCreate": {
+      "post": {
+        "description": "Creates components in one transaction: each request is the body POST /components takes, run as that create runs it, in order, so a component may name as its parent one an earlier request creates, and its system and location by name as the single create does. Every row writes its own audit row carrying the one batch_id the response returns, under from_batch. A refused request refuses the whole batch, mapped as POST /components maps it, with its position in the request (requests[3]) leading the detail; nothing lands. validate_only runs the same transaction and rolls it back, answering 200 with the names the write would mint and no ids. A batch carries at most 1000 requests; more is a 413 naming the limit, so split a bigger import (by building). Gated by component:create; each request is held to that scope, its location resolves within your location:read scope, and a request naming a system also needs system:update over it, as its single create does.",
+        "operationId": "batch-create-components",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchCreateComponentsInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchCreateComponentsOutputBody"
+                }
+              }
+            },
+            "description": "The dry run: what the write would create, nothing written"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchCreateComponentsOutputBody"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Create many components in one write",
+        "x-omniglass-conditional-permission": "system:update",
+        "x-omniglass-mcp": {},
+        "x-omniglass-permission": "component:create"
+      }
+    },
     "/components:checkName": {
       "post": {
         "description": "Reports whether a proposed name is a valid slug and currently free within the given placement (parent wins over location; neither means the unplaced/root bucket). Advisory (Save is still gated by the unique constraint). Gated by component:update.",
@@ -28405,6 +28667,57 @@
         },
         "summary": "Set a tag value on a location",
         "x-omniglass-permission": "location:update"
+      }
+    },
+    "/locations:batchCreate": {
+      "post": {
+        "description": "Creates locations in one transaction: each request is the body POST /locations takes, run as that create runs it, in order, so a location may name as its parent one an earlier request creates. Every row writes its own audit row carrying the one batch_id the response returns, under from_batch. A refused request refuses the whole batch, mapped as POST /locations maps it, with its position in the request (requests[3]) leading the detail; nothing lands. validate_only runs the same transaction and rolls it back, answering 200 with the names the write would mint and no ids. A batch carries at most 1000 requests; more is a 413 naming the limit, so split a bigger import (by building). Gated by location:create, and each request is held to that scope as its single create is.",
+        "operationId": "batch-create-locations",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchCreateLocationsInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchCreateLocationsOutputBody"
+                }
+              }
+            },
+            "description": "The dry run: what the write would create, nothing written"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchCreateLocationsOutputBody"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Create many locations in one write",
+        "x-omniglass-mcp": {},
+        "x-omniglass-permission": "location:create"
       }
     },
     "/locations:checkName": {
@@ -34350,6 +34663,57 @@
         },
         "summary": "Set a tag value on a system",
         "x-omniglass-permission": "system:update"
+      }
+    },
+    "/systems:batchCreate": {
+      "post": {
+        "description": "Creates systems in one transaction: each request is the body POST /systems takes, run as that create runs it, in order, so a system may name as its parent one an earlier request creates, and its location by name as the single create does. Every row writes its own audit row carrying the one batch_id the response returns, under from_batch. A refused request refuses the whole batch, mapped as POST /systems maps it, with its position in the request (requests[3]) leading the detail; nothing lands. validate_only runs the same transaction and rolls it back, answering 200 with the names the write would mint and no ids. A batch carries at most 1000 requests; more is a 413 naming the limit, so split a bigger import (by building). Gated by system:create; each request is held to that scope, and its location resolves within your location:read scope, as its single create is.",
+        "operationId": "batch-create-systems",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchCreateSystemsInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchCreateSystemsOutputBody"
+                }
+              }
+            },
+            "description": "The dry run: what the write would create, nothing written"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchCreateSystemsOutputBody"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Create many systems in one write",
+        "x-omniglass-mcp": {},
+        "x-omniglass-permission": "system:create"
       }
     },
     "/systems:checkName": {

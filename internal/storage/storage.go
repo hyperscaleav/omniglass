@@ -834,6 +834,13 @@ type Gateway interface {
 	// in one transaction, each piece the ordinary create in the caller's
 	// scope with its own audit row (#827).
 	CreatePlan(ctx context.Context, actorID string, plan Plan, sc PlanScopes) (*Planned, error)
+	// BatchCreateLocations, BatchCreateSystems and BatchCreateComponents run
+	// the single create for each row, in order, in one transaction (#2368): a
+	// refused row refuses the batch as a BatchError naming it, and
+	// validateOnly rolls the transaction back.
+	BatchCreateLocations(ctx context.Context, actorID string, specs []LocationSpec, create scope.Set, validateOnly bool) ([]*Location, error)
+	BatchCreateSystems(ctx context.Context, actorID string, specs []SystemSpec, create, locationRead scope.Set, validateOnly bool) ([]*System, error)
+	BatchCreateComponents(ctx context.Context, actorID string, specs []ComponentSpec, create, locationRead, systemRead, systemUpdate scope.Set, validateOnly bool) ([]*Component, error)
 	// ResolveTaskOwner binds a task's owner component and confines the outpost to its
 	// own tasks, for the telemetry ingest consumer.
 	ResolveTaskOwner(ctx context.Context, taskID, outpostName string) (TaskOwner, bool, error)

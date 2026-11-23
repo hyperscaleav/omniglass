@@ -432,6 +432,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	registerStandardFromTemplate(api, a, gw, template.Shipped())
 	registerCreateFromTemplateRoutes(api, a, gw, template.Shipped())
 	registerComponentRoutes(api, a, gw)
+	registerBatchCreateRoutes(api, a, gw)
 	registerVendorRoutes(api, a, gw)
 	registerDriverRoutes(api, a, gw)
 	registerComponentTypeRoutes(api, a, gw)

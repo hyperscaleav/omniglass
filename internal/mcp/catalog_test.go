@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/mcp/mcpgen"
+	"github.com/hyperscaleav/omniglass/internal/mcp/tooldef"
 )
 
 // The served catalog is exactly what the generator builds from the committed
@@ -48,5 +49,26 @@ func TestAPIBaseIsTheSpecsServer(t *testing.T) {
 	}
 	if doc.Servers[0].URL != apiBase {
 		t.Errorf("spec server %q, dispatcher prefix %q", doc.Servers[0].URL, apiBase)
+	}
+}
+
+// The batch creates write in bulk: each is gated by its collection's create,
+// so the rule classes it a write, and a client confirms it as one rather than
+// running it as a read-only, idempotent preview (#2368, #2369).
+func TestBatchCreatesAreWriteTools(t *testing.T) {
+	for _, name := range []string{"batch-create-locations", "batch-create-systems", "batch-create-components"} {
+		found := false
+		for _, d := range catalog {
+			if d.Name != name {
+				continue
+			}
+			found = true
+			if d.Annotations.ReadOnly || d.Annotations.Idempotent || d.Class != tooldef.ClassWrite {
+				t.Errorf("%s is classed %s (read-only %t, idempotent %t), want a write", name, d.Class, d.Annotations.ReadOnly, d.Annotations.Idempotent)
+			}
+		}
+		if !found {
+			t.Errorf("%s is not an MCP tool", name)
+		}
 	}
 }

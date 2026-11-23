@@ -120,26 +120,30 @@ type systemPathInput struct {
 	Name string `path:"name" doc:"The system's name, or a dotted address (e.g. boi.17c.$sys.av)"`
 }
 
+// createSystemInputBody is the single create's body, which the batch create
+// (POST /systems:batchCreate) takes as each of its requests.
+type createSystemInputBody struct {
+	// Name is optional (#686), exactly as a component's is: omit it and the
+	// platform mints the system_type chain's stem plus the lowest free
+	// ordinal in this placement, suppressing the ordinal for the first of
+	// that stem in the bucket, and marks name_generated. Supplied, it is
+	// validated exactly as before. Omitting it without a system_type is a
+	// 422: the stem lives on that catalog row.
+	Name       string `json:"name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the system_type's stem."`
+	Label      string `json:"label,omitempty" doc:"What an operator reads; the name is the address"`
+	StandardID string `json:"standard_id,omitempty" doc:"The standard it conforms to, by handle or uuid; omit for a one-off system"`
+	// Nullable for now: a floor on system_type_id waits until the shipped
+	// tree has proven out.
+	SystemTypeID string  `json:"system_type_id,omitempty" doc:"The system_type it is classified as (what it is for), by name or uuid; omit to leave it unclassified"`
+	Parent       *string `json:"parent,omitempty" doc:"Parent system name; omit for a root system"`
+	Location     *string `json:"location,omitempty" doc:"Location name this system is placed at"`
+	// The create form's ordinal precondition (#702); see
+	// createComponentInput for why it is a number and never a name.
+	ExpectedName *string `json:"expected_name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The name a create form previewed (POST /systems:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the system_type's stem moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422."`
+}
+
 type createSystemInput struct {
-	Body struct {
-		// Name is optional (#686), exactly as a component's is: omit it and the
-		// platform mints the system_type chain's stem plus the lowest free
-		// ordinal in this placement, suppressing the ordinal for the first of
-		// that stem in the bucket, and marks name_generated. Supplied, it is
-		// validated exactly as before. Omitting it without a system_type is a
-		// 422: the stem lives on that catalog row.
-		Name       string `json:"name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the system_type's stem."`
-		Label      string `json:"label,omitempty" doc:"What an operator reads; the name is the address"`
-		StandardID string `json:"standard_id,omitempty" doc:"The standard it conforms to, by handle or uuid; omit for a one-off system"`
-		// Nullable for now: a floor on system_type_id waits until the shipped
-		// tree has proven out.
-		SystemTypeID string  `json:"system_type_id,omitempty" doc:"The system_type it is classified as (what it is for), by name or uuid; omit to leave it unclassified"`
-		Parent       *string `json:"parent,omitempty" doc:"Parent system name; omit for a root system"`
-		Location     *string `json:"location,omitempty" doc:"Location name this system is placed at"`
-		// The create form's ordinal precondition (#702); see
-		// createComponentInput for why it is a number and never a name.
-		ExpectedName *string `json:"expected_name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The name a create form previewed (POST /systems:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the system_type's stem moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422."`
-	}
+	Body createSystemInputBody
 }
 
 // updateSystemInput is the PATCH body. It deliberately carries no name: a rename

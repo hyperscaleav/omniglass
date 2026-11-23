@@ -815,6 +815,332 @@ export type AvatarOutputBody = {
   image_base64: string;
 };
 
+export type CreateComponentInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The name a create form previewed (POST /components:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the type's stem moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422.
+     * @minLength 1
+     * @maxLength 100
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  expected_name?: string;
+  /** What an operator reads; the name is the address */
+  label?: string;
+  /** Location name this component is placed at */
+  location?: string;
+  /**
+     * Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the product's type.
+     * @minLength 1
+     * @maxLength 100
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  name?: string;
+  /** Parent component name; omit for a root component */
+  parent?: string;
+  /** Product (catalog SKU) this component is an instance of, by name or uuid. Required: use a generic (generic-device, generic-app, generic-service) until a real product is modeled. */
+  product?: string;
+  /** Primary system name this component belongs to. Naming one writes that system's membership, so it costs the system:update permission and resolves in that scope; omitted, the create costs component:create alone. */
+  system?: string;
+};
+
+export type BatchCreateComponentsInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The components to create, each the body POST /components takes, in order: a parent before its children
+     * @minItems 1
+     * @nullable
+     */
+  requests: CreateComponentInputBody[] | null;
+  /** Run every request in the transaction and roll it back: the response is what the write would create (names minted, ids empty), or the row that would refuse it, and nothing is written */
+  validate_only?: boolean;
+};
+
+export type RenderBody = {
+  /** The dash render's segments concatenated with no separator, with the final stem-ordinal segment compacted to <abbrev><ordinal> when the owning type registers one (e.g. boi17c216bdsp1). On a LIST row the substitution is skipped (segments concatenated as-is) to avoid a per-row abbrev resolution; a GET always compacts it. Display only either way; not accepted by the resolver. */
+  bare: string;
+  /** The path's non-accessor segments joined with '-' (e.g. boi-17c-216b-display-1). Display only; not accepted by the resolver. */
+  dash: string;
+};
+
+/**
+ * The resolved effective tags (key -> winning value) that cascade onto this component; for the Tags column. Provenance is in the effective-tags detail view.
+ */
+export type ComponentBodyEffectiveTags = {[key: string]: string};
+
+/**
+ * One managed device or service, an instance of a product, placed at a location and usually a member of a system.
+ */
+export type ComponentBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces.
+     * @nullable
+     */
+  actions?: string[] | null;
+  /** The resolved effective tags (key -> winning value) that cascade onto this component; for the Tags column. Provenance is in the effective-tags detail view. */
+  effective_tags?: ComponentBodyEffectiveTags;
+  id: string;
+  label?: string;
+  /** Whether the platform rendered this label from a label rule rather than an operator typing it. Read-only: write label to claim it, write an empty label to hand it back. */
+  label_generated: boolean;
+  /** The location's name, for display */
+  location?: string;
+  /** The location's id, the canonical handle */
+  location_id?: string;
+  name: string;
+  /** Whether the platform picked this name (a server-side generator) rather than an operator typing it. */
+  name_generated: boolean;
+  /** The parent component's name, for display; absent for a root component */
+  parent?: string;
+  /** The parent component's id, the canonical handle */
+  parent_id?: string;
+  /** The dotted address (e.g. boi.17c.415a.$comp.display-1): derived from the component's own placement, never from a system it belongs to. Set on a GET or LIST response; empty on a create/update/move/rename/resetName response (refetch the row to see it). */
+  path?: string;
+  /**
+     * path split on '.', accessors included, so the round trip through the resolver stays lossless.
+     * @nullable
+     */
+  path_segments?: string[] | null;
+  /** The product's name, for display; the form a body round-trips. */
+  product?: string;
+  /** The product (catalog SKU) this component is an instance of, if any; the stable handle that survives a rename. */
+  product_id?: string;
+  /** Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy. */
+  renders?: RenderBody;
+  /** Name of the component's primary system, its default when no system is named. A component may belong to several; read /components/{name}/memberships for all of them. */
+  system?: string;
+  /** How many systems this component belongs to; more than one means it is shared. */
+  system_count: number;
+  /** The primary system's id, the canonical handle */
+  system_id?: string;
+};
+
+export type BatchCreateComponentsOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** The batch id every audit row of this call carries as from_batch; omitted on a dry run */
+  batch_id?: string;
+  /**
+     * The components created, each as POST /components answers it, in request order
+     * @nullable
+     */
+  components: ComponentBody[] | null;
+  /** Whether this was a dry run that wrote nothing */
+  validate_only: boolean;
+};
+
+export type CreateLocationInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The name a create form previewed (POST /locations:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the location_type's name rule moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422.
+     * @minLength 1
+     * @maxLength 100
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  expected_name?: string;
+  /** What an operator reads; the name is the address */
+  label?: string;
+  /**
+     * The location_type, by name or uuid (campus, building, ...)
+     * @minLength 1
+     */
+  location_type: string;
+  /**
+     * Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the location_type's name rule.
+     * @minLength 1
+     * @maxLength 100
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  name?: string;
+  /** Parent location name; omit for a root location */
+  parent?: string;
+};
+
+export type BatchCreateLocationsInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The locations to create, each the body POST /locations takes, in order: a parent before its children, which then name it as their parent
+     * @minItems 1
+     * @nullable
+     */
+  requests: CreateLocationInputBody[] | null;
+  /** Run every request in the transaction and roll it back: the response is what the write would create (names minted, ids empty), or the row that would refuse it, and nothing is written */
+  validate_only?: boolean;
+};
+
+/**
+ * The resolved effective tags (key -> winning value) that cascade onto this location (platform and its location tree); for the Tags column.
+ */
+export type LocationBodyEffectiveTags = {[key: string]: string};
+
+/**
+ * A place the fleet occupies, from a campus down to a room, nested under the location it sits in.
+ */
+export type LocationBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces.
+     * @nullable
+     */
+  actions?: string[] | null;
+  /** The resolved effective tags (key -> winning value) that cascade onto this location (platform and its location tree); for the Tags column. */
+  effective_tags?: LocationBodyEffectiveTags;
+  id: string;
+  label?: string;
+  /** Whether the platform rendered this label from a label rule rather than an operator typing it. Read-only: write label to claim it, write an empty label to hand it back. */
+  label_generated: boolean;
+  /** The location_type name */
+  location_type: string;
+  /** The location_type's uuid, the stable form of location_type */
+  location_type_id: string;
+  name: string;
+  /** Whether the platform picked this name (from the location_type's name rule) rather than an operator typing it. */
+  name_generated: boolean;
+  /** The parent location's name, for display; absent for a site root */
+  parent?: string;
+  /** The parent location's id, the canonical handle */
+  parent_id?: string;
+  /** The dotted address (e.g. boi.17c.415a); no accessor, since a location's own address IS its location-tree ancestor chain. Set on a GET or LIST response; empty on a create/update/move/rename response (refetch the row to see it). */
+  path?: string;
+  /**
+     * path split on '.'.
+     * @nullable
+     */
+  path_segments?: string[] | null;
+  /** Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy. */
+  renders?: RenderBody;
+};
+
+export type BatchCreateLocationsOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** The batch id every audit row of this call carries as from_batch; omitted on a dry run */
+  batch_id?: string;
+  /**
+     * The locations created, each as POST /locations answers it, in request order
+     * @nullable
+     */
+  locations: LocationBody[] | null;
+  /** Whether this was a dry run that wrote nothing */
+  validate_only: boolean;
+};
+
+export type CreateSystemInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The name a create form previewed (POST /systems:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the system_type's stem moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422.
+     * @minLength 1
+     * @maxLength 100
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  expected_name?: string;
+  /** What an operator reads; the name is the address */
+  label?: string;
+  /** Location name this system is placed at */
+  location?: string;
+  /**
+     * Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the system_type's stem.
+     * @minLength 1
+     * @maxLength 100
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  name?: string;
+  /** Parent system name; omit for a root system */
+  parent?: string;
+  /** The standard it conforms to, by handle or uuid; omit for a one-off system */
+  standard_id?: string;
+  /** The system_type it is classified as (what it is for), by name or uuid; omit to leave it unclassified */
+  system_type_id?: string;
+};
+
+export type BatchCreateSystemsInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The systems to create, each the body POST /systems takes, in order: a parent before its children
+     * @minItems 1
+     * @nullable
+     */
+  requests: CreateSystemInputBody[] | null;
+  /** Run every request in the transaction and roll it back: the response is what the write would create (names minted, ids empty), or the row that would refuse it, and nothing is written */
+  validate_only?: boolean;
+};
+
+/**
+ * The resolved effective tags (key -> winning value) that cascade onto this system (platform, its location, its system tree); for the Tags column.
+ */
+export type SystemBodyEffectiveTags = {[key: string]: string};
+
+/**
+ * The unit Omniglass monitors, a set of components in one location that works as one, with one health of its own.
+ */
+export type SystemBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces.
+     * @nullable
+     */
+  actions?: string[] | null;
+  /** The resolved effective tags (key -> winning value) that cascade onto this system (platform, its location, its system tree); for the Tags column. */
+  effective_tags?: SystemBodyEffectiveTags;
+  id: string;
+  label?: string;
+  /** Whether the platform rendered this label from a label rule rather than an operator typing it. Read-only: write label to claim it, write an empty label to hand it back. */
+  label_generated: boolean;
+  /** The location's name, for display */
+  location?: string;
+  /** The location's id, the canonical handle */
+  location_id?: string;
+  /** How many components are bound into this system */
+  member_count: number;
+  name: string;
+  /** Whether the platform picked this name (from the system_type's stem) rather than an operator typing it. */
+  name_generated: boolean;
+  /** The parent system's name, for display; absent for a root system */
+  parent?: string;
+  /** The parent system's id, the canonical handle */
+  parent_id?: string;
+  /** The dotted address (e.g. boi.17c.$sys.av). Set on a GET or LIST response; empty on a create/update/move/rename response (refetch the row to see it). */
+  path?: string;
+  /**
+     * path split on '.', accessors included, so the round trip through the resolver stays lossless.
+     * @nullable
+     */
+  path_segments?: string[] | null;
+  /** Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy. */
+  renders?: RenderBody;
+  /** The standard's handle, for display; omitted for a one-off system */
+  standard?: string;
+  /** The standard's uuid; the stable form of standard */
+  standard_id?: string;
+  /** The system_type's name, for display: what this system is for (board, class, video-wall). Omitted for an unclassified system. Distinct from standard, which is the contract it is built to. */
+  system_type?: string;
+  /** The system_type's uuid; the stable form of system_type */
+  system_type_id?: string;
+};
+
+export type BatchCreateSystemsOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** The batch id every audit row of this call carries as from_batch; omitted on a dry run */
+  batch_id?: string;
+  /**
+     * The systems created, each as POST /systems answers it, in request order
+     * @nullable
+     */
+  systems: SystemBody[] | null;
+  /** Whether this was a dry run that wrote nothing */
+  validate_only: boolean;
+};
+
 export type CalcErrorBody = {
   /** The registered diagnostic that gave it, when one did (documented on the expressions page) */
   code?: string;
@@ -1440,67 +1766,6 @@ export type CommandTypeBody = {
 };
 
 /**
- * The resolved effective tags (key -> winning value) that cascade onto this component; for the Tags column. Provenance is in the effective-tags detail view.
- */
-export type ComponentBodyEffectiveTags = {[key: string]: string};
-
-export type RenderBody = {
-  /** The dash render's segments concatenated with no separator, with the final stem-ordinal segment compacted to <abbrev><ordinal> when the owning type registers one (e.g. boi17c216bdsp1). On a LIST row the substitution is skipped (segments concatenated as-is) to avoid a per-row abbrev resolution; a GET always compacts it. Display only either way; not accepted by the resolver. */
-  bare: string;
-  /** The path's non-accessor segments joined with '-' (e.g. boi-17c-216b-display-1). Display only; not accepted by the resolver. */
-  dash: string;
-};
-
-/**
- * One managed device or service, an instance of a product, placed at a location and usually a member of a system.
- */
-export type ComponentBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  /**
-     * The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces.
-     * @nullable
-     */
-  actions?: string[] | null;
-  /** The resolved effective tags (key -> winning value) that cascade onto this component; for the Tags column. Provenance is in the effective-tags detail view. */
-  effective_tags?: ComponentBodyEffectiveTags;
-  id: string;
-  label?: string;
-  /** Whether the platform rendered this label from a label rule rather than an operator typing it. Read-only: write label to claim it, write an empty label to hand it back. */
-  label_generated: boolean;
-  /** The location's name, for display */
-  location?: string;
-  /** The location's id, the canonical handle */
-  location_id?: string;
-  name: string;
-  /** Whether the platform picked this name (a server-side generator) rather than an operator typing it. */
-  name_generated: boolean;
-  /** The parent component's name, for display; absent for a root component */
-  parent?: string;
-  /** The parent component's id, the canonical handle */
-  parent_id?: string;
-  /** The dotted address (e.g. boi.17c.415a.$comp.display-1): derived from the component's own placement, never from a system it belongs to. Set on a GET or LIST response; empty on a create/update/move/rename/resetName response (refetch the row to see it). */
-  path?: string;
-  /**
-     * path split on '.', accessors included, so the round trip through the resolver stays lossless.
-     * @nullable
-     */
-  path_segments?: string[] | null;
-  /** The product's name, for display; the form a body round-trips. */
-  product?: string;
-  /** The product (catalog SKU) this component is an instance of, if any; the stable handle that survives a rename. */
-  product_id?: string;
-  /** Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy. */
-  renders?: RenderBody;
-  /** Name of the component's primary system, its default when no system is named. A component may belong to several; read /components/{name}/memberships for all of them. */
-  system?: string;
-  /** How many systems this component belongs to; more than one means it is shared. */
-  system_count: number;
-  /** The primary system's id, the canonical handle */
-  system_id?: string;
-};
-
-/**
  * How it depends: power (fed from an outlet of the upstream, a PDU), host (hosted by the upstream, a codec and the peripheral it reboots, a chassis and its line card) or path (reached through the upstream, a gateway)
  */
 export type ComponentDependencyBodyKind = typeof ComponentDependencyBodyKind[keyof typeof ComponentDependencyBodyKind];
@@ -2047,35 +2312,6 @@ export type CreateComponentFromTemplateOutputBody = {
   template: string;
 };
 
-export type CreateComponentInputBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  /**
-     * The name a create form previewed (POST /components:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the type's stem moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422.
-     * @minLength 1
-     * @maxLength 100
-     * @pattern ^[a-z0-9][a-z0-9-]*$
-     */
-  expected_name?: string;
-  /** What an operator reads; the name is the address */
-  label?: string;
-  /** Location name this component is placed at */
-  location?: string;
-  /**
-     * Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the product's type.
-     * @minLength 1
-     * @maxLength 100
-     * @pattern ^[a-z0-9][a-z0-9-]*$
-     */
-  name?: string;
-  /** Parent component name; omit for a root component */
-  parent?: string;
-  /** Product (catalog SKU) this component is an instance of, by name or uuid. Required: use a generic (generic-device, generic-app, generic-service) until a real product is modeled. */
-  product?: string;
-  /** Primary system name this component belongs to. Naming one writes that system's membership, so it costs the system:update permission and resolves in that scope; omitted, the create costs component:create alone. */
-  system?: string;
-};
-
 export type CreateComponentTypeInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -2381,34 +2617,6 @@ export type CreateGroupInputBody = {
      * @pattern ^[a-z0-9][a-z0-9-]*$
      */
   name: string;
-};
-
-export type CreateLocationInputBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  /**
-     * The name a create form previewed (POST /locations:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the location_type's name rule moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422.
-     * @minLength 1
-     * @maxLength 100
-     * @pattern ^[a-z0-9][a-z0-9-]*$
-     */
-  expected_name?: string;
-  /** What an operator reads; the name is the address */
-  label?: string;
-  /**
-     * The location_type, by name or uuid (campus, building, ...)
-     * @minLength 1
-     */
-  location_type: string;
-  /**
-     * Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the location_type's name rule.
-     * @minLength 1
-     * @maxLength 100
-     * @pattern ^[a-z0-9][a-z0-9-]*$
-     */
-  name?: string;
-  /** Parent location name; omit for a root location */
-  parent?: string;
 };
 
 export type NameRuleBody = {
@@ -2980,35 +3188,6 @@ export type CreateSystemFromTemplateOutputBody = {
      * @nullable
      */
   to_attach: string[] | null;
-};
-
-export type CreateSystemInputBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  /**
-     * The name a create form previewed (POST /systems:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the system_type's stem moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422.
-     * @minLength 1
-     * @maxLength 100
-     * @pattern ^[a-z0-9][a-z0-9-]*$
-     */
-  expected_name?: string;
-  /** What an operator reads; the name is the address */
-  label?: string;
-  /** Location name this system is placed at */
-  location?: string;
-  /**
-     * Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the system_type's stem.
-     * @minLength 1
-     * @maxLength 100
-     * @pattern ^[a-z0-9][a-z0-9-]*$
-     */
-  name?: string;
-  /** Parent system name; omit for a root system */
-  parent?: string;
-  /** The standard it conforms to, by handle or uuid; omit for a one-off system */
-  standard_id?: string;
-  /** The system_type it is classified as (what it is for), by name or uuid; omit to leave it unclassified */
-  system_type_id?: string;
 };
 
 export type CreateSystemTypeInputBody = {
@@ -4670,50 +4849,6 @@ export type ListLocationTypesOutputBody = {
   location_types: LocationTypeBody[] | null;
 };
 
-/**
- * The resolved effective tags (key -> winning value) that cascade onto this location (platform and its location tree); for the Tags column.
- */
-export type LocationBodyEffectiveTags = {[key: string]: string};
-
-/**
- * A place the fleet occupies, from a campus down to a room, nested under the location it sits in.
- */
-export type LocationBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  /**
-     * The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces.
-     * @nullable
-     */
-  actions?: string[] | null;
-  /** The resolved effective tags (key -> winning value) that cascade onto this location (platform and its location tree); for the Tags column. */
-  effective_tags?: LocationBodyEffectiveTags;
-  id: string;
-  label?: string;
-  /** Whether the platform rendered this label from a label rule rather than an operator typing it. Read-only: write label to claim it, write an empty label to hand it back. */
-  label_generated: boolean;
-  /** The location_type name */
-  location_type: string;
-  /** The location_type's uuid, the stable form of location_type */
-  location_type_id: string;
-  name: string;
-  /** Whether the platform picked this name (from the location_type's name rule) rather than an operator typing it. */
-  name_generated: boolean;
-  /** The parent location's name, for display; absent for a site root */
-  parent?: string;
-  /** The parent location's id, the canonical handle */
-  parent_id?: string;
-  /** The dotted address (e.g. boi.17c.415a); no accessor, since a location's own address IS its location-tree ancestor chain. Set on a GET or LIST response; empty on a create/update/move/rename response (refetch the row to see it). */
-  path?: string;
-  /**
-     * path split on '.'.
-     * @nullable
-     */
-  path_segments?: string[] | null;
-  /** Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy. */
-  renders?: RenderBody;
-};
-
 export type ListLocationsOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -5453,60 +5588,6 @@ export type ListSystemTypesOutputBody = {
   readonly $schema?: string;
   /** @nullable */
   system_types: SystemTypeBody[] | null;
-};
-
-/**
- * The resolved effective tags (key -> winning value) that cascade onto this system (platform, its location, its system tree); for the Tags column.
- */
-export type SystemBodyEffectiveTags = {[key: string]: string};
-
-/**
- * The unit Omniglass monitors, a set of components in one location that works as one, with one health of its own.
- */
-export type SystemBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  /**
-     * The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces.
-     * @nullable
-     */
-  actions?: string[] | null;
-  /** The resolved effective tags (key -> winning value) that cascade onto this system (platform, its location, its system tree); for the Tags column. */
-  effective_tags?: SystemBodyEffectiveTags;
-  id: string;
-  label?: string;
-  /** Whether the platform rendered this label from a label rule rather than an operator typing it. Read-only: write label to claim it, write an empty label to hand it back. */
-  label_generated: boolean;
-  /** The location's name, for display */
-  location?: string;
-  /** The location's id, the canonical handle */
-  location_id?: string;
-  /** How many components are bound into this system */
-  member_count: number;
-  name: string;
-  /** Whether the platform picked this name (from the system_type's stem) rather than an operator typing it. */
-  name_generated: boolean;
-  /** The parent system's name, for display; absent for a root system */
-  parent?: string;
-  /** The parent system's id, the canonical handle */
-  parent_id?: string;
-  /** The dotted address (e.g. boi.17c.$sys.av). Set on a GET or LIST response; empty on a create/update/move/rename response (refetch the row to see it). */
-  path?: string;
-  /**
-     * path split on '.', accessors included, so the round trip through the resolver stays lossless.
-     * @nullable
-     */
-  path_segments?: string[] | null;
-  /** Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy. */
-  renders?: RenderBody;
-  /** The standard's handle, for display; omitted for a one-off system */
-  standard?: string;
-  /** The standard's uuid; the stable form of standard */
-  standard_id?: string;
-  /** The system_type's name, for display: what this system is for (board, class, video-wall). Omitted for an unclassified system. Distinct from standard, which is the contract it is built to. */
-  system_type?: string;
-  /** The system_type's uuid; the stable form of system_type */
-  system_type_id?: string;
 };
 
 export type ListSystemsOutputBody = {
@@ -14492,6 +14573,55 @@ export const setComponentTag = async (name: string,
 
 
 
+export type batchCreateComponentsResponse200 = {
+  data: BatchCreateComponentsOutputBody
+  status: 200
+}
+
+export type batchCreateComponentsResponse201 = {
+  data: BatchCreateComponentsOutputBody
+  status: 201
+}
+
+export type batchCreateComponentsResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200 | 201>
+}
+
+export type batchCreateComponentsResponseSuccess = (batchCreateComponentsResponse200 | batchCreateComponentsResponse201) & {
+  headers: Headers;
+};
+export type batchCreateComponentsResponseError = (batchCreateComponentsResponseDefault) & {
+  headers: Headers;
+};
+
+export type batchCreateComponentsResponse = (batchCreateComponentsResponseSuccess | batchCreateComponentsResponseError)
+
+export const getBatchCreateComponentsUrl = () => {
+
+
+
+
+  return `/components:batchCreate`
+}
+
+/**
+ * Creates components in one transaction: each request is the body POST /components takes, run as that create runs it, in order, so a component may name as its parent one an earlier request creates, and its system and location by name as the single create does. Every row writes its own audit row carrying the one batch_id the response returns, under from_batch. A refused request refuses the whole batch, mapped as POST /components maps it, with its position in the request (requests[3]) leading the detail; nothing lands. validate_only runs the same transaction and rolls it back, answering 200 with the names the write would mint and no ids. A batch carries at most 1000 requests; more is a 413 naming the limit, so split a bigger import (by building). Gated by component:create; each request is held to that scope, its location resolves within your location:read scope, and a request naming a system also needs system:update over it, as its single create does.
+ * @summary Create many components in one write
+ */
+export const batchCreateComponents = async (batchCreateComponentsInputBody: NonReadonly<BatchCreateComponentsInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<batchCreateComponentsResponse> => {
+
+  return ogFetch<batchCreateComponentsResponse>(getBatchCreateComponentsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
+    body: JSON.stringify(batchCreateComponentsInputBody)
+  }
+);}
+
+
+
 export type checkComponentNameResponse200 = {
   data: CheckNameOutputBody
   status: 200
@@ -17563,6 +17693,55 @@ export const setLocationTag = async (name: string,
     method: 'POST',
     headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(entitySetTagInputBody)
+  }
+);}
+
+
+
+export type batchCreateLocationsResponse200 = {
+  data: BatchCreateLocationsOutputBody
+  status: 200
+}
+
+export type batchCreateLocationsResponse201 = {
+  data: BatchCreateLocationsOutputBody
+  status: 201
+}
+
+export type batchCreateLocationsResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200 | 201>
+}
+
+export type batchCreateLocationsResponseSuccess = (batchCreateLocationsResponse200 | batchCreateLocationsResponse201) & {
+  headers: Headers;
+};
+export type batchCreateLocationsResponseError = (batchCreateLocationsResponseDefault) & {
+  headers: Headers;
+};
+
+export type batchCreateLocationsResponse = (batchCreateLocationsResponseSuccess | batchCreateLocationsResponseError)
+
+export const getBatchCreateLocationsUrl = () => {
+
+
+
+
+  return `/locations:batchCreate`
+}
+
+/**
+ * Creates locations in one transaction: each request is the body POST /locations takes, run as that create runs it, in order, so a location may name as its parent one an earlier request creates. Every row writes its own audit row carrying the one batch_id the response returns, under from_batch. A refused request refuses the whole batch, mapped as POST /locations maps it, with its position in the request (requests[3]) leading the detail; nothing lands. validate_only runs the same transaction and rolls it back, answering 200 with the names the write would mint and no ids. A batch carries at most 1000 requests; more is a 413 naming the limit, so split a bigger import (by building). Gated by location:create, and each request is held to that scope as its single create is.
+ * @summary Create many locations in one write
+ */
+export const batchCreateLocations = async (batchCreateLocationsInputBody: NonReadonly<BatchCreateLocationsInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<batchCreateLocationsResponse> => {
+
+  return ogFetch<batchCreateLocationsResponse>(getBatchCreateLocationsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
+    body: JSON.stringify(batchCreateLocationsInputBody)
   }
 );}
 
@@ -23541,6 +23720,55 @@ export const setSystemTag = async (name: string,
     method: 'POST',
     headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(entitySetTagInputBody)
+  }
+);}
+
+
+
+export type batchCreateSystemsResponse200 = {
+  data: BatchCreateSystemsOutputBody
+  status: 200
+}
+
+export type batchCreateSystemsResponse201 = {
+  data: BatchCreateSystemsOutputBody
+  status: 201
+}
+
+export type batchCreateSystemsResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200 | 201>
+}
+
+export type batchCreateSystemsResponseSuccess = (batchCreateSystemsResponse200 | batchCreateSystemsResponse201) & {
+  headers: Headers;
+};
+export type batchCreateSystemsResponseError = (batchCreateSystemsResponseDefault) & {
+  headers: Headers;
+};
+
+export type batchCreateSystemsResponse = (batchCreateSystemsResponseSuccess | batchCreateSystemsResponseError)
+
+export const getBatchCreateSystemsUrl = () => {
+
+
+
+
+  return `/systems:batchCreate`
+}
+
+/**
+ * Creates systems in one transaction: each request is the body POST /systems takes, run as that create runs it, in order, so a system may name as its parent one an earlier request creates, and its location by name as the single create does. Every row writes its own audit row carrying the one batch_id the response returns, under from_batch. A refused request refuses the whole batch, mapped as POST /systems maps it, with its position in the request (requests[3]) leading the detail; nothing lands. validate_only runs the same transaction and rolls it back, answering 200 with the names the write would mint and no ids. A batch carries at most 1000 requests; more is a 413 naming the limit, so split a bigger import (by building). Gated by system:create; each request is held to that scope, and its location resolves within your location:read scope, as its single create is.
+ * @summary Create many systems in one write
+ */
+export const batchCreateSystems = async (batchCreateSystemsInputBody: NonReadonly<BatchCreateSystemsInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<batchCreateSystemsResponse> => {
+
+  return ogFetch<batchCreateSystemsResponse>(getBatchCreateSystemsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
+    body: JSON.stringify(batchCreateSystemsInputBody)
   }
 );}
 

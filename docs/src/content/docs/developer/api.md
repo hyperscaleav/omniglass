@@ -37,6 +37,12 @@ the scope your grants reach, so a token sees exactly what its user does.
 
 - **Resources and `:verb` methods.** Routes are AIP-style: a collection (`/locations`), an item by
   name or id, and a custom method after a colon for an action that is not a plain update.
+- **Batch creates.** `POST /locations:batchCreate`, `/systems:batchCreate` and `/components:batchCreate`
+  each take a list of up to 1000 of the single create's own bodies under `requests`, run in order in one
+  transaction, every row or none. `validate_only: true` runs the same transaction and rolls it back,
+  answering 200 with what a write would create; a write answers 201 with a `batch_id` every audit row
+  it wrote carries as `from_batch`. A refused row is answered as its single create answers it, led by
+  `requests[3]: `. See [creating in batches](/developer/cli/#creating-in-batches).
 - **Names address.** A resource you type the name of answers to it; the id it returns survives a rename.
 - **Lists** filter, order and page by cursor.
 - **Errors** are one `problem+json` envelope, with the field a 422 refused named.
