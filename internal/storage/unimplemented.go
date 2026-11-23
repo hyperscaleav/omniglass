@@ -1036,13 +1036,16 @@ func (UnimplementedGateway) EndExpiredSnoozes(context.Context, int) (int, error)
 func (UnimplementedGateway) ListAlarms(context.Context, string, AlarmFilter) ([]Alarm, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) SystemHealth(context.Context, string, time.Duration, scope.Set) (*HealthReport, error) {
+func (UnimplementedGateway) SystemHealth(context.Context, string, HealthRange, scope.Set) (*HealthReport, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ComponentHealthReport(context.Context, string, HealthRange, scope.Set) (*HealthReport, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) SystemHealths(context.Context, scope.Set) ([]SystemHealthEntry, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) LocationHealth(context.Context, string, time.Duration, scope.Set) (*HealthReport, error) {
+func (UnimplementedGateway) LocationHealth(context.Context, string, HealthRange, scope.Set) (*HealthReport, error) {
 	return nil, nil
 }
 

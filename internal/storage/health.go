@@ -135,6 +135,35 @@ type HealthSystem struct {
 	Verdict string
 }
 
+// HealthRange bounds the transitions a health read returns. Since and Until are
+// instants the caller named (a request's own query parameters); a zero value
+// is no bound on that side. With Since zero, Window is the trailing window
+// measured on the database's clock (tsSince, #719), so the default boundary is
+// never an instant the server process computed. The zero HealthRange is the
+// whole history.
+type HealthRange struct {
+	Since  time.Time
+	Until  time.Time
+	Window time.Duration
+}
+
+// predicate renders the range as a where fragment on col, appending its
+// arguments after args (the fragment's first placeholder follows them).
+func (r HealthRange) predicate(col string, args ...any) (string, []any) {
+	var bound string
+	if r.Since.IsZero() {
+		bound, args = tsSince(col, r.Window, args...)
+	} else {
+		args = append(args, r.Since)
+		bound = fmt.Sprintf("%s >= $%d", col, len(args))
+	}
+	if !r.Until.IsZero() {
+		args = append(args, r.Until)
+		bound += fmt.Sprintf(" and %s <= $%d", col, len(args))
+	}
+	return bound, args
+}
+
 // HealthTransition is one recorded edge: the moment the verdict changed and what
 // it changed to.
 type HealthTransition struct {
@@ -1078,7 +1107,7 @@ func splitHealthSlots(rs []resolvedSlot) (unconditional []health.Slot, choices [
 // (each with Active false, HealthSlot), so the verdict can be healthy while
 // the list beside it shows impaired rows, and Active is what tells the two
 // apart rather than that being a disagreement.
-func (p *PG) SystemHealth(ctx context.Context, systemName string, window time.Duration, read scope.Set) (*HealthReport, error) {
+func (p *PG) SystemHealth(ctx context.Context, systemName string, rng HealthRange, read scope.Set) (*HealthReport, error) {
 	// Resolved once, here, rather than through ownerInScope (which does the
 	// same lookup but discards the id): every read below, including
 	// healthTransitions, binds sys.ID, never re-derived from systemName once
@@ -1122,7 +1151,7 @@ func (p *PG) SystemHealth(ctx context.Context, systemName string, window time.Du
 		}
 		rep.Slots = append(rep.Slots, row)
 	}
-	if rep.Transitions, err = healthTransitions(ctx, p.pool, "system", sys.ID, window); err != nil {
+	if rep.Transitions, err = healthTransitions(ctx, p.pool, "system", sys.ID, rng); err != nil {
 		return nil, err
 	}
 	return rep, nil
@@ -1136,7 +1165,7 @@ func (p *PG) SystemHealth(ctx context.Context, systemName string, window time.Du
 // The verdict is the rollup of exactly those systems, so the headline and the
 // drill-down can never disagree: a location cannot read healthy over a system it
 // itself lists as an outage.
-func (p *PG) LocationHealth(ctx context.Context, locationName string, window time.Duration, read scope.Set) (*HealthReport, error) {
+func (p *PG) LocationHealth(ctx context.Context, locationName string, rng HealthRange, read scope.Set) (*HealthReport, error) {
 	// Resolved once via scopedByNameInScope, not scopedByName-then-
 	// inScopeTree (see SystemHealth's comment; ruling 2, #627); rep.OwnerID
 	// keeps echoing the caller's own reference, unchanged.
@@ -1151,7 +1180,27 @@ func (p *PG) LocationHealth(ctx context.Context, locationName string, window tim
 	}
 	rep.Systems = systems
 	rep.Verdict = health.RollUp(systemHealthValues(systems)).String()
-	if rep.Transitions, err = healthTransitions(ctx, p.pool, "location", loc.ID, window); err != nil {
+	if rep.Transitions, err = healthTransitions(ctx, p.pool, "location", loc.ID, rng); err != nil {
+		return nil, err
+	}
+	return rep, nil
+}
+
+// ComponentHealthReport reports one component's own current verdict (the live
+// read ComponentHealth makes, "unknown" for a device nothing has observed) and
+// its recorded transitions inside rng. Resolved once through
+// scopedByNameInScope, as SystemHealth does: an out-of-scope or absent name is
+// the same non-disclosing ErrComponentNotFound.
+func (p *PG) ComponentHealthReport(ctx context.Context, componentName string, rng HealthRange, read scope.Set) (*HealthReport, error) {
+	c, err := scopedByNameInScope(ctx, p.pool, componentConfig, componentName, "component", read)
+	if err != nil {
+		return nil, err
+	}
+	rep := &HealthReport{OwnerKind: "component", OwnerID: componentName, Slots: []HealthSlot{}, Systems: []HealthSystem{}}
+	if rep.Verdict, err = p.ComponentHealth(ctx, c.ID); err != nil {
+		return nil, err
+	}
+	if rep.Transitions, err = healthTransitions(ctx, p.pool, "component", c.ID, rng); err != nil {
 		return nil, err
 	}
 	return rep, nil
@@ -1266,12 +1315,12 @@ func (p *PG) subtreeSystemHealth(ctx context.Context, q txQuerier, locationID st
 // rather than the component-and-instance one. ownerID follows recordHealth's
 // contract (see ownerArcExprN): an id for component/system/location, a name for
 // outpost. The window's boundary is the database's own (tsSince, #719).
-func healthTransitions(ctx context.Context, q txQuerier, ownerKind, ownerID string, window time.Duration) ([]HealthTransition, error) {
+func healthTransitions(ctx context.Context, q txQuerier, ownerKind, ownerID string, rng HealthRange) ([]HealthTransition, error) {
 	col, err := ownerColumn(ownerKind)
 	if err != nil {
 		return nil, err
 	}
-	bound, args := tsSince("ts", window, ownerID, healthKey)
+	bound, args := rng.predicate("ts", ownerID, healthKey)
 	sql := fmt.Sprintf(`select ts, value #>> '{}' from property
 		where %s = %s and property_type_id = (select id from property_type_in_effect() property_type where name = $2) and instance = ''
 		  and provenance = 'calculated' and %s
