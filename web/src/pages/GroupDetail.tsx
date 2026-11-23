@@ -16,6 +16,7 @@ import {
 } from "../lib/groups";
 import { useSearchParams } from "@solidjs/router";
 import { useEditParam } from "../lib/editurl";
+import { firstParam } from "../lib/drawer_address";
 import { type ScopeKind, USERS_KEY, ROLES_KEY, listUsers, listRoles, userName, kindLabel } from "../lib/users";
 import { listLocations } from "../lib/locations";
 import { listSystems } from "../lib/systems";
@@ -122,13 +123,13 @@ export function GroupDetail(props: { id: string }) {
     },
   });
 
-  // The blade's edit mode composes with its id deep link (#762): ?g=<id>&edit=1
+  // The blade's edit mode composes with its id deep link (#762): ?open=<id>&edit=1
   // opens this blade already editing once its data has loaded (and the caller can
   // manage it), which is also how the create flow hands off. Gated on the URL
   // naming THIS blade, so a stale ?edit=1 beside another group's id (or none)
   // cannot flip a blade the operator merely clicked open.
   const [searchParams] = useSearchParams();
-  const linked = () => (Array.isArray(searchParams.g) ? searchParams.g[0] : searchParams.g) === props.id;
+  const linked = () => (firstParam(searchParams.open) ?? firstParam(searchParams.g)) === props.id;
   useEditParam(edit, { ready: () => !!group.data && linked(), canUpdate: canManage });
 
   async function removeGroup() {
