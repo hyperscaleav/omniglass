@@ -54,6 +54,15 @@ describe("confirmDelete", () => {
     expect(run).not.toHaveBeenCalled();
   });
 
+  it("holds while the act is in flight: Escape does not answer a delete that may still land", async () => {
+    let finish!: () => void;
+    const answer = confirmDelete({ kind: "tag", name: "a", run: () => new Promise<void>((r) => (finish = r)) });
+    fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Delete tag" }));
+    fireEvent.keyDown(dialog(), { key: "Escape" });
+    finish();
+    await expect(answer).resolves.toBe(true);
+  });
+
   it("keeps the dialog open on a failed act and says why", async () => {
     const answer = confirmDelete({ kind: "tag", name: "a", run: () => Promise.reject({ status: 500, detail: "the database is away" }) });
     fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Delete tag" }));

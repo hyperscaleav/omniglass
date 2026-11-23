@@ -119,7 +119,7 @@ move it there.
 The list names only what you may read. A blocker outside your scope is counted (**1 more you
 cannot see from here**), never named, so a refusal tells you no more about the fleet than your
 grants already do; someone who can see it has to clear it. Nothing here deletes in cascade: each
-row goes by its own delete. (Decommissioning a whole place, with what it holds, is a separate verb.)
+row goes by its own delete. (Decommissioning a whole location, with what it holds, is a separate verb.)
 
 ## Deep-link the edit
 

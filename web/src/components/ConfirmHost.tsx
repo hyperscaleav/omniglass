@@ -70,7 +70,11 @@ export default function ConfirmHost(props: { navigate?: (href: string) => void }
     }),
   );
 
-  const close = () => pendingConfirm()?.resolve(false);
+  // Not while the act is in flight: Escape mid-delete would answer "no" to a
+  // delete that then lands, and the page would never take its way out.
+  const close = () => {
+    if (!busy()) pendingConfirm()?.resolve(false);
+  };
 
   const act = async () => {
     const req = pendingConfirm();
