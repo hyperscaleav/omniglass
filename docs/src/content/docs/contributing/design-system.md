@@ -68,7 +68,7 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
 - **Every page has the `Page` header.** A page opens with its title and a one-line hint, both read
   from the nav metadata (`<Page route="/roles">`), so the sidebar, the top bar and the page say the
   same words and a page never ships without one. A page that wraps a list takes the header like any
-  other; the full-page detail of a node renders its own heading instead.
+  other; the full-page detail of a row renders its own heading instead.
 - **One drawer width rule.** A drawer is the narrow panel (`max-w-md`) unless its body carries a
   table or a timeline, which takes the wide one (`max-w-2xl`; `wide` on a `FlatList` detail or on
   `Drawer`). The alarm drawer (its timeline) and the audit drawer (its change table) are wide; a
