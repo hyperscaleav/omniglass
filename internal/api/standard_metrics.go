@@ -69,7 +69,7 @@ func registerStandardMetricRoutes(api huma.API, a *authenticator, gw storage.Gat
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-standard-metrics",
 		Method:      http.MethodGet,
-		Path:        "/standards/{id}/metrics",
+		Path:        "/standards/{namespace}/{id}/metrics",
 		Summary:     "List a standard's declared metrics",
 		Description: "Lists the standard's declared-metric contract (which metrics every system conforming to it carries), ordered by metric name, each with its optional default and required flag. Gated by standard:read.",
 	}, "standard", "read"), func(ctx context.Context, in *standardPathInput) (*listStandardMetricsOutput, error) {
@@ -88,7 +88,7 @@ func registerStandardMetricRoutes(api huma.API, a *authenticator, gw storage.Gat
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "set-standard-metric",
 		Method:      http.MethodPut,
-		Path:        "/standards/{id}/metrics/{metric}",
+		Path:        "/standards/{namespace}/{id}/metrics/{metric_namespace}/{metric}",
 		Summary:     "Declare a metric on a standard",
 		Description: "Declares a catalog metric on a custom standard, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official standards are read-only (422); an unknown standard is a 404 and a metric the catalog does not know is a 422. Gated by standard:update.",
 	}, "standard", "update"), func(ctx context.Context, in *setStandardMetricInput) (*standardMetricOutput, error) {
@@ -110,7 +110,7 @@ func registerStandardMetricRoutes(api huma.API, a *authenticator, gw storage.Gat
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-standard-metric",
 		Method:        http.MethodDelete,
-		Path:          "/standards/{id}/metrics/{metric}",
+		Path:          "/standards/{namespace}/{id}/metrics/{metric_namespace}/{metric}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Withdraw a metric from a standard",
 		Description:   "Removes one line from a custom standard's contract; conforming systems keep any samples the series already holds, now off-contract. A metric the standard does not declare is a 404, and an official standard is read-only (422). Gated by standard:delete.",

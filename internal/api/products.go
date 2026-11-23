@@ -29,6 +29,7 @@ type productBody struct {
 	LabelRule       string `json:"label_rule,omitempty" doc:"The label rule instances of this product get, the most specific tier; unset falls back to the component_type chain, then the global component rule"`
 	ParentProduct   string `json:"parent_product,omitempty" doc:"The parent product's handle"`
 	ParentProductID string `json:"parent_product_id,omitempty" doc:"The parent product's uuid; the stable form of parent_product"`
+	Namespace       string `json:"namespace" doc:"The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"`
 	Official        bool   `json:"official"`
 }
 
@@ -73,7 +74,7 @@ func toProductBody(m *storage.Product) productBody {
 		Icon:            derefStr(m.Icon),
 		LabelRule:       derefStr(m.LabelRule),
 		ParentProduct:   derefStr(m.ParentProductName), ParentProductID: derefStr(m.ParentProductID),
-		Official: m.Official,
+		Official: m.Official, Namespace: catalogNamespaceOf(m.Official),
 	}
 }
 
@@ -89,6 +90,7 @@ type productPathInput struct {
 
 type createProductInput struct {
 	Body struct {
+		CatalogCreateNamespace
 		Name            string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The globally unique name; renameable"`
 		Label           string `json:"label" minLength:"1" doc:"What an operator reads in pickers and lists"`
 		VendorID        string `json:"vendor_id,omitempty" doc:"The vendor, by handle or uuid"`
@@ -198,7 +200,7 @@ func registerProductRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		OperationID: "get-product",
 		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
-		Path:        "/products/{id}",
+		Path:        "/products/{namespace}/{id}",
 		Summary:     "Get a product",
 		Description: "Fetches a product by its name or its uuid. Either form resolves, so `omniglass product get acme-soundbar` and the uuid are interchangeable. Gated by product:read.",
 	}, "product", "read"), func(ctx context.Context, in *productPathInput) (*productOutput, error) {
@@ -212,7 +214,7 @@ func registerProductRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "update-product",
 		Method:      http.MethodPatch,
-		Path:        "/products/{id}",
+		Path:        "/products/{namespace}/{id}",
 		Summary:     "Update a product",
 		Description: "Patches a custom product's label, vendor, driver, kind, component_type, icon, label rule, or parent. Each optional field follows the three-state string: omitted is unchanged, an empty string clears it, a value sets it, so a vendor, driver, parent, icon or label rule can be unset as well as changed. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.",
 	}, "product", "update"), func(ctx context.Context, in *updateProductInput) (*productOutput, error) {
@@ -238,7 +240,7 @@ func registerProductRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-product",
 		Method:        http.MethodDelete,
-		Path:          "/products/{id}",
+		Path:          "/products/{namespace}/{id}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a product",
 		Description:   "Deletes a custom product, refused if official (422) or still referenced by a component (409). Gated by product:delete.",

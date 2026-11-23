@@ -154,7 +154,7 @@ func (e *ruleEvaluator) typeID(ctx context.Context, tx pgx.Tx, name string) (uui
 		return id, true
 	}
 	var s string
-	if err := tx.QueryRow(ctx, `select id::text from component_type_in_effect() component_type where name = $1`, name).Scan(&s); err != nil {
+	if err := tx.QueryRow(ctx, `select id::text from `+refRows("component_type", name)+` component_type where `+catalogRefCol(name)+` = $1`, name).Scan(&s); err != nil {
 		return uuid.UUID{}, false
 	}
 	id, err := uuid.Parse(s)

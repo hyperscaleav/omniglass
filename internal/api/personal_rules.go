@@ -301,14 +301,14 @@ func registerOptOutRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "opt-out-action-rule",
 		Method:      http.MethodPost,
-		Path:        "/action-rules/{name}:optOut",
+		Path:        "/action-rules/{namespace}/{name}:optOut",
 		Summary:     "Opt yourself out of a group notification",
 		Description: "Stops a platform action rule telling you through a group it targets, for you alone. Only a rule an admin marked opt_out_allowed (a 409 otherwise); a rule that names you directly still tells you. Idempotent and audited. Gated by notification:subscribe.",
 	}, "notification", "subscribe"), set(true))
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "opt-in-action-rule",
 		Method:      http.MethodPost,
-		Path:        "/action-rules/{name}:optIn",
+		Path:        "/action-rules/{namespace}/{name}:optIn",
 		Summary:     "Opt yourself back in to a group notification",
 		Description: "Undoes your opt-out of a platform action rule; always allowed. Idempotent and audited. Gated by notification:subscribe.",
 	}, "notification", "subscribe"), set(false))

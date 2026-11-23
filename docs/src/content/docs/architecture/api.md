@@ -75,8 +75,8 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
   subtree's contribution between two ancestor chains and recomputes both
   ([ADR-0092](/architecture/decisions/#adr-0092-a-location-move-recomputes-both-ancestor-chains)).
 - **A type's retention window is a custom method**
-  ([ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks)). `POST /metric-types/{name}:setRetention`
-  and `/property-types/{name}:setRetention` take `{days}` (1 to 36,500) or `{days: null}` to return the
+  ([ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks)). `POST /metric-types/{namespace}/{name}:setRetention`
+  and `/property-types/{namespace}/{name}:setRetention` take `{days}` (1 to 36,500) or `{days: null}` to return the
   type to its lane's window. It works on an official type, which `PATCH` refuses as read-only: the
   type's definition is the seed's, its retention the install's. It is gated by `<type>:update` and
   `platform:update`, like the retention settings, and writes its own audit verb, `set_retention`.
@@ -229,7 +229,7 @@ once the body is decoded into a typed struct. So the field goes in `update_mask`
 carries no value for it:
 
 ```http
-PATCH /location-types/{id}
+PATCH /location-types/{namespace}/{id}
 { "update_mask": ["name_rule"], "name_rule": null }
 ```
 
@@ -241,12 +241,12 @@ alone, which would silently leave the rest unwritten. The console's location typ
 that when an operator turns naming off while editing something else.
 
 The catalog routes follow the same rule
-([#1189](https://github.com/hyperscaleav/omniglass/issues/1189)). `PATCH /metric-types/{name}` clears
-`precision`, `PATCH /event-types/{name}` clears `payload_schema`, `PATCH /property-types/{name}` clears
-`validation` and `PATCH /command-types/{name}` clears `params_schema`, each by naming the field in
+([#1189](https://github.com/hyperscaleav/omniglass/issues/1189)). `PATCH /metric-types/{namespace}/{name}` clears
+`precision`, `PATCH /event-types/{namespace}/{name}` clears `payload_schema`, `PATCH /property-types/{namespace}/{name}` clears
+`validation` and `PATCH /command-types/{namespace}/{name}` clears `params_schema`, each by naming the field in
 `update_mask`; omitted, each is unchanged. On these routes the mask governs every patchable field, so a
 mask that names `precision` writes only `precision`, and a populated `description` the mask leaves out
-stays as it was. A nullable reference is a string, so `PATCH /standards/{id}` clears
+stays as it was. A nullable reference is a string, so `PATCH /standards/{namespace}/{id}` clears
 `parent_standard_id` with the `""` sentinel instead, and a name or uuid sets it.
 
 A `name_rule` also reads back with **`examples`**, the first two names it mints, produced by the same
@@ -257,8 +257,8 @@ a shape implemented twice eventually disagrees, and here the wrong answer would 
 was promised that no create produces. It is a fact about the RULE and not the fleet, so it costs no
 read, reserves no ordinal, and needs no scope.
 
-Built on the slot declarations (`PATCH /standards/{id}/slots/{slot}`, `PATCH
-/systems/{name}/slots/{slot}`) and adopted by `PATCH /location-types/{id}`. The other `PATCH` routes
+Built on the slot declarations (`PATCH /standards/{namespace}/{id}/slots/{slot}`, `PATCH
+/systems/{name}/slots/{slot}`) and adopted by `PATCH /location-types/{namespace}/{id}`. The other `PATCH` routes
 accept no mask yet, and they do not need one to stay correct: an absent mask is the implied mask,
 which is exactly what they already do.
 
@@ -494,14 +494,14 @@ at the sample) and `in_force_now`. Its reads are index probes per series; the wi
 not exist, and a criterion that does not compile is a 422 at its line and column. A rule edit is judged on what it changes from the stored rule:
 a selector entry, key or criteria it restates unchanged is not re-resolved, so a rule whose component or
 type was deleted stays editable (it matches nothing by the stale entry), while an entry new to the rule must
-exist. `POST /event-rules/{name}:rename` (gated `rule:update` on an all-scope grant; `omniglass event-rule
+exist. `POST /event-rules/{namespace}/{name}:rename` (gated `rule:update` on an all-scope grant; `omniglass event-rule
 rename`) moves an operator rule's name (#977) and answers the rule with its `id`; every reference inside
 the platform holds that uuid (an alarm's `raised_by_rule_id` and its `dedup_key`, `rule:<uuid>[:<instance>]`,
 a firing, a streak, an event's `derived_by_rule_id`), so a rename bumps no version and leaves streaks
 and firings running. An event keeps the name it was written under (`derived_by_rule`). An official
 rule keeps its name (409, the seed matches it by name), a taken name is a 409, an illegal or uuid-shaped
 one a 422. The list and a get carry each rule's live state as counts (`firing`, `open_alarms`,
-`pending_streaks`), read for the whole list in one query; `GET /event-rules/{name}/state` lists the
+`pending_streaks`), read for the whole list in one query; `GET /event-rules/{namespace}/{name}/state` lists the
 firings, the alarms and the streaks themselves.
 Both are fenced to the caller's component read scope. The list, a get and the state also carry
 `last_judged_at`, when the rule last judged an arriving sample, to within 5s (absent when it never has);
@@ -533,9 +533,9 @@ rule writes names it on `/metric-types` and `/property-types` (list and get) as 
 (`rule`, `rule_id`): the enabled writer, else a disabled one, read with the type and scope-free as the
 catalog is (#1019). A rule that would close a cycle in the key graph is a 422 whose detail names the chain
 (`temp-twice -> avg-temp -> temp-twice`), its error carrying the `keys` and `rules` along it. A patch
-bumps the version unless it changes nothing; `POST /calc-rules/{name}:rename` moves the name, bumping no
+bumps the version unless it changes nothing; `POST /calc-rules/{namespace}/{name}:rename` moves the name, bumping no
 version (a rename to the same name writes nothing), with the same 409 and 422 refusals as an event
-rule's rename. `GET /calc-rules/{name}/state` (gated `rule:read`; `omniglass calc-rule state list`) lists
+rule's rename. `GET /calc-rules/{namespace}/{name}/state` (gated `rule:read`; `omniglass calc-rule state list`) lists
 what the rule last did on each owner the caller may read (a component by the component read scope, a
 system by the system read scope), the owner named now: `value`, `computed_at`, `rule_version`,
 `missing`, a system's `skipped` members and the `stale` instances (named when the caller may read the
@@ -763,7 +763,7 @@ row (201) and `PATCH` updates and `DELETE` removes (204), gated `<resource>:crea
 ([ADR-0095](/architecture/decisions/#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it)):
 there a `PATCH` of a shipped row succeeds without writing it, storing the caller's version over it and
 answering 200 with `forked: true` under the same id, `DELETE` is still 422 (a fork is an overlay, not
-ownership), and `POST /component-types/{id}:restore` discards the fork (409 when there is none) so later
+ownership), and `POST /component-types/{namespace}/{id}:restore` discards the fork (409 when there is none) so later
 releases reach the row again. `component_type` is the first adopter; `official` and `forked` together
 are the row's origin (shipped, yours, or yours overriding shipped). The `{ref}` grammar is unchanged
 either way: one uuid per logical row, forked or not (a name names one row per namespace, ADR-0318), and the fork never appears in a
@@ -783,8 +783,8 @@ a create takes the `name`, the response carries the minted uuid, and a reference
 `driver`, a parent) resolves whichever form it is given.
 
 The handle is what ADR-0062 made renameable, and five catalogs rename it: `POST
-/vendors/{id}:rename`, `/drivers/{id}:rename`, `/products/{id}:rename`, `/standards/{id}:rename`, and
-`/location-types/{id}:rename`, each with a body of `{"name": "<new>"}`, the row addressed by its
+/vendors/{namespace}/{id}:rename`, `/drivers/{namespace}/{id}:rename`, `/products/{namespace}/{id}:rename`, `/standards/{namespace}/{id}:rename`, and
+`/location-types/{namespace}/{id}:rename`, each with a body of `{"name": "<new>"}`, the row addressed by its
 current name or its uuid
 ([ADR-0555](/architecture/decisions/#adr-0555-a-registry-row-renames-through-its-own-rename-custom-method)).
 It is the fleet tiers' custom method, not a `PATCH` field, and it is gated by its own
@@ -911,10 +911,10 @@ idempotent: `PUT` declares it or revises it in place. Type and validation come f
 [property catalog](/admin/properties/), not the body. Three classifiers carry a contract, on
 identical route shapes:
 
-- `GET /products/{id}/properties`, `PUT` / `DELETE /products/{id}/properties/{property}`, gated
-  `product:read` / `:update` / `:delete`; `GET /standards/{id}/properties`, `PUT` /
-  `DELETE /standards/{id}/properties/{property}`, gated `standard:read` / `:update` / `:delete`.
-- `GET /location-types/{id}/properties`, `PUT` / `DELETE /location-types/{id}/properties/{property}`,
+- `GET /products/{namespace}/{id}/properties`, `PUT` / `DELETE /products/{namespace}/{id}/properties/{property_namespace}/{property}`, gated
+  `product:read` / `:update` / `:delete`; `GET /standards/{namespace}/{id}/properties`, `PUT` /
+  `DELETE /standards/{namespace}/{id}/properties/{property_namespace}/{property}`, gated `standard:read` / `:update` / `:delete`.
+- `GET /location-types/{namespace}/{id}/properties`, `PUT` / `DELETE /location-types/{namespace}/{id}/properties/{property_namespace}/{property}`,
   gated `location_type:read` / `:update` / `:delete`, the catalog's own resource.
 
 The list returns the contract ordered by property name, each line
@@ -997,7 +997,7 @@ with no value is what clears it back to unbounded. `impact` is `outage` / `degra
 `choice-name/alternate-name` this slot joins, an empty string detaching it; every slot read returns it
 in the same form. Gating follows the owner:
 
-- `GET /standards/{id}/slots` plus `PATCH` / `DELETE /standards/{id}/slots/{slot}`, gated `standard:read` /
+- `GET /standards/{namespace}/{id}/slots` plus `PATCH` / `DELETE /standards/{namespace}/{id}/slots/{slot}`, gated `standard:read` /
   `:update` / `:delete`. Withdrawing a slot takes every assignment conforming systems made to it (a
   cascade); a slot the standard does not declare is a 404. A standard that does not exist is a 422 on
   the declaration and writes nothing (`system_slot_owner_arc_check` makes an ownerless slot
@@ -1136,7 +1136,7 @@ directory's admin-tier read. The caller's own inbox is `GET /auth/me/notificatio
 `/auth/me/action-rules` (list, get, create, patch, delete, and `:test` against their recent alarms, on
 a saved rule or, `POST /auth/me/action-rules:testDraft`, on a draft not yet saved),
 under `notification:subscribe`, which `viewer` carries; another user's rule is a 404. A member of a
-group a rule targets opts out with `POST /action-rules/{name}:optOut` and back in with `:optIn`, where
+group a rule targets opts out with `POST /action-rules/{namespace}/{name}:optOut` and back in with `:optIn`, where
 the rule allows it. A person-addressed row names its `recipient` only to that person and to the
 user directory's readers.
 

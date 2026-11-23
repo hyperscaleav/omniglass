@@ -149,7 +149,7 @@ func TestSettingANameRuleOnAShippedTypeForksAndRestoresAPI(t *testing.T) {
 	}
 
 	var forked locationTypeWire
-	if err := json.Unmarshal(c.do(owner, http.MethodPatch, "/location-types/floor",
+	if err := json.Unmarshal(c.do(owner, http.MethodPatch, "/location-types/og/floor",
 		map[string]any{"name_rule": map[string]any{"stem": "level", "bare_first": true}}, http.StatusOK), &forked); err != nil {
 		t.Fatalf("decode fork: %v", err)
 	}
@@ -176,7 +176,7 @@ func TestSettingANameRuleOnAShippedTypeForksAndRestoresAPI(t *testing.T) {
 	}
 
 	var restored locationTypeWire
-	if err := json.Unmarshal(c.do(owner, http.MethodPost, "/location-types/floor:restore", nil, http.StatusOK), &restored); err != nil {
+	if err := json.Unmarshal(c.do(owner, http.MethodPost, "/location-types/og/floor:restore", nil, http.StatusOK), &restored); err != nil {
 		t.Fatalf("decode restore: %v", err)
 	}
 	if restored.Forked || restored.NameRule != nil {
@@ -223,10 +223,10 @@ func TestTheRefusalANameRuleEditorHasToSurfaceAPI(t *testing.T) {
 	// admits, which is the coincidence that makes ErrInvalidNameRule
 	// unreachable from here. Both halves are asserted so the day one moves the
 	// other has to move with it.
-	c.do(ownerTok, http.MethodPatch, "/location-types/nre-refusal",
+	c.do(ownerTok, http.MethodPatch, "/location-types/local/nre-refusal",
 		map[string]any{"name_rule": map[string]any{"stem": stem(90)}}, http.StatusOK)
-	c.do(ownerTok, http.MethodPatch, "/location-types/nre-refusal",
+	c.do(ownerTok, http.MethodPatch, "/location-types/local/nre-refusal",
 		map[string]any{"name_rule": map[string]any{"stem": stem(91)}}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodPatch, "/location-types/nre-refusal",
+	c.do(ownerTok, http.MethodPatch, "/location-types/local/nre-refusal",
 		map[string]any{"name_rule": map[string]any{"stem": "Bad Stem"}}, http.StatusUnprocessableEntity)
 }

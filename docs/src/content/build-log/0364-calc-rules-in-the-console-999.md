@@ -9,7 +9,7 @@ is the calc rule registry's page, a sibling of Rules and Severity as each regist
 its own page. The list reads each rule's owner kind, inputs, reduce (a reducer in words, an expression as
 code) and output, with live counts the list route now carries (`owners_computed`, `owners_pending`,
 `owners_unsupported`, `owners_failed`, over the owners the caller may read, `CalcRuleCounts`). The blade
-shows the rule and its state per owner from `GET /calc-rules/{name}/state` (valued owners first, skipped
+shows the rule and its state per owner from `GET /calc-rules/{namespace}/{name}/state` (valued owners first, skipped
 members grouped by key and counted past four, out-of-scope members only counted, the no-members notice,
 pending and due), and the `calc_error` alert. The Drawer form creates, edits and renames (the owner kind
 fixed at create), with the selector of its kind, an inputs list, a reducer offered by the input's type or

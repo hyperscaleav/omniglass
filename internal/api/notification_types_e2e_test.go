@@ -88,9 +88,9 @@ func TestNotificationTypeAPI(t *testing.T) {
 	}
 
 	// The official types are read-only, to an admin as much as anyone.
-	c.do(ownerTok, http.MethodPatch, "/notification-types/alarm-raised", map[string]any{"subject": "mine"}, http.StatusConflict)
-	c.do(ownerTok, http.MethodDelete, "/notification-types/alarm-raised", nil, http.StatusConflict)
-	c.do(ownerTok, http.MethodPost, "/notification-types/alarm-raised:rename", map[string]any{"name": "raised"}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPatch, "/notification-types/og/alarm-raised", map[string]any{"subject": "mine"}, http.StatusConflict)
+	c.do(ownerTok, http.MethodDelete, "/notification-types/og/alarm-raised", nil, http.StatusConflict)
+	c.do(ownerTok, http.MethodPost, "/notification-types/og/alarm-raised:rename", map[string]any{"name": "raised"}, http.StatusUnprocessableEntity)
 
 	// A viewer writes nothing; an operator creates and patches its own.
 	draft := map[string]any{"name": "page-oncall", "label": "Page on-call", "subject": "{{.SeverityLabel | upper}} {{.Component}}", "text": "{{.Message}}{{.NotAFact}}"}
@@ -102,8 +102,8 @@ func TestNotificationTypeAPI(t *testing.T) {
 	if mine.Official || mine.Name != "page-oncall" {
 		t.Fatalf("created = %+v", mine)
 	}
-	c.do(viewer, http.MethodPatch, "/notification-types/page-oncall", map[string]any{"label": "x"}, http.StatusForbidden)
-	c.do(operator, http.MethodPatch, "/notification-types/page-oncall", map[string]any{"label": "Page the on-call"}, http.StatusOK)
+	c.do(viewer, http.MethodPatch, "/notification-types/local/page-oncall", map[string]any{"label": "x"}, http.StatusForbidden)
+	c.do(operator, http.MethodPatch, "/notification-types/local/page-oncall", map[string]any{"label": "Page the on-call"}, http.StatusOK)
 
 	// A refused construct is a 422 that names it, and nothing is stored.
 	for src, want := range map[string]string{
@@ -111,15 +111,15 @@ func TestNotificationTypeAPI(t *testing.T) {
 		`{{call .Message}}`:                   `call`,
 		`{{index .Message 0}}`:                `index`,
 	} {
-		body := c.do(operator, http.MethodPatch, "/notification-types/page-oncall", map[string]any{"text": src}, http.StatusUnprocessableEntity)
+		body := c.do(operator, http.MethodPatch, "/notification-types/local/page-oncall", map[string]any{"text": src}, http.StatusUnprocessableEntity)
 		if !strings.Contains(string(body), want) || !strings.Contains(string(body), "text") {
 			t.Errorf("refusal of %q = %s, want it to name text and %s", src, body, want)
 		}
 	}
 	c.do(operator, http.MethodPost, "/notification-types", map[string]any{"name": "bad", "subject": "{{.X", "text": ""}, http.StatusUnprocessableEntity)
-	c.do(viewer, http.MethodGet, "/notification-types/bad", nil, http.StatusNotFound)
+	c.do(viewer, http.MethodGet, "/notification-types/local/bad", nil, http.StatusNotFound)
 	var got notificationTypeWire
-	if err := json.Unmarshal(c.do(viewer, http.MethodGet, "/notification-types/page-oncall", nil, http.StatusOK), &got); err != nil {
+	if err := json.Unmarshal(c.do(viewer, http.MethodGet, "/notification-types/local/page-oncall", nil, http.StatusOK), &got); err != nil {
 		t.Fatal(err)
 	}
 	if got.Text != "{{.Message}}{{.NotAFact}}" || got.Label != "Page the on-call" {
@@ -130,7 +130,7 @@ func TestNotificationTypeAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/components/display-1/alarms", map[string]any{"severity": "high", "message": "no video"}, http.StatusCreated)
 	before := auditCount(t, ctx, dsn)
 	var p notificationPreviewWire
-	if err := json.Unmarshal(c.do(viewer, http.MethodPost, "/notification-types/page-oncall:preview", map[string]any{"component": "display-1"}, http.StatusOK), &p); err != nil {
+	if err := json.Unmarshal(c.do(viewer, http.MethodPost, "/notification-types/local/page-oncall:preview", map[string]any{"component": "display-1"}, http.StatusOK), &p); err != nil {
 		t.Fatal(err)
 	}
 	if p.Subject != "HIGH display-1" || p.Text != "no video" || p.Transition != "raised" {
@@ -146,7 +146,7 @@ func TestNotificationTypeAPI(t *testing.T) {
 		t.Fatalf("facts carry a key outside the map: %+v", p.Facts)
 	}
 	// The official raised type, for the cleared edge, and a draft that is never stored.
-	if err := json.Unmarshal(c.do(viewer, http.MethodPost, "/notification-types/alarm-raised:preview",
+	if err := json.Unmarshal(c.do(viewer, http.MethodPost, "/notification-types/og/alarm-raised:preview",
 		map[string]any{"component": "display-1", "transition": "cleared", "subject": "{{.Transition}}: {{.Component}}"}, http.StatusOK), &p); err != nil {
 		t.Fatal(err)
 	}
@@ -157,23 +157,23 @@ func TestNotificationTypeAPI(t *testing.T) {
 		t.Fatalf("preview wrote %d audit rows, want none", after-before)
 	}
 	// A component with no alarm, and an unknown type, are 404s.
-	c.do(viewer, http.MethodPost, "/notification-types/page-oncall:preview", map[string]any{"component": "elsewhere"}, http.StatusNotFound)
-	c.do(viewer, http.MethodPost, "/notification-types/nope:preview", map[string]any{"component": "display-1"}, http.StatusNotFound)
+	c.do(viewer, http.MethodPost, "/notification-types/local/page-oncall:preview", map[string]any{"component": "elsewhere"}, http.StatusNotFound)
+	c.do(viewer, http.MethodPost, "/notification-types/local/nope:preview", map[string]any{"component": "display-1"}, http.StatusNotFound)
 	// An output past the subject cap is a render failure, a 422.
-	c.do(viewer, http.MethodPost, "/notification-types/page-oncall:preview",
+	c.do(viewer, http.MethodPost, "/notification-types/local/page-oncall:preview",
 		map[string]any{"component": "display-1", "subject": strings.Repeat("x", 201)}, http.StatusUnprocessableEntity)
 
 	// Rename moves the handle; delete removes an operator type.
 	var renamed notificationTypeWire
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/notification-types/page-oncall:rename", map[string]any{"name": "page-on-call"}, http.StatusOK), &renamed); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/notification-types/local/page-oncall:rename", map[string]any{"name": "page-on-call"}, http.StatusOK), &renamed); err != nil {
 		t.Fatal(err)
 	}
 	if renamed.ID != mine.ID || renamed.Name != "page-on-call" {
 		t.Fatalf("renamed = %+v", renamed)
 	}
-	c.do(ownerTok, http.MethodPost, "/notification-types/page-on-call:rename", map[string]any{"name": "0190f6a2-7c1e-7b3a-9c4d-1a2b3c4d5e6f"}, http.StatusUnprocessableEntity)
-	c.do(operator, http.MethodDelete, "/notification-types/page-on-call", nil, http.StatusForbidden)
-	c.do(ownerTok, http.MethodDelete, "/notification-types/page-on-call", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodPost, "/notification-types/local/page-on-call:rename", map[string]any{"name": "0190f6a2-7c1e-7b3a-9c4d-1a2b3c4d5e6f"}, http.StatusUnprocessableEntity)
+	c.do(operator, http.MethodDelete, "/notification-types/local/page-on-call", nil, http.StatusForbidden)
+	c.do(ownerTok, http.MethodDelete, "/notification-types/local/page-on-call", nil, http.StatusNoContent)
 }
 
 func auditCount(t *testing.T, ctx context.Context, dsn string) int {

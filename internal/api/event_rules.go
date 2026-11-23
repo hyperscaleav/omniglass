@@ -53,6 +53,7 @@ type eventRuleBody struct {
 	ClearEventType   string              `json:"clear_event_type,omitempty" doc:"The event type the rule writes when it clears, by name; absent, it writes none"`
 	Message          string              `json:"message,omitempty" doc:"The alarm's message; empty uses the rule's label or name"`
 	Enabled          bool                `json:"enabled"`
+	Namespace        string              `json:"namespace" doc:"The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"`
 	Official         bool                `json:"official" doc:"Shipped with the platform and read-only"`
 	Version          int                 `json:"version" doc:"Bumps on every update"`
 	OpenAlarms       int                 `json:"open_alarms" doc:"How many alarms the rule raised are still open right now (its live state; GET /event-rules/{name}/state lists them)"`
@@ -108,7 +109,7 @@ func toEventRuleBody(r *storage.EventRule) eventRuleBody {
 		Selector:  selectorBody{ComponentTypes: r.Selector.ComponentTypes, Components: r.Selector.Components},
 		SampleKey: r.SampleKey, SampleLane: string(r.SampleLane), FireCriteria: toCriteriaBody(r.FireCriteria),
 		FireSustain: r.FireSustain.String(), ClearSustain: r.ClearSustain.String(), SampleWindow: r.SampleWindow.String(), Severity: r.Severity,
-		FireEventType: r.FireEventType, ClearEventType: r.ClearEventType, Message: r.Message, Enabled: r.Enabled, Official: r.Official, Version: r.Version,
+		FireEventType: r.FireEventType, ClearEventType: r.ClearEventType, Message: r.Message, Enabled: r.Enabled, Official: r.Official, Namespace: catalogNamespaceOf(r.Official), Version: r.Version,
 		OpenAlarms: r.OpenAlarms, PendingStreaks: r.PendingStreaks, Firing: r.Firing, LastJudgedAt: r.LastJudgedAt,
 		CriteriaError: toCriteriaErrorBody(r.CriteriaError), CriteriaWarnings: toCriteriaWarnings(r.CriteriaWarnings)}
 	if r.ClearCriteria != nil {
@@ -143,6 +144,7 @@ type eventRuleNameInput struct {
 
 type createEventRuleInput struct {
 	Body struct {
+		CatalogCreateNamespace
 		Name           string         `json:"name" minLength:"1" doc:"The rule's name (lowercase kebab)"`
 		Label          string         `json:"label,omitempty" required:"false" doc:"A human label; also the alarm message when message is empty"`
 		Description    string         `json:"description,omitempty" required:"false" doc:"What the rule watches for and why"`
@@ -223,7 +225,7 @@ func registerEventRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		OperationID: "get-event-rule",
 		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
-		Path:        "/event-rules/{name}",
+		Path:        "/event-rules/{namespace}/{name}",
 		Summary:     "Get an event rule",
 		Description: "Returns one event rule by name, with its live state as counts over the components the caller may read. Gated by rule:read.",
 	}, "rule", "read"), func(ctx context.Context, in *eventRuleNameInput) (*eventRuleOutput, error) {
@@ -279,7 +281,7 @@ func registerEventRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "update-event-rule",
 		Method:      http.MethodPatch,
-		Path:        "/event-rules/{name}",
+		Path:        "/event-rules/{namespace}/{name}",
 		Summary:     "Update an event rule",
 		Description: "Patches a rule (an absent field is unchanged), bumping its version; disabling it stops new opens. Criteria take {expr} or the short form {op, value}, compiled as on create (a 422 names the criteria, line and column). An empty severity makes the rule informational and an empty clear_event_type drops its clear event; the fire event type cannot be emptied (422). Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.",
 	}, "rule", "update"), func(ctx context.Context, in *updateEventRuleInput) (*eventRuleOutput, error) {
@@ -335,7 +337,7 @@ func registerEventRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "rename-event-rule",
 		Method:      http.MethodPost,
-		Path:        "/event-rules/{name}:rename",
+		Path:        "/event-rules/{namespace}/{name}:rename",
 		Summary:     "Rename an event rule",
 		Description: "Moves an operator rule's name, the address an operator types. A separate act from an update, because it breaks bookmarks and integration config outside this system; inside it nothing breaks, since every reference holds the rule's uuid (an alarm's raised_by_rule_id and dedup key, a firing, a streak, an event's derived_by_rule_id). Not a material change: no version bump, streaks keep running and firings stay. An event keeps the name it was written under (derived_by_rule); the rule's next events carry the new one. An official rule keeps its name (409), a taken name is a 409, an illegal or uuid-shaped one a 422. Returns the rule with its uuid. Audited. Gated by rule:update, with an all-scope grant.",
 	}, "rule", "update"), func(ctx context.Context, in *renameEventRuleInput) (*eventRuleOutput, error) {
@@ -349,7 +351,7 @@ func registerEventRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-event-rule",
 		Method:        http.MethodDelete,
-		Path:          "/event-rules/{name}",
+		Path:          "/event-rules/{namespace}/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete an event rule",
 		Description:   "Removes an operator rule; an official rule is read-only (409). Audited. Gated by rule:delete, with an all-scope grant.",
@@ -402,7 +404,7 @@ func registerEventRuleStateRoute(api huma.API, a *authenticator, gw storage.Gate
 		OperationID: "get-event-rule-state",
 		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
-		Path:        "/event-rules/{name}/state",
+		Path:        "/event-rules/{namespace}/{name}/state",
 		Summary:     "Get an event rule's live state",
 		Description: "What a rule holds right now: its firings (one per component and instance, whether or not it raises an alarm), the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only firings, alarms and streaks on components the caller may read are listed. Gated by rule:read.",
 	}, "rule", "read"), func(ctx context.Context, in *eventRuleNameInput) (*eventRuleStateOutput, error) {

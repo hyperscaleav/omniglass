@@ -44,6 +44,11 @@ type Gateway interface {
 	// endpoint reports its result; a non-nil error means the database leg is
 	// down even if the process is up.
 	Ping(ctx context.Context) error
+	// ResolveCatalogKey turns a catalog route's {namespace}/{key} into the ref
+	// the catalog's reads take for exactly that row: its name where the search
+	// path reaches it, else its uuid (#1434). ErrCatalogKeyNotFound when the
+	// namespace holds no such row.
+	ResolveCatalogKey(ctx context.Context, table, namespace, key string) (string, error)
 	// UpsertRole installs or updates an official role by id, the boot-seed
 	// phase's write. Idempotent: re-seeding the same role is a no-op update.
 	UpsertRole(ctx context.Context, r Role) error

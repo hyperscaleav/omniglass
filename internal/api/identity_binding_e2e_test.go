@@ -294,10 +294,10 @@ func TestIdentityBindingKeyDeleteIsAConflictWhileBound(t *testing.T) {
 	f := newBindingE2E(t)
 	f.c.do(f.owner, http.MethodPost, "/property-types", map[string]any{"name": "amp-channel", "data_type": "string", "label": "Amp channel"}, http.StatusCreated)
 	f.c.do(f.owner, http.MethodPut, bindPath("ucc-cloud", "amp-channel", "1"), ownerBody("system", "room-a"), http.StatusOK)
-	st, raw := f.c.send(f.owner, http.MethodDelete, "/property-types/amp-channel", nil)
+	st, raw := f.c.send(f.owner, http.MethodDelete, "/property-types/local/amp-channel", nil)
 	if st != http.StatusConflict || !strings.Contains(string(raw), "identity binding") {
 		t.Fatalf("delete a bound key = %d %s, want 409 naming identity bindings", st, raw)
 	}
 	f.c.do(f.owner, http.MethodDelete, bindPath("ucc-cloud", "amp-channel", "1"), nil, http.StatusNoContent)
-	f.c.do(f.owner, http.MethodDelete, "/property-types/amp-channel", nil, http.StatusNoContent)
+	f.c.do(f.owner, http.MethodDelete, "/property-types/local/amp-channel", nil, http.StatusNoContent)
 }

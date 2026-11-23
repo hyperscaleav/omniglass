@@ -51,12 +51,12 @@ func slotMaskFixture(t *testing.T) (*apiClient, string, string) {
 		"name": "mask-room", "label": "Mask Room",
 	}, http.StatusCreated)
 	pinned := storagetest.MintProduct(t, ctx, gw, "display")
-	c.do(ownerTok, http.MethodPatch, "/standards/mask-room/slots/main-display", map[string]any{
+	c.do(ownerTok, http.MethodPatch, "/standards/local/mask-room/slots/main-display", map[string]any{
 		"label": "Main Display", "quorum": 2, "capacity": 3, "impact": "outage",
 		"position_labels": []string{"left", "right"},
 		"accepted_types":  []string{"display"}, "pinned_products": []string{pinned.Name},
 	}, http.StatusOK)
-	return c, ownerTok, "/standards/mask-room/slots/main-display"
+	return c, ownerTok, "/standards/local/mask-room/slots/main-display"
 }
 
 // readDeclaredSlot reads the slot back off the standard's declaration list,
@@ -66,7 +66,7 @@ func readDeclaredSlot(t *testing.T, c *apiClient, tok, name string) declaredSlot
 	var list struct {
 		Slots []declaredSlotWire `json:"slots"`
 	}
-	if err := json.Unmarshal(c.do(tok, http.MethodGet, "/standards/mask-room/slots", nil, http.StatusOK), &list); err != nil {
+	if err := json.Unmarshal(c.do(tok, http.MethodGet, "/standards/local/mask-room/slots", nil, http.StatusOK), &list); err != nil {
 		t.Fatalf("decode standard slots: %v", err)
 	}
 	for _, r := range list.Slots {
@@ -256,13 +256,13 @@ func TestSlotAlternateRoundTrips(t *testing.T) {
 		t.Fatalf("create standard with choice: %v", err)
 	}
 
-	const path = "/standards/alt-room/slots/conf-bar"
+	const path = "/standards/local/alt-room/slots/conf-bar"
 	readAlt := func() string {
 		t.Helper()
 		var list struct {
 			Slots []declaredSlotWire `json:"slots"`
 		}
-		if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/standards/alt-room/slots", nil, http.StatusOK), &list); err != nil {
+		if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/standards/local/alt-room/slots", nil, http.StatusOK), &list); err != nil {
 			t.Fatalf("decode standard slots: %v", err)
 		}
 		for _, r := range list.Slots {

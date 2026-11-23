@@ -69,7 +69,7 @@ func registerProductMetricRoutes(api huma.API, a *authenticator, gw storage.Gate
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-product-metrics",
 		Method:      http.MethodGet,
-		Path:        "/products/{id}/metrics",
+		Path:        "/products/{namespace}/{id}/metrics",
 		Summary:     "List a product's declared metrics",
 		Description: "Lists the product's declared-metric contract (which metrics every instance of the product carries), ordered by metric name, each with its optional default and required flag. Gated by product:read.",
 	}, "product", "read"), func(ctx context.Context, in *productPathInput) (*listProductMetricsOutput, error) {
@@ -88,7 +88,7 @@ func registerProductMetricRoutes(api huma.API, a *authenticator, gw storage.Gate
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "set-product-metric",
 		Method:      http.MethodPut,
-		Path:        "/products/{id}/metrics/{metric}",
+		Path:        "/products/{namespace}/{id}/metrics/{metric_namespace}/{metric}",
 		Summary:     "Declare a metric on a product",
 		Description: "Declares a catalog metric on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422); an unknown product is a 404 and a metric the catalog does not know is a 422. Gated by product:update.",
 	}, "product", "update"), func(ctx context.Context, in *setProductMetricInput) (*productMetricOutput, error) {
@@ -110,7 +110,7 @@ func registerProductMetricRoutes(api huma.API, a *authenticator, gw storage.Gate
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-product-metric",
 		Method:        http.MethodDelete,
-		Path:          "/products/{id}/metrics/{metric}",
+		Path:          "/products/{namespace}/{id}/metrics/{metric_namespace}/{metric}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Withdraw a metric from a product",
 		Description:   "Removes one line from a custom product's contract; instances keep any samples the series already holds, now off-contract. A metric the product does not declare is a 404, and an official product is read-only (422). Gated by product:delete.",

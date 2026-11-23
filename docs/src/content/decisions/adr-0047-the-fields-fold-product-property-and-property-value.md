@@ -28,8 +28,8 @@ summary: "The standalone **fields** feature retires and folds into the estate mo
   UNION of two arms: the **contract arm** (every `product_property` of the component's product, value =
   `coalesce(the component's declared value, the contract default)`, `from_contract=true`) and the **ad-hoc
   arm** (declared values the contract does not declare, `from_contract=false`), so a **productless component
-  still resolves**, to its ad-hoc set alone. Six routes carry it: `GET /products/{id}/properties` and
-  `PUT` / `DELETE /products/{id}/properties/{property}` (gated `product:read` / `:update` / `:delete`, an
+  still resolves**, to its ad-hoc set alone. Six routes carry it: `GET /products/{namespace}/{id}/properties` and
+  `PUT` / `DELETE /products/{namespace}/{id}/properties/{property_namespace}/{property}` (gated `product:read` / `:update` / `:delete`, an
   official product read-only 422), and `GET /components/{name}/properties` plus
   `PUT` / `DELETE /components/{name}/properties/{property}` (gated `component:read` / `:update`, ABAC-scoped
   with a non-disclosing 404 out of scope, audited). The console renames the operator word from **Fields** to

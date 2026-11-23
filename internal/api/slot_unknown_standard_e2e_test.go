@@ -14,9 +14,9 @@ import (
 func TestAnUnknownStandardListsNoSlots(t *testing.T) {
 	t.Parallel()
 	f := newStaffingFixture(t)
-	if st, raw := f.c.send(f.owner, http.MethodGet, "/standards/no-such-standard/slots", nil); st != http.StatusNotFound {
+	if st, raw := f.c.send(f.owner, http.MethodGet, "/standards/local/no-such-standard/slots", nil); st != http.StatusNotFound {
 		t.Fatalf("list the slots of an unknown standard = %d, want 404\nbody: %s", st, raw)
 	}
 	f.c.do(f.owner, http.MethodPost, "/standards", map[string]any{"name": "bare-std", "label": "Bare"}, http.StatusCreated)
-	f.c.do(f.owner, http.MethodGet, "/standards/bare-std/slots", nil, http.StatusOK)
+	f.c.do(f.owner, http.MethodGet, "/standards/local/bare-std/slots", nil, http.StatusOK)
 }

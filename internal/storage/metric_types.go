@@ -173,7 +173,7 @@ func (p *PG) GetMetricType(ctx context.Context, name string) (*MetricType, error
 	if err := RejectAddressForm("metric_type", name); err != nil {
 		return nil, err
 	}
-	mt, err := scanMetricType(p.pool.QueryRow(ctx, `select `+metricTypeCols+` from metric_type_in_effect() metric_type where name = $1`, name))
+	mt, err := scanMetricType(p.pool.QueryRow(ctx, `select `+metricTypeCols+` from `+refRows("metric_type", name)+` metric_type where `+catalogRefCol(name)+` = $1`, name))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrMetricTypeNotFound
 	}
@@ -191,7 +191,7 @@ func guardMetricTypeMutable(ctx context.Context, q querier, name string) error {
 		return err
 	}
 	var official bool
-	err := q.QueryRow(ctx, `select official from metric_type_in_effect() metric_type where name = $1`, name).Scan(&official)
+	err := q.QueryRow(ctx, `select official from `+refRows("metric_type", name)+` metric_type where `+catalogRefCol(name)+` = $1`, name).Scan(&official)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrMetricTypeNotFound
 	}
@@ -285,12 +285,12 @@ func (p *PG) UpdateMetricType(ctx context.Context, actorID, name string, patch M
 			description  = coalesce($3, description),
 			unit         = coalesce($4, unit),
 			"precision"  = case when $7::boolean then $5 else "precision" end
-		where id = (select id from metric_type_in_effect() metric_type where name = $1)`,
+		where id = (select id from `+refRows("metric_type", name)+` metric_type where `+catalogRefCol(name)+` = $1)`,
 		name, labelVal, maskedPtr(w, MetricTypeFieldDescription, patch.Description), maskedPtr(w, MetricTypeFieldUnit, patch.Unit),
 		patch.Precision, setLabel, w.Has(MetricTypeFieldPrecision)); err != nil {
 		return nil, fmt.Errorf("storage: update metric type %q: %w", name, err)
 	}
-	mt, err := scanMetricType(tx.QueryRow(ctx, `select `+metricTypeCols+` from metric_type_in_effect() metric_type where name = $1`, name))
+	mt, err := scanMetricType(tx.QueryRow(ctx, `select `+metricTypeCols+` from `+refRows("metric_type", name)+` metric_type where `+catalogRefCol(name)+` = $1`, name))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrMetricTypeNotFound
@@ -336,7 +336,7 @@ func (p *PG) DeleteMetricType(ctx context.Context, actorID, name string) error {
 	if _, err := tx.Exec(ctx, `savepoint type_delete`); err != nil {
 		return fmt.Errorf("storage: savepoint: %w", err)
 	}
-	if _, err := tx.Exec(ctx, `delete from metric_type where id = (select id from metric_type_in_effect() metric_type where name = $1)`, name); err != nil {
+	if _, err := tx.Exec(ctx, `delete from metric_type where id = (select id from `+refRows("metric_type", name)+` metric_type where `+catalogRefCol(name)+` = $1)`, name); err != nil {
 		if _, rerr := tx.Exec(ctx, `rollback to savepoint type_delete`); rerr == nil {
 			if inUse := calcOutputInUse(ctx, tx, rules.LaneMetric, name, err); inUse != nil {
 				return inUse

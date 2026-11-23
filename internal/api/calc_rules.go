@@ -63,6 +63,7 @@ type calcRuleBody struct {
 	OutputKey    string              `json:"output_key" doc:"The property or metric the rule writes"`
 	OutputLane   string              `json:"output_lane" enum:"property,metric" doc:"Which lane the output key is on, derived from the catalogs"`
 	Enabled      bool                `json:"enabled" doc:"Whether the rule runs; an enabled rule is part of the key graph"`
+	Namespace    string              `json:"namespace" doc:"The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"`
 	Official     bool                `json:"official" doc:"Shipped with the platform and read-only"`
 	Version      int                 `json:"version" doc:"Bumps on every update"`
 	CreatedAt    time.Time           `json:"created_at" doc:"When the rule was created"`
@@ -89,7 +90,7 @@ func toCalcRuleBody(r *storage.CalcRule) calcRuleBody {
 		Selector: calcSelectorBody{ComponentTypes: r.Selector.ComponentTypes, Components: r.Selector.Components,
 			SystemTypes: r.Selector.SystemTypes, Systems: r.Selector.Systems},
 		Reduce:    calcReduceBody{Expr: r.Reduce.Expr},
-		OutputKey: r.OutputKey, OutputLane: string(r.OutputLane), Enabled: r.Enabled, Official: r.Official, Version: r.Version,
+		OutputKey: r.OutputKey, OutputLane: string(r.OutputLane), Enabled: r.Enabled, Official: r.Official, Namespace: catalogNamespaceOf(r.Official), Version: r.Version,
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
 	if f := r.CalcError; f != nil {
 		b.CalcError = &calcErrorBody{Field: f.Field, Line: f.Line, Column: f.Column, Message: f.Message, Code: f.Code}
@@ -126,6 +127,7 @@ type calcRuleNameInput struct {
 
 type createCalcRuleInput struct {
 	Body struct {
+		CatalogCreateNamespace
 		Name        string            `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The rule's name (lowercase letters, digits, hyphens)"`
 		Label       string            `json:"label,omitempty" required:"false" doc:"A human label"`
 		Description string            `json:"description,omitempty" required:"false" doc:"What the rule derives and why"`
@@ -197,7 +199,7 @@ func registerCalcRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		OperationID: "get-calc-rule",
 		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
-		Path:        "/calc-rules/{name}",
+		Path:        "/calc-rules/{namespace}/{name}",
 		Summary:     "Get a calc rule",
 		Description: "Returns one calc rule by name (or uuid). Gated by rule:read.",
 	}, "rule", "read"), func(ctx context.Context, in *calcRuleNameInput) (*calcRuleOutput, error) {
@@ -233,7 +235,7 @@ func registerCalcRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "update-calc-rule",
 		Method:      http.MethodPatch,
-		Path:        "/calc-rules/{name}",
+		Path:        "/calc-rules/{namespace}/{name}",
 		Summary:     "Update a calc rule",
 		Description: "Patches a rule (an absent field is unchanged), bumping its version; a patch that changes nothing writes nothing. What changed is checked as on create: changed inputs, reduce or output recompile, a changed output must be one no collection writes, and an enabled rule may not close a cycle or share its output with another enabled rule. Enabling a disabled rule recompiles it and checks both, so a rule carrying calc_error cannot be enabled (422). The owner kind is fixed at create. Official rules are read-only (409). Audited. Gated by rule:update, with an all-scope grant.",
 	}, "rule", "update"), func(ctx context.Context, in *updateCalcRuleInput) (*calcRuleOutput, error) {
@@ -260,7 +262,7 @@ func registerCalcRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "rename-calc-rule",
 		Method:      http.MethodPost,
-		Path:        "/calc-rules/{name}:rename",
+		Path:        "/calc-rules/{namespace}/{name}:rename",
 		Summary:     "Rename a calc rule",
 		Description: "Moves an operator rule's name, the address an operator types. A separate act from an update, because it breaks bookmarks and integration config outside this system; inside it nothing breaks, since the audit rows hold the rule's uuid and the key graph is of keys, not rule names. Not a material change: no version bump. An official rule keeps its name (409), a taken name is a 409, an illegal or uuid-shaped one a 422. Returns the rule with its uuid. Audited. Gated by rule:update, with an all-scope grant.",
 	}, "rule", "update"), func(ctx context.Context, in *renameCalcRuleInput) (*calcRuleOutput, error) {
@@ -274,7 +276,7 @@ func registerCalcRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-calc-rule",
 		Method:        http.MethodDelete,
-		Path:          "/calc-rules/{name}",
+		Path:          "/calc-rules/{namespace}/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a calc rule",
 		Description:   "Removes an operator rule; an official rule is read-only (409). Audited. Gated by rule:delete, with an all-scope grant.",

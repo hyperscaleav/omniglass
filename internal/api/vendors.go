@@ -19,13 +19,14 @@ type vendorBody struct {
 	Icon         string `json:"icon,omitempty"`
 	SupportPhone string `json:"support_phone,omitempty"`
 	Website      string `json:"website,omitempty"`
+	Namespace    string `json:"namespace" doc:"The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"`
 	Official     bool   `json:"official"`
 }
 
 func toVendorBody(m *storage.Vendor) vendorBody {
 	return vendorBody{
 		ID: m.ID, Name: m.Name, Label: m.Label, Kind: m.Kind, Icon: m.Icon,
-		SupportPhone: m.SupportPhone, Website: m.Website, Official: m.Official,
+		SupportPhone: m.SupportPhone, Website: m.Website, Official: m.Official, Namespace: catalogNamespaceOf(m.Official),
 	}
 }
 
@@ -41,6 +42,7 @@ type vendorPathInput struct {
 
 type createVendorInput struct {
 	Body struct {
+		CatalogCreateNamespace
 		Name         string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The globally unique name; renameable"`
 		Label        string `json:"label" minLength:"1" doc:"What an operator reads in pickers and lists"`
 		Kind         string `json:"kind,omitempty" enum:"manufacturer,integrator,developer" default:"manufacturer" doc:"The role the organization plays"`
@@ -147,7 +149,7 @@ func registerVendorRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-vendor",
 		Method:      http.MethodGet,
-		Path:        "/vendors/{id}",
+		Path:        "/vendors/{namespace}/{id}",
 		Summary:     "Get a vendor",
 		Description: "Fetches a vendor by id. Gated by vendor:read.",
 	}, "vendor", "read"), func(ctx context.Context, in *vendorPathInput) (*vendorOutput, error) {
@@ -161,7 +163,7 @@ func registerVendorRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "update-vendor",
 		Method:      http.MethodPatch,
-		Path:        "/vendors/{id}",
+		Path:        "/vendors/{namespace}/{id}",
 		Summary:     "Update a vendor",
 		Description: "Patches a custom vendor's label, kind, icon, support_phone, or website. Official vendors are read-only (422). Gated by vendor:update.",
 	}, "vendor", "update"), func(ctx context.Context, in *updateVendorInput) (*vendorOutput, error) {
@@ -184,7 +186,7 @@ func registerVendorRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-vendor",
 		Method:        http.MethodDelete,
-		Path:          "/vendors/{id}",
+		Path:          "/vendors/{namespace}/{id}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a vendor",
 		Description:   "Deletes a custom vendor, refused if official (422). Gated by vendor:delete.",

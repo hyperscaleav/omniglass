@@ -78,7 +78,7 @@ func TestSystemSlotsAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/standards", map[string]any{
 		"name": "acme-room", "label": "Acme Room",
 	}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPatch, "/standards/acme-room/slots/table-mic", map[string]any{
+	c.do(ownerTok, http.MethodPatch, "/standards/local/acme-room/slots/table-mic", map[string]any{
 		"label": "Table Microphone", "quorum": 2,
 		"accepted_types": []string{"video-bar"},
 	}, http.StatusOK)
@@ -95,7 +95,7 @@ func TestSystemSlotsAPI(t *testing.T) {
 			AcceptedTypes []string `json:"accepted_types"`
 		} `json:"slots"`
 	}
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/standards/acme-room/slots", nil, http.StatusOK), &declared); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/standards/local/acme-room/slots", nil, http.StatusOK), &declared); err != nil {
 		t.Fatalf("decode standard slots: %v", err)
 	}
 	if len(declared.Slots) != 1 || declared.Slots[0].Name != "table-mic" ||
@@ -191,7 +191,7 @@ func TestSystemSlotsAPI(t *testing.T) {
 
 	// Withdrawing the standard's slot takes it off every conforming system, and
 	// the assignments to it go with it.
-	c.do(ownerTok, http.MethodDelete, "/standards/acme-room/slots/table-mic", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/standards/local/acme-room/slots/table-mic", nil, http.StatusNoContent)
 	if got = read(ownerTok, "acme-1"); len(got.Slots) != 0 {
 		t.Fatalf("after withdrawing the standard's slot: %+v, want none left", got.Slots)
 	}

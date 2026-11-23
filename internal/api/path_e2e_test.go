@@ -157,18 +157,19 @@ func TestGetOutpostByDottedRefIs422(t *testing.T) {
 	}
 }
 
-// TestGetMetricTypeByDottedRefIs422 is the lane-type companion: metric_type
-// (and its three siblings, wired identically) stays a single global token.
-func TestGetMetricTypeByDottedRefIs422(t *testing.T) {
+// TestGetMetricTypeByDottedRefIs404 is the lane-type companion: a metric
+// type's key is one token read in its namespace (#1434), so a dotted key names
+// no row there and the route answers 404 before any handler parses it.
+func TestGetMetricTypeByDottedRefIs404(t *testing.T) {
 	t.Parallel()
 	c, tok := pathTestServer(t)
 
-	status, body := c.send(tok, http.MethodGet, "/metric-types/icmp.rtt-avg", nil)
-	if status != http.StatusUnprocessableEntity {
-		t.Fatalf("GET a metric type by a dotted ref status = %d, want 422\nbody: %s", status, body)
+	status, body := c.send(tok, http.MethodGet, "/metric-types/local/icmp.rtt-avg", nil)
+	if status != http.StatusNotFound {
+		t.Fatalf("GET a metric type by a dotted ref status = %d, want 404\nbody: %s", status, body)
 	}
-	if !strings.Contains(string(body), "single token") {
-		t.Fatalf("422 body = %s, want it to say a metric_type name is a single token", body)
+	if !strings.Contains(string(body), "local/icmp.rtt-avg not found") {
+		t.Fatalf("404 body = %s, want it to name the namespace and key", body)
 	}
 }
 

@@ -85,7 +85,7 @@ func TestCatalogRenameAPI(t *testing.T) {
 			if want {
 				status = http.StatusOK
 			}
-			c.do(adminTok, http.MethodGet, "/"+collection+"/"+name, nil, status)
+			c.do(adminTok, http.MethodGet, "/"+collection+"/local/"+name, nil, status)
 			return
 		}
 		var list struct {
@@ -102,7 +102,7 @@ func TestCatalogRenameAPI(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.collection, func(t *testing.T) {
 			c := &apiClient{t: t, ctx: ctx, base: srv.URL}
-			path := "/" + tc.collection + "/" + tc.old + ":rename"
+			path := "/" + tc.collection + "/local/" + tc.old + ":rename"
 			// An operator holds no <catalog>:rename (403, before anything resolves).
 			c.do(operatorTok, http.MethodPost, path, map[string]any{"name": tc.renamed}, http.StatusForbidden)
 			// Illegal and uuid-shaped names are refused, and leave the row as it was.
@@ -119,26 +119,26 @@ func TestCatalogRenameAPI(t *testing.T) {
 			resolves(t, c, tc.collection, tc.renamed, true)
 			resolves(t, c, tc.collection, tc.old, false)
 			// By uuid works too, and a rename onto a name another row holds is a conflict.
-			c.do(adminTok, http.MethodPost, "/"+tc.collection+"/"+tc.created.ID+":rename", map[string]any{"name": tc.old}, http.StatusOK)
+			c.do(adminTok, http.MethodPost, "/"+tc.collection+"/local/"+tc.created.ID+":rename", map[string]any{"name": tc.old}, http.StatusOK)
 			if tc.official != "" {
-				c.do(adminTok, http.MethodPost, "/"+tc.collection+"/"+tc.old+":rename", map[string]any{"name": tc.official}, http.StatusConflict)
-				c.do(adminTok, http.MethodPost, "/"+tc.collection+"/"+tc.official+":rename", map[string]any{"name": "renamed-official"}, http.StatusUnprocessableEntity)
+				c.do(adminTok, http.MethodPost, "/"+tc.collection+"/local/"+tc.old+":rename", map[string]any{"name": tc.official}, http.StatusConflict)
+				c.do(adminTok, http.MethodPost, "/"+tc.collection+"/og/"+tc.official+":rename", map[string]any{"name": "renamed-official"}, http.StatusUnprocessableEntity)
 			}
-			c.do(adminTok, http.MethodPost, "/"+tc.collection+"/no-such-row:rename", map[string]any{"name": "anything"}, http.StatusNotFound)
+			c.do(adminTok, http.MethodPost, "/"+tc.collection+"/local/no-such-row:rename", map[string]any{"name": "anything"}, http.StatusNotFound)
 		})
 	}
-	c.do(adminTok, http.MethodPost, "/location-types/wing:rename", map[string]any{"name": "root"}, http.StatusUnprocessableEntity)
+	c.do(adminTok, http.MethodPost, "/location-types/local/wing:rename", map[string]any{"name": "root"}, http.StatusUnprocessableEntity)
 
 	// A standard forked from a template renames like any of the operator's own:
 	// nothing plants it again by name (ADR-0827).
 	c.do(adminTok, http.MethodPost, "/standards:createFromTemplate", map[string]any{"template": "meeting-room"}, http.StatusCreated)
-	c.do(adminTok, http.MethodPost, "/standards/meeting-room:rename", map[string]any{"name": "conference-room"}, http.StatusOK)
-	c.do(adminTok, http.MethodGet, "/standards/conference-room", nil, http.StatusOK)
-	c.do(adminTok, http.MethodGet, "/standards/meeting-room", nil, http.StatusNotFound)
+	c.do(adminTok, http.MethodPost, "/standards/local/meeting-room:rename", map[string]any{"name": "conference-room"}, http.StatusOK)
+	c.do(adminTok, http.MethodGet, "/standards/local/conference-room", nil, http.StatusOK)
+	c.do(adminTok, http.MethodGet, "/standards/local/meeting-room", nil, http.StatusNotFound)
 
 	// vendor:update without vendor:rename edits the vendor and cannot rename it.
 	editorTok := userWithGrants(t, ctx, dsn, "vendor-editor", []grant{{role: "vendor-editor", scopeKind: "all"}})
-	c.do(editorTok, http.MethodPatch, "/vendors/acme", map[string]any{"label": "Acme Audio"}, http.StatusOK)
-	c.do(editorTok, http.MethodPost, "/vendors/acme:rename", map[string]any{"name": "acme-audio"}, http.StatusForbidden)
-	c.do(adminTok, http.MethodGet, "/vendors/acme", nil, http.StatusOK)
+	c.do(editorTok, http.MethodPatch, "/vendors/local/acme", map[string]any{"label": "Acme Audio"}, http.StatusOK)
+	c.do(editorTok, http.MethodPost, "/vendors/local/acme:rename", map[string]any{"name": "acme-audio"}, http.StatusForbidden)
+	c.do(adminTok, http.MethodGet, "/vendors/local/acme", nil, http.StatusOK)
 }

@@ -381,7 +381,7 @@ func validIdentityValue(value string) error {
 // identityKeyID resolves a match key to its registered property type's id.
 func identityKeyID(ctx context.Context, q txQuerier, key string) (string, error) {
 	var id string
-	err := q.QueryRow(ctx, `select id from property_type_in_effect() property_type where name = $1`, key).Scan(&id)
+	err := q.QueryRow(ctx, `select id from `+refRows("property_type", key)+` property_type where `+catalogRefCol(key)+` = $1`, key).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrIdentityBindingKeyUnregistered
 	}

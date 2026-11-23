@@ -145,7 +145,7 @@ func (p *PG) GetEventType(ctx context.Context, name string) (*EventType, error) 
 	}
 	var et EventType
 	err := p.pool.QueryRow(ctx,
-		`select id, name, coalesce(label, ''), description, payload_schema, official, namespace from event_type_in_effect() event_type where name = $1`,
+		`select id, name, coalesce(label, ''), description, payload_schema, official, namespace from `+refRows("event_type", name)+` event_type where `+catalogRefCol(name)+` = $1`,
 		name).Scan(&et.ID, &et.Name, &et.Label, &et.Description, &et.PayloadSchema, &et.Official, &et.Namespace)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrEventTypeNotFound
@@ -164,7 +164,7 @@ func guardEventTypeMutable(ctx context.Context, q querier, name string) error {
 		return err
 	}
 	var official bool
-	err := q.QueryRow(ctx, `select official from event_type_in_effect() event_type where name = $1`, name).Scan(&official)
+	err := q.QueryRow(ctx, `select official from `+refRows("event_type", name)+` event_type where `+catalogRefCol(name)+` = $1`, name).Scan(&official)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrEventTypeNotFound
 	}
@@ -289,14 +289,14 @@ func (p *PG) UpdateEventType(ctx context.Context, actorID, name string, patch Ev
 			label   = case when $5::boolean then $2 else label end,
 			description    = coalesce($3, description),
 			payload_schema = case when $6::boolean then $4::jsonb else payload_schema end
-		where id = (select id from event_type_in_effect() event_type where name = $1)`,
+		where id = (select id from `+refRows("event_type", name)+` event_type where `+catalogRefCol(name)+` = $1)`,
 		name, labelVal, maskedPtr(w, EventTypeFieldDescription, patch.Description), schemaArg(patch.PayloadSchema), setLabel,
 		w.Has(EventTypeFieldPayloadSchema)); err != nil {
 		return nil, fmt.Errorf("storage: update event type %q: %w", name, err)
 	}
 	var et EventType
 	if err := tx.QueryRow(ctx,
-		`select id, name, coalesce(label, ''), description, payload_schema, official, namespace from event_type_in_effect() event_type where name = $1`,
+		`select id, name, coalesce(label, ''), description, payload_schema, official, namespace from `+refRows("event_type", name)+` event_type where `+catalogRefCol(name)+` = $1`,
 		name).Scan(&et.ID, &et.Name, &et.Label, &et.Description, &et.PayloadSchema, &et.Official, &et.Namespace); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrEventTypeNotFound
@@ -335,7 +335,7 @@ func (p *PG) DeleteEventType(ctx context.Context, actorID, name string) error {
 		}
 		return fmt.Errorf("storage: audit image event_type %q: %w", name, err)
 	}
-	if _, err := tx.Exec(ctx, `delete from event_type where id = (select id from event_type_in_effect() event_type where name = $1)`, name); err != nil {
+	if _, err := tx.Exec(ctx, `delete from event_type where id = (select id from `+refRows("event_type", name)+` event_type where `+catalogRefCol(name)+` = $1)`, name); err != nil {
 		// Recorded events and the event rules that name the type restrict it.
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23503" {

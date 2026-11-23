@@ -59,7 +59,7 @@ func TestLocationPropertiesAPI(t *testing.T) {
 	// The shipped location types are operator-owned, so room can carry the contract
 	// under test directly. A room may not sit at the top (its allowed_parent_types
 	// exclude root), so a campus goes in first.
-	c.do(ownerTok, http.MethodPut, "/location-types/room/properties/serial-number",
+	c.do(ownerTok, http.MethodPut, "/location-types/og/room/properties/og/serial-number",
 		map[string]any{"default_value": "SN-DEFAULT", "required": true}, http.StatusOK)
 	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{
 		"name": "hq", "location_type": "campus",

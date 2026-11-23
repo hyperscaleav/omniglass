@@ -20,8 +20,8 @@ form: bullet
   `coalesce(the component's declared value, the contract default)`, `from_contract` true) plus the
   **off-contract arm** (declared values the contract does not declare), so a **productless** component still
   resolves, to its off-contract set alone. Six routes ship, regenerated into the OpenAPI document, the cobra
-  CLI, and the typed SPA client: `GET /products/{id}/properties` and `PUT` / `DELETE
-  /products/{id}/properties/{property}` (gated `product:read` / `:update` / `:delete`, an official product
+  CLI, and the typed SPA client: `GET /products/{namespace}/{id}/properties` and `PUT` / `DELETE
+  /products/{namespace}/{id}/properties/{property_namespace}/{property}` (gated `product:read` / `:update` / `:delete`, an official product
   read-only 422), and `GET /components/{name}/properties` plus `PUT` / `DELETE
   /components/{name}/properties/{property}` (gated `component:read` / `:update`, ABAC-scoped with a
   non-disclosing 404 out of scope, audited in the same transaction). The CLI reads `omniglass product
@@ -39,7 +39,7 @@ form: bullet
   now-unclaimed `field:*` permissions, since `property:*` already covers the tier. Proven by the
   `product_property` and `property_value` storage integration tests (the in-place contract upsert, a nil
   default round-tripping as SQL NULL, both resolver arms, the idempotent re-set on one series row, the
-  clear-to-default, and the productless component), the `/products/{id}/properties` and
+  clear-to-default, and the productless component), the `/products/{namespace}/{id}/properties` and
   `/components/{name}/properties` HTTP e2e (the official-product 422, the unknown-property 422, the
   out-of-scope non-disclosing 404, the withdraw-twice 404, and the clear back to the contract default), and the
   console suites for both new surfaces. This is **PR5** of

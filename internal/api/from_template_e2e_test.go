@@ -310,7 +310,7 @@ func TestCreateLocationsFromTemplateAPI(t *testing.T) {
 	}
 	before := f.count(`select count(*) from location`)
 	// An operator who forks floor to allow it under a room is checked against their fork.
-	f.c.do(f.owner, http.MethodPatch, "/location-types/floor", map[string]any{"allowed_parent_types": []string{"building", "campus", "room"}}, http.StatusOK)
+	f.c.do(f.owner, http.MethodPatch, "/location-types/og/floor", map[string]any{"allowed_parent_types": []string{"building", "campus", "room"}}, http.StatusOK)
 	f.c.do(f.owner, http.MethodPost, "/locations:createFromTemplate",
 		map[string]any{"template": "meeting-floor", "parent": "hq.f3." + room, "name": "f9"}, http.StatusCreated)
 	if n := f.count(`select count(*) from location`); n != before+3 {

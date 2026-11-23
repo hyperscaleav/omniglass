@@ -46,7 +46,7 @@ func TestClearingAnInheritedComponentFactOverTheWireAPI(t *testing.T) {
 	}
 
 	var cleared componentTypeWire
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/component-types/ifc-lapel-mic",
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/component-types/local/ifc-lapel-mic",
 		map[string]any{"stem": "", "icon": "", "abbrev": ""}, http.StatusOK), &cleared); err != nil {
 		t.Fatalf("decode clear: %v", err)
 	}
@@ -97,15 +97,15 @@ func TestClearingAStemDoesNotWeakenTheStemRuleAPI(t *testing.T) {
 	}, http.StatusCreated)
 
 	for _, bad := range []string{"Bad Stem", "-leading-hyphen", "has space", "UPPER", "trailing space "} {
-		c.do(ownerTok, http.MethodPatch, "/component-types/ifc-stem-rule",
+		c.do(ownerTok, http.MethodPatch, "/component-types/local/ifc-stem-rule",
 			map[string]any{"stem": bad}, http.StatusUnprocessableEntity)
-		c.do(ownerTok, http.MethodPatch, "/system-types/ifc-sys-stem-rule",
+		c.do(ownerTok, http.MethodPatch, "/system-types/local/ifc-sys-stem-rule",
 			map[string]any{"stem": bad}, http.StatusUnprocessableEntity)
 	}
 
 	// The one string the relaxation admits, on both catalogs.
-	c.do(ownerTok, http.MethodPatch, "/component-types/ifc-stem-rule", map[string]any{"stem": ""}, http.StatusOK)
-	c.do(ownerTok, http.MethodPatch, "/system-types/ifc-sys-stem-rule", map[string]any{"stem": ""}, http.StatusOK)
+	c.do(ownerTok, http.MethodPatch, "/component-types/local/ifc-stem-rule", map[string]any{"stem": ""}, http.StatusOK)
+	c.do(ownerTok, http.MethodPatch, "/system-types/local/ifc-sys-stem-rule", map[string]any{"stem": ""}, http.StatusOK)
 }
 
 // TestClearingARootTypesStemIsA422API: a root has no ancestor to inherit from,
@@ -130,7 +130,7 @@ func TestClearingARootTypesStemIsA422API(t *testing.T) {
 		"name": "ifc-sys-root", "label": "Sys Root", "stem": "sysrootstem",
 	}, http.StatusCreated)
 
-	for path := range map[string]struct{}{"/component-types/ifc-root": {}, "/system-types/ifc-sys-root": {}} {
+	for path := range map[string]struct{}{"/component-types/local/ifc-root": {}, "/system-types/local/ifc-sys-root": {}} {
 		out := c.do(ownerTok, http.MethodPatch, path, map[string]any{"stem": ""}, http.StatusUnprocessableEntity)
 		if !strings.Contains(string(out), "must have a stem") {
 			t.Fatalf("refusal on %s = %s, want it to name the missing stem", path, out)
@@ -174,7 +174,7 @@ func TestClearingAStemOnAShippedTypeForksAndTheWalkResumesAPI(t *testing.T) {
 	}
 
 	var forked componentTypeWire
-	if err := json.Unmarshal(c.do(owner, http.MethodPatch, "/component-types/ceiling-mic",
+	if err := json.Unmarshal(c.do(owner, http.MethodPatch, "/component-types/og/ceiling-mic",
 		map[string]any{"stem": "ceilmic"}, http.StatusOK), &forked); err != nil {
 		t.Fatalf("decode fork: %v", err)
 	}
@@ -186,7 +186,7 @@ func TestClearingAStemOnAShippedTypeForksAndTheWalkResumesAPI(t *testing.T) {
 	}
 
 	var cleared componentTypeWire
-	if err := json.Unmarshal(c.do(owner, http.MethodPatch, "/component-types/ceiling-mic",
+	if err := json.Unmarshal(c.do(owner, http.MethodPatch, "/component-types/og/ceiling-mic",
 		map[string]any{"stem": ""}, http.StatusOK), &cleared); err != nil {
 		t.Fatalf("decode clear: %v", err)
 	}
@@ -199,7 +199,7 @@ func TestClearingAStemOnAShippedTypeForksAndTheWalkResumesAPI(t *testing.T) {
 
 	// Restore is still the way back out of a fork, cleared facts included.
 	var restored componentTypeWire
-	if err := json.Unmarshal(c.do(owner, http.MethodPost, "/component-types/ceiling-mic:restore", nil, http.StatusOK), &restored); err != nil {
+	if err := json.Unmarshal(c.do(owner, http.MethodPost, "/component-types/og/ceiling-mic:restore", nil, http.StatusOK), &restored); err != nil {
 		t.Fatalf("decode restore: %v", err)
 	}
 	if restored.Forked {
@@ -293,7 +293,7 @@ func TestTheListingServesWhatAnInheritedFactWouldInheritAPI(t *testing.T) {
 	// And the sentinel clear moves the row from stating its own to inheriting,
 	// where what it shows and what it inherits become the same string. This is
 	// the transition an operator makes by emptying the box.
-	c.do(ownerTok, http.MethodPatch, "/component-types/ifh-leaf", map[string]any{"stem": ""}, http.StatusOK)
+	c.do(ownerTok, http.MethodPatch, "/component-types/local/ifh-leaf", map[string]any{"stem": ""}, http.StatusOK)
 	// A FRESH decode target, not the one above. encoding/json reuses a slice's
 	// existing elements and unmarshals into them field by field, so a key the
 	// new payload omits keeps the old decode's value: `stem` is omitempty, so

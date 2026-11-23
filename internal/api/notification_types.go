@@ -27,6 +27,7 @@ type notificationTypeBody struct {
 	Description string    `json:"description,omitempty"`
 	Subject     string    `json:"subject" doc:"The one-line subject, written in the rule language"`
 	Text        string    `json:"text" doc:"The body text, written in the rule language"`
+	Namespace   string    `json:"namespace" doc:"The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"`
 	Official    bool      `json:"official" doc:"Shipped with the platform and read-only"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
@@ -34,7 +35,7 @@ type notificationTypeBody struct {
 
 func toNotificationTypeBody(t *storage.NotificationType) notificationTypeBody {
 	return notificationTypeBody{ID: t.ID, Name: t.Name, Label: t.Label, Description: t.Description,
-		Subject: t.Subject, Text: t.Text, Official: t.Official, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt}
+		Subject: t.Subject, Text: t.Text, Official: t.Official, Namespace: catalogNamespaceOf(t.Official), CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt}
 }
 
 type listNotificationTypesOutput struct {
@@ -59,6 +60,7 @@ var notificationRuleDoc = "Subject and text are written in the rule language a l
 
 type createNotificationTypeInput struct {
 	Body struct {
+		CatalogCreateNamespace
 		Name        string `json:"name" minLength:"1" doc:"The type's name (lowercase kebab)"`
 		Label       string `json:"label,omitempty" required:"false" doc:"A human label"`
 		Description string `json:"description,omitempty" required:"false" doc:"What the message is for"`
@@ -138,7 +140,7 @@ func registerNotificationTypeRoutes(api huma.API, a *authenticator, gw storage.G
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-notification-type",
 		Method:      http.MethodGet,
-		Path:        "/notification-types/{name}",
+		Path:        "/notification-types/{namespace}/{name}",
 		Summary:     "Get a notification type",
 		Description: "Returns one notification type by name or uuid. Gated by notification_type:read.",
 	}, "notification_type", "read"), func(ctx context.Context, in *notificationTypeRefInput) (*notificationTypeOutput, error) {
@@ -170,7 +172,7 @@ func registerNotificationTypeRoutes(api huma.API, a *authenticator, gw storage.G
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "update-notification-type",
 		Method:      http.MethodPatch,
-		Path:        "/notification-types/{name}",
+		Path:        "/notification-types/{namespace}/{name}",
 		Summary:     "Update a notification type",
 		Description: "Patches an operator type's label, description, subject or text (an absent field is unchanged). " + notificationRuleDoc + ". An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.",
 	}, "notification_type", "update"), func(ctx context.Context, in *updateNotificationTypeInput) (*notificationTypeOutput, error) {
@@ -186,7 +188,7 @@ func registerNotificationTypeRoutes(api huma.API, a *authenticator, gw storage.G
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-notification-type",
 		Method:        http.MethodDelete,
-		Path:          "/notification-types/{name}",
+		Path:          "/notification-types/{namespace}/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a notification type",
 		Description:   "Removes an operator notification type. An official type, or one an action rule still sends, is a 409. Audited. Gated by notification_type:delete.",
@@ -201,7 +203,7 @@ func registerNotificationTypeRoutes(api huma.API, a *authenticator, gw storage.G
 		OperationID: "preview-notification-type",
 		Extensions:  mcpExposed(),
 		Method:      http.MethodPost,
-		Path:        "/notification-types/{name}:preview",
+		Path:        "/notification-types/{namespace}/{name}:preview",
 		Summary:     "Preview a notification type against an alarm",
 		Description: "Renders the type's subject and text (or a draft of either, sent in the body) against one real alarm, exactly as a delivery of that alarm's transition would carry them, with the facts they read. Writes nothing. The alarm is named by its component and id; without an id, the component's most recently raised alarm. A draft the sandbox refuses is a 422, one that fails to render (its output past the cap) a 422 naming it. Gated by notification_type:read; the component is resolved in the caller's component read scope, so a component outside it is a non-disclosing 404.",
 	}, "notification_type", "read"), func(ctx context.Context, in *previewNotificationTypeInput) (*previewNotificationTypeOutput, error) {

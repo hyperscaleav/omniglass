@@ -39,6 +39,7 @@ Adds a rule that, on an alarm's raise or clear, when its predicate holds over th
 | `--enabled` | bool | `false` | Whether it fires (default true): a disabled rule queues nothing on a transition, and what it queued before still delivers |
 | `--label` | string | (none) | A human label |
 | `--name` | string | (none) | The rule's name (lowercase kebab) |
+| `--namespace` | string | (none) | The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows |
 | `--notification-type` | string | (none) | The notification type to send, by name or uuid; absent sends the official one for the transition |
 | `--on` | string | (none) | The alarm transitions it fires on: raised, cleared, or both. Acknowledging an alarm is never one |
 | `--opt-out-allowed` | bool | `false` | Let a member of a group it targets opt out of it for themselves (default false) |
@@ -918,6 +919,7 @@ Authors a rule that derives its output key on each owner (each component its sel
 | `--inputs` | string | (none) | The keys the rule reads, each by a unique alias its reduce uses; health may not be one |
 | `--label` | string | (none) | A human label |
 | `--name` | string | (none) | The rule's name (lowercase letters, digits, hyphens) |
+| `--namespace` | string | (none) | The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows |
 | `--output-key` | string | (none) | The property or metric the rule writes: its type pins the reduce's result. Not a reserved key (a native probe key, health), not a key a driver's emits or a command type write, and not one another enabled rule writes |
 | `--owner-kind` | string | (none) | What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's slot-bound members). Fixed at create |
 | `--reduce` | string | (none) | An expression over the inputs by alias |
@@ -1093,6 +1095,7 @@ Registers a custom command type (official=false). The name must be a single keba
 | `--hold-seconds` | int | `0` | A disruptive type's backstop in seconds, greater than quiet_seconds: an endpoint with no up reading by then reopens anyway, counted. Not the settle window. Only on a disruptive type |
 | `--label` | string | (none) | A human label |
 | `--name` | string | (none) | The command type name (lowercase kebab) |
+| `--namespace` | string | (none) | The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows |
 | `--params-schema` | string | (none) | A JSON Schema fragment for the params |
 | `--power-outlet-param` | string | (none) | Marks a power command: the name of the param that carries the outlet, so its hold set is what that outlet feeds. Only on a disruptive type |
 | `--quiet-seconds` | int | `0` | A disruptive type's quiet period in seconds: no poll, probe or session dial runs against the held endpoints. Only on a disruptive type |
@@ -2369,6 +2372,7 @@ Creates a custom (non-official) component_type, optionally under a parent. Gated
 | `--label` | string | (none) | What an operator reads in pickers and lists |
 | `--label-rule` | string | (none) | A label rule, written in Go text/template, rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the parent's, then the global component rule. A rule that does not parse is refused here, 422. |
 | `--name` | string | (none) | The globally unique name |
+| `--namespace` | string | (none) | The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows |
 | `--parent-id` | string | (none) | The parent component_type, by name or uuid; omit for a root type |
 | `--stem` | string | (none) | The auto-generated component name's prefix; omit to inherit the parent's. Lowercase letters, digits, and hyphens. |
 
@@ -2469,6 +2473,7 @@ Creates a custom (non-official) driver. Gated by driver:create.
 |---|---|---|---|
 | `--label` | string | (none) | What an operator reads in pickers and lists |
 | `--name` | string | (none) | The globally unique name; renameable |
+| `--namespace` | string | (none) | The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows |
 | `--spec` | string | (none) | The declarative spec body; validated against the catalogs, and a spec that fails validation refuses the write (422) |
 | `--version` | string | (none) | A free-form version string, e.g. 1.0.0 |
 
@@ -2820,6 +2825,7 @@ Authors a rule that fires on each component it watches when its sample key meets
 | `--label` | string | (none) | A human label; also the alarm message when message is empty |
 | `--message` | string | (none) | The alarm message; empty uses the label or the name |
 | `--name` | string | (none) | The rule's name (lowercase kebab) |
+| `--namespace` | string | (none) | The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows |
 | `--sample-key` | string | (none) | The property or metric the rule reads |
 | `--sample-window` | string | (none) | A metric rule's trend window, a Go duration up to 168h: the criteria read window, the series' points over it, oldest first; empty is 0s, no window |
 | `--selector` | string | (none) | The components the rule watches (component types and components); absent is every component |
@@ -2997,6 +3003,7 @@ Registers a custom event type (official=false). The name must be a single kebab 
 | `--description` | string | (none) | What the occurrence means |
 | `--label` | string | (none) | A human label |
 | `--name` | string | (none) | The event type name (lowercase kebab) |
+| `--namespace` | string | (none) | The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows |
 | `--payload-schema` | string | (none) | A JSON Schema fragment for the payload |
 
 Example:
@@ -3876,6 +3883,7 @@ Creates a custom (non-official) location_type, optionally with the label_rule lo
 | `--label-rule` | string | (none) | The label rule locations of this type get, a Go text/template over the location data map; omit to fall back to the global rule. Refused (422) if it does not compile |
 | `--name` | string | (none) | The globally unique name (e.g. wing); "root" is reserved |
 | `--name-rule` | string | (none) | How the platform NAMES locations of this type; omit to have an operator name every one of them. Refused (422) if it cannot mint a legal name |
+| `--namespace` | string | (none) | The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows |
 
 Example:
 
@@ -4166,6 +4174,7 @@ Registers a custom metric type (official=false). The name must be a valid metric
 | `--description` | string | (none) | What the series measures |
 | `--label` | string | (none) | A human label |
 | `--name` | string | (none) | The metric type name (lowercase kebab) |
+| `--namespace` | string | (none) | The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows |
 | `--precision` | int | `0` | Decimal places a rendered value keeps |
 | `--unit` | string | (none) | The display unit of the series (ms, dB, percent) |
 
@@ -4494,6 +4503,7 @@ Registers an operator notification type (official=false). Subject and text are w
 | `--description` | string | (none) | What the message is for |
 | `--label` | string | (none) | A human label |
 | `--name` | string | (none) | The type's name (lowercase kebab) |
+| `--namespace` | string | (none) | The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows |
 | `--subject` | string | (none) | The one-line subject, written in the rule language |
 | `--text` | string | (none) | The body text, written in the rule language |
 
@@ -4996,6 +5006,7 @@ Creates a custom (non-official) product, classified under a component_type. kind
 | `--label` | string | (none) | What an operator reads in pickers and lists |
 | `--label-rule` | string | (none) | A label rule, written in Go text/template, rendering the label of every component of this product, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the component_type chain's rule, then the global component rule. A rule that does not parse is refused here, 422. |
 | `--name` | string | (none) | The globally unique name; renameable |
+| `--namespace` | string | (none) | The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows |
 | `--parent-product-id` | string | (none) | The parent product, by handle or uuid |
 | `--vendor-id` | string | (none) | The vendor, by handle or uuid |
 
@@ -5234,6 +5245,7 @@ Registers a custom property (official=false). The name must be a valid property 
 | `--description` | string | (none) | What the property means |
 | `--label` | string | (none) | A human label |
 | `--name` | string | (none) | The property name (lowercase kebab) |
+| `--namespace` | string | (none) | The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows |
 | `--validation` | string | (none) | A JSON Schema fragment constraining the value |
 
 Example:
@@ -5720,6 +5732,7 @@ Adds an operator severity level at a rank of its own, between two others without
 | `--color` | string | (none) | One of gray, blue, green, yellow, orange, red, darkred |
 | `--label` | string | (none) | A human label |
 | `--name` | string | (none) | The level's name (lowercase kebab) |
+| `--namespace` | string | (none) | The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows |
 | `--rank` | int | `0` | Its position among the levels: higher is more severe; unique |
 
 Example:
@@ -5953,6 +5966,7 @@ Creates a custom (non-official) standard, optionally as a variant of another. Ga
 |---|---|---|---|
 | `--label` | string | (none) | What an operator reads in pickers and lists |
 | `--name` | string | (none) | The globally unique name; renameable |
+| `--namespace` | string | (none) | The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows |
 | `--parent-standard-id` | string | (none) | A standard this one is a variant of, by handle or uuid |
 
 Example:
@@ -7114,6 +7128,7 @@ Creates a custom (non-official) system_type, optionally under a parent and optio
 | `--label` | string | (none) | What an operator reads in pickers and lists |
 | `--label-rule` | string | (none) | The label rule systems of this type get, a Go text/template over the system data map; omit to inherit the nearest ancestor's. Refused (422) if it does not compile |
 | `--name` | string | (none) | The globally unique name |
+| `--namespace` | string | (none) | The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows |
 | `--parent-id` | string | (none) | The parent system_type, by name or uuid; omit for a root type |
 | `--stem` | string | (none) | The prefix a generated system name is built from; omit to inherit the parent's. Lowercase letters, digits, and hyphens. Required for a root type, which has no ancestor to inherit one from. |
 
@@ -8231,6 +8246,7 @@ Creates a custom (non-official) vendor. Gated by vendor:create.
 | `--kind` | string | (none) | The role the organization plays |
 | `--label` | string | (none) | What an operator reads in pickers and lists |
 | `--name` | string | (none) | The globally unique name; renameable |
+| `--namespace` | string | (none) | The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows |
 | `--support-phone` | string | (none) | The vendor's support line |
 | `--website` | string | (none) | The vendor's website (http or https) |
 

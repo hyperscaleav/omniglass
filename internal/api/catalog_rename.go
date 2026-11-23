@@ -52,7 +52,7 @@ func registerCatalogRename[O any](api huma.API, a *authenticator, gw storage.Gat
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "rename-" + strings.ReplaceAll(r.resource, "_", "-"),
 		Method:      http.MethodPost,
-		Path:        "/" + r.collection + "/{id}:rename",
+		Path:        "/" + r.collection + "/{namespace}/{id}:rename",
 		Summary:     "Rename a " + r.noun,
 		Description: fmt.Sprintf("Moves a custom %[1]s's name, the handle an operator types, addressed by its current name or its uuid. "+
 			"The uuid does not change, so every reference inside the platform still resolves and now reads the new name; "+

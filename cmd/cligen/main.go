@@ -202,7 +202,11 @@ type command struct {
 	// ArgExamples parallels Args: the OpenAPI example for that path parameter,
 	// or "" where it has none.
 	ArgExamples []string
-	Body        []bodyField
+	// Slots are the Go expressions filling APIPath's %s slots, in order; a
+	// catalog pair fills two from one positional (Pairs).
+	Slots []string
+	Pairs []catalogPair
+	Body  []bodyField
 	// FreeBody marks a request body that is an object with no declared
 	// properties (a merge patch whose keys belong to the thing patched): it has no
 	// per-property flags, so it takes the whole document as --body or --body-file
@@ -375,16 +379,36 @@ func buildCommand(doc spec, base, path, method string, op operation) command {
 	// Path params become positional args and %s slots, in path order. A custom
 	// method fuses the param and the verb in one segment ({id}:archive); the param
 	// still binds as a positional arg and the ":verb" suffix stays literal.
+	//
+	// A catalog key's {namespace}/{key} pair (ADR-0318) is one positional,
+	// written ns/key or as a bare name the search path resolves
+	// (catalogAddress), filling both slots.
 	apiPath := base
-	var args, argExamples []string
-	for _, seg := range splitPath(path) {
-		if name, suffix, ok := pathParamSeg(seg); ok {
-			apiPath += "/%s" + suffix
-			args = append(args, name)
-			argExamples = append(argExamples, pathParamExample(op, name))
-		} else {
+	var args, argExamples, slots []string
+	var pairs []catalogPair
+	segs := splitPath(path)
+	for i := 0; i < len(segs); i++ {
+		seg := segs[i]
+		name, suffix, ok := pathParamSeg(seg)
+		if !ok {
 			apiPath += "/" + seg
+			continue
 		}
+		if collection := catalogCollection(segs, i); collection != "" {
+			key, keySuffix, _ := pathParamSeg(segs[i+1])
+			n := len(args)
+			apiPath += "/%s/%s" + keySuffix
+			pairs = append(pairs, catalogPair{Arg: n, Collection: collection})
+			slots = append(slots, fmt.Sprintf("ns%d", n), fmt.Sprintf("key%d", n))
+			args = append(args, key)
+			argExamples = append(argExamples, pathParamExample(op, key))
+			i++
+			continue
+		}
+		apiPath += "/%s" + suffix
+		slots = append(slots, fmt.Sprintf("pathSegment(args[%d])", len(args)))
+		args = append(args, name)
+		argExamples = append(argExamples, pathParamExample(op, name))
 	}
 
 	c := command{
@@ -394,6 +418,8 @@ func buildCommand(doc spec, base, path, method string, op operation) command {
 		OperationID: op.OperationID,
 		Args:        args,
 		ArgExamples: argExamples,
+		Slots:       slots,
+		Pairs:       pairs,
 		Short:       op.Summary,
 		Long:        withArgHelp(op.Description, op, args),
 	}
@@ -964,7 +990,13 @@ func generatedCommands() []*cobra.Command {
 			Example: {{quote .Example}},
 			Args:    pathArgs({{len .Args}}),
 			RunE: func(cmd *cobra.Command, args []string) error {
-				path := fmt.Sprintf({{quote .APIPath}}{{range $i, $a := .Args}}, pathSegment(args[{{$i}}]){{end}})
+				{{- range $p := .Pairs}}
+				ns{{$p.Arg}}, key{{$p.Arg}}, err := catalogAddress(cmd, {{quote $p.Collection}}, args[{{$p.Arg}}])
+				if err != nil {
+					return err
+				}
+				{{- end}}
+				path := fmt.Sprintf({{quote .APIPath}}{{range $e := .Slots}}, {{$e}}{{end}})
 				{{- if .Query}}
 				q := url.Values{}
 				{{- range $qp := .Query}}
@@ -1020,3 +1052,33 @@ func generatedCommands() []*cobra.Command {
 		return cmd
 	}(){{end}}
 `))
+
+// catalogPair is one positional a catalog key's {namespace}/{key} path pair
+// reads from: the argument's index and the catalog's collection, where a bare
+// name is looked up.
+type catalogPair struct {
+	Arg        int
+	Collection string
+}
+
+// catalogChildCollections is the catalog a child collection's key reads in
+// (a product's metrics are metric types).
+var catalogChildCollections = map[string]string{"metrics": "metric-types", "properties": "property-types"}
+
+// catalogCollection is the collection a {namespace} parameter at segs[i]
+// addresses a key of, followed by the key's parameter: the segment before it,
+// or the catalog a child collection reads in. "" when segs[i] is no catalog
+// namespace (ADR-0318).
+func catalogCollection(segs []string, i int) string {
+	name, _, ok := pathParamSeg(segs[i])
+	if !ok || i == 0 || i+1 >= len(segs) || (name != "namespace" && !strings.HasSuffix(name, "_namespace")) {
+		return ""
+	}
+	if _, _, ok := pathParamSeg(segs[i+1]); !ok {
+		return ""
+	}
+	if c, ok := catalogChildCollections[segs[i-1]]; ok {
+		return c
+	}
+	return segs[i-1]
+}

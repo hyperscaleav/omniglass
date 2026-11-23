@@ -17,7 +17,7 @@ lines, capped at 4000. The alarm facts a template reads are declared once in `in
 beside the accessor that builds them and rendered into the docs by `cmd/labelgen`, the same way the
 label data map is.
 
-`POST /notification-types/{name}:preview` renders a type, or an unsaved draft of it, against a
+`POST /notification-types/{namespace}/{name}:preview` renders a type, or an unsaved draft of it, against a
 component's real alarm and returns the facts beside the result, writing nothing. The console's
 Notifications catalog page stops being a soon stub: it lists the types, edits an operator's
 templates, and previews them through that route.

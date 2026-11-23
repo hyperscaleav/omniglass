@@ -30,6 +30,7 @@ type commandTypeBody struct {
 	QuietSeconds        int             `json:"quiet_seconds" doc:"A disruptive type's quiet period: how long the outpost runs no poll, probe or session dial against the held endpoints after delivery. 0 on a type that is not disruptive"`
 	HoldSeconds         int             `json:"hold_seconds" doc:"A disruptive type's backstop: an endpoint with no up reading this long after delivery reopens anyway, counted as hold-expiry-count. Not the settle window. 0 on a type that is not disruptive"`
 	PowerOutletParam    string          `json:"power_outlet_param,omitempty" doc:"Marks a power command: the name of the param that carries the outlet. Its hold set is the components that outlet feeds (their power dependencies) and what they host, not the target itself. Only on a disruptive type"`
+	Namespace           string          `json:"namespace" doc:"The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"`
 	Official            bool            `json:"official"`
 }
 
@@ -37,7 +38,7 @@ func toCommandTypeBody(ct *storage.CommandType) commandTypeBody {
 	b := commandTypeBody{
 		ID: ct.ID, Name: ct.Name, Label: ct.Label, Description: ct.Description,
 		SettleWindowSeconds: ct.SettleWindowSeconds, TargetPropertyType: ct.TargetPropertyType,
-		TargetMetricType: ct.TargetMetricType, Official: ct.Official,
+		TargetMetricType: ct.TargetMetricType, Official: ct.Official, Namespace: catalogNamespaceOf(ct.Official),
 		Disruptive: ct.Disruptive, QuietSeconds: ct.QuietSeconds, HoldSeconds: ct.HoldSeconds,
 		PowerOutletParam: ct.PowerOutletParam,
 	}
@@ -61,6 +62,7 @@ type commandTypeNameInput struct {
 
 type createCommandTypeInput struct {
 	Body struct {
+		CatalogCreateNamespace
 		Name                string `json:"name" minLength:"1" doc:"The command type name (lowercase kebab)"`
 		Label               string `json:"label,omitempty" doc:"A human label"`
 		Description         string `json:"description,omitempty" doc:"What the command does"`
@@ -119,7 +121,7 @@ func registerCommandTypeRoutes(api huma.API, a *authenticator, gw storage.Gatewa
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-command-type",
 		Method:      http.MethodGet,
-		Path:        "/command-types/{name}",
+		Path:        "/command-types/{namespace}/{name}",
 		Summary:     "Get a command type",
 		Description: "Returns one command type by name. Gated by command_type:read.",
 	}, "command_type", "read"), func(ctx context.Context, in *commandTypeNameInput) (*commandTypeOutput, error) {
@@ -164,7 +166,7 @@ func registerCommandTypeRoutes(api huma.API, a *authenticator, gw storage.Gatewa
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "update-command-type",
 		Method:      http.MethodPatch,
-		Path:        "/command-types/{name}",
+		Path:        "/command-types/{namespace}/{name}",
 		Summary:     "Update a command type",
 		Description: "Patches a custom command type's label, description, params schema, settle window, disruption (disruptive, quiet_seconds, hold_seconds, power_outlet_param, checked together on the merged row), or target on either arm. Partial by default: the fields present in the body change and the rest are left alone (an empty target clears it; a non-empty arm clears the other). params_schema is a nullable object with no empty value, so it clears by being named in update_mask with no value in the body; a mask naming a field this resource does not patch is a 422. The name is fixed at creation. Official types are read-only. Gated by command_type:update.",
 	}, "command_type", "update"), func(ctx context.Context, in *updateCommandTypeInput) (*commandTypeOutput, error) {
@@ -199,7 +201,7 @@ func registerCommandTypeRoutes(api huma.API, a *authenticator, gw storage.Gatewa
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-command-type",
 		Method:        http.MethodDelete,
-		Path:          "/command-types/{name}",
+		Path:          "/command-types/{namespace}/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a command type",
 		Description:   "Removes a custom command type by name. Official types are read-only. Gated by command_type:delete.",

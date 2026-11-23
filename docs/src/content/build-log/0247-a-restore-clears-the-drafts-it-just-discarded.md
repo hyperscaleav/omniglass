@@ -24,7 +24,7 @@ form: bullet
 
   **The system type registry needed no fix, contrary to the issue.** It has no restore leg at all:
   `system_type` has not adopted the fork (#655, ADR-0095), carries no `forked` field, and there is no
-  `/system-types/{id}:restore` route, so the blade has no path that replaces its row. It inherits the
+  `/system-types/{namespace}/{id}:restore` route, so the blade has no path that replaces its row. It inherits the
   primitive the day it adopts one.
 
   The test drives restore with a DIRTY draft on top of a fork and asserts the four fields, not that

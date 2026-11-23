@@ -93,7 +93,7 @@ func (p *PG) GetPropertyType(ctx context.Context, name string) (*PropertyType, e
 	if err := RejectAddressForm("property_type", name); err != nil {
 		return nil, err
 	}
-	prop, err := scanPropertyType(p.pool.QueryRow(ctx, `select `+propertyCols+` from property_type_in_effect() property_type where name = $1`, name))
+	prop, err := scanPropertyType(p.pool.QueryRow(ctx, `select `+propertyCols+` from `+refRows("property_type", name)+` property_type where `+catalogRefCol(name)+` = $1`, name))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrPropertyTypeNotFound
 	}
@@ -110,7 +110,7 @@ func guardPropertyMutable(ctx context.Context, q querier, name string) error {
 		return err
 	}
 	var official bool
-	err := q.QueryRow(ctx, `select official from property_type_in_effect() property_type where name = $1`, name).Scan(&official)
+	err := q.QueryRow(ctx, `select official from `+refRows("property_type", name)+` property_type where `+catalogRefCol(name)+` = $1`, name).Scan(&official)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrPropertyTypeNotFound
 	}
@@ -207,12 +207,12 @@ func (p *PG) UpdatePropertyType(ctx context.Context, actorID, name string, patch
 			label = case when $5::boolean then $2 else label end,
 			description  = coalesce($3, description),
 			validation   = case when $6::boolean then $4::jsonb else validation end
-		where id = (select id from property_type_in_effect() property_type where name = $1)`,
+		where id = (select id from `+refRows("property_type", name)+` property_type where `+catalogRefCol(name)+` = $1)`,
 		name, labelVal, maskedPtr(w, PropertyTypeFieldDescription, patch.Description), schemaArg(patch.Validation), setLabel,
 		w.Has(PropertyTypeFieldValidation)); err != nil {
 		return nil, fmt.Errorf("storage: update property %q: %w", name, err)
 	}
-	prop, err := scanPropertyType(tx.QueryRow(ctx, `select `+propertyCols+` from property_type_in_effect() property_type where name = $1`, name))
+	prop, err := scanPropertyType(tx.QueryRow(ctx, `select `+propertyCols+` from `+refRows("property_type", name)+` property_type where `+catalogRefCol(name)+` = $1`, name))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrPropertyTypeNotFound
@@ -263,7 +263,7 @@ func (p *PG) DeletePropertyType(ctx context.Context, actorID, name string) error
 	if _, err := tx.Exec(ctx, `savepoint type_delete`); err != nil {
 		return fmt.Errorf("storage: savepoint: %w", err)
 	}
-	if _, err := tx.Exec(ctx, `delete from property_type where id = (select id from property_type_in_effect() property_type where name = $1)`, name); err != nil {
+	if _, err := tx.Exec(ctx, `delete from property_type where id = (select id from `+refRows("property_type", name)+` property_type where `+catalogRefCol(name)+` = $1)`, name); err != nil {
 		if _, rerr := tx.Exec(ctx, `rollback to savepoint type_delete`); rerr == nil {
 			if inUse := calcOutputInUse(ctx, tx, rules.LaneProperty, name, err); inUse != nil {
 				return inUse

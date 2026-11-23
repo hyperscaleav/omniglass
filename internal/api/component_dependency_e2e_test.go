@@ -205,7 +205,7 @@ func TestDependencyMarkersOverHTTP(t *testing.T) {
 	}
 	// The cleared marker is omitted on the wire, so decode into a fresh value.
 	ct.PowerOutletParam = ""
-	json.Unmarshal(f.c.do(f.owner, http.MethodPatch, "/command-types/outlet-cycle", map[string]any{"power_outlet_param": ""}, http.StatusOK), &ct)
+	json.Unmarshal(f.c.do(f.owner, http.MethodPatch, "/command-types/local/outlet-cycle", map[string]any{"power_outlet_param": ""}, http.StatusOK), &ct)
 	if ct.PowerOutletParam != "" {
 		t.Fatalf("command type patch = %+v, want the marker cleared", ct)
 	}

@@ -93,7 +93,7 @@ func TestCalcRuleAPI(t *testing.T) {
 			RuleID string `json:"rule_id"`
 		} `json:"written_by"`
 	}
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/metric-types/avg-temp", nil, http.StatusOK), &mt); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/metric-types/local/avg-temp", nil, http.StatusOK), &mt); err != nil {
 		t.Fatal(err)
 	}
 	if mt.WrittenBy == nil || mt.WrittenBy.Rule != made.Name || mt.WrittenBy.RuleID != made.ID {
@@ -123,7 +123,7 @@ func TestCalcRuleAPI(t *testing.T) {
 	// The key a rule writes cannot be deleted from its catalog: a 409 naming
 	// the rule.
 	p = problem{}
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodDelete, "/metric-types/avg-temp", nil, http.StatusConflict), &p); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodDelete, "/metric-types/local/avg-temp", nil, http.StatusConflict), &p); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(p.Detail, "temp-mean") {
@@ -139,7 +139,7 @@ func TestCalcRuleAPI(t *testing.T) {
 	if len(list.CalcRules) != 1 || list.CalcRules[0].ID != made.ID {
 		t.Fatalf("list = %+v", list)
 	}
-	c.do(viewer, http.MethodGet, "/calc-rules/"+made.ID, nil, http.StatusOK)
+	c.do(viewer, http.MethodGet, "/calc-rules/local/"+made.ID, nil, http.StatusOK)
 
 	// A reduce that does not compile is placed at its expression, line and
 	// column.
@@ -231,14 +231,14 @@ func TestCalcRuleAPI(t *testing.T) {
 			Message string `json:"message"`
 		} `json:"calc_error"`
 	}
-	if err := json.Unmarshal(c.do(viewer, http.MethodGet, "/calc-rules/doubled", nil, http.StatusOK), &broken); err != nil {
+	if err := json.Unmarshal(c.do(viewer, http.MethodGet, "/calc-rules/local/doubled", nil, http.StatusOK), &broken); err != nil {
 		t.Fatal(err)
 	}
 	if broken.CalcError == nil || broken.CalcError.Field != "reduce.expr" || broken.CalcError.Line != 2 || broken.CalcError.Message == "" {
 		t.Fatalf("a broken rule reads %+v, want calc_error at reduce.expr line 2", broken.CalcError)
 	}
-	c.do(ownerTok, http.MethodPatch, "/calc-rules/doubled", map[string]any{"enabled": false}, http.StatusOK)
-	c.do(ownerTok, http.MethodPatch, "/calc-rules/doubled", map[string]any{"enabled": true}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPatch, "/calc-rules/local/doubled", map[string]any{"enabled": false}, http.StatusOK)
+	c.do(ownerTok, http.MethodPatch, "/calc-rules/local/doubled", map[string]any{"enabled": true}, http.StatusUnprocessableEntity)
 
 	// Writes take an all-scope grant.
 	south := c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "calc-south", "location_type": "campus"}, http.StatusCreated)
@@ -249,15 +249,15 @@ func TestCalcRuleAPI(t *testing.T) {
 		t.Fatalf("created location %s (%v)", south, err)
 	}
 	placeOwner := setupScopedUser(t, ctx, dsn, "calc-south-owner", grantSpec{role: "owner", scopeKind: "location", scopeID: loc.ID})
-	c.do(placeOwner, http.MethodGet, "/calc-rules/temp-mean", nil, http.StatusOK)
+	c.do(placeOwner, http.MethodGet, "/calc-rules/local/temp-mean", nil, http.StatusOK)
 	c.do(placeOwner, http.MethodPost, "/calc-rules", map[string]any{"name": "mine", "owner_kind": "component",
 		"inputs": []map[string]any{{"alias": "t", "key": "room-temperature"}}, "reduce": map[string]any{"expr": "max(t)"}, "output_key": "temp-twice"}, http.StatusForbidden)
-	c.do(placeOwner, http.MethodPatch, "/calc-rules/temp-mean", map[string]any{"label": "mine"}, http.StatusForbidden)
-	c.do(placeOwner, http.MethodPost, "/calc-rules/temp-mean:rename", map[string]any{"name": "mine"}, http.StatusForbidden)
-	c.do(placeOwner, http.MethodDelete, "/calc-rules/temp-mean", nil, http.StatusForbidden)
+	c.do(placeOwner, http.MethodPatch, "/calc-rules/local/temp-mean", map[string]any{"label": "mine"}, http.StatusForbidden)
+	c.do(placeOwner, http.MethodPost, "/calc-rules/local/temp-mean:rename", map[string]any{"name": "mine"}, http.StatusForbidden)
+	c.do(placeOwner, http.MethodDelete, "/calc-rules/local/temp-mean", nil, http.StatusForbidden)
 
 	var up calcRuleBody
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/calc-rules/temp-mean", map[string]any{"reduce": map[string]any{"expr": "max(t)"}}, http.StatusOK), &up); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/calc-rules/local/temp-mean", map[string]any{"reduce": map[string]any{"expr": "max(t)"}}, http.StatusOK), &up); err != nil {
 		t.Fatal(err)
 	}
 	if up.Version != 2 || up.Reduce.Expr != "max(t)" || up.ID != made.ID {
@@ -265,17 +265,17 @@ func TestCalcRuleAPI(t *testing.T) {
 	}
 
 	var renamed calcRuleBody
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/calc-rules/temp-mean:rename", map[string]any{"name": "temp-peak"}, http.StatusOK), &renamed); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/calc-rules/local/temp-mean:rename", map[string]any{"name": "temp-peak"}, http.StatusOK), &renamed); err != nil {
 		t.Fatal(err)
 	}
 	if renamed.ID != made.ID || renamed.Name != "temp-peak" || renamed.Version != 2 {
 		t.Fatalf("renamed = %+v, want the same uuid and version under temp-peak", renamed)
 	}
-	c.do(ownerTok, http.MethodGet, "/calc-rules/temp-mean", nil, http.StatusNotFound)
-	c.do(ownerTok, http.MethodPost, "/calc-rules/temp-peak:rename", map[string]any{"name": "doubled"}, http.StatusConflict)
-	c.do(ownerTok, http.MethodPost, "/calc-rules/temp-peak:rename", map[string]any{"name": "Not Kebab"}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodGet, "/calc-rules/local/temp-mean", nil, http.StatusNotFound)
+	c.do(ownerTok, http.MethodPost, "/calc-rules/local/temp-peak:rename", map[string]any{"name": "doubled"}, http.StatusConflict)
+	c.do(ownerTok, http.MethodPost, "/calc-rules/local/temp-peak:rename", map[string]any{"name": "Not Kebab"}, http.StatusUnprocessableEntity)
 
-	c.do(viewer, http.MethodDelete, "/calc-rules/temp-peak", nil, http.StatusForbidden)
-	c.do(ownerTok, http.MethodDelete, "/calc-rules/temp-peak", nil, http.StatusNoContent)
-	c.do(ownerTok, http.MethodGet, "/calc-rules/temp-peak", nil, http.StatusNotFound)
+	c.do(viewer, http.MethodDelete, "/calc-rules/local/temp-peak", nil, http.StatusForbidden)
+	c.do(ownerTok, http.MethodDelete, "/calc-rules/local/temp-peak", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodGet, "/calc-rules/local/temp-peak", nil, http.StatusNotFound)
 }

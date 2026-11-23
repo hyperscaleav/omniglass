@@ -56,7 +56,7 @@ func TestPropertyAPI(t *testing.T) {
 	}
 
 	// Get it back.
-	c.do(ownerTok, http.MethodGet, "/property-types/rack-unit", nil, http.StatusOK)
+	c.do(ownerTok, http.MethodGet, "/property-types/local/rack-unit", nil, http.StatusOK)
 
 	// A numeric data type is refused by the enum: numbers register as metric types.
 	c.do(ownerTok, http.MethodPost, "/property-types", map[string]any{"name": "fan-rpm", "data_type": "int"}, http.StatusUnprocessableEntity)
@@ -83,7 +83,7 @@ func TestPropertyAPI(t *testing.T) {
 	}
 
 	// Update a mutable field.
-	c.do(ownerTok, http.MethodPatch, "/property-types/rack-unit", map[string]any{"label": "Rack Unit (U)"}, http.StatusOK)
+	c.do(ownerTok, http.MethodPatch, "/property-types/local/rack-unit", map[string]any{"label": "Rack Unit (U)"}, http.StatusOK)
 
 	// A malformed name is a 422.
 	c.do(ownerTok, http.MethodPost, "/property-types", map[string]any{"name": "Bad-Name", "data_type": "string"}, http.StatusUnprocessableEntity)
@@ -92,14 +92,14 @@ func TestPropertyAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/property-types", map[string]any{"name": "rack-unit", "data_type": "string"}, http.StatusConflict)
 
 	// An official (seeded) property is read-only (409).
-	c.do(ownerTok, http.MethodPatch, "/property-types/serial-number", map[string]any{"label": "x"}, http.StatusConflict)
-	c.do(ownerTok, http.MethodDelete, "/property-types/serial-number", nil, http.StatusConflict)
+	c.do(ownerTok, http.MethodPatch, "/property-types/og/serial-number", map[string]any{"label": "x"}, http.StatusConflict)
+	c.do(ownerTok, http.MethodDelete, "/property-types/og/serial-number", nil, http.StatusConflict)
 
 	// An unknown property is a 404.
-	c.do(ownerTok, http.MethodGet, "/property-types/nope", nil, http.StatusNotFound)
+	c.do(ownerTok, http.MethodGet, "/property-types/local/nope", nil, http.StatusNotFound)
 
 	// Delete the custom property.
-	c.do(ownerTok, http.MethodDelete, "/property-types/rack-unit", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/property-types/local/rack-unit", nil, http.StatusNoContent)
 
 	// An ungranted user is forbidden to create.
 	noneTok := userWithGrants(t, ctx, dsn, "noprops", nil)
@@ -132,7 +132,7 @@ func TestPropertyTypeValidationClearsUnderUpdateMask(t *testing.T) {
 	patch := func(body map[string]any) map[string]json.RawMessage {
 		t.Helper()
 		var got map[string]json.RawMessage
-		if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/property-types/rack-temp", body, http.StatusOK), &got); err != nil {
+		if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/property-types/local/rack-temp", body, http.StatusOK), &got); err != nil {
 			t.Fatalf("decode patch: %v", err)
 		}
 		return got
@@ -158,9 +158,9 @@ func TestPropertyTypeValidationClearsUnderUpdateMask(t *testing.T) {
 	// Naming the field with no value clears it, on the response and on a re-read.
 	hasSchema("cleared", patch(map[string]any{"update_mask": []string{"validation"}}), "")
 	var reread map[string]json.RawMessage
-	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/property-types/rack-temp", nil, http.StatusOK), &reread)
+	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/property-types/local/rack-temp", nil, http.StatusOK), &reread)
 	hasSchema("reread", reread, "")
 	// A mask naming a field the route does not patch is a 422, never a no-op.
-	c.do(ownerTok, http.MethodPatch, "/property-types/rack-temp",
+	c.do(ownerTok, http.MethodPatch, "/property-types/local/rack-temp",
 		map[string]any{"update_mask": []string{"name"}}, http.StatusUnprocessableEntity)
 }

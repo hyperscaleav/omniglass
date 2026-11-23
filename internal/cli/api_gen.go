@@ -25,6 +25,7 @@ func generatedCommands() []*cobra.Command {
 				var fEnabled bool
 				var fLabel string
 				var fName string
+				var fNamespace string
 				var fNotificationType string
 				var fOn string
 				var fOptOutAllowed bool
@@ -51,6 +52,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
 						}
+						if cmd.Flags().Changed("namespace") {
+							body["namespace"] = fNamespace
+						}
 						if cmd.Flags().Changed("notification-type") {
 							body["notification_type"] = fNotificationType
 						}
@@ -74,6 +78,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
 				cmd.Flags().StringVar(&fName, "name", "", "The rule's name (lowercase kebab)")
 				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fNamespace, "namespace", "", "The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows")
 				cmd.Flags().StringVar(&fNotificationType, "notification-type", "", "The notification type to send, by name or uuid; absent sends the official one for the transition")
 				cmd.Flags().StringVar(&fOn, "on", "", "The alarm transitions it fires on: raised, cleared, or both. Acknowledging an alarm is never one")
 				_ = cmd.MarkFlagRequired("on")
@@ -94,7 +99,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass action-rule delete <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/action-rules/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "action-rules", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/action-rules/%s/%s", ns0, key0)
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -111,7 +120,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass action-rule get <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/action-rules/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "action-rules", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/action-rules/%s/%s", ns0, key0)
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -145,7 +158,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass action-rule optIn <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/action-rules/%s:optIn", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "action-rules", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/action-rules/%s/%s:optIn", ns0, key0)
 						return runAPICommand(cmd, "POST", path, nil)
 					},
 				}
@@ -162,7 +179,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass action-rule optOut <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/action-rules/%s:optOut", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "action-rules", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/action-rules/%s/%s:optOut", ns0, key0)
 						return runAPICommand(cmd, "POST", path, nil)
 					},
 				}
@@ -187,7 +208,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass action-rule update <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/action-rules/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "action-rules", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/action-rules/%s/%s", ns0, key0)
 						body := map[string]any{}
 						if cmd.Flags().Changed("description") {
 							body["description"] = fDescription
@@ -1304,6 +1329,7 @@ func generatedCommands() []*cobra.Command {
 				var fInputs string
 				var fLabel string
 				var fName string
+				var fNamespace string
 				var fOutputKey string
 				var fOwnerKind string
 				var fReduce string
@@ -1332,6 +1358,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
 						}
+						if cmd.Flags().Changed("namespace") {
+							body["namespace"] = fNamespace
+						}
 						if cmd.Flags().Changed("output-key") {
 							body["output_key"] = fOutputKey
 						}
@@ -1354,6 +1383,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
 				cmd.Flags().StringVar(&fName, "name", "", "The rule's name (lowercase letters, digits, hyphens)")
 				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fNamespace, "namespace", "", "The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows")
 				cmd.Flags().StringVar(&fOutputKey, "output-key", "", "The property or metric the rule writes: its type pins the reduce's result. Not a reserved key (a native probe key, health), not a key a driver's emits or a command type write, and not one another enabled rule writes")
 				_ = cmd.MarkFlagRequired("output-key")
 				cmd.Flags().StringVar(&fOwnerKind, "owner-kind", "", "What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's slot-bound members). Fixed at create")
@@ -1374,7 +1404,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass calc-rule delete <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/calc-rules/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "calc-rules", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/calc-rules/%s/%s", ns0, key0)
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -1391,7 +1425,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass calc-rule get <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/calc-rules/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "calc-rules", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/calc-rules/%s/%s", ns0, key0)
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -1478,7 +1516,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass calc-rule rename <name> --name name",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/calc-rules/%s:rename", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "calc-rules", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/calc-rules/%s/%s:rename", ns0, key0)
 						body := map[string]any{}
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
@@ -1507,7 +1549,11 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass calc-rule state list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/calc-rules/%s/state", pathSegment(args[0]))
+							ns0, key0, err := catalogAddress(cmd, "calc-rules", args[0])
+							if err != nil {
+								return err
+							}
+							path := fmt.Sprintf("/api/v1/calc-rules/%s/%s/state", ns0, key0)
 							q := url.Values{}
 							if cmd.Flags().Changed("limit") {
 								q.Set("limit", fmt.Sprintf("%v", qLimit))
@@ -1541,7 +1587,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass calc-rule update <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/calc-rules/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "calc-rules", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/calc-rules/%s/%s", ns0, key0)
 						body := map[string]any{}
 						if cmd.Flags().Changed("description") {
 							body["description"] = fDescription
@@ -1592,6 +1642,7 @@ func generatedCommands() []*cobra.Command {
 				var fHoldSeconds int
 				var fLabel string
 				var fName string
+				var fNamespace string
 				var fParamsSchema string
 				var fPowerOutletParam string
 				var fQuietSeconds int
@@ -1622,6 +1673,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
 						}
+						if cmd.Flags().Changed("namespace") {
+							body["namespace"] = fNamespace
+						}
 						if cmd.Flags().Changed("params-schema") {
 							body["params_schema"] = jsonOrString(fParamsSchema)
 						}
@@ -1649,6 +1703,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
 				cmd.Flags().StringVar(&fName, "name", "", "The command type name (lowercase kebab)")
 				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fNamespace, "namespace", "", "The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows")
 				cmd.Flags().StringVar(&fParamsSchema, "params-schema", "", "A JSON Schema fragment for the params")
 				cmd.Flags().StringVar(&fPowerOutletParam, "power-outlet-param", "", "Marks a power command: the name of the param that carries the outlet, so its hold set is what that outlet feeds. Only on a disruptive type")
 				cmd.Flags().IntVar(&fQuietSeconds, "quiet-seconds", 0, "A disruptive type's quiet period in seconds: no poll, probe or session dial runs against the held endpoints. Only on a disruptive type")
@@ -1668,7 +1723,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass command-type delete <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/command-types/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "command-types", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/command-types/%s/%s", ns0, key0)
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -1685,7 +1744,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass command-type get <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/command-types/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "command-types", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/command-types/%s/%s", ns0, key0)
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -1730,7 +1793,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass command-type update <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/command-types/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "command-types", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/command-types/%s/%s", ns0, key0)
 						body := map[string]any{}
 						if cmd.Flags().Changed("description") {
 							body["description"] = fDescription
@@ -3236,6 +3303,7 @@ func generatedCommands() []*cobra.Command {
 				var fLabel string
 				var fLabelRule string
 				var fName string
+				var fNamespace string
 				var fParentId string
 				var fStem string
 				cmd := &cobra.Command{
@@ -3265,6 +3333,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
 						}
+						if cmd.Flags().Changed("namespace") {
+							body["namespace"] = fNamespace
+						}
 						if cmd.Flags().Changed("parent-id") {
 							body["parent_id"] = fParentId
 						}
@@ -3282,6 +3353,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A label rule, written in Go text/template, rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the parent's, then the global component rule. A rule that does not parse is refused here, 422.")
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name")
 				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fNamespace, "namespace", "", "The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows")
 				cmd.Flags().StringVar(&fParentId, "parent-id", "", "The parent component_type, by name or uuid; omit for a root type")
 				cmd.Flags().StringVar(&fStem, "stem", "", "The auto-generated component name's prefix; omit to inherit the parent's. Lowercase letters, digits, and hyphens.")
 				return cmd
@@ -3297,7 +3369,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass component-type delete display",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/component-types/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "component-types", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/component-types/%s/%s", ns0, key0)
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -3331,7 +3407,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass component-type restore display",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/component-types/%s:restore", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "component-types", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/component-types/%s/%s:restore", ns0, key0)
 						return runAPICommand(cmd, "POST", path, nil)
 					},
 				}
@@ -3354,7 +3434,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass component-type update display",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/component-types/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "component-types", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/component-types/%s/%s", ns0, key0)
 						body := map[string]any{}
 						if cmd.Flags().Changed("abbrev") {
 							body["abbrev"] = fAbbrev
@@ -3398,6 +3482,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := func() *cobra.Command {
 				var fLabel string
 				var fName string
+				var fNamespace string
 				var fSpec string
 				var fVersion string
 				cmd := &cobra.Command{
@@ -3415,6 +3500,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
 						}
+						if cmd.Flags().Changed("namespace") {
+							body["namespace"] = fNamespace
+						}
 						if cmd.Flags().Changed("spec") {
 							body["spec"] = jsonOrString(fSpec)
 						}
@@ -3428,6 +3516,7 @@ func generatedCommands() []*cobra.Command {
 				_ = cmd.MarkFlagRequired("label")
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name; renameable")
 				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fNamespace, "namespace", "", "The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows")
 				cmd.Flags().StringVar(&fSpec, "spec", "", "The declarative spec body; validated against the catalogs, and a spec that fails validation refuses the write (422)")
 				cmd.Flags().StringVar(&fVersion, "version", "", "A free-form version string, e.g. 1.0.0")
 				return cmd
@@ -3443,7 +3532,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass driver delete snmp-generic",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/drivers/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "drivers", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/drivers/%s/%s", ns0, key0)
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -3460,7 +3553,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass driver get snmp-generic",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/drivers/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "drivers", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/drivers/%s/%s", ns0, key0)
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -3544,7 +3641,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass driver rename <id> --name name",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/drivers/%s:rename", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "drivers", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/drivers/%s/%s:rename", ns0, key0)
 						body := map[string]any{}
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
@@ -3570,7 +3671,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass driver update snmp-generic",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/drivers/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "drivers", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/drivers/%s/%s", ns0, key0)
 						body := map[string]any{}
 						if cmd.Flags().Changed("label") {
 							body["label"] = fLabel
@@ -3877,6 +3982,7 @@ func generatedCommands() []*cobra.Command {
 				var fLabel string
 				var fMessage string
 				var fName string
+				var fNamespace string
 				var fSampleKey string
 				var fSampleWindow string
 				var fSelector string
@@ -3923,6 +4029,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
 						}
+						if cmd.Flags().Changed("namespace") {
+							body["namespace"] = fNamespace
+						}
 						if cmd.Flags().Changed("sample-key") {
 							body["sample_key"] = fSampleKey
 						}
@@ -3952,6 +4061,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fMessage, "message", "", "The alarm message; empty uses the label or the name")
 				cmd.Flags().StringVar(&fName, "name", "", "The rule's name (lowercase kebab)")
 				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fNamespace, "namespace", "", "The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows")
 				cmd.Flags().StringVar(&fSampleKey, "sample-key", "", "The property or metric the rule reads")
 				_ = cmd.MarkFlagRequired("sample-key")
 				cmd.Flags().StringVar(&fSampleWindow, "sample-window", "", "A metric rule's trend window, a Go duration up to 168h: the criteria read window, the series' points over it, oldest first; empty is 0s, no window")
@@ -3970,7 +4080,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass event-rule delete <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/event-rules/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "event-rules", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/event-rules/%s/%s", ns0, key0)
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -3987,7 +4101,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass event-rule get <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/event-rules/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "event-rules", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/event-rules/%s/%s", ns0, key0)
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -4072,7 +4190,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass event-rule rename <name> --name name",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/event-rules/%s:rename", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "event-rules", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/event-rules/%s/%s:rename", ns0, key0)
 						body := map[string]any{}
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
@@ -4100,7 +4222,11 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass event-rule state list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/event-rules/%s/state", pathSegment(args[0]))
+							ns0, key0, err := catalogAddress(cmd, "event-rules", args[0])
+							if err != nil {
+								return err
+							}
+							path := fmt.Sprintf("/api/v1/event-rules/%s/%s/state", ns0, key0)
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -4134,7 +4260,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass event-rule update <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/event-rules/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "event-rules", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/event-rules/%s/%s", ns0, key0)
 						body := map[string]any{}
 						if cmd.Flags().Changed("clear-criteria") {
 							body["clear_criteria"] = jsonOrString(fClearCriteria)
@@ -4215,6 +4345,7 @@ func generatedCommands() []*cobra.Command {
 				var fDescription string
 				var fLabel string
 				var fName string
+				var fNamespace string
 				var fPayloadSchema string
 				cmd := &cobra.Command{
 					Use:     "create",
@@ -4234,6 +4365,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
 						}
+						if cmd.Flags().Changed("namespace") {
+							body["namespace"] = fNamespace
+						}
 						if cmd.Flags().Changed("payload-schema") {
 							body["payload_schema"] = jsonOrString(fPayloadSchema)
 						}
@@ -4244,6 +4378,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
 				cmd.Flags().StringVar(&fName, "name", "", "The event type name (lowercase kebab)")
 				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fNamespace, "namespace", "", "The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows")
 				cmd.Flags().StringVar(&fPayloadSchema, "payload-schema", "", "A JSON Schema fragment for the payload")
 				return cmd
 			}()
@@ -4258,7 +4393,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass event-type delete <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/event-types/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "event-types", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/event-types/%s/%s", ns0, key0)
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -4275,7 +4414,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass event-type get <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/event-types/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "event-types", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/event-types/%s/%s", ns0, key0)
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -4313,7 +4456,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass event-type update <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/event-types/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "event-types", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/event-types/%s/%s", ns0, key0)
 						body := map[string]any{}
 						if cmd.Flags().Changed("description") {
 							body["description"] = fDescription
@@ -5086,6 +5233,7 @@ func generatedCommands() []*cobra.Command {
 				var fLabelRule string
 				var fName string
 				var fNameRule string
+				var fNamespace string
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a location type",
@@ -5113,6 +5261,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("name-rule") {
 							body["name_rule"] = jsonOrString(fNameRule)
 						}
+						if cmd.Flags().Changed("namespace") {
+							body["namespace"] = fNamespace
+						}
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
@@ -5124,6 +5275,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name (e.g. wing); \"root\" is reserved")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fNameRule, "name-rule", "", "How the platform NAMES locations of this type; omit to have an operator name every one of them. Refused (422) if it cannot mint a legal name")
+				cmd.Flags().StringVar(&fNamespace, "namespace", "", "The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows")
 				return cmd
 			}()
 			return cmd
@@ -5137,7 +5289,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass location-type delete room",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/location-types/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "location-types", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/location-types/%s/%s", ns0, key0)
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -5176,7 +5332,15 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass location-type metric delete room <metric>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/location-types/%s/metrics/%s", pathSegment(args[0]), pathSegment(args[1]))
+							ns0, key0, err := catalogAddress(cmd, "location-types", args[0])
+							if err != nil {
+								return err
+							}
+							ns1, key1, err := catalogAddress(cmd, "metric-types", args[1])
+							if err != nil {
+								return err
+							}
+							path := fmt.Sprintf("/api/v1/location-types/%s/%s/metrics/%s/%s", ns0, key0, ns1, key1)
 							return runAPICommand(cmd, "DELETE", path, nil)
 						},
 					}
@@ -5193,7 +5357,11 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass location-type metric list room",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/location-types/%s/metrics", pathSegment(args[0]))
+							ns0, key0, err := catalogAddress(cmd, "location-types", args[0])
+							if err != nil {
+								return err
+							}
+							path := fmt.Sprintf("/api/v1/location-types/%s/%s/metrics", ns0, key0)
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -5212,7 +5380,15 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass location-type metric update room <metric>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/location-types/%s/metrics/%s", pathSegment(args[0]), pathSegment(args[1]))
+							ns0, key0, err := catalogAddress(cmd, "location-types", args[0])
+							if err != nil {
+								return err
+							}
+							ns1, key1, err := catalogAddress(cmd, "metric-types", args[1])
+							if err != nil {
+								return err
+							}
+							path := fmt.Sprintf("/api/v1/location-types/%s/%s/metrics/%s/%s", ns0, key0, ns1, key1)
 							body := map[string]any{}
 							if cmd.Flags().Changed("default-value") {
 								body["default_value"] = jsonOrString(fDefaultValue)
@@ -5245,7 +5421,15 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass location-type property delete room <property>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/location-types/%s/properties/%s", pathSegment(args[0]), pathSegment(args[1]))
+							ns0, key0, err := catalogAddress(cmd, "location-types", args[0])
+							if err != nil {
+								return err
+							}
+							ns1, key1, err := catalogAddress(cmd, "property-types", args[1])
+							if err != nil {
+								return err
+							}
+							path := fmt.Sprintf("/api/v1/location-types/%s/%s/properties/%s/%s", ns0, key0, ns1, key1)
 							return runAPICommand(cmd, "DELETE", path, nil)
 						},
 					}
@@ -5262,7 +5446,11 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass location-type property list room",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/location-types/%s/properties", pathSegment(args[0]))
+							ns0, key0, err := catalogAddress(cmd, "location-types", args[0])
+							if err != nil {
+								return err
+							}
+							path := fmt.Sprintf("/api/v1/location-types/%s/%s/properties", ns0, key0)
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -5281,7 +5469,15 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass location-type property update room <property>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/location-types/%s/properties/%s", pathSegment(args[0]), pathSegment(args[1]))
+							ns0, key0, err := catalogAddress(cmd, "location-types", args[0])
+							if err != nil {
+								return err
+							}
+							ns1, key1, err := catalogAddress(cmd, "property-types", args[1])
+							if err != nil {
+								return err
+							}
+							path := fmt.Sprintf("/api/v1/location-types/%s/%s/properties/%s/%s", ns0, key0, ns1, key1)
 							body := map[string]any{}
 							if cmd.Flags().Changed("default-value") {
 								body["default_value"] = jsonOrString(fDefaultValue)
@@ -5310,7 +5506,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass location-type rename <id> --name name",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/location-types/%s:rename", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "location-types", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/location-types/%s/%s:rename", ns0, key0)
 						body := map[string]any{}
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
@@ -5333,7 +5533,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass location-type restore room",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/location-types/%s:restore", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "location-types", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/location-types/%s/%s:restore", ns0, key0)
 						return runAPICommand(cmd, "POST", path, nil)
 					},
 				}
@@ -5356,7 +5560,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass location-type update room",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/location-types/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "location-types", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/location-types/%s/%s", ns0, key0)
 						body := map[string]any{}
 						if cmd.Flags().Changed("allowed-parent-types") {
 							body["allowed_parent_types"] = jsonOrString(fAllowedParentTypes)
@@ -5402,6 +5610,7 @@ func generatedCommands() []*cobra.Command {
 				var fDescription string
 				var fLabel string
 				var fName string
+				var fNamespace string
 				var fPrecision int
 				var fUnit string
 				cmd := &cobra.Command{
@@ -5425,6 +5634,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
 						}
+						if cmd.Flags().Changed("namespace") {
+							body["namespace"] = fNamespace
+						}
 						if cmd.Flags().Changed("precision") {
 							body["precision"] = fPrecision
 						}
@@ -5440,6 +5652,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
 				cmd.Flags().StringVar(&fName, "name", "", "The metric type name (lowercase kebab)")
 				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fNamespace, "namespace", "", "The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows")
 				cmd.Flags().IntVar(&fPrecision, "precision", 0, "Decimal places a rendered value keeps")
 				cmd.Flags().StringVar(&fUnit, "unit", "", "The display unit of the series (ms, dB, percent)")
 				return cmd
@@ -5455,7 +5668,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass metric-type delete <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/metric-types/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "metric-types", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/metric-types/%s/%s", ns0, key0)
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -5472,7 +5689,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass metric-type get <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/metric-types/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "metric-types", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/metric-types/%s/%s", ns0, key0)
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -5507,7 +5728,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass metric-type setRetention <name> --days <json>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/metric-types/%s:setRetention", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "metric-types", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/metric-types/%s/%s:setRetention", ns0, key0)
 						body := map[string]any{}
 						if cmd.Flags().Changed("days") {
 							body["days"] = jsonOrString(fDays)
@@ -5535,7 +5760,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass metric-type update <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/metric-types/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "metric-types", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/metric-types/%s/%s", ns0, key0)
 						body := map[string]any{}
 						if cmd.Flags().Changed("description") {
 							body["description"] = fDescription
@@ -5873,6 +6102,7 @@ func generatedCommands() []*cobra.Command {
 				var fDescription string
 				var fLabel string
 				var fName string
+				var fNamespace string
 				var fSubject string
 				var fText string
 				cmd := &cobra.Command{
@@ -5893,6 +6123,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
 						}
+						if cmd.Flags().Changed("namespace") {
+							body["namespace"] = fNamespace
+						}
 						if cmd.Flags().Changed("subject") {
 							body["subject"] = fSubject
 						}
@@ -5906,6 +6139,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
 				cmd.Flags().StringVar(&fName, "name", "", "The type's name (lowercase kebab)")
 				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fNamespace, "namespace", "", "The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows")
 				cmd.Flags().StringVar(&fSubject, "subject", "", "The one-line subject, written in the rule language")
 				_ = cmd.MarkFlagRequired("subject")
 				cmd.Flags().StringVar(&fText, "text", "", "The body text, written in the rule language")
@@ -5923,7 +6157,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass notification-type delete <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/notification-types/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "notification-types", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/notification-types/%s/%s", ns0, key0)
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -5940,7 +6178,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass notification-type get <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/notification-types/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "notification-types", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/notification-types/%s/%s", ns0, key0)
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -5979,7 +6221,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass notification-type preview <name> --component component",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/notification-types/%s:preview", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "notification-types", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/notification-types/%s/%s:preview", ns0, key0)
 						body := map[string]any{}
 						if cmd.Flags().Changed("alarm") {
 							body["alarm"] = fAlarm
@@ -6019,7 +6265,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass notification-type rename <id> --name name",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/notification-types/%s:rename", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "notification-types", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/notification-types/%s/%s:rename", ns0, key0)
 						body := map[string]any{}
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
@@ -6046,7 +6296,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass notification-type update <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/notification-types/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "notification-types", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/notification-types/%s/%s", ns0, key0)
 						body := map[string]any{}
 						if cmd.Flags().Changed("description") {
 							body["description"] = fDescription
@@ -6400,6 +6654,7 @@ func generatedCommands() []*cobra.Command {
 				var fLabel string
 				var fLabelRule string
 				var fName string
+				var fNamespace string
 				var fParentProductId string
 				var fVendorId string
 				cmd := &cobra.Command{
@@ -6432,6 +6687,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
 						}
+						if cmd.Flags().Changed("namespace") {
+							body["namespace"] = fNamespace
+						}
 						if cmd.Flags().Changed("parent-product-id") {
 							body["parent_product_id"] = fParentProductId
 						}
@@ -6452,6 +6710,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A label rule, written in Go text/template, rendering the label of every component of this product, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the component_type chain's rule, then the global component rule. A rule that does not parse is refused here, 422.")
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name; renameable")
 				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fNamespace, "namespace", "", "The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows")
 				cmd.Flags().StringVar(&fParentProductId, "parent-product-id", "", "The parent product, by handle or uuid")
 				cmd.Flags().StringVar(&fVendorId, "vendor-id", "", "The vendor, by handle or uuid")
 				return cmd
@@ -6467,7 +6726,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass product delete boreal-edge-55",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/products/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "products", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/products/%s/%s", ns0, key0)
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -6484,7 +6747,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass product get boreal-edge-55",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/products/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "products", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/products/%s/%s", ns0, key0)
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -6523,7 +6790,15 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass product metric delete boreal-edge-55 <metric>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/products/%s/metrics/%s", pathSegment(args[0]), pathSegment(args[1]))
+							ns0, key0, err := catalogAddress(cmd, "products", args[0])
+							if err != nil {
+								return err
+							}
+							ns1, key1, err := catalogAddress(cmd, "metric-types", args[1])
+							if err != nil {
+								return err
+							}
+							path := fmt.Sprintf("/api/v1/products/%s/%s/metrics/%s/%s", ns0, key0, ns1, key1)
 							return runAPICommand(cmd, "DELETE", path, nil)
 						},
 					}
@@ -6540,7 +6815,11 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass product metric list boreal-edge-55",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/products/%s/metrics", pathSegment(args[0]))
+							ns0, key0, err := catalogAddress(cmd, "products", args[0])
+							if err != nil {
+								return err
+							}
+							path := fmt.Sprintf("/api/v1/products/%s/%s/metrics", ns0, key0)
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -6559,7 +6838,15 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass product metric update boreal-edge-55 <metric>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/products/%s/metrics/%s", pathSegment(args[0]), pathSegment(args[1]))
+							ns0, key0, err := catalogAddress(cmd, "products", args[0])
+							if err != nil {
+								return err
+							}
+							ns1, key1, err := catalogAddress(cmd, "metric-types", args[1])
+							if err != nil {
+								return err
+							}
+							path := fmt.Sprintf("/api/v1/products/%s/%s/metrics/%s/%s", ns0, key0, ns1, key1)
 							body := map[string]any{}
 							if cmd.Flags().Changed("default-value") {
 								body["default_value"] = jsonOrString(fDefaultValue)
@@ -6592,7 +6879,15 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass product property delete boreal-edge-55 <property>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/products/%s/properties/%s", pathSegment(args[0]), pathSegment(args[1]))
+							ns0, key0, err := catalogAddress(cmd, "products", args[0])
+							if err != nil {
+								return err
+							}
+							ns1, key1, err := catalogAddress(cmd, "property-types", args[1])
+							if err != nil {
+								return err
+							}
+							path := fmt.Sprintf("/api/v1/products/%s/%s/properties/%s/%s", ns0, key0, ns1, key1)
 							return runAPICommand(cmd, "DELETE", path, nil)
 						},
 					}
@@ -6609,7 +6904,11 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass product property list boreal-edge-55",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/products/%s/properties", pathSegment(args[0]))
+							ns0, key0, err := catalogAddress(cmd, "products", args[0])
+							if err != nil {
+								return err
+							}
+							path := fmt.Sprintf("/api/v1/products/%s/%s/properties", ns0, key0)
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -6628,7 +6927,15 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass product property update boreal-edge-55 <property>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/products/%s/properties/%s", pathSegment(args[0]), pathSegment(args[1]))
+							ns0, key0, err := catalogAddress(cmd, "products", args[0])
+							if err != nil {
+								return err
+							}
+							ns1, key1, err := catalogAddress(cmd, "property-types", args[1])
+							if err != nil {
+								return err
+							}
+							path := fmt.Sprintf("/api/v1/products/%s/%s/properties/%s/%s", ns0, key0, ns1, key1)
 							body := map[string]any{}
 							if cmd.Flags().Changed("default-value") {
 								body["default_value"] = jsonOrString(fDefaultValue)
@@ -6657,7 +6964,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass product rename <id> --name name",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/products/%s:rename", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "products", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/products/%s/%s:rename", ns0, key0)
 						body := map[string]any{}
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
@@ -6688,7 +6999,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass product update boreal-edge-55",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/products/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "products", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/products/%s/%s", ns0, key0)
 						body := map[string]any{}
 						if cmd.Flags().Changed("component-type") {
 							body["component_type"] = fComponentType
@@ -6742,6 +7057,7 @@ func generatedCommands() []*cobra.Command {
 				var fDescription string
 				var fLabel string
 				var fName string
+				var fNamespace string
 				var fValidation string
 				cmd := &cobra.Command{
 					Use:     "create",
@@ -6764,6 +7080,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
 						}
+						if cmd.Flags().Changed("namespace") {
+							body["namespace"] = fNamespace
+						}
 						if cmd.Flags().Changed("validation") {
 							body["validation"] = jsonOrString(fValidation)
 						}
@@ -6776,6 +7095,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
 				cmd.Flags().StringVar(&fName, "name", "", "The property name (lowercase kebab)")
 				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fNamespace, "namespace", "", "The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows")
 				cmd.Flags().StringVar(&fValidation, "validation", "", "A JSON Schema fragment constraining the value")
 				return cmd
 			}()
@@ -6790,7 +7110,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass property-type delete <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/property-types/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "property-types", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/property-types/%s/%s", ns0, key0)
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -6807,7 +7131,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass property-type get <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/property-types/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "property-types", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/property-types/%s/%s", ns0, key0)
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -6842,7 +7170,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass property-type setRetention <name> --days <json>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/property-types/%s:setRetention", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "property-types", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/property-types/%s/%s:setRetention", ns0, key0)
 						body := map[string]any{}
 						if cmd.Flags().Changed("days") {
 							body["days"] = jsonOrString(fDays)
@@ -6869,7 +7201,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass property-type update <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/property-types/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "property-types", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/property-types/%s/%s", ns0, key0)
 						body := map[string]any{}
 						if cmd.Flags().Changed("description") {
 							body["description"] = fDescription
@@ -7285,6 +7621,7 @@ func generatedCommands() []*cobra.Command {
 				var fColor string
 				var fLabel string
 				var fName string
+				var fNamespace string
 				var fRank int
 				cmd := &cobra.Command{
 					Use:     "create",
@@ -7304,6 +7641,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
 						}
+						if cmd.Flags().Changed("namespace") {
+							body["namespace"] = fNamespace
+						}
 						if cmd.Flags().Changed("rank") {
 							body["rank"] = fRank
 						}
@@ -7315,6 +7655,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
 				cmd.Flags().StringVar(&fName, "name", "", "The level's name (lowercase kebab)")
 				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fNamespace, "namespace", "", "The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows")
 				cmd.Flags().IntVar(&fRank, "rank", 0, "Its position among the levels: higher is more severe; unique")
 				_ = cmd.MarkFlagRequired("rank")
 				return cmd
@@ -7330,7 +7671,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass severity-level delete <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/severity-levels/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "severity-levels", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/severity-levels/%s/%s", ns0, key0)
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -7347,7 +7692,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass severity-level get <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/severity-levels/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "severity-levels", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/severity-levels/%s/%s", ns0, key0)
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -7385,7 +7734,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass severity-level update <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/severity-levels/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "severity-levels", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/severity-levels/%s/%s", ns0, key0)
 						body := map[string]any{}
 						if cmd.Flags().Changed("color") {
 							body["color"] = fColor
@@ -7554,6 +7907,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := func() *cobra.Command {
 				var fLabel string
 				var fName string
+				var fNamespace string
 				var fParentStandardId string
 				cmd := &cobra.Command{
 					Use:     "create",
@@ -7570,6 +7924,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
 						}
+						if cmd.Flags().Changed("namespace") {
+							body["namespace"] = fNamespace
+						}
 						if cmd.Flags().Changed("parent-standard-id") {
 							body["parent_standard_id"] = fParentStandardId
 						}
@@ -7580,6 +7937,7 @@ func generatedCommands() []*cobra.Command {
 				_ = cmd.MarkFlagRequired("label")
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name; renameable")
 				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fNamespace, "namespace", "", "The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows")
 				cmd.Flags().StringVar(&fParentStandardId, "parent-standard-id", "", "A standard this one is a variant of, by handle or uuid")
 				return cmd
 			}()
@@ -7633,7 +7991,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass standard delete meeting-room",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/standards/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "standards", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/standards/%s/%s", ns0, key0)
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -7650,7 +8012,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass standard get meeting-room",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/standards/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "standards", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/standards/%s/%s", ns0, key0)
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -7689,7 +8055,15 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass standard metric delete meeting-room <metric>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/standards/%s/metrics/%s", pathSegment(args[0]), pathSegment(args[1]))
+							ns0, key0, err := catalogAddress(cmd, "standards", args[0])
+							if err != nil {
+								return err
+							}
+							ns1, key1, err := catalogAddress(cmd, "metric-types", args[1])
+							if err != nil {
+								return err
+							}
+							path := fmt.Sprintf("/api/v1/standards/%s/%s/metrics/%s/%s", ns0, key0, ns1, key1)
 							return runAPICommand(cmd, "DELETE", path, nil)
 						},
 					}
@@ -7706,7 +8080,11 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass standard metric list meeting-room",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/standards/%s/metrics", pathSegment(args[0]))
+							ns0, key0, err := catalogAddress(cmd, "standards", args[0])
+							if err != nil {
+								return err
+							}
+							path := fmt.Sprintf("/api/v1/standards/%s/%s/metrics", ns0, key0)
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -7725,7 +8103,15 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass standard metric update meeting-room <metric>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/standards/%s/metrics/%s", pathSegment(args[0]), pathSegment(args[1]))
+							ns0, key0, err := catalogAddress(cmd, "standards", args[0])
+							if err != nil {
+								return err
+							}
+							ns1, key1, err := catalogAddress(cmd, "metric-types", args[1])
+							if err != nil {
+								return err
+							}
+							path := fmt.Sprintf("/api/v1/standards/%s/%s/metrics/%s/%s", ns0, key0, ns1, key1)
 							body := map[string]any{}
 							if cmd.Flags().Changed("default-value") {
 								body["default_value"] = jsonOrString(fDefaultValue)
@@ -7758,7 +8144,15 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass standard property delete meeting-room <property>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/standards/%s/properties/%s", pathSegment(args[0]), pathSegment(args[1]))
+							ns0, key0, err := catalogAddress(cmd, "standards", args[0])
+							if err != nil {
+								return err
+							}
+							ns1, key1, err := catalogAddress(cmd, "property-types", args[1])
+							if err != nil {
+								return err
+							}
+							path := fmt.Sprintf("/api/v1/standards/%s/%s/properties/%s/%s", ns0, key0, ns1, key1)
 							return runAPICommand(cmd, "DELETE", path, nil)
 						},
 					}
@@ -7775,7 +8169,11 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass standard property list meeting-room",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/standards/%s/properties", pathSegment(args[0]))
+							ns0, key0, err := catalogAddress(cmd, "standards", args[0])
+							if err != nil {
+								return err
+							}
+							path := fmt.Sprintf("/api/v1/standards/%s/%s/properties", ns0, key0)
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -7794,7 +8192,15 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass standard property update meeting-room <property>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/standards/%s/properties/%s", pathSegment(args[0]), pathSegment(args[1]))
+							ns0, key0, err := catalogAddress(cmd, "standards", args[0])
+							if err != nil {
+								return err
+							}
+							ns1, key1, err := catalogAddress(cmd, "property-types", args[1])
+							if err != nil {
+								return err
+							}
+							path := fmt.Sprintf("/api/v1/standards/%s/%s/properties/%s/%s", ns0, key0, ns1, key1)
 							body := map[string]any{}
 							if cmd.Flags().Changed("default-value") {
 								body["default_value"] = jsonOrString(fDefaultValue)
@@ -7823,7 +8229,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass standard rename <id> --name name",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/standards/%s:rename", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "standards", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/standards/%s/%s:rename", ns0, key0)
 						body := map[string]any{}
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
@@ -7851,7 +8261,11 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass standard slot delete meeting-room <slot>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/standards/%s/slots/%s", pathSegment(args[0]), pathSegment(args[1]))
+							ns0, key0, err := catalogAddress(cmd, "standards", args[0])
+							if err != nil {
+								return err
+							}
+							path := fmt.Sprintf("/api/v1/standards/%s/%s/slots/%s", ns0, key0, pathSegment(args[1]))
 							return runAPICommand(cmd, "DELETE", path, nil)
 						},
 					}
@@ -7868,7 +8282,11 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass standard slot list meeting-room",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/standards/%s/slots", pathSegment(args[0]))
+							ns0, key0, err := catalogAddress(cmd, "standards", args[0])
+							if err != nil {
+								return err
+							}
+							path := fmt.Sprintf("/api/v1/standards/%s/%s/slots", ns0, key0)
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -7894,7 +8312,11 @@ func generatedCommands() []*cobra.Command {
 						Example: "  omniglass standard slot update meeting-room <slot>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/standards/%s/slots/%s", pathSegment(args[0]), pathSegment(args[1]))
+							ns0, key0, err := catalogAddress(cmd, "standards", args[0])
+							if err != nil {
+								return err
+							}
+							path := fmt.Sprintf("/api/v1/standards/%s/%s/slots/%s", ns0, key0, pathSegment(args[1]))
 							body := map[string]any{}
 							if cmd.Flags().Changed("accepted-types") {
 								body["accepted_types"] = jsonOrString(fAcceptedTypes)
@@ -7953,7 +8375,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass standard update meeting-room",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/standards/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "standards", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/standards/%s/%s", ns0, key0)
 						body := map[string]any{}
 						if cmd.Flags().Changed("label") {
 							body["label"] = fLabel
@@ -9021,6 +9447,7 @@ func generatedCommands() []*cobra.Command {
 				var fLabel string
 				var fLabelRule string
 				var fName string
+				var fNamespace string
 				var fParentId string
 				var fStem string
 				cmd := &cobra.Command{
@@ -9047,6 +9474,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
 						}
+						if cmd.Flags().Changed("namespace") {
+							body["namespace"] = fNamespace
+						}
 						if cmd.Flags().Changed("parent-id") {
 							body["parent_id"] = fParentId
 						}
@@ -9063,6 +9493,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "The label rule systems of this type get, a Go text/template over the system data map; omit to inherit the nearest ancestor's. Refused (422) if it does not compile")
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name")
 				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fNamespace, "namespace", "", "The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows")
 				cmd.Flags().StringVar(&fParentId, "parent-id", "", "The parent system_type, by name or uuid; omit for a root type")
 				cmd.Flags().StringVar(&fStem, "stem", "", "The prefix a generated system name is built from; omit to inherit the parent's. Lowercase letters, digits, and hyphens. Required for a root type, which has no ancestor to inherit one from.")
 				return cmd
@@ -9078,7 +9509,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass system-type delete av",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/system-types/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "system-types", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/system-types/%s/%s", ns0, key0)
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -9117,7 +9552,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass system-type update av",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/system-types/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "system-types", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/system-types/%s/%s", ns0, key0)
 						body := map[string]any{}
 						if cmd.Flags().Changed("abbrev") {
 							body["abbrev"] = fAbbrev
@@ -10475,6 +10914,7 @@ func generatedCommands() []*cobra.Command {
 				var fKind string
 				var fLabel string
 				var fName string
+				var fNamespace string
 				var fSupportPhone string
 				var fWebsite string
 				cmd := &cobra.Command{
@@ -10498,6 +10938,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
 						}
+						if cmd.Flags().Changed("namespace") {
+							body["namespace"] = fNamespace
+						}
 						if cmd.Flags().Changed("support-phone") {
 							body["support_phone"] = fSupportPhone
 						}
@@ -10513,6 +10956,7 @@ func generatedCommands() []*cobra.Command {
 				_ = cmd.MarkFlagRequired("label")
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name; renameable")
 				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fNamespace, "namespace", "", "The namespace the new row lives in. Absent or local lands it in local, the operator's; og is refused (422), since only the boot seed writes the platform's rows")
 				cmd.Flags().StringVar(&fSupportPhone, "support-phone", "", "The vendor's support line")
 				cmd.Flags().StringVar(&fWebsite, "website", "", "The vendor's website (http or https)")
 				return cmd
@@ -10528,7 +10972,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass vendor delete boreal",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/vendors/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "vendors", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/vendors/%s/%s", ns0, key0)
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -10545,7 +10993,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass vendor get boreal",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/vendors/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "vendors", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/vendors/%s/%s", ns0, key0)
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -10580,7 +11032,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass vendor rename <id> --name name",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/vendors/%s:rename", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "vendors", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/vendors/%s/%s:rename", ns0, key0)
 						body := map[string]any{}
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
@@ -10608,7 +11064,11 @@ func generatedCommands() []*cobra.Command {
 					Example: "  omniglass vendor update boreal",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/vendors/%s", pathSegment(args[0]))
+						ns0, key0, err := catalogAddress(cmd, "vendors", args[0])
+						if err != nil {
+							return err
+						}
+						path := fmt.Sprintf("/api/v1/vendors/%s/%s", ns0, key0)
 						body := map[string]any{}
 						if cmd.Flags().Changed("icon") {
 							body["icon"] = fIcon

@@ -20,6 +20,7 @@ type metricTypeBody struct {
 	Description   string          `json:"description,omitempty"`
 	Unit          *string         `json:"unit,omitempty" doc:"The display unit of the series (ms, dB, percent)"`
 	Precision     *int            `json:"precision,omitempty" doc:"Decimal places a rendered value keeps"`
+	Namespace     string          `json:"namespace" doc:"The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"`
 	Official      bool            `json:"official"`
 	RetentionDays *int            `json:"retention_days,omitempty" required:"false" doc:"The type's own retention window in days, overriding its lane's; absent when the lane's applies (#417)"`
 	WrittenBy     *calcWriterBody `json:"written_by,omitempty" required:"false" doc:"The calc rule that writes this metric, absent when none does (one enabled rule writes a key; a disabled writer is named when no rule is enabled)"`
@@ -42,7 +43,7 @@ func toCalcWriterBody(w *storage.CalcWriter) *calcWriterBody {
 func toMetricTypeBody(mt *storage.MetricType) metricTypeBody {
 	return metricTypeBody{
 		ID: mt.ID, Name: mt.Name, DataType: mt.DataType, Label: mt.Label,
-		Description: mt.Description, Unit: mt.Unit, Precision: mt.Precision, Official: mt.Official,
+		Description: mt.Description, Unit: mt.Unit, Precision: mt.Precision, Official: mt.Official, Namespace: catalogNamespaceOf(mt.Official),
 		RetentionDays: mt.RetentionDays,
 		WrittenBy:     toCalcWriterBody(mt.WrittenBy), WriterClass: string(mt.WriterClass),
 	}
@@ -60,6 +61,7 @@ type metricTypeOutput struct {
 
 type createMetricTypeInput struct {
 	Body struct {
+		CatalogCreateNamespace
 		Name        string  `json:"name" minLength:"1" doc:"The metric type name (lowercase kebab)"`
 		DataType    string  `json:"data_type" enum:"int,float" doc:"The value type; a metric is always a number"`
 		Label       string  `json:"label,omitempty" doc:"A human label"`
@@ -125,7 +127,7 @@ func registerMetricTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-metric-type",
 		Method:      http.MethodGet,
-		Path:        "/metric-types/{name}",
+		Path:        "/metric-types/{namespace}/{name}",
 		Summary:     "Get a metric type",
 		Description: "Returns one metric type by name. Gated by metric_type:read.",
 	}, "metric_type", "read"), func(ctx context.Context, in *metricTypeNameInput) (*metricTypeOutput, error) {
@@ -161,7 +163,7 @@ func registerMetricTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "update-metric-type",
 		Method:      http.MethodPatch,
-		Path:        "/metric-types/{name}",
+		Path:        "/metric-types/{namespace}/{name}",
 		Summary:     "Update a metric type",
 		Description: "Patches a custom metric type's label, description, unit, or precision. Partial by default: the fields present in the body change and the rest are left alone. precision is a nullable integer with no empty value, so it clears by being named in update_mask with no value in the body; label, description and unit clear with an explicit empty string. A mask naming a field this resource does not patch is a 422. Data type is fixed at creation. Official metric types are read-only. Gated by metric_type:update.",
 	}, "metric_type", "update"), func(ctx context.Context, in *updateMetricTypeInput) (*metricTypeOutput, error) {
@@ -186,7 +188,7 @@ func registerMetricTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway
 	huma.Register(api, a.platformGated(a.gated(huma.Operation{
 		OperationID: "set-metric-type-retention",
 		Method:      http.MethodPost,
-		Path:        "/metric-types/{name}:setRetention",
+		Path:        "/metric-types/{namespace}/{name}:setRetention",
 		Summary:     "Set a metric type's retention window",
 		Description: "Sets how many days this type's samples are kept, overriding the metric lane's window (retention.metric_days), or with null returns it to the lane's. Works on an official type: a shipped type's definition is read-only, but how long an install keeps its samples is the install's, and the boot seed never resets it. A command's intended values are never removed; a series with no sample inside the window reads as no reading within retention (ADR-1275). 1 to 36,500 days. Audited as set_retention. Gated by metric_type:update and platform:update.",
 	}, "metric_type", "update"), "update"), func(ctx context.Context, in *setMetricTypeRetentionInput) (*metricTypeOutput, error) {
@@ -205,7 +207,7 @@ func registerMetricTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-metric-type",
 		Method:        http.MethodDelete,
-		Path:          "/metric-types/{name}",
+		Path:          "/metric-types/{namespace}/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a metric type",
 		Description:   "Removes a custom metric type by name. Official metric types are read-only. A metric type a calc rule writes is a 409 naming the rule. Gated by metric_type:delete.",

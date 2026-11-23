@@ -63,9 +63,9 @@ summary: "`system_type` is promoted to **`standard`**, the blueprint a system co
     `product`, `interface_type`, `secret_type`) and `role` stay on that same authoritative path for now.
 
   Four route groups carry the contracts and the values, all regenerated into the OpenAPI document, the cobra
-  CLI, and the typed client: `GET /standards/{id}/properties` plus
-  `PUT` / `DELETE /standards/{id}/properties/{property}` (gated `standard:read` / `:update` / `:delete`);
-  `GET /location-types/{id}/properties` plus `PUT` / `DELETE .../{property}` (gated `type:*`, since the
+  CLI, and the typed client: `GET /standards/{namespace}/{id}/properties` plus
+  `PUT` / `DELETE /standards/{namespace}/{id}/properties/{property_namespace}/{property}` (gated `standard:read` / `:update` / `:delete`);
+  `GET /location-types/{namespace}/{id}/properties` plus `PUT` / `DELETE .../{property}` (gated `type:*`, since the
   location type registry is still a `type` registry); and the value sides
   `GET /systems/{name}/properties` plus `PUT` / `DELETE .../{property}` (gated `system:read` / `:update`) and
   the same for `/locations/{name}/properties` (gated `location:read` / `:update`). The value routes are

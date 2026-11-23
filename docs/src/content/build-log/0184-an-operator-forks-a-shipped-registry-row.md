@@ -12,7 +12,7 @@ form: bullet
   `ErrTypeOfficial` for any patch to a shipped row. Correct as far as it went, and it left an operator
   nowhere to go. An edit now **forks**: the operator's version of the row lands in `registry_shadow`,
   reads resolve it over the official row, the official row is never written, and restore
-  (`POST /component-types/{id}:restore`) discards the fork so later releases reach the row again.
+  (`POST /component-types/{namespace}/{id}:restore`) discards the fork so later releases reach the row again.
 
   The key was the decision worth the time, because twelve more registries copy whatever shape this
   slice picks. A `namespace` column with the unique relaxed to `(namespace, name)` was rejected on

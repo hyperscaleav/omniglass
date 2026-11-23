@@ -255,7 +255,7 @@ func registerStandardSlotRoutes(api huma.API, a *authenticator, gw storage.Gatew
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-standard-slots",
 		Method:      http.MethodGet,
-		Path:        "/standards/{id}/slots",
+		Path:        "/standards/{namespace}/{id}/slots",
 		Summary:     "List a standard's declared slots",
 		Description: "Lists the slots this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the component_types (accepted_types) and, if pinned, the products a filling component must match. An unknown standard is a 404, never an empty list. Gated by standard:read.",
 	}, "standard", "read"), func(ctx context.Context, in *standardPathInput) (*listStandardSlotsOutput, error) {
@@ -277,7 +277,7 @@ func registerStandardSlotRoutes(api huma.API, a *authenticator, gw storage.Gatew
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "set-standard-slot",
 		Method:      http.MethodPatch,
-		Path:        "/standards/{id}/slots/{slot}",
+		Path:        "/standards/{namespace}/{id}/slots/{slot}",
 		Summary:     "Declare a slot on a standard",
 		Description: "Declares a slot every conforming system needs filled, or revises it in place (the slot is addressed by name, so the write is idempotent and declaring is this same route). Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and [\"*\"] replaces the whole declaration. An unknown standard, type, or product is a 422, as is a mask naming a field this resource does not patch. A name a conforming system already declares itself is a 409, since a slot name must mean one slot in a system, and so is a capacity below what a conforming system already holds; either names the conflicting system only if the caller may read it. Gated by standard:update.",
 	}, "standard", "update"), func(ctx context.Context, in *setStandardSlotInput) (*systemSlotOutput, error) {
@@ -299,7 +299,7 @@ func registerStandardSlotRoutes(api huma.API, a *authenticator, gw storage.Gatew
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-standard-slot",
 		Method:        http.MethodDelete,
-		Path:          "/standards/{id}/slots/{slot}",
+		Path:          "/standards/{namespace}/{id}/slots/{slot}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Withdraw a slot from a standard",
 		Description:   "Removes the slot from the standard, and with it every assignment conforming systems made to it. A slot the standard does not declare is a 404. Gated by standard:delete.",

@@ -73,7 +73,7 @@ func registerLocationTypePropertyRoutes(api huma.API, a *authenticator, gw stora
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-location-type-properties",
 		Method:      http.MethodGet,
-		Path:        "/location-types/{id}/properties",
+		Path:        "/location-types/{namespace}/{id}/properties",
 		Summary:     "List a location type's declared properties",
 		Description: "Lists the location type's declared-property contract (what every location of the type exposes), ordered by property name, each with its optional default and required flag. Gated by location_type:read.",
 	}, "location_type", "read"), func(ctx context.Context, in *locationTypePathInput) (*listLocationTypePropertiesOutput, error) {
@@ -92,7 +92,7 @@ func registerLocationTypePropertyRoutes(api huma.API, a *authenticator, gw stora
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "set-location-type-property",
 		Method:      http.MethodPut,
-		Path:        "/location-types/{id}/properties/{property}",
+		Path:        "/location-types/{namespace}/{id}/properties/{property_namespace}/{property}",
 		Summary:     "Declare a property on a location type",
 		Description: "Declares a catalog property on a location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). A shipped (official) type's contract is writable too: a contract line is a row in its own table and nothing seeds one, so every line is an operator's. An unknown type is a 404 and a property the catalog does not know is a 422, as is a default its property type refuses. Gated by location_type:update.",
 	}, "location_type", "update"), func(ctx context.Context, in *setLocationTypePropertyInput) (*locationTypePropertyOutput, error) {
@@ -114,7 +114,7 @@ func registerLocationTypePropertyRoutes(api huma.API, a *authenticator, gw stora
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-location-type-property",
 		Method:        http.MethodDelete,
-		Path:          "/location-types/{id}/properties/{property}",
+		Path:          "/location-types/{namespace}/{id}/properties/{property_namespace}/{property}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Withdraw a property from a location type",
 		Description:   "Removes one line from a location type's contract, a shipped (official) type's included, since nothing seeds a contract line; locations of the type keep any value they set for it, now off-contract. A property the type does not declare is a 404, and so is an unknown type. Gated by location_type:delete.",

@@ -36,7 +36,7 @@ func TestAViewerSubscribesThemselvesToWhatTheyCanSee(t *testing.T) {
 	if list := string(p.c.do(p.owner, http.MethodGet, "/action-rules", nil, http.StatusOK)); strings.Contains(list, "my-displays") {
 		t.Fatalf("the platform list shows a personal rule: %s", list)
 	}
-	p.c.do(p.owner, http.MethodGet, "/action-rules/"+bobs.ID, nil, http.StatusNotFound)
+	p.c.do(p.owner, http.MethodGet, "/action-rules/local/"+bobs.ID, nil, http.StatusNotFound)
 
 	p.c.do(p.owner, http.MethodPost, "/components/display-1/alarms", map[string]any{"severity": "high", "message": "no video"}, http.StatusCreated)
 	p.c.do(p.owner, http.MethodPost, "/components/display-2/alarms", map[string]any{"severity": "high", "message": "no audio"}, http.StatusCreated)
@@ -76,14 +76,14 @@ func TestAMemberOptsOutOfAGroupPageOnlyWhereAllowed(t *testing.T) {
 		"user_group": "on-call", "channels": []string{"inbox"}}, http.StatusCreated)
 	p.c.do(p.owner, http.MethodPost, "/action-rules", map[string]any{"name": "page-on-call", "on": []string{"raised"},
 		"targets": []string{"on-call-page"}}, http.StatusCreated)
-	p.c.do(p.toks["alice"], http.MethodPost, "/action-rules/page-on-call:optOut", nil, http.StatusConflict)
-	p.c.do(p.owner, http.MethodPatch, "/action-rules/page-on-call", map[string]any{"opt_out_allowed": true}, http.StatusOK)
-	p.c.do(p.toks["alice"], http.MethodPost, "/action-rules/page-on-call:optOut", nil, http.StatusOK)
+	p.c.do(p.toks["alice"], http.MethodPost, "/action-rules/local/page-on-call:optOut", nil, http.StatusConflict)
+	p.c.do(p.owner, http.MethodPatch, "/action-rules/local/page-on-call", map[string]any{"opt_out_allowed": true}, http.StatusOK)
+	p.c.do(p.toks["alice"], http.MethodPost, "/action-rules/local/page-on-call:optOut", nil, http.StatusOK)
 	p.c.do(p.owner, http.MethodPost, "/components/display-1/alarms", map[string]any{"severity": "high", "message": "no video"}, http.StatusCreated)
 	if a, b := p.inbox("alice"), p.inbox("bob"); len(a.Notifications) != 0 || len(b.Notifications) != 1 {
 		t.Fatalf("with alice opted out: alice %d, bob %d; want 0 and 1", len(a.Notifications), len(b.Notifications))
 	}
-	p.c.do(p.toks["alice"], http.MethodPost, "/action-rules/page-on-call:optIn", nil, http.StatusOK)
+	p.c.do(p.toks["alice"], http.MethodPost, "/action-rules/local/page-on-call:optIn", nil, http.StatusOK)
 	p.c.do(p.owner, http.MethodPost, "/components/display-2/alarms", map[string]any{"severity": "high", "message": "no audio"}, http.StatusCreated)
 	if a := p.inbox("alice"); len(a.Notifications) != 1 {
 		t.Fatalf("after opting back in alice has %d, want 1", len(a.Notifications))

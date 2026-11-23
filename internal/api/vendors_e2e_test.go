@@ -77,9 +77,9 @@ func TestVendorsAPI(t *testing.T) {
 		map[string]any{"name": "acme", "label": "Dup"}, http.StatusConflict)
 
 	// The custom row is fully mutable.
-	c.do(ownerTok, http.MethodPatch, "/vendors/acme",
+	c.do(ownerTok, http.MethodPatch, "/vendors/local/acme",
 		map[string]any{"label": "Acme Corp"}, http.StatusOK)
-	c.do(ownerTok, http.MethodGet, "/vendors/acme", nil, http.StatusOK)
+	c.do(ownerTok, http.MethodGet, "/vendors/local/acme", nil, http.StatusOK)
 
 	// A non-http(s) website scheme is refused server-side (defense-in-depth
 	// against a stored javascript:/data: href reaching a non-browser caller
@@ -89,21 +89,21 @@ func TestVendorsAPI(t *testing.T) {
 		map[string]any{"name": "evil", "label": "Evil", "website": "javascript:alert(1)"}, http.StatusUnprocessableEntity)
 	c.do(ownerTok, http.MethodPost, "/vendors",
 		map[string]any{"name": "acme2", "label": "Acme 2", "website": "https://acme.example"}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPatch, "/vendors/acme",
+	c.do(ownerTok, http.MethodPatch, "/vendors/local/acme",
 		map[string]any{"website": "javascript:alert(1)"}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodPatch, "/vendors/acme",
+	c.do(ownerTok, http.MethodPatch, "/vendors/local/acme",
 		map[string]any{"website": "https://acme.example"}, http.StatusOK)
-	c.do(ownerTok, http.MethodDelete, "/vendors/acme2", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/vendors/local/acme2", nil, http.StatusNoContent)
 
 	// The seeded official row (boreal) is read-only: 422 on patch and delete.
-	c.do(ownerTok, http.MethodPatch, "/vendors/boreal",
+	c.do(ownerTok, http.MethodPatch, "/vendors/og/boreal",
 		map[string]any{"label": "X"}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodDelete, "/vendors/boreal", nil, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodDelete, "/vendors/og/boreal", nil, http.StatusUnprocessableEntity)
 
 	// Admin deletes the custom row.
-	c.do(ownerTok, http.MethodDelete, "/vendors/acme", nil, http.StatusNoContent)
-	c.do(ownerTok, http.MethodGet, "/vendors/acme", nil, http.StatusNotFound)
+	c.do(ownerTok, http.MethodDelete, "/vendors/local/acme", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodGet, "/vendors/local/acme", nil, http.StatusNotFound)
 
 	// Unknown id is a 404.
-	c.do(ownerTok, http.MethodDelete, "/vendors/nope", nil, http.StatusNotFound)
+	c.do(ownerTok, http.MethodDelete, "/vendors/local/nope", nil, http.StatusNotFound)
 }

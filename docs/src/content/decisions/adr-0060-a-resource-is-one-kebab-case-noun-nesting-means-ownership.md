@@ -8,9 +8,9 @@ summary: "A resource is one kebab-case noun; nesting means ownership"
 - **Date:** 2026-07-22 | **Status:** Accepted | **Pages:** [api-first](/contributing/api-first/), [API](/architecture/api/), [types](/guides/admin/types/)
 - **Decision:** a resource is addressed by **one kebab-case noun**, and a nested path segment means the
   nested thing is **owned** by it. The `/types` umbrella is retired: `GET/POST /location-types`,
-  `PATCH/DELETE /location-types/{id}`, `GET /secret-types`.
+  `PATCH/DELETE /location-types/{namespace}/{id}`, `GET /secret-types`.
 - **Context:** the location type registry was addressed **two ways**. Its CRUD lived under
-  `/types/location` while its property contract lived on a flat `/location-types/{id}/properties`, so
+  `/types/location` while its property contract lived on a flat `/location-types/{namespace}/{id}/properties`, so
   one entity had two command groups (`type location update` and `location-type property list`) and an
   operator had to know both. `/types/secret` had no flat form at all.
 - **The umbrella misused nesting.** A nested segment says the child belongs to the parent

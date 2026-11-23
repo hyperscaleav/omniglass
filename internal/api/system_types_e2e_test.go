@@ -146,23 +146,23 @@ func TestSystemTypesAPI(t *testing.T) {
 	// A stem is a name prefix, so a bad slug is refused at the edge on both verbs.
 	c.do(ownerTok, http.MethodPost, "/system-types",
 		map[string]any{"name": "bad-stem", "label": "Bad Stem", "stem": "Bad Stem"}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodPatch, "/system-types/custom-room",
+	c.do(ownerTok, http.MethodPatch, "/system-types/local/custom-room",
 		map[string]any{"stem": "also bad"}, http.StatusUnprocessableEntity)
 
 	// The custom row is mutable; the shipped one is not, on either verb.
-	c.do(ownerTok, http.MethodPatch, "/system-types/custom-room",
+	c.do(ownerTok, http.MethodPatch, "/system-types/local/custom-room",
 		map[string]any{"label": "Custom Room Pro"}, http.StatusOK)
-	c.do(ownerTok, http.MethodPatch, "/system-types/collaboration",
+	c.do(ownerTok, http.MethodPatch, "/system-types/og/collaboration",
 		map[string]any{"label": "X"}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodDelete, "/system-types/collaboration", nil, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodDelete, "/system-types/og/collaboration", nil, http.StatusUnprocessableEntity)
 
 	// A custom row that still parents another is refused (409); its leaf is not.
 	c.do(ownerTok, http.MethodPost, "/system-types", map[string]any{
 		"name": "custom-room-leaf", "label": "Custom Room Leaf", "parent_id": "custom-room",
 	}, http.StatusCreated)
-	c.do(ownerTok, http.MethodDelete, "/system-types/custom-room", nil, http.StatusConflict)
-	c.do(ownerTok, http.MethodDelete, "/system-types/custom-room-leaf", nil, http.StatusNoContent)
-	c.do(ownerTok, http.MethodDelete, "/system-types/custom-room", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/system-types/local/custom-room", nil, http.StatusConflict)
+	c.do(ownerTok, http.MethodDelete, "/system-types/local/custom-room-leaf", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/system-types/local/custom-room", nil, http.StatusNoContent)
 }
 
 // TestSystemCarriesItsTypeAPI drives the classification from the system's side:
@@ -225,7 +225,7 @@ func TestSystemCarriesItsTypeAPI(t *testing.T) {
 	}
 
 	// A type that still classifies a system cannot be deleted.
-	c.do(ownerTok, http.MethodDelete, "/system-types/huddle", nil, http.StatusUnprocessableEntity) // official first
+	c.do(ownerTok, http.MethodDelete, "/system-types/og/huddle", nil, http.StatusUnprocessableEntity) // official first
 
 	cleared := decode(c.do(ownerTok, http.MethodPatch, "/systems/sct-api-room",
 		map[string]any{"system_type_id": ""}, http.StatusOK))
@@ -245,5 +245,5 @@ func TestSystemCarriesItsTypeAPI(t *testing.T) {
 	}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPatch, "/systems/sct-api-room",
 		map[string]any{"system_type_id": "sct-api-custom"}, http.StatusOK)
-	c.do(ownerTok, http.MethodDelete, "/system-types/sct-api-custom", nil, http.StatusConflict)
+	c.do(ownerTok, http.MethodDelete, "/system-types/local/sct-api-custom", nil, http.StatusConflict)
 }

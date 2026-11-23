@@ -87,16 +87,16 @@ func TestWriterClassOnTheWire(t *testing.T) {
 	ctx := context.Background()
 	_, c, tok := pushHarness(t, ctx)
 	for path, want := range map[string]string{
-		"/metric-types/tcp-connect-time":     "outpost-probe",
-		"/property-types/tcp-open":           "outpost-probe",
-		"/property-types/session-state":      "outpost-probe",
-		"/event-types/collection-failed":     "outpost-probe",
-		"/property-types/health":             "platform",
-		"/property-types/video-input":        "collected",
-		"/metric-types/uptime":               "collected",
-		"/event-types/call-started":          "collected",
-		"/event-types/command-issued":        "command-lifecycle",
-		"/property-types/endpoint-rejection": "outpost-probe",
+		"/metric-types/og/tcp-connect-time":     "outpost-probe",
+		"/property-types/og/tcp-open":           "outpost-probe",
+		"/property-types/og/session-state":      "outpost-probe",
+		"/event-types/og/collection-failed":     "outpost-probe",
+		"/property-types/og/health":             "platform",
+		"/property-types/og/video-input":        "collected",
+		"/metric-types/og/uptime":               "collected",
+		"/event-types/og/call-started":          "collected",
+		"/event-types/og/command-issued":        "command-lifecycle",
+		"/property-types/og/endpoint-rejection": "outpost-probe",
 	} {
 		var body struct {
 			WriterClass string `json:"writer_class"`

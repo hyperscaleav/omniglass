@@ -30,6 +30,7 @@ type systemTypeBody struct {
 	ResolvedIcon string  `json:"resolved_icon,omitempty" doc:"The glyph this type shows: its own icon, else the nearest ancestor's. Served on the catalog listing, where the whole chain is already in hand; a single-row write response does not carry it"`
 	Abbrev       string  `json:"abbrev,omitempty" doc:"A compact form of label; empty inherits the nearest ancestor's"`
 	LabelRule    string  `json:"label_rule,omitempty" doc:"The label rule systems of this type get; empty inherits the nearest ancestor's, then the global rule for systems"`
+	Namespace    string  `json:"namespace" doc:"The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"`
 	Official     bool    `json:"official"`
 	ParentID     *string `json:"parent_id,omitempty" doc:"The parent system_type's id, the canonical handle; absent for a root type"`
 	Parent       *string `json:"parent,omitempty" doc:"The parent system_type's name, for display; absent for a root type"`
@@ -48,7 +49,7 @@ func toSystemTypeBody(st *storage.SystemType, parentName *string) systemTypeBody
 	b := systemTypeBody{
 		ID: st.ID.String(), Name: st.Name, Label: st.Label,
 		Stem: derefStr(st.Stem), Icon: derefStr(st.Icon), Abbrev: derefStr(st.Abbrev), LabelRule: derefStr(st.LabelRule),
-		Official: st.Official,
+		Official: st.Official, Namespace: catalogNamespaceOf(st.Official),
 	}
 	if st.ParentID != nil {
 		pid := st.ParentID.String()
@@ -70,6 +71,7 @@ type systemTypePathInput struct {
 
 type createSystemTypeInput struct {
 	Body struct {
+		CatalogCreateNamespace
 		Name  string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The globally unique name"`
 		Label string `json:"label" minLength:"1" doc:"What an operator reads in pickers and lists"`
 		// A stem is a name prefix (#657's name rule mints it straight into a
@@ -206,7 +208,7 @@ func registerSystemTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "update-system-type",
 		Method:      http.MethodPatch,
-		Path:        "/system-types/{id}",
+		Path:        "/system-types/{namespace}/{id}",
 		Summary:     "Update a system type",
 		Description: "Patches a custom system_type's label, stem, icon, abbrev, or label_rule. An unparseable label_rule is a 422 at rule-edit time, never a broken row at create time, and setting one restamps nothing on its own: apply it with /systems:recomputeLabels after seeing the blast radius with :previewLabels. Official types are read-only (422). Gated by system_type:update.",
 	}, "system_type", "update"), func(ctx context.Context, in *updateSystemTypeInput) (*systemTypeOutput, error) {
@@ -229,7 +231,7 @@ func registerSystemTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-system-type",
 		Method:        http.MethodDelete,
-		Path:          "/system-types/{id}",
+		Path:          "/system-types/{namespace}/{id}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a system type",
 		Description:   "Deletes a custom system_type, refused if official (422), still a parent of another system_type (409), or still classifying a system (409). Gated by system_type:delete.",

@@ -422,7 +422,7 @@ var ErrPropertyValueInvalid = errors.New("storage: property value does not satis
 func checkDeclaredValue(ctx context.Context, q querier, propertyName string, value json.RawMessage) error {
 	var dataType string
 	var validation []byte
-	err := q.QueryRow(ctx, `select data_type, validation from property_type_in_effect() property_type where name = $1`, propertyName).Scan(&dataType, &validation)
+	err := q.QueryRow(ctx, `select data_type, validation from `+refRows("property_type", propertyName)+` property_type where `+catalogRefCol(propertyName)+` = $1`, propertyName).Scan(&dataType, &validation)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}

@@ -21,6 +21,7 @@ type propertyBody struct {
 	Label         string          `json:"label,omitempty"`
 	Description   string          `json:"description,omitempty"`
 	Validation    json.RawMessage `json:"validation,omitempty" doc:"A JSON Schema fragment constraining the value"`
+	Namespace     string          `json:"namespace" doc:"The namespace the row lives in: og for the platform's shipped rows, local for the operator's (ADR-0318). Its address is /<collection>/{namespace}/{name}"`
 	Official      bool            `json:"official"`
 	RetentionDays *int            `json:"retention_days,omitempty" required:"false" doc:"The type's own retention window in days, overriding its lane's; absent when the lane's applies (#417)"`
 	WrittenBy     *calcWriterBody `json:"written_by,omitempty" required:"false" doc:"The calc rule that writes this property, absent when none does (one enabled rule writes a key; a disabled writer is named when no rule is enabled)"`
@@ -31,7 +32,7 @@ func toPropertyBody(p *storage.PropertyType) propertyBody {
 	b := propertyBody{
 		ID: p.ID, Name: p.Name, DataType: p.DataType, Label: p.Label,
 		RetentionDays: p.RetentionDays,
-		Description:   p.Description, Official: p.Official, WrittenBy: toCalcWriterBody(p.WrittenBy),
+		Description:   p.Description, Official: p.Official, Namespace: catalogNamespaceOf(p.Official), WrittenBy: toCalcWriterBody(p.WrittenBy),
 		WriterClass: string(p.WriterClass),
 	}
 	if len(p.Validation) > 0 {
@@ -52,6 +53,7 @@ type propertyOutput struct {
 
 type createPropertyInput struct {
 	Body struct {
+		CatalogCreateNamespace
 		Name        string `json:"name" minLength:"1" doc:"The property name (lowercase kebab)"`
 		DataType    string `json:"data_type" enum:"string,bool,json" doc:"The value type; a numeric signal is a metric type"`
 		Label       string `json:"label,omitempty" doc:"A human label"`
@@ -106,7 +108,7 @@ func registerPropertyRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-property-type",
 		Method:      http.MethodGet,
-		Path:        "/property-types/{name}",
+		Path:        "/property-types/{namespace}/{name}",
 		Summary:     "Get a property",
 		Description: "Returns one property by name. Gated by property_type:read.",
 	}, "property_type", "read"), func(ctx context.Context, in *propertyNameInput) (*propertyOutput, error) {
@@ -145,7 +147,7 @@ func registerPropertyRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "update-property-type",
 		Method:      http.MethodPatch,
-		Path:        "/property-types/{name}",
+		Path:        "/property-types/{namespace}/{name}",
 		Summary:     "Update a property",
 		Description: "Patches a custom property's label, description, or validation. Partial by default: the fields present in the body change and the rest are left alone. validation is a nullable object with no empty value, so it clears by being named in update_mask with no value in the body; label and description clear with an explicit empty string. A mask naming a field this resource does not patch is a 422. Data type is fixed at creation. Official properties are read-only. Gated by property_type:update.",
 	}, "property_type", "update"), func(ctx context.Context, in *updatePropertyInput) (*propertyOutput, error) {
@@ -173,7 +175,7 @@ func registerPropertyRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "delete-property-type",
 		Method:        http.MethodDelete,
-		Path:          "/property-types/{name}",
+		Path:          "/property-types/{namespace}/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a property",
 		Description:   "Removes a custom property by name. Official properties are read-only. A property a calc rule writes is a 409 naming the rule, and one identity bindings use as their match key is a 409 counting them. Gated by property_type:delete.",
@@ -187,7 +189,7 @@ func registerPropertyRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 	huma.Register(api, a.platformGated(a.gated(huma.Operation{
 		OperationID: "set-property-type-retention",
 		Method:      http.MethodPost,
-		Path:        "/property-types/{name}:setRetention",
+		Path:        "/property-types/{namespace}/{name}:setRetention",
 		Summary:     "Set a property type's retention window",
 		Description: "Sets how many days this type's transitions are kept, overriding the property lane's window (retention.property_days), or with null returns it to the lane's. Works on an official type: a shipped type's definition is read-only, but how long an install keeps its samples is the install's, and the boot seed never resets it. The retention floor still holds: a declared value and a series' latest value are never removed. 1 to 36,500 days. Audited as set_retention. Gated by property_type:update and platform:update.",
 	}, "property_type", "update"), "update"), func(ctx context.Context, in *setPropertyTypeRetentionInput) (*propertyOutput, error) {

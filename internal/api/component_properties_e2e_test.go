@@ -76,7 +76,7 @@ func TestComponentPropertiesAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/products", map[string]any{
 		"name": "acme-display", "label": "Acme Display", "kind": "device", "component_type": "generic-device",
 	}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPut, "/products/acme-display/properties/serial-number",
+	c.do(ownerTok, http.MethodPut, "/products/local/acme-display/properties/og/serial-number",
 		map[string]any{"default_value": "SN-DEFAULT", "required": true}, http.StatusOK)
 	c.do(ownerTok, http.MethodPost, "/components", map[string]any{
 		"name": "disp-1", "product": "acme-display",

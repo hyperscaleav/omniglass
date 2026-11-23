@@ -21,7 +21,13 @@ import (
 // not break as the interface grows.
 type UnimplementedGateway struct{}
 
-func (UnimplementedGateway) Ping(context.Context) error                            { return nil }
+func (UnimplementedGateway) Ping(context.Context) error { return nil }
+
+// ResolveCatalogKey hands the key through, so a stub's handler sees what the
+// path carried.
+func (UnimplementedGateway) ResolveCatalogKey(_ context.Context, _, _, key string) (string, error) {
+	return key, nil
+}
 func (UnimplementedGateway) ReconcileReservedKeys(context.Context, []string) error { return nil }
 func (UnimplementedGateway) UpsertLabelRuleDefault(context.Context, string, string) error {
 	return nil

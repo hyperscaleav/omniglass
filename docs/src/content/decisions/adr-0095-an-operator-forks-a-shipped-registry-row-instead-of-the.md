@@ -11,7 +11,7 @@ summary: "An operator's edit of a shipped (`official: true`) registry row does n
   row. It writes a **shadow**: the operator's version of the row's mutable columns, stored in one
   registry-agnostic `registry_shadow` table keyed `(registry, row_id)` where `row_id` is the shipped
   row's **own uuid**. Every read resolves the shadow over the official row, and restore-to-defaults
-  (`POST /component-types/{id}:restore` for the first adopter) is deleting the shadow. The official row is neither updated nor
+  (`POST /component-types/{namespace}/{id}:restore` for the first adopter) is deleting the shadow. The official row is neither updated nor
   deleted by any operator action, so a release can improve it without stomping anyone, and a delete
   of a shipped row stays refused whether or not it is forked: a fork is an overlay, not ownership.
   `component_type` is the first adopter; the other registries carrying `official` adopt as their

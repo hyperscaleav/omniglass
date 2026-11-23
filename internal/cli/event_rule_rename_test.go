@@ -26,7 +26,7 @@ func TestEventRuleRenameCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("rename failed: %v (%s)", err, out)
 	}
-	if method != http.MethodPost || path != "/api/v1/event-rules/door-open:rename" || body["name"] != "door-held" {
-		t.Fatalf("the CLI sent %s %s %v, want POST /api/v1/event-rules/door-open:rename {name: door-held}", method, path, body)
+	if method != http.MethodPost || path != "/api/v1/event-rules/local/door-open:rename" || body["name"] != "door-held" {
+		t.Fatalf("the CLI sent %s %s %v, want POST /api/v1/event-rules/local/door-open:rename {name: door-held}", method, path, body)
 	}
 }
