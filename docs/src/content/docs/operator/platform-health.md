@@ -116,7 +116,6 @@ screenshots:
     mask:
       - "[data-testid=platform-version] >> xpath=ancestor::div[3]"
       - "[data-testid=platform-uptime] >> xpath=ancestor::div[3]"
-      - "[data-figure=checkin-age]"
       - "[data-testid=pipeline] [role=group] >> xpath=.."
       - "[data-testid=pipeline] ol >> xpath=.."
       - "[data-testid=pipeline-hop-detail] > div:nth-child(2)"

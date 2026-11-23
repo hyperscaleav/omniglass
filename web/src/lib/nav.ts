@@ -117,7 +117,7 @@ export const navItems: NavItem[] = [
       // The door, the top bar and the page heading all say "Platform health"
       // (#2446): one name, not the one-word "Status" the door wore before.
       { label: "Outposts", path: "/outposts", live: true, resource: "outpost", hint: "Collection daemons: their health, enrollment, and the collection tasks assigned to each." },
-      { label: PLATFORM_HEALTH_NAME, path: "/platform", live: true, resource: "outpost", hint: "Whether Omniglass itself is well: the build running, how long it has been up, and each outpost's check-in, schedule and command queue." },
+      { label: "Platform health", path: "/platform", live: true, resource: "outpost", hint: "Whether Omniglass itself is well: the build running, how long it has been up, and each outpost's check-in, schedule and command queue." },
       { label: "Settings", path: "/settings", live: true, hint: "Platform preferences resolved down the cascade: the theme, defaults, and keybindings, each with its provenance and lock state." },
     ],
   },
