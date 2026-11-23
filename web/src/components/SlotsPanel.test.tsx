@@ -10,6 +10,7 @@ import { uuidFor } from "../lib/testids";
 import { systemHealthKey, type FleetHealth } from "../lib/health";
 import { COMPONENT_TYPES_KEY } from "../lib/component_types";
 import { PRODUCTS_KEY } from "../lib/products";
+import { answerConfirms } from "../lib/confirm.testkit";
 
 // The panel resolves a system's slots: what its standard declares plus what the
 // system declares of its own, each with the typed-slot guard (#626) it enforces
@@ -301,7 +302,7 @@ describe("SlotsPanel", () => {
     });
 
     it("withdraws an ad hoc slot after confirmation with a DELETE", async () => {
-      vi.spyOn(window, "confirm").mockReturnValue(true);
+      answerConfirms(true);
       let del: Request | undefined;
       vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
         const req = input as Request;

@@ -26,6 +26,7 @@ import { ROOT_STEM_HINT, TYPE_PARENT_HINT, inheritedFact, catalogLock } from "..
 import { createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
+import { confirmDelete } from "../lib/confirm";
 
 // System Types (Catalog > Systems: Types): what a system is for
 // (ADR-0096). It classifies the SYSTEM (`system.system_type_id`) by what it
@@ -175,7 +176,7 @@ function SystemTypeBladeBody(p: { id: string }): JSX.Element {
   async function removeType() {
     const r = row();
     if (!r) return;
-    if (!confirm(`Delete system type "${r.name}"?`)) return;
+    if (!(await confirmDelete({ kind: "system type", name: r.name }))) return;
     setErr(null);
     try {
       await deleteSystemType(r.id);

@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import { Router, Route } from "@solidjs/router";
 import Profile from "./Profile";
 import { ME_KEY, type Me } from "../lib/auth";
+import { answerConfirms } from "../lib/confirm.testkit";
 
 // The Profile page is the signed-in operator's own account surface. Its avatar
 // section renders the current picture (fetched as base64 and wrapped in a data
@@ -108,7 +109,7 @@ describe("Profile bulk revoke", () => {
       }
       return new Response(JSON.stringify(meWith(false)), { status: 200, headers: { "Content-Type": "application/json" } });
     });
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    answerConfirms(true);
 
     mount(false);
     // With one (current) session there is nothing else to revoke, so only the tokens
