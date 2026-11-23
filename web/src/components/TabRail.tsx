@@ -11,9 +11,9 @@ import type { TabDef, TabState } from "../lib/tabstate";
 // `guard` is the host's leave guard (lib/leave_guard): switching to ANOTHER
 // facet asks it first, so unsaved Configure drafts are not dropped silently.
 //
-// `end` is a host-wide control the rail carries at its far end, outside the
-// tablist (the time range, #2304): it governs every facet's content, so it
-// sits on the rail rather than inside one facet.
+// `end` is a page-wide control the rail carries at its far end, outside the
+// tablist (the page's time range, #2304): it governs every facet's content,
+// so it sits on the rail rather than inside one facet.
 export default function TabRail(props: { tabs: TabDef[]; state: TabState; guard?: LeaveGuard; end?: JSX.Element }) {
   // Resolved once: reading props.end twice would build the control twice.
   const end = children(() => props.end);
@@ -33,8 +33,9 @@ export default function TabRail(props: { tabs: TabDef[]; state: TabState; guard?
                 "text-base-content/60 hover:text-base-content": props.state.active() !== t.key,
               }}
               onClick={() => {
-                if (t.key !== props.state.active() && props.guard && !props.guard.confirmLeave()) return;
-                props.state.select(t.key);
+                const leave = t.key === props.state.active() || !props.guard ? true : props.guard.confirmLeave();
+                if (leave === true) return props.state.select(t.key);
+                void leave.then((ok) => ok && props.state.select(t.key));
               }}
             >
               {t.label}

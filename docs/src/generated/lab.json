@@ -66,9 +66,23 @@
   ],
   "walkthroughs": [
     {
+      "id": "add-a-component",
+      "title": "Add a component",
+      "description": "Add a display to a system from the Simulation page, with a simulated device as its address, pick its credential, test it, and land on its collected values.",
+      "lab": [],
+      "setup": []
+    },
+    {
       "id": "add-a-dependency",
       "title": "Add and remove a dependency",
       "description": "Read what a video bar depends on and what depends on it, try an edge that would close a cycle and read the server's refusal, then add a real upstream and remove it again.",
+      "lab": [],
+      "setup": []
+    },
+    {
+      "id": "break-a-device-in-one-click",
+      "title": "Break a device in one click",
+      "description": "Unplug a simulated panel from its row's Break menu, watch the fault chip and the reachability alarm it causes, then clear the fault from the chip.",
       "lab": [],
       "setup": []
     },
@@ -82,9 +96,38 @@
       ]
     },
     {
+      "id": "delete-what-you-made",
+      "title": "Delete what you made",
+      "description": "Delete a component that still owns an endpoint, then the location that still holds a system, clearing each one's blockers from the same confirm dialog.",
+      "lab": [],
+      "setup": [
+        "omniglass location create --label 'Pop-up site' --location-type campus --name pop-up-site",
+        "omniglass system create --label 'Pop-up kiosk' --location pop-up-site --name pop-up-kiosk",
+        "omniglass component create --label 'Pop-up display' --location pop-up-site --name pop-up-display --product generic-device",
+        "omniglass endpoint create --component pop-up-display --transport icmp"
+      ]
+    },
+    {
       "id": "derive-a-value-with-a-calc-rule",
       "title": "Derive a value with a calc rule",
       "description": "Author a calc rule and the metric it writes in one drawer, write the expression that takes each component's slowest TCP connect time, preview and save it, and find the derived value on a component, linked to its rule.",
+      "lab": [],
+      "setup": []
+    },
+    {
+      "id": "find-a-cleared-alarm",
+      "title": "Find a cleared alarm and how long it lasted",
+      "description": "Clear an alarm from its component, then read it in the alarm page's Cleared filter with when it cleared and how long it was raised, and open its history.",
+      "lab": [],
+      "setup": [
+        "omniglass component create --label 'History demo display' --location bay-2 --name history-demo-display --product boreal-edge-55",
+        "omniglass component alarm create history-demo-display --dedup-key walkthrough-history-input --message 'History demo input lost' --severity high"
+      ]
+    },
+    {
+      "id": "find-a-device-from-the-keyboard",
+      "title": "Find a device from the keyboard",
+      "description": "Open the command palette with Ctrl-K, type part of a name, read which location each match sits under, narrow it to one device and press Enter to open it.",
       "lab": [],
       "setup": []
     },

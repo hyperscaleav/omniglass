@@ -24,6 +24,7 @@ import { isLifecycleDate } from "../lib/lifecycle";
 import { useMe, can } from "../lib/auth";
 import { BladeEditContext } from "../lib/blades";
 import { describeError } from "../lib/format";
+import { confirmAction } from "../lib/confirm";
 
 // ContractEditor is the classifier detail-blade panel for curating a declared
 // contract: which catalog signals every owner of the classifier exposes, and
@@ -305,7 +306,7 @@ export default function ContractEditor(props: {
   }
 
   async function withdraw(name: string) {
-    if (!confirm(copy().confirm(name))) return;
+    if (!(await confirmAction({ title: copy().confirm(name), confirmLabel: "Withdraw", tone: "danger" }))) return;
     setBusy(true);
     setErr(null);
     try {

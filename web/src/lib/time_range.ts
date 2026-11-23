@@ -137,12 +137,11 @@ export function useTimeRange(): { range: Accessor<TimeRange>; setRange: (r: Time
 }
 
 // useHostTimeRange is the range a detail body reads (#2425): a page's is the
-// address's (useTimeRange); a blade's opens on its page's range but is its
-// own signal, so a pick in a blade never rewrites the page beneath it, as a
-// blade's tab never does (lib/tabstate, ADR-2423).
+// address's (useTimeRange); a blade's is its own signal, opening on the
+// default, so the page's ?range= is not the blade's and a pick in a blade never
+// rewrites the page beneath it, as a blade's tab never does (lib/tabstate, ADR-2423).
 export function useHostTimeRange(host: "page" | "blade"): { range: Accessor<TimeRange>; setRange: (r: TimeRange) => void } {
-  const page = useTimeRange();
-  if (host === "page") return page;
-  const [range, setRange] = createSignal<TimeRange>(page.range(), { equals: (a, b) => JSON.stringify(a) === JSON.stringify(b) });
+  if (host === "page") return useTimeRange();
+  const [range, setRange] = createSignal<TimeRange>(DEFAULT_RANGE, { equals: (a, b) => JSON.stringify(a) === JSON.stringify(b) });
   return { range, setRange };
 }

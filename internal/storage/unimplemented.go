@@ -329,6 +329,9 @@ func (UnimplementedGateway) ResetComponentName(context.Context, string, string, 
 func (UnimplementedGateway) ComponentNameTaken(context.Context, string, *string, *string) (bool, error) {
 	return false, nil
 }
+func (UnimplementedGateway) DeleteBlockersOf(context.Context, string, string, func(string) scope.Set) (*DeleteBlockers, error) {
+	return &DeleteBlockers{}, nil
+}
 func (UnimplementedGateway) DeleteComponent(context.Context, string, string, scope.Set, scope.Set) error {
 	return nil
 }
@@ -1054,6 +1057,10 @@ func (UnimplementedGateway) LocationHealth(context.Context, string, HealthRange,
 
 func (UnimplementedGateway) FleetProjection(context.Context, scope.Set, scope.Set, scope.Set) (*FleetView, error) {
 	return nil, nil
+}
+
+func (UnimplementedGateway) SearchFleet(context.Context, string, int, scope.Set, scope.Set, scope.Set) (*FleetSearchResult, error) {
+	return &FleetSearchResult{}, nil
 }
 
 func (UnimplementedGateway) PlatformView(context.Context, scope.Set, scope.Set, scope.Set) (*PlatformView, error) {

@@ -26,6 +26,7 @@ import { uuidFor } from "../lib/testids";
 import { toLocalInput } from "../components/TimeRangePicker";
 import { seedSeverityLevels } from "../lib/testseverity";
 import type { EffectiveSlot } from "../lib/system_zoom";
+import { answerConfirms } from "../lib/confirm.testkit";
 
 // The system zoom's chrome (#636): one card per slot with the server's own
 // arithmetic, choices grouped with the active alternate marked and the losing
@@ -629,6 +630,16 @@ describe("the history tab (#792)", () => {
     expect(await within(tab).findByText("Fan speed high")).toBeTruthy();
   });
 
+  // #2426: a cleared alarm says how long it was raised, the same words the
+  // alarms page and a component's panel use.
+  it("says how long a cleared alarm outside every stretch was raised", async () => {
+    const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`);
+    seedAlarms(r.qc);
+    const tab = screen.getByTestId("history-tab");
+    const row = (await within(tab).findByText("Fan speed high")).closest("li")!;
+    expect(row.textContent).toContain("lasted 41m");
+  });
+
   it("Activity is always on the rail, with the timeline and raise markers", async () => {
     const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`);
     seedAlarms(r.qc);
@@ -1013,7 +1024,7 @@ describe("leaving Configure with unsaved drafts", () => {
   const overview = () => screen.getByRole("tab", { name: "Overview" });
 
   it("asks first, and confirming discards the drafts and leaves", async () => {
-    const ask = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const ask = answerConfirms(true);
     const { name } = await dirtyConfigure();
     fireEvent.input(name, { target: { value: "exec-boardroom" } });
     fireEvent.click(overview());
@@ -1023,7 +1034,7 @@ describe("leaving Configure with unsaved drafts", () => {
   });
 
   it("cancelling stays on Configure with the drafts intact", async () => {
-    const ask = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const ask = answerConfirms(false);
     const { name } = await dirtyConfigure();
     fireEvent.input(name, { target: { value: "exec-boardroom" } });
     fireEvent.click(overview());
@@ -1034,7 +1045,7 @@ describe("leaving Configure with unsaved drafts", () => {
   });
 
   it("does not ask when editing but nothing changed, or when not editing", async () => {
-    const ask = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const ask = answerConfirms(false);
     await dirtyConfigure();
     fireEvent.click(overview());
     await waitFor(() => expect(screen.queryByTestId("configure-face")).toBeNull());

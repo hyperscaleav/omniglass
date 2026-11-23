@@ -13,6 +13,7 @@ import {
   useRestoreAllDefaults,
 } from "../lib/settings";
 import { constraintFor, isList, isMap, listText, objectText, settingKeys, validateField, wireValue } from "../lib/settingsValidation";
+import { confirmAction } from "../lib/confirm";
 
 // Settings is the Admin platform-settings surface (issue #271). It resolves the
 // effective settings document from the cascade (the declared defaults, the operator
@@ -89,7 +90,7 @@ export default function Settings() {
   const [pageErr, setPageErr] = createSignal<string | null>(null);
 
   async function onRestoreAll() {
-    if (!window.confirm("Restore every platform setting to its default? This clears every console binding.")) return;
+    if (!(await confirmAction({ title: "Restore every platform setting to its default?", body: "This clears every console binding.", confirmLabel: "Restore defaults", tone: "danger" }))) return;
     setRestoringAll(true);
     setPageErr(null);
     const r = await restoreAll();
@@ -98,7 +99,7 @@ export default function Settings() {
   }
 
   async function onRestoreNamespace(namespace: string) {
-    if (!window.confirm(`Restore all "${namespace}" settings to their defaults?`)) return;
+    if (!(await confirmAction({ title: `Restore all "${namespace}" settings to their defaults?`, confirmLabel: "Restore defaults", tone: "danger" }))) return;
     setPageErr(null);
     const r = await restoreNamespace(namespace);
     if (!r.ok) setPageErr(r.message);

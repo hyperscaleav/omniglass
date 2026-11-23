@@ -8,6 +8,7 @@ import { PRODUCTS_KEY, type Product } from "../lib/products";
 import { ME_KEY, type Me } from "../lib/auth";
 import { BladeEditContext, createEditSlot } from "../lib/blades";
 import { uuidFor } from "../lib/testids";
+import { answerConfirms } from "../lib/confirm.testkit";
 
 // The editor curates the slots a standard declares: the slots every conforming
 // system needs filled, each with the typed-slot guard (#626) a filling
@@ -217,7 +218,7 @@ describe("SlotEditor on a standard", () => {
   });
 
   it("withdraws a slot after confirmation, calling DELETE", async () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const confirmSpy = answerConfirms(true);
     let del: Request | undefined;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;

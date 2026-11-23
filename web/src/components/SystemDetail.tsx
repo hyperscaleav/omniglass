@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal } from "solid-js";
+import { For, Show, createMemo, createSignal, onCleanup } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import HealthBadge from "./HealthBadge";
@@ -7,6 +7,7 @@ import Eyebrow from "./Eyebrow";
 import DetailGate from "./DetailGate";
 import LocationCard from "./LocationCard";
 import MemberRows from "./MemberRows";
+import AddComponentLink from "./AddComponentLink";
 import OutlineWorkspace from "./OutlineWorkspace";
 import { FLEET_VIEW_KEY, fleetView, childrenIndex } from "../lib/fleet";
 import { systemHealth, systemHealthKey, healthOf } from "../lib/health";
@@ -51,6 +52,7 @@ import { useBlades } from "../lib/blades";
 import { type DetailHost } from "../lib/tabstate";
 import { useEntityDelete } from "../lib/entity_delete";
 import { deleteSystem } from "../lib/systems";
+import { LOCATIONS_KEY, deleteLocation, listLocations } from "../lib/locations";
 
 import { CLOCK_TICK_MS, createClock } from "../lib/clock";
 
@@ -94,7 +96,6 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
   const qc = useQueryClient();
   const me = useMe();
   // Unsaved Configure drafts (the system's and its sole location's) the tab rail asks about.
-  const leave = createLeaveGuard();
   // Every age on the card reads one ticking clock: a poll that returns the
   // same report changes nothing a query can see, so an age pinned to the data
   // (or to the mount) would stop moving. The history and the charts read a
@@ -149,7 +150,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
     { key: "overview", label: "Overview" },
     { key: "activity", label: "Activity" },
     { key: "timeline", label: "Timeline" },
-    ...(can(me.data, "system", "update") ? [{ key: "configure", label: "Configure" }] : []),
+    ...(can(me.data, "system", "update") || can(me.data, "system", "delete") ? [{ key: "configure", label: "Configure" }] : []),
   ]);
   const tabState = createTabState(props.host, tabs, { legacy: { map: "overview", data: "overview", history: "activity", events: "activity", logs: "activity" } });
   const tab = tabState.active;
@@ -170,7 +171,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
   }));
   // The one time range (#2304), held in the address: the metrics grid and the
   // timeline read over it, and the picker on the tab rail writes it. A blade
-  // opens on its page's range and keeps its own.
+  // opens on the default and keeps its own.
   const { range: asked, setRange } = useHostTimeRange(props.host);
   // An absolute range reads through the views read, which needs view:read: a
   // shared link opened by a caller without it reads the default instead, and
@@ -269,6 +270,10 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
   // every member, alarm and map marker opens the component's blade on it
   // (ADR-0129's altitude rule), stacking wherever the body is.
   const blades = useBlades();
+  // Unsaved Configure drafts (the system's and its sole location's) the tab
+  // rail asks about; in a blade, closing or popping it asks too.
+  const leave = createLeaveGuard();
+  if (props.host === "blade") onCleanup(blades.guard({ kind: "system", id: props.id }, leave));
   const openComponent = (cid: string) => blades.push({ kind: "component", id: cid });
   const { destructive, err } = useEntityDelete({
     kindLabel: "system",
@@ -278,6 +283,26 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
     remove: (sid) => deleteSystem(sid),
     onDeleted: () => (props.host === "blade" ? blades.close() : navigate("/explore")),
     invalidate: () => Promise.all([qc.invalidateQueries({ queryKey: [...SYSTEMS_KEY] }), qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] })]),
+  });
+  // A sole system's location has no page of its own (its address lands
+  // here), so its section below carries the location's own Delete (#2463).
+  const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
+  const locationRow = () => (locations.data ?? []).find((l) => l.id === locationId());
+  const locationDelete = useEntityDelete({
+    kindLabel: "location",
+    get id() {
+      return locationId() ?? "";
+    },
+    name: () => locationRow()?.name,
+    actions: () => locationRow()?.actions ?? [],
+    remove: (lid) => deleteLocation(lid),
+    onDeleted: () => (props.host === "blade" ? blades.close() : navigate("/explore")),
+    invalidate: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: [...LOCATIONS_KEY] }),
+        qc.invalidateQueries({ queryKey: [...SYSTEMS_KEY] }),
+        qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] }),
+      ]),
   });
   const pending = () => view.isPending || health.isPending || declared.isPending;
 
@@ -341,7 +366,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                 {(pid) => (
                   <section class="border-b border-base-300">
                     <div class="px-4 pt-4"><Eyebrow label="Location" hint="Where this system sits: the location's own name, type, parent, properties and tags. Its edit is its own, beside the system's." /></div>
-                    <ConfigureFace kind="location" id={pid} editValue="location" testid="configure-face-location" guard={leave} host={props.host} />
+                    <ConfigureFace kind="location" id={pid} editValue="location" testid="configure-face-location" guard={leave} host={props.host} destructive={locationDelete.destructive} />
                   </section>
                 )}
               </Show>
@@ -462,6 +487,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                                         <button type="button" class="cursor-pointer font-mono text-base-content/70 hover:underline" onClick={(e) => { e.stopPropagation(); openComponent(r.componentId); }}>{r.component}</button>
                                         <span class="text-base-content/45 tabular-nums">
                                           {fmtTime(r.raisedAt)} → {r.clearedAt ? fmtTime(r.clearedAt) : "ongoing"}
+                                          {r.clearedAt ? ` · lasted ${durationText(Date.parse(r.clearedAt) - Date.parse(r.raisedAt))}` : ""}
                                         </span>
                                       </li>
                                     )}
@@ -488,7 +514,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                         <SeverityBadge name={r.severity} size="xs" />
                         <span>{r.message}</span>
                         <button type="button" class="cursor-pointer font-mono text-base-content/70 hover:underline" onClick={() => openComponent(r.componentId)}>{r.component}</button>
-                        <span class="ml-auto text-base-content/45 tabular-nums">{fmtTime(r.raisedAt)}</span>
+                        <span class="ml-auto text-base-content/45 tabular-nums">{fmtTime(r.raisedAt)}{r.clearedAt ? ` · lasted ${durationText(Date.parse(r.clearedAt) - Date.parse(r.raisedAt))}` : ""}</span>
                       </li>
                     )}
                   </For>
@@ -592,7 +618,10 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                     </section>
                   </Show>
                   <section class="flex flex-col gap-2">
-                    <Eyebrow label="Components" hint="The pieces of this system, each with the slot it fills. A slot gets its own header only where it says something a column cannot: more than one wanted, a shortfall, or nobody staffing it yet." />
+                    <div class="flex items-center justify-between gap-2">
+                      <Eyebrow label="Components" hint="The pieces of this system, each with the slot it fills. A slot gets its own header only where it says something a column cannot: more than one wanted, a shortfall, or nobody staffing it yet." />
+                      <AddComponentLink system={id()} size="xs" intent={members().rows.length + members().groups.length === 0 ? "action" : "quiet"} />
+                    </div>
                     <MemberRows rows={members().rows} groups={members().groups} onOpen={openComponent} />
                   </section>
                   <Show when={mapDecl()}>

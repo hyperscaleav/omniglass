@@ -8,6 +8,7 @@ import { PROPERTIES_KEY, type PropertyRow } from "../lib/properties";
 import { METRICS_KEY, type MetricRow } from "../lib/metric_types";
 import { ME_KEY, type Me } from "../lib/auth";
 import { BladeEditContext, createEditSlot } from "../lib/blades";
+import { answerConfirms } from "../lib/confirm.testkit";
 
 // One editor curates the declared-properties contract of all three classifiers: a
 // product (for its components), a standard (for the systems conforming to it), and
@@ -121,7 +122,7 @@ describe("ContractEditor on a standard", () => {
   });
 
   it("withdraws a line after confirmation, calling DELETE", async () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const confirmSpy = answerConfirms(true);
     let del: Request | undefined;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
@@ -289,7 +290,7 @@ describe("ContractEditor's metric lane", () => {
   });
 
   it("withdraws a line after confirmation, calling DELETE on the standards metric route", async () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const confirmSpy = answerConfirms(true);
     let del: Request | undefined;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;

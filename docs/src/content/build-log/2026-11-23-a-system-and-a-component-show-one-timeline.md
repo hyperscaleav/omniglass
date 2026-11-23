@@ -21,4 +21,4 @@ raised by `until` and still raised at `since`), the health lane draws from the h
 `carried_in` (#2305: the health in force when `since` opened the range, so a quiet range is one span
 of the health that held, not an empty lane), events, logs and property changes read through `POST /views:run` with `from`/`to`, and
 commands through their `since`/`until`. A nested cursor provider now shares the outer cursor. The Timeline tab lives in the shared detail bodies (#2423), so a fleet blade carries it too; a blade's
-time range opens on its page's and is its own after that, never rewriting the page's address.
+time range is its own (it opens on the default), never rewriting the page's address.
