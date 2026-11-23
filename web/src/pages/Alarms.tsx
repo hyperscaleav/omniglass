@@ -173,7 +173,7 @@ export default function Alarms() {
   };
 
   return (
-    <div class="h-[calc(100dvh-9rem)] min-h-96" data-testid="alarm-queue">
+    <div class="h-full min-h-96" data-testid="alarm-queue">
       <FlatList<Alarm>
         config={{
           entity: { name: "alarm", plural: "alarms" },

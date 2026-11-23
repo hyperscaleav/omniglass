@@ -1,5 +1,5 @@
 import { For, Show, createSignal, type JSX } from "solid-js";
-import { Popover } from "@kobalte/core/popover";
+import Popover from "./ui/Popover";
 import { useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
 import ActionFailure from "./ActionFailure";
@@ -116,16 +116,20 @@ export function SnoozeControl(props: { componentId: string; alarm: Snoozable; su
           </Button>
         }
       >
-        <Popover placement="bottom-end" gutter={4} open={openMenu() === key()} onOpenChange={(o) => {
+        <Popover class="btn btn-quiet btn-xs gap-1.5"
+          placement="bottom-end"
+          open={openMenu() === key()}
+          onOpenChange={(o) => {
             if (o) setOpenMenu(key());
             else if (openMenu() === key()) setOpenMenu(null);
-          }}>
-          <Popover.Trigger class="btn btn-quiet btn-xs gap-1.5" aria-label={acting("Snooze", props.alarm)} title={SNOOZE_TIP} disabled={busy()}>
-            <Moon size={14} />
-            Snooze
-          </Popover.Trigger>
-          <Popover.Portal>
-            <Popover.Content class="menu z-50 w-44 rounded-box border border-base-300 bg-base-100 p-1.5 shadow-2xl focus:outline-none" aria-label="Snooze for">
+          }}
+          aria-label={acting("Snooze", props.alarm)}
+          title={SNOOZE_TIP}
+          disabled={busy()}
+          contentClass="menu z-50 w-44 rounded-box border border-base-300 bg-base-100 p-1.5 shadow-2xl focus:outline-none"
+          contentLabel="Snooze for"
+          content={
+            <>
               <p class="menu-title px-2 pb-1 text-[10.5px]">Silence this alarm for</p>
               <ul class="flex flex-col">
                 <For each={SNOOZE_PRESETS}>
@@ -139,8 +143,11 @@ export function SnoozeControl(props: { componentId: string; alarm: Snoozable; su
                   )}
                 </For>
               </ul>
-            </Popover.Content>
-          </Popover.Portal>
+            </>
+          }
+        >
+          <Moon size={14} />
+          Snooze
         </Popover>
       </Show>
       <Show when={err()}>

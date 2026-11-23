@@ -29,6 +29,9 @@ export interface SegmentedControlProps {
   "data-testid"?: string;
 }
 
+// Undo Kobalte's visually-hidden inline style; the class keeps it invisible.
+const COVER = { clip: "auto", "clip-path": "none", width: "100%", height: "100%", margin: "0", overflow: "visible", position: "absolute", "white-space": "normal" } as const;
+
 const SIZE = { xs: "tabs-xs", sm: "tabs-sm", md: "tabs-md" } as const;
 
 export default function SegmentedControl(props: SegmentedControlProps) {
@@ -52,7 +55,10 @@ export default function SegmentedControl(props: SegmentedControlProps) {
               class="tab relative has-[input:focus-visible]:ring-1 has-[input:focus-visible]:ring-primary/60"
               classList={{ "tab-active": props.value === o.value }}
             >
-              <ItemInput />
+              {/* The radio covers its segment, transparent, instead of being
+                  visually hidden: a click (a person's or a test driver's)
+                  lands on the radio itself, not on a label in front of it. */}
+              <ItemInput class="absolute inset-0 m-0 h-full w-full cursor-pointer opacity-0" style={COVER} />
               <ItemLabel class="cursor-pointer">{o.label}</ItemLabel>
             </Item>
           )}

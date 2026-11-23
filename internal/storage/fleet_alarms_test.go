@@ -325,51 +325,49 @@ func TestFleetAlarmLocationFallsBackToTheSystemsLocation(t *testing.T) {
 	}
 }
 
-// The fallback looks only at the systems the caller may read: a hidden system
-// that shares a readable system's name must not lend its location (#2426).
-func TestFleetAlarmLocationFallbackIgnoresAHiddenSameNamedSystem(t *testing.T) {
+// The system-location fallback only ever reads systems the caller may read: a
+// component also in a hidden system that shares a visible system's name is not
+// placed by the hidden one (#2426, agent-review).
+func TestFleetAlarmLocationFallbackIgnoresHiddenSameNamedSystems(t *testing.T) {
 	t.Parallel()
-	gw, _ := secretGateway(t)
+	gw, dsn := secretGateway(t)
 	ctx := context.Background()
 	all := scope.Set{All: true}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hid-room", LocationType: "campus"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hid-vault", LocationType: "campus"}, all); err != nil {
 		t.Fatalf("location: %v", err)
 	}
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "hid-comp"}, all, all, all, all); err != nil {
 		t.Fatalf("component: %v", err)
 	}
-	visible, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "hid-dup"}, all, all)
+	// "twin" is visible and has no location; the other "twin" is hidden and sits in hid-vault.
+	visible, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "twin"}, all, all)
 	if err != nil {
 		t.Fatalf("visible system: %v", err)
 	}
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "hid-dup", LocationName: strptr("hid-room")}, all, all); err != nil {
-		t.Skipf("same-named system not creatable here: %v", err)
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "twin", LocationName: strptr("hid-vault")}, all, all); err != nil {
+		t.Fatalf("hidden system: %v", err)
 	}
-	for _, id := range []string{visible.ID} {
-		if err := gw.AddMember(ctx, "", id, "hid-comp", all, all, all, all); err != nil {
-			t.Fatalf("member: %v", err)
-		}
-	}
-	rows, err := gw.ListSystems(ctx, all)
+	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
-		t.Fatalf("systems: %v", err)
+		t.Fatalf("connect: %v", err)
 	}
-	for _, s := range rows {
-		if s.ID != visible.ID && s.Name == "hid-dup" {
-			if err := gw.AddMember(ctx, "", s.ID, "hid-comp", all, all, all, all); err != nil {
-				t.Fatalf("hidden member: %v", err)
-			}
-		}
+	defer conn.Close(ctx)
+	// Both twins hold the component; AddMember takes names, which are ambiguous here.
+	if _, err := conn.Exec(ctx, `insert into system_member (system_id, component_id)
+		select s.id, c.id from system s, component c where s.name = 'twin' and c.name = 'hid-comp'`); err != nil {
+		t.Fatalf("members: %v", err)
 	}
 	if _, err := gw.RaiseAlarm(ctx, "", "hid-comp", storage.AlarmSpec{Severity: "high", Message: "x", DedupKey: "x"}); err != nil {
 		t.Fatalf("raise: %v", err)
 	}
-	seeing := scope.Set{IDs: []string{visible.ID}}
-	got, _, err := gw.ListFleetAlarms(ctx, all, seeing, storage.AlarmFilter{}, 100)
-	if err != nil || len(got) != 1 {
-		t.Fatalf("list = %d (%v)", len(got), err)
+	rows, _, err := gw.ListFleetAlarms(ctx, all, scope.Set{IDs: []string{visible.ID}}, storage.AlarmFilter{}, 100)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("list = %d rows (%v)", len(rows), err)
 	}
-	if got[0].LocationName != "" || got[0].LocationID != "" {
-		t.Errorf("location %q leaked from a system the caller cannot read", got[0].LocationName)
+	if len(rows[0].SystemIDs) != 1 || rows[0].SystemIDs[0] != visible.ID {
+		t.Fatalf("system ids %v, want only the visible twin", rows[0].SystemIDs)
+	}
+	if rows[0].LocationName != "" || rows[0].LocationID != "" {
+		t.Errorf("location %q (%s) leaked from the hidden twin in hid-vault", rows[0].LocationName, rows[0].LocationID)
 	}
 }

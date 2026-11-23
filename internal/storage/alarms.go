@@ -681,9 +681,10 @@ func (p *PG) attachAlarmLocations(ctx context.Context, alarms []Alarm) error {
 
 // attachSystemLocations names a location for the alarms whose component has
 // none of its own (#2426): a component placed only through its system sits
-// where that system does. Only the alarm's SystemIDs (the systems the caller
-// may read) are consulted, by id, so a hidden same-named system lends nothing;
-// the first by name wins. One batched walk for the page.
+// where that system does. It reads only each alarm's own SystemIDs, the
+// systems the caller may read, so a hidden system, even one sharing a visible
+// system's name, never names a location; the first by name with a location
+// wins. One batched walk for the page.
 func (p *PG) attachSystemLocations(ctx context.Context, alarms []Alarm) error {
 	var sysIDs []string
 	for _, a := range alarms {
@@ -699,7 +700,7 @@ func (p *PG) attachSystemLocations(ctx context.Context, alarms []Alarm) error {
 	if err != nil {
 		return err
 	}
-	sysLocs, err := planeRootLocationIDs(ctx, p.pool, systemTable, sysIDs)
+	locIDs, err := planeRootLocationIDs(ctx, p.pool, systemTable, sysIDs)
 	if err != nil {
 		return err
 	}
@@ -707,23 +708,21 @@ func (p *PG) attachSystemLocations(ctx context.Context, alarms []Alarm) error {
 		if alarms[i].LocationName != "" {
 			continue
 		}
-		// SystemIDs are the caller-readable systems in name order: the first
-		// that sits at a location lends it.
-		for _, sys := range alarms[i].SystemIDs {
+		for _, id := range alarms[i].SystemIDs {
 			var loc []string
-			for _, s := range paths[sys] {
-				if s == accessorSys {
+			for _, seg := range paths[id] {
+				if seg == accessorSys {
 					break
 				}
-				loc = append(loc, s)
+				loc = append(loc, seg)
 			}
 			if len(loc) == 0 {
 				continue
 			}
 			alarms[i].LocationPath = loc
 			alarms[i].LocationName = loc[len(loc)-1]
-			if id := sysLocs[sys]; id != nil {
-				alarms[i].LocationID = *id
+			if lid := locIDs[id]; lid != nil {
+				alarms[i].LocationID = *lid
 			}
 			break
 		}
