@@ -331,8 +331,8 @@ stored, shown, and enforced, end to end through the pure engine, the binding tab
 the API, the two permissions, the two seeded `profile` namespaces, and the Admin settings page.
 
 :::design[The fast-follow rungs and platform-domain namespaces, tracked in #270]
-**Fast-follow (not this slice):** the group and user binding rungs and the Profile preferences tab
-(editable, user-scoped Gateway reads), the `settings:lock` permission split for group-admins, the
+**Fast-follow (not this slice):** the group binding rung and the Profile preferences tab (the user
+rung itself has since landed for profile namespaces, #2450, with `PATCH /settings/me/{namespace}`), the `settings:lock` permission split for group-admins, the
 remaining `platform`-domain namespaces (`integrations`) with their features (`label` has since
 landed with the acronym dictionary, `retention` with sample retention, #417, and `collection` with
 each endpoint's report window, #1369), a GitOps read-only mode, and live file reload (SIGHUP)
