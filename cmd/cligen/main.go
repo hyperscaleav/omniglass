@@ -768,11 +768,36 @@ func tree(cmds []command) ([]*node, error) {
 	sortRec = func(ns []*node) {
 		sort.Slice(ns, func(i, j int) bool { return ns[i].Name < ns[j].Name })
 		for _, n := range ns {
+			n.noteShadowedArg()
 			sortRec(n.Kids)
 		}
 	}
 	sortRec(roots)
 	return roots, nil
+}
+
+// noteShadowedArg documents the one way to reach a command's path argument when
+// a child's word equals it. A command with a path argument and children shares
+// one position between the argument and the children's words, and cobra matches
+// a subcommand name first, so `simulation observation` runs the child group, not
+// the read of a node named `observation` (#1667). The `--` separator ends
+// subcommand matching, so `simulation -- observation` reaches the argument.
+func (n *node) noteShadowedArg() {
+	if n.Cmd == nil || len(n.Cmd.Args) == 0 || len(n.Kids) == 0 {
+		return
+	}
+	words := make([]string, len(n.Kids))
+	for i, k := range n.Kids {
+		words[i] = k.Name
+	}
+	sort.Strings(words)
+	note := fmt.Sprintf("A value equal to a subcommand name (%s) runs that subcommand; put -- before it to pass it as <%s>, e.g. `%s -- %s`.",
+		strings.Join(words, ", "), n.Cmd.Args[0], strings.Join(n.Cmd.Words, " "), words[0])
+	if n.Cmd.Long == "" {
+		n.Cmd.Long = note
+	} else {
+		n.Cmd.Long += "\n\n" + note
+	}
 }
 
 // collision is the error for two operations that derive one command path: each
