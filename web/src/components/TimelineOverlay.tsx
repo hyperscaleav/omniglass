@@ -309,7 +309,10 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
     const h = spanAt(health(), t);
     if (h) parts.push(`health ${h.value}`);
     const up = alarms().filter((a) => t >= a.from && t <= a.to);
-    parts.push(up.length ? `${up.length} alarm${up.length === 1 ? "" : "s"} raised` : "no alarm raised");
+    // Each alarm raised at the instant, and how long it was raised in all.
+    if (up.length === 0) parts.push("no alarm raised");
+    for (const a of up.slice(-3)) parts.push(`${isComponent() ? "" : `${a.component} `}${a.rule ?? a.message} ${a.clearedAt === undefined ? `raised ${durationText(a.duration)} so far` : `raised for ${durationText(a.duration)}`}`);
+    if (up.length > 3) parts.push(`${up.length - 3} more alarms raised`);
     for (const r of propertyRows()) {
       const b = spanAt(r.bands, t);
       if (b) parts.push(`${r.label} ${b.value}`);

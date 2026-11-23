@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { uuidFor } from "./testids";
 import {
   alarmSpans,
   alarmTip,
@@ -203,11 +204,11 @@ describe("lane defaults", () => {
   it("defaults the metrics and properties to the inputs of the rules that raised alarms in range", () => {
     const spans = alarmSpans([alarm({ raised_at: at(10), cleared_at: at(20) })], range, now);
     const rules = [
-      { id: "r1", name: "reachability-lost", sample_lane: "property" as const, sample_key: "reachable" },
-      { id: "r2", name: "too-hot", sample_lane: "metric" as const, sample_key: "temperature" },
+      { id: uuidFor("tl-rule-1"), name: "reachability-lost", sample_lane: "property" as const, sample_key: "reachable" },
+      { id: uuidFor("tl-rule-2"), name: "too-hot", sample_lane: "metric" as const, sample_key: "temperature" },
     ];
     expect(ruleInputs(spans, rules)).toEqual({ metrics: [], properties: ["reachable"] });
-    const hot = alarmSpans([{ ...alarm({ raised_at: at(10) }), raised_by_rule: "too-hot", raised_by_rule_id: "r2" }], range, now);
+    const hot = alarmSpans([{ ...alarm({ raised_at: at(10) }), raised_by_rule: "too-hot", raised_by_rule_id: uuidFor("tl-rule-2") }], range, now);
     expect(ruleInputs(hot, rules)).toEqual({ metrics: ["temperature"], properties: [] });
   });
 

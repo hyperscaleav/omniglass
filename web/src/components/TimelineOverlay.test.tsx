@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { uuidFor } from "../lib/testids";
 import { cleanup, fireEvent, render, screen, waitFor } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import { Router, Route } from "@solidjs/router";
@@ -39,13 +40,13 @@ function stub(reads: Read[]) {
           component: "disp",
           health: "healthy",
           alarms: [
-            { id: "a1", component: "disp", component_id: "disp", severity: "high", message: "Reachability lost", raised_by_rule: "reachability-lost", raised_by_rule_id: "r1", raised_at: ago(40), cleared_at: ago(26), acknowledged: false, active: false, dedup_key: "k" },
+            { id: "a1", component: "disp", component_id: "disp", severity: "high", message: "Reachability lost", raised_by_rule: "reachability-lost", raised_by_rule_id: uuidFor("tl-rule-1"), raised_at: ago(40), cleared_at: ago(26), acknowledged: false, active: false, dedup_key: "k" },
           ],
         });
       if (path === "/components/disp/commands")
         return json({ commands: [{ id: 7, command_type: "power", component: "disp", component_id: "disp", status: "settled", phase: "settled", issued_at: ago(30), deadline: ago(29), delivery_count: 1 }] });
       if (path === "/components/disp/alarms/a1:timeline") return json({ entries: [{ at: ago(40), kind: "audit", what: "raised" }] });
-      if (path === "/event-rules") return json({ event_rules: [{ id: "r1", name: "reachability-lost", sample_lane: "property", sample_key: "power" }] });
+      if (path === "/event-rules") return json({ event_rules: [{ id: uuidFor("tl-rule-1"), name: "reachability-lost", sample_lane: "property", sample_key: "power" }] });
       if (path === "/components/disp/properties") return json({ properties: [{ property_type_name: "power", property_type_id: "p", data_type: "string", from_contract: true, is_set: false, required: false }] });
       if (path === "/components/disp/metrics") return json({ metrics: [] });
       if (path === "/severity-levels") return json({ severity_levels: [{ name: "high", label: "High", color: "red", rank: 4, outage: true }] });
@@ -136,7 +137,7 @@ describe("TimelineOverlay", () => {
     expect(screen.getByTestId("cursor-line")).toBeTruthy();
     const readout = screen.getByTestId("timeline-readout").textContent!;
     expect(readout).toContain("health outage");
-    expect(readout).toContain("1 alarm raised");
+    expect(readout).toContain("reachability-lost raised for 14m");
     expect(readout).toContain("power off");
   });
 
