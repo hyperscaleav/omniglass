@@ -231,7 +231,7 @@ func TestAPlatformComponentWithNoEndpointIsNotAFindingButAFleetOneIs(t *testing.
 	s := healthy()
 	s.Components = append(s.Components, labcheck.Component{
 		Name: "server", Product: storage.ServerProductName,
-		Values: []labcheck.Value{{Key: "uptime", Class: writerclass.Platform}},
+		Values: []labcheck.Value{{Key: writerclass.ProcessUptime, Class: writerclass.Platform}},
 	})
 	if fs := labcheck.Evaluate(s, nil); len(fs) != 0 {
 		t.Fatalf("a platform component with platform metrics is a finding:\n%s", render(fs))
@@ -240,6 +240,11 @@ func TestAPlatformComponentWithNoEndpointIsNotAFindingButAFleetOneIs(t *testing.
 	s.Components[1].Values = nil
 	if fs := labcheck.Evaluate(s, nil); !strings.Contains(render(fs), "reports no platform metric") {
 		t.Fatalf("a platform component with no platform metric must fail:\n%s", render(fs))
+	}
+
+	s.Components[1].Values = []labcheck.Value{{Key: writerclass.Health, Class: writerclass.Platform}}
+	if fs := labcheck.Evaluate(s, nil); !strings.Contains(render(fs), "reports no platform metric") {
+		t.Fatalf("a component holding only the health rollup must fail:\n%s", render(fs))
 	}
 
 	s = healthy()

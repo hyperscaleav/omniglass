@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/hyperscaleav/omniglass/internal/devseed"
+	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/transport"
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
@@ -118,14 +119,18 @@ func ownValue(vs []Value) bool {
 // server, a node, an outpost). They report platform metrics themselves and
 // have no endpoint by design, so the endpoint-driven built-in and collected
 // tiers do not apply to them; they are held to the platform tier instead.
-var platformProducts = []string{"omniglass-server", "omniglass-node", "omniglass-outpost"}
+var platformProducts = []string{storage.ServerProductName, storage.OutpostProductName}
 
 // isPlatform reports whether c is one of the platform's own components.
 func (c Component) isPlatform() bool { return slices.Contains(platformProducts, c.Product) }
 
-// carriesPlatformValue is whether vs holds a value the platform wrote.
+// carriesPlatformValue is whether vs holds a self-reported platform metric: a
+// platform-class value other than the health rollup, which the server writes
+// about every component and so says nothing about the component itself.
 func carriesPlatformValue(vs []Value) bool {
-	return slices.ContainsFunc(vs, func(v Value) bool { return v.Class == writerclass.Platform })
+	return slices.ContainsFunc(vs, func(v Value) bool {
+		return v.Class == writerclass.Platform && writerclass.ProcessSelf(v.Key)
+	})
 }
 
 // owner names a component for a finding. A component's name is unique within
