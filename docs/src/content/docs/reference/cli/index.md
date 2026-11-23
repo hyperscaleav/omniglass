@@ -5409,6 +5409,7 @@ Populate a fresh dev database with a small example fleet so a dev stack comes up
   dev       the example fleet a lab comes up with
   empty     nothing beyond the boot seed: a fresh install's first run
   degraded  the example fleet with an open alarm on one in every 3 components
+  storm     the large fleet with an open alarm on one in every 3 components: an alarm storm of 150 or more, for the alarm queue's scale checks
   large     the example fleet plus its self-contained rooms copied 6 times under each of 5 replica sites (only the example fleet is simulated)
 
 | Flag | Type | Default | Description |

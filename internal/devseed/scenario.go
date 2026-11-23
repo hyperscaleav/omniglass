@@ -37,6 +37,10 @@ var LargeFleet = ReplicaParams{Sites: 5, RoomCopies: 6}
 // component that has none.
 const DegradedEvery = 3
 
+// StormFloor is the fewest open alarms the storm scenario carries (#2333): the
+// alarm queue's scale check reads a fleet of at least this many.
+const StormFloor = 150
+
 var scenarios = []Scenario{
 	{Name: "dev", Summary: "the example fleet a lab comes up with"},
 	{Name: "empty", Summary: "nothing beyond the boot seed: a fresh install's first run", Empty: true},
@@ -45,6 +49,14 @@ var scenarios = []Scenario{
 		Summary: "the example fleet with an open alarm on one in every " + strconv.Itoa(DegradedEvery) + " components",
 		expand: func(d Doc) Doc {
 			return Degrade(d, DegradedEvery, shippedProductTypes(), seed.ShippedComponentTypeParents())
+		},
+	},
+	{
+		Name: "storm",
+		Summary: fmt.Sprintf("the large fleet with an open alarm on one in every %d components: an alarm storm of %d or more, for the alarm queue's scale checks",
+			DegradedEvery, StormFloor),
+		expand: func(d Doc) Doc {
+			return Degrade(Replicate(d, LargeFleet), DegradedEvery, shippedProductTypes(), seed.ShippedComponentTypeParents())
 		},
 	},
 	{

@@ -73,14 +73,14 @@ export const ROUTE_MANIFEST: RouteEntry[] = [
   { path: "/user-groups", shell: "protected", page: "Groups", smoke: "/user-groups" },
   { path: "/secrets", shell: "protected", page: "Secrets", smoke: "/secrets" },
   { path: "/variables", shell: "protected", page: "Variables", smoke: "/variables" },
+  { path: "/alarms", shell: "protected", page: "Alarms", smoke: "/alarms" },
   { path: "/audit", shell: "protected", page: "Audit", smoke: "/audit" },
   { path: "/settings", shell: "protected", page: "Settings", smoke: "/settings" },
   // Stubbed sections outside the catalog (nav.ts's STUBS minus the catalog's
   // routed soon slots); the guard test pins this list to nav.ts, so a stub
   // added there without a row here fails the suite.
   { path: "/dashboards", shell: "protected", page: "SectionStub", smoke: "/dashboards" },
-  { path: "/alarms", shell: "protected", page: "SectionStub", smoke: "/alarms" },
-  { path: "/learn", shell: "protected", page: "SectionStub", smoke: "/learn" },
+    { path: "/learn", shell: "protected", page: "SectionStub", smoke: "/learn" },
   { path: "/config", shell: "protected", page: "SectionStub", smoke: "/config" },
   { path: "/log-types", shell: "protected", page: "SectionStub", smoke: "/log-types" },
   // The not-found face is a route like any other; any unroutable address smokes it.
