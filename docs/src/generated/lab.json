@@ -206,6 +206,13 @@
       "setup": []
     },
     {
+      "id": "see-what-needs-attention",
+      "title": "See what needs attention",
+      "description": "Read Home's Need attention card, open it, and find Explore's chip saying the same words, with exactly that many rows beneath it.",
+      "lab": [],
+      "setup": []
+    },
+    {
       "id": "send-alarms-to-a-chat-channel",
       "title": "Send alarms to a chat channel",
       "description": "Make a webhook target, test it and read the receiver's answer, then write the action rule that sends high alarms to it.",
