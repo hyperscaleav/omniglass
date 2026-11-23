@@ -75,6 +75,9 @@ type Calls = string[];
 function stub(opts: { pollFails?: { status: number; detail: string } } = {}) {
   const calls: Calls = [];
   let endpoints: unknown[] = [];
+  // The simulator takes the new device on at its next pull: the first read
+  // after the create does not list it, the next one serves it.
+  let simReads = 0;
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     const req = input as Request;
     const url = new URL(req.url);
@@ -87,6 +90,11 @@ function stub(opts: { pollFails?: { status: number; detail: string } } = {}) {
     if (line === `GET /systems/${systems[0].id}/slots`) return json({ slots });
     if (line === "GET /outposts/edge-hq/simulation/components:plan") return json(plan);
     if (line === "GET /endpoints") return json({ endpoints });
+    if (line === "GET /simulation") {
+      simReads++;
+      const mine = { ...fleet.outposts[0].components[0], component_id: C_NEW, component: "display-3", address: "127.60.0.9", serving: simReads > 1 };
+      return json({ ...fleet, outposts: [{ ...fleet.outposts[0], components: [...fleet.outposts[0].components, mine] }] });
+    }
     calls.push(line + (req.method === "POST" || req.method === "PUT" ? ` ${await req.clone().text()}` : ""));
     if (line === "POST /components") return json({ id: C_NEW, name: "display-3" }, 201);
     if (line.startsWith("PUT /systems/")) return new Response(null, { status: 204 });
@@ -182,8 +190,11 @@ describe("AddComponentFlow", () => {
     expect(JSON.parse(calls[0].slice("POST /components ".length))).toMatchObject({ product: "boreal-edge-55", expected_name: "display-3", system: systems[0].id, location: room.id });
     expect(calls[1]).toBe(`PUT /systems/${systems[0].id}/slots/display/assignments/${C_NEW} `);
     expect(JSON.parse(calls[2].slice("POST /endpoints ".length))).toEqual({ driver: "boreal-edge-snmp", inputs: { host: "127.60.0.9", port: "161", community: "sim-community" }, component: C_NEW, outpost: "edge-hq" });
-    // The test runs on its own and shows what it read.
-    await screen.findByText("Edge 55");
+    // A new simulated device: the test waits for the simulator to serve it,
+    // then runs on its own and shows what it read.
+    expect((await screen.findByTestId("sim-wait")).textContent).toMatch(/127\.60\.0\.9/);
+    await screen.findByText("Edge 55", {}, { timeout: 5000 });
+    expect(screen.queryByTestId("sim-wait")).toBeNull();
     await next("Open the component");
     await waitFor(() => expect(screen.getByTestId("landed").textContent).toBe(C_NEW));
     expect(calls.some((c) => c.startsWith("DELETE"))).toBe(false);
@@ -206,7 +217,7 @@ describe("AddComponentFlow", () => {
     mount();
     await walkToCredentials();
     await next("Create and test");
-    await screen.findByText("Edge 55");
+    await screen.findByText("Edge 55", {}, { timeout: 5000 });
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     await screen.findByTestId("explore");
     expect(calls.filter((c) => c.startsWith("DELETE"))).toEqual([`DELETE /endpoints/${E_NEW}`, `DELETE /components/${C_NEW}`]);
@@ -226,7 +237,7 @@ describe("AddComponentFlow", () => {
     mount();
     await walkToCredentials();
     await next("Create and test");
-    const fix = await screen.findByTestId("flow-fix");
+    const fix = await screen.findByTestId("flow-fix", {}, { timeout: 5000 });
     expect(fix.textContent).toMatch(/refused the credential/);
     fireEvent.click(within(fix).getByRole("button", { name: "Fix the credentials" }));
     await waitFor(() => expect(current()).toBe("Credentials"));
@@ -247,7 +258,7 @@ describe("AddComponentFlow", () => {
     mount();
     await walkToCredentials();
     await next("Create and test");
-    const fix = await screen.findByTestId("flow-fix");
+    const fix = await screen.findByTestId("flow-fix", {}, { timeout: 5000 });
     fireEvent.click(within(fix).getByRole("button", { name: "Fix the endpoint" }));
     await waitFor(() => expect(current()).toBe("Endpoint"));
   });

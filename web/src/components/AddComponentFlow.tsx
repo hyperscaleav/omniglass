@@ -71,6 +71,10 @@ import { entityLabel } from "../lib/entities";
 // ?simulated=1 to start where the operator stood. The plain create form stays
 // at /components/create, linked here as the advanced way.
 
+// How long the test waits for the simulator to take on a new device before
+// it runs anyway. The lab's outpost pulls every few seconds.
+const SIM_WAIT_MS = 20_000;
+
 const IO: FlowIO = {
   createComponent: (b) => createComponent(b),
   assignSlot,
@@ -97,7 +101,10 @@ export default function AddComponentFlow(): JSX.Element {
   const locationTypes = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes }));
   const outposts = useQuery(() => ({ queryKey: OUTPOSTS_KEY, queryFn: () => listOutposts() }));
   const mayReadSim = () => can(me.data, "simulation", "read");
-  const sim = useQuery(() => ({ queryKey: SIMULATION_KEY, queryFn: getSimulation, enabled: mayReadSim() }));
+  // A new simulated device answers from the simulator's next pull, so the
+  // test waits until the simulator reports serving it (simWait, below).
+  const [simWait, setSimWait] = createSignal(false);
+  const sim = useQuery(() => ({ queryKey: SIMULATION_KEY, queryFn: getSimulation, enabled: mayReadSim(), refetchInterval: simWait() ? 1000 : false }));
 
   const [d, setD] = createStore<FlowDraft>({ ...emptyDraft(), product: param("product"), system: param("system"), location: param("under") });
   const namePen = createPen();
@@ -193,6 +200,7 @@ export default function AddComponentFlow(): JSX.Element {
     const made = created();
     if (!made) return;
     setCreated(null);
+    setSimWait(false);
     setOutcomes({});
     for (const k of Object.keys(outcomes)) setOutcomes(k, undefined);
     try {
@@ -211,8 +219,10 @@ export default function AddComponentFlow(): JSX.Element {
     setBusy(true);
     setErr(null);
     try {
+      const sim = usingSim();
       const made = await commitFlow({ ...d }, IO);
       await qc.invalidateQueries({ queryKey: [...ENDPOINTS_KEY] });
+      setSimWait(sim);
       setCreated(made);
       setStep("test");
     } catch (e) {
@@ -258,6 +268,17 @@ export default function AddComponentFlow(): JSX.Element {
     await Promise.all([qc.invalidateQueries({ queryKey: [...COMPONENTS_KEY] }), qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] })]);
     navigate(`/components/${encodeURIComponent(made.component)}`);
   }
+
+  const simServing = () =>
+    (sim.data?.outposts ?? []).some((o) => (o.components ?? []).some((c) => c.component_id === created()?.component && c.serving));
+  // The wait is bounded: a simulator that never reports it still gets tested,
+  // and the test then names why it did not answer.
+  createEffect(() => {
+    if (!simWait()) return;
+    if (simServing()) return setSimWait(false);
+    const t = setTimeout(() => setSimWait(false), SIM_WAIT_MS);
+    onCleanup(() => clearTimeout(t));
+  });
 
   const results = () => Object.values(outcomes).filter((o): o is PollOutcome => !!o);
   const anyRead = () => results().some((o) => o.ok);
@@ -403,7 +424,7 @@ export default function AddComponentFlow(): JSX.Element {
                       </div>
                     </div>
                     <Show when={simulatedKin().length}>
-                      <Collapsible title={<span class="text-xs text-base-content/60">{simulatedKin().length} simulated {d.product} already answer, each a component of its own</span>}>
+                      <Collapsible title={<span class="text-xs text-base-content/60">{simulatedKin().length} simulated {product() ? entityLabel(product()!) : d.product} already answer, each a component of its own</span>}>
                         <ul class="grid grid-cols-[minmax(0,auto)_1fr] gap-x-4 gap-y-0.5 pt-1 text-xs">
                           <For each={simulatedKin().slice(0, 12)}>
                             {(c) => (
@@ -471,7 +492,13 @@ export default function AddComponentFlow(): JSX.Element {
                 <p class="text-sm text-base-content/70">
                   Created, with its endpoint on <span class="font-data">{d.outpost}</span>. The outpost runs each of the driver's polls now and shows what it read.
                 </p>
-                <PollTest endpoint={made().endpoint!} autoRun onResult={(poll, o) => setOutcomes(poll, o)} />
+                <Show when={simWait()}>
+                  <p class="flex items-center gap-2 text-sm text-base-content/60" data-testid="sim-wait">
+                    <span class="loading loading-spinner loading-xs" />
+                    Waiting for the simulator to answer at <span class="font-data">{d.inputs.host}</span>: it takes on a new device at its next pull.
+                  </p>
+                </Show>
+                <PollTest endpoint={made().endpoint!} autoRun={!simWait()} onResult={(poll, o) => setOutcomes(poll, o)} />
                 <Show when={!anyRead() && firstFailure()}>
                   {(f) => (
                     <div role="alert" class="alert alert-warning alert-soft flex flex-wrap items-center gap-2 text-sm" data-testid="flow-fix">

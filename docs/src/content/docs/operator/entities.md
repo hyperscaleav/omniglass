@@ -116,6 +116,8 @@ identity pages.
 
 ## Create, edit, delete
 
+- A **component** is added through its own flow, from its product to an endpoint that has answered
+  ([add a component](/operator/add-a-component/)); the plain form below is its **advanced** link.
 - **New** opens a **draft** at the entity's own `/create` address, **From scratch** by default; **From a
   template** instead starts from one of the examples Omniglass ships
   ([starting from a template](/operator/templates/)). From scratch, it asks **what** and **where**

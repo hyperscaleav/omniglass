@@ -1,0 +1,50 @@
+# Add a component (#2460): the whole life of a new device in one flow, from
+# the Simulation page to values on the component's own page. A second Boreal
+# Edge 55 joins the Bay 1 signage system in its panel slot (the slot is
+# unbounded, so a replay on the same stack adds another), takes Bay 1 as its
+# place from the system, and answers as a new simulated device at the free
+# address the server plans for it. Nothing is created until Create and test,
+# which creates the component and its endpoint and runs the driver's poll
+# through the outpost; Open the component lands on its Overview, where the
+# sample the test read is already collected.
+title: Add a component
+description: Add a display to a system from the Simulation page, with a simulated device as its address, pick its credential, test it, and land on its collected values.
+steps:
+  - goto: /simulation
+    caption: The lab's simulated devices. Adding one to monitor starts here, or from Explore's New menu, or a system's Components.
+  - click: { role: button, name: Add and monitor a device }
+    caption: One flow, from the product to an endpoint that has answered. Nothing is created until the test.
+  - type: { target: '[data-step=product] >> role=combobox', text: Boreal Edge 55 }
+    caption: Choose what it is. Products are found by name, type or vendor.
+  - click: '[role=option]:has-text("Boreal Edge 55")'
+    caption: A Boreal Edge 55, a display. The platform names it from its type.
+  - click: { role: button, name: Next }
+    caption: Next, where it sits.
+  - click: '[data-step=where] >> role=button[name=/^System/]'
+    caption: The system it serves.
+  - click: { role: option, name: Bay 1 }
+    caption: The Bay 1 signage system.
+  - select: { target: '[data-step=where] select', value: panel }
+    caption: It fills the system's panel slot. Only the slots a display may fill are offered, and its place comes from the system.
+    hold: 1500
+  - click: { role: button, name: Next }
+    caption: Next, how the outpost reaches it.
+  - wait: { selector: '[data-testid=simulated-device]:has-text("in use")', timeout: 15000 }
+    caption: The product's own driver is chosen, and a new simulated display fills in the outpost, its address and the driver's inputs.
+    hold: 2500
+  - click: { role: button, name: Next }
+    caption: Next, its credential.
+  - wait: { selector: '[data-step=credentials] [role=combobox]' }
+    caption: The SNMP community is picked from the secrets of that kind, never typed. The simulator's is already chosen.
+    hold: 2000
+  - click: { role: button, name: Create and test }
+    caption: Create the component and its endpoint, and test them.
+  - wait: { selector: '[data-step=test] [data-testid=poll-result][data-state=ok]', timeout: 30000 }
+    caption: The outpost ran the driver's poll and shows what it read. A failure would name its cause and offer the step to fix.
+    hold: 2500
+  - click: { role: button, name: Open the component }
+    caption: Done. The new display opens on its Overview.
+  - wait: { selector: '[data-testid="leaf-vitals"]', timeout: 30000 }
+    caption: Its first values are already collected, with no detour to another page.
+    hold: 2500
+    poster: true

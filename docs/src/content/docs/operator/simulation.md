@@ -93,6 +93,11 @@ omniglass component simulation fire panel-1 --surface nvp --command "GET INPUT" 
 
 ## Add a component
 
+To add a device you will monitor the way you would add real hardware (its product, its system and
+slot, its driver, its credential, a test), use **Add and monitor a device**, which opens
+[the add-a-component flow](/operator/add-a-component/) with a new simulated device as its address.
+The button below is the quick path: it creates the component and its endpoint in one go.
+
 **Add simulated component** on the Simulation page (with `simulation:update`, `component:create` and
 `endpoint:create`) asks for an outpost with a simulator, a product the simulator has a profile for (type
 part of the product or its profile to narrow the list; each match shows the profile under it), a name,
