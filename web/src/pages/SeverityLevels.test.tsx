@@ -3,7 +3,6 @@ import { render, fireEvent, screen, waitFor, within } from "@solidjs/testing-lib
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import SeverityLevels from "./SeverityLevels";
 import { ME_KEY, type Me } from "../lib/auth";
-import { OFFICIAL_LOCK } from "../lib/catalog";
 import { MAJOR_LEVEL, SEEDED_LEVELS, seedSeverityLevels } from "../lib/testseverity";
 import { componentAlarmsKey } from "../lib/alarms";
 import { SYSTEM_HEALTHS_KEY, locationHealthKey, systemHealthKey } from "../lib/health";
@@ -221,9 +220,9 @@ describe("Severity levels page", () => {
     mount();
     openLevel("high");
     const b = await blade();
-    const editBtn = within(b).getByLabelText("Edit") as HTMLButtonElement;
-    expect(editBtn.disabled).toBe(true);
-    expect(editBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe(OFFICIAL_LOCK);
+    expect(within(b).getByTestId("footer-note").textContent).toBe("Official, read-only");
+    expect(within(b).queryByLabelText("Edit")).toBeNull();
+    expect(within(b).queryByText("Delete")).toBeNull();
   });
 
   it("greys an operator level's Edit for a reader with what it needs", async () => {

@@ -66,7 +66,10 @@ describe("catalog create forms open on Label, then Name", () => {
     ));
     fireEvent.click(await screen.findByRole("button", { name: /^new /i }));
     const dialog = await screen.findByRole("dialog");
-    const labels = Array.from(dialog.querySelectorAll("label")).map((l) => l.textContent?.trim() ?? "");
+    // The form's fields, not a mode switch (Standards opens on a scratch/template choice).
+    const labels = Array.from(dialog.querySelectorAll<HTMLLabelElement>("label[for]"))
+      .filter((l) => document.getElementById(l.htmlFor)?.getAttribute("type") !== "radio")
+      .map((l) => l.textContent?.trim() ?? "");
     expect(labels.slice(0, 2)).toEqual(["Label", "Name"]);
   });
 });

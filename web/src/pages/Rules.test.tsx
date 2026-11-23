@@ -11,7 +11,6 @@ import { METRICS_KEY, type MetricRow } from "../lib/metric_types";
 import { COMPONENT_TYPES_KEY } from "../lib/component_types";
 import { COMPONENTS_KEY } from "../lib/components";
 import { ME_KEY, type Me } from "../lib/auth";
-import { OFFICIAL_LOCK } from "../lib/catalog";
 import { uuidFor } from "../lib/testids";
 import { EVENT_TYPES_KEY, type EventTypeRow } from "../lib/event_types";
 import { expressionText, typeExpression, warmExpressionEditor } from "../components/ExpressionField.testing";
@@ -308,11 +307,9 @@ describe("Rules page", () => {
     mount();
     fireEvent.click(screen.getByText("Reachability lost"));
     const b = await blade();
-    const editBtn = within(b).getByLabelText("Edit") as HTMLButtonElement;
-    const deleteBtn = within(b).getByText("Delete").closest("button") as HTMLButtonElement;
-    expect(editBtn.disabled).toBe(true);
-    expect(deleteBtn.disabled).toBe(true);
-    expect(editBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe(OFFICIAL_LOCK);
+    expect(within(b).getByTestId("footer-note").textContent).toBe("Official, read-only");
+    expect(within(b).queryByLabelText("Edit")).toBeNull();
+    expect(within(b).queryByText("Delete")).toBeNull();
     expect(within(b).queryByText("Disable")).toBeNull();
   });
 

@@ -139,6 +139,32 @@ describe("BladeStack", () => {
     expect(document.querySelectorAll("aside[data-blade] footer button")).toHaveLength(0);
   });
 
+  // The footer's one shape (#2431 item 5), pinned for every catalog blade: the
+  // PanelFooter rail, the destructive action first at the left, the primary
+  // (Edit) last in the right-aligned cluster, nothing between them but that
+  // cluster. A catalog page that binds a live row cannot reorder it.
+  it("draws destructive at the left and the primary at the right, through PanelFooter", () => {
+    const reg: Record<string, BladeDef> = {
+      thing: {
+        Title: () => <>T</>,
+        Body: () => {
+          useBladeEdit().bind({ save: async () => {}, destructive: () => ({ label: "Delete", tone: "danger", onClick: () => {} }) });
+          return <div>body</div>;
+        },
+      },
+    };
+    const ctl = createBladeController();
+    render(() => <BladeStack controller={ctl} registry={reg} />);
+    ctl.push({ kind: "thing", id: "a" });
+    const footer = document.querySelector("aside[data-blade] footer")!;
+    expect(footer.className).toContain("border-t");
+    const row = footer.querySelector(":scope > div")!;
+    const kids = [...row.children];
+    expect(kids[0].textContent).toContain("Delete");
+    expect(kids[kids.length - 1].className).toContain("ml-auto");
+    expect(kids[kids.length - 1].lastElementChild!.textContent).toContain("Edit");
+  });
+
   // A read-only kind (no write route at all) names its own reason, in the same
   // note, and draws no button of any kind.
   it("a custom lock reason reads as the note itself", () => {

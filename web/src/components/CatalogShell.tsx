@@ -1,7 +1,9 @@
-import { For, Show, createMemo, type ParentComponent } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, on, type ParentComponent } from "solid-js";
 import { A, useHref, useLocation, useNavigate } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import { Soon } from "./Sidebar";
+import Button from "./Button";
+import { ChevronDown } from "./icons";
 import { useMe, can } from "../lib/auth";
 import { OVERVIEW_PATH, entryActive, entryCount, entryHref, visibleGroups, type CatalogEntry } from "../lib/catalog";
 
@@ -26,10 +28,27 @@ const CatalogShell: ParentComponent = (props) => {
   const me = useMe();
   const groups = createMemo(() => visibleGroups((tokens) => can(me.data, ...tokens)));
 
+  // Below 1100 px the app rail plus a 210 px subrail leave the list about 300 px
+  // (150 with a drawer open), so the subrail folds behind one button naming the
+  // section you are in; it opens in place and closes on navigation (#2431).
+  const location = useLocation();
+  const [open, setOpen] = createSignal(false);
+  createEffect(on(() => location.pathname + location.search, () => setOpen(false), { defer: true }));
+  const current = () => {
+    for (const g of groups()) for (const e of g.entries) if (entryActive(e, location.pathname, location.search)) return e.label;
+    return location.pathname.replace(/^\/web/, "") === OVERVIEW_PATH ? "Overview" : "sections";
+  };
+
   return (
-    <div class="flex items-start gap-4">
+    <div class="flex flex-col gap-3 min-[1100px]:flex-row min-[1100px]:items-start min-[1100px]:gap-4">
+      <Button class="justify-between min-[1100px]:hidden" expanded={open()} controls="catalog-subrail" onClick={() => setOpen(!open())}>
+        <span class="truncate">Catalog: {current()}</span>
+        <ChevronDown size={14} />
+      </Button>
       <nav
-        class="sticky top-0 max-h-[calc(100vh-3.5rem)] w-52.5 flex-none self-start overflow-y-auto"
+        id="catalog-subrail"
+        class="w-full flex-none overflow-y-auto min-[1100px]:sticky min-[1100px]:top-0 min-[1100px]:block min-[1100px]:max-h-[calc(100vh-3.5rem)] min-[1100px]:w-52.5 min-[1100px]:self-start"
+        classList={{ hidden: !open() }}
         aria-label="Catalog sections"
       >
         <ul class="menu w-full flex-nowrap gap-0.5 p-0 [&_li>*]:rounded-field">

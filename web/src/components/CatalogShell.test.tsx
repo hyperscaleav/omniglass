@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, within } from "@solidjs/testing-library";
+import { fireEvent, render, screen, waitFor, within } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import CatalogShell from "./CatalogShell";
@@ -101,6 +101,26 @@ const hrefs = () => [...nav().querySelectorAll("a")].map((a) => a.getAttribute("
 
 describe("CatalogShell", () => {
   afterEach(() => vi.restoreAllMocks());
+
+  // #2431 item 9: under 1100 px the subrail folds behind a button that names the
+  // section you are in, closed by default, opening in place and closing again on
+  // navigation. Wide, the button is hidden and the rail always shows (classes:
+  // jsdom has no layout, so the breakpoint rule is pinned on them).
+  it("folds the subrail behind a toggle at narrow widths", async () => {
+    mount(owner, { url: "/metrics" });
+    const toggle = screen.getByRole("button", { name: /^Catalog:/ });
+    expect(toggle.textContent).toContain("Catalog: Metrics");
+    expect(toggle.className).toContain("min-[1100px]:hidden");
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(nav().className).toContain("hidden");
+    expect(nav().className).toContain("min-[1100px]:block");
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(nav().classList.contains("hidden")).toBe(false);
+    fireEvent.click(nav().querySelector('a[href="/properties"]')!);
+    await waitFor(() => expect(toggle.getAttribute("aria-expanded")).toBe("false"));
+    expect(toggle.textContent).toContain("Catalog: Properties");
+  });
 
   it("renders the subrail as links: Overview first, then the groups from the table, in order", () => {
     mount();

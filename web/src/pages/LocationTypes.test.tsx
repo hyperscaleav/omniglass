@@ -296,8 +296,8 @@ describe("LocationTypes page", () => {
     expect(within(blade).queryByText("Restore default")).toBeNull();
     // Delete is present but greyed with the official sentence: a shipped row is
     // never deleted, and while it is pristine there is nothing to discard either.
-    const del = within(blade).getByText("Delete").closest("button") as HTMLButtonElement;
-    expect(del.disabled).toBe(true);
+    expect(within(blade).getByTestId("footer-note").textContent).toBe("Official, read-only");
+    expect(within(blade).queryByText("Delete")).toBeNull();
 
     // The forked one offers Restore in the same slot a custom row puts Delete.
     // Scoped to the table: the open blade's allowed-parents picker lists every

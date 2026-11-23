@@ -148,6 +148,21 @@ a location holding none or several renders its own subject card,
   the helper was copied into six new pages around them. A convention can be forgotten; a slot
   cannot. Full-page create forms draw their own inline rail through `FormActionBar` with the
   `inline` prop; a `FormActionBar inline` is the one full-page form rail the guard permits.
+- **A list page reads the same across the catalog (#2431).** One header height: the filter bar
+  holds a button's height itself, so a list with no New button (templates, secret types) sits level
+  with its siblings. While chips filter, the bar says `n of m`. An empty list shows its empty state
+  alone, with no column header row above it. A create form opens on Label, then the derived Name
+  (`IdentityFields`, which owns both fields and their hints), then the kind-specific fields;
+  `catalog_create_order.test.tsx` fails a catalog page that opens on anything else.
+- **A read-only row draws a note, never dead buttons.** The footer is `PanelFooter`: destructive at
+  the left, the primary at the right. A locked official row replaces both with one note, "Official,
+  read-only"; a kind whose API has no write route (secret types, templates) draws no write button
+  at all and says why in one line. `catalog_readonly.test.tsx` reads "has a write route" from the
+  generated route table (`api/paths.gen.ts`) and fails a disabled button on a kind without one. A
+  lock for a missing permission still greys its button, with the permission it needs on the tooltip,
+  because that button works for someone else. Where the app rail plus the catalog subrail would leave
+  a list under about 300 px (below 1100 px wide) the subrail folds behind one button that names the
+  section you are in.
 - **Client preferences in localStorage, for now.** Column order/visibility
   persists per browser; the eventual home is a per-user preferences endpoint (a
   read/write swap), not the cascade.
