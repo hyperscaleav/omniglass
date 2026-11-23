@@ -9,7 +9,8 @@ import type { BladeDef } from "../lib/blades";
 import type { TreeNode } from "../lib/treeselect";
 import type { ExistingGrant, GrantRef, ScopeOp } from "../lib/grantdraft";
 import {
-  GROUPS_KEY, groupName, memberName,
+  GROUPS_KEY, groupName, memberName, memberSource, issuerHost,
+  listGroupMappings, createGroupMapping, deleteGroupMapping,
   getGroup, updateGroup, deleteGroup,
   listGroupMembers, addGroupMember, removeGroupMember,
   listGroupGrants, createGroupGrant, revokeGroupGrant,
@@ -43,6 +44,7 @@ export function GroupDetail(props: { id: string }) {
   const group = useQuery(() => ({ queryKey: [...GROUPS_KEY, props.id], queryFn: () => getGroup(props.id) }));
   const members = useQuery(() => ({ queryKey: [...GROUPS_KEY, props.id, "members"], queryFn: () => listGroupMembers(props.id) }));
   const users = useQuery(() => ({ queryKey: USERS_KEY, queryFn: () => listUsers(), enabled: canManage() }));
+  const mappings = useQuery(() => ({ queryKey: [...GROUPS_KEY, props.id, "idp-mappings"], queryFn: () => listGroupMappings(props.id) }));
 
   const editing = () => edit.editing();
   const canDrillMembers = () => blades.stack()[0]?.kind === "group";
@@ -51,6 +53,10 @@ export function GroupDetail(props: { id: string }) {
   // to remove. The list below always shows the effective post-save membership.
   const [pendAdd, setPendAdd] = createSignal<string[]>([]);
   const [pendRemove, setPendRemove] = createSignal<Set<string>>(new Set());
+  // Staged identity provider mappings (applied on Save, as members are):
+  // claim values to map, and current mappings to remove.
+  const [pendMapAdd, setPendMapAdd] = createSignal<string[]>([]);
+  const [pendMapRemove, setPendMapRemove] = createSignal<Set<string>>(new Set());
   const [label, setLabel] = createSignal("");
   const [description, setDescription] = createSignal("");
   const [err, setErr] = createSignal<string | null>(null);
@@ -70,7 +76,7 @@ export function GroupDetail(props: { id: string }) {
   const memberItems = createMemo(() => {
     const kept = (members.data ?? [])
       .filter((m) => !pendRemove().has(m.user_id))
-      .map((m) => ({ id: m.user_id, kind: "user", name: memberName(m), badge: kindLabel(m.kind) }));
+      .map((m) => ({ id: m.user_id, kind: "user", name: memberName(m), badge: kindLabel(m.kind), sub: memberSource(m) }));
     const added = pendAdd().map((id) => {
       const p = userById(id);
       return { id, kind: "user", name: p ? userName(p) : id, badge: p ? kindLabel(p.kind) : "" };
@@ -87,9 +93,26 @@ export function GroupDetail(props: { id: string }) {
   const stageAdd = (id: string) => {
     if (id && !pendAdd().includes(id)) setPendAdd((a) => [...a, id]);
   };
+  const mappingItems = createMemo(() => {
+    const kept = (mappings.data ?? [])
+      .filter((m) => !pendMapRemove().has(m.id))
+      .map((m) => ({ id: m.id, kind: "idp-mapping", name: m.claim_value, sub: issuerHost(m.issuer) }));
+    const added = pendMapAdd().map((v) => ({ id: `new:${v}`, kind: "idp-mapping", name: v, sub: "on save" }));
+    return [...kept, ...added];
+  });
+  const stageMapRemove = (id: string) => {
+    if (id.startsWith("new:")) setPendMapAdd((a) => a.filter((v) => `new:${v}` !== id));
+    else setPendMapRemove((s) => { const next = new Set(s); next.add(id); return next; });
+  };
+  const stageMapAdd = (value: string) => {
+    if (value && !pendMapAdd().includes(value) && !(mappings.data ?? []).some((m) => m.claim_value === value)) setPendMapAdd((a) => [...a, value]);
+  };
+
   const resetStaging = () => {
     setPendAdd([]);
     setPendRemove(new Set<string>());
+    setPendMapAdd([]);
+    setPendMapRemove(new Set<string>());
     setErr(null);
   };
 
@@ -104,8 +127,11 @@ export function GroupDetail(props: { id: string }) {
         }
         for (const id of pendRemove()) await removeGroupMember(props.id, id);
         for (const id of pendAdd()) await addGroupMember(props.id, id);
+        for (const id of pendMapRemove()) await deleteGroupMapping(props.id, id);
+        for (const v of pendMapAdd()) await createGroupMapping(props.id, v);
         await grantCommit();
         await Promise.all([
+          qc.invalidateQueries({ queryKey: [...GROUPS_KEY, props.id, "idp-mappings"] }),
           qc.invalidateQueries({ queryKey: [...GROUPS_KEY, props.id] }),
           qc.invalidateQueries({ queryKey: [...GROUPS_KEY, props.id, "members"] }),
           qc.invalidateQueries({ queryKey: GROUPS_KEY }),
@@ -185,6 +211,21 @@ export function GroupDetail(props: { id: string }) {
         onRemove={editing() ? (item) => stageRemove(item.id) : undefined}
         add={editing() ? { placeholder: "Add a member...", options: addable().map((p) => ({ id: p.id, label: userName(p) })), onAdd: stageAdd, canAdd: true } : undefined}
       />
+
+      <div class="flex flex-col gap-1.5">
+        <RelatedList
+          label="Identity provider groups"
+          items={mappingItems()}
+          empty="No identity provider group maps here."
+          onRemove={editing() ? (item) => stageMapRemove(item.id) : undefined}
+          add={editing() ? { placeholder: "A groups claim value, e.g. av-support", onAdd: stageMapAdd, canAdd: true } : undefined}
+        />
+        <p class="text-xs text-base-content/50">
+          A person who signs in with single sign-on joins this group when their provider's groups claim carries one of these
+          values, and leaves it at the sign-in or re-check whose token no longer does; those members show as from SSO. A member
+          added here stays. No provider group may reach an owner, so a group with an owner grant cannot be mapped.
+        </p>
+      </div>
 
       <div>
         <div class="eyebrow mb-1.5">Grants (inherited by every member)</div>

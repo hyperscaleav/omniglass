@@ -3,7 +3,7 @@ import { render, fireEvent, screen, waitFor, within } from "@solidjs/testing-lib
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Groups from "./Groups";
-import { GROUPS_KEY, type Group, type GroupMember } from "../lib/groups";
+import { GROUPS_KEY, type Group, type GroupMapping, type GroupMember } from "../lib/groups";
 import { USERS_KEY, ROLES_KEY, type User } from "../lib/users";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
@@ -16,11 +16,12 @@ const members: GroupMember[] = [{ user_id: uuidFor("u-alice"), kind: "person", n
 const alice: User = { id: uuidFor("u-alice"), kind: "person", active: true, person: { username: "alice", email: "alice@example.com", label: "Alice Ng" }, grants: [], groups: [{ id: uuidFor("g-hd"), name: "Help Desk" }] };
 const me: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
 
-function mount() {
+function mount(opts: { members?: GroupMember[]; mappings?: GroupMapping[] } = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+  qc.setQueryData([...GROUPS_KEY, uuidFor("g-hd"), "idp-mappings"], opts.mappings ?? []);
   qc.setQueryData([...GROUPS_KEY], [group]);
   qc.setQueryData([...GROUPS_KEY, uuidFor("g-hd")], group);
-  qc.setQueryData([...GROUPS_KEY, uuidFor("g-hd"), "members"], members);
+  qc.setQueryData([...GROUPS_KEY, uuidFor("g-hd"), "members"], opts.members ?? members);
   qc.setQueryData([...GROUPS_KEY, uuidFor("g-hd"), "grants"], []);
   qc.setQueryData([...USERS_KEY], [alice]);
   qc.setQueryData([...USERS_KEY, alice.id], alice); // the drilled user blade fetches getUser by id
@@ -200,6 +201,53 @@ describe("Groups page", () => {
     const userBlade = asides()[1] as HTMLElement;
     fireEvent.click(within(userBlade).getByText("Help Desk"));
     expect(asides().length).toBe(2);
+  });
+});
+
+// Identity provider groups (#2363): the roster says which members single
+// sign-on brought, and the mapping editor stages claim values beside the
+// members, applied on Save.
+describe("Groups identity provider mappings", () => {
+  afterEach(() => vi.restoreAllMocks());
+  const issuer = "https://login.example.com/tenant";
+  const openBlade = async () => {
+    fireEvent.click(screen.getByText("Help Desk"));
+    return waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+  };
+
+  it("marks a member single sign-on brought, naming the provider's host", async () => {
+    mount({ members: [...members, { user_id: uuidFor("u-bob"), kind: "person", name: "bob", source: "idp", issuer }] });
+    const blade = await openBlade();
+    expect(within(blade).getByText("from SSO (login.example.com)")).toBeTruthy();
+    expect(within(blade).getAllByText(/^from SSO/)).toHaveLength(1); // alice is local
+  });
+
+  it("lists the mapped claim values and stages a new one, posted on Save", async () => {
+    const posted: unknown[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const req = input instanceof Request ? input : new Request(input, init);
+      if (req.method === "POST" && req.url.includes("/idp-mappings")) {
+        posted.push(await req.json());
+        return new Response(JSON.stringify({ id: uuidFor("m-new"), group_id: group.id, group: group.name, issuer, claim_value: "night-ops", created_at: "2026-11-23T00:00:00Z" }), { status: 201, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({}), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    mount({ mappings: [{ id: uuidFor("m-av"), group_id: group.id, issuer, claim_value: "av-support" }] });
+    const blade = await openBlade();
+    expect(within(blade).getByText("av-support")).toBeTruthy();
+    expect(within(blade).queryByPlaceholderText(/groups claim value/)).toBeNull(); // edit-only
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    const entry = within(blade).getByPlaceholderText(/groups claim value/) as HTMLInputElement;
+    fireEvent.input(entry, { target: { value: "night-ops" } });
+    fireEvent.keyDown(entry, { key: "Enter" });
+    expect(within(blade).getByText("night-ops")).toBeTruthy();
+    expect(posted).toHaveLength(0); // staged, not sent
+    fireEvent.click(within(blade).getByText("Save"));
+    await waitFor(() => expect(posted).toEqual([{ claim_value: "night-ops" }]));
   });
 });
 
