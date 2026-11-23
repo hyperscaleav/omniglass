@@ -1168,7 +1168,7 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; prefill
         ready={!!d.sampleKey && !errors().fireValue && !errors().fireExpr && !errors().clearValue && !errors().clearExpr && !exprBad()}
         reads={readsLabel()}
         condition={conditionWords(d, readsLabel(), readsUnit())}
-        place={(id) => { const c = componentById().get(id); return c ? placeOf(c) : ""; }}
+        whereIs={(id) => { const c = componentById().get(id); return c ? placeOf(c) : ""; }}
       />
     </form>
   );
@@ -1186,7 +1186,7 @@ function RulePreviewPanel(p: {
   ready: boolean;
   reads: string;
   condition: string;
-  place: (componentId: string) => string;
+  whereIs: (componentId: string) => string;
 }): JSX.Element {
   const [result, setResult] = createSignal<RulePreview | null>(null);
   const [busy, setBusy] = createSignal(false);
@@ -1214,7 +1214,7 @@ function RulePreviewPanel(p: {
       <A href={`/components/${q.s.component_id}`} class="link link-hover">{q.s.component}</A>
       <span class="text-base-content/60">· {p.reads}</span>
       <Show when={q.s.instance}><span class="font-data text-base-content/60">{q.s.instance}</span></Show>
-      <Show when={p.place(q.s.component_id)}><span class="text-[11px] text-base-content/45">in {p.place(q.s.component_id)}</span></Show>
+      <Show when={p.whereIs(q.s.component_id)}><span class="text-[11px] text-base-content/45">in {p.whereIs(q.s.component_id)}</span></Show>
     </span>
   );
   return (
