@@ -7,7 +7,7 @@ refs: [2460, 2427, 2289, 878]
 Adding a device took about twelve clicks over three pages and a drawer, an unfiltered list of every
 driver, a secret typed by name, and an address read off the Simulation page, with no test at the
 end. **Add a component** (`/components/add`) is now one page of six steps: the product (a filterable
-picker naming each product's type and vendor) and its name; the system, the slot and the place (taken
+picker naming each product's type and vendor) and its name; the system, the slot and the location (taken
 from the system, since the server does not inherit it yet, #878); the endpoint, with the product's
 own driver chosen and its type's other drivers listed next; the credentials, picked from the secrets
 of the kind each input takes, with the secret form inline to create a missing one; the poll test of

@@ -59,7 +59,7 @@ import { entityLabel } from "../lib/entities";
 
 // AddComponentFlow (#2460): adding a device is one path that ends with data.
 // Six steps on one page: the product and the name, where it sits (system,
-// slot, place), the endpoint (driver, outpost, address, or a simulated device
+// slot, location), the endpoint (driver, outpost, address, or a simulated device
 // in a lab), the credentials (picked, never typed), a test that runs the
 // driver's polls through the outpost, and the component's own page. Each
 // step is the console's existing piece (the create form's identity section,
@@ -67,7 +67,7 @@ import { entityLabel } from "../lib/entities";
 // not a copy. Nothing is created until "Create and test"; every way out
 // short of the end takes what was created back out (lib/add_component_flow).
 //
-// Entry: /components/add, with ?under= (a place), ?system=, ?product= and
+// Entry: /components/add, with ?under= (a location), ?system=, ?product= and
 // ?simulated=1 to start where the operator stood. The plain create form stays
 // at /components/create, linked here as the advanced way.
 
@@ -154,7 +154,7 @@ export default function AddComponentFlow(): JSX.Element {
     if (!d.outpost && outposts.data?.length === 1) setD("outpost", outposts.data[0].name);
   });
 
-  // Where: the system's slots this product may fill, and the system's place.
+  // Where: the system's slots this product may fill, and the system's location.
   const bindable = createMemo(() => bindableSystemNodes(systems.data ?? []));
   const mayBind = () => can(me.data, "system", "update") && bindable().length > 0;
   const systemRow = () => systems.data?.find((s) => s.id === d.system);
@@ -377,7 +377,7 @@ export default function AddComponentFlow(): JSX.Element {
                 when={mayBind()}
                 fallback={<p class="text-xs text-base-content/60">Putting a component in a system writes that system's membership, which needs <code>system:update</code> on a system you can see. Add it without one; it can join a system later.</p>}
               >
-                <FieldRow label="System" hint="The system it serves. Its place comes with it.">
+                <FieldRow label="System" hint="The system it serves. Its location comes with it.">
                   <TreeSelect items={bindable()} value={d.system} onChange={chooseSystem} rootLabel="None" />
                 </FieldRow>
                 <Show when={d.system}>
@@ -394,10 +394,10 @@ export default function AddComponentFlow(): JSX.Element {
                 </Show>
               </Show>
               <FieldRow
-                label="Place"
+                label="Location"
                 hint={
                   d.system && inherited() && d.location === inherited()
-                    ? `Taken from ${systemRow() ? entityLabel(systemRow()!) : "the system"}. The flow sets it, since the platform does not inherit a place from a system yet (#878).`
+                    ? `Taken from ${systemRow() ? entityLabel(systemRow()!) : "the system"}. The flow sets it, since the platform does not inherit a location from a system yet (#878).`
                     : "Where it physically sits."
                 }
               >

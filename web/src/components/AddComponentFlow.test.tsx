@@ -177,7 +177,7 @@ describe("AddComponentFlow", () => {
     expect(offered).toEqual(["Boreal Edge 55Display, boreal", "Boreal Edge 65Display, boreal"]);
   });
 
-  it("walks product, place, simulated endpoint and picked credential to a test that read values, then lands on the component", async () => {
+  it("walks product, location, simulated endpoint and picked credential to a test that read values, then lands on the component", async () => {
     const calls = stub();
     mount();
     await walkToCredentials();
@@ -244,7 +244,7 @@ describe("AddComponentFlow", () => {
     expect(calls.filter((c) => c.startsWith("DELETE"))).toEqual([`DELETE /endpoints/${E_NEW}`, `DELETE /components/${C_NEW}`]);
   });
 
-  it("starts in the system it was opened from, by name, with the system's place", async () => {
+  it("starts in the system it was opened from, by name, with the system's location", async () => {
     stub();
     mount("/components/add?system=lobby-av&product=boreal-edge-55");
     await next();

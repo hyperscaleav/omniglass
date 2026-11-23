@@ -1,6 +1,6 @@
 ---
 title: Add a component
-description: "Adding a device in one flow: its product and name, the system and place it serves, its endpoint and driver, the credential it accepts, a test that reads its first values, and its own page."
+description: "Adding a device in one flow: its product and name, the system it serves and its location, its endpoint and driver, the credential it accepts, a test that reads its first values, and its own page."
 sidebar:
   label: Add a component
   order: 3
@@ -20,7 +20,7 @@ pieces is [the model in one pass](/start/the-model/) and [data collection](/arch
 
 ## Where it starts
 
-- **Explore**, **New**, **Component** (or a location row's **+**, which starts it in that place).
+- **Explore**, **New**, **Component** (or a location row's **+**, which starts it at that location).
 - A **system's** page: **Add a component** beside its Components, which starts it in that system.
 - In a lab, the **Simulation** page: **Add and monitor a device**, which starts it on a simulated
   device (below).
@@ -36,8 +36,8 @@ form (advanced)**.
    and the name the platform gives it: the name and label fields work as they do on the plain form
    (locked on the platform's answer, unlocked to type your own).
 2. **Where.** The **system** it serves, the **slot** it fills there (only the slots a component of
-   this product may fill are offered), and its **place**. Choosing a system sets the place to the
-   system's own. The flow sets it, since the platform does not yet inherit a component's place from
+   this product may fill are offered), and its **location**. Choosing a system sets the location to the
+   system's own. The flow sets it, since the platform does not yet inherit a component's location from
    its system ([#878](https://github.com/hyperscaleav/omniglass/issues/878)); you can still pick
    another.
 3. **Endpoint.** The **driver** is the product's own, chosen for you, with the drivers other
