@@ -435,6 +435,17 @@ func checkDeclaredValue(ctx context.Context, q querier, propertyName string, val
 	return nil
 }
 
+// checkContractDefault holds a contract line's default (a product's, a
+// standard's or a location type's) to its property type, as checkDeclaredValue
+// holds a declared value: every owner under the contract reads the default as
+// its own effective value. A line with no default has nothing to check.
+func checkContractDefault(ctx context.Context, q querier, propertyName string, def json.RawMessage) error {
+	if len(def) == 0 || string(def) == "null" {
+		return nil
+	}
+	return checkDeclaredValue(ctx, q, propertyName, def)
+}
+
 // EffectiveProperties is the owner's properties read (#1297): one row per
 // property key the owner has, the union of the declared cascade and calc rule
 // outputs (declaredProperties) with every key a live observer reports or a

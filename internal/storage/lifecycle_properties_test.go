@@ -3,6 +3,7 @@ package storage_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/seed"
@@ -63,7 +64,20 @@ func TestLifecycleProperties(t *testing.T) {
 		}
 	}
 
-	if _, err := gw.SetProperty(ctx, "", "component", "lc-a", "warranty-end", "", json.RawMessage(`"next tuesday"`), all, all); err == nil {
-		t.Fatal("a malformed date was accepted, want it refused")
+	for _, bad := range []string{`"next tuesday"`, `"2030-02-30"`, `"2030-13-45"`} {
+		if _, err := gw.SetProperty(ctx, "", "component", "lc-a", "warranty-end", "", json.RawMessage(bad), all, all); !errors.Is(err, storage.ErrPropertyValueInvalid) {
+			t.Fatalf("component warranty-end %s: err = %v, want ErrPropertyValueInvalid", bad, err)
+		}
+	}
+
+	// A contract default is held to the same type as a declared value: every
+	// component of the product would otherwise read the bad default as its own.
+	if _, err := gw.SetProductProperty(ctx, "", "lc-widget", storage.ProductPropertySpec{
+		PropertyTypeName: "end-of-life", DefaultValue: json.RawMessage(`"soon"`),
+	}); !errors.Is(err, storage.ErrPropertyValueInvalid) {
+		t.Fatalf("malformed product default: err = %v, want ErrPropertyValueInvalid", err)
+	}
+	if _, err := gw.SetProductProperty(ctx, "", "lc-widget", storage.ProductPropertySpec{PropertyTypeName: "install-date"}); err != nil {
+		t.Fatalf("a contract line with no default: %v", err)
 	}
 }

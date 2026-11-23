@@ -162,7 +162,8 @@ Every install seeds six official lifecycle fields, with no setup: four dates on 
 (`2030-06-30`); and two numbers on the metric lane, `replacement-cost` (USD, two decimals) and
 `expected-life-years`. Set a date as a product's contract default and it applies to every component
 of that product; set it on one component and that component's value wins. A value that is not a real
-date is refused (422), and the console's date inputs refuse it before sending. Cost and expected life
+date (`2030-02-30` included) is refused (422), on a component and as a product default alike, and the
+console's date inputs refuse it before sending. Cost and expected life
 are product facts: set them only as the product contract's default, with no per-component override.
 They show formatted (dates as dates, cost as currency) in a **Lifecycle** group on the component and
 the product page. No alarm or reminder watches them yet.

@@ -89,7 +89,7 @@ func registerLocationPropertyRoutes(api huma.API, a *authenticator, gw storage.G
 		Method:      http.MethodPut,
 		Path:        "/locations/{name}/properties/{property}",
 		Summary:     "Set a property on a location",
-		Description: "Declares a value for the property on this location, overriding the location type contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by location:update; read and update scopes drive the 404 versus 403 split.",
+		Description: "Declares a value for the property on this location, overriding the location type contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise), and the value must satisfy the property type's data type and validation (422 otherwise). Gated by location:update; read and update scopes drive the 404 versus 403 split.",
 	}, "location", "update"), func(ctx context.Context, in *setLocationPropertyInput) (*locationPropertyOutput, error) {
 		raw, err := encodePropertyJSON(in.Body.Value, "value")
 		if err != nil {
