@@ -303,11 +303,13 @@ entities, and enrolling one is an admin's job, so their entry sits in Admin (liv
 `outpost:read` plus ABAC scope; ADR-1767). **Endpoints and tasks are not nav items**: an endpoint is a
 panel on a component, a task a panel on an outpost, facets of the owning entity's detail page.
 
-Admin is the renamed Settings group: Users, Roles, User groups, Audit, Outposts, Status (the Platform
-health page, #1767: whether Omniglass itself is well is administration, not fleet work, so it sits
+Admin is the renamed Settings group: Users, Roles, User groups, Audit, Outposts, Platform health (#1767:
+whether Omniglass itself is well is administration, not fleet work, so it sits
 here behind the same `outpost:read` gate as Outposts, whose rows it reads), plus the live Settings leaf, the
 platform-preferences page. **Every sidebar tab is one word**, a group, a leaf and a group's child
-alike (`nav.test.ts` holds it); a tab's word names the door, and the page it opens may carry a
+alike (`nav.test.ts` holds it), with two exceptions that name a page whose own name has no good
+single word: User groups and Platform health (ADR-2446: the door, the top bar and the page heading
+all read that one name). Any other tab's word names the door, and the page it opens may carry a
 longer title.
 
 **Home today** (`/`) is a row of tiles, each a scoped read of the platform rather than a

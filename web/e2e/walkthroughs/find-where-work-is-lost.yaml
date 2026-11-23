@@ -14,7 +14,7 @@
 title: Find where work is lost
 description: Read the platform's pipeline hop by hop at 0, open a hop's explainer, break a simulated panel and watch its failures land on the panel while the outpost hop stays at 0, then follow a component's row to its delivery series.
 steps:
-  - goto: /platform
+  - goto: /platform?open=pipeline
     caption: Platform health draws the path a sample takes from its run to the store, one hop at a time.
   - wait: { selector: '[data-testid=pipeline]:has([data-testid=pipeline-hop-outpost] [data-testid=hop-loss]:text-is("0%")):has([data-testid=pipeline-hop-ingest] [data-testid=hop-loss]:text-is("0%"))', timeout: 30000 }
     caption: Each hop shows what it took in, what it handed on, and the share it lost. 0% is healthy.
@@ -37,8 +37,8 @@ steps:
   - wait: { selector: '[data-testid=vital-poll-failure-count] > span:first-child:not(:text-is("0"))', timeout: 30000 }
     caption: The failed polls land on the panel's own component, as its poll failures.
     hold: 1500
-  - goto: /platform
-    caption: Back on Platform health.
+  - goto: /platform?open=pipeline
+    caption: Back on Platform health, Where work is lost still open.
   - wait: { selector: '[data-testid=pipeline]:has([data-testid=pipeline-hop-outpost] [data-testid=hop-loss]:text-is("0%")):has([data-testid=pipeline-hop-ingest] [data-testid=hop-loss]:text-is("0%"))' }
     caption: Every hop still reads 0%. A failed poll is a device that did not answer, not work the platform dropped. A hop that does lose a share is tinted, so it stands out.
     poster: true

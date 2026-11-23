@@ -49,6 +49,7 @@ export default function Groups() {
         columns,
         empty: "No user groups yet.",
         rowId: (g) => g.id,
+        rowAlt: (g) => g.name,
         legacyParam: "g",
         blades: { registry: identityRegistry, rootKind: "group" },
         create: can(me.data, "user_group", "create")

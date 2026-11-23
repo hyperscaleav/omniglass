@@ -2645,17 +2645,41 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var qProduct string
+				var qDriver string
+				var qComponentType string
+				var qLimit int
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List components in scope",
-					Long:    "Lists the components the caller may read, each filtered to its scope subtree. Gated by component:read.",
+					Long:    "Lists the components the caller may read, each filtered to its scope subtree. Optional product, driver and component_type filters narrow to the components a catalog row classifies or a driver serves, and limit caps the page while total counts every match (the catalog drawers' used-by reads). Gated by component:read.",
 					Example: "  omniglass component list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/components")
+						q := url.Values{}
+						if cmd.Flags().Changed("product") {
+							q.Set("product", fmt.Sprintf("%v", qProduct))
+						}
+						if cmd.Flags().Changed("driver") {
+							q.Set("driver", fmt.Sprintf("%v", qDriver))
+						}
+						if cmd.Flags().Changed("component-type") {
+							q.Set("component_type", fmt.Sprintf("%v", qComponentType))
+						}
+						if cmd.Flags().Changed("limit") {
+							q.Set("limit", fmt.Sprintf("%v", qLimit))
+						}
+						if enc := q.Encode(); enc != "" {
+							path += "?" + enc
+						}
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
+				cmd.Flags().StringVar(&qProduct, "product", "", "Only components of this product (name or uuid)")
+				cmd.Flags().StringVar(&qDriver, "driver", "", "Only components of a product this driver serves (name or uuid)")
+				cmd.Flags().StringVar(&qComponentType, "component-type", "", "Only components of a product classified under exactly this component type (name or uuid)")
+				cmd.Flags().IntVar(&qLimit, "limit", 0, "Cap the page at this many rows; 0 or absent is no cap. total still counts every match.")
 				return cmd
 			}()
 			return cmd
@@ -6561,17 +6585,31 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var qDeclaresMetric string
+				var qDeclaresProperty string
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List products",
-					Long:    "Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.",
+					Long:    "Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. declares_metric and declares_property narrow it to the products whose contract declares that key. Gated by product:read.",
 					Example: "  omniglass product list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/products")
+						q := url.Values{}
+						if cmd.Flags().Changed("declares-metric") {
+							q.Set("declares_metric", fmt.Sprintf("%v", qDeclaresMetric))
+						}
+						if cmd.Flags().Changed("declares-property") {
+							q.Set("declares_property", fmt.Sprintf("%v", qDeclaresProperty))
+						}
+						if enc := q.Encode(); enc != "" {
+							path += "?" + enc
+						}
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
+				cmd.Flags().StringVar(&qDeclaresMetric, "declares-metric", "", "Only products whose contract declares this metric (name or uuid)")
+				cmd.Flags().StringVar(&qDeclaresProperty, "declares-property", "", "Only products whose contract declares this property (name or uuid)")
 				return cmd
 			}()
 			return cmd
@@ -8415,17 +8453,31 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var qStandard string
+				var qLimit int
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List systems in scope",
-					Long:    "Lists the systems the caller may read, each filtered to its scope subtree. Gated by system:read.",
+					Long:    "Lists the systems the caller may read, each filtered to its scope subtree. An optional standard filter narrows to the systems built to one standard, and limit caps the page while total counts every match. Gated by system:read.",
 					Example: "  omniglass system list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/systems")
+						q := url.Values{}
+						if cmd.Flags().Changed("standard") {
+							q.Set("standard", fmt.Sprintf("%v", qStandard))
+						}
+						if cmd.Flags().Changed("limit") {
+							q.Set("limit", fmt.Sprintf("%v", qLimit))
+						}
+						if enc := q.Encode(); enc != "" {
+							path += "?" + enc
+						}
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
+				cmd.Flags().StringVar(&qStandard, "standard", "", "Only systems built to this standard (name or uuid)")
+				cmd.Flags().IntVar(&qLimit, "limit", 0, "Cap the page at this many rows; 0 or absent is no cap. total still counts every match.")
 				return cmd
 			}()
 			return cmd

@@ -5,6 +5,7 @@ import Drawer from "../components/Drawer";
 import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
 import KVStacked from "../components/KVStacked";
+import CatalogRef from "../components/CatalogRef";
 import Eyebrow from "../components/Eyebrow";
 import InfoTip from "../components/InfoTip";
 import ExpressionField from "../components/ExpressionField";
@@ -74,10 +75,10 @@ function TransitionPills(p: { on: string[] | null | undefined }): JSX.Element {
   );
 }
 
-function TargetChips(p: { targets: string[] | null | undefined }): JSX.Element {
+function TargetChips(p: { targets: string[] | null | undefined; linked?: boolean }): JSX.Element {
   return (
     <span class="flex flex-wrap gap-1">
-      <For each={p.targets ?? []}>{(t) => <span class={`${PILL_NEUTRAL} font-data`}>{t}</span>}</For>
+      <For each={p.targets ?? []}>{(t) => <span class={`${PILL_NEUTRAL} font-data`}><Show when={p.linked} fallback={t}><CatalogRef kind="notification_target" name={t} /></Show></span>}</For>
     </span>
   );
 }
@@ -270,7 +271,7 @@ function ActionRuleBladeBody(p: { name: string }): JSX.Element {
               hint={ACTION_RULE_HINTS.type}
               value={
                 <Show when={r().notification_type} fallback={<span class="text-base-content/60">the official message</span>}>
-                  <span class="font-data">{r().notification_type}</span>
+                  <CatalogRef kind="notification_type" name={r().notification_type} />
                 </Show>
               }
             />
@@ -290,7 +291,7 @@ function ActionRuleBladeBody(p: { name: string }): JSX.Element {
           </section>
           <section class="flex flex-col gap-2" aria-label="Sends to">
             <Eyebrow label="Sends to" hint={ACTION_RULE_HINTS.targets} />
-            <TargetChips targets={r().targets} />
+            <TargetChips targets={r().targets} linked />
           </section>
           <Show when={can(me.data, "notification", "read")}>
             <RecentNotifications rule={r().name} hint={ACTION_RULE_HINTS.recent} />

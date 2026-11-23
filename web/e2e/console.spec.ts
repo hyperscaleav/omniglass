@@ -492,6 +492,9 @@ test.describe("operator console", () => {
     await expect(tile).toContainText(/not up/);
     await tile.click();
     await page.waitForURL(/\/web\/platform$/);
+    // One name: the sidebar door, the top bar and the heading (#2446).
+    await expect(page.getByRole("heading", { level: 1, name: "Platform health" })).toBeVisible();
+    await expect(page.locator("aside").getByRole("link", { name: "Platform health" })).toBeVisible();
 
     // The header: the build the server booted, how long it has been up, and the
     // platform system's health, all read from the platform's own components.
@@ -499,7 +502,16 @@ test.describe("operator console", () => {
     await expect(header.getByTestId("platform-version").first()).not.toHaveText(/not reported/);
     await expect(header.getByTestId("platform-uptime").first()).not.toHaveText(/not reported/);
     await expect(header.getByTestId("platform-health")).toContainText(/healthy|incomplete|degraded|outage/);
-    await expect(page.getByTestId("platform-lab")).toBeVisible();
+    // The banner says "Lab instance"; the page does not say it a second time.
+    await expect(page.getByTestId("platform-lab")).toHaveCount(0);
+
+    // The sections open folded; the outposts open on demand and the open state is
+    // the URL's, so it survives a reload.
+    await expect(page.getByTestId("platform-outposts")).toHaveCount(0);
+    await page.getByTestId("section-outposts").getByRole("button", { expanded: false }).click();
+    await expect(page).toHaveURL(/open=outposts/);
+    await page.reload();
+    await expect(page.getByTestId("platform-outposts")).toBeVisible();
 
     // A row for every enrolled outpost, and a checkin figure on each that has
     // checked in (the empty scenario enrolls none; the read-platform-health
@@ -527,7 +539,7 @@ test.describe("operator console", () => {
   test("platform health @simulator: every simulated outpost reads measured, no gap open, every polled protocol reached", async ({ page }) => {
     test.skip(!process.env.OG_E2E_SIMULATOR, "needs a lab with a simulator (run.sh's second phase)");
     test.setTimeout(150_000);
-    await page.goto("/web/platform");
+    await page.goto("/web/platform?open=simulation");
     const section = page.getByTestId("platform-simulation");
     await expect(section).toBeVisible({ timeout: 30_000 });
     const cards = section.locator("[data-testid^=platform-sim-][data-state]");
@@ -581,7 +593,7 @@ test.describe("operator console", () => {
     type Pipeline = {
       hops: { id: string; label: string; kinds: { kind: string; last_hour: Figure }[] | null; total: { last_hour: Figure }; by_component: { name: string }[] | null }[] | null;
     };
-    await page.goto("/web/platform");
+    await page.goto("/web/platform?open=pipeline");
     const flow = page.getByTestId("pipeline");
     await expect(flow).toBeVisible();
 
@@ -656,7 +668,9 @@ test.describe("operator console", () => {
 
     await page.goto("/web/platform");
     const set = page.locator("[data-testid^=server-panels-]").first();
-    await expect(set).toHaveAttribute("open", "");
+    // The server's section opens on demand (#2446), and says so in the address.
+    await set.getByRole("button", { expanded: false }).click();
+    await expect(page).toHaveURL(/open=server-/);
     for (const panel of ["requests", "ingest", "queues", "retention"]) {
       const rows = set.getByTestId(`server-panel-${panel}`).locator("tr[data-testid^=panel-row-]");
       await expect(rows.filter({ hasNotText: /not reported/ }).first()).toBeVisible();

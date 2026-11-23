@@ -7,6 +7,7 @@ import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
 import DriverSpecMenu from "../components/DriverSpecMenu";
+import { CollectedByDriver, DriverUsedBy } from "../components/CatalogUsage";
 import { useFormActions } from "../lib/formactions";
 import { Plus } from "../components/icons";
 import {
@@ -188,6 +189,8 @@ function DriverBladeBody(p: { id: string }): JSX.Element {
               </div>
             )}
           </Show>
+          <CollectedByDriver driver={r().name} title="Collects and offers" />
+          <DriverUsedBy name={r().name} />
         </div>
       )}
     </Show>
