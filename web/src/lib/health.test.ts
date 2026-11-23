@@ -24,9 +24,10 @@ const slot = (over: Partial<HealthSlot>): HealthSlot => ({
   down: [],
   assigned_to: [],
   alarms: [],
+  to_attach: [],
   active: true,
   ...over,
-});
+} as HealthSlot);
 
 describe("healthOf", () => {
   it("narrows to the three states the console knows", () => {

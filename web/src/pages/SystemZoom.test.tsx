@@ -249,6 +249,24 @@ describe("the system zoom", () => {
     expect(within(strip).getAllByRole("button", { name: /^Timeline of / }).length).toBeGreaterThan(0);
   });
 
+  // #2459: a member outside every slot with an open alarm is on the strip, the
+  // verdict line says why, and the members section says it is not in a slot.
+  it("lists an outside-a-slot member's alarm, states the reason, and names the member not in a slot", () => {
+    const outside = {
+      ...health,
+      health: "degraded",
+      reason: "1 member outside a slot has an open alarm (amp-1)",
+      members: [{ name: "amp-1", id: uuidFor("szp-c-amp"), health: "outage", outside_slot: true, to_attach: false,
+        alarms: [{ id: "al-amp", component: "amp-1", component_id: uuidFor("szp-c-amp"), severity: "high", message: "Amplifier powered off", raised_at: "2026-08-15T15:00:00Z", acknowledged: false }] }],
+    } as unknown as FleetHealth;
+    mount(undefined, outside);
+    const strip = screen.getByTestId("alarm-strip");
+    expect(within(strip).getByText("Amplifier powered off")).toBeTruthy();
+    expect(within(strip).getByText(/not in a slot/)).toBeTruthy();
+    expect(screen.getByTestId("health-reason").textContent).toBe("degraded: 1 member outside a slot has an open alarm (amp-1)");
+    expect(screen.getByTestId("outside-slot-notice").textContent).toContain("1 member is not in a slot: amp-1.");
+  });
+
   // The strip is where a storm is triaged from (#990): acknowledging a causing
   // alarm must not need the component's own page.
   describe("acknowledging from the Why strip", () => {
@@ -371,7 +389,7 @@ describe("the components-first body (#790)", () => {
   it("a no-slot member is a row saying so, not a strip of chips", () => {
     mount();
     const row = screen.getByTestId(`member-${uuidFor("szp-c-power")}`);
-    expect(within(row).getByText("no slot")).toBeTruthy();
+    expect(within(row).getByText("not in a slot")).toBeTruthy();
     expect(screen.queryByTestId("no-slot-strip")).toBeNull();
   });
 

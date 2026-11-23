@@ -82,23 +82,24 @@ const health: FleetHealth = {
   owner_kind: "system",
   owner: "boardroom",
   health: "degraded",
-  transitions: [],
+  members: [],
+      transitions: [],
   systems: [],
   slots: [
     {
       name: "table-mic", label: "Table microphone", impact: "degraded",
       quorum: 2, satisfying: 1, short: 1, spare: 0, impaired: true, active: true,
-      assigned_to: ["mic-1"], down: [], alarms: [],
+      assigned_to: ["mic-1"], down: [], alarms: [], to_attach: [],
     },
     {
       name: "main-display", label: "Main display", impact: "outage",
       quorum: 1, satisfying: 1, short: 0, spare: 0, impaired: false, active: true,
-      assigned_to: ["disp-1"], down: [], alarms: [],
+      assigned_to: ["disp-1"], down: [], alarms: [], to_attach: [],
     },
     {
       name: "spare-panel", label: "Spare panel", impact: "none",
       quorum: 1, satisfying: 0, short: 1, spare: 0, impaired: true, active: true,
-      assigned_to: [], down: [], alarms: [],
+      assigned_to: [], down: [], alarms: [], to_attach: [],
     },
   ],
 };

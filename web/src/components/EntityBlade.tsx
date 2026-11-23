@@ -16,6 +16,9 @@ import { FLEET_VIEW_KEY, fleetView } from "../lib/fleet";
 import { entityLabel } from "../lib/entities";
 import { systemHealth, systemHealthKey, locationHealth, locationHealthKey, SYSTEM_HEALTH_PREFIX, SYSTEM_HEALTHS_KEY } from "../lib/health";
 import { alarmRows, sinceOf } from "../lib/system_zoom";
+import HealthReason from "./HealthReason";
+import { can, useMe } from "../lib/auth";
+import OutsideSlotNotice from "./OutsideSlotNotice";
 import { dotHealth, leafAlarmSince } from "../lib/component_leaf";
 import { SYSTEMS_KEY, listSystems, deleteSystem } from "../lib/systems";
 import { LOCATIONS_KEY, listLocations, deleteLocation } from "../lib/locations";
@@ -165,6 +168,7 @@ function SystemBody(props: { id: string }) {
   const cluster = () => view.data?.systems?.find((s) => s.id === props.id);
   const row = () => (systems.data ?? []).find((s) => s.id === props.id);
   const scale = useSeverity();
+  const me = useMe();
   const alarms = createMemo(() => (health.data ? alarmRows(health.data, scale().levels) : []));
   const strip = createMemo(() => (health.data ? slotStrip(health.data) : undefined));
   const count = () => (cluster()?.dots ?? []).length;
@@ -186,7 +190,9 @@ function SystemBody(props: { id: string }) {
       <div class="flex flex-wrap items-center gap-2">
         <HealthBadge health={cluster()?.health ?? undefined} size="sm" />
         <SinceLine since={health.data ? sinceOf(health.data, now) : undefined} />
+        <HealthReason health={health.data?.health} reason={health.data?.reason} />
       </div>
+      <OutsideSlotNotice members={health.data?.members ?? undefined} placeHref={can(me.data, "system", "update") ? `/systems/${props.id}?tab=configure` : undefined} />
       <Why
         rows={alarms().map((a) => ({
           severity: a.severity,

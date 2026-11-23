@@ -10,6 +10,8 @@ import DetailGate from "../components/DetailGate";
 import LocationCard from "../components/LocationCard";
 import TemplateNotice from "../components/TemplateNotice";
 import MemberRows from "../components/MemberRows";
+import HealthReason from "../components/HealthReason";
+import OutsideSlotNotice from "../components/OutsideSlotNotice";
 import OutlineWorkspace from "../components/OutlineWorkspace";
 import { FLEET_VIEW_KEY, fleetView, childrenIndex } from "../lib/fleet";
 import { systemHealth, systemHealthKey, healthOf } from "../lib/health";
@@ -337,6 +339,7 @@ export default function SystemZoom() {
             <div data-testid="system-header" class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-base-300 px-4 py-3 text-sm">
               <Eyebrow label="System" hint="The logical group of components that makes this location work, and the thing Omniglass monitors: its health is what the components filling its slots add up to." />
               <HealthBadge health={health.data?.health} size="sm" />
+              <HealthReason health={health.data?.health} reason={health.data?.reason} />
               <Show when={health.data && sinceOf(health.data, now())}>
                 {(sc) => <span data-testid="since-line" class="tabular-nums text-base-content/70">since {fmtTime(sc().ts)} · {durationText(sc().ms)}</span>}
               </Show>
@@ -580,7 +583,7 @@ export default function SystemZoom() {
                               <Show when={a.componentId} fallback={<span class="font-mono text-xs text-base-content/60">{a.component}</span>}>
                                 {(cid) => <button type="button" class="cursor-pointer font-mono text-xs text-base-content/80 hover:underline" onClick={() => openComponent(cid())}>{a.component}</button>}
                               </Show>
-                              <span class="text-xs text-base-content/50">impairs {a.slotLabel} · {durationText(now() - Date.parse(a.raisedAt))}</span>
+                              <span class="text-xs text-base-content/50">{a.where} · {durationText(now() - Date.parse(a.raisedAt))}</span>
                               <Show when={a.acknowledged}>
                                 <span class="text-xs text-base-content/50">
                                   · acknowledged{a.acknowledgedBy ? ` by ${a.acknowledgedBy}` : ""}{a.acknowledgedAt ? ` ${fmtTime(a.acknowledgedAt)}` : ""}
@@ -598,6 +601,7 @@ export default function SystemZoom() {
                   </Show>
                   <section class="flex flex-col gap-2">
                     <Eyebrow label="Components" hint="The pieces of this system, each with the slot it fills. A slot gets its own header only where it says something a column cannot: more than one wanted, a shortfall, or nobody staffing it yet." />
+                    <OutsideSlotNotice members={health.data?.members ?? undefined} placeHref={can(me.data, "system", "update") ? `/systems/${id()}?tab=configure` : undefined} />
                     <MemberRows rows={members().rows} groups={members().groups} onOpen={openComponent} />
                   </section>
                   <Show when={mapDecl()}>

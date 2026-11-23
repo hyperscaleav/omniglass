@@ -176,6 +176,30 @@ describe("alarmRows", () => {
     });
   });
 
+  // #2459: every member's open alarms, slotted or not. A member outside every
+  // slot says so; a slotted member whose alarm impairs nothing says which slot
+  // it sits in; the build not in use stays out.
+  it("lists every member's open alarm, saying where each member sits", () => {
+    const withMembers = {
+      ...health,
+      members: [
+        { name: "mic-1", id: uuidFor("sz-c-mic"), health: "outage", outside_slot: false, to_attach: false,
+          alarms: [{ id: "al-1", component: "mic-1", component_id: uuidFor("sz-c-mic"), severity: "high", message: "No route to host", raised_at: "2026-08-15T14:20:00Z" }] },
+        { name: "videobar-1", id: uuidFor("sz-c-bar"), health: "degraded", outside_slot: false, to_attach: false,
+          alarms: [{ id: "al-bar", component: "videobar-1", component_id: uuidFor("sz-c-bar"), severity: "warning", message: "Fan", raised_at: "2026-08-15T12:00:00Z" }] },
+        { name: "amp-1", id: uuidFor("sz-c-amp"), health: "outage", outside_slot: true, to_attach: false,
+          alarms: [{ id: "al-amp", component: "amp-1", component_id: uuidFor("sz-c-amp"), severity: "high", message: "Powered off", raised_at: "2026-08-15T15:00:00Z" }] },
+        { name: "ghost-1", id: uuidFor("sz-c-ghost"), health: "outage", outside_slot: false, to_attach: false,
+          alarms: [{ id: "al-ghost", component: "ghost-1", component_id: uuidFor("sz-c-ghost"), severity: "high", message: "From the build not in use", raised_at: "2026-08-10T00:00:00Z" }] },
+      ],
+    } as never;
+    const rows = alarmRows(withMembers, SEEDED_LEVELS);
+    expect(rows.map((r) => r.id).sort()).toEqual(["al-1", "al-2", "al-amp", "al-bar"]);
+    expect(rows.find((r) => r.id === "al-amp")).toMatchObject({ outsideSlot: true, where: "not in a slot", componentId: uuidFor("sz-c-amp") });
+    expect(rows.find((r) => r.id === "al-1")).toMatchObject({ outsideSlot: false, where: "impairs Room Microphone" });
+    expect(rows.find((r) => r.id === "al-bar")).toMatchObject({ outsideSlot: false, where: "in Room Microphone" });
+  });
+
   it("never carries an alarm from a build not in use: an inactive slot's alarms did not move the health", () => {
     const rows = alarmRows(health, SEEDED_LEVELS);
     expect(rows.find((r) => r.message === "From the build not in use")).toBeUndefined();
