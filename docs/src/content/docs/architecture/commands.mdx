@@ -139,7 +139,7 @@ A **command** is the "do" half of the telemetry model, alongside a [metric or pr
 
 - **`settle_window_seconds`**: how long the device physically takes to actuate (a projector warms up in twenty seconds, a matrix switch flips in one), so a difference from the reported value is not called drift until the device has had time to act. It is a duration, so the schema floors it at **0** and both write paths refuse a negative one: `Settle` tests `windowSeconds > 0`, so a negative window behaves exactly as zero does, and a value that is stored, read back, and then never honoured is worse than a refusal.
 - **The two-armed target**: a **settleable** command names the value it sets in exactly one lane, `target_property_type_id` (`set-input` targets `video-input`) **or** `target_metric_type_id` (`set-volume` targets a numeric level), never both (a CHECK enforces the arc). A command with no target is **fire-and-forget** (`reboot`): it records the invocation and a caused event, with no value to settle, so its outpost's execution report decides it (settled when the outpost carried it out, failed when the execution failed) and no report within the delivery window times it out.
-- **The disruption** (#1651): a **disruptive** command takes its device down (`reboot` is seeded disruptive, quiet 15 s, hold 300 s; `set-input` is not). Its delivery carries the flag and the **hold set**, the endpoints placed on the delivering outpost that the command takes down (its target's in-band endpoints and what the target hosts, [below](#the-hold-set-follows-dependency-edges)), and the outpost closes each one's [gate](/architecture/outposts/#implicit-reachability) with reason `disrupted` before it sends ([ADR-1651](/architecture/decisions/#adr-1651-a-disruptive-command-closes-its-endpoints-gates)). For **`quiet_seconds`** nothing runs against a held endpoint: no poll, no probe, no session dial, so a device mid-reboot is not read as a failure or hammered with reconnects. After quiet, each endpoint reopens on **its own** first up verdict that began after quiet (an answer already in flight at the delivery cannot release it), while a sibling that has not answered stays held. **`hold_seconds`** is the backstop: an endpoint with no up verdict by then reopens anyway, counted as `hold-expiry-count`. The hold is **not** the settle window: `settle_window_seconds` is how long settlement watches a value, and a fire-and-forget reboot has none, while the hold bounds how long its endpoints may stay closed. A non-disruptive type carries neither (a CHECK refuses a quiet or hold on one), and a disruptive type's hold must exceed its quiet.
+- **The disruption** (#1651): a **disruptive** command takes its device down (`reboot` is seeded disruptive, quiet 15 s, hold 300 s; `set-input` is not). Its delivery carries the flag and the **hold set**, the endpoints placed on the delivering outpost that the command takes down (its target's in-band endpoints and what the target hosts, [below](#the-hold-set-follows-dependency-edges)), and the outpost closes each one's [gate](/architecture/outposts/#implicit-reachability) with reason `disrupted` before it sends ([ADR-1651](/architecture/decisions/#adr-1651-a-disruptive-command-closes-its-endpoints-gates)). For **`quiet_seconds`** nothing runs against a held endpoint: no poll, no probe, no session dial, so a device mid-reboot is not read as a failure or hammered with reconnects. After quiet, each endpoint reopens on **its own** first up reading that began after quiet (an answer already in flight at the delivery cannot release it), while a sibling that has not answered stays held. **`hold_seconds`** is the backstop: an endpoint with no up reading by then reopens anyway, counted as `hold-expiry-count`. The hold is **not** the settle window: `settle_window_seconds` is how long settlement watches a value, and a fire-and-forget reboot has none, while the hold bounds how long its endpoints may stay closed. A non-disruptive type carries neither (a CHECK refuses a quiet or hold on one), and a disruptive type's hold must exceed its quiet.
 
 **The power commands** (#1653) are the seeded pair that switch one outlet of a PDU. **`outlet-off`**
 is disruptive (quiet 15 s, hold 300 s) and names `outlet` as its `power_outlet_param`, so its hold
@@ -173,7 +173,7 @@ reachable from the target and the endpoints of the components they name
   outlet) holds **every** endpoint of each component fed from that outlet of the target, its
   out-of-band ones included (the outlet takes the whole device dark), and the in-band endpoints of
   what those components host. The PDU's own endpoints are not held: the PDU stays up while its
-  outlet is off. An outlet off has no up verdict to read, so its hold ends at the `hold_seconds`
+  outlet is off. An outlet off has no up reading, so its hold ends at the `hold_seconds`
   backstop, by design.
 - **An out-of-band endpoint** (a BMC, a management port; `out_of_band` on the
   [endpoint](/architecture/collection/#endpoints-the-devices-apis-declared-once)) answers
@@ -209,11 +209,11 @@ room-scoped command grant may command that room and no more. The read scope deci
 refusal it is owed, a non-disclosing 404 outside it and a 403 for a component it can see but not
 command ([the three-way split](/architecture/identity-access/#the-three-way-status-split)).
 
-## Settlement: the verdict is computed, the outcome is recorded
+## Settlement: the settlement is computed, the outcome is recorded
 
 A command's effect is judged as a pure function of the intended value, the observed value, and the settle window:
 
-- **none**: nothing was told (fire-and-forget, or no intended value); the recorded status, not the verdict, carries such a command's outcome.
+- **none**: nothing was told (fire-and-forget, or no intended value); the recorded status, not the settlement, carries such a command's outcome.
 - **settled**: an observation taken at or after the intent matches it, as soon as one arrives; or,
   past the window, the latest observation matches.
 - **pending**: still within the settle window with no matching observation yet, so a difference
@@ -260,22 +260,22 @@ observed. A live instance leaves out a **retired observer**, an endpoint since d
 reading would otherwise stand forever. A command still queued, which no outpost has taken, never
 reached the device, so its window closing is a timeout that says where it stopped, whatever its
 carrier last read, never a failure. An observation runs the settle check of every command judged on
-its instance and of every owner-level one, and the computed verdict a command's issue answers with
+its instance and of every owner-level one, and the computed settlement a command's issue answers with
 reads the same observation the recorded outcome did.
 
 **A zero window is terminal by construction, never by arithmetic**
 ([ADR-0108](/architecture/decisions/#adr-0108-settlement-reads-one-clock-and-a-zero-window-is-a-statement-of-intent)).
 `settle_window_seconds: 0` is the way to say "settle immediately", which is a claim about intent
-rather than about elapsed time, so the verdict for such a command never consults a timestamp and
+rather than about elapsed time, so the settlement for such a command never consults a timestamp and
 never comes back `pending`. And **the comparison reads one clock, the database's**: a sample's `ts`
 is written by Postgres, so the `now` a settle-check judges against is read from Postgres too, in the
-same transaction. A server whose clock differs from its database's gets the same verdict either way.
+same transaction. A server whose clock differs from its database's gets the same settlement either way.
 
-Beside the computed verdict, the `command` row **records its lifecycle**: `status` is `issued`
+Beside the computed settlement, the `command` row **records its lifecycle**: `status` is `issued`
 until a terminal `settled`, `failed`, or `timed-out`, and `settled_at` stamps the terminal moment
 (a CHECK ties the two: `issued` exactly while `settled_at` is null). The recorded status carries
-the finer vocabulary the verdict collapses (failed versus timed-out; a fire-and-forget records
-`settled` on its execution report while its verdict stays `none`), so a stuck command is distinguishable from one nobody
+the finer vocabulary the settlement collapses (failed versus timed-out; a fire-and-forget records
+`settled` on its execution report while its settlement stays `none`), so a stuck command is distinguishable from one nobody
 has checked ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)).
 
 ## Reading a command: from issue to settlement
@@ -355,7 +355,7 @@ The physical layout (the owner arc, the caused-event lineage, partitioning) live
     target_metric_type_id: 'The other arm: the metric the command intends to set; never both',
     disruptive: 'Whether the command takes its device down: its delivery closes the gates of its hold set on that outpost',
     quiet_seconds: 'A disruptive type&#39;s quiet period: no poll, probe or session dial runs against a held endpoint',
-    hold_seconds: 'A disruptive type&#39;s backstop: a held endpoint with no up verdict by then reopens, counted; not the settle window',
+    hold_seconds: 'A disruptive type&#39;s backstop: a held endpoint with no up reading by then reopens, counted; not the settle window',
     power_outlet_param: 'The power-command marker: the param that names the outlet, so the hold set is what that outlet feeds; disruptive types only',
     official: 'Shipped-canonical versus org-local; official rows are read-only',
   }}
@@ -373,7 +373,7 @@ The physical layout (the owner arc, the caused-event lineage, partitioning) live
     dispatched_at: 'When an outpost&#39;s queue pull last delivered it (#815); null until an outpost picks it up',
     first_dispatched_at: 'When an outpost&#39;s queue pull first delivered it (#1626); kept across redeliveries, null until an outpost picks it up',
     delivery_count: 'How many times a pull delivered it (#1626); 0 until an outpost picks it up, 2 or more once redelivered',
-    executed_at: 'When the outpost&#39;s execution report stamped, once; the actuation fact beside the settlement verdict',
+    executed_at: 'When the outpost&#39;s execution report stamped, once; the actuation fact beside the settlement',
     exec_error: 'A failed or unrenderable actuation&#39;s story; null on success',
     dispatched_endpoint_id: 'The endpoint a dispatch chose to actuate over; the confinement anchor for the execution report',
     reply: 'The component&#39;s answer as its execution report carried it, masked of credentials and capped; null until a report lands',
