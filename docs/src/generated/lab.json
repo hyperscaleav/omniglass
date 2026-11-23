@@ -147,6 +147,13 @@
       "setup": []
     },
     {
+      "id": "link-a-colleague-to-a-rule",
+      "title": "Link a colleague to a rule",
+      "description": "Open an event rule's drawer and see its address in the URL, close it with Back, and land on the same drawer from the address alone.",
+      "lab": [],
+      "setup": []
+    },
+    {
       "id": "move-a-device-to-another-room",
       "title": "Move a device to another room",
       "description": "Open a spare microphone's Configure, press Move to, choose Bay 4, and watch the breadcrumb follow the device without leaving its page.",

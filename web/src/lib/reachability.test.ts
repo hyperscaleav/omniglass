@@ -221,7 +221,7 @@ describe("pendingNotice", () => {
   it("sends an endpoint awaiting its first probe to its outpost's blade", () => {
     const n = pendingNotice(ep({ pending: "awaiting-probe", outpost: "edge 1" }));
     expect(n?.text).toContain("edge 1");
-    expect(n?.href).toBe("/outposts?n=edge%201");
+    expect(n?.href).toBe("/outposts?open=edge+1");
   });
   it("says nothing of a row with a state or no reason", () => {
     expect(pendingNotice(ep({}))).toBeNull();
