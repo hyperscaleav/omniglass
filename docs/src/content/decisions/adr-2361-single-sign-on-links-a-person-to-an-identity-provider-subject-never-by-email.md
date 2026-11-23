@@ -2,7 +2,7 @@
 title: "Single sign-on links a person to an identity provider subject, never by email"
 date: 2026-11-23
 status: "Accepted"
-summary: "A person signs in through one OIDC identity provider (authorization code with PKCE) by an `oidc` credential whose identifier is `iss|sub`, linked by an admin or by the person; SAML 2.0 follows on the same model. Email never links an account. IdP groups sync IdP-sourced memberships at each sign-in and may not reach an owner grant. Removal at the provider ends every SSO-origin session and API token within one re-check interval (15 minutes), by refreshing each link against the provider; no SCIM. One provider per install, shaped so a second is additive. Owners keep password sign-in as break-glass; an enforce mode refuses it for everyone else. Reverses ADR-0004's OIDC deferral"
+summary: "A person signs in through one OIDC identity provider (authorization code with PKCE) by an `oidc` credential whose identifier is `iss|sub`, linked by an admin or by the person; SAML 2.0 follows on the same model. Email never links an account. IdP groups sync IdP-sourced memberships at each sign-in and may not reach an owner grant. Removal at the provider is not instant: a 15-minute re-check refreshes each link and revokes its sessions and API tokens once the provider refuses, which leaves a window and depends on the provider; immediate revocation needs SCIM, deferred. One provider per install, shaped so a second is additive. Owners keep password sign-in as break-glass; an enforce mode refuses it for everyone else. Reverses ADR-0004's OIDC deferral"
 refs: [2361, 527, 2362, 2363, 2364, 2365, 81]
 ---
 
@@ -100,15 +100,16 @@ refs: [2361, 527, 2362, 2363, 2364, 2365, 81]
      policy of provisioning every Access user as an owner is the one exception to point 4's spirit
      (no identity provider makes an owner): #81 records it, confines it to preview installs, and may
      not match a person by email (point 2).
-  9. **Removal at the provider ends access within one re-check, without SCIM.** A sweep every
+  9. **Removal at the provider ends access at the next re-check the provider refuses, without SCIM.** A sweep every
      `recheck_minutes` (default 15) takes each link that has a live credential through it (point 1's
      `via_link`) and redeems its refresh token at the provider's token endpoint, storing the rotated
-     token and the time. The major providers refuse a refresh once a person is disabled, deleted or
-     has their sessions revoked there (`invalid_grant`), and a refusal revokes, in one audited
+     token and the time. A provider that refuses the refresh (`invalid_grant`, as Entra does once an
+     admin revokes the person's sessions and Okta does once the person is deactivated or suspended)
+     makes the sweep revoke, in one audited
      transaction, every session and API token through that link and clears its refresh token: the
      person can sign in again only if the provider lets them. When the refresh answers with an
      id_token that carries the groups claim, point 4's sync runs on it, so a group removed at the
-     provider also lands within the interval. A network error or a 5xx is not a refusal: the sweep
+     provider lands at the first refresh whose token reflects it. A network error or a 5xx is not a refusal: the sweep
      retries, but a credential whose link has gone `recheck_grace_minutes` (default 60) without an
      accepted refresh is refused at authentication until one is accepted, so a provider outage
      suspends SSO-origin access for a while and destroys nothing, and owners keep password sign-in
@@ -132,17 +133,32 @@ refs: [2361, 527, 2362, 2363, 2364, 2365, 81]
 - **Limits:**
   - One identity provider per install (point 10). Changing `issuer` leaves every existing link on
     the old issuer, so those people cannot sign in by SSO until relinked.
-  - Removal at the provider takes effect within one re-check interval plus however long the provider
-    takes to refuse the refresh, not instantly; disabling the person in Omniglass is still the
-    instant cut-off. The cut-off is only as good as the provider's refusal: a provider that keeps
-    honoring a disabled person's refresh token defeats it, and the provider's own setup page says so
-    for each provider the docs cover.
+  - **Revocation is not immediate.** Omniglass learns of a removal only by asking, so a removed
+    person keeps their Omniglass session and API tokens until the first re-check the provider refuses:
+    up to `recheck_minutes` (15) after the provider starts refusing, and longer if it is slow to.
+    Disabling the person in Omniglass is the instant cut-off. Immediate revocation on disable or group
+    removal needs the provider to push it, which is SCIM deprovisioning (deferred, see Not chosen);
+    back-channel logout and shared-signals feeds are not sent by every provider and not for group
+    removal.
+  - **The cut-off is only as good as the provider's refusal**, and providers differ (as each one's
+    documentation stood in November 2026; the setup page for each provider repeats its row):
+    - Entra ID refuses once an admin revokes the person's sessions; disabling the account alone is
+      not documented as revoking refresh tokens, a group change can take up to a day to reach issued
+      tokens, and a B2B guest's tokens are not revoked in the resource tenant. The runbook is: disable
+      and revoke sessions.
+    - Okta refuses once the person is deactivated or suspended (reported, not in Okta's reference).
+      Its default refresh token lifetime is unlimited with a seven-day idle expiry, which the sweep
+      keeps alive.
+    - Google issues no groups claim, so group mapping (#2363) has nothing to sync from Google, and
+      suspending a Workspace account is not documented as revoking a third party's refresh token.
+      With Google, disable the person in Omniglass too.
   - An API token minted by a password session (an owner's) is not an SSO-origin credential and is
     not re-checked, since its person never went through the provider.
   - Only groups claim values: no nested-group expansion, no userinfo call, and no handling of a
     provider that leaves an oversized groups list out of the token (Entra's group overage).
   - No SCIM, so a person removed at the provider stays an Omniglass person (unable to sign in by
-    SSO once the provider refuses them) until an admin disables them.
+    SSO once the provider refuses them) until an admin disables them, and nothing reaches Omniglass
+    between re-checks.
   - MFA is the provider's; the open question on a local TOTP path for installs without SSO stands.
 - **Not chosen:**
   - **Linking by verified email.** Convenient, but `email_verified` is only as good as the
@@ -166,6 +182,10 @@ refs: [2361, 527, 2362, 2363, 2364, 2365, 81]
   - **Checking userinfo with the access token.** Providers commonly let an issued access token run
     to its expiry (about an hour) after a person is disabled; the refresh grant is the one they
     revoke at once.
+  - **SCIM deprovisioning, now.** It is the push the major providers send on disable, delete and
+    group removal, and the only way to revoke at the moment of removal; it is deferred to keep the
+    first SSO release to sign-in alone, and lands later as a receiver that revokes on those calls,
+    with the sweep kept as the backstop for providers that do not send it.
   - **Back-channel logout.** It tells Omniglass a session ended, not that a person was removed, and
     the providers that matter here do not all send it; it can be added later as an accelerator on
     top of the sweep.
