@@ -175,9 +175,9 @@
       "setup": []
     },
     {
-      "id": "pick-a-time-range",
-      "title": "Pick the time range a system page charts",
-      "description": "Open the Huddle Room, open the time range on its tab rail, pick the last 7 days, and read the data section redrawn over the week.",
+      "id": "pick-a-product-by-typing",
+      "title": "Pick a product by typing",
+      "description": "In the Add simulated component drawer, type part of a product or its profile, read the matches with the profile under each, and choose one from the keyboard.",
       "lab": [],
       "setup": []
     },
@@ -260,6 +260,15 @@
       "lab": [],
       "setup": [
         "omniglass component alarm create panel-2 --dedup-key walkthrough-subscribe --message 'Touch input lost' --severity high"
+      ]
+    },
+    {
+      "id": "test-an-endpoints-poll",
+      "title": "Test an endpoint's poll",
+      "description": "Attach a driver to a display, then run its poll now and read what the outpost collected, without waiting for the next cycle.",
+      "lab": [],
+      "setup": [
+        "omniglass component create --label 'Bay 2 Display' --location bay-2 --name bay-2-poll-display --product boreal-edge-55"
       ]
     },
     {
