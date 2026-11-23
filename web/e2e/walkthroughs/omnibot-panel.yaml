@@ -1,8 +1,10 @@
 # Omnibot in the console (#1167): the top bar opens omnibot in a panel, a
 # prompt runs on the server (#2121), each tool call shows as a card, and the
 # write the agent policy asks about waits on a confirm card. The lab's server
-# plays a recording (internal/lab/omnibot-replay.yaml) that reads the meeting
-# 405 video bar and asks to tag it, so every run goes the same way.
+# plays a recording (internal/lab/omnibot/default.yaml) that reads the meeting
+# 405 video bar and asks to tag it, so every run goes the same way. It answers
+# only the prompts it was recorded for (#2443): the panel says it is a recorded
+# demo and offers them, and a question it has no recording for plays no run.
 title: Ask omnibot from the console
 description: Open omnibot from the top bar, ask it to tag a video bar, watch its reads arrive as cards, and confirm the write it asks about.
 steps:
@@ -11,11 +13,19 @@ steps:
   - click: 'button[aria-label="Ask omnibot"]'
     caption: Open omnibot. It acts as you, through the same API, and your agent policy decides each write.
   - wait: { selector: '[data-testid=omnibot-empty]' }
-    caption: The panel says what omnibot may do before the first prompt.
-  - type: { target: 'textarea[aria-label="Ask omnibot"]', text: tag the meeting 405 video bar AV-0415 }
-    caption: Ask it in plain words.
+    caption: The panel says what omnibot may do before the first prompt, and the page it will read.
+  - wait: { selector: '[data-testid=omnibot-replay]' }
+    caption: This lab has no live model, so the panel says it is a recorded demo and offers the questions the recording answers.
+    hold: 1500
+  - type: { target: 'textarea[aria-label="Ask omnibot"]', text: "Which alarm is worst?" }
+    caption: A question of its own is not one the recording answers.
   - press: Enter
-    caption: Send it. The run streams back from the server.
+    caption: Send it.
+  - wait: { text: connect a model to ask your own question, timeout: 30000 }
+    caption: The server says so, and nothing runs, rather than playing an unrelated recording.
+    hold: 1500
+  - click: { role: button, name: Tag the meeting 405 video bar with its asset id }
+    caption: Choose a recorded question instead. The run streams back from the server.
   - wait: { selector: '[data-testid=omnibot-ask]', timeout: 30000 }
     caption: Its read shows as a card linking to the video bar. Tagging it is a write, so it waits for you.
     poster: true

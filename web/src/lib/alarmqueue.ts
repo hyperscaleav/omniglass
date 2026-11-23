@@ -5,9 +5,19 @@ import type { Alarm, FleetAlarmsQuery } from "./alarms";
 // address (`/alarms?state=active&severity=critical&ack=no`) so the page can be
 // handed to a colleague or to omnibot (pageSubject) and read back the same.
 // Four facets, each a chip: severity (one or more levels), location (a subtree,
-// by name), ack (yes | no) and snoozed (yes | no). `state=active` is the one
-// state the queue has (cleared alarms are history, not queue) and is accepted
-// so a link that names it still reads.
+// by name), ack (yes | no) and snoozed (yes | no). The state is
+// not a chip: `state=active` is the queue an operator works, `state=cleared`
+// and `state=all` read the history (#2426), each cleared row with when it
+// cleared and how long it was raised.
+
+export type AlarmState = "active" | "cleared" | "all";
+export const ALARM_STATES: AlarmState[] = ["active", "cleared", "all"];
+
+// stateFromParams reads the address's state; anything unknown is the queue.
+export function stateFromParams(p: Params): AlarmState {
+  const v = list(p.state)[0];
+  return (ALARM_STATES as string[]).includes(v) ? (v as AlarmState) : "active";
+}
 
 export const SEVERITY = "severity";
 export const LOCATION = "location";
@@ -43,8 +53,8 @@ export function chipsFromParams(p: Params): Chip[] {
 
 // paramsFromChips writes chips back to the address: the inverse of
 // chipsFromParams, `state=active` always first so the link names what it shows.
-export function paramsFromChips(chips: Chip[]): Record<string, string | undefined> {
-  const out: Record<string, string | undefined> = { state: "active", severity: undefined, location: undefined, ack: undefined, snoozed: undefined, rule: undefined };
+export function paramsFromChips(chips: Chip[], state: AlarmState = "active"): Record<string, string | undefined> {
+  const out: Record<string, string | undefined> = { state, severity: undefined, location: undefined, ack: undefined, snoozed: undefined, rule: undefined };
   for (const c of chips) {
     if (c.op !== "eq" || !c.values.length) continue;
     if (c.key === SEVERITY) out.severity = c.values.join(",");
@@ -58,8 +68,9 @@ export function paramsFromChips(chips: Chip[]): Record<string, string | undefine
 // queryFromChips is the server's own filter for the chips: the queue is
 // narrowed where it is read, so a filter holds over a queue longer than the
 // pages loaded, and the rows that land are already the filtered set.
-export function queryFromChips(chips: Chip[]): FleetAlarmsQuery {
+export function queryFromChips(chips: Chip[], state: AlarmState = "active"): FleetAlarmsQuery {
   const q: FleetAlarmsQuery = {};
+  if (state !== "active") q.state = state;
   for (const c of chips) {
     if (c.op !== "eq" || !c.values.length) continue;
     if (c.key === SEVERITY) q.severity = c.values;

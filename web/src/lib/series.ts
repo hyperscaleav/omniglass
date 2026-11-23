@@ -5,6 +5,7 @@
 // capped raw read keeps only the newest rows.
 import { api } from "../api/client";
 import type { ChartBucket } from "./chart";
+import { runView } from "./binding";
 
 // SERIES_POLL_MS is a polled sparkline's cadence (the Data table, a system
 // zoom): a line over hours moves too little in the leaf's five seconds to be
@@ -100,4 +101,45 @@ export async function propertyBuckets(
   if (res.error) throw res.error;
   const body = res.data as { buckets?: PropertyBucket[]; covered_from?: string; carried_in?: string } | undefined;
   return { buckets: body?.buckets ?? [], coveredFrom: body?.covered_from ?? null, carriedIn: body?.carried_in ?? null };
+}
+
+// A bucketed metric read over an absolute range (#2304): the same buckets as
+// metricBuckets, read through the views binding (/views:run), which takes a
+// from and a to where the series route only counts hours back from now. The
+// binding answers one series per instance: `instance` picks one, and left
+// undefined the read keeps the one with measured samples in the range (the
+// series route's own rule), else the first.
+export const metricBucketsBetweenKey = (
+  kind: "components" | "systems",
+  owner: string,
+  metric: string,
+  from: number,
+  to: number,
+  resolutionSeconds: number,
+  instance?: string,
+) => ["metric-buckets-between", kind, owner, metric, from, to, resolutionSeconds, instance ?? null] as const;
+
+export async function metricBucketsBetween(
+  kind: "components" | "systems",
+  owner: string,
+  metric: string,
+  from: number,
+  to: number,
+  resolutionSeconds: number,
+  instance?: string,
+): Promise<MetricBuckets> {
+  const result = await runView({
+    primitive: "metric",
+    kind: kind === "systems" ? "system" : "component",
+    refs: [owner],
+    keys: [metric],
+    from: new Date(from).toISOString(),
+    to: new Date(to).toISOString(),
+    step_seconds: resolutionSeconds,
+  });
+  const series = result.metric ?? [];
+  const measured = (s: (typeof series)[number]) => (s.buckets ?? []).some((b) => b.count > 0);
+  const pick =
+    instance !== undefined ? series.find((s) => s.instance === instance) : (series.find(measured) ?? series[0]);
+  return { buckets: (pick?.buckets ?? []) as ChartBucket[], coveredFrom: result.covered_from || null };
 }

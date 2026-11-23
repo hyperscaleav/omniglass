@@ -398,17 +398,17 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		return out, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.gated(withDeleteRefusal(api, huma.Operation{
 		OperationID:   "delete-system",
 		Method:        http.MethodDelete,
 		Path:          "/systems/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a system",
-		Description:   "Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.",
-	}, "system", "delete"), func(ctx context.Context, in *systemPathInput) (*struct{}, error) {
+		Description:   "Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.",
+	}), "system", "delete"), func(ctx context.Context, in *systemPathInput) (*struct{}, error) {
 		if err := gw.DeleteSystem(ctx, actorID(ctx), in.Name,
 			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "delete")); err != nil {
-			return nil, mapSystemErr(err)
+			return nil, a.deleteRefusal(ctx, gw, "system", in.Name, err, mapSystemErr(err))
 		}
 		return nil, nil
 	})

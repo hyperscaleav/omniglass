@@ -13,6 +13,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/driver"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/sim"
+	"github.com/hyperscaleav/omniglass/internal/sim/impair"
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
 	"github.com/hyperscaleav/omniglass/internal/simfleet"
@@ -61,8 +62,10 @@ func SimSecretSpecs() []storage.SecretSpec {
 // seedSimFleet lands the plan through the gateway: the community secret,
 // then each planned component's endpoints on the dev outpost. A component that
 // already has an endpoint is left alone, so a re-run changes nothing. Only the
-// components whose ids are in only are planned.
-func seedSimFleet(ctx context.Context, gw storage.Gateway, actorID string, portOffset int, only map[string]bool) error {
+// components whose ids are in only are planned. A component in faults is
+// impaired as it is wired (#2434), and only then: a presenter who lifts the
+// fault on the Simulation page finds it still lifted after a restart.
+func seedSimFleet(ctx context.Context, gw storage.Gateway, actorID string, portOffset int, only map[string]bool, faults map[string]impair.Impairment) error {
 	all := scope.Set{All: true}
 	store, err := profile.LoadStoreFS(profiles.FS)
 	if err != nil {
@@ -137,6 +140,13 @@ func seedSimFleet(ctx context.Context, gw storage.Gateway, actorID string, portO
 	outpost := reachOutpost
 	for _, dev := range plan {
 		comp := dev.ComponentID
+		// Impaired before its first endpoint, so a run cut short between
+		// endpoints cannot leave it wired with its fault never set.
+		if imp, ok := faults[comp]; ok {
+			if _, err := gw.SetSimImpairment(ctx, actorID, comp, imp); err != nil {
+				return fmt.Errorf("devseed: impair %s: %w", comp, err)
+			}
+		}
 		for _, e := range dev.Endpoints {
 			spec := storage.EndpointSpec{Component: &comp, Outpost: &outpost, SecretRead: all, SecretBind: all, CanAdmin: true}
 			if e.Driver != "" {

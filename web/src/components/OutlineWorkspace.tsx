@@ -48,11 +48,18 @@ function readOpen(): Set<string> {
   } catch { return new Set(); }
 }
 
-export default function OutlineWorkspace(props: { rootId?: string }) {
+// `host` "blade" (#2423): a rooted outline inside a blade keeps its filter in
+// a signal of its own, so filtering it never rewrites (or reads) the page's
+// address, the Explore outline beneath it included.
+export default function OutlineWorkspace(props: { rootId?: string; host?: "page" | "blade" }) {
   const navigate = useNavigate();
   const me = useMe();
-  const [search, setSearch] = useSearchParams();
-  const param = (k: string) => { const v = search[k]; return Array.isArray(v) ? v[0] : v; };
+  const [urlSearch, setUrlSearch] = useSearchParams();
+  const [local, setLocal] = createSignal<Record<string, string | undefined>>({});
+  const inBlade = props.host === "blade";
+  const search = (): Record<string, string | string[] | undefined> => (inBlade ? local() : urlSearch);
+  const setSearch = (next: Record<string, string | undefined>) => (inBlade ? setLocal((p) => ({ ...p, ...next })) : setUrlSearch(next));
+  const param = (k: string) => { const v = search()[k]; return Array.isArray(v) ? v[0] : v; };
 
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents, enabled: can(me.data, "component", "read") }));
@@ -185,7 +192,13 @@ export default function OutlineWorkspace(props: { rootId?: string }) {
     if (props.rootId) return r ? addOptions(r.chain[0]) : [];
     return (["location", "system", "component"] as AddKind[]).filter((k) => can(me.data, k, "create"));
   };
-  const create = (kind: AddKind, under?: string) => navigate(`/${kind}s/create${under ? `?under=${encodeURIComponent(under)}` : ""}`);
+  // A component is added through the guided flow (#2460), which ends on an
+  // endpoint that has answered; its plain form stays one link away there.
+  // A caller who may create a component but not its endpoint gets the plain
+  // form, since the flow ends on an endpoint they could not make.
+  const guided = () => can(me.data, "endpoint", "create");
+  const create = (kind: AddKind, under?: string) =>
+    navigate(`/${kind}s/${kind === "component" && guided() ? "add" : "create"}${under ? `?under=${encodeURIComponent(under)}` : ""}`);
 
   const subtree = (n: LocationNode): string[] => [n.id, ...n.children.flatMap(subtree)];
   const onToggle = (n: LocationNode, deep: boolean) => {
@@ -199,7 +212,9 @@ export default function OutlineWorkspace(props: { rootId?: string }) {
   const blades = useBlades();
   const openTarget = (t: OpenTarget, key: string) => {
     setSelected(key.split(":").pop() === t.id ? t.id : key);
-    blades.close();
+    // On a page a row opens a fresh stack; inside a blade the stack is the
+    // one this blade sits on, so the row stacks over it (#2423).
+    if (!inBlade) blades.close();
     blades.push(t);
   };
 
@@ -316,7 +331,7 @@ export default function OutlineWorkspace(props: { rootId?: string }) {
                           const t = targetOfEntry(e, roots());
                           if (!t) return revealResult(e.id);
                           setSelected(e.id);
-                          blades.close();
+                          if (!inBlade) blades.close();
                           blades.push(t);
                         }} onReveal={(e) => revealResult(e.id)} />
                       </Show>
