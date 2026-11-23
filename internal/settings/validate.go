@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/hyperscaleav/omniglass/internal/egress"
+	"regexp"
 
 	"github.com/danielgtaylor/huma/v2"
 )
@@ -84,6 +85,17 @@ func withoutNulls(v any) any {
 // says, checked where the value is accepted so a value nothing can use is
 // refused naming the entry, rather than stored and failing every later use.
 var valueChecks = map[string]func(any) error{
+	// The lessons a person finished (#2450): any signed-in person writes their
+	// own, so each entry is held to a lesson slug's shape.
+	"learn.done": func(v any) error {
+		list, _ := v.([]any)
+		for _, e := range list {
+			if s, _ := e.(string); !learnSlug.MatchString(s) {
+				return fmt.Errorf("%q is not a lesson slug (lowercase letters, digits and dashes, at most 64)", s)
+			}
+		}
+		return nil
+	},
 	// The egress allow list (#618): every entry a CIDR, an address or a host
 	// name, parsed by the primitive that reads it.
 	"notification.egress_allow": func(v any) error {
@@ -112,3 +124,6 @@ var valueChecks = map[string]func(any) error{
 		return nil
 	},
 }
+
+// learnSlug is the shape of a lesson's slug (web/src/lib/lessons.ts).
+var learnSlug = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)

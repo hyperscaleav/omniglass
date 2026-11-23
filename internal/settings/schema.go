@@ -65,7 +65,7 @@ type Keybindings struct {
 // LearnSettings is the learn namespace (#2450): which of the console's
 // lessons (web/src/lib/lessons.ts) this person has finished, by slug.
 type LearnSettings struct {
-	Done []string `json:"done" nullable:"false" default:"" doc:"The lessons this person has finished, by slug (device-to-samples); set at the user level from the Learn page"`
+	Done []string `json:"done" nullable:"false" maxItems:"32" default:"" doc:"The lessons this person has finished, by slug (device-to-samples); set at the user level from the Learn page; at most 32, each a lowercase slug of at most 64 characters"`
 }
 
 // LabelSettings is the label namespace: how the label rule engine renders, as

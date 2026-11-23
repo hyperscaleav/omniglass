@@ -2,6 +2,7 @@ package settings
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -38,5 +39,29 @@ func TestValidatePatternViolation(t *testing.T) {
 	}
 	if err := Validate("ui", map[string]any{"default_landing": "/alarms"}); err != nil {
 		t.Fatalf("valid absolute path errored: %v", err)
+	}
+}
+
+// TestLearnDoneIsBounded (#2450): any signed-in person writes their own
+// learn.done, so it is held to a short list of slug-shaped entries rather than
+// stored at any size and read back on every console boot.
+func TestLearnDoneIsBounded(t *testing.T) {
+	ok := []any{"device-to-samples", "rules-and-alarms"}
+	if err := Validate("learn", map[string]any{"done": ok}); err != nil {
+		t.Fatalf("two slugs: %v", err)
+	}
+	long := make([]any, 33)
+	for i := range long {
+		long[i] = "device-to-samples"
+	}
+	for name, v := range map[string][]any{
+		"too many":     long,
+		"not a slug":   {"Device To Samples!"},
+		"too long":     {strings.Repeat("a", 65)},
+		"empty string": {""},
+	} {
+		if err := Validate("learn", map[string]any{"done": v}); err == nil {
+			t.Errorf("%s: accepted, want a field error", name)
+		}
 	}
 }

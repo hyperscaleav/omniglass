@@ -4560,7 +4560,10 @@ export type LabelSettings = {
 };
 
 export type LearnSettings = {
-  /** The lessons this person has finished, by slug (device-to-samples); set at the user level from the Learn page */
+  /**
+     * The lessons this person has finished, by slug (device-to-samples); set at the user level from the Learn page; at most 32, each a lowercase slug of at most 64 characters
+     * @maxItems 32
+     */
   done: string[];
 };
 
