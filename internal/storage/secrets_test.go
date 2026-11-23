@@ -151,7 +151,7 @@ func TestSecretOwnerScope(t *testing.T) {
 	ctx := context.Background()
 	// campus is the official type allowed at root; the type is incidental
 	// here, only the name (rm) is asserted below.
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "rm", LocationType: "campus"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "rm", LocationType: "campus"}, all, all); err != nil {
 		t.Fatalf("seed location: %v", err)
 	}
 
@@ -290,7 +290,7 @@ func TestSecretCascadeResolve(t *testing.T) {
 
 func mustLoc(t *testing.T, gw storage.Gateway, name, typ string, parent *string) {
 	t.Helper()
-	if _, err := gw.CreateLocation(context.Background(), "", storage.LocationSpec{Name: name, LocationType: typ, ParentName: parent}, all); err != nil {
+	if _, err := gw.CreateLocation(context.Background(), "", storage.LocationSpec{Name: name, LocationType: typ, ParentName: parent}, all, all); err != nil {
 		t.Fatalf("location %s: %v", name, err)
 	}
 }

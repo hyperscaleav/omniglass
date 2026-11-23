@@ -57,7 +57,7 @@ func TestCreateGeneratesFromTypeStem(t *testing.T) {
 
 	// The LOCATION bucket (unparented, placed) is its own scope too, not
 	// just the parent and orphan buckets exercised above.
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "namegen-loc", LocationType: "campus"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "namegen-loc", LocationType: "campus"}, all, all); err != nil {
 		t.Fatalf("create location: %v", err)
 	}
 	locName := "namegen-loc"

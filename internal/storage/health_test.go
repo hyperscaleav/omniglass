@@ -88,7 +88,7 @@ func (f *healthFixture) mustLocation(t *testing.T, ctx context.Context, name, ki
 	t.Helper()
 	if _, err := f.gw.CreateLocation(ctx, "", storage.LocationSpec{
 		Name: name, LocationType: kind, ParentName: parent,
-	}, f.all); err != nil {
+	}, f.all, f.all); err != nil {
 		t.Fatalf("create location %s: %v", name, err)
 	}
 }
@@ -272,7 +272,7 @@ func TestHealthReportNamesTheCause(t *testing.T) {
 		t.Fatalf("raise alarm: %v", err)
 	}
 
-	rep, err := f.gw.SystemHealth(ctx, "hq-huddle", 0, f.all)
+	rep, err := f.gw.SystemHealth(ctx, "hq-huddle", storage.HealthRange{}, f.all)
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}
@@ -309,7 +309,7 @@ func TestHealthReportNamesTheCause(t *testing.T) {
 
 	// The location report is the drill-down: it names the system at fault rather
 	// than repeating the slot detail, which the system read already answers.
-	loc, err := f.gw.LocationHealth(ctx, "hq", 0, f.all)
+	loc, err := f.gw.LocationHealth(ctx, "hq", storage.HealthRange{}, f.all)
 	if err != nil {
 		t.Fatalf("location health: %v", err)
 	}
@@ -530,7 +530,7 @@ func TestHealthReportOfAFreshSystem(t *testing.T) {
 		t.Fatalf("create system: %v", err)
 	}
 
-	rep, err := f.gw.SystemHealth(ctx, "fresh", 0, f.all)
+	rep, err := f.gw.SystemHealth(ctx, "fresh", storage.HealthRange{}, f.all)
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}
@@ -553,7 +553,7 @@ func TestHealthReportOfAFreshSystem(t *testing.T) {
 	}
 	// The opening verdict climbed to the room the system was created in, and the
 	// location report agrees with the systems it lists.
-	loc, err := f.gw.LocationHealth(ctx, "hq-r1", 0, f.all)
+	loc, err := f.gw.LocationHealth(ctx, "hq-r1", storage.HealthRange{}, f.all)
 	if err != nil {
 		t.Fatalf("location health: %v", err)
 	}
@@ -639,7 +639,7 @@ func TestHealthMovesOnStandardChange(t *testing.T) {
 	if n-before != 1 {
 		t.Fatalf("recorded %d rows for the standard change, want exactly 1", n-before)
 	}
-	rep, err := f.gw.SystemHealth(ctx, "fresh", 0, f.all)
+	rep, err := f.gw.SystemHealth(ctx, "fresh", storage.HealthRange{}, f.all)
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}
@@ -683,7 +683,7 @@ func TestHealthIgnoresProductChange(t *testing.T) {
 	if n, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "healthy" || n != before {
 		t.Fatalf("system after a product swap = %d rows / %q, want %d / healthy (product no longer moves health)", n, v, before)
 	}
-	rep, err := f.gw.SystemHealth(ctx, "hq-huddle", 0, f.all)
+	rep, err := f.gw.SystemHealth(ctx, "hq-huddle", storage.HealthRange{}, f.all)
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}
@@ -757,7 +757,7 @@ func TestHealthMovesOnRelocation(t *testing.T) {
 	}
 	// The reports agree with the systems they list, on both ends of the move.
 	for _, tc := range []struct{ name, want string }{{"hq-r1", "healthy"}, {"hq-r2", "degraded"}} {
-		rep, err := f.gw.LocationHealth(ctx, tc.name, 0, f.all)
+		rep, err := f.gw.LocationHealth(ctx, tc.name, storage.HealthRange{}, f.all)
 		if err != nil {
 			t.Fatalf("location health %s: %v", tc.name, err)
 		}
@@ -861,7 +861,7 @@ func TestHealthMovesOnLocationMove(t *testing.T) {
 		{"north-b1", "healthy"}, {"north-campus", "healthy"},
 		{"south-b1", "incomplete"}, {"south-campus", "incomplete"},
 	} {
-		rep, err := f.gw.LocationHealth(ctx, tc.name, 0, f.all)
+		rep, err := f.gw.LocationHealth(ctx, tc.name, storage.HealthRange{}, f.all)
 		if err != nil {
 			t.Fatalf("location health %s: %v", tc.name, err)
 		}
@@ -894,13 +894,13 @@ func TestHealthReadScope(t *testing.T) {
 	ctx := context.Background()
 
 	none := scope.Set{}
-	if _, err := f.gw.SystemHealth(ctx, "hq-huddle", 0, none); !errors.Is(err, storage.ErrSystemNotFound) {
+	if _, err := f.gw.SystemHealth(ctx, "hq-huddle", storage.HealthRange{}, none); !errors.Is(err, storage.ErrSystemNotFound) {
 		t.Errorf("out-of-scope system health: err = %v, want ErrSystemNotFound", err)
 	}
-	if _, err := f.gw.LocationHealth(ctx, "hq", 0, none); !errors.Is(err, storage.ErrLocationNotFound) {
+	if _, err := f.gw.LocationHealth(ctx, "hq", storage.HealthRange{}, none); !errors.Is(err, storage.ErrLocationNotFound) {
 		t.Errorf("out-of-scope location health: err = %v, want ErrLocationNotFound", err)
 	}
-	if _, err := f.gw.SystemHealth(ctx, "no-such-system", 0, f.all); !errors.Is(err, storage.ErrSystemNotFound) {
+	if _, err := f.gw.SystemHealth(ctx, "no-such-system", storage.HealthRange{}, f.all); !errors.Is(err, storage.ErrSystemNotFound) {
 		t.Errorf("unknown system health: err = %v, want ErrSystemNotFound", err)
 	}
 }
@@ -929,7 +929,7 @@ func TestAlarmImpairsComponentImpairsSlot(t *testing.T) {
 		t.Errorf("component = %q, want outage: only a critical alarm takes it down (a degraded component still occupies)", v)
 	}
 
-	rep, err := f.gw.SystemHealth(ctx, "hq-huddle", 0, f.all)
+	rep, err := f.gw.SystemHealth(ctx, "hq-huddle", storage.HealthRange{}, f.all)
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}
@@ -970,7 +970,7 @@ func TestDegradedOccupantStillSatisfies(t *testing.T) {
 		t.Errorf("component = %q, want degraded (a warning alarm)", v)
 	}
 
-	rep, err := f.gw.SystemHealth(ctx, "hq-huddle", 0, f.all)
+	rep, err := f.gw.SystemHealth(ctx, "hq-huddle", storage.HealthRange{}, f.all)
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}
@@ -1024,7 +1024,7 @@ func TestAlarmOnSpareDoesNotShort(t *testing.T) {
 		t.Errorf("component = %q, want outage (a critical alarm)", v)
 	}
 
-	rep, err := f.gw.SystemHealth(ctx, "hq-huddle", 0, f.all)
+	rep, err := f.gw.SystemHealth(ctx, "hq-huddle", storage.HealthRange{}, f.all)
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}
@@ -1073,7 +1073,7 @@ func TestShortAndUnderstaffedDivergeOnCriticalAlarm(t *testing.T) {
 			t.Fatalf("understaffed = %+v, want 0: the assignment row is untouched by a warning", slots)
 		}
 
-		rep, err := f.gw.SystemHealth(ctx, "hq-huddle", 0, f.all)
+		rep, err := f.gw.SystemHealth(ctx, "hq-huddle", storage.HealthRange{}, f.all)
 		if err != nil {
 			t.Fatalf("system health: %v", err)
 		}
@@ -1104,7 +1104,7 @@ func TestShortAndUnderstaffedDivergeOnCriticalAlarm(t *testing.T) {
 			t.Fatalf("understaffed = %+v, want 0: the assignment row is untouched, understaffed is health-blind", slots)
 		}
 
-		rep, err := f.gw.SystemHealth(ctx, "hq-huddle", 0, f.all)
+		rep, err := f.gw.SystemHealth(ctx, "hq-huddle", storage.HealthRange{}, f.all)
 		if err != nil {
 			t.Fatalf("system health: %v", err)
 		}

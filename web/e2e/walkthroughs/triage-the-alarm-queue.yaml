@@ -3,7 +3,7 @@
 # and hands a third to omnibot, all from the rows. The scene is a display of its
 # own (the probe replays every walkthrough on one stack, so the alarms carry
 # messages no other walkthrough's do, and each step names its row by them). The
-# lab's server plays a recording (internal/lab/omnibot-replay.yaml) for the
+# lab's server plays a recording (internal/lab/omnibot/default.yaml) for the
 # omnibot step, so the run goes the same way every time.
 title: Triage the alarm queue
 description: Filter the fleet's alarm queue to the worst severities, acknowledge one alarm, snooze another and hand a third to omnibot, from the rows.

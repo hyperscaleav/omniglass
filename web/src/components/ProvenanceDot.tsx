@@ -1,4 +1,4 @@
-import { Tooltip } from "@kobalte/core/tooltip";
+import Tooltip from "./ui/Tooltip";
 import { type JSX } from "solid-js";
 
 // ProvenanceDot: the console's mark for a value that comes from somewhere that
@@ -40,35 +40,26 @@ export default function ProvenanceDot(props: {
   from: string;
 }): JSX.Element {
   return (
-    <Tooltip openDelay={150} closeDelay={100} placement="top" gutter={4}>
-      <Tooltip.Trigger
-        type="button"
-        // The whole fact is in the accessible NAME, not only in the tooltip. A
-        // hover has no keyboard and no touch equivalent, so a mark that states
-        // itself only on hover is unreadable for anyone not using a mouse; the
-        // name states it outright, and the trigger is a button, so it is a tab
-        // stop that reveals the same words on focus.
-        aria-label={`${props.label} is inherited from ${props.from}`}
-        // Teal, because the mark is emphasis. `text-primary` is the console's
-        // one teal for a small glyph and app.css darkens it on the light ground,
-        // where the bright brand fill would be a 1.9:1 dot. The padding is the
-        // hit area and the negative vertical margin gives the row its height
-        // back, so a 6px dot is reachable without a 6px label row becoming an
-        // 18px one.
-        class="inline-flex shrink-0 items-center justify-center rounded-full p-1.5 -my-1.5 text-primary transition-colors hover:text-primary/70 focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/60"
-      >
-        <span class="block h-[6px] w-[6px] rounded-full bg-current" />
-      </Tooltip.Trigger>
-      <Tooltip.Portal>
-        {/*
-          Portaled, so a blade's overflow cannot clip it, and reset to normal
-          case and tracking, because the mark sits inside an eyebrow whose
-          small-caps styling would otherwise be inherited by the tooltip's text.
-        */}
-        <Tooltip.Content class="z-100 max-w-56 rounded-box border border-base-300 bg-base-100 px-2.5 py-1.5 text-xs font-normal normal-case leading-snug tracking-normal text-base-content shadow-lg">
-          Inherited from <span class="font-data">{props.from}</span>
-        </Tooltip.Content>
-      </Tooltip.Portal>
+    <Tooltip
+      // Portaled, so a blade's overflow cannot clip it; the house card resets
+      // case and tracking, because the mark sits inside an eyebrow whose
+      // small-caps styling would otherwise be inherited by the tooltip's text.
+      content={<>Inherited from <span class="font-data">{props.from}</span></>}
+      // The whole fact is in the accessible NAME, not only in the tooltip. A
+      // hover has no keyboard and no touch equivalent, so a mark that states
+      // itself only on hover is unreadable for anyone not using a mouse; the
+      // name states it outright, and the trigger is a button, so it is a tab
+      // stop that reveals the same words on focus.
+      aria-label={`${props.label} is inherited from ${props.from}`}
+      // Teal, because the mark is emphasis. `text-primary` is the console's
+      // one teal for a small glyph and app.css darkens it on the light ground,
+      // where the bright brand fill would be a 1.9:1 dot. The padding is the
+      // hit area and the negative vertical margin gives the row its height
+      // back, so a 6px dot is reachable without a 6px label row becoming an
+      // 18px one.
+      class="inline-flex shrink-0 items-center justify-center rounded-full p-1.5 -my-1.5 text-primary transition-colors hover:text-primary/70 focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/60"
+    >
+      <span class="block h-[6px] w-[6px] rounded-full bg-current" />
     </Tooltip>
   );
 }

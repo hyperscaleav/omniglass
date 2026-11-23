@@ -43,6 +43,10 @@ describe("route manifest", () => {
     expect(r).toMatchObject({ shell: "protected", page: "PlatformHealth", smoke: "/platform" });
   });
 
+  it("smokes one drawer address, an ?open= naming no row (#2429)", () => {
+    expect(ROUTE_MANIFEST.filter((r) => r.smoke.includes("?open="))).toHaveLength(1);
+  });
+
   it("keeps paths unique", () => {
     const paths = ROUTE_MANIFEST.map((r) => `${r.shell}:${r.path}`);
     expect(new Set(paths).size).toBe(paths.length);
