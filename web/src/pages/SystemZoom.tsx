@@ -44,10 +44,10 @@ import { spans as timelineSpans } from "../lib/timeline";
 import { systemEvents, systemEventsKey, systemLogs, systemLogsKey, type SystemLogs } from "../lib/system_activity";
 import type { LogFilter } from "../lib/logs";
 import LogFilters from "../components/LogFilters";
+import { DEFAULT_RANGE, useTimeRange, type TimeRange } from "../lib/time_range";
 import TimeRangePicker from "../components/TimeRangePicker";
 import { memberModel, systemCrumbs, systemsAtLocation, type MemberContext } from "../lib/detail";
 import MetricsGrid from "../components/MetricsGrid";
-import { useTimeRange } from "../lib/time_range";
 import { systemMembers, systemMembersKey } from "../lib/members";
 import { LEAF_POLL_MS } from "../lib/component_leaf";
 import { CLOCK_TICK_MS, createClock } from "../lib/clock";
@@ -178,9 +178,16 @@ export default function SystemZoom() {
     enabled: tab() === "activity",
     refetchInterval: LEAF_POLL_MS,
   }));
-  // The page's one time range (#2304), held in the address: the metrics
-  // grid charts over it, and the picker on the tab rail writes it.
-  const { range, setRange } = useTimeRange();
+  // The page's one time range (#2304), held in the address: a preset slides
+  // to now and reads `hours` back from it; an absolute range reads its own
+  // [from, to) through the views binding and holds still, so it never polls.
+  const { range: asked, setRange } = useTimeRange();
+  // An absolute range reads through the views read, which needs view:read: a
+  // shared link opened by a caller without it reads the default instead, and
+  // the data section says why rather than drawing empty charts.
+  const canViews = () => can(me.data, "view", "read");
+  const rangeDenied = () => asked().kind === "absolute" && !!me.data && !canViews();
+  const range = (): TimeRange => (rangeDenied() ? DEFAULT_RANGE : asked());
   const eventsQ = useQuery(() => ({ queryKey: systemEventsKey(id()), queryFn: () => systemEvents(id()), enabled: tab() === "activity", refetchInterval: LEAF_POLL_MS }));
   // The members' lines under the Logs filter (#1145): a severity threshold
   // and a source, applied by the read.
@@ -337,7 +344,7 @@ export default function SystemZoom() {
               // The range governs Overview's charts. Activity's reads keep
               // their own fixed windows (#2304's follow-up), so the control
               // is not offered where it would be ignored.
-              end={tab() === "overview" ? <TimeRangePicker range={range()} onChange={setRange} allowCustom={can(me.data, "view", "read")} /> : undefined}
+              end={tab() === "overview" ? <TimeRangePicker range={range()} onChange={setRange} allowCustom={canViews()} /> : undefined}
             />
             <Show when={tab() === "configure"}>
               {/* A sole system's location has no page of its own: it configures
@@ -593,6 +600,11 @@ export default function SystemZoom() {
                       </div>
                     )}
                   </Show>
+        <Show when={rangeDenied()}>
+          <p data-testid="range-denied" role="status" class="text-xs text-warning">
+            This link's custom range is read through views, which needs view:read. Showing the last 24 hours instead.
+          </p>
+        </Show>
         <MetricsGrid kind="systems" id={id()} range={range()} />
                 </div>
               )}

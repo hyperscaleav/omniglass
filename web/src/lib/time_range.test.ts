@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_RANGE,
+  MAX_CUSTOM_MS,
   PRESETS,
   parseRange,
   rangeHours,
@@ -120,6 +121,10 @@ describe("rangeStepSeconds", () => {
   it("uses whole hours past two days, as the series route raises it to", () => {
     expect(rangeStepSeconds(49 * 3600_000) % 3600).toBe(0);
   });
+  it("uses whole hours when asked, for a range reaching back past the raw samples", () => {
+    expect(rangeStepSeconds(24 * 3600_000, true)).toBe(3600);
+    expect(rangeStepSeconds(3600_000, true)).toBe(3600);
+  });
   it("stays under the server's 5000-bucket cap for a long custom range", () => {
     const twoYears = 2 * 365 * 86400_000;
     expect(twoYears / 1000 / rangeStepSeconds(twoYears)).toBeLessThanOrEqual(5000);
@@ -134,5 +139,11 @@ describe("rangeLabel", () => {
   it("names an absolute range by its two ends", () => {
     const label = rangeLabel({ kind: "absolute", from: Date.parse("2026-11-01T08:00:00Z"), to: Date.parse("2026-11-02T08:00:00Z") });
     expect(label).toContain("→");
+  });
+});
+
+describe("MAX_CUSTOM_MS", () => {
+  it("is the views read's two-year ceiling", () => {
+    expect(MAX_CUSTOM_MS).toBe(2 * 365 * 86400_000);
   });
 });

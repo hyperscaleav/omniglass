@@ -42,6 +42,10 @@ export const PRESETS: readonly { key: PresetKey; label: string; ms: number }[] =
   { key: "30d", label: "Last 30 days", ms: 30 * DAY },
 ];
 
+// MAX_CUSTOM_MS is the longest absolute range a read takes: the views read's
+// two-year ceiling.
+export const MAX_CUSTOM_MS = 2 * 365 * DAY;
+
 export const DEFAULT_RANGE = { kind: "preset", preset: "24h" } as const satisfies TimeRange;
 
 const presetOf = (key: PresetKey) => PRESETS.find((p) => p.key === key)!;
@@ -96,9 +100,11 @@ const MAX_BUCKETS = 720;
 
 // rangeStepSeconds is the bucket width for a chart over windowMs: the finest
 // step that keeps it at most 720 buckets, in whole hours past two days (the
-// series route raises a longer window's step to whole hours anyway).
-export function rangeStepSeconds(windowMs: number): number {
-  const candidates = windowMs > 2 * DAY ? STEPS_S.filter((s) => s >= 3600) : STEPS_S;
+// series route raises a longer window's step to whole hours anyway) or when
+// wholeHours asks: a range reaching back past the raw samples, which the views
+// read answers from the hourly trends only at a whole-hour step.
+export function rangeStepSeconds(windowMs: number, wholeHours = windowMs > 2 * DAY): number {
+  const candidates = wholeHours ? STEPS_S.filter((s) => s >= 3600) : STEPS_S;
   return candidates.find((s) => windowMs / 1000 / s <= MAX_BUCKETS) ?? candidates[candidates.length - 1];
 }
 

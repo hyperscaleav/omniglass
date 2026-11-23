@@ -73,6 +73,34 @@ describe("TimeRangePicker", () => {
     expect(r.picked).toEqual([]);
   });
 
+  it("will not apply a custom range longer than the two years a read takes", async () => {
+    const r = mount({ kind: "preset", preset: "24h" });
+    fireEvent.click(screen.getByTestId("time-range-trigger"));
+    fireEvent.input(await screen.findByLabelText("From"), { target: { value: "2020-01-01T00:00" } });
+    fireEvent.input(screen.getByLabelText("To"), { target: { value: "2026-11-01T00:00" } });
+    expect((screen.getByRole("button", { name: "Apply" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/two years/i)).toBeTruthy();
+    expect(r.picked).toEqual([]);
+  });
+
+  it("is one radio group of presets: one tab stop, the arrows move between them", async () => {
+    mount({ kind: "preset", preset: "24h" });
+    fireEvent.click(screen.getByTestId("time-range-trigger"));
+    const group = await screen.findByRole("radiogroup", { name: "Preset ranges" });
+    const radios = screen.getAllByRole("radio");
+    expect(radios).toHaveLength(5);
+    for (const r of radios) expect(r.parentElement).toBe(group);
+    expect(radios.map((r) => r.getAttribute("tabindex"))).toEqual(["-1", "-1", "0", "-1", "-1"]);
+    await waitFor(() => expect(document.activeElement).toBe(radios[2]));
+    fireEvent.keyDown(radios[2], { key: "ArrowDown" });
+    expect(document.activeElement).toBe(radios[3]);
+    fireEvent.keyDown(radios[3], { key: "ArrowUp" });
+    fireEvent.keyDown(radios[2], { key: "ArrowUp" });
+    expect(document.activeElement).toBe(radios[1]);
+    fireEvent.keyDown(radios[0], { key: "ArrowUp" });
+    expect(document.activeElement).toBe(radios[4]);
+  });
+
   it("seeds the custom fields from the current absolute range", async () => {
     const from = new Date("2026-11-01T08:00").getTime();
     const to = new Date("2026-11-01T20:30").getTime();

@@ -1,8 +1,8 @@
 import { For, Show, createSignal, createUniqueId } from "solid-js";
-import { Popover } from "@kobalte/core/popover";
+import Popover from "./ui/Popover";
 import { Clock } from "./icons";
 import Button from "./Button";
-import { PRESETS, rangeLabel, type TimeRange } from "../lib/time_range";
+import { MAX_CUSTOM_MS, PRESETS, rangeLabel, type TimeRange } from "../lib/time_range";
 
 // TimeRangePicker: the page's one time-range control (#2304), on the tab rail.
 // The trigger names the range; its panel (a Kobalte popover, portaled so a
@@ -31,15 +31,34 @@ export default function TimeRangePicker(props: { range: TimeRange; onChange: (r:
   };
   const fromMs = () => fromLocalInput(from());
   const toMs = () => fromLocalInput(to());
-  const customOk = () => fromMs() !== undefined && toMs() !== undefined && fromMs()! < toMs()!;
+  // Why a custom range cannot apply, or undefined when it can.
+  const customProblem = () => {
+    const f = fromMs();
+    const t = toMs();
+    if (f === undefined || t === undefined) return "Give both ends.";
+    if (f >= t) return "The range must end after it starts.";
+    if (t - f > MAX_CUSTOM_MS) return "A range spans at most two years.";
+    return undefined;
+  };
+  const customOk = () => customProblem() === undefined;
   const pick = (r: TimeRange) => {
     props.onChange(r);
     setOpen(false);
   };
   const isPreset = (key: string) => props.range.kind === "preset" && props.range.preset === key;
+  // One tab stop for the group (the range in force, else the first preset);
+  // the arrows move between presets, wrapping, as a radio group does.
+  const tabStop = (i: number) => (props.range.kind === "preset" ? isPreset(PRESETS[i].key) : i === 0);
+  const onArrow = (e: KeyboardEvent, i: number) => {
+    const step = e.key === "ArrowDown" || e.key === "ArrowRight" ? 1 : e.key === "ArrowUp" || e.key === "ArrowLeft" ? -1 : 0;
+    if (!step) return;
+    e.preventDefault();
+    const radios = (e.currentTarget as HTMLElement).parentElement?.querySelectorAll<HTMLElement>('[role="radio"]');
+    radios?.[(i + step + PRESETS.length) % PRESETS.length]?.focus();
+  };
 
   return (
-    <Popover
+    <Popover class="btn btn-quiet btn-xs gap-1.5 font-normal"
       placement="bottom-end"
       gutter={6}
       open={open()}
@@ -47,30 +66,19 @@ export default function TimeRangePicker(props: { range: TimeRange; onChange: (r:
         if (o) seed();
         setOpen(o);
       }}
-    >
-      <Popover.Trigger data-testid="time-range-trigger" class="btn btn-quiet btn-xs gap-1.5 font-normal" aria-label={`Time range: ${rangeLabel(props.range)}`}>
-        <Clock size={13} />
-        <span class="tabular-nums">{rangeLabel(props.range)}</span>
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Content
-          data-testid="time-range-panel"
-          // Focus lands on the range in force, not the first preset, so the
-          // ring never reads as a second selection.
-          onOpenAutoFocus={(e) => {
-            const checked = (e.currentTarget as HTMLElement | null)?.querySelector<HTMLElement>('[aria-checked="true"]');
-            if (checked) {
-              e.preventDefault();
-              checked.focus();
-            }
-          }}
-          class="z-50 flex w-72 max-w-[calc(100vw-1rem)] flex-col gap-2 rounded-box border border-base-300 bg-base-100 p-2 text-sm shadow-2xl focus:outline-none"
-        >
+      data-testid="time-range-trigger"
+      aria-label={`Time range: ${rangeLabel(props.range)}`}
+      contentLabel="Time range"
+      contentClass="z-50 w-72 max-w-[calc(100vw-1rem)] rounded-box border border-base-300 bg-base-100 p-2 text-sm shadow-2xl focus:outline-none"
+      // Focus lands on the range in force, not the first preset, so the
+      // ring never reads as a second selection.
+      initialFocus={(panel) => panel.querySelector<HTMLElement>('[aria-checked="true"]')}
+      content={
+        <div data-testid="time-range-panel" class="flex flex-col gap-2">
           <p class="menu-title px-2 pt-1 pb-0 text-[10.5px]">Time range · every chart on this page</p>
-          <ul role="radiogroup" aria-label="Preset ranges" class="flex flex-col">
+          <div role="radiogroup" aria-label="Preset ranges" class="flex flex-col">
             <For each={PRESETS}>
-              {(p) => (
-                <li>
+              {(p, i) => (
                   <button
                     type="button"
                     role="radio"
@@ -78,15 +86,16 @@ export default function TimeRangePicker(props: { range: TimeRange; onChange: (r:
                     data-testid={`time-range-preset-${p.key}`}
                     class="flex w-full cursor-pointer items-center justify-between rounded-field px-2 py-1.5 text-left hover:bg-base-content/5"
                     classList={{ "font-medium text-primary": isPreset(p.key) }}
+                    tabindex={tabStop(i()) ? 0 : -1}
+                    onKeyDown={(e) => onArrow(e, i())}
                     onClick={() => pick({ kind: "preset", preset: p.key })}
                   >
                     {p.label}
                     <span class="font-data text-[10.5px] text-base-content/45">{p.key}</span>
                   </button>
-                </li>
               )}
             </For>
-          </ul>
+          </div>
           <Show when={props.allowCustom}>
             <form
               class="flex flex-col gap-1.5 border-t border-base-300 px-2 pt-2 pb-1"
@@ -103,13 +112,16 @@ export default function TimeRangePicker(props: { range: TimeRange; onChange: (r:
                 <input id={toId} type="datetime-local" class="input input-bordered input-xs w-full min-w-0 font-data" value={to()} onInput={(e) => setTo(e.currentTarget.value)} />
               </div>
               <Show when={from() && to() && !customOk()}>
-                <p class="text-xs text-warning">The range must end after it starts.</p>
+                <p class="text-xs text-warning">{customProblem()}</p>
               </Show>
               <Button type="submit" intent="action" size="xs" class="self-end" disabled={!customOk()}>Apply</Button>
             </form>
           </Show>
-        </Popover.Content>
-      </Popover.Portal>
+        </div>
+      }
+    >
+      <Clock size={13} />
+      <span class="tabular-nums">{rangeLabel(props.range)}</span>
     </Popover>
   );
 }

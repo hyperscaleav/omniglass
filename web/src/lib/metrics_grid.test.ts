@@ -19,6 +19,16 @@ describe("gridWindow", () => {
   });
 });
 
+describe("gridWindow over an older absolute range", () => {
+  // The views read answers hours past the raw samples from the hourly trends
+  // only at a whole-hour step (#2304): an absolute range reaching back past a
+  // day steps in whole hours even when it is narrow.
+  it("steps in whole hours once its start is more than a day back", () => {
+    expect(gridWindow({ kind: "absolute", from: now - 3 * 24 * HOUR, to: now - 3 * 24 * HOUR + 6 * HOUR }, now).stepSeconds).toBe(3600);
+    expect(gridWindow({ kind: "absolute", from: now - 6 * HOUR, to: now }, now).stepSeconds).toBe(60);
+  });
+});
+
 describe("hasData", () => {
   const b = (count: number) => ({ ts: "2026-11-23T11:00:00Z", count, min: count ? 1 : null, max: count ? 1 : null, avg: count ? 1 : null, last: count ? 1 : null });
   it("is true only when some bucket holds a sample", () => {
