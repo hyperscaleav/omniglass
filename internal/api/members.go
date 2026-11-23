@@ -21,7 +21,7 @@ type systemMemberBody struct {
 	SystemCount int    `json:"system_count" doc:"How many systems this component belongs to in total; more than one means it is shared"`
 	// The component's verdict, not the system's: a system's view polls its
 	// members' health here (#940), one request for the system.
-	ComponentHealth string `json:"component_health" doc:"The component's own recorded verdict (healthy, degraded, or outage), the one its active alarms make; never the system's"`
+	ComponentHealth string `json:"component_health" doc:"The component's own recorded health (healthy, degraded, or outage), the one its active alarms make; never the system's"`
 }
 
 func toSystemMemberBody(m storage.Member) systemMemberBody {
@@ -105,7 +105,7 @@ func registerMemberRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/systems/{name}/members",
 		Summary:     "List the components in a system",
-		Description: "The components bound into this system, ordered by name. Membership is what a slot attaches to: every component staffing a slot here is a member, and a member may also carry no slot at all (a power conditioner is in the room without filling a declared slot). Each member carries its own verdict, so a system's view can poll its members' health here rather than reading the whole fleet. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+		Description: "The components bound into this system, ordered by name. Membership is what a slot attaches to: every component staffing a slot here is a member, and a member may also carry no slot at all (a power conditioner is in the room without filling a declared slot). Each member carries its own health, so a system's view can poll its members' health here rather than reading the whole fleet. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
 	}, "system", "read"), func(ctx context.Context, in *systemMembersInput) (*listSystemMembersOutput, error) {
 		ms, err := gw.ListMembers(ctx, in.Name, a.scopeFor(ctx, "system", "read"))
 		if err != nil {

@@ -74,7 +74,7 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
 - **A detail view is one per system, its location as context.** Systems are the unit; locations are
   folders and metadata; components are pieces of systems (#872). A system's view
   (`pages/SystemZoom.tsx`) is a `LocationCard` (the location's type, tags and its own panel, never its
-  name when the view is already titled by it) above the subject card (an eyebrow, the verdict, the
+  name when the view is already titled by it) above the subject card (an eyebrow, the health, the
   facts said once) with its `TabRail` inside. A location holding exactly one system lands on it
   (`lib/detail.ts` `landingFor`), and its location configures in a second `ConfigureFace` on the
 system's Configure tab, answering its own edit intent (`useEditParam`'s `value`, `edit=location`);
@@ -87,7 +87,7 @@ a location holding none or several renders its own subject card,
   their own queries iterates stable ids, never the objects a fresh read hands back: iterating
   objects rebuilt each card on every read, and each rebuilt card refetched, a request storm.
 - **The side panel is the glance, and says each fact once.** A fleet panel (`EntityBlade`) leads
-  with verdict, since and why (severity first), then the context the operator came for, then the
+  with health, since and why (severity first), then the context the operator came for, then the
   form's name, classification, a location's parent, and tags. Reading in a blade, the label is the
   title and the form drops its Label row; a room holding one system is that system
   (`lib/detail.ts` `isRoomOf`), so its `LocationCard` names no location and offers no second panel, and a
@@ -183,16 +183,16 @@ with dark ink; that rule is inert while the console is dark-only.
 Status badges use `badge badge-sm` with a **soft hue** for a signalled state (`badge-soft
 badge-success` for up/enabled/responding, `badge-soft badge-error` for down, `badge-soft
 badge-warning` for stale). A **neutral** state (an outpost that has never checked in, a disabled task,
-an unknown verdict) does **not** use `badge-neutral`: against this theme's dark `base-100`
+an unknown health) does **not** use `badge-neutral`: against this theme's dark `base-100`
 (`#080c16`) it renders near-black, and `theme-badges.test.ts` bans it. The app's neutral chip is
 `badge-ghost`, which `app.css` restyles from daisyUI's transparent default into a soft grey fill
 tinted from the text color, so it reads as a visible pill at the same weight as the soft hues. The
 same reason keeps `type` values (endpoint/task `type`) as plain `font-data` text, not a
-`badge-neutral` chip. A **healthy** verdict wears green from one token, `--og-healthy` (ADR-0154):
+`badge-neutral` chip. A **healthy** health wears green from one token, `--og-healthy` (ADR-0154):
 `badge-healthy` on a pill and `bg-healthy` on a strip at the trouble hues' weight, `text-healthy`
 (muted) on dense views such as the outline and the map. A glyph that stands for one component (an
-outline slot, a map marker's icon) takes its hue from `verdictHue`, every verdict in its own colour,
-so a known healthy verdict never reads as the grey unknown chip.
+outline slot, a map marker's icon) takes its hue from `healthHue`, every health in its own colour,
+so a known healthy health never reads as the grey unknown chip.
 
 A **severity** wears its level's color, one map for the whole console (`SEVERITY_BADGE` beside
 `SeverityBadge`): gray is the `badge-ghost` neutral chip, blue `badge-info`, green `badge-success`,

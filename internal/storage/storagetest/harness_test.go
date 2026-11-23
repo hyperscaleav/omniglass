@@ -200,3 +200,52 @@ func TestReaperDisabledBeforeStart(t *testing.T) {
 		t.Fatal("runPostgres was not called")
 	}
 }
+
+// TestPortCollisionIsTheOnlyRetriedStartError pins the retry decision: a start
+// that lost the host-port race is retried, any other failure is not.
+func TestPortCollisionIsTheOnlyRetriedStartError(t *testing.T) {
+	collision := errors.New("start container: Error response from daemon: driver failed programming external connectivity: listen tcp4 0.0.0.0:35922: bind: address already in use")
+	if !isPortCollision(collision) {
+		t.Error("a port collision must be retried")
+	}
+	for _, err := range []error{nil, errors.New("wait strategy timed out"), errors.New("no such image")} {
+		if isPortCollision(err) {
+			t.Errorf("%v must not be retried", err)
+		}
+	}
+}
+
+// TestRunWithPortRetryBoundsAndStops drives the loop with a fake start (no
+// Docker): collisions retry up to the bound, then surface; a different error
+// stops at once; success after a collision returns.
+func TestRunWithPortRetryBoundsAndStops(t *testing.T) {
+	ctx := context.Background()
+	collision := errors.New("bind: address already in use")
+	calls := 0
+	_, err := RunWithPortRetry(ctx, func(context.Context) (*tcpostgres.PostgresContainer, error) {
+		calls++
+		return nil, collision
+	})
+	if !errors.Is(err, collision) || calls != startAttempts {
+		t.Errorf("persistent collision: err=%v calls=%d, want %d calls", err, calls, startAttempts)
+	}
+	calls = 0
+	_, err = RunWithPortRetry(ctx, func(context.Context) (*tcpostgres.PostgresContainer, error) {
+		calls++
+		return nil, errors.New("no such image")
+	})
+	if err == nil || calls != 1 {
+		t.Errorf("unrelated error: err=%v calls=%d, want 1 call", err, calls)
+	}
+	calls = 0
+	_, err = RunWithPortRetry(ctx, func(context.Context) (*tcpostgres.PostgresContainer, error) {
+		calls++
+		if calls < 3 {
+			return nil, collision
+		}
+		return nil, nil
+	})
+	if err != nil || calls != 3 {
+		t.Errorf("recovering collision: err=%v calls=%d, want nil after 3", err, calls)
+	}
+}

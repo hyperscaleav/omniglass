@@ -50,18 +50,18 @@ type healthSlotBody struct {
 	Label      string `json:"label"`
 	Impact     string `json:"impact" doc:"What an impaired slot means for its system: outage, degraded, or none"`
 	Quorum     int    `json:"quorum"`
-	Satisfying int    `json:"satisfying" doc:"How many assigned components currently occupy the slot (their own verdict is not outage; a degraded component still occupies)"`
+	Satisfying int    `json:"satisfying" doc:"How many assigned components currently occupy the slot (their own health is not outage; a degraded component still occupies)"`
 	// Short and Spare are occupancy-aware, unlike the slots read's
 	// understaffed (Quorum minus len(assigned_to), health-blind): a slot can
 	// report understaffed 0 here and still be short if an assigned
 	// component's own verdict is outage. They live here rather than on the
 	// declaration read because computing them needs each occupant's
 	// current verdict, which only this read resolves.
-	Short      int               `json:"short" doc:"How many more occupants the slot needs to reach quorum, counting only those currently occupying (own verdict not outage); zero once it does. Diverges from the slots read's understaffed when an assigned component is down"`
+	Short      int               `json:"short" doc:"How many more occupants the slot needs to reach quorum, counting only those currently occupying (own health not outage); zero once it does. Diverges from the slots read's understaffed when an assigned component is down"`
 	Spare      int               `json:"spare" doc:"How many occupants the slot has beyond quorum; zero at or below quorum"`
 	Impaired   bool              `json:"impaired" doc:"True when satisfying is below quorum"`
 	AssignedTo []string          `json:"assigned_to"`
-	Down       []string          `json:"down" doc:"The assigned components whose own verdict is outage; empty when the slot is merely short-staffed or only degraded"`
+	Down       []string          `json:"down" doc:"The assigned components whose own health is outage; empty when the slot is merely short-staffed or only degraded"`
 	Alarms     []healthAlarmBody `json:"alarms" doc:"The active alarms on those down components"`
 	// Choice, Alternate and Active are the #626 grouping: a slot can belong
 	// to an exclusive-or group instead of contributing unconditionally.
@@ -75,7 +75,7 @@ type healthSlotBody struct {
 	// when it is really one the verdict was never going to count.
 	Choice    string `json:"choice,omitempty" doc:"The choice this slot belongs to; absent when the slot is unconditional"`
 	Alternate string `json:"alternate,omitempty" doc:"The alternate within choice this slot belongs to; absent when the slot is unconditional"`
-	Active    bool   `json:"active" doc:"True for an unconditional slot, or a slot whose alternate is the one currently answering its choice. False means this slot's own impaired/short/spare figures did not contribute to the system's verdict"`
+	Active    bool   `json:"active" doc:"True for an unconditional slot, or a slot whose alternate is the one currently answering its choice. False means this slot's own impaired/short/spare figures did not contribute to the system's health"`
 }
 
 type healthSystemBody struct {
@@ -94,7 +94,7 @@ type fleetHealthOutput struct {
 		Owner       string                 `json:"owner"`
 		Health      string                 `json:"health" doc:"healthy, incomplete, degraded, or outage: the rollup of the slots or systems served beside it. incomplete is a commissioning gap, a slot short because the hardware was never installed rather than because installed hardware is failing, and it ranks between healthy and degraded"`
 		Slots       []healthSlotBody       `json:"slots" doc:"The contributing slots; empty for a location"`
-		Systems     []healthSystemBody     `json:"systems" doc:"The systems beneath a location with their verdicts; empty for a system"`
+		Systems     []healthSystemBody     `json:"systems" doc:"The systems beneath a location with their health; empty for a system"`
 		Transitions []healthTransitionBody `json:"transitions" doc:"The recorded edges over the window, oldest first: one entry per change, never a sample"`
 	}
 }
@@ -189,7 +189,7 @@ func registerHealthRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/systems/{name}/health",
 		Summary:     "Read a system's health",
-		Description: "The system's current verdict and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the verdict. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+		Description: "The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
 	}, "system", "read"), func(ctx context.Context, in *systemPathInput) (*fleetHealthOutput, error) {
 		rep, err := gw.SystemHealth(ctx, in.Name, healthHistoryWindow, a.scopeFor(ctx, "system", "read"))
 		if err != nil {
@@ -223,7 +223,7 @@ func registerHealthRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/locations/{name}/health",
 		Summary:     "Read a location's health",
-		Description: "The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.",
+		Description: "The location's current health, worst-wins over every system placed anywhere beneath it, with those systems and their health as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.",
 	}, "location", "read"), func(ctx context.Context, in *locationPathInput) (*fleetHealthOutput, error) {
 		rep, err := gw.LocationHealth(ctx, in.Name, healthHistoryWindow, a.scopeFor(ctx, "location", "read"))
 		if err != nil {

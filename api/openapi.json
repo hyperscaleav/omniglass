@@ -2636,7 +2636,7 @@
             "type": "integer"
           },
           "settlement": {
-            "description": "On an issue's answer only: the computed settlement verdict at that moment (none/pending/settled/failed)",
+            "description": "On an issue's answer only: the computed settlement at that moment (none/pending/settled/failed)",
             "enum": [
               "none",
               "pending",
@@ -2722,7 +2722,7 @@
             "type": "boolean"
           },
           "hold_seconds": {
-            "description": "A disruptive type's backstop: an endpoint with no up verdict this long after delivery reopens anyway, counted as hold-expiry-count. Not the settle window. 0 on a type that is not disruptive",
+            "description": "A disruptive type's backstop: an endpoint with no up reading this long after delivery reopens anyway, counted as hold-expiry-count. Not the settle window. 0 on a type that is not disruptive",
             "format": "int64",
             "type": "integer"
           },
@@ -3406,7 +3406,7 @@
             "type": "boolean"
           },
           "hold_seconds": {
-            "description": "A disruptive type's backstop in seconds, greater than quiet_seconds: an endpoint with no up verdict by then reopens anyway, counted. Not the settle window. Only on a disruptive type",
+            "description": "A disruptive type's backstop in seconds, greater than quiet_seconds: an endpoint with no up reading by then reopens anyway, counted. Not the settle window. Only on a disruptive type",
             "format": "int64",
             "minimum": 0,
             "type": "integer"
@@ -7026,7 +7026,7 @@
             "type": "string"
           },
           "health": {
-            "description": "healthy, incomplete, degraded, or outage: the component's own verdict, which is the only thing that colours the dot",
+            "description": "healthy, incomplete, degraded, or outage: the component's own health, which is the only thing that colours the dot",
             "type": "string"
           },
           "name": {
@@ -7084,7 +7084,7 @@
             ]
           },
           "systems": {
-            "description": "The systems beneath a location with their verdicts; empty for a system",
+            "description": "The systems beneath a location with their health; empty for a system",
             "items": {
               "$ref": "#/components/schemas/HealthSystemBody"
             },
@@ -7118,7 +7118,7 @@
         "additionalProperties": false,
         "properties": {
           "health": {
-            "description": "The location's recorded verdict, worst-wins over the systems beneath it",
+            "description": "The location's recorded health, worst-wins over the systems beneath it",
             "type": "string"
           },
           "id": {
@@ -7168,7 +7168,7 @@
             ]
           },
           "health": {
-            "description": "The system's recorded verdict, the same one its health read serves",
+            "description": "The system's recorded health, the same one its health read serves",
             "type": "string"
           },
           "id": {
@@ -7437,7 +7437,7 @@
         "additionalProperties": false,
         "properties": {
           "active": {
-            "description": "True for an unconditional slot, or a slot whose alternate is the one currently answering its choice. False means this slot's own impaired/short/spare figures did not contribute to the system's verdict",
+            "description": "True for an unconditional slot, or a slot whose alternate is the one currently answering its choice. False means this slot's own impaired/short/spare figures did not contribute to the system's health",
             "type": "boolean"
           },
           "alarms": {
@@ -7468,7 +7468,7 @@
             "type": "string"
           },
           "down": {
-            "description": "The assigned components whose own verdict is outage; empty when the slot is merely short-staffed or only degraded",
+            "description": "The assigned components whose own health is outage; empty when the slot is merely short-staffed or only degraded",
             "items": {
               "type": "string"
             },
@@ -7496,12 +7496,12 @@
             "type": "integer"
           },
           "satisfying": {
-            "description": "How many assigned components currently occupy the slot (their own verdict is not outage; a degraded component still occupies)",
+            "description": "How many assigned components currently occupy the slot (their own health is not outage; a degraded component still occupies)",
             "format": "int64",
             "type": "integer"
           },
           "short": {
-            "description": "How many more occupants the slot needs to reach quorum, counting only those currently occupying (own verdict not outage); zero once it does. Diverges from the slots read's understaffed when an assigned component is down",
+            "description": "How many more occupants the slot needs to reach quorum, counting only those currently occupying (own health not outage); zero once it does. Diverges from the slots read's understaffed when an assigned component is down",
             "format": "int64",
             "type": "integer"
           },
@@ -7989,7 +7989,7 @@
             "type": "string"
           },
           "health": {
-            "description": "The component's own verdict, the one its active alarms make (healthy, degraded, or outage), whatever the filter: a component's view reads it here rather than off the whole fleet view. unknown when nothing has ever observed the component (no alarm raised, no endpoint delivered): there is nothing to call healthy on",
+            "description": "The component's own health, the one its active alarms make (healthy, degraded, or outage), whatever the filter: a component's view reads it here rather than off the whole fleet view. unknown when nothing has ever observed the component (no alarm raised, no endpoint delivered): there is nothing to call healthy on",
             "type": "string"
           }
         },
@@ -11518,7 +11518,7 @@
             "type": "object"
           },
           "health": {
-            "description": "The outpost's platform component verdict, which tones the row; absent without a fleet-wide component read",
+            "description": "The outpost's platform component health, which tones the row; absent without a fleet-wide component read",
             "type": "string"
           },
           "label": {
@@ -11933,7 +11933,7 @@
             ]
           },
           "health": {
-            "description": "The server component's recorded verdict",
+            "description": "The server component's recorded health",
             "type": "string"
           },
           "name": {
@@ -12301,11 +12301,11 @@
         "additionalProperties": false,
         "properties": {
           "health": {
-            "description": "The platform system's recorded verdict, the same one its health read serves",
+            "description": "The platform system's recorded health, the same one its health read serves",
             "type": "string"
           },
           "id": {
-            "description": "The platform system's uuid: the page's verdict links to its system detail, where the verdict is explained",
+            "description": "The platform system's uuid: the page's health links to its system detail, where the health is explained",
             "type": "string"
           },
           "name": {
@@ -12332,7 +12332,7 @@
             "type": "string"
           },
           "figures_read": {
-            "description": "True when the caller's component read reached the platform components. False means the figures, verdicts and servers are left out because the caller may not read them, not because nothing was reported",
+            "description": "True when the caller's component read reached the platform components. False means the figures, health and servers are left out because the caller may not read them, not because nothing was reported",
             "type": "boolean"
           },
           "groups": {
@@ -12390,7 +12390,7 @@
           },
           "system": {
             "$ref": "#/components/schemas/PlatformSystemBody",
-            "description": "The platform system and its verdict; absent without a fleet-wide system read"
+            "description": "The platform system and its health; absent without a fleet-wide system read"
           }
         },
         "required": [
@@ -13558,7 +13558,7 @@
             ]
           },
           "history": {
-            "description": "The recent verdict transitions, oldest first, for the availability strip",
+            "description": "The recent reachability transitions, oldest first, for the availability strip",
             "items": {
               "$ref": "#/components/schemas/ReachHistoryBody"
             },
@@ -13581,7 +13581,7 @@
             "type": "string"
           },
           "layers": {
-            "description": "The per-layer probe signals that compose the verdict",
+            "description": "The per-layer probe signals that compose the reachability",
             "items": {
               "$ref": "#/components/schemas/ReachLayerBody"
             },
@@ -13595,7 +13595,7 @@
             "type": "string"
           },
           "pending": {
-            "description": "Why reachability is null, present only while it is: no-outpost, the endpoint has no outpost assigned so nothing probes it (create and enroll an outpost, run it, then assign the endpoint to it); awaiting-probe, an outpost is assigned and its first probe has not landed. Absent once a verdict exists, and on a push endpoint, which has no verdict to wait for. Derived at read time, not stored",
+            "description": "Why reachability is null, present only while it is: no-outpost, the endpoint has no outpost assigned so nothing probes it (create and enroll an outpost, run it, then assign the endpoint to it); awaiting-probe, an outpost is assigned and its first probe has not landed. Absent once a reachability exists, and on a push endpoint, which has no reachability to wait for. Derived at read time, not stored",
             "enum": [
               "no-outpost",
               "awaiting-probe"
@@ -13628,7 +13628,7 @@
           },
           "webhook": {
             "$ref": "#/components/schemas/EndpointWebhookBody",
-            "description": "A webhook endpoint's block (#1024): a push endpoint has no ladder and reads last_seen (last heard) in place of a verdict, never down for silence; its scheme, whether it is signed, its token's secret and what its scheme refused. Absent on every dialed transport"
+            "description": "A webhook endpoint's block (#1024): a push endpoint has no ladder and reads last_seen (last heard) in place of a reachability, never down for silence; its scheme, whether it is signed, its token's secret and what its scheme refused. Absent on every dialed transport"
           }
         },
         "required": [
@@ -13649,11 +13649,11 @@
             "type": "string"
           },
           "kind": {
-            "description": "The reason's kind: disrupted, a disruptive command (a reboot) delivered to the endpoint's component, which lifts on the endpoint's first up verdict after the command type's quiet period or at its hold backstop; unreachable, two consecutive down verdicts from the endpoint's reachability probe, which lifts on its next up verdict; upstream, a component the endpoint's component is reached through (a path dependency, #1652) has a closed gate on this outpost, which holds the endpoint's probes as well as its polls until the upstream opens, then lifts on the endpoint's own next up verdict (at once when it has no probe)",
+            "description": "The reason's kind: disrupted, a disruptive command (a reboot) delivered to the endpoint's component, which lifts on the endpoint's first up reading after the command type's quiet period or at its hold backstop; unreachable, two consecutive down readings from the endpoint's reachability probe, which lifts on its next up reading; upstream, a component the endpoint's component is reached through (a path dependency, #1652) has a closed gate on this outpost, which holds the endpoint's probes as well as its polls until the upstream opens, then lifts on the endpoint's own next up reading (at once when it has no probe)",
             "type": "string"
           },
           "since": {
-            "description": "When the reason began: for disrupted, the command's delivery; for unreachable, the first of the down verdicts that closed the gate; for upstream, when the upstream's gate closed this endpoint's",
+            "description": "When the reason began: for disrupted, the command's delivery; for unreachable, the first of the down readings that closed the gate; for upstream, when the upstream's gate closed this endpoint's",
             "format": "date-time",
             "type": "string"
           },
@@ -13723,12 +13723,12 @@
         "additionalProperties": false,
         "properties": {
           "ts": {
-            "description": "When the verdict last changed: one is stored only on a transition, so an endpoint's freshness is last_seen, not this",
+            "description": "When the reachability last changed: one is stored only on a transition, so an endpoint's freshness is last_seen, not this",
             "format": "date-time",
             "type": "string"
           },
           "value": {
-            "description": "The latest stored verdict value (up/down)",
+            "description": "The latest stored reachability value (up/down)",
             "type": "string"
           }
         },
@@ -17346,7 +17346,7 @@
             "type": "string"
           },
           "component_health": {
-            "description": "The component's own recorded verdict (healthy, degraded, or outage), the one its active alarms make; never the system's",
+            "description": "The component's own recorded health (healthy, degraded, or outage), the one its active alarms make; never the system's",
             "type": "string"
           },
           "component_id": {
@@ -23526,7 +23526,7 @@
     },
     "/components/{name}/alarms": {
       "get": {
-        "description": "What is currently wrong with this component, newest first, with the component's own verdict those alarms make. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+        "description": "What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
         "operationId": "list-component-alarms",
         "parameters": [
           {
@@ -23587,7 +23587,7 @@
         "x-omniglass-permission": "component:read"
       },
       "post": {
-        "description": "Raises an alarm on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (an alarm at or above the high level), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser alarm degrades the component but leaves it occupying its slots. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
+        "description": "Raises an alarm on this component, then recomputes health in the same transaction: the component's own health moves, and if it is now outage (an alarm at or above the high level), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location health with it; a lesser alarm degrades the component but leaves it occupying its slots. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
         "operationId": "raise-component-alarm",
         "parameters": [
           {
@@ -24062,7 +24062,7 @@
     },
     "/components/{name}/commands:issue": {
       "post": {
-        "description": "Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Answers with the command as it stands (as the command read returns it) and the computed settlement verdict; with wait, once it settles, fails or times out, or wait_timeout passes. Gated by command:issue, whose scope is resolved on the component tier from that permission (not from component:read); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not command is a 403.",
+        "description": "Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Answers with the command as it stands (as the command read returns it) and the computed settlement; with wait, once it settles, fails or times out, or wait_timeout passes. Gated by command:issue, whose scope is resolved on the component tier from that permission (not from component:read); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not command is a 403.",
         "operationId": "issue-component-command",
         "parameters": [
           {
@@ -25518,7 +25518,7 @@
     },
     "/components/{name}:move": {
       "post": {
-        "description": "Relocates and/or re-parents a component: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant (a location-scoped grant reaches a component for read and create only). A separate act from update, and a separately grantable one (component:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. Does not recompute health: a component's own verdict is purely its active alarms, unaffected by where it sits. A taken name at the destination is a 409. Gated by component:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).",
+        "description": "Relocates and/or re-parents a component: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant (a location-scoped grant reaches a component for read and create only). A separate act from update, and a separately grantable one (component:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. Does not recompute health: a component's own health is purely its active alarms, unaffected by where it sits. A taken name at the destination is a 409. Gated by component:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).",
         "operationId": "move-component",
         "parameters": [
           {
@@ -26505,7 +26505,7 @@
     },
     "/endpoints/{endpoint}/polls/{poll}:run": {
       "post": {
-        "description": "Runs one of an attached endpoint's polls now, on the outpost that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run waits for the endpoint's lane on the outpost, ahead of its scheduled polls and never beside another request to the endpoint; it borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409), a refusal, an unreachable verdict from the endpoint's probe, or a disruptive command (a reboot) the run was queued behind, and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no outpost is a 409. An outpost that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the outpost's operator lanes, is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.",
+        "description": "Runs one of an attached endpoint's polls now, on the outpost that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run waits for the endpoint's lane on the outpost, ahead of its scheduled polls and never beside another request to the endpoint; it borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409), a refusal, an unreachable reading from the endpoint's probe, or a disruptive command (a reboot) the run was queued behind, and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no outpost is a 409. An outpost that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the outpost's operator lanes, is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.",
         "operationId": "run-endpoint-poll",
         "parameters": [
           {
@@ -28239,7 +28239,7 @@
     },
     "/locations/{name}/health": {
       "get": {
-        "description": "The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.",
+        "description": "The location's current health, worst-wins over every system placed anywhere beneath it, with those systems and their health as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.",
         "operationId": "get-location-health",
         "parameters": [
           {
@@ -33455,7 +33455,7 @@
     },
     "/systems/{name}/health": {
       "get": {
-        "description": "The system's current verdict and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the verdict. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+        "description": "The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
         "operationId": "get-system-health",
         "parameters": [
           {
@@ -33572,7 +33572,7 @@
     },
     "/systems/{name}/members": {
       "get": {
-        "description": "The components bound into this system, ordered by name. Membership is what a slot attaches to: every component staffing a slot here is a member, and a member may also carry no slot at all (a power conditioner is in the room without filling a declared slot). Each member carries its own verdict, so a system's view can poll its members' health here rather than reading the whole fleet. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+        "description": "The components bound into this system, ordered by name. Membership is what a slot attaches to: every component staffing a slot here is a member, and a member may also carry no slot at all (a power conditioner is in the room without filling a declared slot). Each member carries its own health, so a system's view can poll its members' health here rather than reading the whole fleet. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
         "operationId": "list-system-members",
         "parameters": [
           {
@@ -35313,7 +35313,7 @@
     },
     "/telemetry:push": {
       "post": {
-        "description": "Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Every key has one writer class, and a push writes only a collected key: a built-in key an outpost writes (a reachability verdict or rung, a probe metric or timing, a held session's state, collection-failed, an endpoint's collection telemetry) is an outpost's own observation and a platform key (health, the webhook receiver's counts) is the platform's, each rejected by name on every lane; a key a calc rule outputs is rejected naming the rule. The owner is a component or a system; a system batch carries no log lines (a log line is component-owned), refused with a 422. An observation's instance is the endpoint it came through: one naming no endpoint on the owner refuses the batch with a 422 naming it and listing the owner's endpoints, and a system has none, so a system's observations name no instance. Gated by telemetry:push, whose scope must cover the declared owner on its own tier (one check per batch): the push scope alone is enough to see the owner (no component:read or system:read is needed), an owner outside both the push scope and the caller's read of that kind is a non-disclosing 404, and one the caller can read but may not push to is a 403.",
+        "description": "Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Every key has one writer class, and a push writes only a collected key: a built-in key an outpost writes (a reachability or rung, a probe metric or timing, a held session's state, collection-failed, an endpoint's collection telemetry) is an outpost's own observation and a platform key (health, the webhook receiver's counts) is the platform's, each rejected by name on every lane; a key a calc rule outputs is rejected naming the rule. The owner is a component or a system; a system batch carries no log lines (a log line is component-owned), refused with a 422. An observation's instance is the endpoint it came through: one naming no endpoint on the owner refuses the batch with a 422 naming it and listing the owner's endpoints, and a system has none, so a system's observations name no instance. Gated by telemetry:push, whose scope must cover the declared owner on its own tier (one check per batch): the push scope alone is enough to see the owner (no component:read or system:read is needed), an owner outside both the push scope and the caller's read of that kind is a non-disclosing 404, and one the caller can read but may not push to is a 403.",
         "operationId": "push-telemetry",
         "requestBody": {
           "content": {
@@ -37411,7 +37411,7 @@
     },
     "/views/fleet": {
       "get": {
-        "description": "Returns every in-scope location (flat, with parent and verdict), every in-scope system (with location and verdict), and one dot per component in each system. A dot carries the component id, its verdict, and the primary/shared flags, not a full component row. The open_alarms count is the alarms open on the components the caller may read. Each tier is scoped on its own read permission: a caller who can read locations but not components gets locations with empty systems, and a caller with no scope gets an empty result, not an error. Gated by location:read.",
+        "description": "Returns every in-scope location (flat, with parent and health), every in-scope system (with location and health), and one dot per component in each system. A dot carries the component id, its health, and the primary/shared flags, not a full component row. The open_alarms count is the alarms open on the components the caller may read. Each tier is scoped on its own read permission: a caller who can read locations but not components gets locations with empty systems, and a caller with no scope gets an empty result, not an error. Gated by location:read.",
         "operationId": "get-fleet-view",
         "responses": {
           "200": {
@@ -37441,7 +37441,7 @@
     },
     "/views/platform": {
       "get": {
-        "description": "Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build, start time and panels (Requests, Ingest, Queues and Retention: each key's catalog facts and its latest sample per instance, a ranked key cut to the ten highest of its newest window in the database, and the open alarms on the server component with the key each one's rule samples), the outpost table's column groups with each key's catalog facts, and one row per outpost with its last heartbeat, its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest) and its loss over its own hops, and the pipeline: each hop an item crosses, in order, with its in, out and loss per kind and per component, newest window and last hour, and the end to end. The rows need a fleet-wide outpost:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers (with their panels) need a fleet-wide component:read and the system a fleet-wide system:read; short of that each (the pipeline and the outpost loss with them) is left out, never zeroed. Gated by outpost:read.",
+        "description": "Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its health, each server's running build, start time and panels (Requests, Ingest, Queues and Retention: each key's catalog facts and its latest sample per instance, a ranked key cut to the ten highest of its newest window in the database, and the open alarms on the server component with the key each one's rule samples), the outpost table's column groups with each key's catalog facts, and one row per outpost with its last heartbeat, its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest) and its loss over its own hops, and the pipeline: each hop an item crosses, in order, with its in, out and loss per kind and per component, newest window and last hour, and the end to end. The rows need a fleet-wide outpost:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, health and servers (with their panels) need a fleet-wide component:read and the system a fleet-wide system:read; short of that each (the pipeline and the outpost loss with them) is left out, never zeroed. Gated by outpost:read.",
         "operationId": "get-platform-view",
         "responses": {
           "200": {

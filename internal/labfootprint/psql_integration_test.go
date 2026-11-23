@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	"github.com/jackc/pgx/v5"
 	"github.com/moby/moby/client"
 	"github.com/testcontainers/testcontainers-go"
@@ -20,13 +21,15 @@ import (
 func psqlHarness(t *testing.T) (*harness, *pgx.Conn) {
 	t.Helper()
 	ctx := context.Background()
-	c, err := tcpostgres.Run(ctx, "postgres:18",
-		tcpostgres.WithDatabase("omniglass"),
-		tcpostgres.WithUsername("omniglass"),
-		tcpostgres.WithPassword("omniglass"),
-		testcontainers.WithWaitStrategy(
-			wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2).WithStartupTimeout(60*time.Second)))
+	c, err := storagetest.RunWithPortRetry(ctx, func(ctx context.Context) (*tcpostgres.PostgresContainer, error) {
+		return tcpostgres.Run(ctx, "postgres:18",
+			tcpostgres.WithDatabase("omniglass"),
+			tcpostgres.WithUsername("omniglass"),
+			tcpostgres.WithPassword("omniglass"),
+			testcontainers.WithWaitStrategy(
+				wait.ForLog("database system is ready to accept connections").
+					WithOccurrence(2).WithStartupTimeout(60*time.Second)))
+	})
 	if c != nil {
 		t.Cleanup(func() { _ = testcontainers.TerminateContainer(c) })
 	}
