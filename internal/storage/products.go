@@ -307,6 +307,44 @@ func (p *PG) UpsertProduct(ctx context.Context, m Product) error {
 	return nil
 }
 
+// ListProductsDeclaring returns the products whose contract declares the named
+// metric (lane "metric") or property (lane "property"), in ListProducts' order
+// (#2430): the reverse of a product's own contract read, so a metric's page can
+// say which products carry it without fetching every product's contract. name
+// is the catalog row's name or uuid; one that names nothing matches nothing.
+func (p *PG) ListProductsDeclaring(ctx context.Context, lane, name string) ([]Product, error) {
+	var contract, typeTable, typeCol string
+	switch lane {
+	case "metric":
+		contract, typeTable, typeCol = "product_metric", "metric_type", "metric_type_id"
+	case "property":
+		contract, typeTable, typeCol = "product_property", "property_type", "property_type_id"
+	default:
+		return nil, fmt.Errorf("storage: list products declaring: unknown lane %q", lane)
+	}
+	col := "name"
+	if isUUID(name) {
+		col = "id"
+	}
+	rows, err := p.pool.Query(ctx, `select `+productCols+` from product
+		where exists (select 1 from `+contract+` c join `+typeTable+` t on t.id = c.`+typeCol+`
+		              where c.product_id = product.id and t.`+col+` = $1)
+		order by label nulls last, name`, name)
+	if err != nil {
+		return nil, fmt.Errorf("storage: list products declaring %s %q: %w", lane, name, err)
+	}
+	defer rows.Close()
+	out := []Product{}
+	for rows.Next() {
+		m, err := scanProduct(rows)
+		if err != nil {
+			return nil, fmt.Errorf("storage: scan product: %w", err)
+		}
+		out = append(out, *m)
+	}
+	return out, rows.Err()
+}
+
 // ListProducts returns every product, ordered alphabetically by label,
 // with unlabelled rows last and the name breaking ties (#613; see ListVendors for
 // why `nulls last` is written out).
