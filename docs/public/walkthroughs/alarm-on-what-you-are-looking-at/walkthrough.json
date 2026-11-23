@@ -1,0 +1,98 @@
+{
+  "id": "alarm-on-what-you-are-looking-at",
+  "title": "Alarm on what you are looking at",
+  "description": "From a component's vitals, start a rule on one metric, see the form name what is missing, preview it in plain words, and save it.",
+  "steps": [
+    {
+      "n": 1,
+      "kind": "goto",
+      "caption": "Touch Panel 2, with its vitals. Each metric has a way to raise an alarm on it.",
+      "still": "step-01.png"
+    },
+    {
+      "n": 2,
+      "kind": "click",
+      "caption": "Alarm on this opens a new rule that already reads this metric on this component.",
+      "still": "step-02.png"
+    },
+    {
+      "n": 3,
+      "kind": "wait",
+      "caption": "The component is filled in, and the picker names where it sits, so two panels with one name are not mistaken.",
+      "still": "step-03.png"
+    },
+    {
+      "n": 4,
+      "kind": "click",
+      "caption": "Submit with nothing else filled in.",
+      "still": "step-04.png"
+    },
+    {
+      "n": 5,
+      "kind": "wait",
+      "caption": "The form says what is missing by name, puts the focus on the first, and each name is a link to its field.",
+      "still": "step-05.png"
+    },
+    {
+      "n": 6,
+      "kind": "type",
+      "caption": "Name it. The label beneath follows, in words, until you write your own.",
+      "still": "step-06.png"
+    },
+    {
+      "n": 7,
+      "kind": "select",
+      "caption": "Poll Duration is a number, so it can be compared any way.",
+      "still": "step-07.png"
+    },
+    {
+      "n": 8,
+      "kind": "type",
+      "caption": "Fire above 2.",
+      "still": "step-08.png"
+    },
+    {
+      "n": 9,
+      "kind": "type",
+      "caption": "And only when it holds for 30 seconds.",
+      "still": "step-09.png"
+    },
+    {
+      "n": 10,
+      "kind": "click",
+      "caption": "Preview judges the draft against the last day of samples, writing nothing.",
+      "still": "step-10.png"
+    },
+    {
+      "n": 11,
+      "kind": "wait",
+      "caption": "A sentence in the words you entered, naming the series by its component and metric.",
+      "still": "step-11.png"
+    },
+    {
+      "n": 12,
+      "kind": "wait",
+      "caption": "The 30 seconds is named, and why the preview cannot apply it, so the counts read as the most the rule would have done.",
+      "still": "step-12.png"
+    },
+    {
+      "n": 13,
+      "kind": "click",
+      "caption": "Save it. The rule judges every sample from now on.",
+      "still": "step-13.png"
+    },
+    {
+      "n": 14,
+      "kind": "wait",
+      "caption": "Its drawer reads in words first, with a link to the alarms it raises; the expressions sit behind Show expression.",
+      "still": "step-14.png"
+    }
+  ],
+  "poster": "step-12.png",
+  "preview": "preview.webp",
+  "budget": {
+    "seconds": 47.8,
+    "bytes": 864504,
+    "previewBytes": 627898
+  }
+}
