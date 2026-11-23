@@ -4,7 +4,7 @@ import { X } from "./icons";
 import FormActionBar from "./FormActionBar";
 import { FormActionsContext, createFormActions } from "../lib/formactions";
 
-// Drawer: a right slide-over on ModalDialog (ui/, over Kobalte Dialog). Kobalte owns focus-trap, focus
+// Drawer: a right slide-over on Kobalte Dialog. Kobalte owns focus-trap, focus
 // restore, Esc, scroll-lock, and the ARIA wiring; this styles the shell and owns
 // the action rail.
 //
