@@ -84,6 +84,7 @@ export default function Secrets() {
         columns,
         empty: "No secrets yet.",
         rowId: (s) => s.id,
+        rowAlt: (s) => s.name,
         blades: { registry: { secret: secretBlade }, rootKind: "secret" },
         create: can(me.data, "secret", "create")
           ? { label: "New secret", can: () => can(me.data, "secret", "create"), body: (ctx) => <CreateSecretForm onCreated={ctx.select} /> }
