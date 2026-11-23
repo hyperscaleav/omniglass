@@ -1159,6 +1159,7 @@ func TestRaiseAlarmWithoutCapabilities(t *testing.T) {
 // system called "meeting" read as two entries that differ in an addressable
 // field, and that field opens the system.
 func TestLocationHealthSystemsAreAddressable(t *testing.T) {
+	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	f.mustLocation(t, ctx, "hq-r2", "room", ptrStr("hq-b1"))
