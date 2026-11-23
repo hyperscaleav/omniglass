@@ -30,7 +30,7 @@ import (
 type fleetDotBody struct {
 	Component string `json:"component" doc:"The component's uuid: what a renderer navigates to when a dot is clicked"`
 	Name      string `json:"name" doc:"The component's name, for the dot's hover title"`
-	Health    string `json:"health" doc:"healthy, incomplete, degraded, or outage: the component's own verdict, which is the only thing that colours the dot"`
+	Health    string `json:"health" doc:"healthy, incomplete, degraded, or outage: the component's own health, which is the only thing that colours the dot"`
 	Primary   bool   `json:"primary" doc:"True in the component's primary system, the one cluster that draws it solid. A shared component is a ghost outline everywhere else, so the fleet never counts one physical device twice"`
 	Shared    bool   `json:"shared" doc:"True when the component belongs to more than one system, which is what earns it a ring"`
 }
@@ -40,7 +40,7 @@ type fleetSystemBody struct {
 	Name     string         `json:"name"`
 	Label    string         `json:"label"`
 	Location string         `json:"location,omitempty" doc:"The uuid of the location this system is placed at; absent when it is placed nowhere"`
-	Health   string         `json:"health" doc:"The system's recorded verdict, the same one its health read serves"`
+	Health   string         `json:"health" doc:"The system's recorded health, the same one its health read serves"`
 	Dots     []fleetDotBody `json:"dots" doc:"One entry per component in this system; empty when the caller may read the system but not its components"`
 }
 
@@ -51,7 +51,7 @@ type fleetLocationBody struct {
 	LocationType   string `json:"location_type" doc:"The type's name, which the band renders as its type chip"`
 	LocationTypeID string `json:"location_type_id" doc:"The type's uuid, the stable handle beside its renameable name"`
 	Parent         string `json:"parent,omitempty" doc:"The uuid of this location's parent; absent on a root. The tree is flat here and assembled by the client"`
-	Health         string `json:"health" doc:"The location's recorded verdict, worst-wins over the systems beneath it"`
+	Health         string `json:"health" doc:"The location's recorded health, worst-wins over the systems beneath it"`
 }
 
 type fleetViewOutput struct {
@@ -99,9 +99,9 @@ func toFleetViewOutput(v *storage.FleetView) *fleetViewOutput {
 }
 
 type platformSystemBody struct {
-	ID     string `json:"id" doc:"The platform system's uuid: the page's verdict links to its system detail, where the verdict is explained"`
+	ID     string `json:"id" doc:"The platform system's uuid: the page's health links to its system detail, where the health is explained"`
 	Name   string `json:"name"`
-	Health string `json:"health" doc:"The platform system's recorded verdict, the same one its health read serves"`
+	Health string `json:"health" doc:"The platform system's recorded health, the same one its health read serves"`
 }
 
 type platformServerBody struct {
@@ -109,7 +109,7 @@ type platformServerBody struct {
 	Name      string              `json:"name" doc:"The server's platform component name"`
 	Version   string              `json:"version,omitempty" doc:"The build the server runs, as its boot wrote it (server-version); absent before a boot has written it"`
 	StartedAt *time.Time          `json:"started_at,omitempty" doc:"When the server's current boot started (server-started-at); uptime is read_at minus this"`
-	Health    string              `json:"health" doc:"The server component's recorded verdict"`
+	Health    string              `json:"health" doc:"The server component's recorded health"`
 	Groups    []platformPanelBody `json:"groups" doc:"The server's panels (Requests, Ingest, Queues, Retention), in order: the page renders these and has no key list of its own"`
 	Alarms    []platformAlarmBody `json:"alarms" doc:"The open alarms on the server's platform component, newest first; a panel is flagged when one names a key it carries"`
 }
@@ -169,7 +169,7 @@ type platformOutpostBody struct {
 	Enrolled        bool                          `json:"enrolled"`
 	LastHeartbeatAt *time.Time                    `json:"last_heartbeat_at,omitempty" doc:"The outpost's last heartbeat; absent when it has never sent one"`
 	Component       string                        `json:"component,omitempty" doc:"The outpost's platform component uuid, where every figure has its history; absent for an outpost the boot has not yet adopted"`
-	Health          string                        `json:"health,omitempty" doc:"The outpost's platform component verdict, which tones the row; absent without a fleet-wide component read"`
+	Health          string                        `json:"health,omitempty" doc:"The outpost's platform component health, which tones the row; absent without a fleet-wide component read"`
 	Figures         map[string]platformFigureBody `json:"figures,omitempty" doc:"The current figure per key, by key name: a gauge's latest sample, a window count only while its window is the newest. A key the outpost has never reported, or whose last window has passed, is absent, never zero; the whole map is absent without a fleet-wide component read"`
 	Loss            *float64                      `json:"loss,omitempty" doc:"The share of what the outpost's own hops (loss_hops) took in over the last hour that they lost, every kind summed per hop and composed across them as the pipeline's end to end is; 0 is healthy. Absent when nothing went in on any of them, or without a fleet-wide component read"`
 }
@@ -233,8 +233,8 @@ type platformViewOutput struct {
 	Body struct {
 		ReadAt      time.Time             `json:"read_at" doc:"The server's clock when the view was read: uptime and the liveness pill are both judged against it, so they read one clock"`
 		Lab         bool                  `json:"lab" doc:"True when this server runs as an omniglass lab"`
-		FiguresRead bool                  `json:"figures_read" doc:"True when the caller's component read reached the platform components. False means the figures, verdicts and servers are left out because the caller may not read them, not because nothing was reported"`
-		System      *platformSystemBody   `json:"system,omitempty" doc:"The platform system and its verdict; absent without a fleet-wide system read"`
+		FiguresRead bool                  `json:"figures_read" doc:"True when the caller's component read reached the platform components. False means the figures, health and servers are left out because the caller may not read them, not because nothing was reported"`
+		System      *platformSystemBody   `json:"system,omitempty" doc:"The platform system and its health; absent without a fleet-wide system read"`
 		Servers     []platformServerBody  `json:"servers" doc:"Every server's platform component, the identity its boot wrote and its panels; empty without a fleet-wide component read"`
 		Groups      []platformGroupBody   `json:"groups" doc:"The outpost table's column groups, in order: the page renders these and has no key list of its own"`
 		Outposts    []platformOutpostBody `json:"outposts" doc:"One row per outpost, in name order"`
@@ -377,7 +377,7 @@ func registerViewRoutes(api huma.API, a *authenticator, gw storage.Gateway, log 
 		Method:      http.MethodGet,
 		Path:        "/views/fleet",
 		Summary:     "Read the whole in-scope fleet in one call",
-		Description: "Returns every in-scope location (flat, with parent and verdict), every in-scope system (with location and verdict), and one dot per component in each system. A dot carries the component id, its verdict, and the primary/shared flags, not a full component row. The open_alarms count is the alarms open on the components the caller may read. Each tier is scoped on its own read permission: a caller who can read locations but not components gets locations with empty systems, and a caller with no scope gets an empty result, not an error. Gated by location:read.",
+		Description: "Returns every in-scope location (flat, with parent and health), every in-scope system (with location and health), and one dot per component in each system. A dot carries the component id, its health, and the primary/shared flags, not a full component row. The open_alarms count is the alarms open on the components the caller may read. Each tier is scoped on its own read permission: a caller who can read locations but not components gets locations with empty systems, and a caller with no scope gets an empty result, not an error. Gated by location:read.",
 	}, "location", "read"), func(ctx context.Context, _ *struct{}) (*fleetViewOutput, error) {
 		// Three scopes, three permissions. Resolving them separately is what
 		// makes the tiers independent: Explore is a location-rooted surface,
@@ -402,7 +402,7 @@ func registerViewRoutes(api huma.API, a *authenticator, gw storage.Gateway, log 
 		Method:      http.MethodGet,
 		Path:        "/views/platform",
 		Summary:     "Read Omniglass's own health in one call",
-		Description: "Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build, start time and panels (Requests, Ingest, Queues and Retention: each key's catalog facts and its latest sample per instance, a ranked key cut to the ten highest of its newest window in the database, and the open alarms on the server component with the key each one's rule samples), the outpost table's column groups with each key's catalog facts, and one row per outpost with its last heartbeat, its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest) and its loss over its own hops, and the pipeline: each hop an item crosses, in order, with its in, out and loss per kind and per component, newest window and last hour, and the end to end. The rows need a fleet-wide outpost:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers (with their panels) need a fleet-wide component:read and the system a fleet-wide system:read; short of that each (the pipeline and the outpost loss with them) is left out, never zeroed. Gated by outpost:read.",
+		Description: "Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its health, each server's running build, start time and panels (Requests, Ingest, Queues and Retention: each key's catalog facts and its latest sample per instance, a ranked key cut to the ten highest of its newest window in the database, and the open alarms on the server component with the key each one's rule samples), the outpost table's column groups with each key's catalog facts, and one row per outpost with its last heartbeat, its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest) and its loss over its own hops, and the pipeline: each hop an item crosses, in order, with its in, out and loss per kind and per component, newest window and last hour, and the end to end. The rows need a fleet-wide outpost:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, health and servers (with their panels) need a fleet-wide component:read and the system a fleet-wide system:read; short of that each (the pipeline and the outpost loss with them) is left out, never zeroed. Gated by outpost:read.",
 	}, "outpost", "read"), func(ctx context.Context, _ *struct{}) (*platformViewOutput, error) {
 		v, err := gw.PlatformView(ctx,
 			a.scopeFor(ctx, "outpost", "read"),

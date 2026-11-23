@@ -96,7 +96,7 @@ though a change you make in the console nudges it to pull at once and reaches it
 Each probe and each poll runs on its own interval, on the outpost's own timer, not on the check-in.
 The throwaway lab each walkthrough is recorded on runs at
 `walkthrough` and probes every 2s, since a recording is held to a time budget, so in your
-lab a walkthrough that waits on a probe's verdict (watching a rule raise an alarm, say) waits a few
+lab a walkthrough that waits on a probe's reachability (watching a rule raise an alarm, say) waits a few
 seconds longer than its recording. Its seed also sets the platform's report window
 (`collection.report_seconds`) to 10s, so the outpost's and the server's own figures, the ones
 [Platform health](/operator/platform-health/) reads, land inside the recording; your lab
@@ -865,7 +865,7 @@ missing rather than dropping out. A run whose worklist read failed, or found no 
 refused its first worklist reports while it waits) runs no task, so the ingest drain does not wait on
 it for a sample, and the run reaches this gate and names it rather than failing as not drained.
 
-Before any figure, the runs themselves must be clean, or the verdict is **invalid** and the check exits
+Before any figure, the runs themselves must be clean, or the soak verdict is **invalid** and the check exits
 nonzero with the reason: the runs measured another size, window or warm-up than the baseline's, this
 build places a different device set than the baseline's (the plan digest moved, so regenerate the
 baseline) or a run recorded no device set at all (a series from before the gate), an outpost restarted or its simulator's served fleet changed inside the window, or a device carried an impairment. A gated lab is never
@@ -977,7 +977,7 @@ latency are not in a sample yet (#1625, #1626).
 
 A sample reads the lab from its host, through Docker. To read the same platform from anywhere else,
 with a token and the API alone, use [`omniglass platform health`](/reference/cli/#omniglass-platform-health): one
-reading whose exit status is the verdict, or the same `--every`, `--window`, `--append` and
+reading whose exit status is the soak verdict, or the same `--every`, `--window`, `--append` and
 `--page-clients` series against a server you can reach but not shell into, such as a soak's from your
 desk.
 
@@ -1092,7 +1092,7 @@ machine through a tunnel, then open `http://127.0.0.1:8080/web`:
 ssh -L 8080:127.0.0.1:8080 <soak-host>
 ```
 
-**The verdict.** A week of the series says how the platform grew; whether it failed silently is the
+**The soak verdict.** A week of the series says how the platform grew; whether it failed silently is the
 platform's own to say, and `lab soak verdict` reads exactly that, through the API alone: the platform
 system's alarm history and every loss ratio on the Platform health page. It judges the window from
 `--since` to now (or `--until`), prints pass or fail with every reason, and exits 1 on a fail:

@@ -48,7 +48,7 @@ type Term struct {
 	Permission string    `yaml:"permission"`
 	Nav        string    `yaml:"nav"`
 	NavLabel   string    `yaml:"nav_label"`
-	Verdict    string    `yaml:"verdict"`
+	Health     string    `yaml:"health"`
 	Retired    []Retired `yaml:"retired"`
 }
 
@@ -125,7 +125,7 @@ func (v Vocabulary) validate() error {
 		}
 		for _, c := range []struct{ kind, key string }{
 			{"word", t.Word}, {"collection", t.Collection}, {"schema", t.Schema},
-			{"nav", t.Nav}, {"verdict", t.Verdict},
+			{"nav", t.Nav}, {"health", t.Health},
 		} {
 			if err := claim(c.kind, c.key, t.Word); err != nil {
 				return err
@@ -191,12 +191,12 @@ func (v Vocabulary) Nav() map[string]*Term {
 	return out
 }
 
-// Verdicts maps each health verdict value to its term.
-func (v Vocabulary) Verdicts() map[string]Term {
+// Healths maps each health value to its term.
+func (v Vocabulary) Healths() map[string]Term {
 	out := map[string]Term{}
 	for _, t := range v.Terms {
-		if t.Verdict != "" {
-			out[t.Verdict] = t
+		if t.Health != "" {
+			out[t.Health] = t
 		}
 	}
 	return out

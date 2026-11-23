@@ -660,7 +660,7 @@ own scope** on the component tier rather than by `component:read`,
 [ADR-0117](/architecture/decisions/#adr-0117-an-actuation-is-fenced-by-the-permission-that-authorizes-it))
 is the write: it records the invocation, writes a caused event,
 and (for a settleable command) opens an intended value, answering with the command as the read
-returns it beside the computed settlement verdict (none/pending/settled/failed); the invocation then
+returns it beside the computed settlement (none/pending/settled/failed); the invocation then
 actuates over the per-outpost command queue
 ([commands](/architecture/commands/#actuation-the-wire-to-the-device), #815). With `wait` the issue
 holds until the command is terminal or `wait_timeout` passes (1 to 120 seconds), bounded to 64 waits

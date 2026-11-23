@@ -349,10 +349,10 @@ with the spool shipping again rather than a connection that gave up.
 The spool is **memory**, bounded at 10,000 batches, 16 MiB, or 12 hours: past any of them it drops
 the oldest batch (never one with the stream), says so once when it starts dropping and once, with the
 count, when it drains, and the run loop forgets the transitions it remembers as sent (the
-reachability verdict, a poll's faults and occurrences), so the next tick sends current state again.
-A held session says its state, its auth verdict and its listeners' faults only when they change, so
+reachability, a poll's faults and occurrences), so the next tick sends current state again.
+A held session says its state, its auth result and its listeners' faults only when they change, so
 the same tick has the session manager **resend** them: each held session's current `session-state`
-and auth verdict, and each listener's current faults, once each. The resend rides the spool, so a
+and auth result, and each listener's current faults, once each. The resend rides the spool, so a
 resend it drops raises the overflow again and is resent on the next tick; a tick without an overflow
 resends nothing. The server therefore never keeps showing a session up that went down while the bus
 was unreachable.
@@ -631,7 +631,7 @@ driver task's `session` block (read off the live driver spec) and the endpoint's
 fingerprint and published gate (ADR-0158); the outpost
 renders the login against the delivered secrets (a credential it lacks refuses the session by
 reference, never by value), runs it on every connection before any poll, command, or arm, and
-publishes its verdict as `endpoint-authenticated`. A terminal refusal reads `rejected` and the outpost
+publishes its reachability as `endpoint-authenticated`. A terminal refusal reads `rejected` and the outpost
 dials no more: a poll over it fails fast and waits its interval (or runs the moment its
 session is up again, so a fixed credential lands data at once), a command fails with the reason, and
 neither falls back to a throwaway connection. The outpost gates the endpoint at the refusal's ladder
@@ -841,18 +841,18 @@ limit and would otherwise let the heap grow until the kernel kills it.
 
 Any endpoint with a host address gets reachability for free: the outpost pings the host and checks the declared port(s), continuously and out of band; a smart default, **bypassable per endpoint** (for endpoints that drop ICMP or have no port).
 
-**Verdict-gated polls** are built (#1650,
+**Reachability-gated polls** are built (#1650,
 [ADR-1650](/architecture/decisions/#adr-1650-an-endpoint-gate-holds-a-set-of-reasons)). The
-endpoint's reachability probe feeds its gate: **two consecutive down verdicts** add an
+endpoint's reachability probe feeds its gate: **two consecutive down readings** add an
 `unreachable` reason to the gate, dated from the first down, so one lost probe never stops
 collection; an inconclusive probe neither adds nor resets the streak, nor does a rung that reads
 down only because a refusal holds it (snmp's held get, udp's gated request), so a refused endpoint
-never also reads unreachable; the next up verdict removes it. While the gate holds `unreachable`, a due poll is **held**: nothing is sent, no failure and no
+never also reads unreachable; the next up reading removes it. While the gate holds `unreachable`, a due poll is **held**: nothing is sent, no failure and no
 backoff are booked, and the window counts it as `poll-held-count`, apart from
 `poll-failure-count`, because a poll the outpost chose not to send is not a lost sample. The first
-up verdict releases it at once. A command or a run now on the held endpoint answers at once
+up reading releases it at once. A command or a run now on the held endpoint answers at once
 naming the reason (`unreachable since <time>`), and a preview answers 409, not a transport
-failure. An endpoint with no probe has no verdict, so its polls fail and back off as before.
+failure. An endpoint with no probe has no reachability yet, so its polls fail and back off as before.
 Held sessions and listen tasks are not gated by `unreachable`; their own reconnect handles a
 gone device.
 
@@ -867,10 +867,10 @@ and the outpost adds a
 command (`disrupted by reboot (command 42) since <time>`). For the type's quiet period nothing runs
 against a held endpoint: polls are held and counted as `poll-held-count`, never as failures; the
 probe does not run; a held session does not dial; a command, a run now or a preview answers at once
-naming the reason. After quiet each endpoint reopens on **its own** first up verdict, and only a
+naming the reason. After quiet each endpoint reopens on **its own** first up reading, and only a
 probe that **began** after quiet counts, so an answer already in flight when the command went out
-cannot release it; a down verdict releases nothing, and a sibling that has not answered stays held.
-The delivery starts the probe's down streak over, and a verdict read before quiet ends neither feeds
+cannot release it; a down reading releases nothing, and a sibling that has not answered stays held.
+The delivery starts the probe's down streak over, and a reachability read before quiet ends neither feeds
 nor resets it, so `unreachable` takes two downs read after quiet, dated from the first of them.
 The type's hold is the backstop: an endpoint still held then reopens anyway and the window counts
 it as `hold-expiry-count`, so a device that never comes back is seen rather than silently resumed.
@@ -894,7 +894,7 @@ phases. **Held**, while the upstream is closed: due polls are held and counted a
 probe result never moves and nothing fires on it, and a command, run now or preview answers at once
 (`held by upstream gateway-1 since <time>`). A gateway going down raises one root cause on the
 gateway, not a storm on everything behind it. **Waiting**, once every upstream opens: the probe
-resumes, polls stay held, and the dependent's own next up verdict releases it; a dependent with no
+resumes, polls stay held, and the dependent's own next up reading releases it; a dependent with no
 probe has nothing to wait for and is released at once, and one that earns its own `unreachable`
 while waiting drops `upstream`, so its gate names its own cause. Downs its probe read before the hold do
 not count toward that: they saw the same outage through the upstream. **The reason names the root.** Down
@@ -915,10 +915,10 @@ on another outpost is not followed (#1655), and a held session's own reconnect i
 an **OSI-layered** set of cheap checks the endpoint's probe runs on its own interval. All applicable
 checks run, each shipping a built-in sample usable in rules and dashboards, instanced (the ping by
 host, the rest by endpoint) and owned by the queried component; the endpoint's
-**`endpoint-reachable`** verdict is their AND, and it feeds the gate from the outpost's local copy, so
+**`endpoint-reachable`** reachability is their AND, and it feeds the gate from the outpost's local copy, so
 the connection detector and the dashboard signal are one always-on probe. The probe is not a
 pre-pass run before each poll: the gate it feeds is consulted as each job is taken off its
-[endpoint lane](#the-endpoint-lane), so a poll asks the verdict already read rather than waiting on
+[endpoint lane](#the-endpoint-lane), so a poll asks the reachability already read rather than waiting on
 a fresh check. **The ping is shared per host**: every endpoint on one host whose probe falls due in
 the same probe slot (the clock truncated to the probe interval) rides one ping, the first to ask
 sending it and the rest reading its answer, so three endpoints on one host send one echo burst a
@@ -926,16 +926,16 @@ slot, not three.
 
 | Layer | Check | Sample | Notes |
 |---|---|---|---|
-| L3 network | ICMP ping, **shared once per host** per probe slot | `icmp-reachable` (`up`/`down`, a transition-only property) / `icmp-rtt-avg` (a metric) | **informational** (see verdict below); shared by every endpoint on the host |
+| L3 network | ICMP ping, **shared once per host** per probe slot | `icmp-reachable` (`up`/`down`, a transition-only property) / `icmp-rtt-avg` (a metric) | **informational** (see reachability below); shared by every endpoint on the host |
 | L4 transport | TCP connect (tcp-family) | `tcp-open` (`open`/`closed`, a transition-only property) / `tcp-connect-time` (a metric) | udp has no presence check: an open udp port cannot be detected, so its transport rung is the driver's request answered (built, [ADR-0163](/architecture/decisions/#adr-0163-a-udp-endpoint-binds-its-own-socket-and-its-rung-is-a-request-answered)), and the host's port-unreachable report reads `refused` |
-| L7 app | protocol handshake: SNMP `sysUpTime` get (built as snmp's transport rung, [ADR-0821](/architecture/decisions/#adr-0821-snmps-rung-is-a-standard-get-answered-and-only-an-authorizationerror-reads-as-auth)) · SSH handshake+auth · telnet login chain · an HTTP response drawn, after the TLS handshake for https (built, [ADR-0902](/architecture/decisions/#adr-0902-http-polls-and-commands-send-real-requests-read-through-one-extraction-authenticated-by-a-declared-scheme)) | (verdict) | the SNMP get is the SNMP liveness (ICMP-independent); SSH/telnet log in only where the driver's ladder declares a session rung, because their liveness credential can differ from the component's; the http probe never carries a credential, so an http endpoint's session rung is proven by its credentialed polls and commands |
+| L7 app | protocol handshake: SNMP `sysUpTime` get (built as snmp's transport rung, [ADR-0821](/architecture/decisions/#adr-0821-snmps-rung-is-a-standard-get-answered-and-only-an-authorizationerror-reads-as-auth)) · SSH handshake+auth · telnet login chain · an HTTP response drawn, after the TLS handshake for https (built, [ADR-0902](/architecture/decisions/#adr-0902-http-polls-and-commands-send-real-requests-read-through-one-extraction-authenticated-by-a-declared-scheme)) | (reachability) | the SNMP get is the SNMP liveness (ICMP-independent); SSH/telnet log in only where the driver's ladder declares a session rung, because their liveness credential can differ from the component's; the http probe never carries a credential, so an http endpoint's session rung is proven by its credentialed polls and commands |
 
-**The verdict respects each layer's definitiveness.** A TCP connect, any L7 handshake and a
+**The reachability respects each layer's definitiveness.** A TCP connect, any L7 handshake and a
 request answered are **definitive**, so the **ping is informational**, everywhere (an
 ICMP-filtered host still reads up). The UDP presence check this design once leaned on the ping to
 disambiguate (an ambiguous read timeout, `pingGates`) is retired: where no port can be opened (udp,
 and snmp) the transport rung is a request answered. A definitively down layer (TCP refused,
-UDP ICMP-unreachable, an L7 auth/no-answer) fails the verdict regardless; an inconclusive probe (a
+UDP ICMP-unreachable, an L7 auth/no-answer) fails the reachability regardless; an inconclusive probe (a
 setup/resolve error, a missing credential) does not gate.
 
 **The per-check toggles retire into the ladder.** The `params.<name>_check` toggles and
@@ -966,9 +966,9 @@ it is **open only when the set is empty**. The reasons above, side by side:
 | Reason | Added by | Released by | Built in |
 |---|---|---|---|
 | `refused` | a terminal refusal on a rung | a fingerprint change, an operator's `:retry`, or the rung passing | ADR-0158, into the set with #1650 |
-| `unreachable` | two consecutive down probe verdicts | the next up verdict | #1650 |
-| `disrupted` | a disruptive command, before it is sent, on every endpoint of its hold set | after the quiet period, each endpoint's first up verdict from a probe begun after it; the hold backstop releases the rest and counts the expiry | #1651, the hold set #1648 |
-| `upstream` | a closed gate on the component the endpoint is reached through (a path edge, cycle-guarded) | the upstream opening, then the dependent's own first up verdict | #1652 |
+| `unreachable` | two consecutive down probe readings | the next up reading | #1650 |
+| `disrupted` | a disruptive command, before it is sent, on every endpoint of its hold set | after the quiet period, each endpoint's first up reading from a probe begun after it; the hold backstop releases the rest and counts the expiry | #1651, the hold set #1648 |
+| `upstream` | a closed gate on the component the endpoint is reached through (a path edge, cycle-guarded) | the upstream opening, then the dependent's own first up reading | #1652 |
 
 **Poller** tasks run only while the gate is open; **listener** (`mode=listen`) tasks run ungated,
 never pinged; **inline probes** (`icmp`/`tcp` with the host on the task) *are* the check, ungated.
@@ -1122,7 +1122,7 @@ so a first run just before a slot is not followed by a second a moment later, an
 due is an interval apart. Because the grid is a function of the task's id alone, a restarted outpost
 lands each task on the same slots as before, and a fleet of tasks with one interval spreads across
 it instead of firing together. A task whose connection fingerprint moves (an edit in place, a
-rotated secret, an operator's `:retry`, #1061) runs at once, so an operator's fix reads its verdict
+rotated secret, an operator's `:retry`, #1061) runs at once, so an operator's fix reads its reachability
 in seconds.
 
 **Skip, not burst.** A task still in flight at its next due is **skipped and counted**, never queued

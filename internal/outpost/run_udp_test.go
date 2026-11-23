@@ -166,16 +166,30 @@ func TestOutpostUDPEndpointExchangesAndListensInDatagrams(t *testing.T) {
 	if _, err := other.WriteToUDP([]byte("EVT INPUT usbc\r\n"), outpost); err != nil {
 		t.Fatal(err)
 	}
-	// The outpost reads the datagram at once and a claim would ship on the next
-	// tick; the window is read through, not sampled once at its end.
-	for end := time.Now().Add(1500 * time.Millisecond); time.Now().Before(end); time.Sleep(25 * time.Millisecond) {
-		switch v := s.latest("panel-1", ep.Name, "video-input"); v {
-		case "dp1":
-		case "usbc":
-			t.Fatal("video-input = \"usbc\": the stranger's datagram was claimed")
-		default:
-			t.Fatalf("video-input = %q after a stranger's datagram, want dp1 still", v)
+	// The proof is causal, not a window: the real peer pushes a third value
+	// after the stranger's datagram, and the outpost reads its one socket in
+	// order, so a claimed stranger would have landed before hdmi1 does. Wait on
+	// that push, then read the ordered transitions since dp1: dp1, hdmi1, with
+	// no usbc between.
+	if _, err := other.WriteToUDP([]byte("SET INPUT hdmi1\r\n"), face); err != nil {
+		t.Fatal(err)
+	}
+	s.waitFor("panel-1", ep.Name, "video-input", is("hdmi1"), "hdmi1, pushed after the stranger's datagram")
+	trs, err := s.gw.PropertyTransitions(s.ctx, "panel-1", "video-input", ep.Name, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var seq []string
+	for _, tr := range trs {
+		if tr.Value == "dp1" {
+			seq = seq[:0]
 		}
+		if len(seq) > 0 || tr.Value == "dp1" {
+			seq = append(seq, tr.Value)
+		}
+	}
+	if got, want := strings.Join(seq, ","), "dp1,hdmi1"; got != want {
+		t.Fatalf("video-input since dp1 = %s, want %s: a stranger's datagram was claimed", got, want)
 	}
 
 	// The face falls silent: not responsive, and the verdict is down.
