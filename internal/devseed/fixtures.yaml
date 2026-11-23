@@ -2074,6 +2074,10 @@ component_dependencies:
   - { component: div-amp, upstream: power, kind: power, outlet: "2" }
   - { component: touch-a, upstream: bar-a, kind: host }
   - { component: touch-a, upstream: bar-a, kind: path }
+  # The bar is a component with one upstream (the power conditioner) and two
+  # downstreams (the touch panel, and the room display reached through it), so
+  # its page shows the Dependencies panel populated both ways (#2428).
+  - { component: panel-a, upstream: bar-a, kind: path }
   - { component: huddle-touch, upstream: huddle-bar, kind: host }
 
 alarms:
