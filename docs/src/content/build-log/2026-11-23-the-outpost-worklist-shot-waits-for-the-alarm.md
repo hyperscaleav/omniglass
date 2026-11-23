@@ -8,4 +8,5 @@ refs: [2291]
 had no wait for the lab's outpost-silent alarm, so a capture landing before the alarm read a healthy
 row tone and pill where one landing after read outage (the 4.4% failures of #2168). It now waits,
 after its click and before its hover, for the outage pill, failing with a message naming the alarm.
-The tolerance stays zero. The baseline PNGs are regenerated from a CI capture taken after this change.
+The tolerance stays zero. The committed baseline PNGs already show the outage state: a CI capture
+taken after this change matched them pixel for pixel, so none needed regenerating.
