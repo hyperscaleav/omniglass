@@ -254,3 +254,56 @@ func TestARetentionLaneThatStopsReportingOpensNoAlarm(t *testing.T) {
 		}
 	}
 }
+
+// TestARestartSeedsTheFlaggedLanesFromStoredFlags (#1673), against real
+// Postgres: a lane's newest stored retention-behind of 1 seeds the loop's
+// flagged set; a lane since written 0 does not. The pass after a restart then
+// writes 0 for the seeded lane that no longer reports.
+func TestARestartSeedsTheFlaggedLanesFromStoredFlags(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+	outpost, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "srv-stand-in"}, all, all)
+	if err != nil || outpost.PlatformComponentID == nil {
+		t.Fatalf("create outpost: %v", err)
+	}
+	comp := *outpost.PlatformComponentID
+	now := time.Now()
+	write := func(lane string, v float64, at time.Time) {
+		t.Helper()
+		if err := gw.RecordPlatformMetrics(ctx, []storage.PlatformMetric{{ComponentID: comp,
+			Key: writerclass.RetentionBehind, Instance: lane, Value: v, TS: at}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("metric/held", 1, now.Add(-3*time.Second))
+	write("property", 1, now.Add(-3*time.Second))
+	write("property", 0, now.Add(-2*time.Second))
+	write("metric", 0, now.Add(-2*time.Second))
+
+	flagged := seedFlaggedLanes(ctx, gw, comp, 0)
+	if len(flagged) != 1 || flagged[0] != "metric/held" {
+		t.Fatalf("seeded %v, want [metric/held]", flagged)
+	}
+	if got := seedFlaggedLanes(ctx, gw, "", 0); got != nil {
+		t.Errorf("no component seeded %v, want none", got)
+	}
+
+	gone := retentionReport{Deleted: map[string]int64{"metric": 0}}
+	if err := recordRetention(ctx, gw, comp, gone, flagged, now, 0); err != nil {
+		t.Fatal(err)
+	}
+	if got := seedFlaggedLanes(ctx, gw, comp, 0); len(got) != 0 {
+		t.Errorf("after the pass %v still flagged, want none", got)
+	}
+}
