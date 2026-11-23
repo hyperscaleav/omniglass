@@ -84,7 +84,9 @@ select extract(epoch from clock_timestamp()),
   pg_database_size(current_database()),
   coalesce(pg_total_relation_size(to_regclass('telemetry_receipt')), 0),
   pg_wal_lsn_diff(pg_current_wal_lsn(), '0/0')::bigint,
-  coalesce((select s.n_tup_ins from pg_stat_user_tables s where s.relid = to_regclass('telemetry_receipt')), 0)`
+  coalesce((select s.n_tup_ins from pg_stat_user_tables s where s.relid = to_regclass('telemetry_receipt')), 0),
+  coalesce((select string_agg(s.relid::oid || ':' || s.n_tup_ins, ',') from lane join pg_stat_user_tables s using (relid) where lane.name = 'metric'), ''),
+  coalesce((select string_agg(s.relid::oid || ':' || s.n_tup_ins, ',') from lane join pg_stat_user_tables s using (relid) where lane.name = 'property'), '')`
 
 // DBCounters is one reading of DBCountersQuery.
 type DBCounters struct {
@@ -98,14 +100,63 @@ type DBCounters struct {
 	// landed. It counts the receipt of a rolled-back pass too, so a batch the
 	// consumer landed in three passes after a Postgres refusal counts three.
 	ReceiptsInserted int64
+	// MetricParts and PropertyParts are the insert counters per partition
+	// (keyed by relid), so a window differences each partition present at
+	// both ends: a dropped partition (retention rolling) contributes nothing
+	// and a new one counts from zero (#1956). Nil falls back to the totals.
+	MetricParts, PropertyParts map[uint32]int64
+}
+
+// parseParts reads "relid:n,relid:n" into a map.
+func parseParts(s string) (map[uint32]int64, error) {
+	m := map[uint32]int64{}
+	if s == "" {
+		return m, nil
+	}
+	for _, p := range strings.Split(s, ",") {
+		k, v, ok := strings.Cut(p, ":")
+		id, err1 := strconv.ParseUint(k, 10, 32)
+		n, err2 := strconv.ParseInt(v, 10, 64)
+		if !ok || err1 != nil || err2 != nil {
+			return nil, fmt.Errorf("the partition counter %q", p)
+		}
+		m[uint32(id)] = n
+	}
+	return m, nil
+}
+
+// InsertsBetween is the rows inserted across a window from per-partition
+// counters: each partition present at both ends differences, one present only
+// at the end counts from zero, and one gone at the end (dropped) adds nothing.
+// A partition's counter going backwards is a reset, reported as restarted.
+func InsertsBetween(a, b map[uint32]int64) (n int64, restarted bool) {
+	for id, v := range b {
+		if prev, ok := a[id]; ok {
+			if v < prev {
+				return 0, true
+			}
+			v -= prev
+		}
+		n += v
+	}
+	return n, false
+}
+
+// rowsBetween is a lane's rows inserted across the window: per partition when
+// both readings carry them, else the totals' difference.
+func rowsBetween(r0, r1 int64, p0, p1 map[uint32]int64) (int64, bool) {
+	if p0 != nil && p1 != nil {
+		return InsertsBetween(p0, p1)
+	}
+	return r1 - r0, r1 < r0
 }
 
 // ParseDBCounters reads DBCountersQuery's row as psql prints it unaligned
 // (-At): pipe-separated, in the query's order.
 func ParseDBCounters(out string) (DBCounters, error) {
 	f := strings.Split(strings.TrimSpace(out), "|")
-	if len(f) != 9 {
-		return DBCounters{}, fmt.Errorf("database counters: %d fields in %q, want 9", len(f), out)
+	if len(f) != 11 {
+		return DBCounters{}, fmt.Errorf("database counters: %d fields in %q, want 11", len(f), out)
 	}
 	epoch, err := strconv.ParseFloat(f[0], 64)
 	if err != nil {
@@ -118,10 +169,19 @@ func ParseDBCounters(out string) (DBCounters, error) {
 		}
 	}
 	sec := int64(epoch)
+	mp, err := parseParts(f[9])
+	if err != nil {
+		return DBCounters{}, fmt.Errorf("database counters: %w", err)
+	}
+	pp, err := parseParts(f[10])
+	if err != nil {
+		return DBCounters{}, fmt.Errorf("database counters: %w", err)
+	}
 	at := time.Unix(sec, int64((epoch-float64(sec))*1e9+0.5)).UTC()
 	return DBCounters{
 		At: at, MetricRows: n[0], PropertyRows: n[1], MetricBytes: n[2], PropertyBytes: n[3],
 		DatabaseBytes: n[4], ReceiptBytes: n[5], WALBytes: n[6], ReceiptsInserted: n[7],
+		MetricParts: mp, PropertyParts: pp,
 	}, nil
 }
 
@@ -200,19 +260,21 @@ func WindowOf(db0, db1 DBCounters, use0, use1 map[string]Usage) (Window, error) 
 	}
 	// The statistics counters only grow while Postgres runs; one that went
 	// backwards means it restarted and reset them.
-	if db1.MetricRows < db0.MetricRows || db1.PropertyRows < db0.PropertyRows || db1.ReceiptsInserted < db0.ReceiptsInserted || db1.WALBytes < db0.WALBytes {
+	metricRows, mReset := rowsBetween(db0.MetricRows, db1.MetricRows, db0.MetricParts, db1.MetricParts)
+	propertyRows, pReset := rowsBetween(db0.PropertyRows, db1.PropertyRows, db0.PropertyParts, db1.PropertyParts)
+	if mReset || pReset || db1.ReceiptsInserted < db0.ReceiptsInserted || db1.WALBytes < db0.WALBytes {
 		return Window{}, fmt.Errorf("the database's counters went backwards between %s and %s (Postgres restarted?)", db0.At.Format(time.TimeOnly), db1.At.Format(time.TimeOnly))
 	}
-	perMin := func(a, b int64) float64 { return float64(b-a) / dt.Minutes() }
+	perMin := func(n int64) float64 { return float64(n) / dt.Minutes() }
 	perDay := func(a, b int64) float64 { return float64(b-a) / dt.Hours() * 24 }
 	batches := db1.ReceiptsInserted - db0.ReceiptsInserted
-	samples := (db1.MetricRows - db0.MetricRows) + (db1.PropertyRows - db0.PropertyRows)
+	samples := metricRows + propertyRows
 	perBatch, perSecond := BatchRates(batches, samples, dt)
 	w := Window{
 		BatchesLanded: batches, SamplesLanded: samples,
 		SamplesPerBatch: perBatch, BatchesPerSecond: perSecond,
-		MetricRowsPerMinute:   perMin(db0.MetricRows, db1.MetricRows),
-		PropertyRowsPerMinute: perMin(db0.PropertyRows, db1.PropertyRows),
+		MetricRowsPerMinute:   perMin(metricRows),
+		PropertyRowsPerMinute: perMin(propertyRows),
 		MetricBytesPerDay:     perDay(db0.MetricBytes, db1.MetricBytes),
 		PropertyBytesPerDay:   perDay(db0.PropertyBytes, db1.PropertyBytes),
 		ReceiptBytesPerDay:    perDay(db0.ReceiptBytes, db1.ReceiptBytes),

@@ -63,7 +63,7 @@ func TestMillicores(t *testing.T) {
 // The database counters come back from one psql row, pipe-separated, in the
 // order DBCountersQuery selects them.
 func TestParseDBCounters(t *testing.T) {
-	c, err := ParseDBCounters("1798545600.5|1200|30|81920|16384|9000000|4096|123456789|77\n")
+	c, err := ParseDBCounters("1798545600.5|1200|30|81920|16384|9000000|4096|123456789|77|16:1000,17:200|18:30\n")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,19 +73,21 @@ func TestParseDBCounters(t *testing.T) {
 		MetricBytes: 81920, PropertyBytes: 16384, DatabaseBytes: 9000000, ReceiptBytes: 4096,
 		WALBytes: 123456789, ReceiptsInserted: 77,
 	}
-	if c != want {
+	want.MetricParts = map[uint32]int64{16: 1000, 17: 200}
+	want.PropertyParts = map[uint32]int64{18: 30}
+	if !reflect.DeepEqual(c, want) {
 		t.Fatalf("counters %+v, want %+v", c, want)
 	}
 	if _, err := ParseDBCounters("1|2|3"); err == nil {
 		t.Fatal("a short row parsed")
 	}
-	if _, err := ParseDBCounters("1798545600.5|1200|30|81920|16384|9000000|4096|123456789"); err == nil {
+	if _, err := ParseDBCounters("1798545600.5|1200|30|81920|16384|9000000|4096|123456789||"); err == nil {
 		t.Fatal("a row without the receipt count parsed")
 	}
-	if _, err := ParseDBCounters("1798545600.5|1200|30|81920|16384|9000000|4096|123456789|x"); err == nil {
+	if _, err := ParseDBCounters("1798545600.5|1200|30|81920|16384|9000000|4096|123456789|x||"); err == nil {
 		t.Fatal("a non-numeric receipt count parsed")
 	}
-	if _, err := ParseDBCounters("x|1|2|3|4|5|6|7|8"); err == nil {
+	if _, err := ParseDBCounters("x|1|2|3|4|5|6|7|8||"); err == nil {
 		t.Fatal("a non-numeric row parsed")
 	}
 }
@@ -311,5 +313,27 @@ func TestFootprintSystems(t *testing.T) {
 		if got := footprintSystems(c.fleet, c.counted); got != c.want {
 			t.Errorf("%s: footprintSystems = %d, want %d", c.name, got, c.want)
 		}
+	}
+}
+
+// A partition dropped inside the window (retention rolling) takes its stats
+// row with it: the window counts what the surviving and new partitions took
+// and is not read as a restart (#1956). A partition's own counter going
+// backwards still is.
+func TestWindowOfAcrossDroppedPartition(t *testing.T) {
+	t0 := time.Date(2026, 11, 14, 23, 57, 0, 0, time.UTC)
+	db0 := DBCounters{At: t0, MetricRows: 1500, MetricParts: map[uint32]int64{1: 1000, 2: 500}}
+	db1 := DBCounters{At: t0.Add(5 * time.Minute), MetricRows: 900,
+		MetricParts: map[uint32]int64{2: 600, 3: 300}} // 1 dropped, 3 new
+	w, err := WindowOf(db0, db1, nil, nil)
+	if err != nil {
+		t.Fatalf("a dropped partition failed the window: %v", err)
+	}
+	if w.SamplesLanded != 400 {
+		t.Fatalf("landed %d, want 400", w.SamplesLanded)
+	}
+	reset := DBCounters{At: db1.At, MetricRows: 10, MetricParts: map[uint32]int64{2: 10}}
+	if _, err := WindowOf(db0, reset, nil, nil); err == nil {
+		t.Fatal("a partition counter going backwards passed")
 	}
 }
