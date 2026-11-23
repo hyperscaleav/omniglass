@@ -175,6 +175,13 @@
       "setup": []
     },
     {
+      "id": "pick-a-product-by-typing",
+      "title": "Pick a product by typing",
+      "description": "In the Add simulated component drawer, type part of a product or its profile, read the matches with the profile under each, and choose one from the keyboard.",
+      "lab": [],
+      "setup": []
+    },
+    {
       "id": "preview-a-notification",
       "title": "Preview a notification",
       "description": "Open an operator's notification type, preview it against Touch Panel 2's open alarm, and try a draft subject before saving it.",
@@ -253,6 +260,15 @@
       "lab": [],
       "setup": [
         "omniglass component alarm create panel-2 --dedup-key walkthrough-subscribe --message 'Touch input lost' --severity high"
+      ]
+    },
+    {
+      "id": "test-an-endpoints-poll",
+      "title": "Test an endpoint's poll",
+      "description": "Attach a driver to a display, then run its poll now and read what the outpost collected, without waiting for the next cycle.",
+      "lab": [],
+      "setup": [
+        "omniglass component create --label 'Bay 2 Display' --location bay-2 --name bay-2-poll-display --product boreal-edge-55"
       ]
     },
     {

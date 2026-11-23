@@ -2454,6 +2454,44 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			parent := &cobra.Command{
+				Use:   "health",
+				Short: "Commands for the health resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					var qSince string
+					var qUntil string
+					cmd := &cobra.Command{
+						Use:     "list <name>",
+						Short:   "Read a component's health",
+						Long:    "The component's own current health (healthy, degraded or outage from its active alarms; unknown for a device nothing has observed) beside the recorded edges that got it there, in the shape the system health read returns: slots and systems are empty, transitions are one entry per change inside since..until (default the last 30 days), oldest first. since after until is a 400. Gated by component:read; an out-of-scope component is a non-disclosing 404.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Example: "  omniglass component health list 'hq.west.level-2.boardroom-a.$comp.videobar-1'",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/components/%s/health", pathSegment(args[0]))
+							q := url.Values{}
+							if cmd.Flags().Changed("since") {
+								q.Set("since", fmt.Sprintf("%v", qSince))
+							}
+							if cmd.Flags().Changed("until") {
+								q.Set("until", fmt.Sprintf("%v", qUntil))
+							}
+							if enc := q.Encode(); enc != "" {
+								path += "?" + enc
+							}
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					cmd.Flags().StringVar(&qSince, "since", "", "Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent")
+					cmd.Flags().StringVar(&qUntil, "until", "", "Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since")
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
 				Use:   "identity-binding",
 				Short: "Commands for the identity-binding resource",
 			}
@@ -4717,17 +4755,31 @@ func generatedCommands() []*cobra.Command {
 			}
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
+					var qSince string
+					var qUntil string
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "Read a location's health",
-						Long:    "The location's current health, worst-wins over every system placed anywhere beneath it, with those systems and their health as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.\n\nArguments:\n  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "The location's current health, worst-wins over every system placed anywhere beneath it, with those systems and their health as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges inside since..until (default the last 30 days); since after until is a 400. Gated by location:read; an out-of-scope location is a non-disclosing 404.\n\nArguments:\n  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass location health list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/locations/%s/health", pathSegment(args[0]))
+							q := url.Values{}
+							if cmd.Flags().Changed("since") {
+								q.Set("since", fmt.Sprintf("%v", qSince))
+							}
+							if cmd.Flags().Changed("until") {
+								q.Set("until", fmt.Sprintf("%v", qUntil))
+							}
+							if enc := q.Encode(); enc != "" {
+								path += "?" + enc
+							}
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
+					cmd.Flags().StringVar(&qSince, "since", "", "Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent")
+					cmd.Flags().StringVar(&qUntil, "until", "", "Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since")
 					return cmd
 				}()
 				return cmd
@@ -8250,17 +8302,31 @@ func generatedCommands() []*cobra.Command {
 			}()
 			cmd.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
+					var qSince string
+					var qUntil string
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "Read a system's health",
-						Long:    "The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Transitions are the recorded edges inside since..until (default the last 30 days), one entry per change; since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass system health list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/systems/%s/health", pathSegment(args[0]))
+							q := url.Values{}
+							if cmd.Flags().Changed("since") {
+								q.Set("since", fmt.Sprintf("%v", qSince))
+							}
+							if cmd.Flags().Changed("until") {
+								q.Set("until", fmt.Sprintf("%v", qUntil))
+							}
+							if enc := q.Encode(); enc != "" {
+								path += "?" + enc
+							}
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
+					cmd.Flags().StringVar(&qSince, "since", "", "Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent")
+					cmd.Flags().StringVar(&qUntil, "until", "", "Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since")
 					return cmd
 				}()
 				return cmd
