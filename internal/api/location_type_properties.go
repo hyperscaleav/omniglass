@@ -94,7 +94,7 @@ func registerLocationTypePropertyRoutes(api huma.API, a *authenticator, gw stora
 		Method:      http.MethodPut,
 		Path:        "/location-types/{id}/properties/{property}",
 		Summary:     "Declare a property on a location type",
-		Description: "Declares a catalog property on a location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). A shipped (official) type's contract is writable too: a contract line is a row in its own table and nothing seeds one, so every line is an operator's. An unknown type is a 404 and a property the catalog does not know is a 422. Gated by location_type:update.",
+		Description: "Declares a catalog property on a location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). A shipped (official) type's contract is writable too: a contract line is a row in its own table and nothing seeds one, so every line is an operator's. An unknown type is a 404 and a property the catalog does not know is a 422, as is a default its property type refuses. Gated by location_type:update.",
 	}, "location_type", "update"), func(ctx context.Context, in *setLocationTypePropertyInput) (*locationTypePropertyOutput, error) {
 		def, err := encodePropertyJSON(in.Body.DefaultValue, "default_value")
 		if err != nil {
@@ -136,6 +136,9 @@ func registerLocationTypePropertyRoutes(api huma.API, a *authenticator, gw stora
 func mapLocationTypePropertyErr(err error) error {
 	if errors.Is(err, storage.ErrPropertyTypeNotFound) {
 		return huma.Error422UnprocessableEntity("unknown property")
+	}
+	if errors.Is(err, storage.ErrPropertyValueInvalid) {
+		return huma.Error422UnprocessableEntity(err.Error())
 	}
 	return mapTypeErr(err, "location_type property")
 }

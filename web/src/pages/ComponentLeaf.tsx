@@ -33,6 +33,7 @@ import { COMPONENTS_KEY, listComponents, type Component as FleetComponent } from
 import { componentSystemsKey, componentSystems } from "../lib/members";
 import { REACHABILITY_KEY, getReachability, lastSeenAt, type ReachEndpoint } from "../lib/reachability";
 import { componentAlarmsRead, componentAlarmsReadKey, splitAlarms } from "../lib/alarms";
+import { lifecycleRows } from "../lib/lifecycle";
 import { effectiveProperties, effectivePropertiesKey } from "../lib/component_properties";
 import { effectiveMetrics, effectiveMetricsKey } from "../lib/component_metrics";
 import { CalcRuleLink } from "../components/RuleLink";
@@ -170,6 +171,7 @@ export default function ComponentLeaf() {
   // view's dot (read once, for the location and the path) stands in until then.
   const componentHealth = createMemo(() => alarmsQ.data?.health ?? (view.data ? dotHealth(view.data, component()?.id ?? "") : null));
   const identity = createMemo(() => identityRows(propsQ.data ?? []));
+  const lifecycle = createMemo(() => lifecycleRows(propsQ.data ?? [], metricsQ.data ?? []));
   const vitals = createMemo(() => vitalRows(metricsQ.data ?? []));
   // The vitals rows are kept by metric name, never by the objects a poll
   // hands back (each poll is fresh), so an opened row and its tooltip survive
@@ -356,6 +358,21 @@ export default function ComponentLeaf() {
                   </For>
                 </dl>
               </section>
+                  <Show when={lifecycle().length > 0}>
+                    <section data-testid="leaf-lifecycle" class="rounded-box border border-base-300 bg-base-100 p-3.5 text-sm">
+                      <Eyebrow label="Lifecycle" hint="Install, warranty, support and end-of-life dates, and what replacing it costs. Set on the product, overridden here where this one differs." />
+                      <dl class="mt-2 grid grid-cols-[8rem_1fr] items-baseline gap-x-3 gap-y-1">
+                        <For each={lifecycle()}>
+                          {(row) => (
+                            <>
+                              <dt class="text-base-content/50">{row.label}</dt>
+                              <dd class="font-mono text-xs" data-lifecycle={row.name}>{row.text}</dd>
+                            </>
+                          )}
+                        </For>
+                      </dl>
+                    </section>
+                  </Show>
                   <section data-testid="leaf-memberships" class="rounded-box border border-base-300 bg-base-100 p-3.5 text-sm">
                     <Eyebrow label="Systems it serves" hint="Each system this component belongs to, and the slot it fills there. The primary is the system answered when a question names none." />
                     <Show when={rows().length > 0} fallback={<p class="mt-2 text-base-content/60">Not in any system yet.</p>}>
