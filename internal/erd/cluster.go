@@ -71,7 +71,7 @@ var Subsystems = []Cluster{
 		// oauth_code its code between consent and exchange (#2048); a
 		// token it earns is a credential row linked to the client, which
 		// oauth_refresh renews (#2073).
-		"oauth_client", "oauth_code", "oauth_refresh",
+		"oauth_client", "oauth_code", "oauth_refresh", "oidc_state",
 		// assistant_conversation is a person's stored omnibot conversation
 		// and assistant_message its transcript (#2113), read by their owner
 		// alone.

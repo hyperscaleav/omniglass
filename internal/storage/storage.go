@@ -1251,6 +1251,22 @@ type Gateway interface {
 	// MergePatchAssistantSettings patches the assistant namespace, judging
 	// the model key's binding on the result (the bind right).
 	MergePatchAssistantSettings(ctx context.Context, actorID string, patch map[string]any, use SecretUse) (*SettingBinding, error)
+	// Single sign-on (#2362, ADR-2361): the provider (its client secret
+	// unsealed; never returned by a route), the settings patch judging the
+	// secret's binding, a sign-in's state, the identity links, the sign-in
+	// through one, and the re-check sweep's reads and writes.
+	SSOProvider(ctx context.Context, name string) (*SSOProvider, error)
+	SSOProviders(ctx context.Context) ([]string, error)
+	MergePatchSSOSettings(ctx context.Context, actorID string, patch map[string]any, use SecretUse) (*SettingBinding, error)
+	CreateOIDCState(ctx context.Context, s OIDCState) error
+	ConsumeOIDCState(ctx context.Context, stateHash []byte) (*OIDCState, error)
+	LinkIdentity(ctx context.Context, actorID, userID, identifier string) (*IdentityLink, error)
+	UnlinkIdentity(ctx context.Context, actorID, userID, linkID string) error
+	ListIdentityLinks(ctx context.Context, userID string) ([]IdentityLink, error)
+	SignInByIdentity(ctx context.Context, in SSOSignIn) (*User, time.Time, error)
+	LinksToRecheck(ctx context.Context, issuer string) ([]LinkRecheck, error)
+	AcceptLinkRefresh(ctx context.Context, linkID, rotated string, grace time.Duration) error
+	RevokeLink(ctx context.Context, linkID, reason string) (int, error)
 	// The action rule (#618): reads catalog-shaped, writes all-scope.
 	ListActionRules(ctx context.Context) ([]ActionRule, error)
 	// UpsertNotificationTarget and UpsertActionRule install the shipped

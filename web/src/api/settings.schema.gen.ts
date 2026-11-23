@@ -240,6 +240,38 @@ export const settingsSchema = {
       "format": "int64"
     }
   },
+  "sso": {
+    "client_secret": {
+      "description": "A platform oauth2-client secret, by name: its client_id field is the client id Omniglass is registered as, its client_secret field authenticates the token exchange. Setting it from the console or API takes secret:bind on it; the settings file and environment are trusted as deployment config",
+      "type": "string"
+    },
+    "groups_claim": {
+      "description": "The id_token claim carrying the person's groups at the provider (read by group mapping, #2363)",
+      "type": "string"
+    },
+    "issuer": {
+      "description": "The identity provider's issuer URL exactly as its id_tokens carry it (https://login.example.com/realms/corp). Empty turns single sign-on off. An on-premises provider is reached only when the notification settings' egress_allow names it. Moving it from the console or API while client_secret is bound takes secret:bind on that secret; the settings file and environment are trusted as deployment config",
+      "type": "string"
+    },
+    "recheck_grace_minutes": {
+      "description": "Minutes a link may go without a refresh the provider accepted (an outage) before its sessions and tokens are refused until one is; also the length of a session through a provider that issues no refresh token",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10080,
+      "format": "int64"
+    },
+    "recheck_minutes": {
+      "description": "Minutes between re-checks: each link with a live session or token through it redeems its refresh token at the provider, and a refusal revokes them",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1440,
+      "format": "int64"
+    },
+    "scopes": {
+      "description": "The scopes a sign-in asks for, space-separated. offline_access asks for the refresh token the re-check redeems; a provider that issues none gives sessions of recheck_grace_minutes and no API tokens",
+      "type": "string"
+    }
+  },
   "ui": {
     "default_landing": {
       "description": "Route the console opens to (an absolute path)",

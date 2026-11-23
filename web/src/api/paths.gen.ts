@@ -264,6 +264,36 @@ export interface paths {
       error: og.getAuthMeAvatarResponseError["data"];
     };
   };
+  "/auth/me/identity-links": {
+    get: {
+      path: never;
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.listAuthMeIdentityLinksResponseSuccess["data"];
+      error: og.listAuthMeIdentityLinksResponseError["data"];
+    };
+  };
+  "/auth/me/identity-links/{link}:unlink": {
+    post: {
+      path: { "link": string };
+      query: never;
+      body: NonNullable<Parameters<typeof og.unlinkAuthMeIdentityLink>[1]>;
+      bodyRequired: true;
+      data: og.unlinkAuthMeIdentityLinkResponseSuccess["data"];
+      error: og.unlinkAuthMeIdentityLinkResponseError["data"];
+    };
+  };
+  "/auth/me/identity-links:start": {
+    post: {
+      path: never;
+      query: never;
+      body: NonNullable<Parameters<typeof og.startAuthMeIdentityLink>[0]>;
+      bodyRequired: true;
+      data: og.startAuthMeIdentityLinkResponseSuccess["data"];
+      error: og.startAuthMeIdentityLinkResponseError["data"];
+    };
+  };
   "/auth/me/notifications": {
     get: {
       path: never;
@@ -3296,6 +3326,34 @@ export interface paths {
       bodyRequired: false;
       data: og.revokeGrantResponseSuccess["data"];
       error: og.revokeGrantResponseError["data"];
+    };
+  };
+  "/users/{id}/identity-links": {
+    get: {
+      path: { "id": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.listUserIdentityLinksResponseSuccess["data"];
+      error: og.listUserIdentityLinksResponseError["data"];
+    };
+    post: {
+      path: { "id": string };
+      query: never;
+      body: NonNullable<Parameters<typeof og.createUserIdentityLink>[1]>;
+      bodyRequired: true;
+      data: og.createUserIdentityLinkResponseSuccess["data"];
+      error: og.createUserIdentityLinkResponseError["data"];
+    };
+  };
+  "/users/{id}/identity-links/{link}": {
+    delete: {
+      path: { "id": string; "link": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.deleteUserIdentityLinkResponseSuccess["data"];
+      error: og.deleteUserIdentityLinkResponseError["data"];
     };
   };
   "/users/{id}/sessions": {

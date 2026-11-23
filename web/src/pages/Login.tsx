@@ -2,6 +2,7 @@ import { Show, createSignal, createResource } from "solid-js";
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import { useLogin, useTokenLogin } from "../lib/auth";
 import { resolveNext } from "../lib/next";
+import { ssoErrorMessage } from "../lib/ssoErrors";
 import { api } from "../api/client";
 import { BrandMark, Wordmark } from "../components/Brand";
 import Button from "../components/Button";
@@ -27,9 +28,15 @@ export default function Login() {
   // never flashes for an already-bootstrapped system.
   const [status] = createResource(async () => {
     const { data } = await api.GET("/auth/status");
-    return { bootstrapped: data?.bootstrapped ?? true };
+    return { bootstrapped: data?.bootstrapped ?? true, sso: (data?.sso_providers ?? []) as string[] };
   });
   const bootstrapped = () => status()?.bootstrapped;
+  // Single sign-on (#2362): a provider is configured, so the page offers it. The
+  // button is a plain navigation: the server's start route sends the browser to
+  // the provider, which sends it back to the callback; a refusal lands here
+  // again with its code in ?sso_error=, shown as that code's fixed message.
+  const ssoProvider = () => status()?.sso[0];
+  const ssoError = () => ssoErrorMessage(params.sso_error);
 
   // Resolve ?next= to a safe in-app path. The rule and its inverse live together
   // in lib/next, because they used to disagree: AuthGuard captured the query
@@ -66,6 +73,19 @@ export default function Login() {
             </div>
             <p class="mt-1.5 text-sm text-base-content/60">Sign in to the operator console.</p>
           </div>
+          <Show when={ssoError()}>
+            <div role="alert" class="alert alert-error alert-soft text-sm"><span>{ssoError()}</span></div>
+          </Show>
+          <Show when={ssoProvider()}>
+            {(provider) => (
+              <>
+                <Button type="button" intent="action" size="md" class="w-full" onClick={() => window.location.assign(`/auth/oidc/start/${encodeURIComponent(provider())}`)}>
+                  Sign in with SSO
+                </Button>
+                <div class="divider my-0 text-xs text-base-content/40">or with a password</div>
+              </>
+            )}
+          </Show>
           <form onSubmit={onSubmit} class="flex flex-col gap-3">
             <Show
               when={mode() === "password"}
