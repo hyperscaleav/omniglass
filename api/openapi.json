@@ -7110,12 +7110,9 @@
             "type": "string"
           },
           "first_recorded_at": {
-            "description": "When this owner's health was first recorded; null if never. How long it has been watched, whatever the range",
+            "description": "When this owner's health was first recorded; absent if never. How long it has been watched, whatever the range",
             "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": "string"
           },
           "health": {
             "description": "healthy, incomplete, degraded, or outage: the rollup of the slots or systems served beside it. incomplete is a commissioning gap, a slot short because the hardware was never installed rather than because installed hardware is failing, and it ranks between healthy and degraded",
@@ -7164,8 +7161,7 @@
           "health",
           "slots",
           "systems",
-          "transitions",
-          "first_recorded_at"
+          "transitions"
         ],
         "type": "object"
       },

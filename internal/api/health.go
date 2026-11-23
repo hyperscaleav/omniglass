@@ -137,7 +137,7 @@ type fleetHealthOutput struct {
 		Systems         []healthSystemBody     `json:"systems" doc:"The systems beneath a location with their health; empty for a system"`
 		Transitions     []healthTransitionBody `json:"transitions" doc:"The recorded edges over the window, oldest first: one entry per change, never a sample"`
 		CarriedIn       string                 `json:"carried_in,omitempty" doc:"The health in force when since opened the range: the last recorded edge before it. Absent without since, or when nothing was recorded before it. A timeline draws the stretch before the first transition from it"`
-		FirstRecordedAt *time.Time             `json:"first_recorded_at" doc:"When this owner's health was first recorded; null if never. How long it has been watched, whatever the range"`
+		FirstRecordedAt *time.Time             `json:"first_recorded_at,omitempty" doc:"When this owner's health was first recorded; absent if never. How long it has been watched, whatever the range"`
 	}
 }
 
