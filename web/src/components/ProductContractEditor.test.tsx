@@ -6,6 +6,7 @@ import { classifierPropertiesKey, type ClassifierProperty } from "../lib/classif
 import { PROPERTIES_KEY, type PropertyRow } from "../lib/properties";
 import { ME_KEY, type Me } from "../lib/auth";
 import { BladeEditContext, createEditSlot } from "../lib/blades";
+import { answerConfirms } from "../lib/confirm.testkit";
 
 // The contract editor curates which catalog properties a product declares and what
 // each defaults to. Data is seeded into the query cache so no server is needed; the
@@ -129,7 +130,7 @@ describe("ProductContractEditor", () => {
   });
 
   it("withdraws a line after confirmation, calling DELETE", async () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const confirmSpy = answerConfirms(true);
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       const method = typeof input === "string" ? "GET" : req.method;

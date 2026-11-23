@@ -127,4 +127,22 @@ describe("the system map's labels fit and do not collide (#1072)", () => {
     expect(anchorOf(320)).toContain("items-start");
     expect(anchorOf(1280)).toContain("items-center");
   });
+
+  it("sizes to a system's few members instead of drawing the whole empty room (#2465)", () => {
+    boxWidth = 600;
+    render(() => (
+      <Router>
+        <Route path="*" component={() => <SystemMap decl={decl} markers={markers.slice(3, 5)} member={member} />} />
+      </Router>
+    ));
+    const box = screen.getByTestId("system-map");
+    // The two stage mics sit at 0.4 and 0.6: a window a third of the room wide.
+    expect(parseFloat(box.style.maxWidth)).toBeLessThan(42);
+    const ratio = Number(/aspect-ratio:\s*([0-9.]+)/.exec(box.getAttribute("style") ?? "")?.[1]);
+    expect(ratio).toBeGreaterThan(0);
+    expect(ratio).not.toBeCloseTo(decl.aspect, 1);
+    const mic = screen.getByTestId("mapmarker-stage-mic-1");
+    expect(parseFloat(mic.style.left)).toBeGreaterThan(0);
+    expect(parseFloat(mic.style.left)).toBeLessThan(50);
+  });
 });

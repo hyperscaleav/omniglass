@@ -62,15 +62,19 @@ screenshots:
     path: /web/systems/huddle
     alt: "A system's view: the location as a card of context, the system's header (health, since, standard, size), then Overview: its components as rows naming each one's slot, slots grouped only where they say something."
     # The since-line ages with the capture; the history strip is Activity's
-    # now (#872), so nothing else on Overview moves.
+    # now (#872). The map is cropped to its members (#2465), so the Data
+    # section's first sparkline rises into the frame and plots like it ages.
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
+      - "[data-testid=sparkline]"
   - id: fleet-map
     path: /web/systems/huddle
     alt: "The map inside Overview: the standard's declared layout rendered top-down, one marker per slot position, each the type icon of the component holding it, in its health colour, with its label under it."
-    # The header's since-line ages with the capture.
+    # The header's since-line ages with the capture, and the cropped map
+    # (#2465) lifts the Data section's sparklines into the frame.
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
+      - "[data-testid=sparkline]"
   # The auditorium carries the fleet's live high-severity alarm, so the history
   # tab has something real to say. Its room holds that one system, so the
   # room's address lands on it.
@@ -347,6 +351,10 @@ one marker per declared position. A staffed position shows the component's type 
 its health colour (green, amber, red, as in the Health column) with the component's label
 under it; hover or focus a marker for its slot, product, health and any alarm, and click it to
 open its panel. A dashed ring is a position nobody staffs, labelled with its slot.
+
+The map is cropped to the positions the system holds (#2465): a system with a few members shows a
+small map around them rather than the whole room with most of it empty, and a system spread across
+the room shows the whole room.
 
 The map redraws to the width it has. A label never runs past the edge of the map: a marker
 near a side hangs its label inward, one near the bottom puts it above its icon, and a phone

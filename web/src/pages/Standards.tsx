@@ -27,6 +27,7 @@ import { catalogLock } from "../lib/catalog";
 import { createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
+import { confirmDelete } from "../lib/confirm";
 
 // Standards: the catalog of contracts a system is built to ("Meeting room",
 // "Huddle space"), on the flat FlatList surface beside Products. A standard is the
@@ -135,7 +136,7 @@ function StandardBladeBody(p: { id: string }): JSX.Element {
   async function removeStandard() {
     const r = row();
     if (!r) return;
-    if (!confirm(`Delete standard "${r.name}"?`)) return;
+    if (!(await confirmDelete({ kind: "standard", name: r.name }))) return;
     setErr(null);
     try {
       await deleteStandard(r.name);

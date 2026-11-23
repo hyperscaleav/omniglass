@@ -42,6 +42,7 @@ import { bindSelectValue } from "../lib/selectvalue";
 import { describeError } from "../lib/format";
 import { type BladeDef, createBladeController, useBlades, useBladeEdit } from "../lib/blades";
 import { OFFICIAL_LOCK, catalogLock } from "../lib/catalog";
+import { confirmDelete } from "../lib/confirm";
 
 // Severity levels (Catalog > Actions > Severity, #921): the ranked catalog an
 // event rule raises at (#917), beside the rules. Each row is a level's rank, its
@@ -174,7 +175,7 @@ function SeverityLevelBladeBody(p: { name: string }): JSX.Element {
   const canDelete = () => canFleet(me.data, "severity_level", "delete");
 
   async function remove(l: SeverityLevel) {
-    if (!confirm(`Delete severity level "${l.name}"? The server refuses it while an alarm or a rule still names it.`)) return;
+    if (!(await confirmDelete({ kind: "severity level", name: l.name, consequence: "The server refuses it while an alarm or a rule still names it." }))) return;
     setErr(null);
     try {
       await deleteSeverityLevel(l.name);
