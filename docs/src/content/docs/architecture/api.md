@@ -1183,8 +1183,8 @@ The reports are one shape over three owners:
   at 500. A system's health history explains its unhealthy stretches with it, one request however many members the
   system has.
 
-Both resolve their owner **within the caller's scope first** (an out-of-scope system or location is a
-**non-disclosing 404**), and **neither read writes anything**: the health served is computed from the
+All three resolve their owner **within the caller's scope first** (an out-of-scope system, location or component is a
+**non-disclosing 404**), and **no read writes anything**: the health served is computed from the
 very rows served beside it, so a report can never disagree with its own evidence
 ([ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain)).
 
