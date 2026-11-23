@@ -1,7 +1,7 @@
 ---
 title: "A component's page shows and edits its dependencies (#2428)"
 date: 2026-11-23
-refs: [2428, 1648, 1652]
+refs: [2428, 2452, 1648, 1652]
 ---
 
 The dependency API (`list-component-dependency`, `create-component-dependency`,
@@ -20,4 +20,4 @@ No API change: the list route already answers both directions in one read. The d
 second downstream of Boardroom A's video bar (the room display, reached through it), so the bar
 has one upstream and two downstreams. The "holding this" mark reads the upstream reason on the
 component's own endpoint gates, so it names the root of a chain; naming the holder in the Why strip
-is filed separately because that row is being reworked.
+is deferred to #2452 (recorded on #2428) because that row is being reworked by #2423.
