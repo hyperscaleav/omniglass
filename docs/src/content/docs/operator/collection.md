@@ -164,6 +164,10 @@ later.
 
 ::walkthrough{#fix-an-endpoint-in-place}
 
+Because an endpoint belongs to a component, it inherits that component's scope: an endpoint
+on a component outside your scope is not shown. An outpost **purge cascades** its endpoints and
+their derived tasks.
+
 ### Test a poll now
 
 A driver-attached endpoint ends with proof that it collects, not a wait for the next cycle. With
@@ -181,8 +185,8 @@ A test runs the poll once, now, through the outpost that holds the endpoint, out
   read nothing says so.
 - **Gated:** an endpoint the outpost holds (a refusal such as a wrong community, a changed key, an
   unreachable probe, or a reboot in flight) refuses the run and nothing is sent. The card carries
-  the gate's own reason, the same one the endpoint's notice shows, and the way to lift it
-  (**Retry** or **Open endpoint**).
+  the gate's own reason, the same one the endpoint's notice shows. The notice beside the card
+  offers the way to lift it (**Retry** or **Open endpoint**) where it shows one.
 - **No outpost:** the endpoint is placed on no outpost, or its outpost is not connected, so nothing
   can run the poll.
 - **Failed or timed out:** the outpost ran the poll and could not complete it (it names why), or
@@ -193,10 +197,6 @@ endpoint. The same run is one call from the CLI or the API (`run-endpoint-poll`,
 `POST /endpoints/{endpoint}/polls/{poll}:run`).
 
 ::walkthrough{#test-an-endpoints-poll}
-
-Because an endpoint belongs to a component, it inherits that component's scope: an endpoint
-on a component outside your scope is not shown. An outpost **purge cascades** its endpoints and
-their derived tasks.
 
 ## Tasks
 
