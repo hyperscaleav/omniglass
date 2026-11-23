@@ -9,6 +9,8 @@ import { Ban, Eye, Key, LogOut, Mask, Trash, X } from "../components/icons";
 import PasswordField from "../components/PasswordField";
 import Button from "../components/Button";
 import SessionsList from "../components/SessionsList";
+import IdentityLinksList from "../components/IdentityLinksList";
+import { useUserIdentityLinks, useLinkIdentity, useUnlinkIdentity, type IdentityLink } from "../lib/identityLinks";
 import { useUserSessions, useRevokeUserSession, useRevokeAllUserSessions, type Session } from "../lib/sessions";
 import { useBlades, useBladeEdit } from "../lib/blades";
 import type { BladeDef } from "../lib/blades";
@@ -50,6 +52,7 @@ export function UserDetail(props: { id: string }) {
   const canResetPassword = () => can(me.data, "user", "reset-password");
   const canSetAvatar = () => can(me.data, "user", "set-avatar");
   const canRevokeSession = () => can(me.data, "user", "revoke-session");
+  const canLinkIdentity = () => can(me.data, "user", "link-identity");
   const revokeAllSessions = useRevokeAllUserSessions(props.id);
   // An owner's credentials cannot be revoked by anyone (the takeover guard, server-side).
   // Detect it from the target's grants so the console hides the revoke affordances rather
@@ -448,6 +451,13 @@ export function UserDetail(props: { id: string }) {
           <Show when={canRevokeSession()}>
             <SessionsSection id={pr().id} revocable={!isOwnerTarget()} />
           </Show>
+
+          {/* Identity links (#2362): the identities at the identity provider this
+              person signs in through by single sign-on. Shown to whoever may link,
+              read-only on an owner (an owner links their own) and on yourself. */}
+          <Show when={pr().person && canLinkIdentity()}>
+            <IdentityLinksSection id={pr().id} linkable={!isOwnerTarget() && pr().id !== me.data?.user?.id} />
+          </Show>
         </div>
       )}
     </Show>
@@ -507,6 +517,76 @@ function SessionsSection(props: { id: string; revocable: boolean }) {
         </p>
         <SessionsList sessions={tokenRows()} revoking={revoking()} onRevoke={props.revocable ? revoke : undefined} emptyLabel="No API tokens." />
       </div>
+    </div>
+  );
+}
+
+// IdentityLinksSection lists a person's identity links on the admin blade and
+// links a new one by its iss|sub identifier. It teaches the identifier's shape
+// where it is typed, since the identifier is the whole of the trust: email
+// never links. linkable is false for an owner or yourself (the server's
+// takeover guard), leaving the list read-only with the reason.
+function IdentityLinksSection(props: { id: string; linkable: boolean }) {
+  const links = useUserIdentityLinks(props.id);
+  const link = useLinkIdentity(props.id);
+  const unlink = useUnlinkIdentity(props.id);
+  const [identifier, setIdentifier] = createSignal("");
+  const [busy, setBusy] = createSignal(false);
+  const [unlinking, setUnlinking] = createSignal<string | null>(null);
+  const [err, setErr] = createSignal<string | null>(null);
+  async function onLink() {
+    setBusy(true);
+    setErr(null);
+    const r = await link(identifier().trim());
+    if (r.ok) setIdentifier("");
+    else setErr(r.message);
+    setBusy(false);
+  }
+  async function onUnlink(l: IdentityLink) {
+    if (!confirm("Unlink this identity? Every session and token signed in through it ends now.")) return;
+    setUnlinking(l.id);
+    setErr(null);
+    const r = await unlink(l.id);
+    if (!r.ok) setErr(r.message);
+    setUnlinking(null);
+  }
+  return (
+    <div class="flex flex-col gap-2">
+      <div class="eyebrow">Single sign-on</div>
+      <p class="text-xs text-base-content/50">
+        The identities at the identity provider this person signs in through. Each is the provider's issuer and the
+        person's subject there, <span class="font-data text-base-content/70">iss|sub</span>, exactly as its tokens carry
+        them. An email address never links: whoever controls an address at a provider is not necessarily this person.
+      </p>
+      <Show when={links.error}>
+        <div role="alert" class="alert alert-error alert-soft text-sm"><span>Could not load this person's identity links.</span></div>
+      </Show>
+      <Show when={err()}>
+        <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
+      </Show>
+      <IdentityLinksList links={links.data ?? []} unlinking={unlinking()} onUnlink={props.linkable ? onUnlink : undefined} emptyLabel="Not linked: this person signs in with a password only." />
+      <Show
+        when={props.linkable}
+        fallback={<p class="text-xs text-base-content/40">An owner, and you yourself, link an identity from your own profile, which confirms your password.</p>}
+      >
+        <div class="flex items-end gap-2">
+          <div class="min-w-0 flex-1">
+            <label class="eyebrow mb-1.5 block" for="link-identifier">Identity (iss|sub)</label>
+            <input
+              id="link-identifier"
+              autocomplete="off"
+              class="input input-bordered input-sm w-full font-data"
+              placeholder="https://login.example.com|248289761001"
+              value={identifier()}
+              onInput={(e) => { setIdentifier(e.currentTarget.value); setErr(null); }}
+            />
+          </div>
+          <Button size="sm" intent="action" loading={busy()} disabled={!identifier().includes("|")} onClick={onLink}>Link</Button>
+        </div>
+        <p class="text-[11px] text-base-content/40">
+          The subject is in the provider's admin console, and an unlinked sign-in names the whole identifier on the sign-in page.
+        </p>
+      </Show>
     </div>
   );
 }
