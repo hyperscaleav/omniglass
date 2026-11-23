@@ -4818,6 +4818,8 @@ omniglass outpost simulation <name>
 
 The devices a simulator beside the outpost serves (each component with an endpoint placed on the outpost, within the caller's component read scope), joined to the hits the server has seen and the simulator's capabilities. Hits are live and per server process, not stored. Requires an all-scope outpost read. Gated by outpost:read.
 
+A value equal to a subcommand name (observation) runs that subcommand; put -- before it to pass it as <name>, e.g. `outpost simulation -- observation`.
+
 Example:
 
 ```sh
