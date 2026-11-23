@@ -10,6 +10,9 @@ summary: "Every credential is time-bounded (reverses tokens-never-expire): sessi
   web-login session keeps a 12h absolute lifetime; CLI/API tokens and the bootstrap token get a 90-day
   default expiry with a `--ttl` override capped at 365 days; nothing is issued without an expiry. Sessions
   and API tokens are distinguished by a `credential.purpose` column, not by whether `expires_at` is set.
+- **Amended (#2361):** the bound is on credentials that are bearer secrets. An identity provider link
+  (an `oidc` or `saml` row, [ADR-2361](#adr-2361-single-sign-on-links-a-person-to-an-identity-provider-subject-never-by-email)) holds no secret and carries no expiry; the session a
+  sign-in through it mints is the ordinary 12h one.
   Expiry is enforced lazily at authentication; there is no background sweep, and session/token lists show
   only live credentials. Deferred: a sliding idle timeout, a housekeeping sweep of long-expired rows, and
   nearing-expiry notifications.
