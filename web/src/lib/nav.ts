@@ -28,6 +28,11 @@ export type NavChild = {
   // section, never as a collapsible fold; filterNav still judges each entry on
   // its own gate, so a section whose entries are all hidden loses its header too.
   section?: string;
+  // An explicit "no gate": every signed-in person may open this entry. Set it on
+  // purpose (a stub whose "soon" door stays visible, an entry that filters its own
+  // contents); nav.test.ts fails an entry that declares no gate and is not public,
+  // so a new door cannot ship ungated by omission (#2442).
+  public?: boolean;
 };
 
 export type NavItem = {
@@ -45,6 +50,7 @@ export type NavItem = {
   // entries), a single resource would silently lock a reader of only one kind
   // out of the whole page; the faces inside permission-filter themselves.
   anyResource?: string[];
+  public?: boolean; // see NavChild.public
   // A runtime condition the entry also waits on, beyond its permission: the
   // sidebar shows the entry only while the condition holds (filterWhen). The
   // route itself stays registered and gated as usual, so a bookmark still
@@ -57,7 +63,7 @@ export type NavItem = {
 export type NavCondition = "simulator";
 
 export const navItems: NavItem[] = [
-  { label: "Home", path: "/", icon: Icons.Home, live: true, hint: "Your environment at a glance, and what needs attention right now." },
+  { label: "Home", path: "/", icon: Icons.Home, live: true, public: true, hint: "Your environment at a glance, and what needs attention right now." },
   // Explore (#826): the sidebar's one door into the fleet ("fleet" stays the
   // noun, ADR-0122), the outline of locations (#861). It
   // replaced the Fleet entry and the Explore stub once reserved for a data
@@ -95,7 +101,7 @@ export const navItems: NavItem[] = [
   // exactly the catalogs it may read, while each catalog page keeps its own
   // route-guard gate. The per-catalog pages stay declared off-rail (OFF_RAIL
   // below): that carries their top-bar identity and their route-guard gates.
-  { label: "Catalog", path: "/catalog", icon: Icons.Layers, live: true, hint: "Everything the fleet is typed by: every catalog, browsable in one place." },
+  { label: "Catalog", path: "/catalog", icon: Icons.Layers, live: true, public: true, hint: "Everything the fleet is typed by: every catalog, browsable in one place." },
   {
     label: "Admin", icon: Icons.Settings,
     children: [
@@ -110,7 +116,7 @@ export const navItems: NavItem[] = [
       // outpost:read because Status's rows are the outpost list.
       { label: "Outposts", path: "/outposts", live: true, resource: "outpost", hint: "Collection daemons: their health, enrollment, and the collection tasks assigned to each." },
       { label: "Status", path: "/platform", live: true, resource: "outpost", hint: "Whether Omniglass itself is well: the build running, how long it has been up, and each outpost's check-in, schedule and command queue." },
-      { label: "Settings", path: "/settings", live: true, hint: "Platform preferences resolved down the cascade: the theme, defaults, and keybindings, each with its provenance and lock state." },
+      { label: "Settings", path: "/settings", live: true, resource: "settings", hint: "Platform preferences resolved down the cascade: the theme, defaults, and keybindings, each with its provenance and lock state." },
     ],
   },
 ];
@@ -156,7 +162,7 @@ export function filterWhen(items: NavItem[], holds: (c: NavCondition) => boolean
 // resource/perm feeds navPerms exactly as a rail entry's would, so collapsing
 // the rail loosened no gate: /secret-types still demands secret:read. A
 // page's tracking issue, when it has one, rides here too.
-export const OFF_RAIL: { path: string; label: string; hint: string; resource?: string; perm?: string; issue?: number }[] = [
+export const OFF_RAIL: { path: string; label: string; hint: string; resource?: string; perm?: string; issue?: number; public?: boolean }[] = [
   // The fleet kinds (#798, #861): Explore's outline lists them and each bare
   // URL redirects there, but the detail view routes (/locations/{id} and
   // friends) still resolve identity and gate here.
@@ -282,6 +288,13 @@ export function routeTokens(pathname: string): string[] | null {
 export function routeAllowed(pathname: string, allow: (tokens: string[]) => boolean): boolean {
   const alts = routeAlternatives(pathname);
   return !alts || alts.some(allow);
+}
+
+// routeNeeds is routeTokens for every alternative, each as its
+// <resource>:<action> string (an empty list for an ungated route): what the denied
+// face names, so a person reads which permission opens the page.
+export function routeNeeds(pathname: string): string[] {
+  return (routeAlternatives(pathname) ?? []).map((t) => t.join(":"));
 }
 
 function routeAlternatives(pathname: string): string[][] | null {
