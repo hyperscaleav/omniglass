@@ -545,10 +545,18 @@ func (p *PG) newestSamples(ctx context.Context, tx pgx.Tx, lane rules.Lane, key,
 	if componentID != "" {
 		return newestOfSeries(ctx, tx, lane, key, componentID, instance, days)
 	}
+	return newestKeySamples(ctx, tx, lane, key, "", days)
+}
+
+// newestKeySamples reads the newest sample of every component series of a
+// key on a lane, every instance of it, on one component when componentID is
+// set ("" is every component): what a prime judges.
+func newestKeySamples(ctx context.Context, tx pgx.Tx, lane rules.Lane, key, componentID, days string) ([]seriesSample, error) {
 	table, typeTable, value := laneTables(lane)
 	q := fmt.Sprintf(`select distinct on (s.component_id, s.instance) s.component_id::text, s.instance, %s
 		from %s s join %s t on t.id = s.%s_id
-		where t.name = $1 and s.component_id is not null`, value, table, typeTable, typeTable) +
+		where t.name = $1 and s.component_id is not null
+			and ($2::uuid is null or s.component_id = $2::uuid)`, value, table, typeTable, typeTable) +
 		` order by s.component_id, s.instance, s.ts desc, s.id desc`
 	if lane == rules.LaneMetric {
 		// Each component series' newest sample, one probe a series rather
@@ -557,9 +565,10 @@ func (p *PG) newestSamples(ctx context.Context, tx pgx.Tx, lane rules.Lane, key,
 			from metric_series s join metric_type_in_effect() t on t.id = s.metric_type_id
 			cross join lateral (` + metricNewestSQL("s.id", days) + `) n
 			where t.name = $1 and s.owner_kind = 'component'
+				and ($2::uuid is null or s.owner_id = $2::uuid)
 			order by s.owner_id, s.instance, n.ts desc, n.id desc`
 	}
-	args := []any{key}
+	args := []any{key, nullIfEmpty(componentID)}
 	rows, err := tx.Query(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: newest samples of %s: %w", key, err)
@@ -627,19 +636,27 @@ func (p *PG) primeRule(ctx context.Context, tx pgx.Tx, r EventRule) error {
 		if !picked {
 			continue
 		}
-		history, err := p.ruleHistory(ctx, tx, r, s.component, s.instance)
-		if err != nil {
-			return err
-		}
-		action, ok := p.decide(r, o, s.instance, s.value, history)
-		if !ok {
-			continue
-		}
-		if err := p.stepRule(ctx, tx, r, &o.comp, s.instance, action, now, sampled(s.value)); err != nil {
+		if err := p.primeSeries(ctx, tx, r, o, s, now); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// primeSeries judges one series' newest sample by a rule that selects its
+// component, at now, as though it had just arrived: the step a prime takes
+// on each series (primeRule for a rule's whole selection,
+// reselectComponentRules for one component a rule came to select).
+func (p *PG) primeSeries(ctx context.Context, tx pgx.Tx, r EventRule, o *ruleOwner, s seriesSample, now time.Time) error {
+	history, err := p.ruleHistory(ctx, tx, r, s.component, s.instance)
+	if err != nil {
+		return err
+	}
+	action, ok := p.decide(r, o, s.instance, s.value, history)
+	if !ok {
+		return nil
+	}
+	return p.stepRule(ctx, tx, r, &o.comp, s.instance, action, now, sampled(s.value))
 }
 
 // edgeSample is the sample that moved a rule across an edge, which its
@@ -944,7 +961,14 @@ func (p *PG) streakStillHolds(ctx context.Context, tx pgx.Tx, r EventRule, d due
 // refuses (nil keeps none): a rule disabled or deleted lets go of what it
 // holds, and one narrowed lets go of what it no longer watches.
 func (p *PG) clearRuleAlarms(ctx context.Context, tx pgx.Tx, actorID string, r EventRule, keep func(*ruleOwner) (bool, error)) error {
-	rows, err := tx.Query(ctx, `select component_id::text, dedup_key from alarm where raised_by_rule_id = $1 and cleared_at is null`, r.ID)
+	return p.clearRuleAlarmsOn(ctx, tx, actorID, r, "", keep)
+}
+
+// clearRuleAlarmsOn is clearRuleAlarms on one component when componentID is
+// set ("" is every component).
+func (p *PG) clearRuleAlarmsOn(ctx context.Context, tx pgx.Tx, actorID string, r EventRule, componentID string, keep func(*ruleOwner) (bool, error)) error {
+	rows, err := tx.Query(ctx, `select component_id::text, dedup_key from alarm where raised_by_rule_id = $1 and cleared_at is null
+		and ($2::uuid is null or component_id = $2::uuid)`, r.ID, nullIfEmpty(componentID))
 	if err != nil {
 		return fmt.Errorf("storage: rule %s open alarms: %w", r.Name, err)
 	}
@@ -992,7 +1016,14 @@ func (p *PG) clearRuleAlarms(ctx context.Context, tx pgx.Tx, actorID string, r E
 // the rule still holds open with no firing behind it (an upgrade the
 // backfill did not reach) is resolved after, by clearRuleAlarms.
 func (p *PG) endRuleFirings(ctx context.Context, tx pgx.Tx, actorID string, r EventRule, keep func(*ruleOwner) (bool, error)) error {
-	conds, err := ruleFirings(ctx, tx, r)
+	return p.endRuleFiringsOn(ctx, tx, actorID, r, "", keep)
+}
+
+// endRuleFiringsOn is endRuleFirings on one component when componentID is
+// set ("" is every component): a component a rule no longer selects lets go
+// of what the rule holds there, and nothing else.
+func (p *PG) endRuleFiringsOn(ctx context.Context, tx pgx.Tx, actorID string, r EventRule, componentID string, keep func(*ruleOwner) (bool, error)) error {
+	conds, err := ruleFiringsOn(ctx, tx, r, componentID)
 	if err != nil {
 		return err
 	}
@@ -1018,15 +1049,22 @@ func (p *PG) endRuleFirings(ctx context.Context, tx pgx.Tx, actorID string, r Ev
 			return err
 		}
 	}
-	return p.clearRuleAlarms(ctx, tx, actorID, r, keep)
+	return p.clearRuleAlarmsOn(ctx, tx, actorID, r, componentID, keep)
 }
 
 // ruleFiring is one firing a rule holds.
 type ruleFiring struct{ component, instance string }
 
 func ruleFirings(ctx context.Context, tx pgx.Tx, r EventRule) ([]ruleFiring, error) {
+	return ruleFiringsOn(ctx, tx, r, "")
+}
+
+// ruleFiringsOn is ruleFirings on one component when componentID is set
+// ("" is every component).
+func ruleFiringsOn(ctx context.Context, tx pgx.Tx, r EventRule, componentID string) ([]ruleFiring, error) {
 	rows, err := tx.Query(ctx, `select component_id::text, instance from event_rule_firing where rule_id = $1::uuid
-		order by component_id, instance`, r.ID)
+		and ($2::uuid is null or component_id = $2::uuid)
+		order by component_id, instance`, r.ID, nullIfEmpty(componentID))
 	if err != nil {
 		return nil, fmt.Errorf("storage: rule %s firings: %w", r.Name, err)
 	}
