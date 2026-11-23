@@ -17,6 +17,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
+	"github.com/hyperscaleav/omniglass/internal/sim/simtest"
 )
 
 // The simulated panel's TLS face (#1035): the NVP line protocol its tcp,
@@ -177,7 +178,7 @@ func TestTLSFaceValidityComesFromTheProfile(t *testing.T) {
 // test can tell a TCP connect from a handshake: a connect sends no hello.
 func TestTLSFaceRestartsAndCountsHandshakes(t *testing.T) {
 	e := newCatalogEngine(t)
-	if err := e.Sync([]DeviceSnapshot{panelSnapshot("panel-h", "127.88.7.6")}); err != nil {
+	if err := e.Sync([]DeviceSnapshot{panelSnapshot("panel-h", simtest.ClaimLoopback(t))}); err != nil {
 		t.Fatal(err)
 	}
 	panel := device(t, e, "panel-h")
