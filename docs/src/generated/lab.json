@@ -154,6 +154,13 @@
       "setup": []
     },
     {
+      "id": "link-a-colleague-to-a-rule",
+      "title": "Link a colleague to a rule",
+      "description": "Open an event rule's drawer and see its address in the URL, close it with Back, and land on the same drawer from the address alone.",
+      "lab": [],
+      "setup": []
+    },
+    {
       "id": "move-a-location",
       "title": "Move a location to another building",
       "description": "Open a room's Configure, pick its new parent from the location tree, and save. The tree shows the nesting, and rooms (which a room may not sit under) stay in place but cannot be picked.",
