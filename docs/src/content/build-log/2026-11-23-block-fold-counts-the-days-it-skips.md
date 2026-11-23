@@ -11,3 +11,5 @@ intact at the same instant. `BlockCompaction.Skipped` now counts each series-day
 with it. The storage page names 3 days as the shortest window that folds. Widening the window so a
 2-day lane folds would move the merge's and the series read's intact test (ADR-1529, ADR-1530), so it
 is left to a decision of its own. Regression test: `TestTheShortestLaneThatFoldsIsThreeDays`.
+
+A window under 3 days is refused at config load: `retention.metric_days` below 3 fails the settings file, the environment and a console write with an error naming the metric lane, its window and the 3-day minimum.
