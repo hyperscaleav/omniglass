@@ -603,6 +603,24 @@ describe("Move to... on a component's and a system's edit face (#1804)", () => {
     } finally { stub.mockRestore(); }
   });
 
+  it("a move drops the staged membership drafts so Save cannot undo it", async () => {
+    const { calls, stub } = stubFetch();
+    try {
+      const { slot } = mountKind("component", mover);
+      const form = await screen.findByTestId("entity-form");
+      slot().begin();
+      await pickInPicker(await within(form).findByRole("combobox", { name: "Also serves..." }), "Beta");
+      expect(slot().dirty()).toBe(true);
+      fireEvent.click(await within(form).findByRole("button", { name: "Move to..." }));
+      await pickInPicker(within(form).getByRole("combobox", { name: "Destination" }), "Boardroom B");
+      fireEvent.click(within(form).getByRole("button", { name: "Move" }));
+      await waitFor(() => expect(calls.some((c) => c.path.endsWith(":move"))).toBe(true));
+      await waitFor(() => expect(slot().dirty()).toBe(false));
+      await slot().save();
+      expect(calls.some((c) => c.path.includes("/members/"))).toBe(false);
+    } finally { stub.mockRestore(); }
+  });
+
   it("is withheld without <kind>:move", async () => {
     const { slot } = mountKind("component", noMove);
     const form = await screen.findByTestId("entity-form");

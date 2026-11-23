@@ -493,7 +493,15 @@ export default function EntityForm(props: {
                   parents={parentOptions()}
                   systems={props.kind === "component" ? moveSystemOptions() : undefined}
                   members={props.kind === "component" ? memberList() : undefined}
-                  onMoved={refresh}
+                  onMoved={async () => {
+                    // The move already wrote the membership change; a staged draft over the old one would undo it on Save.
+                    if (props.kind === "component") {
+                      setPrimaryDraft(undefined);
+                      setRemovedMembers(new Set<string>());
+                      setAddedMembers(new Set<string>());
+                    }
+                    await refresh();
+                  }}
                 />
               </Show>
             </>
