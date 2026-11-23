@@ -1,10 +1,11 @@
 # Platform health (#1644, #1645): Omniglass watching itself. Home's Platform
 # tile carries the platform system's verdict and how many outposts are not up;
-# the page names the build the server runs and how long it has been up, draws
-# where work is lost hop by hop (#1646), gives each server its panels
-# (Requests, Ingest, Queues, Retention), each outpost a row of its platform
-# figures and, with a simulator connected, what the devices saw against what
-# was collected (#1647). Every hop and every gap reads as a loss ratio, 0
+# the page names the build the server runs and how long it has been up, then
+# folds every section to one line, a verdict and the one number that matters
+# (#2446), and opens on demand: where work is lost hop by hop (#1646), each
+# server's panels (Requests, Ingest, Queues, Retention), each outpost's row of
+# platform figures and, with a simulator connected, what the devices saw against
+# what was collected (#1647). The open sections are held in the URL. Every hop and every gap reads as a loss ratio, 0
 # healthy. A key's name teaches it in a tooltip and leads onto its series on
 # the server's platform component, the ordinary component detail, where each
 # figure has its history.
@@ -13,9 +14,9 @@
 # default), so the script is ready only once it has: that wait is off camera,
 # and the recording never spends its budget on a lab that has just come up.
 title: Read the platform's health
-description: From Home, open Platform health, read the build, open a hop under where work is lost, fold the server's panels to read the outposts and the simulator's gaps, open them on the Requests panel, then follow the slowest route's figure onto its series on the server's platform component.
+description: From Home, open Platform health, read each section's one-line verdict, open a hop under where work is lost, open the outposts and the simulator's gaps, then open the server's panels on the Requests panel and follow the slowest route's figure onto its series on the server's platform component.
 ready:
-  goto: /platform
+  goto: /platform?open=server-server
   wait: { selector: '[data-testid=server-panel-requests] tr[data-testid=panel-row-http-request-duration-max][aria-expanded]', timeout: 150000 }
 steps:
   - goto: /
@@ -23,8 +24,13 @@ steps:
   - click: '[data-testid=home-platform]'
     caption: Open Platform health.
   - wait: { selector: '[data-testid=platform-version]' }
-    caption: The build, its uptime and the verdict, each read from the platform's own components.
+    caption: The build, its uptime and the verdict, each read from the platform's own components. Every section below is folded to one line.
     hold: 1500
+  - wait: { selector: '[data-testid=section-summary]:has-text("lost end to end")', timeout: 30000 }
+    caption: A section's line is its verdict and the one number that matters, for where work is lost, the server's open alarms and how many outposts are up.
+    hold: 2000
+  - click: '[data-testid=section-pipeline] button[aria-expanded]'
+    caption: Open where work is lost. What is open is held in the address, so a reload keeps it.
   - wait: { selector: '[data-testid=pipeline]:has([data-testid=pipeline-hop-outpost] [data-testid=hop-loss]:text-is("0%")):has([data-testid=pipeline-hop-ingest] [data-testid=hop-loss]:text-is("0%"))', timeout: 30000 }
     caption: Where work is lost follows a sample from its run to the store, hop by hop. Each hop reads a loss ratio, the share it took in and did not hand on. 0% is healthy.
     hold: 2000
@@ -33,16 +39,22 @@ steps:
   - wait: { selector: '[data-testid=pipeline-hop-detail]' }
     caption: The keys the hop is read from, and each outpost's own share of it. The same three keys read every hop.
     hold: 2000
-  - click: '[data-testid=server-panels-server] > summary .eyebrow'
-    caption: Each server's panels fold to its name and verdict. Close them to reach the outpost table under them.
+  - click: '[data-testid=section-pipeline] button[aria-expanded]'
+    caption: Fold it again.
+  - click: '[data-testid=section-outposts] button[aria-expanded]'
+    caption: Open the outposts.
   - wait: { selector: '[data-testid=platform-outpost-edge-hq]' }
     caption: One row per outpost. A figure the outpost never reported reads not reported, never 0.
     hold: 1500
+  - click: '[data-testid=section-simulation] button[aria-expanded]'
+    caption: Open the simulator's section.
   - wait: { selector: '[data-testid=platform-simulation] [data-testid=platform-sim-gaps]:has([data-testid=platform-sim-gap]) thead', timeout: 30000 }
     caption: With a simulator connected, each gap is what the devices saw against what the platform collected, a loss ratio where 0 is healthy.
     hold: 2000
-  - click: '[data-testid=server-panels-server] > summary .eyebrow'
-    caption: Open the server's panels again. Requests ranks the slowest routes of the newest report window, highest first.
+  - click: '[data-testid=section-outposts] button[aria-expanded]'
+    caption: Fold the outposts to reach the server under them.
+  - click: '[data-testid=section-server-server] button[aria-expanded]'
+    caption: Open the server's panels. Requests ranks the slowest routes of the newest report window, highest first.
     hold: 1500
   - hover: '[data-testid=server-panel-requests] button[aria-label="HTTP Request Time (max)"] >> nth=0'
     caption: A key's name teaches it. Rest on it to read what it measures.

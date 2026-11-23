@@ -1,5 +1,5 @@
 import { For, Show, createSignal, type JSX } from "solid-js";
-import { A, useNavigate } from "@solidjs/router";
+import { A, useNavigate, useSearchParams } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import Eyebrow from "../components/Eyebrow";
 import TimeseriesChart from "../components/TimeseriesChart";
@@ -8,14 +8,17 @@ import HealthBadge from "../components/HealthBadge";
 import InfoTip from "../components/InfoTip";
 import KeyedFor from "../components/KeyedFor";
 import PipelineFlow from "../components/PipelineFlow";
+import PlatformSection from "../components/PlatformSection";
 import PlatformSimulation from "./PlatformSimulation";
-import { ArrowUpRight, ChevronRight, TriangleAlert } from "../components/icons";
+import { ArrowUpRight, TriangleAlert } from "../components/icons";
 import { fmtTime } from "../lib/format";
+import { PLATFORM_HEALTH_NAME } from "../lib/nav";
 import { LEAF_POLL_MS } from "../lib/component_leaf";
 import { entityLabel } from "../lib/entities";
 import { healthOf } from "../lib/health";
 import type { OutpostStatus } from "../lib/outposts";
 import { createViewBinding } from "../lib/binding";
+import { OPEN_PARAM, isSectionOpen, outpostsSummary, pipelineSummary, serverSummary, setSectionOpen } from "../lib/platform_sections";
 import {
   NOT_REPORTED,
   PLATFORM_VIEW_KEY,
@@ -82,19 +85,18 @@ const ROW_TONE: Record<string, string> = {
   degraded: "bg-warning/5",
 };
 
+// The sections fold to one line each (#2446) and the open ones are held in the
+// URL (?open=pipeline,server-lab-server,outposts,simulation), so a reload, a back
+// step and a shared link keep what the operator was reading.
 export default function PlatformHealth() {
   const view = useQuery(() => ({ queryKey: PLATFORM_VIEW_KEY, queryFn: platformView, retry: retryPlatformView, refetchInterval: LEAF_POLL_MS }));
+  const [params, setParams] = useSearchParams();
+  const openRaw = () => params[OPEN_PARAM];
+  const isOpen = (id: string) => isSectionOpen(openRaw(), id);
+  const setOpen = (id: string, open: boolean) => setParams({ [OPEN_PARAM]: setSectionOpen(openRaw(), id, open) }, { replace: true });
 
   return (
-    <Page
-      title="Platform health"
-      subtitle="Omniglass watching itself: the build running and how long it has been up, how each server is serving, ingesting, queueing and keeping its retention, and whether each outpost is checking in, keeping its schedule and draining its command queue."
-      actions={
-        <Show when={view.data?.lab}>
-          <span class="badge badge-info badge-sm font-semibold uppercase tracking-wide" data-testid="platform-lab">Lab instance</span>
-        </Show>
-      }
-    >
+    <Page title={PLATFORM_HEALTH_NAME}>
       <Show when={view.error}>
         <div
           role="alert"
@@ -113,12 +115,20 @@ export default function PlatformHealth() {
                 Platform figures need a fleet-wide read: your component read does not reach the platform components, so each outpost shows only its check-in.
               </div>
             </Show>
-            <Show when={v().pipeline}>{(p) => <PipelineFlow pipeline={p()} />}</Show>
+            <Show when={v().pipeline}>
+              {(p) => (
+                <PlatformSection testid="section-pipeline" label="Where work is lost" summary={pipelineSummary(p())} open={isOpen("pipeline")} onOpenChange={(o) => setOpen("pipeline", o)}>
+                  <PipelineFlow pipeline={p()} bare />
+                </PlatformSection>
+              )}
+            </Show>
             <KeyedFor each={v().servers} by={(s) => s.component}>
-              {(s, i) => <ServerPanels server={s()} view={v()} open={i() === 0} />}
+              {(s) => <ServerPanels server={s()} view={v()} open={isOpen(`server-${s().name}`)} onOpenChange={(o) => setOpen(`server-${s().name}`, o)} />}
             </KeyedFor>
-            <OutpostTable view={v()} />
-            <PlatformSimulation />
+            <PlatformSection testid="section-outposts" label="Outposts" summary={outpostsSummary(v())} open={isOpen("outposts")} onOpenChange={(o) => setOpen("outposts", o)}>
+              <OutpostTable view={v()} />
+            </PlatformSection>
+            <PlatformSimulation open={isOpen("simulation")} onOpenChange={(o) => setOpen("simulation", o)} />
           </>
         )}
       </Show>
@@ -171,7 +181,7 @@ function Fact(props: { label: string; sub: string; children: JSX.Element }) {
 
 // HEAD_TIP is a column header's tooltip trigger: the label itself, dotted, so
 // the description is a keyboard focus away.
-const HEAD_TIP = "cursor-help whitespace-nowrap underline decoration-base-content/30 decoration-dotted underline-offset-4 focus-visible:outline-none focus-visible:text-primary";
+const HEAD_TIP = "inline-block max-w-24 cursor-help whitespace-normal text-right underline decoration-base-content/30 decoration-dotted underline-offset-4 focus-visible:outline-none focus-visible:text-primary";
 
 function OutpostTable(props: { view: PlatformView }) {
   const columns = () => platformColumns(props.view);
@@ -181,8 +191,10 @@ function OutpostTable(props: { view: PlatformView }) {
   const lossShown = () => (props.view.loss_hops ?? []).length > 0;
   const width = () => columns().length + 3 + (lossShown() ? 1 : 0);
   return (
-    <div class="overflow-x-auto rounded-box border border-base-300">
-      <table class="table table-sm" data-testid="platform-outposts">
+    <>
+    <OutpostCards view={props.view} />
+    <div class="hidden overflow-x-auto rounded-box border border-base-300 xl:block">
+      <table class="table table-xs [&_td]:px-2 [&_th]:px-2 [&_th]:align-bottom [&_th]:leading-tight" data-testid="platform-outposts">
         <thead>
           <tr>
             <th colSpan={2} />
@@ -225,6 +237,56 @@ function OutpostTable(props: { view: PlatformView }) {
         </tbody>
       </table>
     </div>
+    </>
+  );
+}
+
+// OutpostCards is the outposts below the table's width (#2446): the table has a
+// column per platform key and needs the full console width, so a narrower window
+// reads each outpost as a card, its figures in a grid, and nothing runs off an edge.
+function OutpostCards(props: { view: PlatformView }) {
+  return (
+    <ul class="flex flex-col gap-3 xl:hidden" data-testid="platform-outpost-cards">
+      <KeyedFor each={props.view.outposts} by={(n) => n.name} fallback={<li class="text-sm text-base-content/50">No outposts yet.</li>}>
+        {(n) => {
+          const pill = () => outpostPill(n(), props.view.read_at);
+          const rowHealth = () => healthOf(n().health);
+          return (
+            <li class="rounded-box border border-base-300 bg-base-200 p-3" classList={{ [ROW_TONE[rowHealth() ?? ""] ?? ""]: !!ROW_TONE[rowHealth() ?? ""] }} data-testid={`platform-outpost-card-${n().name}`}>
+              <div class="flex flex-wrap items-center gap-2">
+                <Show when={n().component} fallback={<span class="font-medium">{entityLabel(n())}</span>}>
+                  <A href={`/components/${n().component}`} class="font-medium hover:underline">{entityLabel(n())}</A>
+                </Show>
+                <span class={`badge badge-sm ${PILL[pill()]}`}>{pill()}</span>
+                <Show when={rowHealth()}>{(h) => <HealthBadge health={h()} size="xs" />}</Show>
+                <A href={`/outposts?n=${encodeURIComponent(n().name)}`} class="btn btn-quiet btn-xs btn-square ml-auto" aria-label={`Open ${n().name} in Outposts`}>
+                  <ArrowUpRight size={14} />
+                </A>
+              </div>
+              <dl class="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-3">
+                <KeyedFor each={platformColumns(props.view)} by={(c) => c.key}>
+                  {(c) => {
+                    const text = () => figureText(n(), c());
+                    return (
+                      <div class="flex min-w-0 items-baseline justify-between gap-2">
+                        <dt class="truncate text-base-content/60" title={c().label}>{c().label}</dt>
+                        <dd class="tnum whitespace-nowrap" classList={{ "text-base-content/30": text() === NOT_REPORTED, "font-semibold text-error": figureTinted(n(), c()) }}>{text()}</dd>
+                      </div>
+                    );
+                  }}
+                </KeyedFor>
+                <Show when={(props.view.loss_hops ?? []).length > 0}>
+                  <div class="flex min-w-0 items-baseline justify-between gap-2">
+                    <dt class="truncate text-base-content/60">Outpost Loss</dt>
+                    <dd class="tnum whitespace-nowrap" classList={{ "text-base-content/30": n().loss === undefined, "font-semibold text-error": lossTinted(n().loss) }}>{outpostLossText(n())}</dd>
+                  </div>
+                </Show>
+              </dl>
+            </li>
+          );
+        }}
+      </KeyedFor>
+    </ul>
   );
 }
 
@@ -242,7 +304,7 @@ function OutpostRow(props: { outpost: PlatformOutpost; view: PlatformView }) {
       classList={{ "cursor-pointer hover:bg-base-200": !!props.outpost.component }}
       onClick={open}
     >
-      <td class="whitespace-nowrap">
+      <td class="max-w-36">
         <div class="flex flex-col">
           <Show when={props.outpost.component} fallback={<span class="font-medium">{title()}</span>}>
             <A href={`/components/${props.outpost.component}`} class="font-medium hover:underline" onClick={(e) => e.stopPropagation()}>{title()}</A>
@@ -253,7 +315,7 @@ function OutpostRow(props: { outpost: PlatformOutpost; view: PlatformView }) {
         </div>
       </td>
       <td>
-        <div class="flex items-center gap-2">
+        <div class="flex flex-col items-start gap-1">
           <span class={`badge badge-sm ${PILL[pill()]}`}>{pill()}</span>
           <Show when={rowHealth()}>{(v) => <HealthBadge health={v()} size="xs" />}</Show>
         </div>
@@ -284,36 +346,37 @@ function OutpostRow(props: { outpost: PlatformOutpost; view: PlatformView }) {
   );
 }
 
-// ServerPanels is one server's panel set: a disclosure (the first one open)
-// over its four panels. A closed set reads no series; its figures are the
-// view's, already on the page.
-function ServerPanels(props: { server: PlatformServer; view: PlatformView; open: boolean }) {
-  const [open, setOpen] = createSignal(props.open);
+// ServerPanels is one server's panel set: a folded section (its verdict and its
+// open alarms on the line) over its four panels. A closed set mounts nothing, so
+// it reads no series; its figures are the view's, already on the page.
+function ServerPanels(props: { server: PlatformServer; view: PlatformView; open: boolean; onOpenChange: (open: boolean) => void }) {
   return (
-    <details
-      class="rounded-box border border-base-300 bg-base-100"
-      data-testid={`server-panels-${props.server.name}`}
-      // The set's own state, seeded once from props.open: a server that later
-      // sorts ahead moves the index, not the set the operator is reading.
-      open={open()}
-      onToggle={(e) => setOpen(e.currentTarget.open)}
-    >
-      <summary class="flex cursor-pointer items-center gap-2 px-4 py-3">
-        {/* A flex summary drops the native marker, so the chevron says the set opens. */}
-        <span data-disclosure class="text-base-content/60 transition-transform" classList={{ "rotate-90": open() }}><ChevronRight size={14} /></span>
-        <span class="eyebrow">Server</span>
-        <A href={`/components/${props.server.component}`} class="font-medium hover:underline" onClick={(e) => e.stopPropagation()}>{props.server.name}</A>
-        <HealthBadge health={props.server.health} size="xs" />
-        <Show when={(props.server.alarms ?? []).length > 0}>
-          <span class="badge badge-soft badge-warning badge-sm">{(props.server.alarms ?? []).length} open</span>
-        </Show>
-      </summary>
-      <div class="grid gap-4 px-4 pb-4 xl:grid-cols-2">
-        <KeyedFor each={props.server.groups} by={(p) => p.name}>
-          {(p) => <Panel panel={p()} server={props.server} view={props.view} live={open()} />}
-        </KeyedFor>
-      </div>
-    </details>
+    <div data-testid={`server-panels-${props.server.name}`}>
+      <PlatformSection
+        testid={`section-server-${props.server.name}`}
+        label="Server"
+        lead={
+          <span class="flex items-center gap-2">
+            <span class="font-medium">{props.server.name}</span>{" "}
+            <HealthBadge health={props.server.health} size="xs" />
+          </span>
+        }
+        summary={serverSummary(props.server)}
+        open={props.open}
+        onOpenChange={props.onOpenChange}
+      >
+        <div class="mb-3 text-xs">
+          <A href={`/components/${props.server.component}`} class="inline-flex items-center gap-1 hover:underline">
+            Open {props.server.name}'s component <ArrowUpRight size={12} />
+          </A>
+        </div>
+        <div class="grid gap-4 xl:grid-cols-2">
+          <KeyedFor each={props.server.groups} by={(p) => p.name}>
+            {(p) => <Panel panel={p()} server={props.server} view={props.view} live />}
+          </KeyedFor>
+        </div>
+      </PlatformSection>
+    </div>
   );
 }
 

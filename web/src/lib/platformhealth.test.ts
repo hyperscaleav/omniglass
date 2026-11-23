@@ -6,7 +6,6 @@ import {
   gapName,
   gapProtocolText,
   gapTone,
-  NOT_WIRED,
   ratioText,
   RESTARTED,
   windowText,
@@ -14,7 +13,6 @@ import {
   sortDevices,
   sortGaps,
   WARMING_UP,
-  wiredText,
   type PlatformSimDevice,
   type PlatformSimGap,
   hopFigure,
@@ -267,16 +265,10 @@ describe("states with no number", () => {
     expect(WARMING_UP).not.toMatch(/\d/);
     expect(RESTARTED).not.toMatch(/\d/);
   });
-  it("reads an unreported queue depth or busy-worker figure as not wired yet", () => {
-    expect(wiredText(null)).toBe(NOT_WIRED);
-    expect(wiredText(undefined)).toBe(NOT_WIRED);
-    expect(wiredText(0)).toBe("0");
-    expect(NOT_WIRED).not.toMatch(/\d/);
-  });
 });
 
 describe("devices", () => {
-  const dev = (over: Partial<PlatformSimDevice>): PlatformSimDevice => ({ component_id: "c", component: "", received: {}, impaired: false, unhit: false, ...over });
+  const dev = (over: Partial<PlatformSimDevice>): PlatformSimDevice => ({ component_id: "c", component: "", received: {}, impaired: false, unhit: false, system: "", place: [], ...over });
   it("sums a device's requests over its protocols", () => {
     expect(deviceReceived(dev({ received: { http: 4, tcp: 2 } }))).toBe(6);
     expect(deviceReceived(dev({}))).toBe(0);

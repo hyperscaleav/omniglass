@@ -1,7 +1,10 @@
-import { For, Show, type JSX } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, on as onChange, type JSX } from "solid-js";
 import { A } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import InfoTip from "../components/InfoTip";
+import Pager from "../components/Pager";
+import PlatformSection from "../components/PlatformSection";
+import { deviceStateText, devicePlaceText, filterDevices, pageSlice, simulationSummary } from "../lib/platform_sections";
 import { can, useMe } from "../lib/auth";
 import { describeError, fmtTime } from "../lib/format";
 import { LEAF_POLL_MS } from "../lib/component_leaf";
@@ -18,7 +21,6 @@ import {
   simStateNote,
   sortDevices,
   sortGaps,
-  wiredText,
   windowText,
   type GapTone,
   type PlatformSimGap,
@@ -56,7 +58,7 @@ const READING_BADGE: Record<string, string> = {
   "not observed by the sim": "bg-base-content/5 text-base-content/50 border-transparent",
 };
 
-export default function PlatformSimulation() {
+export default function PlatformSimulation(props: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const me = useMe();
   const fleet = useQuery(() => ({
     queryKey: SIMULATION_KEY,
@@ -75,30 +77,39 @@ export default function PlatformSimulation() {
   }));
   return (
     <Show when={on()}>
-      <section class="flex flex-col gap-4" data-testid="platform-simulation">
-        <div class="flex flex-col gap-1">
-          <h2 class="text-lg font-semibold">With a simulator</h2>
-          <p class="max-w-3xl text-sm text-base-content/60">
-            The simulator counts what each device saw; the platform counts what it collected. Each gap below is one hop a request or a
-            batch travels, read as a loss ratio over the last {windowText(sim.data?.window_seconds)}: what was lost at the hop over what went into it, 0 healthy.
-            An impaired device loses traffic on purpose, so its gap reads as expected, not as a fault.
-          </p>
-        </div>
-        <Show when={sim.error}>
-          <div role="alert" class="alert alert-soft alert-warning text-sm">
-            {(sim.error as { status?: number }).status === 404
-              ? "The simulation read needs a fleet-wide component read; yours reaches only part of the fleet."
-              : describeError(sim.error)}
+      <div data-testid="platform-simulation">
+        <PlatformSection
+          testid="section-simulation"
+          label="With a simulator"
+          summary={simulationSummary(sim.error ? undefined : sim.data?.outposts)}
+          open={props.open}
+          onOpenChange={props.onOpenChange}
+        >
+          <div class="flex flex-col gap-4">
+            <div class="flex items-center gap-1.5 text-xs text-base-content/60">
+              <span>What each device saw against what the platform collected, over the last {windowText(sim.data?.window_seconds)}.</span>
+              <InfoTip
+                label="the simulation section"
+                text="The simulator counts what each device saw; the platform counts what it collected. Each gap is one hop a request or a batch travels, read as a loss ratio: what was lost at the hop over what went into it, 0 healthy. An impaired device loses traffic on purpose, so its gap reads as expected, not as a fault."
+              />
+            </div>
+            <Show when={sim.error}>
+              <div role="alert" class="alert alert-soft alert-warning text-sm">
+                {(sim.error as { status?: number }).status === 404
+                  ? "The simulation read needs a fleet-wide component read; yours reaches only part of the fleet."
+                  : describeError(sim.error)}
+              </div>
+            </Show>
+            <Show when={sim.data}>
+              {(v) => (
+                <For each={v().outposts} fallback={<div class="text-sm text-base-content/50">No outpost has a simulator checking in yet.</div>}>
+                  {(n) => <SimOutpost outpost={n} />}
+                </For>
+              )}
+            </Show>
           </div>
-        </Show>
-        <Show when={sim.data}>
-          {(v) => (
-            <For each={v().outposts} fallback={<div class="text-sm text-base-content/50">No outpost has a simulator checking in yet.</div>}>
-              {(n) => <SimOutpost outpost={n} />}
-            </For>
-          )}
-        </Show>
-      </section>
+        </PlatformSection>
+      </div>
     </Show>
   );
 }
@@ -126,8 +137,6 @@ function SimOutpost(props: { outpost: PlatformSimOutpost }) {
         <div class="grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-3">
           <Figure label="Batches landed" tip="Telemetry receipts the server landed for this outpost over the window, counted by landed_at, with the margin before it and the bracket after it." value={note() ? null : String(props.outpost.receipts.landed)} />
           <Figure label="Sim in flight, high" tip="The most requests the outpost's simulator held at once over every protocol: the simulator's own count." value={note() ? null : String(props.outpost.in_flight_high)} />
-          <Figure label="Queue depth" tip="The outpost's dispatch queue depth. The outpost does not report it to the server yet." value={wiredText(props.outpost.queue_depth)} muted={props.outpost.queue_depth == null} />
-          <Figure label="Busy workers" tip="The outpost's busy-worker high water. The outpost does not report it to the server yet." value={wiredText(props.outpost.busy_workers)} muted={props.outpost.busy_workers == null} />
         </div>
         <Show when={!note()}>
           <GapTable gaps={props.outpost.gaps} />
@@ -141,7 +150,7 @@ function SimOutpost(props: { outpost: PlatformSimOutpost }) {
 
 // Figure is one small figure with its source in an (i) tooltip (ADR-0127). A
 // null value is a window with no figures yet: no number, a dash.
-function Figure(props: { label: string; tip: string; value: string | null; muted?: boolean }) {
+function Figure(props: { label: string; tip: string; value: string | null }) {
   return (
     <div class="flex flex-col gap-0.5 rounded-box bg-base-200 px-3 py-2">
       <div class="flex items-center gap-1 text-xs text-base-content/60">
@@ -150,7 +159,7 @@ function Figure(props: { label: string; tip: string; value: string | null; muted
       </div>
       <div
         class="tnum text-lg font-semibold"
-        classList={{ "text-base-content/30": props.value == null || props.muted }}
+        classList={{ "text-base-content/30": props.value == null }}
         data-figure={props.label}
       >
         {props.value ?? "-"}
@@ -250,39 +259,82 @@ function Head(props: { label: string; tip: string }): JSX.Element {
   );
 }
 
+// PAGE is how many device rows the table renders at once: the simulator can
+// serve thousands, so the table is a page of them behind a filter, never all.
+const DEVICE_PAGE = 25;
+
 function DeviceTable(props: { outpost: PlatformSimOutpost }) {
+  const [query, setQuery] = createSignal("");
+  const [page, setPage] = createSignal(0);
+  const all = createMemo(() => sortDevices(props.outpost.devices));
+  const matched = createMemo(() => filterDevices(all(), query()));
+  const rows = createMemo(() => pageSlice(matched(), page(), DEVICE_PAGE));
+  createEffect(onChange(query, () => setPage(0), { defer: true }));
   return (
-    <div class="overflow-x-auto rounded-box border border-base-300">
-      <table class="table table-sm" data-testid="platform-sim-devices">
-        <thead>
-          <tr>
-            <th>Device</th>
-            <Head label="Received" tip="Requests the simulator saw for the device over the window, by protocol." />
-            <th>State</th>
-          </tr>
-        </thead>
-        <tbody>
-          <For each={sortDevices(props.outpost.devices)} fallback={<tr><td colSpan={3} class="text-base-content/50">The simulator serves no device on this outpost.</td></tr>}>
-            {(d) => (
-              <tr data-testid="platform-sim-device" data-component={d.component_id} data-received={deviceReceived(d)} classList={{ "bg-warning/5": d.unhit }}>
-                <td>
-                  <A href={`/simulation?c=${encodeURIComponent(d.component_id)}`} class="font-medium hover:underline" title="Open the device's drawer on the Simulation page">
-                    {d.component || d.component_id}
-                  </A>
-                </td>
-                <td class="tnum text-right text-sm">
-                  {Object.entries(d.received ?? {}).sort(([a], [b]) => a.localeCompare(b)).map(([p, n]) => `${p} ${n}`).join(", ") || "0"}
-                </td>
-                <td class="flex gap-1">
-                  <Show when={d.impaired}><span class="badge badge-sm badge-soft badge-info">impaired</span></Show>
-                  <Show when={d.unhit}><span class="badge badge-sm badge-soft badge-warning">due, never seen</span></Show>
-                </td>
-              </tr>
-            )}
-          </For>
-        </tbody>
-      </table>
+    <div class="flex flex-col gap-2">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <input
+          type="search"
+          class="input input-bordered input-sm w-full max-w-xs"
+          placeholder="Filter by device, system or place"
+          aria-label={`Filter ${props.outpost.outpost}'s devices by name, system or place`}
+          value={query()}
+          onInput={(e) => setQuery(e.currentTarget.value)}
+          data-testid="platform-sim-device-filter"
+        />
+        <Pager total={matched().length} page={page()} size={DEVICE_PAGE} onPage={setPage} label={`${props.outpost.outpost} devices`} />
+      </div>
+      <div class="overflow-x-auto rounded-box border border-base-300">
+        <table class="table table-sm" data-testid="platform-sim-devices">
+          <thead>
+            <tr>
+              <th>Device</th>
+              <th>System and place</th>
+              <Head label="Received" tip="Requests the simulator saw for the device over the window, by protocol." />
+              <th>State</th>
+            </tr>
+          </thead>
+          <tbody>
+            <For
+              each={rows()}
+              fallback={
+                <tr>
+                  <td colSpan={4} class="text-base-content/50">
+                    {all().length === 0 ? "The simulator serves no device on this outpost." : "No device matches the filter."}
+                  </td>
+                </tr>
+              }
+            >
+              {(d) => (
+                <tr data-testid="platform-sim-device" data-component={d.component_id} data-received={deviceReceived(d)} classList={{ "bg-warning/5": d.unhit }}>
+                  <td class="whitespace-nowrap align-middle">
+                    <A href={`/simulation?c=${encodeURIComponent(d.component_id)}`} class="font-medium hover:underline" title="Open the device's drawer on the Simulation page">
+                      {d.component || d.component_id}
+                    </A>
+                  </td>
+                  <td class="align-middle text-xs text-base-content/60" data-testid="platform-sim-device-place">{devicePlaceText(d)}</td>
+                  <td class="tnum whitespace-nowrap text-right align-middle text-sm">
+                    {Object.entries(d.received ?? {}).sort(([a], [b]) => a.localeCompare(b)).map(([p, n]) => `${p} ${n}`).join(", ") || "0"}
+                  </td>
+                  <td class="align-middle">
+                    <div class="flex flex-wrap gap-1" data-testid="platform-sim-device-state">
+                      <For each={deviceStateText(d)}>
+                        {(t) => <span class={`badge badge-sm ${STATE_BADGE[t]}`}>{t}</span>}
+                      </For>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </For>
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
 
+const STATE_BADGE: Record<string, string> = {
+  answering: "bg-base-content/5 text-base-content/60 border-transparent",
+  impaired: "badge-soft badge-info",
+  "due, never seen": "badge-soft badge-warning",
+};
