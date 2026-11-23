@@ -130,13 +130,14 @@ type healthTransitionBody struct {
 
 type fleetHealthOutput struct {
 	Body struct {
-		OwnerKind   string                 `json:"owner_kind"`
-		Owner       string                 `json:"owner"`
-		Health      string                 `json:"health" doc:"healthy, incomplete, degraded, or outage: the rollup of the slots or systems served beside it. incomplete is a commissioning gap, a slot short because the hardware was never installed rather than because installed hardware is failing, and it ranks between healthy and degraded"`
-		Slots       []healthSlotBody       `json:"slots" doc:"The contributing slots; empty for a location"`
-		Systems     []healthSystemBody     `json:"systems" doc:"The systems beneath a location with their health; empty for a system"`
-		Transitions []healthTransitionBody `json:"transitions" doc:"The recorded edges over the window, oldest first: one entry per change, never a sample"`
-		CarriedIn   string                 `json:"carried_in,omitempty" doc:"The health in force when since opened the range: the last recorded edge before it. Absent without since, or when nothing was recorded before it. A timeline draws the stretch before the first transition from it"`
+		OwnerKind       string                 `json:"owner_kind"`
+		Owner           string                 `json:"owner"`
+		Health          string                 `json:"health" doc:"healthy, incomplete, degraded, or outage: the rollup of the slots or systems served beside it. incomplete is a commissioning gap, a slot short because the hardware was never installed rather than because installed hardware is failing, and it ranks between healthy and degraded"`
+		Slots           []healthSlotBody       `json:"slots" doc:"The contributing slots; empty for a location"`
+		Systems         []healthSystemBody     `json:"systems" doc:"The systems beneath a location with their health; empty for a system"`
+		Transitions     []healthTransitionBody `json:"transitions" doc:"The recorded edges over the window, oldest first: one entry per change, never a sample"`
+		CarriedIn       string                 `json:"carried_in,omitempty" doc:"The health in force when since opened the range: the last recorded edge before it. Absent without since, or when nothing was recorded before it. A timeline draws the stretch before the first transition from it"`
+		FirstRecordedAt *time.Time             `json:"first_recorded_at,omitempty" doc:"When this owner's health was first recorded; absent if never. How long it has been watched, whatever the range"`
 	}
 }
 
@@ -146,6 +147,7 @@ func toHealthOutput(rep *storage.HealthReport) *fleetHealthOutput {
 	out.Body.Owner = rep.OwnerID
 	out.Body.Health = rep.Verdict
 	out.Body.CarriedIn = rep.CarriedIn
+	out.Body.FirstRecordedAt = rep.FirstRecorded
 	out.Body.Slots = make([]healthSlotBody, 0, len(rep.Slots))
 	for i := range rep.Slots {
 		out.Body.Slots = append(out.Body.Slots, toHealthSlotBody(&rep.Slots[i]))

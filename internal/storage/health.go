@@ -99,6 +99,9 @@ type HealthReport struct {
 	// Since or nothing was recorded before it. A timeline draws the stretch
 	// before the first edge in range from it.
 	CarriedIn string
+	// FirstRecorded is when the owner's health was first recorded (nil if
+	// never): how long it has been watched, whatever the range.
+	FirstRecorded *time.Time
 }
 
 // HealthSlot is one contributing slot, with the causing chain when it is
@@ -1163,6 +1166,9 @@ func (p *PG) SystemHealth(ctx context.Context, systemName string, rng HealthRang
 	if rep.CarriedIn, err = healthCarriedIn(ctx, p.pool, "system", sys.ID, rng); err != nil {
 		return nil, err
 	}
+	if rep.FirstRecorded, err = healthFirstRecorded(ctx, p.pool, "system", sys.ID); err != nil {
+		return nil, err
+	}
 	return rep, nil
 }
 
@@ -1195,6 +1201,9 @@ func (p *PG) LocationHealth(ctx context.Context, locationName string, rng Health
 	if rep.CarriedIn, err = healthCarriedIn(ctx, p.pool, "location", loc.ID, rng); err != nil {
 		return nil, err
 	}
+	if rep.FirstRecorded, err = healthFirstRecorded(ctx, p.pool, "location", loc.ID); err != nil {
+		return nil, err
+	}
 	return rep, nil
 }
 
@@ -1216,6 +1225,9 @@ func (p *PG) ComponentHealthReport(ctx context.Context, componentName string, rn
 		return nil, err
 	}
 	if rep.CarriedIn, err = healthCarriedIn(ctx, p.pool, "component", c.ID, rng); err != nil {
+		return nil, err
+	}
+	if rep.FirstRecorded, err = healthFirstRecorded(ctx, p.pool, "component", c.ID); err != nil {
 		return nil, err
 	}
 	return rep, nil
@@ -1355,6 +1367,23 @@ func healthTransitions(ctx context.Context, q txQuerier, ownerKind, ownerID stri
 		out = append(out, t)
 	}
 	return out, rows.Err()
+}
+
+// healthFirstRecorded is the timestamp of the owner's first recorded edge, nil
+// when none exists: one aggregate on the same index the transitions read.
+func healthFirstRecorded(ctx context.Context, q txQuerier, ownerKind, ownerID string) (*time.Time, error) {
+	col, err := ownerColumn(ownerKind)
+	if err != nil {
+		return nil, err
+	}
+	sql := fmt.Sprintf(`select min(ts) from property
+		where %s = %s and property_type_id = (select id from property_type_in_effect() property_type where name = $2) and instance = ''
+		  and provenance = 'calculated'`, col, ownerArcExprN(ownerKind, 1))
+	var first *time.Time
+	if err := q.QueryRow(ctx, sql, ownerID, healthKey).Scan(&first); err != nil {
+		return nil, fmt.Errorf("storage: first health %s/%s: %w", ownerKind, ownerID, err)
+	}
+	return first, nil
 }
 
 // healthCarriedIn is the verdict in force at rng.Since (#2425): the newest

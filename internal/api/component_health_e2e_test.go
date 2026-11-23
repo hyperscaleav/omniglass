@@ -23,6 +23,8 @@ type healthHistoryWire struct {
 		TS     time.Time `json:"ts"`
 		Health string    `json:"health"`
 	} `json:"transitions"`
+	CarriedIn       string     `json:"carried_in"`
+	FirstRecordedAt *time.Time `json:"first_recorded_at"`
 }
 
 // TestComponentHealthHistoryRange drives GET /components/{name}/health the way
@@ -123,4 +125,77 @@ func TestComponentHealthHistoryRange(t *testing.T) {
 	read(viewer, "/components/theirs/health", http.StatusOK)
 	read(viewer, "/components/mine/health", http.StatusNotFound)
 	read(viewer, "/components/no-such-component/health", http.StatusNotFound)
+}
+
+// TestHealthHistoryCarriesInTheHealthAtSince: a range with no edge inside it
+// still says what the health was when it began (carried_in, set only when since
+// is given); an entity first recorded inside the range has none, and every read
+// says when the entity was first recorded (#2305).
+func TestHealthHistoryCarriesInTheHealthAtSince(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := seededDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+	owner := userWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(ctx)
+	read := func(path string) healthHistoryWire {
+		t.Helper()
+		var w healthHistoryWire
+		if err := json.Unmarshal(c.do(owner, http.MethodGet, path, nil, http.StatusOK), &w); err != nil {
+			t.Fatalf("decode %s: %v", path, err)
+		}
+		return w
+	}
+	at := func(d time.Duration) string { return url.QueryEscape(time.Now().UTC().Add(d).Format(time.RFC3339)) }
+
+	// quiet: its only edges are 40 days old (raised, then cleared: healthy last).
+	c.do(owner, http.MethodPost, "/components", map[string]any{"name": "quiet", "product": "generic-device"}, http.StatusCreated)
+	quietID := entityID(t, c, owner, "/components", "quiet")
+	alarm := raiseFor(t, c, owner, "quiet", "high", "no-signal", "no signal")
+	c.do(owner, http.MethodDelete, "/components/quiet/alarms/"+alarm, nil, http.StatusNoContent)
+	if _, err := conn.Exec(ctx, `
+		update property p set ts = now() - interval '40 days' + r.n * interval '1 hour'
+		from (select id, row_number() over (order by id) n from property
+			where component_id = $1 and provenance = 'calculated' and instance = '') r
+		where p.id = r.id`, quietID); err != nil {
+		t.Fatalf("place transitions: %v", err)
+	}
+	got := read("/components/quiet/health?since=" + at(-5*24*time.Hour))
+	if len(got.Transitions) != 0 || got.CarriedIn != "healthy" {
+		t.Errorf("quiet range = %d transitions, carried_in %q; want none and healthy", len(got.Transitions), got.CarriedIn)
+	}
+	if got.FirstRecordedAt == nil || time.Since(*got.FirstRecordedAt) < 39*24*time.Hour {
+		t.Errorf("first_recorded_at = %v, want about 40 days ago", got.FirstRecordedAt)
+	}
+	if w := read("/components/quiet/health?since=" + at(-60*24*time.Hour)); w.CarriedIn != "" {
+		t.Errorf("since before every edge: carried_in = %q, want absent", w.CarriedIn)
+	}
+	if w := read("/components/quiet/health"); w.CarriedIn != "" {
+		t.Errorf("no since: carried_in = %q, want absent", w.CarriedIn)
+	}
+
+	// fresh: first recorded inside the range, so nothing was in force.
+	c.do(owner, http.MethodPost, "/components", map[string]any{"name": "fresh", "product": "generic-device"}, http.StatusCreated)
+	raiseFor(t, c, owner, "fresh", "high", "no-signal", "no signal")
+	fresh := read("/components/fresh/health?since=" + at(-5*24*time.Hour))
+	if fresh.CarriedIn != "" {
+		t.Errorf("an entity first recorded inside the range has carried_in %q, want absent", fresh.CarriedIn)
+	}
+	if len(fresh.Transitions) == 0 || fresh.FirstRecordedAt == nil || !fresh.FirstRecordedAt.Equal(fresh.Transitions[0].TS) {
+		t.Errorf("fresh = %+v, want first_recorded_at to be its first transition", fresh)
+	}
 }

@@ -307,13 +307,14 @@ down** (nobody assigned, or fewer assigned than the quorum wants) names no alarm
 rather than a duplicated explanation.
 
 **A component's report** (`GET /components/{name}/health`) is the same envelope with no slots and no
-systems: the component's own verdict, from its active alarms, beside the edges that got it there.
+systems: the component's own health, from its active alarms, beside the edges that got it there.
 `omniglass component health list <name>` reads it from the CLI.
 
 All three reports carry the **recorded transitions**, oldest first, one entry per change, never a
 sample: the availability strip's data and the answer to "since when". The range is `since` and
 `until` (RFC 3339) on each route, defaulting to the last 30 days, so a range picker can drive them;
-`since` after `until` is a 400.
+`since` after `until` is a 400. With a `since`, `carried_in` is the health in force when the range
+opened, and `first_recorded_at` says when the owner was first recorded.
 
 ## The alarm: what is wrong with one component
 
