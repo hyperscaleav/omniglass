@@ -83,8 +83,9 @@ only your own account, whatever your role.
   stays, and your API tokens are kept, a token not being tied to your password), so the change takes
   effect on your logins at once.
 - **Access.** A read-only view of the identity model you operate under: your user, the
-  roles granted to you, and the flattened permissions those roles carry. The server enforces
-  these on every request; the console only mirrors them.
+  roles granted to you, and the flattened permissions those roles carry (closed under
+  **Permissions (N)**, the count; open it for the list). The server enforces these on every
+  request; the console only mirrors them.
 - **Single sign-on.** Shown when a provider is connected or you already have a link: the identities
   at the provider you sign in through, each its subject and issuer, who made the link and when it last
   signed you in. **Link your identity** asks for your current password (a link outlives the session

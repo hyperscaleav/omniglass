@@ -1,10 +1,10 @@
-import { Tooltip } from "@kobalte/core/tooltip";
 import { A } from "@solidjs/router";
 import { Show, children, type JSX } from "solid-js";
 import { Info } from "./icons";
+import Tooltip from "./ui/Tooltip";
 
 // InfoTip: the small (i) affordance that sits next to a field label and reveals
-// help text on hover or keyboard focus, via a Kobalte tooltip. The content
+// help text on hover or keyboard focus, via the Tooltip wrapper (ui/). The content
 // portals to the body so it is never clipped by the form drawer (the escape the
 // column menu also needs). Replaces help text rendered muted under the field.
 // The trigger must sit OUTSIDE the field's <label> (a labelable button inside it
@@ -24,48 +24,47 @@ export default function InfoTip(props: { text: string; label?: string; href?: st
   // Resolved once: reading props.children twice (the branch, then the slot)
   // would build the trigger's content twice.
   const trigger = children(() => props.children);
-  return (
-    <Tooltip openDelay={150} closeDelay={props.href ? 350 : 100} placement="top" gutter={4}>
-      <Show
-        when={trigger()}
-        fallback={
-          <Tooltip.Trigger
-            type="button"
-            aria-label={props.label ? `More about ${props.label}` : "More information"}
-            class="inline-flex text-base-content/40 transition-colors hover:text-base-content/70 focus-visible:text-primary focus:outline-none"
-          >
-            <Info size={13} />
-          </Tooltip.Trigger>
-        }
-      >
-        <Tooltip.Trigger type="button" aria-label={props.label} class={props.class}>
-          {trigger()}
-        </Tooltip.Trigger>
+  const content = () => (
+    <>
+      {props.text}
+      <Show when={props.href}>
+        {(href) => (
+          <>
+            {" "}
+            <Show
+              when={props.sameTab}
+              fallback={
+                <a href={href()} target="_blank" rel="noopener noreferrer" class="link link-primary whitespace-nowrap font-medium">
+                  {props.hrefText ?? "Learn more"} {"\u2197"}
+                </a>
+              }
+            >
+              <A href={href()} class="link link-primary whitespace-nowrap font-medium">
+                {props.hrefText ?? "Learn more"} {"\u2192"}
+              </A>
+            </Show>
+          </>
+        )}
       </Show>
-      <Tooltip.Portal>
-        <Tooltip.Content class="z-100 max-w-56 rounded-box border border-base-300 bg-base-100 px-2.5 py-1.5 text-xs font-normal normal-case leading-snug tracking-normal text-base-content shadow-lg">
-          {props.text}
-          <Show when={props.href}>
-            {(href) => (
-              <>
-                {" "}
-                <Show
-                  when={props.sameTab}
-                  fallback={
-                    <a href={href()} target="_blank" rel="noopener noreferrer" class="link link-primary whitespace-nowrap font-medium">
-                      {props.hrefText ?? "Learn more"} {"\u2197"}
-                    </a>
-                  }
-                >
-                  <A href={href()} class="link link-primary whitespace-nowrap font-medium">
-                    {props.hrefText ?? "Learn more"} {"\u2192"}
-                  </A>
-                </Show>
-              </>
-            )}
-          </Show>
-        </Tooltip.Content>
-      </Tooltip.Portal>
-    </Tooltip>
+    </>
+  );
+  return (
+    <Show
+      when={trigger()}
+      fallback={
+        <Tooltip
+          closeDelay={props.href ? 350 : 100}
+          content={content()}
+          aria-label={props.label ? `More about ${props.label}` : "More information"}
+          class="inline-flex text-base-content/40 transition-colors hover:text-base-content/70 focus-visible:text-primary focus:outline-none"
+        >
+          <Info size={13} />
+        </Tooltip>
+      }
+    >
+      <Tooltip closeDelay={props.href ? 350 : 100} content={content()} aria-label={props.label} class={props.class}>
+        {trigger()}
+      </Tooltip>
+    </Show>
   );
 }
