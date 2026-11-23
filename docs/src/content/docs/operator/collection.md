@@ -205,7 +205,7 @@ transport answering. Over a datagram transport (udp, snmp) a silent **responsive
 not down: silence proves nothing there. The host may be off, the agent or service stopped, the v2c
 community wrong (an agent drops a wrong community without a word), or the port filtered; a closed
 port is different and says so (the affirmative **refused**, an ICMP port-unreachable). The rung's
-hint, the collection badge on the component and the row's pill all name those causes. The verdict and
+hint, the collection badge on the component and the row's pill all name those causes. The reachability reading and
 the unreachable streak are unchanged, so a run of silence still alarms; only what it says changed. A tcp connect that times out
 still reads down. A down endpoint also shows a plain-language **why** line. Every value is a
 real reading from the outpost, and the panel is also the authoring surface: its header carries **Add
