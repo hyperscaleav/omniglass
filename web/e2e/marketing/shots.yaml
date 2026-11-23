@@ -194,6 +194,7 @@ shots:
       # Beat 3: the component's page, its outage to its vitals.
       - wait: { selector: '[data-testid=component-card]' }
         focus: here
+        zoom: 1.3
         hold: 2200
 
   # The same room, still: degraded, its Why card naming the alarm and the slot
@@ -228,9 +229,11 @@ shots:
         focus: here
         zoom: 1.7
         hold: 300
+      # Beat 2: Working while it thinks, framed from the moment the question is
+      # sent, then its first thinking, opened, and the calls as they run.
       - press: Enter
-      # Beat 2: Working while it thinks, then its first thinking, opened, and
-      # the calls as they run.
+        focus: '[data-testid=omnibot-working]'
+        zoom: 1.4
       - wait: { selector: '[data-testid=omnibot-thinking] >> nth=0', timeout: 30000 }
         focus: '[data-testid=omnibot-thinking] >> nth=0'
         zoom: 1.4
