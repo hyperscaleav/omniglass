@@ -1,7 +1,7 @@
-import { For, Show, createMemo, createSignal, createUniqueId, type JSX } from "solid-js";
+import { For, Show, createMemo, createSignal, createUniqueId } from "solid-js";
 import LocationCard from "./LocationCard";
-import AcknowledgeButton from "./AcknowledgeButton";
-import SnoozeButton, { SnoozedBadge } from "./SnoozeButton";
+import AlarmActions, { type AlarmActionsAlarm, type AlarmActionsShow } from "./AlarmActions";
+import { SnoozedBadge } from "./SnoozeButton";
 import AlarmTimeline, { createTimelineToggles } from "./AlarmTimeline";
 import { useNavigate } from "@solidjs/router";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/solid-query";
@@ -28,7 +28,6 @@ import { contentsOf, isRoomOf, slotsOf, systemsAtLocation } from "../lib/detail"
 import { LOCATION_TYPES_KEY, listLocationTypes } from "../lib/location_types";
 import { describeError, fmtTime } from "../lib/format";
 import { durationText } from "../lib/timeline";
-import TroubleshootButton from "./TroubleshootButton";
 
 // EntityBlade (#799, refit in #826, the glance since #872): ONE blade per
 // fleet kind, and it is where an operator lands from a row. HealthState and
@@ -109,7 +108,7 @@ function useDelete(opts: {
 // one raised it. A row that names its alarm (timeline) opens the alarm's
 // timeline in place (#950).
 function Why(props: {
-  rows: { severity: string; message: string; component?: string; onOpen?: () => void; rule?: string; ack?: JSX.Element; timeline?: { component: string; alarmId: string }; troubleshoot?: { component: string; raised_by_rule?: string | null; raised_at: string; message?: string } }[];
+  rows: { severity: string; message: string; component?: string; onOpen?: () => void; rule?: string; actions?: { componentId: string; alarm: AlarmActionsAlarm; show: Omit<AlarmActionsShow, "timeline"> & { timeline?: boolean }; surface?: string } }[];
 }) {
   const timelines = createTimelineToggles();
   return (
@@ -130,15 +129,20 @@ function Why(props: {
                 <Show when={a.rule}>
                   {(rule) => <span class="shrink-0 text-[11px] text-base-content/45">by rule <span class="font-data">{rule()}</span></span>}
                 </Show>
-                {a.ack}
-                <Show when={a.troubleshoot}>{(t) => <TroubleshootButton alarm={t()} />}</Show>
-                <Show when={a.timeline}>{(tl) => timelines.button(tl().alarmId, a.message)}</Show>
+                <Show when={a.actions}>
+                  {(x) => (
+                    <>
+                      <SnoozedBadge alarm={x().alarm} />
+                      <AlarmActions componentId={x().componentId} alarm={x().alarm} surface={x().surface} show={{ ...x().show, timeline: x().show.timeline ? timelines : undefined }} />
+                    </>
+                  )}
+                </Show>
               </div>
-              <Show when={a.timeline && timelines.isOpen(a.timeline.alarmId)}>
+              <Show when={a.actions?.show.timeline && timelines.isOpen(a.actions.alarm.id)}>
                 <AlarmTimeline
-                  component={a.timeline!.component}
-                  alarmId={a.timeline!.alarmId}
-                  id={timelines.panelId(a.timeline!.alarmId)}
+                  component={a.actions!.componentId}
+                  alarmId={a.actions!.alarm.id}
+                  id={timelines.panelId(a.actions!.alarm.id)}
                   label={timelines.label(a.message)}
                 />
               </Show>
@@ -189,8 +193,9 @@ function SystemBody(props: { id: string }) {
           message: a.message,
           component: a.component,
           onOpen: a.componentId ? () => blades.push({ kind: "component", id: a.componentId! }) : undefined,
-          timeline: a.componentId ? { component: a.componentId, alarmId: a.id } : undefined,
-          troubleshoot: { component: a.component, raised_at: a.raisedAt, message: a.message },
+          actions: a.componentId
+            ? { componentId: a.componentId, alarm: { id: a.id, message: a.message, component: a.component, raised_at: a.raisedAt }, show: { troubleshoot: true, timeline: true } }
+            : { componentId: a.component, alarm: { id: a.id, message: a.message, component: a.component, raised_at: a.raisedAt }, show: { troubleshoot: true } },
         }))}
       />
       {/* The room's only system is the room: the title already names it. */}
@@ -273,15 +278,7 @@ function ComponentBody(props: { id: string }) {
           severity: a.severity,
           message: a.message,
           rule: a.raised_by_rule,
-          ack: (
-            <>
-              <SnoozedBadge alarm={a} />
-              <AcknowledgeButton component={props.id} alarm={a} />
-              <SnoozeButton component={props.id} alarm={a} surface={snoozeSurface} />
-            </>
-          ),
-          timeline: { component: props.id, alarmId: a.id },
-          troubleshoot: a,
+          actions: { componentId: props.id, alarm: a, surface: snoozeSurface, show: { ack: true, snooze: true, troubleshoot: true, timeline: true } },
         }))}
       />
       {/* Where its location is the room a system it serves makes, Serves names
