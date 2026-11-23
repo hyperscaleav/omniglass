@@ -192,6 +192,15 @@
       "setup": []
     },
     {
+      "id": "read-an-entity-in-its-blade",
+      "title": "Read an entity in its blade",
+      "description": "Open a system from Explore, open one of its components over it, and read the component's whole detail without leaving the outline.",
+      "lab": [],
+      "setup": [
+        "omniglass component alarm create 'hq.west.level-4.meeting-405.$comp.videobar-1' --dedup-key walkthrough-blade-detail --message 'Video feed lost' --severity high"
+      ]
+    },
+    {
       "id": "read-platform-health",
       "title": "Read the platform's health",
       "description": "From Home, open Platform health, read the build, open a hop under where work is lost, fold the server's panels to read the outposts and the simulator's gaps, open them on the Requests panel, then follow the slowest route's figure onto its series on the server's platform component.",
