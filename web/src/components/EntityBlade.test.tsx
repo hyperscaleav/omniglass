@@ -15,7 +15,6 @@ import { LOCATIONS_KEY } from "../lib/locations";
 import { componentAlarmsKey } from "../lib/alarms";
 import { componentSystemsKey } from "../lib/members";
 import { ME_KEY, type Me } from "../lib/auth";
-import { pendingTriage, requestTriage } from "../lib/handover";
 import { LOCATION_TYPES_KEY } from "../lib/location_types";
 import { STANDARDS_KEY } from "../lib/standards";
 import { PRODUCTS_KEY } from "../lib/products";
@@ -129,79 +128,6 @@ function mountBlade(ref: { kind: string; id: string }) {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-});
-
-describe("the system blade", () => {
-  it("leads with health and since, and says why with the severity and the component", async () => {
-    const { controller } = mountBlade({ kind: "system", id: uuidFor("eb-sys") });
-    const blade = await screen.findByRole("dialog");
-    expect(within(blade).getAllByText("degraded").length).toBeGreaterThan(0);
-    expect(within(blade).getByText(/since /)).toBeTruthy();
-    const why = within(blade).getByTestId("blade-why");
-    expect(within(why).getByText("High")).toBeTruthy();
-    expect(within(why).getByText("No route to host")).toBeTruthy();
-    // The report names the component by name; the open action goes by its uuid.
-    fireEvent.click(within(why).getByRole("button", { name: "mic-1" }));
-    expect(controller().stack().at(-1)).toEqual({ kind: "component", id: uuidFor("eb-c-mic") });
-    expect(within(why).getAllByRole("button", { name: /^Timeline of / }).length).toBeGreaterThan(0);
-    // A system's alarm reaches omnibot by its component and when it was raised.
-    fireEvent.click(within(why).getByRole("button", { name: "Troubleshoot No route to host with omnibot" }));
-    expect(pendingTriage()?.ref).toMatch(/^mic-1@/);
-    requestTriage(undefined);
-  });
-
-  // Each fact once (#872 drawer audit). The room's only system IS the room,
-  // so its location card names no location (the title does), and offers no second
-  // drawer for the room (its form is Configure location); the brief says the
-  // size, not the standard the form's Classification already says; the
-  // read-only form drops the Label row the title already says.
-  it("says each fact once: no location name, no location drawer, no standard twice, no label row", async () => {
-    mountBlade({ kind: "system", id: uuidFor("eb-sys") });
-    const blade = await screen.findByRole("dialog");
-    const card = within(blade).getByTestId("location-card");
-    expect(within(card).queryByText("Boardroom A")).toBeNull();
-    expect(within(card).queryByRole("button", { name: "Location details" })).toBeNull();
-    expect(within(card).getByRole("link", { name: "Configure location" })).toBeTruthy();
-    const brief = within(blade).getByTestId("blade-brief");
-    expect(within(brief).getByText("2 components")).toBeTruthy();
-    expect(within(brief).queryByText("Huddle Room Standard")).toBeNull();
-    const form = await within(blade).findByTestId("entity-form");
-    expect(within(form).getAllByText("Huddle Room Standard").length).toBe(1);
-  });
-
-  // A drawer has no breadcrumb, so its location card says where the location sits
-  // (#872): the path above it, the one fact the title does not already say.
-  it("says where the room sits: the path above it, not its name", async () => {
-    mountBlade({ kind: "system", id: uuidFor("eb-sys") });
-    const blade = await screen.findByRole("dialog");
-    const card = within(blade).getByTestId("location-card");
-    expect(within(card).getByTestId("location-path").textContent).toBe("Level 2");
-  });
-
-  it("renders the form's identity, placement, slots and tags", async () => {
-    mountBlade({ kind: "system", id: uuidFor("eb-sys") });
-    const form = await screen.findByTestId("entity-form");
-    expect(within(form).getByText("Identity")).toBeTruthy();
-    expect(within(form).getByText("Tags")).toBeTruthy();
-    expect(within(form).getByText("Slots")).toBeTruthy();
-  });
-
-  it("expands to the identity route and closes the stack", async () => {
-    mountBlade({ kind: "system", id: uuidFor("eb-sys") });
-    fireEvent.click(screen.getByRole("button", { name: "Expand" }));
-    expect(await screen.findByTestId("system-page")).toBeTruthy();
-    expect(window.location.pathname).toBe(`/web/systems/${uuidFor("eb-sys")}`);
-  });
-
-  it("edits identity in place through the blade's footer", async () => {
-    mountBlade({ kind: "system", id: uuidFor("eb-sys") });
-    const blade = await screen.findByRole("dialog");
-    await within(blade).findByTestId("entity-form");
-    fireEvent.click(within(blade).getByRole("button", { name: "Edit" }));
-    expect(await within(blade).findByRole("combobox", { name: /standard/i })).toBeTruthy();
-    expect(within(blade).getByRole("button", { name: /check/i })).toBeTruthy();
-    expect(within(blade).getByRole("button", { name: "Save" })).toBeTruthy();
-  });
 });
 
 describe("the location blade", () => {

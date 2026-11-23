@@ -1,29 +1,23 @@
-import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
-import LocationCard from "./LocationCard";
-import AlarmTimeline, { createTimelineToggles } from "./AlarmTimeline";
+import { For, Show, createMemo, createSignal } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import HealthBadge from "./HealthBadge";
-import SeverityBadge from "./SeverityBadge";
-import { useSeverity } from "../lib/severity";
 import Button from "./Button";
 import EntityForm from "./EntityForm";
 import { Maximize } from "./icons";
 import { useBlades, useBladeEdit, type BladeDef, type BladeDestructive } from "../lib/blades";
 import { FLEET_VIEW_KEY, fleetView } from "../lib/fleet";
 import { entityLabel } from "../lib/entities";
-import { systemHealth, systemHealthKey, locationHealth, locationHealthKey } from "../lib/health";
-import { alarmRows, sinceOf } from "../lib/system_zoom";
-import { SYSTEMS_KEY, listSystems, deleteSystem } from "../lib/systems";
+import { locationHealth, locationHealthKey } from "../lib/health";
+import { sinceOf } from "../lib/system_zoom";
 import { LOCATIONS_KEY, listLocations, deleteLocation } from "../lib/locations";
 import { COMPONENTS_KEY, listComponents } from "../lib/components";
-import { slotStrip } from "../lib/slot_strip";
-import { contentsOf, isRoomOf, systemsAtLocation } from "../lib/detail";
+import { contentsOf, systemsAtLocation } from "../lib/detail";
 import { LOCATION_TYPES_KEY, listLocationTypes } from "../lib/location_types";
 import { describeError, fmtTime } from "../lib/format";
 import { durationText } from "../lib/timeline";
-import TroubleshootButton from "./TroubleshootButton";
 import ComponentDetail from "./ComponentDetail";
+import SystemDetail from "./SystemDetail";
 
 // EntityBlade (#799, refit in #826, the glance since #872): ONE blade per
 // fleet kind, and it is where an operator lands from a row. HealthState and
@@ -99,110 +93,6 @@ function useDelete(opts: {
   return { destructive, err };
 }
 
-// Why, with the severity first: the reason beside the red light, each
-// naming the component when there is one to open, and the event rule when
-// one raised it. A row that names its alarm (timeline) opens the alarm's
-// timeline in place (#950).
-function Why(props: {
-  rows: { severity: string; message: string; component?: string; onOpen?: () => void; rule?: string; ack?: JSX.Element; timeline?: { component: string; alarmId: string }; troubleshoot?: { component: string; raised_by_rule?: string | null; raised_at: string; message?: string } }[];
-}) {
-  const timelines = createTimelineToggles();
-  return (
-    <Show when={props.rows.length > 0}>
-      <div data-testid="blade-why" class={section}>
-        <span class={eyebrow}>Why</span>
-        <For each={props.rows}>
-          {(a) => (
-            <div class="flex flex-col gap-1.5">
-              <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                <SeverityBadge name={a.severity} size="xs" />
-                <Show when={a.component}>
-                  <Show when={a.onOpen} fallback={<span class="font-data text-xs text-base-content/80">{a.component}</span>}>
-                    <button type="button" class="cursor-pointer font-data text-xs text-base-content/80 hover:underline" onClick={() => a.onOpen!()}>{a.component}</button>
-                  </Show>
-                </Show>
-                <span class="min-w-0 flex-1 text-xs text-base-content/70">{a.message}</span>
-                <Show when={a.rule}>
-                  {(rule) => <span class="shrink-0 text-[11px] text-base-content/45">by rule <span class="font-data">{rule()}</span></span>}
-                </Show>
-                {a.ack}
-                <Show when={a.troubleshoot}>{(t) => <TroubleshootButton alarm={t()} />}</Show>
-                <Show when={a.timeline}>{(tl) => timelines.button(tl().alarmId, a.message)}</Show>
-              </div>
-              <Show when={a.timeline && timelines.isOpen(a.timeline.alarmId)}>
-                <AlarmTimeline
-                  component={a.timeline!.component}
-                  alarmId={a.timeline!.alarmId}
-                  id={timelines.panelId(a.timeline!.alarmId)}
-                  label={timelines.label(a.message)}
-                />
-              </Show>
-            </div>
-          )}
-        </For>
-      </div>
-    </Show>
-  );
-}
-
-function SystemBody(props: { id: string }) {
-  const qc = useQueryClient();
-  const blades = useBlades();
-  const edit = useBladeEdit();
-  const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
-  const health = useQuery(() => ({ queryKey: systemHealthKey(props.id), queryFn: () => systemHealth(props.id) }));
-  const systems = useQuery(() => ({ queryKey: SYSTEMS_KEY, queryFn: listSystems }));
-  const now = Date.now();
-  const cluster = () => view.data?.systems?.find((s) => s.id === props.id);
-  const row = () => (systems.data ?? []).find((s) => s.id === props.id);
-  const scale = useSeverity();
-  const alarms = createMemo(() => (health.data ? alarmRows(health.data, scale().levels) : []));
-  const strip = createMemo(() => (health.data ? slotStrip(health.data) : undefined));
-  const count = () => (cluster()?.dots ?? []).length;
-
-  const { destructive, err } = useDelete({
-    kindLabel: "system",
-    id: props.id,
-    name: () => row()?.name,
-    actions: () => row()?.actions ?? [],
-    remove: (id) => deleteSystem(id),
-    invalidate: () => Promise.all([qc.invalidateQueries({ queryKey: [...SYSTEMS_KEY] }), qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] })]),
-  });
-
-  return (
-    <div class="flex flex-col gap-4 text-sm">
-      <Show when={err()}>
-        <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
-      </Show>
-      <div class="flex flex-wrap items-center gap-2">
-        <HealthBadge health={cluster()?.health ?? undefined} size="sm" />
-        <SinceLine since={health.data ? sinceOf(health.data, now) : undefined} />
-      </div>
-      <Why
-        rows={alarms().map((a) => ({
-          severity: a.severity,
-          message: a.message,
-          component: a.component,
-          onOpen: a.componentId ? () => blades.push({ kind: "component", id: a.componentId! }) : undefined,
-          timeline: a.componentId ? { component: a.componentId, alarmId: a.id } : undefined,
-          troubleshoot: { component: a.component, raised_at: a.raisedAt, message: a.message },
-        }))}
-      />
-      {/* The room's only system is the room: the title already names it. */}
-      <Show when={cluster()?.location}>{(pid) => <LocationCard locationId={pid()} path showName={!(view.data && isRoomOf(view.data, pid(), [props.id]))} />}</Show>
-      {/* Size only: the standard is the form's Classification, said there. */}
-      <div data-testid="blade-brief" class="flex flex-wrap items-center gap-x-2 text-base-content/70">
-        <span class="tabular-nums">{count()} {count() === 1 ? "component" : "components"}</span>
-        <Show when={strip() && strip()!.empty > 0}>
-          <span class="text-base-content/30">·</span>
-          <span class="tabular-nums text-incomplete">{strip()!.filled} of {strip()!.total} slots filled</span>
-        </Show>
-      </div>
-      <EntityForm kind="system" id={props.id} slot={edit} host="blade" destructive={destructive} />
-    </div>
-  );
-}
-
 function LocationBody(props: { id: string }) {
   const qc = useQueryClient();
   const blades = useBlades();
@@ -268,8 +158,10 @@ export const systemBlade: BladeDef = {
     const s = () => view.data?.systems?.find((x) => x.id === p.id);
     return <>{s() ? entityLabel(s()!) : "System"}</>;
   },
-  Body: SystemBody,
+  // The system page's own body (#2423): a blade shows what the page shows.
+  Body: (p) => <SystemDetail id={p.id} host="blade" />,
   headerExtra: (p) => <ExpandButton to={`/systems/${p.id}`} />,
+  width: "wide",
 };
 
 export const componentBlade: BladeDef = {
