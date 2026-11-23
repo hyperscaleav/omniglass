@@ -131,6 +131,14 @@ func TestSSOGroupMappingMayNotReachAnOwner(t *testing.T) {
 	s.c.do(s.owner, http.MethodPost, "/user-groups", map[string]any{"name": "owners"}, http.StatusCreated)
 	s.c.do(s.owner, http.MethodPost, "/user-groups/owners/grants", map[string]any{"role": "owner", "scope_kind": "all"}, http.StatusCreated)
 	s.c.do(s.owner, http.MethodPost, "/user-groups/owners/idp-mappings", map[string]any{"claim_value": "it-admins"}, http.StatusConflict)
+	// The guard does not wait on configuration: with single sign-on off it
+	// still refuses, while a plain group without an issuer to default to is a 422.
+	s.c.do(s.owner, http.MethodPatch, "/settings/sso", map[string]any{"issuer": ""}, http.StatusOK)
+	s.c.do(s.owner, http.MethodPost, "/user-groups/owners/idp-mappings", map[string]any{"claim_value": "it-admins"}, http.StatusConflict)
+	s.c.do(s.owner, http.MethodPost, "/user-groups", map[string]any{"name": "plain"}, http.StatusCreated)
+	s.c.do(s.owner, http.MethodPost, "/user-groups/plain/idp-mappings", map[string]any{"claim_value": "x"}, http.StatusUnprocessableEntity)
+	s.c.do(s.owner, http.MethodPost, "/user-groups/plain/idp-mappings", map[string]any{"claim_value": "x", "issuer": "https://other.example"}, http.StatusCreated)
+	s.c.do(s.owner, http.MethodPatch, "/settings/sso", map[string]any{"issuer": s.idp.Issuer()}, http.StatusOK)
 
 	// And an owner grant on a group that has a mapping is refused, while a
 	// lesser grant is not.

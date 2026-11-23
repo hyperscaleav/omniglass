@@ -128,15 +128,6 @@ func (p *PG) CreateGroupIdPMapping(ctx context.Context, actorID, groupRef, issue
 	if !action.All {
 		return nil, ErrUserForbidden
 	}
-	if issuer == "" {
-		s, err := p.platformSettings(ctx, p.pool)
-		if err != nil {
-			return nil, err
-		}
-		if issuer = s.SSO.Issuer; issuer == "" {
-			return nil, ErrGroupMappingNoIssuer
-		}
-	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin create group mapping: %w", err)
@@ -152,6 +143,16 @@ func (p *PG) CreateGroupIdPMapping(ctx context.Context, actorID, groupRef, issue
 	}
 	if owner {
 		return nil, ErrGroupMappingOwner
+	}
+	// The owner guard answers first: it does not depend on configuration.
+	if issuer == "" {
+		st, err := p.platformSettings(ctx, tx)
+		if err != nil {
+			return nil, err
+		}
+		if issuer = st.SSO.Issuer; issuer == "" {
+			return nil, ErrGroupMappingNoIssuer
+		}
 	}
 	m := GroupIdPMapping{GroupID: groupID, Issuer: issuer, ClaimValue: claimValue}
 	err = tx.QueryRow(ctx, `insert into user_group_idp_mapping (group_id, issuer, claim_value) values ($1, $2, $3)
