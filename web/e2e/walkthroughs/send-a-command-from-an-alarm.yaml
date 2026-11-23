@@ -1,0 +1,52 @@
+# Send a command from the alarm it would resolve (#2466): Boardroom A's display
+# is switched off through its simulated web admin and a rule of its own opens an
+# alarm, both off camera. The alarm's row offers Send command, the same form as
+# the component's Activity tab with the component filled in. Its value is a
+# select of the values set-power accepts, never free text. Sending "on" settles
+# from the display's reply, the display reports it on its next read, and the
+# rule clears the alarm.
+#
+# The rule is this walkthrough's own, aimed at the one display, so no other scene
+# gains an alarm; the fire is the Simulation page's own API call
+# (components/{name}/simulation:fire), answered by the simulator beside the
+# display's outpost. The alarm opens on the rule's next judgment after the
+# display's next power read, so `ready` waits for it off camera.
+title: Send a command from an alarm
+description: A display is off and its rule has opened an alarm. Send it the power-on command from the alarm's own row, pick the value from the list the command accepts, and watch the alarm clear.
+setup:
+  - post: /event-rules
+    body:
+      name: walkthrough-display-off
+      label: Display is off
+      selector: { components: ['hq.west.level-2.boardroom-a.$comp.display-1'] }
+      sample_key: power-state
+      fire_criteria: { expr: 'value == "off"' }
+      fire_sustain: 0s
+      severity: high
+      fire_event_type: rule-fired
+      clear_event_type: rule-cleared
+  - post: '/components/hq.west.level-2.boardroom-a.$comp.display-1/simulation:fire'
+    body: { surface: web-admin, method: POST, path: /api/display/power, body: '{"power":"off"}' }
+ready:
+  goto: '/components/hq.west.level-2.boardroom-a.$comp.display-1'
+  wait: { text: Display is off, timeout: 120000 }
+steps:
+  - goto: '/components/hq.west.level-2.boardroom-a.$comp.display-1'
+    caption: Boardroom A's display is off, and its rule has opened an alarm. Overview lists it with the controls that act on it.
+  - wait: { text: Display is off }
+    caption: The alarm names the rule that raised it.
+  - click: { role: button, name: Send command }
+    caption: Send command is on the alarm's own row, offered because a driver on this display's endpoints binds a command.
+  - wait: { role: dialog }
+    caption: The same form as the Activity tab, with this display already filled in.
+  - select: { target: 'form select >> nth=1', value: 'on' }
+    caption: The value is a list of what set-power accepts, so nothing has to be known or typed.
+  - click: { role: button, name: Issue, exact: true }
+    caption: Issue it. The outpost carries it to the display.
+  - wait: { selector: '[data-testid=command-toast]:has-text("settled")', timeout: 20000 }
+    caption: The display's reply named the state it entered, so the command settled.
+    hold: 1200
+  - wait: { selector: '[data-testid=leaf-header]:has-text("Healthy")', timeout: 30000 }
+    caption: The display reported it is on, the rule cleared, and the alarm is gone.
+    poster: true
+    hold: 2000

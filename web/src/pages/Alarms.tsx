@@ -35,7 +35,7 @@ import type { Chip } from "../lib/predicate";
 
 const ACTIONS_SURFACE = "alarm-queue";
 // The row and its drawer offer the same actions: a drawer never offers less than the page.
-const ROW_ACTIONS = { ack: true, snooze: true, troubleshoot: true };
+const ROW_ACTIONS = { ack: true, snooze: true, troubleshoot: true, command: true };
 
 export default function Alarms() {
   const me = useMe();

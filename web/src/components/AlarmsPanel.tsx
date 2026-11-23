@@ -188,7 +188,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
                     componentId={props.component}
                     alarm={a}
                     surface={surface}
-                    show={{ ack: true, snooze: true, troubleshoot: true, timeline: timelines, clear: { allowed: !!props.canUpdate, busy: busy(), onClear: () => void clear(a.id) } }}
+                    show={{ ack: true, snooze: true, troubleshoot: true, command: true, timeline: timelines, clear: { allowed: !!props.canUpdate, busy: busy(), onClear: () => void clear(a.id) } }}
                     allow={{ ack: !!props.canAcknowledge, snooze: !!props.canSnooze }}
                   />
                 </div>

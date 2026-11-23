@@ -571,7 +571,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                                 <AlarmActions
                                   componentId={a.componentId ?? a.component}
                                   alarm={{ id: a.id, message: a.message, component: a.component, raised_at: a.raisedAt, acknowledged: a.acknowledged }}
-                                  show={{ ack: !!a.componentId, troubleshoot: true, timeline: a.componentId ? timelines : undefined }}
+                                  show={{ ack: !!a.componentId, troubleshoot: true, command: !!a.componentId, timeline: a.componentId ? timelines : undefined }}
                                 />
                               </span>
                             </div>
