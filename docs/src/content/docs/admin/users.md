@@ -1,6 +1,6 @@
 ---
 title: Manage users
-description: "The user directory: create a person, edit and rename, the disable-archive-purge lifecycle, admin password reset, and profile pictures."
+description: "The user directory: create a person, edit and rename, the disable-archive-purge lifecycle, admin password reset, single sign-on identity links, and profile pictures."
 sidebar:
   order: 1
   badge:
@@ -82,7 +82,25 @@ users. Because a user is not part of any location or system tree, that grant is 
   read-only (you can see where the account is signed in, not end it), and the affordance is hidden
   unless you hold the capability.
 
+- With `user:link-identity` (all-scope, held by admin and owner), a person's blade gains a **Single
+  sign-on** section: the identities at the identity provider the person signs in through, each shown
+  as its subject and issuer with who made the link and when it was last used. Type an identity as
+  `iss|sub` (the provider's issuer URL exactly as its tokens carry it, a bar, and the person's subject
+  there) and **Link**; the subject is in the provider's admin console, and an unlinked sign-in shows
+  the person the whole identifier on the sign-in page, so they can read it to you. An email address is
+  refused: email never links, since a matching address at a provider is not proof of the person.
+  **Unlink** removes one and ends every session and token the person signed in through it. Linking is
+  a way to sign in as the target, so it takes the same **takeover guard** as a password reset: refused
+  on yourself (link your own from **Your profile**, which confirms your password), on an **owner** (an
+  owner links their own; the list renders read-only), and on anyone whose capabilities exceed yours.
+  Every link and unlink is audited with **you** as the actor, and the link records who made it: when a
+  person is later granted owner, directly or through a group, every link someone else made for them is
+  deleted (audited) and they link again themselves. An identity is linked to one person only (a second
+  link of the same identity is refused). Connecting the provider itself is
+  [single sign-on](/deployment/production/#single-sign-on).
+
 From the CLI the same surface is `omniglass user list` / `get` / `create` / `update` /
 `disable` / `enable` / `archive` / `restore` / `purge`, plus `user session list alice` /
-`user session revoke alice <session-id>` / `user session revokeAll alice` (see the
+`user session revoke alice <session-id>` / `user session revokeAll alice`, and
+`user identity-link list alice` / `create alice --identifier '<iss>|<sub>'` / `delete alice <link-id>` (see the
 [CLI reference](/reference/cli/)).
