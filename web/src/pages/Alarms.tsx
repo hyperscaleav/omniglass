@@ -108,6 +108,9 @@ export default function Alarms() {
           rows,
           loading: () => queue.isLoading,
           loadingRows: 8,
+          // The Raised cell reads from the clock (9s, 17s) and is masked in the
+          // docs shot; a fixed layout keeps its width from moving the columns after it.
+          fixedLayout: true,
           fill: true,
           error: () => queue.error,
           filterKeys: () => alarmFilterKeys(chips, () => scale().levels.map((l) => l.name)),
