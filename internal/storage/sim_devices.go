@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/driver"
 	"github.com/hyperscaleav/omniglass/internal/scope"
@@ -20,6 +21,8 @@ type SimDevice struct {
 	Address     string
 	// Impairment is what is broken on the device; nil when it is healthy.
 	Impairment *impair.Impairment
+	// ImpairedSince is when the impairment was last set; nil when healthy.
+	ImpairedSince *time.Time
 }
 
 // OutpostSimDevices lists each component with an endpoint placed on the outpost,
@@ -46,7 +49,7 @@ func (p *PG) OutpostSimDevices(ctx context.Context, name string, read scope.Set)
 	}
 	rows, err := p.pool.Query(ctx, `
 		select c.id, c.name, pr.name, coalesce(i.params->>'target', ''),
-			si.unplugged, si.latency_ms, si.jitter_ms, si.loss_pct::float8, si.rate_kbit
+			si.unplugged, si.latency_ms, si.jitter_ms, si.loss_pct::float8, si.rate_kbit, si.updated_at
 		from endpoint i
 		join component c on c.id = i.component
 		join product pr on pr.id = c.product_id
@@ -64,11 +67,13 @@ func (p *PG) OutpostSimDevices(ctx context.Context, name string, read scope.Set)
 		var unplugged *bool
 		var latency, jitter, rate *int
 		var loss *float64
-		if err := rows.Scan(&d.ComponentID, &d.Name, &d.Product, &target, &unplugged, &latency, &jitter, &loss, &rate); err != nil {
+		var changed *time.Time
+		if err := rows.Scan(&d.ComponentID, &d.Name, &d.Product, &target, &unplugged, &latency, &jitter, &loss, &rate, &changed); err != nil {
 			return nil, fmt.Errorf("storage: scan sim device: %w", err)
 		}
 		if unplugged != nil {
 			d.Impairment = &impair.Impairment{Unplugged: *unplugged, LatencyMs: *latency, JitterMs: *jitter, LossPct: *loss, RateKbit: *rate}
+			d.ImpairedSince = changed
 		}
 		if visible != nil && !visible[d.ComponentID] {
 			continue

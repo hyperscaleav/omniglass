@@ -4,17 +4,17 @@ import * as Icons from "../components/icons";
 // The operator console IA, from the "Omniglass Console" design. Routes are flat
 // and identity-based (a page addresses its entity, never its menu cluster); the
 // sidebar groups them for browsing. `live` marks a route backed by a real page;
-// everything else renders the generic SectionStub until its backend lands.
+// an entry exists only for a page that is built (nothing in the console says "soon").
 export type NavChild = {
   label: string;
   path: string;
   hint: string;
   live?: boolean;
-  issue?: number; // tracking issue for a not-yet-built section, shown on its stub
+  issue?: number; // tracking issue, when an entry carries one
   // The authorization resource this tab needs to read. When set, the sidebar hides
   // the tab from a user without <resource>:read. Set it when the entity goes
   // live (its server route already gates on the same resource); leave unset while
-  // the section is a stub so its "soon" entry stays visible.
+  // the section has no gate.
   resource?: string;
   // The exact permission a sensitive tab requires, as a topic string, for when a
   // bare <resource>:read does not describe the route's gate (the audit route
@@ -74,7 +74,6 @@ export const navItems: NavItem[] = [
   // explorer, which takes a later name. Gated like the location tree it draws;
   // the projection scopes each tier on its own read underneath.
   { label: "Explore", path: "/explore", icon: Icons.Compass, live: true, anyResource: ["location", "system", "component"], hint: "Every location in the fleet, the systems that sit there, and what is in them." },
-  { label: "Dashboards", path: "/dashboards", icon: Icons.LayoutDashboard, public: true, hint: "Official, shared, and your own dashboards." },
   { label: "Alarms", path: "/alarms", icon: Icons.Bell, live: true, anyResource: ["component"], hint: "What is firing now across the fleet: acknowledge, snooze, or hand one to omnibot." },
   // The fleet has ONE door (#798, the reconciliation ruled on the #795 review):
   // the old fleet group dissolved into the entry above, whose outline lists
@@ -92,7 +91,6 @@ export const navItems: NavItem[] = [
     children: [
       { label: "Variables", path: "/variables", live: true, resource: "variable", hint: "Free interpolated values (macros), resolved down the scope cascade." },
       { label: "Secrets", path: "/secrets", live: true, resource: "secret", hint: "Shared device and platform credentials, resolved down the scope cascade." },
-      { label: "Declared", path: "/config", public: true, hint: "The state operators declare for components and systems, optionally observed back from the device to detect drift and reconcile." },
       // Files are operator-uploaded content, not a cascaded value: a flat, tenant-wide
       // store of opaque bytes kept beside the fleet. It sits in Values as the
       // non-cascading member (deliberately off the exclusive arc).
@@ -108,7 +106,6 @@ export const navItems: NavItem[] = [
   // route-guard gate. The per-catalog pages stay declared off-rail (OFF_RAIL
   // below): that carries their top-bar identity and their route-guard gates.
   { label: "Catalog", path: "/catalog", icon: Icons.Layers, live: true, public: true, hint: "Everything the fleet is typed by: every catalog, browsable in one place." },
-  { label: "Learn", path: "/learn", icon: Icons.GraduationCap, public: true, hint: "How collection turns a device into owned samples." },
   {
     label: "Admin", icon: Icons.Settings,
     children: [
@@ -169,8 +166,7 @@ export function filterWhen(items: NavItem[], holds: (c: NavCondition) => boolean
 // /templates set the precedent when it left the rail (#608). Each entry's
 // resource/perm feeds navPerms exactly as a rail entry's would, so collapsing
 // the rail loosened no gate: /secret-types still demands secret:read. A
-// not-yet-built page's tracking issue rides here too, shown on its stub
-// through navByPath exactly as a rail entry's would be.
+// page's tracking issue, when it has one, rides here too.
 export const OFF_RAIL: { path: string; label: string; hint: string; resource?: string; perm?: string; issue?: number; public?: boolean }[] = [
   // The fleet kinds (#798, #861): Explore's outline lists them and each bare
   // URL redirects there, but the detail view routes (/locations/{id} and
@@ -194,7 +190,6 @@ export const OFF_RAIL: { path: string; label: string; hint: string; resource?: s
   { path: "/event-rules", label: "Event rules", resource: "rule", hint: "The event rules: what each one reads, when it opens and clears an alarm, and what it holds open right now." },
   { path: "/calc-rules", label: "Calc rules", resource: "rule", hint: "The calc rules: what each derives a value from, how it folds its inputs, and what it last computed on each owner." },
   { path: "/severity-levels", label: "Severity levels", resource: "severity_level", hint: "The severity levels: how bad an alarm is, ranked, each with its color and whether it takes its component out." },
-  { path: "/log-types", label: "Logs", public: true, hint: "The log shape catalog. The log lane arrives untyped today; typing what a line can be is still to come." },
   { path: "/notifications", label: "Notifications", resource: "notification_type", hint: "The notification types: what a message about an alarm says, as a subject and a text, previewed against a real alarm." },
   { path: "/action-rules", label: "Action rules", resource: "rule", hint: "The action rules: when a message about an alarm is sent, on which transitions, under which predicate, and to which targets." },
   { path: "/notification-targets", label: "Notification targets", resource: "notification_target", hint: "The notification targets: where a message about an alarm goes, a webhook, a mailbox, a user group or a person. Admin-only." },
@@ -204,7 +199,7 @@ export const OFF_RAIL: { path: string; label: string; hint: string; resource?: s
 ];
 
 // Flattened title + hint (+ icon + tracking issue) lookup by base-relative path,
-// for the generic stub. A child inherits its parent group's icon (that is the icon
+// for the top bar and tests. A child inherits its parent group's icon (that is the icon
 // the sidebar shows it under), so the placeholder matches the sidebar. A sectioned
 // child also carries its group and section labels so the top bar can spell out the
 // full address. Off-rail pages keep their identity here too: a bookmark to
@@ -221,16 +216,6 @@ export const navByPath: Record<string, NavMeta> = (() => {
   return m;
 })();
 
-// Stubbed sections: backends not built yet, each rendering SectionStub in the
-// router. The router renders from the route manifest (#760), and
-// route-manifest-guard.test.ts pins the manifest's stub entries to this list,
-// so every unlive rail entry resolves to a registered stub rather than NotFound.
-export const STUBS = [
-  "/dashboards",
-  "/learn",
-  "/config", "/log-types",
-];
-
 // The router base; nav paths are base-relative.
 const BASE = "/web";
 function relative(pathname: string): string {
@@ -239,7 +224,7 @@ function relative(pathname: string): string {
 }
 
 export function lookupNav(pathname: string): NavMeta {
-  return navByPath[relative(pathname)] ?? { label: "Coming soon", hint: "This section is not built yet.", icon: Icons.Layers };
+  return navByPath[relative(pathname)] ?? { label: "Not found", hint: "That page does not exist in the console.", icon: Icons.Layers };
 }
 
 // sectionLabel resolves a pathname to its top-bar section by longest prefix, so
@@ -271,7 +256,7 @@ export function sectionLabel(pathname: string): string {
 // navPerms maps a gated route path to the permission tokens it requires, from the
 // SAME nav config that hides the sidebar button (an explicit `perm`, else
 // `<resource>:read`), plus the off-rail pages, whose gates outlive their rail
-// entries. An ungated path (Home, Profile, the stubs) is absent. This is the
+// entries. An ungated path (Home, Profile) is absent. This is the
 // single source both the sidebar (hide the button) and the route guard (block
 // the URL) read, so the two can never diverge.
 const navPerms: Record<string, string[][]> = (() => {

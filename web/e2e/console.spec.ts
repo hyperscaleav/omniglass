@@ -527,10 +527,12 @@ test.describe("operator console", () => {
   });
 
   // The closed loop (#1647), on the second lab run.sh brings up: the dev fleet
-  // with its outpost and the simulator beside it, nothing impaired. Once the ring
-  // holds a window the section reads measured for every outpost, and a healthy
-  // lab loses nothing at any hop: every gap reads 0 (or no figure, where the
-  // sim does not observe the hop), and every protocol with a poll target
+  // with its outpost and the simulator beside it, its seeded faults impaired
+  // (#2434). Once the ring holds a window the section reads measured for every
+  // outpost, and the lab loses nothing it did not break on purpose: every gap
+  // reads 0 (or no figure, where the sim does not observe the hop) unless the
+  // console reads it as expected under an applied impairment, and no gap reads
+  // as a fault. Every protocol with a poll target
   // reached the simulator: requests it received, or, for a probe that only
   // connects or logs in and asks nothing (ssh, telnet), connections its
   // listener accepted.
@@ -564,10 +566,13 @@ test.describe("operator console", () => {
     for (const card of await cards.all()) {
       const outpost = await card.getAttribute("data-testid");
       const gaps = await card.getByTestId("platform-sim-gap").evaluateAll((els) =>
-        els.map((e) => ({ gap: e.getAttribute("data-gap"), protocol: e.getAttribute("data-protocol"), ratio: e.getAttribute("data-ratio") })),
+        els.map((e) => ({ gap: e.getAttribute("data-gap"), protocol: e.getAttribute("data-protocol"), ratio: e.getAttribute("data-ratio"), tone: e.getAttribute("data-tone") })),
       );
       expect(gaps.length, `${outpost} reads its gaps`).toBeGreaterThan(0);
-      for (const g of gaps) expect(["0", ""], `${outpost} ${g.gap} ${g.protocol} ratio`).toContain(g.ratio);
+      for (const g of gaps) {
+        expect(g.tone, `${outpost} ${g.gap} ${g.protocol} reads as a fault`).not.toBe("fault");
+        if (g.tone !== "expected") expect(["0", ""], `${outpost} ${g.gap} ${g.protocol} ratio`).toContain(g.ratio);
+      }
 
       const polled = await card.getByTestId("platform-sim-protocol").evaluateAll((els) =>
         els.map((e) => ({

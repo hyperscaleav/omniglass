@@ -188,4 +188,16 @@ type SimHitBatch struct {
 	Serving     []string             `json:"serving"`
 	Hits        []SimHit             `json:"hits"`
 	Impairments *SimImpairmentStatus `json:"impairments,omitempty"`
+	// Faults is each device's settable state paths held off their defaults
+	// (a display powered off), by component id: the whole account every
+	// batch, so a device missing from it holds none (#2462).
+	Faults map[string][]SimFault `json:"faults,omitempty"`
+}
+
+// SimFault is one state path a simulated device holds off its profile's
+// default, values as text.
+type SimFault struct {
+	Path    string `json:"path"`
+	Value   string `json:"value"`
+	Default string `json:"default"`
 }

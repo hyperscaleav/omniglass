@@ -47,6 +47,10 @@ const NOT_APPLIED_HINT = "The impairment is set, but the simulator did not apply
 export default function SimStatusBadge(props: {
   sim: Pick<SimComponent, "status" | "impairment" | "impaired">;
   size?: "xs" | "sm" | "md";
+  // Whether the impairment chip rides beside the state. The Simulation row
+  // turns it off: its fault chip (with age and a clear) says the same (#2462),
+  // and the "not applied" note stays.
+  chip?: boolean;
 }) {
   const status = () => simStatus(props.sim);
   const look = () => LOOK[status().state];
@@ -59,7 +63,7 @@ export default function SimStatusBadge(props: {
           <Dynamic component={look().icon} size={glyph()} />
           {status().state}
         </span>
-        <Show when={status().impairment}>
+        <Show when={props.chip !== false ? status().impairment : undefined}>
           {(i) => (
             <span
               class={`badge badge-soft badge-warning ${size()} min-w-0 gap-1 whitespace-nowrap`}

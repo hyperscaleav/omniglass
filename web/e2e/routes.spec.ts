@@ -46,7 +46,27 @@ test.describe("console routes", () => {
       // The page rendered SOMETHING (the shell, a list, a stub, a miss face);
       // a blank root means the route resolved no component.
       await expect(page.locator("#root > *").first()).toBeVisible();
+      // Nothing in the console says "soon" (#2445): no stub, no badge, no chip.
+      expect(await page.locator("#root").innerText()).not.toMatch(/\bsoon\b/i);
       expect(errors).toEqual([]);
     });
   }
+
+  // The outpost drawer's task rows carried a "driver fn soon" chip (#2445): open
+  // the first outpost's drawer and read it as the person would.
+  test("an outpost drawer says nothing is soon", async ({ page }) => {
+    await page.goto("/web/login");
+    await page.locator("#login-username").fill(USER as string);
+    await page.locator("#login-password").fill(PASSWORD as string);
+    await page.getByRole("button", { name: /sign in/i }).click();
+    await page.waitForURL((url) => !url.pathname.endsWith("/login"));
+    const body = (await (await page.request.get("/api/v1/outposts")).json()) as { outposts?: { name: string }[] };
+    const first = body.outposts?.[0]?.name;
+    test.skip(!first, "the stack has no outposts to open");
+    await gotoSettled(page, `/web/outposts?n=${encodeURIComponent(first as string)}`);
+    const drawer = page.getByRole("dialog");
+    await expect(drawer).toBeVisible();
+    await expect(drawer.getByText("Tasks", { exact: true })).toBeVisible();
+    expect(await drawer.innerText()).not.toMatch(/\bsoon\b/i);
+  });
 });

@@ -17,6 +17,7 @@ import { SnoozedBadge } from "./SnoozeButton";
 import AlarmTimeline, { createTimelineToggles } from "./AlarmTimeline";
 import SeverityBadge from "./SeverityBadge";
 import SimulationSection from "./SimulationSection";
+import { SimFaultChipFor } from "./SimFaultChip";
 import ReachLadder from "./ReachLadder";
 import SessionPill from "./SessionPill";
 import SessionNotice from "./SessionNotice";
@@ -265,6 +266,7 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
               <Show when={since()}>
                 {(sc) => <span data-testid="since-line" class="tabular-nums text-base-content/70">since {fmtTime(sc().ts)} · {durationText(sc().ms)}</span>}
               </Show>
+              <SimFaultChipFor componentId={component()?.id ?? id()} name={component()?.name} />
               <span class="text-base-content/30">·</span>
               <span class="font-data text-xs text-base-content/60">{component()?.name}</span>
             </div>

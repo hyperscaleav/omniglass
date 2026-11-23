@@ -337,15 +337,16 @@ var nameOverride = map[string]([]string){
 	"set-component-impairment": {"component", "impairment", "set"},
 	// The simulated fleet: one group for the fleet, its catalog and adding a
 	// device; a component's own simulation beside its impairment.
-	"get-simulation":                   {"simulation", "get"},
-	"list-simulation-profiles":         {"simulation", "profiles"},
-	"add-outpost-simulation-component": {"simulation", "add-component"},
-	"plan-simulation-system":           {"simulation", "plan-system"},
-	"add-outpost-simulation-system":    {"simulation", "add-system"},
-	"get-component-simulation":         {"component", "simulation", "get"},
-	"fire-component-simulation":        {"component", "simulation", "fire"},
-	"login":                            {"auth", "login"},
-	"logout":                           {"auth", "logout"},
+	"get-simulation":                    {"simulation", "get"},
+	"list-simulation-profiles":          {"simulation", "profiles"},
+	"add-outpost-simulation-component":  {"simulation", "add-component"},
+	"plan-outpost-simulation-component": {"simulation", "plan-component"},
+	"plan-simulation-system":            {"simulation", "plan-system"},
+	"add-outpost-simulation-system":     {"simulation", "add-system"},
+	"get-component-simulation":          {"component", "simulation", "get"},
+	"fire-component-simulation":         {"component", "simulation", "fire"},
+	"login":                             {"auth", "login"},
+	"logout":                            {"auth", "logout"},
 }
 
 func buildCommands(doc spec, base string) []command {

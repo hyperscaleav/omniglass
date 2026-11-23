@@ -36,15 +36,8 @@ import { type BladeLock } from "./blades";
 
 export type CatalogEntry = {
   label: string;
-  // The canonical route this entry opens. A soon entry with a path links to
-  // its routed stub page; a soon entry without one only reserves the slot.
+  // The canonical route this entry opens.
   path?: string;
-  // Pending: the catalog does not exist yet. Wears the rail's SOON treatment.
-  soon?: boolean;
-  // The pending catalog's tracking issue, nav.ts's `issue` pattern: a routed
-  // slot mirrors its nav.ts off-rail entry, whose stub page (SectionStub via
-  // navByPath) shows the same number; a pathless slot carries it here only.
-  issue?: number;
   // The permission tokens reading this catalog requires (the route guard's
   // vocabulary); absent means ungated. A caller failing the gate loses the
   // entry, and with it the entry's count query (never created).
@@ -106,8 +99,7 @@ export type CatalogGroup = {
   entries: CatalogEntry[];
 };
 
-// Each soon slot names its tracking issue (the no-bare-TODO rule). None is
-// left: Rules went live with the event rules (#921), notifications with #618,
+// Every slot is a built page: Rules went live with the event rules (#921), notifications with #618,
 // and the three Templates slots with the template catalog (#1329, closing #615,
 // #616 and #617): each opens /templates filtered, and the Systems slot reaches
 // standard templates too, since a standard is the system-side contract a
@@ -261,7 +253,7 @@ export const OVERVIEW_PATH = "/catalog";
 
 // visibleGroups filters the table to what a caller may see, the same shape as
 // nav.ts's filterNav: a gated entry is kept only when `allow` passes its
-// tokens (an ungated or soon entry is always kept), and a group left with no
+// tokens (an ungated entry is always kept), and a group left with no
 // entries drops entirely, header or card included. Both catalog surfaces judge
 // visibility through this one function over the same can() the rail uses.
 export function visibleGroups(allow: (tokens: string[]) => boolean): CatalogGroup[] {
@@ -272,13 +264,6 @@ export function visibleGroups(allow: (tokens: string[]) => boolean): CatalogGrou
   }
   return out;
 }
-
-// The routed soon slots' paths (none today; /notifications was the last, #618): the router mounts
-// SectionStub for each INSIDE the shell, so the stub renders in the pane. The
-// route manifest carries them with shell "catalog", pinned by the guard test.
-export const CATALOG_STUB_PATHS: string[] = CATALOG_GROUPS.flatMap((g) =>
-  g.entries.filter((e) => e.soon && e.path).map((e) => e.path!),
-);
 
 // InheritedFacts is what the type catalogs' LISTING serves beside the raw
 // fields (#716's console half, extending #695's `resolved_icon`): for each fact
