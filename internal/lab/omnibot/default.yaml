@@ -1,7 +1,10 @@
 # The lab's omnibot (#2121): a recorded model the lab's server plays in place
 # of a live one, by position in each run, so every run goes the same way. A run
 # whose message holds a conversation's match plays that conversation; any other
-# reads the meeting 405 video bar, asks to tag it, and reports.
+# reads the meeting 405 video bar, asks to tag it, and reports. The recording
+# answers only the prompts it names (#2443): the console offers them, and the
+# server refuses any other question rather than play an unrelated run.
+prompt: Tag the meeting 405 video bar with its asset id
 turns:
   - tool_calls:
       - name: get-component
@@ -14,7 +17,7 @@ conversations:
   # The triage-alarm skill's run (#2163): read the component, its alarms and
   # its reachability, then assess, changing nothing.
   - match: "# Triage an alarm"
-    turns:
+    turns: &triage
       - tool_calls:
           - name: get-component
             arguments: {name: hq.west.level-4.meeting-405.$comp.videobar-1}
@@ -27,3 +30,6 @@ conversations:
           The meeting 405 video bar's alarm is still active and the bar answers its
           polls, so the fault is on the device, not the path to it. Next step: a fresh
           poll to confirm a fix takes. I will ask before running it.
+  # The same read, asked in the person's own words.
+  - prompt: What is wrong with the meeting 405 video bar?
+    turns: *triage

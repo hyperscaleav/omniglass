@@ -168,7 +168,7 @@ interfaces:
         mutations:
           - { path: status.call.id, value: "{{ .Request.Body.id }}", pattern: "^[A-Za-z0-9-]{1,32}$" }
           - { path: status.call.active, value: true }
-          - { path: status.call.participants, value: "{{ or .Request.Body.participants 2 }}" }
+          - { path: status.call.participants, value: "{{ or .Request.Body.participants 2 }}", pattern: "^([1-9]|[1-5][0-9]|6[0-4])$" }
         events:
           - name: call-started
             data: '{"id":"{{ .Request.Body.id }}","participants":{{ or .Request.Body.participants 2 }}}'

@@ -5,6 +5,7 @@ import Button from "./Button";
 import { X } from "./icons";
 import { FROM_PARAM, TEMPLATES_KEY, listTemplates } from "../lib/templates";
 import { entityLabel } from "../lib/entities";
+import { parseRange } from "../lib/time_range";
 
 // TemplateNotice (#1329): the one line a created row's page says after a create
 // from a template lands the operator on it. The page was reached with
@@ -15,6 +16,9 @@ import { entityLabel } from "../lib/entities";
 export default function TemplateNotice(): JSX.Element {
   const [params, setParams] = useSearchParams();
   const from = () => {
+    // An absolute time range (#2304) spells its start ?from= too: that is a
+    // window, not a template.
+    if (parseRange(params as Record<string, string | string[] | undefined>).kind === "absolute") return "";
     const v = params[FROM_PARAM];
     return (Array.isArray(v) ? v[0] : v) || "";
   };
