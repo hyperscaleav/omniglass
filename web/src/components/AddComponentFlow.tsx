@@ -220,7 +220,9 @@ export default function AddComponentFlow(): JSX.Element {
     setErr(null);
     try {
       const sim = usingSim();
-      const made = await commitFlow({ ...d }, IO);
+      // A system the caller may not bind (one named in the address it arrived
+      // by) is not sent: the Where step said so, and the server would refuse it.
+      const made = await commitFlow({ ...d, system: mayBind() ? d.system : "", slot: mayBind() ? d.slot : "" }, IO);
       await qc.invalidateQueries({ queryKey: [...ENDPOINTS_KEY] });
       setSimWait(sim);
       setCreated(made);
