@@ -73,6 +73,15 @@ describe("MoveEntity", () => {
     await waitFor(() => expect(moveSystem).toHaveBeenCalledWith("s1", { parent: "" }));
   });
 
+  it("offers No location when placed, and sends the clear as an empty string", async () => {
+    moveComponent.mockResolvedValue({});
+    mount({ currentPlace: "room-a" });
+    openPanel();
+    await pickInPicker(destination(), "No location");
+    fireEvent.click(screen.getByRole("button", { name: "Move" }));
+    await waitFor(() => expect(moveComponent).toHaveBeenCalledWith("c1", { location: "" }));
+  });
+
   it("moves a component to another system by leaving the old one, freeing the slot it held", async () => {
     applySteps.mockResolvedValue(undefined);
     systemSlots.mockImplementation(async (s: string) => (s === "sys-a" ? [{ name: "dsp", label: "DSP", assigned: 1, assigned_to: ["dsp-1"], quorum: 1 }] : []));

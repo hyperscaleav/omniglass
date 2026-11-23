@@ -362,6 +362,21 @@ describe("a component's memberships, editable from its own face (#767)", () => {
     } finally { stub.mockRestore(); }
   });
 
+  it("removing a chip staged as primary removes it and promotes nothing", async () => {
+    const { writes, stub } = stubWrites();
+    try {
+      const { slot } = mountComponent();
+      const form = await screen.findByTestId("entity-form");
+      slot().begin();
+      fireEvent.change(await within(form).findByRole("combobox", { name: "Primary system" }), { target: { value: gamma } });
+      fireEvent.click(await within(form).findByRole("button", { name: /remove gamma/i }));
+      await slot().save();
+      const w = writes();
+      expect(w).toContainEqual({ method: "DELETE", path: `/systems/${gamma}/members/${comp}` });
+      expect(w.some((x) => x.path.endsWith(":setPrimary") && x.path.includes(gamma))).toBe(false);
+    } finally { stub.mockRestore(); }
+  });
+
   it("removing the only membership issues DELETE on it", async () => {
     const { writes, stub } = stubWrites();
     try {

@@ -314,6 +314,7 @@ you pressed **+** on (`← West Building`) and goes there; opened from nowhere i
     you choose (a full slot is shown and cannot be chosen), makes it the component's primary, and
     leaves the system it was in, freeing the slot it held there first. Other systems it serves are
     kept. To keep the old system as well, use **Also serves...** instead.
+  - **No location** (offered once it is placed) unplaces it.
   - **Under a component** or **Under a system**: re-parents it in its own tree. **No parent (top
     level)** lifts it to a root and needs the all-scoped grant the API requires. A cycle (under itself
     or one of its own children) is refused.
@@ -322,7 +323,7 @@ you pressed **+** on (`← West Building`) and goes there; opened from nowhere i
   can rename an entity the platform named, since its name is unique within its placement; the page
   stays on the entity, which is addressed by its uuid, and the breadcrumb and Explore show the new
   location. The same moves are available from the API or CLI (`omniglass component move`,
-  `omniglass system move`), where a clear-to-root, an unplace and the rest are the same three-state
+  `omniglass system move`), which follow the same three-state
   convention: an empty location unplaces, clearing parent to lift an entity to a root needs an
   all-scoped grant, the same authorization creating a root entity already requires, since a
   scope-limited operator clearing parent would otherwise walk an entity out of every subtree their

@@ -70,7 +70,10 @@ export default function MoveEntity(props: {
   const fromSystem = () => props.members?.find((m) => m.primary)?.system_id ?? "";
   const options = createMemo<PickerOption[]>(() => {
     const m = mode();
-    if (m === "place") return props.places.map((o) => (o.value === props.currentPlace ? { ...o, disabled: true, detail: o.detail ? `${o.detail} (current)` : "current" } : o));
+    if (m === "place") {
+      const list = props.places.map((o) => (o.value === props.currentPlace ? { ...o, disabled: true, detail: o.detail ? `${o.detail} (current)` : "current" } : o));
+      return props.currentPlace ? [{ value: ROOT, label: "No location", detail: "unplaces it" }, ...list] : list;
+    }
     if (m === "system") return (props.systems ?? []).map((o) => (o.value === fromSystem() ? { ...o, disabled: true, detail: o.detail ? `${o.detail} (current)` : "current" } : o));
     const list = props.parents.map((o) => (o.value === props.currentParent ? { ...o, disabled: true, detail: o.detail ? `${o.detail} (current)` : "current" } : o));
     return props.currentParent ? [{ value: ROOT, label: "No parent (top level)", detail: "needs a grant over every location" }, ...list] : list;
@@ -109,7 +112,7 @@ export default function MoveEntity(props: {
     setBusy(true);
     setErr(null);
     try {
-      const where = to === ROOT ? "the top level" : labelOf(to);
+      const where = to === ROOT ? (mode() === "place" ? "no location" : "the top level") : labelOf(to);
       if (mode() === "system") {
         // The slots the component holds where it is leaving, read fresh: a held
         // slot refuses the leave, and a stale list would fail it halfway.
@@ -117,7 +120,7 @@ export default function MoveEntity(props: {
         const held = from ? ((await systemSlots(from)).filter((s) => (s.assigned_to ?? []).length > 0 && heldBy(s, props.members ?? [])).map((s) => s.name)) : [];
         await applyMembershipSteps(props.id, planSystemMove({ members: props.members ?? [], to, toSlot: slot() ?? undefined, fromSlots: held }));
       } else {
-        const body = mode() === "place" ? { location: to } : { parent: to === ROOT ? "" : to };
+        const body = mode() === "place" ? { location: to === ROOT ? "" : to } : { parent: to === ROOT ? "" : to };
         if (props.kind === "component") await moveComponent(props.id, body);
         else await moveSystem(props.id, body);
       }

@@ -539,7 +539,11 @@ export default function EntityForm(props: {
                 setRemovedMembers((prev) => { const next = new Set(prev); next.delete(id); return next; });
               }}
               removed={removedMembers}
-              onRemove={(id) => setRemovedMembers((prev) => new Set(prev).add(id))}
+              onRemove={(id) => {
+                setRemovedMembers((prev) => new Set(prev).add(id));
+                // A removed chip cannot stay the staged primary.
+                if (primaryDraft() === id) setPrimaryDraft(undefined);
+              }}
               added={addedMembers}
               onAdd={(id) => {
                 setAddedMembers((prev) => new Set(prev).add(id));
