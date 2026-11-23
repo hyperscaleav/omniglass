@@ -2727,7 +2727,7 @@ export interface paths {
   "/systems/{name}/alarms": {
     get: {
       path: { "name": string };
-      query: never;
+      query: NonNullable<Parameters<typeof og.listSystemAlarms>[1]>;
       body: never;
       bodyRequired: false;
       data: og.listSystemAlarmsResponseSuccess["data"];

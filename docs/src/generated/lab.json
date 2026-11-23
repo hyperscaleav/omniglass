@@ -286,9 +286,23 @@
       ]
     },
     {
+      "id": "read-every-metric-at-one-instant",
+      "title": "Read every metric at one instant",
+      "description": "Open a boardroom's system over the last hour, rest the pointer on one metric's chart, and read the crosshair and value every other chart draws at the same instant.",
+      "lab": [],
+      "setup": []
+    },
+    {
       "id": "read-platform-health",
       "title": "Read the platform's health",
       "description": "From Home, open Platform health, read each section's one-line verdict, open a hop under where work is lost, open the outposts and the simulator's gaps, then open the server's panels on the Requests panel and follow the slowest route's figure onto its series on the server's platform component.",
+      "lab": [],
+      "setup": []
+    },
+    {
+      "id": "read-what-happened-on-the-timeline",
+      "title": "Read what happened on the timeline",
+      "description": "A display drops off the network and recovers; open its system's Timeline, rest the pointer on the alarm's span to read when it was raised, when it cleared and for how long, then on the command sent while it was down.",
       "lab": [],
       "setup": []
     },

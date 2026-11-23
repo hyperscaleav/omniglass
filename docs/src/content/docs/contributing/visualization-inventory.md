@@ -53,8 +53,8 @@ the average line; spark mode is 160 by 36 with no chrome. It is imported by exac
 |---|---|---|---|---|---|---|
 | V01 | `TimeseriesChart spark` in the server panel `Row` (`pages/PlatformHealth.tsx`) | `/platform` | metric | `metricBuckets("components", server, key, 1 h, 60 s)` via `panelSeriesRequest` (`lib/platformhealth.ts`, `lib/series.ts`) | poll 30 s, only while the server's disclosure is open and the key is reported | sparkline row |
 | V02 | `TimeseriesChart` full, the expanded panel row (`pages/PlatformHealth.tsx`) | `/platform` | metric | the same series query as V01 | poll 30 s, shares V01's query | metric chart |
-| V03 | `TimeseriesChart spark` in the data table (`components/SystemDetail.tsx`, `data-testid="data-tab"`) | `/systems/<id>`, its blade | metric | per KPI metric over the page range (`useTimeRange`, `rangeStepSeconds`): `metricBuckets("systems", id, metric, hours, step, instance)` for a preset, `metricBucketsBetween` (`/views:run`) for an absolute range (`lib/series.ts`) | poll 30 s, no poll for an absolute range already past; the metric list polls 5 s | sparkline row |
-| V04 | `TimeseriesChart` full, the expanded data row (`components/SystemDetail.tsx`) | `/systems/<id>`, its blade | metric | the same series query as V03 | as V03, shares its query | metric chart |
+| V03 | `MetricsGrid` card per metric, a fluid `TimeseriesChart` on the shared cursor (`components/MetricsGrid.tsx`, `lib/cursor.tsx`), on the system view | `/systems/<id>`, its blade | metric | `metricBuckets("systems", id, metric, hours, step, instance)` per effective metric over the page range (`lib/metrics_grid.ts`, `lib/time_range.ts`) | poll 30 s; the metric list polls 5 s | metric chart |
+| V04 | the same `MetricsGrid` on the component view (`components/ComponentDetail.tsx`) | `/components/<id>`, its blade | metric | `metricBuckets("components", ...)` per effective metric, as V03 | poll 30 s; the metric list polls 5 s | metric chart |
 
 ## Metric cards and figures
 
@@ -105,6 +105,7 @@ component set; the surfaces below are where they are mounted.
 | V31 | `HealthHistory compact` with `alarm-marker-*` triangles and the expandable `stretch-list` (`components/HealthHistory.tsx`, in `components/SystemDetail.tsx`) | `/systems/<id>`, its blade (Activity tab) | event (recorded health edges) | `systemHealth` transitions | poll 5 s; the clock ticks every 60 s | timeline |
 | V32 | `AvailabilityStrip`, up / down segments with an uptime figure (`components/ReachabilityPanel.tsx`) | `/components/<id>` (Configure tab), blades on the four fleet routes | event (reachability edges) | `getReachability` history | mount+focus | timeline |
 | V33 | `AlarmTimeline`, one alarm's lifecycle with kind chips and `NotificationStatusPill` (`components/AlarmTimeline.tsx`) | `/systems/<id>`, `/components/<id>`, `/event-rules`, blades and the Alarms panel on the four fleet routes | event | `alarmTimeline` (`lib/alarms.ts`) | poll 5 s, focus refetch off, only while expanded | timeline |
+| V33a | `TimelineOverlay`: health spans (a row per member on a system), one span per alarm with its duration, picked property bands and metric lines, clustered event, log and command markers, on the shared cursor (`components/TimelineOverlay.tsx`, `lib/timeline_lanes.ts`, `lib/timeline_reads.ts`) | `/systems/<id>` and `/components/<id>`, their blades (Timeline tab) | event, property, metric | health `since`/`until` with `carried_in`, alarm lists `since`/`until`, `/views:run` events, logs and properties with `from`/`to`, commands `since`/`until`, `metricBucketsBetween` | a preset re-reads every 60 s; an absolute range reads once | timeline |
 
 ## Alarm, event and log lists
 
@@ -224,9 +225,9 @@ epic's vocabulary does not yet name; the count says how much of the console it w
 | metric card | 9 | V05, V06, V07, V08, V09, V10, V11, V12, V13 |
 | event list | 4 | V39, V40, V44, V45 |
 | log list | 3 | V41, V42, V43 |
-| timeline | 3 | V31, V32, V33 |
-| sparkline row | 2 | V01, V03 |
-| metric chart | 2 | V02, V04 |
+| timeline | 4 | V31, V32, V33, V33a |
+| sparkline row | 1 | V01 |
+| metric chart | 3 | V02, V03, V04 |
 | property distribution | 0 | none (`propertyBuckets` exists and is unused) |
 | property timeline | 0 | none (`propertySeries` exists and is unused) |
 | new: health badge | 5 | V14, V15, V16, V17, V20 |

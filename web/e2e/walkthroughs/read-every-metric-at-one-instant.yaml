@@ -1,0 +1,21 @@
+# Read every metric at one instant (#2424): a system's view charts each of its
+# metrics in one grid over the page's time range, and every chart shares one
+# cursor, so resting the pointer on one chart reads all of them at that
+# moment. Boardroom A holds one system, so its address lands on it; `ready`
+# waits off camera until two of its metrics have samples to chart.
+title: Read every metric at one instant
+description: Open a boardroom's system over the last hour, rest the pointer on one metric's chart, and read the crosshair and value every other chart draws at the same instant.
+ready:
+  goto: /locations/boardroom-a?range=1h
+  wait: { selector: '[data-testid=metrics-grid] [data-testid=timeseries-chart] >> nth=1', timeout: 120000 }
+steps:
+  - goto: /locations/boardroom-a?range=1h
+    caption: Boardroom A's system, over the last hour.
+  - wait: { selector: '[data-testid=metrics-grid] [data-testid=timeseries-chart] >> nth=1' }
+    caption: Its metrics grid charts every metric the room declares, a card each with its latest value.
+  - hover: '[data-testid=metrics-grid] [data-testid=chart-end-dot] >> nth=0'
+    caption: Rest the pointer on one chart, at its newest reading.
+  - wait: { selector: '[data-testid=metrics-grid] [data-testid=cursor-value] >> nth=1' }
+    caption: Every chart draws its crosshair at the same instant and reads its own value there.
+    hold: 2000
+    poster: true
