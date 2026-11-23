@@ -55,6 +55,7 @@ export default function Roles() {
         columns,
         empty: "No roles yet.",
         rowId: (r) => r.id,
+        rowAlt: (r) => r.name,
         blades: { registry: identityRegistry, rootKind: "role" },
       }}
     />

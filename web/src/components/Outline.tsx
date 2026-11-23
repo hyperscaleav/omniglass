@@ -3,6 +3,7 @@ import { Dynamic } from "solid-js/web";
 import Popover from "./ui/Popover";
 import { ChevronRight, CircleCheck, CircleDashed, LayoutDashboard, OctagonX, Plus, TriangleAlert, resolveIcon } from "./icons";
 import type { ComponentGroup, ComponentRow, Lights, LocationNode } from "../lib/outline";
+import { NO_COMPONENTS } from "../lib/outline";
 import { HEALTH_HUE, type HealthState } from "../lib/health";
 import OutlineName from "./OutlineName";
 import Tooltip from "./ui/Tooltip";
@@ -345,7 +346,7 @@ export default function Outline(props: {
                 classList={{ "text-error": !!issue(), "text-base-content/55": !issue(), truncate: r().kind !== "location" }}
                 title={issue()}
               >
-                {r().kind === "location" ? <DetailText text={node()!.contents} /> : (issue() ?? "")}
+                {r().kind === "location" ? <DetailText text={node()!.contents} /> : r().kind === "group" && grp()!.components.length === 0 ? NO_COMPONENTS : (issue() ?? "")}
               </span>
               <span>
                 {r().kind === "location"

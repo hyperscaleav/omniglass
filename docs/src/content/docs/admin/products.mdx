@@ -23,6 +23,9 @@ it and the [driver](/admin/drivers/) that speaks to it, classified by a **kind**
 product also carries an `id`, a uuid minted by the database, the internal address the handle resolves
 to ([ADR-0062](/architecture/decisions/)); the handle is what you type and read.
 
+A product's drawer links its vendor, driver and type, lists the components that are the product, and shows what
+its driver collects, apart from the contract the product declares: see [Follow the catalog](/admin/catalog-links/).
+
 A product is also what a **component** points at: `component.product_id` names the product a component
 **is**, required, so every component always resolves a shape (its vendor, driver, and classification)
 and, through its product, a device-class **[component type](/architecture/core-entities/#catalog-reference-data-component_type)**. The

@@ -5,6 +5,7 @@ import BladeTitle from "../components/BladeTitle";
 import BladeField from "../components/BladeField";
 import FieldRow from "../components/FieldRow";
 import KVStacked from "../components/KVStacked";
+import { NotificationTypeUsedBy } from "../components/CatalogUsage";
 import InfoTip from "../components/InfoTip";
 import Button from "../components/Button";
 import { identityColumn } from "../components/IdentityCell";
@@ -183,6 +184,7 @@ function NotificationTypeBladeBody(p: { name: string }): JSX.Element {
           <BladeField label="Subject" info={NOTIFICATION_HINTS.subject} mono value={() => r().subject} draft={subject} onInput={setSubject} />
           <BladeField label="Text" info={NOTIFICATION_HINTS.text} multiline mono rows={6} value={() => r().text} draft={text} onInput={setText} />
           <PreviewPanel type={r().name} drafts={drafts} />
+          <NotificationTypeUsedBy name={r().name} />
         </div>
       )}
     </Show>

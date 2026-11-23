@@ -66,7 +66,7 @@
     {
       "n": 11,
       "kind": "goto",
-      "caption": "Back on Platform health.",
+      "caption": "Back on Platform health, Where work is lost still open.",
       "still": "step-11.png"
     },
     {
@@ -97,8 +97,8 @@
   "poster": "step-12.png",
   "preview": "preview.webp",
   "budget": {
-    "seconds": 52.4,
-    "bytes": 989215,
-    "previewBytes": 650260
+    "seconds": 54.9,
+    "bytes": 906636,
+    "previewBytes": 651444
   }
 }

@@ -1865,10 +1865,17 @@ omniglass component impairment set <name>
 List components in scope
 
 ```
-omniglass component list
+omniglass component list [flags]
 ```
 
-Lists the components the caller may read, each filtered to its scope subtree. Gated by component:read.
+Lists the components the caller may read, each filtered to its scope subtree. Optional product, driver and component_type filters narrow to the components a catalog row classifies or a driver serves, and limit caps the page while total counts every match (the catalog drawers' used-by reads). Gated by component:read.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--component-type` | string | (none) | Only components of a product classified under exactly this component type (name or uuid) |
+| `--driver` | string | (none) | Only components of a product this driver serves (name or uuid) |
+| `--limit` | int | `0` | Cap the page at this many rows; 0 or absent is no cap. total still counts every match. |
+| `--product` | string | (none) | Only components of this product (name or uuid) |
 
 Example:
 
@@ -5078,10 +5085,15 @@ omniglass product get boreal-edge-55
 List products
 
 ```
-omniglass product list
+omniglass product list [flags]
 ```
 
-Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
+Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. declares_metric and declares_property narrow it to the products whose contract declares that key. Gated by product:read.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--declares-metric` | string | (none) | Only products whose contract declares this metric (name or uuid) |
+| `--declares-property` | string | (none) | Only products whose contract declares this property (name or uuid) |
 
 Example:
 
@@ -6561,10 +6573,15 @@ omniglass system health list <name>
 List systems in scope
 
 ```
-omniglass system list
+omniglass system list [flags]
 ```
 
-Lists the systems the caller may read, each filtered to its scope subtree. Gated by system:read.
+Lists the systems the caller may read, each filtered to its scope subtree. An optional standard filter narrows to the systems built to one standard, and limit caps the page while total counts every match. Gated by system:read.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--limit` | int | `0` | Cap the page at this many rows; 0 or absent is no cap. total still counts every match. |
+| `--standard` | string | (none) | Only systems built to this standard (name or uuid) |
 
 Example:
 

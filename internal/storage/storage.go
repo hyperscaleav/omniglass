@@ -465,6 +465,9 @@ type Gateway interface {
 
 	UpsertProduct(ctx context.Context, m Product) error
 	ListProducts(ctx context.Context) ([]Product, error)
+	// ListProductsDeclaring is ListProducts narrowed to the products whose contract
+	// declares the named metric (lane "metric") or property (lane "property").
+	ListProductsDeclaring(ctx context.Context, lane, name string) ([]Product, error)
 	GetProduct(ctx context.Context, id string) (*Product, error)
 	CreateProduct(ctx context.Context, actorID string, m Product) (*Product, error)
 	UpdateProduct(ctx context.Context, actorID, id string, patch ProductPatch) (*Product, error)
@@ -812,6 +815,10 @@ type Gateway interface {
 	EnsureRole(ctx context.Context, actorID string, r Role) error
 	SetMachineToken(ctx context.Context, actorID, name string, hash []byte, prefix string) (bool, error)
 	OutpostSimDevices(ctx context.Context, name string, read scope.Set) ([]SimDevice, error)
+	// ComponentPlaces reads each component's primary system and place names, keyed
+	// by id (#1724): the Platform health simulation table's tiebreak between
+	// devices that share a name.
+	ComponentPlaces(ctx context.Context, ids []string, systemRead, locationRead scope.Set) (map[string]ComponentPlace, error)
 	// OutpostSimWebhooks reads the webhook subscription of each simulated
 	// component on the outpost (ADR-1370), keyed by component id: only for the
 	// simulator's own device list, never an operator's read.

@@ -99,6 +99,10 @@ export function countWord(label: string, n: number): string {
   return `${n} ${word}s`;
 }
 
+// What a system with nothing in its slots reads as: it is a place, not an
+// empty one (#2464).
+export const NO_COMPONENTS = "no components yet";
+
 export function buildOutline(input: OutlineInput): Outline {
   const locations = input.view.locations ?? [];
   const fleetSystems = input.view.systems ?? [];
@@ -226,6 +230,7 @@ export function buildOutline(input: OutlineInput): Outline {
     // worn by the row (its standard and health) and needs no count.
     if (systems.length > 1) parts.push(countWord("system", systems.length));
     if (componentCount > 0) parts.push(countWord("component", componentCount));
+    else if (systems.length > 0) parts.push(NO_COMPONENTS);
 
     const info = typeOf.get(loc.location_type);
     return {
@@ -255,7 +260,7 @@ export function buildOutline(input: OutlineInput): Outline {
     const groups = groupsFor(unplacedSystems, looseNowhere);
     const parts = [
       ...(systems.length > 0 ? [countWord("system", systems.length)] : []),
-      ...(looseNowhere.length > 0 ? [countWord("component", looseNowhere.length)] : []),
+      ...(looseNowhere.length > 0 ? [countWord("component", looseNowhere.length)] : systems.length > 0 ? [NO_COMPONENTS] : []),
     ];
     unplaced = {
       id: "unplaced",

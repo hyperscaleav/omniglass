@@ -5,6 +5,7 @@ import Drawer from "../components/Drawer";
 import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
 import KVStacked from "../components/KVStacked";
+import EntityLink from "../components/EntityLink";
 import Eyebrow from "../components/Eyebrow";
 import InfoTip from "../components/InfoTip";
 import Button from "../components/Button";
@@ -281,7 +282,7 @@ function TargetBladeBody(p: { name: string }): JSX.Element {
                 hint={TARGET_HINTS.secret}
                 value={
                   <Show when={t().secret} fallback={<span class="text-base-content/50">unsigned</span>}>
-                    <span class="font-data">{t().secret}</span> <span class="text-[11px] text-base-content/50">({t().auth})</span>
+                    <EntityLink kind="secret" address={t().secret!} /> <span class="text-[11px] text-base-content/50">({t().auth})</span>
                   </Show>
                 }
               />
@@ -305,14 +306,14 @@ function TargetBladeBody(p: { name: string }): JSX.Element {
                   <KVStacked
                     label={t().kind === "user" ? "Person" : "User group"}
                     hint={t().kind === "user" ? TARGET_HINTS.person : TARGET_HINTS.group}
-                    value={<span class="font-data">{(t().kind === "user" ? t().user : t().user_group) || "withheld"}</span>}
+                    value={(t().kind === "user" ? t().user : t().user_group) ? <EntityLink kind={t().kind === "user" ? "user" : "group"} address={(t().kind === "user" ? t().user : t().user_group)!} /> : <span class="font-data">withheld</span>}
                   />
                   <KVStacked label="Channels" hint={TARGET_HINTS.channels} value={<ChannelPills channels={t().channels} />} />
                 </div>
               </Match>
               <Match when={t().kind === "role"}>
                 <div class="grid grid-cols-2 gap-3 text-sm">
-                  <KVStacked label="Role" hint={TARGET_HINTS.role} value={<span class="font-data" data-testid="target-role">{t().role}</span>} />
+                  <KVStacked label="Role" hint={TARGET_HINTS.role} value={<span data-testid="target-role"><EntityLink kind="role" address={t().role!} /></span>} />
                   <KVStacked label="Channels" hint={TARGET_HINTS.channels} value={<ChannelPills channels={t().channels} />} />
                 </div>
               </Match>
@@ -328,7 +329,7 @@ function TargetBladeBody(p: { name: string }): JSX.Element {
               <Eyebrow label={`Used by${rules.data ? ` (${senders().length})` : ""}`} hint={TARGET_HINTS.usedBy} />
               <Show when={senders().length > 0} fallback={<span class="text-[12px] text-base-content/40">No action rule sends here.</span>}>
                 <span class="flex flex-wrap gap-1.5" data-testid="target-used-by">
-                  <For each={senders()}>{(r) => <span class="badge badge-ghost badge-sm" title={r.name}>{entityLabel(r)}</span>}</For>
+                  <For each={senders()}>{(r) => <span class="badge badge-ghost badge-sm" title={r.name}><EntityLink kind="action_rule" entity={r} /></span>}</For>
                 </span>
               </Show>
             </section>
