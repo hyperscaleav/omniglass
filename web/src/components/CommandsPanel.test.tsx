@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@solidjs/te
 import { Router, Route, useLocation } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import CommandsPanel from "./CommandsPanel";
-import Toaster from "./Toaster";
+import { Toaster } from "./ui/Toast";
 import { componentCommandsKey, type Command } from "../lib/commands";
 import { ENDPOINTS_KEY, type Endpoint } from "../lib/endpoints";
 import { DRIVERS_KEY, type Driver } from "../lib/drivers";

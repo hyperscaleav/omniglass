@@ -279,7 +279,7 @@ List your omnibot conversations
 omniglass assistant conversation list
 ```
 
-Your own stored conversations, most recently moved first, without their messages. Owner-only. Gated by assistant:use.
+Your own stored conversations, most recently moved first, without their messages, and omnibot's mode: live, replay (the server plays a recording, with the prompts it answers) or none. Owner-only. Gated by assistant:use.
 
 Example:
 
@@ -295,7 +295,7 @@ Run omnibot on one of your conversations
 omniglass assistant conversation run <name> [flags]
 ```
 
-Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {"stopped": "step_limit", "steps": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. The run talks to the model the assistant settings configure, read as it starts; with none, the server's recording, if it has one. A server with no model, or a configured model whose key no longer resolves, is a 503. Gated by assistant:use.
+Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {"stopped": "step_limit", "steps": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. The run talks to the model the assistant settings configure, read as it starts; with none, the server's recording, if it has one. A recording answers only the prompts it was recorded for: any other question is a 422 (type urn:omniglass:omnibot-replay-unmatched) that touches nothing; the list route names the prompts. A server with no model, or a configured model whose key no longer resolves, is a 503. Gated by assistant:use.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1711,6 +1711,34 @@ Example:
 
 ```sh
 omniglass component get <name>
+```
+
+### `omniglass component health`
+
+Commands for the health resource
+
+#### `omniglass component health list`
+
+Read a component's health
+
+```
+omniglass component health list <name> [flags]
+```
+
+The component's own current health (healthy, degraded or outage from its active alarms; unknown for a device nothing has observed) beside the recorded edges that got it there, in the shape the system health read returns: slots and systems are empty, transitions are one entry per change inside since..until (default the last 30 days), oldest first. since after until is a 400. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+
+Arguments:
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--since` | string | (none) | Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent |
+| `--until` | string | (none) | Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since |
+
+Example:
+
+```sh
+omniglass component health list 'hq.west.level-2.boardroom-a.$comp.videobar-1'
 ```
 
 ### `omniglass component identity-binding`
@@ -3441,7 +3469,7 @@ Create a location
 omniglass location create [flags]
 ```
 
-Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. Gated by location:create.
+Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. The parent resolves within the caller's location:read scope before its location:create scope: a parent the caller cannot read is the same 404 as one that does not exist, so the answer never discloses a location outside the caller's read, and a parent the caller can read but not create under is a 403. Gated by location:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -3527,13 +3555,18 @@ Commands for the health resource
 Read a location's health
 
 ```
-omniglass location health list <name>
+omniglass location health list <name> [flags]
 ```
 
-The location's current health, worst-wins over every system placed anywhere beneath it, with those systems and their health as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+The location's current health, worst-wins over every system placed anywhere beneath it, with those systems and their health as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges inside since..until (default the last 30 days); since after until is a 400. Gated by location:read; an out-of-scope location is a non-disclosing 404.
 
 Arguments:
   <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--since` | string | (none) | Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent |
+| `--until` | string | (none) | Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since |
 
 Example:
 
@@ -5353,6 +5386,31 @@ Example:
 omniglass role list
 ```
 
+## `omniglass search`
+
+Commands for the search resource
+
+### `omniglass search list`
+
+Find locations, systems, components and catalog entries by name
+
+```
+omniglass search list [flags]
+```
+
+The read behind the command palette. Returns up to limit hits of each kind whose name or label holds q, case-insensitively, best match first (exact, then prefix, then the rest by name). Locations, systems and components are searched inside the caller's own read scope for each kind, so nothing outside it appears; a caller with no scope for a kind gets an empty group, not an error. Each fleet hit carries its location_path, so many components with one name are told apart. Catalog hits cover products (product:read), drivers (driver:read), calc rules and event rules (rule:read) and metrics (metric_type:read), each only for a caller who holds that permission. Gated by location:read, the floor of every fleet reader; the component group also needs component:read.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--limit` | int | `0` | The most hits returned for each kind |
+| `--q` | string | (none) | The text to find, matched case-insensitively anywhere in a name or label |
+
+Example:
+
+```sh
+omniglass search list
+```
+
 ## `omniglass secret`
 
 Commands for the secret resource
@@ -6456,13 +6514,18 @@ omniglass system health
 Read a system's health
 
 ```
-omniglass system health list <name>
+omniglass system health list <name> [flags]
 ```
 
-The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Transitions are the recorded edges inside since..until (default the last 30 days), one entry per change; since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.
 
 Arguments:
   <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--since` | string | (none) | Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent |
+| `--until` | string | (none) | Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since |
 
 Example:
 

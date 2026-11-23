@@ -702,6 +702,28 @@ export type AssistantConversationOutputBody = {
 };
 
 /**
+ * live: a model answers any question; replay: the server plays a recording, which answers only its prompts; none: omnibot cannot run here
+ */
+export type AssistantOmnibotFactsMode = typeof AssistantOmnibotFactsMode[keyof typeof AssistantOmnibotFactsMode];
+
+
+export const AssistantOmnibotFactsMode = {
+  live: 'live',
+  replay: 'replay',
+  none: 'none',
+} as const;
+
+export type AssistantOmnibotFacts = {
+  /** live: a model answers any question; replay: the server plays a recording, which answers only its prompts; none: omnibot cannot run here */
+  mode: AssistantOmnibotFactsMode;
+  /**
+     * The questions a recording answers, in recorded order; empty unless mode is replay
+     * @nullable
+     */
+  prompts: string[] | null;
+};
+
+/**
  * The model omnibot runs on: openai (any OpenAI-compatible chat completions server, OpenRouter by default) or none, which leaves the server's recording, if any
  */
 export type AssistantSettingsProvider = typeof AssistantSettingsProvider[keyof typeof AssistantSettingsProvider];
@@ -4248,6 +4270,10 @@ export type HealthTransitionBody = {
 export type FleetHealthOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
+  /** The health in force when the range opened: the last recorded edge before its start. Present when the caller bounded the start (an explicit since, or the one derived from until); absent on the default window, or when nothing was recorded before it. A timeline draws the stretch before the first transition from it */
+  carried_in?: string;
+  /** When this owner's health was first recorded; absent if never. How long it has been watched, whatever the range */
+  first_recorded_at?: string;
   /** healthy, incomplete, degraded, or outage: the rollup of the slots or systems served beside it. incomplete is a commissioning gap, a slot short because the hardware was never installed rather than because installed hardware is failing, and it ranks between healthy and degraded */
   health: string;
   owner: string;
@@ -4555,6 +4581,8 @@ export type ListAssistantConversationsOutputBody = {
   readonly $schema?: string;
   /** @nullable */
   conversations: AssistantConversation[] | null;
+  /** What omnibot is answering from, so a client can say so before the first question */
+  omnibot: AssistantOmnibotFacts;
 };
 
 export type ListCalcRulesOutputBody = {
@@ -8158,6 +8186,60 @@ export type SSOSettings = {
   scopes: string;
 };
 
+/**
+ * Which catalog the entry belongs to; the console opens its drawer on that catalog's page
+ */
+export type SearchCatalogBodyKind = typeof SearchCatalogBodyKind[keyof typeof SearchCatalogBodyKind];
+
+
+export const SearchCatalogBodyKind = {
+  product: 'product',
+  driver: 'driver',
+  calc_rule: 'calc_rule',
+  event_rule: 'event_rule',
+  metric: 'metric',
+} as const;
+
+export type SearchCatalogBody = {
+  /** A short qualifier: a product's vendor, a driver's version, a metric's unit */
+  detail?: string;
+  /** Which catalog the entry belongs to; the console opens its drawer on that catalog's page */
+  kind: SearchCatalogBodyKind;
+  /** The entry's display label */
+  label?: string;
+  /** The entry's name, its address in the catalog */
+  name: string;
+};
+
+export type SearchEntityBody = {
+  /** The entity's uuid, the address its page opens at */
+  id: string;
+  /** The entity's display label, when it has one */
+  label?: string;
+  /** The locations it sits under, outermost first, joined with ' / '. Empty for a component that has no location of its own and is in a system; its system field says where it is */
+  location_path?: string;
+  /** The entity's name; many components share one, the location_path tells them apart */
+  name: string;
+  /** A component's primary system, when it has one */
+  system?: string;
+};
+
+export type SearchOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * Catalog hits across products, drivers, calc rules, event rules and metrics, best match first, at most limit of each kind
+     * @nullable
+     */
+  catalog: SearchCatalogBody[] | null;
+  /** @nullable */
+  components: SearchEntityBody[] | null;
+  /** @nullable */
+  locations: SearchEntityBody[] | null;
+  /** @nullable */
+  systems: SearchEntityBody[] | null;
+};
+
 export type SetAvatarInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -9560,6 +9642,13 @@ export type EffectiveTagsParams = {
   system?: string;
 };
 
+export type GetComponentHealthParams = {
+  /** Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent */
+  since?: string;
+  /** Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since */
+  until?: string;
+};
+
 export type ListComponentLogsParams = {
   /** Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out */
   severity?: ListComponentLogsSeverity;
@@ -9639,6 +9728,13 @@ export type RunEndpointPollParams = {
   timeout_seconds?: number;
 };
 
+export type GetLocationHealthParams = {
+  /** Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent */
+  since?: string;
+  /** Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since */
+  until?: string;
+};
+
 export type ListNotificationParams = {
   /** Only the notifications about this alarm (its uuid) */
   alarm?: string;
@@ -9665,10 +9761,32 @@ export const ListNotificationStatus = {
   '': '',
 } as const;
 
+export type SearchParams = {
+  /**
+   * The text to find, matched case-insensitively anywhere in a name or label
+   * @minLength 1
+   * @maxLength 200
+   */
+  q?: string;
+  /**
+   * The most hits returned for each kind
+   * @minimum 1
+   * @maximum 20
+   */
+  limit?: number;
+};
+
 /**
  * an RFC 7386 JSON Merge Patch for the namespace; null on a key restores it
  */
 export type PatchSettingsNamespaceBody = {[key: string]: unknown};
+
+export type GetSystemHealthParams = {
+  /** Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent */
+  since?: string;
+  /** Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since */
+  until?: string;
+};
 
 export type ListSystemLogsParams = {
   /** Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out */
@@ -10219,7 +10337,7 @@ export const getListAssistantConversationsUrl = () => {
 }
 
 /**
- * Your own stored conversations, most recently moved first, without their messages. Owner-only. Gated by assistant:use.
+ * Your own stored conversations, most recently moved first, without their messages, and omnibot's mode: live, replay (the server plays a recording, with the prompts it answers) or none. Owner-only. Gated by assistant:use.
  * @summary List your omnibot conversations
  */
 export const listAssistantConversations = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listAssistantConversationsResponse> => {
@@ -10440,7 +10558,7 @@ export const getRunAssistantConversationUrl = (name: string,) => {
 }
 
 /**
- * Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {"stopped": "step_limit", "steps": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. The run talks to the model the assistant settings configure, read as it starts; with none, the server's recording, if it has one. A server with no model, or a configured model whose key no longer resolves, is a 503. Gated by assistant:use.
+ * Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {"stopped": "step_limit", "steps": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. The run talks to the model the assistant settings configure, read as it starts; with none, the server's recording, if it has one. A recording answers only the prompts it was recorded for: any other question is a 422 (type urn:omniglass:omnibot-replay-unmatched) that touches nothing; the list route names the prompts. A server with no model, or a configured model whose key no longer resolves, is a 503. Gated by assistant:use.
  * @summary Run omnibot on one of your conversations
  */
 export const runAssistantConversation = async (name: string,
@@ -13754,6 +13872,59 @@ export const getListComponentEventsUrl = (name: string,) => {
 export const listComponentEvents = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listComponentEventsResponse> => {
 
   return ogFetch<listComponentEventsResponse>(getListComponentEventsUrl(name),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type getComponentHealthResponse200 = {
+  data: FleetHealthOutputBody
+  status: 200
+}
+
+export type getComponentHealthResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type getComponentHealthResponseSuccess = (getComponentHealthResponse200) & {
+  headers: Headers;
+};
+export type getComponentHealthResponseError = (getComponentHealthResponseDefault) & {
+  headers: Headers;
+};
+
+export type getComponentHealthResponse = (getComponentHealthResponseSuccess | getComponentHealthResponseError)
+
+export const getGetComponentHealthUrl = (name: string,
+    params?: GetComponentHealthParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/components/${name}/health?${stringifiedParams}` : `/components/${name}/health`
+}
+
+/**
+ * The component's own current health (healthy, degraded or outage from its active alarms; unknown for a device nothing has observed) beside the recorded edges that got it there, in the shape the system health read returns: slots and systems are empty, transitions are one entry per change inside since..until (default the last 30 days), oldest first. since after until is a 400. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+ * @summary Read a component's health
+ */
+export const getComponentHealth = async (name: string,
+    params?: GetComponentHealthParams, options?: Parameters<typeof ogFetch>[1]): Promise<getComponentHealthResponse> => {
+
+  return ogFetch<getComponentHealthResponse>(getGetComponentHealthUrl(name,params),
   {
     ...options,
     method: 'GET'
@@ -17310,7 +17481,7 @@ export const getCreateLocationUrl = () => {
 }
 
 /**
- * Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. Gated by location:create.
+ * Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. The parent resolves within the caller's location:read scope before its location:create scope: a parent the caller cannot read is the same 404 as one that does not exist, so the answer never discloses a location outside the caller's read, and a parent the caller can read but not create under is a 403. Gated by location:create.
  * @summary Create a location
  */
 export const createLocation = async (createLocationInputBody: NonReadonly<CreateLocationInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createLocationResponse> => {
@@ -17478,21 +17649,30 @@ export type getLocationHealthResponseError = (getLocationHealthResponseDefault) 
 
 export type getLocationHealthResponse = (getLocationHealthResponseSuccess | getLocationHealthResponseError)
 
-export const getGetLocationHealthUrl = (name: string,) => {
+export const getGetLocationHealthUrl = (name: string,
+    params?: GetLocationHealthParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/locations/${name}/health`
+  return stringifiedParams.length > 0 ? `/locations/${name}/health?${stringifiedParams}` : `/locations/${name}/health`
 }
 
 /**
- * The location's current health, worst-wins over every system placed anywhere beneath it, with those systems and their health as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+ * The location's current health, worst-wins over every system placed anywhere beneath it, with those systems and their health as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges inside since..until (default the last 30 days); since after until is a 400. Gated by location:read; an out-of-scope location is a non-disclosing 404.
  * @summary Read a location's health
  */
-export const getLocationHealth = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getLocationHealthResponse> => {
+export const getLocationHealth = async (name: string,
+    params?: GetLocationHealthParams, options?: Parameters<typeof ogFetch>[1]): Promise<getLocationHealthResponse> => {
 
-  return ogFetch<getLocationHealthResponse>(getGetLocationHealthUrl(name),
+  return ogFetch<getLocationHealthResponse>(getGetLocationHealthUrl(name,params),
   {
     ...options,
     method: 'GET'
@@ -20771,6 +20951,57 @@ export const listRoles = async ( options?: Parameters<typeof ogFetch>[1]): Promi
 
 
 
+export type searchResponse200 = {
+  data: SearchOutputBody
+  status: 200
+}
+
+export type searchResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type searchResponseSuccess = (searchResponse200) & {
+  headers: Headers;
+};
+export type searchResponseError = (searchResponseDefault) & {
+  headers: Headers;
+};
+
+export type searchResponse = (searchResponseSuccess | searchResponseError)
+
+export const getSearchUrl = (params?: SearchParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/search?${stringifiedParams}` : `/search`
+}
+
+/**
+ * The read behind the command palette. Returns up to limit hits of each kind whose name or label holds q, case-insensitively, best match first (exact, then prefix, then the rest by name). Locations, systems and components are searched inside the caller's own read scope for each kind, so nothing outside it appears; a caller with no scope for a kind gets an empty group, not an error. Each fleet hit carries its location_path, so many components with one name are told apart. Catalog hits cover products (product:read), drivers (driver:read), calc rules and event rules (rule:read) and metrics (metric_type:read), each only for a caller who holds that permission. Gated by location:read, the floor of every fleet reader; the component group also needs component:read.
+ * @summary Find locations, systems, components and catalog entries by name
+ */
+export const search = async (params?: SearchParams, options?: Parameters<typeof ogFetch>[1]): Promise<searchResponse> => {
+
+  return ogFetch<searchResponse>(getSearchUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
 export type listSecretTypesResponse200 = {
   data: ListSecretTypesOutputBody
   status: 200
@@ -22880,21 +23111,30 @@ export type getSystemHealthResponseError = (getSystemHealthResponseDefault) & {
 
 export type getSystemHealthResponse = (getSystemHealthResponseSuccess | getSystemHealthResponseError)
 
-export const getGetSystemHealthUrl = (name: string,) => {
+export const getGetSystemHealthUrl = (name: string,
+    params?: GetSystemHealthParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/systems/${name}/health`
+  return stringifiedParams.length > 0 ? `/systems/${name}/health?${stringifiedParams}` : `/systems/${name}/health`
 }
 
 /**
- * The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+ * The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Transitions are the recorded edges inside since..until (default the last 30 days), one entry per change; since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.
  * @summary Read a system's health
  */
-export const getSystemHealth = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getSystemHealthResponse> => {
+export const getSystemHealth = async (name: string,
+    params?: GetSystemHealthParams, options?: Parameters<typeof ogFetch>[1]): Promise<getSystemHealthResponse> => {
 
-  return ogFetch<getSystemHealthResponse>(getGetSystemHealthUrl(name),
+  return ogFetch<getSystemHealthResponse>(getGetSystemHealthUrl(name,params),
   {
     ...options,
     method: 'GET'

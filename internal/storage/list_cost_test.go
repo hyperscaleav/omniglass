@@ -112,14 +112,14 @@ const (
 func mustRooms(t *testing.T, gw storage.Gateway) []string {
 	t.Helper()
 	ctx := context.Background()
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "boi", LocationType: "building"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "boi", LocationType: "building"}, all, all); err != nil {
 		t.Fatalf("create building: %v", err)
 	}
 	names := make([]string, 0, rooms)
 	for i := range rooms {
 		name := fmt.Sprintf("room-%d", i)
 		if _, err := gw.CreateLocation(ctx, "",
-			storage.LocationSpec{Name: name, LocationType: "room", ParentName: strptr("boi")}, all); err != nil {
+			storage.LocationSpec{Name: name, LocationType: "room", ParentName: strptr("boi")}, all, all); err != nil {
 			t.Fatalf("create %s: %v", name, err)
 		}
 		names = append(names, name)
@@ -203,7 +203,7 @@ func TestListLocationsCostIsFlatInPageSize(t *testing.T) {
 		ls, err := gw.ListLocations(ctx, all)
 		return len(ls), err
 	}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "boi", LocationType: "building"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "boi", LocationType: "building"}, all, all); err != nil {
 		t.Fatalf("create building: %v", err)
 	}
 	small := measure(t, counter, list)
@@ -214,13 +214,13 @@ func TestListLocationsCostIsFlatInPageSize(t *testing.T) {
 	for f := range rooms {
 		floor := fmt.Sprintf("floor-%d", f)
 		if _, err := gw.CreateLocation(ctx, "",
-			storage.LocationSpec{Name: floor, LocationType: "floor", ParentName: strptr("boi")}, all); err != nil {
+			storage.LocationSpec{Name: floor, LocationType: "floor", ParentName: strptr("boi")}, all, all); err != nil {
 			t.Fatalf("create %s: %v", floor, err)
 		}
 		for r := range widePage / rooms {
 			room := fmt.Sprintf("room-%d-%d", f, r)
 			if _, err := gw.CreateLocation(ctx, "",
-				storage.LocationSpec{Name: room, LocationType: "room", ParentName: strptr(floor)}, all); err != nil {
+				storage.LocationSpec{Name: room, LocationType: "room", ParentName: strptr(floor)}, all, all); err != nil {
 				t.Fatalf("create %s: %v", room, err)
 			}
 		}
@@ -609,14 +609,14 @@ func TestNameRefCostIsFlatInCandidates(t *testing.T) {
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "boi", LocationType: "building"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "boi", LocationType: "building"}, all, all); err != nil {
 		t.Fatalf("create building: %v", err)
 	}
 	var firstDisplay, firstRoom string
 	add := func(i int) {
 		t.Helper()
 		room := fmt.Sprintf("room-%d", i)
-		if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: room, LocationType: "room", ParentName: strptr("boi")}, all); err != nil {
+		if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: room, LocationType: "room", ParentName: strptr("boi")}, all, all); err != nil {
 			t.Fatalf("create %s: %v", room, err)
 		}
 		c := mustCreateComponent(t, gw, storage.ComponentSpec{Name: "display-1", LocationName: strptr(room)}, all)

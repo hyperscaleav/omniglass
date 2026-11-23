@@ -61,11 +61,11 @@ func TestLandSurvivesDuplicateComponentNames(t *testing.T) {
 	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "outpost-a"}, all, all); err != nil {
 		t.Fatalf("create outpost: %v", err)
 	}
-	roomA, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "room-a", LocationType: "campus"}, all)
+	roomA, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "room-a", LocationType: "campus"}, all, all)
 	if err != nil {
 		t.Fatalf("room-a: %v", err)
 	}
-	roomB, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "room-b", LocationType: "campus"}, all)
+	roomB, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "room-b", LocationType: "campus"}, all, all)
 	if err != nil {
 		t.Fatalf("room-b: %v", err)
 	}

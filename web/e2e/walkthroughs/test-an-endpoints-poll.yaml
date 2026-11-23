@@ -1,0 +1,37 @@
+# Test an endpoint's poll (#2427): a display in Bay 2 answers SNMP on
+# 127.60.9.9. Its endpoint is attached with the SNMP driver, and the console
+# ends the attach with proof: Test runs the poll now through the outpost and
+# shows each sample it read, instead of waiting for the next cycle. Its
+# setup creates the component (off camera), under its own name so no sibling walkthrough shares it.
+title: Test an endpoint's poll
+description: Attach a driver to a display, then run its poll now and read what the outpost collected, without waiting for the next cycle.
+setup:
+  - post: /components
+    body: { name: bay-2-poll-display, label: Bay 2 Display, product: boreal-edge-55, location: bay-2 }
+steps:
+  - goto: /components/bay-2-poll-display?tab=configure
+    caption: A display in Bay 2, with no endpoint yet.
+  - click: { role: button, name: Add endpoint }
+    caption: Add an endpoint, the way an outpost reaches the display.
+  - click: { role: tab, name: Attach a driver }
+    caption: Attach a driver.
+  - select: { target: '#new-iface-driver', value: snmp-generic }
+    caption: The SNMP driver reads the uptime any agent reports.
+  - type: { target: '#new-iface-input-host', text: 127.60.9.9 }
+    caption: The host is the display's address.
+  - type: { target: '#new-iface-input-community', text: sim-community }
+    caption: The community is a secret's name, never its value.
+  - select: { target: '#new-iface-outpost', value: edge-hq }
+    caption: The outpost edge-hq collects it.
+  - click: { role: button, name: Attach driver }
+    caption: Attach it. The endpoint opens, and its polls carry a Test button.
+  - goto: /components/bay-2-poll-display
+    caption: Back on the component, collection has begun. Its Overview reads the display as it is collected.
+  - wait: { selector: '[data-testid="leaf-vitals"]:has-text("Uptime")', timeout: 30000 }
+    caption: Samples arrive on the outpost's schedule, so the endpoint is collecting.
+  - click: { role: button, name: Test scalars }
+    caption: Under the endpoint in Collection, test the poll now instead of waiting for the next cycle.
+  - wait: { selector: '[data-testid=leaf-collection] [data-testid=poll-result][data-state=ok]', timeout: 20000 }
+    caption: The outpost ran it and shows each sample it read, with its value and the round trip.
+    hold: 2500
+    poster: true

@@ -218,7 +218,7 @@ func TestASystemPushIsFencedOnTheSystemTier(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 	ids := map[string]string{}
-	loc, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "campus"}, all)
+	loc, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "campus"}, all, all)
 	if err != nil {
 		t.Fatalf("create location: %v", err)
 	}

@@ -26,15 +26,15 @@ func TestInScopeIDs(t *testing.T) {
 		t.Fatalf("seed type: %v", err)
 	}
 	all := scope.Set{All: true}
-	root, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "root", LocationType: "campus"}, all)
+	root, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "root", LocationType: "campus"}, all, all)
 	if err != nil {
 		t.Fatalf("create root: %v", err)
 	}
-	child, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "child", LocationType: "campus", ParentName: &root.Name}, all)
+	child, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "child", LocationType: "campus", ParentName: &root.Name}, all, all)
 	if err != nil {
 		t.Fatalf("create child: %v", err)
 	}
-	other, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "other", LocationType: "campus"}, all)
+	other, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "other", LocationType: "campus"}, all, all)
 	if err != nil {
 		t.Fatalf("create other: %v", err)
 	}

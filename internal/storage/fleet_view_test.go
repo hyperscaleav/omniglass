@@ -55,7 +55,7 @@ func newFleetFixture(t *testing.T) *fleetFixture {
 
 	mk := func(name, kind string, parent *string) {
 		t.Helper()
-		if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: name, LocationType: kind, ParentName: parent}, f.all); err != nil {
+		if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: name, LocationType: kind, ParentName: parent}, f.all, f.all); err != nil {
 			t.Fatalf("create location %s: %v", name, err)
 		}
 	}
@@ -225,7 +225,7 @@ func TestFleetProjectionSystemVerdictMatchesTheHealthRead(t *testing.T) {
 	f := newFleetFixture(t)
 	v := f.project(t, f.all, f.all, f.all)
 
-	rep, err := f.gw.SystemHealth(context.Background(), "hq-huddle", 0, f.all)
+	rep, err := f.gw.SystemHealth(context.Background(), "hq-huddle", storage.HealthRange{}, f.all)
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}
