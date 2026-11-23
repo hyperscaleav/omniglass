@@ -1,9 +1,12 @@
 package lab
 
 import (
+	"encoding/json"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
+	"testing/fstest"
 )
 
 // TestLabFactsMatchCommitted is the drift gate for the lab guide's generated
@@ -83,5 +86,31 @@ func TestFormatLimits(t *testing.T) {
 		if got := FormatLimits(tc.cpus, tc.memory); got != tc.want {
 			t.Errorf("FormatLimits(%g, %d) = %q, want %q", tc.cpus, tc.memory, got, tc.want)
 		}
+	}
+}
+
+// What a walkthrough's lab runs beyond the dev fleet (#2362) reaches the lab
+// guide, so it can say a walkthrough on the identity provider is a script
+// lab's; a walkthrough that names none lists none.
+func TestLabFactsCarryWhatAWalkthroughsLabRuns(t *testing.T) {
+	b, err := FactsJSON(fstest.MapFS{
+		"plain.yaml": {Data: []byte("title: Plain\nsteps: []\n")},
+		"sso.yaml":   {Data: []byte("title: SSO\nlab: [sso]\nsteps: []\n")},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var f struct {
+		Walkthroughs []Walkthrough `json:"walkthroughs"`
+	}
+	if err := json.Unmarshal(b, &f); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string][]string{}
+	for _, w := range f.Walkthroughs {
+		got[w.ID] = w.Lab
+	}
+	if !reflect.DeepEqual(got, map[string][]string{"plain": {}, "sso": {"sso"}}) {
+		t.Fatalf("walkthrough labs = %v, want plain none and sso the identity provider", got)
 	}
 }

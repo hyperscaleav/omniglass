@@ -306,3 +306,45 @@ func TestDoSendsACallersRequestUnderTheContract(t *testing.T) {
 		t.Errorf("allowed = %d (hits %d), want 200 once", resp.StatusCode, hits)
 	}
 }
+
+// The *http.Client adapter (#2362) holds a library's calls to the same
+// contract: a loopback server is refused until the allow list names it, plain
+// http to an unnamed host is refused before any dial, and a redirect is the
+// answer, not followed.
+func TestHTTPClientHoldsALibrarysCallsToTheContract(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/moved" {
+			http.Redirect(w, r, "/elsewhere", http.StatusFound)
+			return
+		}
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+	roots := x509.NewCertPool()
+	roots.AddCert(srv.Certificate())
+	opts := egress.Options{RootCAs: roots}
+
+	if _, err := egress.New(egress.Policy{}, opts).HTTPClient().Get(srv.URL); !errors.Is(err, egress.ErrRefused) {
+		t.Fatalf("loopback under the empty policy: err = %v, want a refusal", err)
+	}
+	if _, err := egress.New(mustPolicy(t, "127.0.0.1"), opts).HTTPClient().Get("http://idp.example.test/"); !errors.Is(err, egress.ErrRefused) {
+		t.Fatalf("plain http to an unnamed host: err = %v, want a refusal", err)
+	}
+	hc := egress.New(mustPolicy(t, "127.0.0.1"), opts).HTTPClient()
+	resp, err := hc.Get(srv.URL)
+	if err != nil {
+		t.Fatalf("allowed loopback: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	resp, err = hc.Get(srv.URL + "/moved")
+	if err != nil {
+		t.Fatalf("redirect: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("redirect status = %d, want the 302 itself", resp.StatusCode)
+	}
+}

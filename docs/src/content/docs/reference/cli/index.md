@@ -626,6 +626,67 @@ Example:
 omniglass auth me action-rule update <name>
 ```
 
+#### `omniglass auth me identity-link`
+
+Commands for the identity-link resource
+
+##### `omniglass auth me identity-link list`
+
+List your own identity links
+
+```
+omniglass auth me identity-link list
+```
+
+Lists the identities at the identity provider you sign in through. Requires authentication; self-scoped (never another person's).
+
+Example:
+
+```sh
+omniglass auth me identity-link list
+```
+
+##### `omniglass auth me identity-link start`
+
+Start linking your own identity at the provider
+
+```
+omniglass auth me identity-link start [flags]
+```
+
+Confirms your current password and starts a sign-in at the identity provider bound to this session: send the browser to the returned url, and signing in there links that identity to you (an owner's only way to gain single sign-on). Requires authentication; self-scoped (it only ever links to you). Needs a session; refused to an agent token. A wrong password is a 403; single sign-on not configured is a 409.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--current-password` | string | (none) | Your current password: a link outlives the session that makes it, so it is confirmed as a password change is |
+| `--provider` | string | (none) | The identity provider to link, by name |
+
+Example:
+
+```sh
+omniglass auth me identity-link start --current-password current_password
+```
+
+##### `omniglass auth me identity-link unlink`
+
+Unlink one of your own identity links
+
+```
+omniglass auth me identity-link unlink <link> [flags]
+```
+
+Confirms your current password and removes one of your identity links; every session and token through it ends with it. Requires authentication; self-scoped (a link that is not yours is a 404). Refused to an agent token. Audited.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--current-password` | string | (none) | Your current password, as linking asks |
+
+Example:
+
+```sh
+omniglass auth me identity-link unlink <link> --current-password current_password
+```
+
 #### `omniglass auth me notification`
 
 Commands for the notification resource
@@ -7564,6 +7625,62 @@ Example:
 
 ```sh
 omniglass user grant delete <id> <grantId>
+```
+
+### `omniglass user identity-link`
+
+Commands for the identity-link resource
+
+#### `omniglass user identity-link create`
+
+Link a person to an identity at the provider
+
+```
+omniglass user identity-link create <id> [flags]
+```
+
+Links another person to an identity at the identity provider (iss|sub), so they sign in through single sign-on as that person. Email never links. Gated by user:link-identity (all-scope) and the takeover guard a password reset takes: refused on yourself (link from your profile), on an owner (an owner links their own identity), or on a person whose capabilities exceed yours. An identity already linked to anyone is a 409. Audited, the link recording who made it; granting the person owner later deletes it.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--identifier` | string | (none) | The identity at the provider as iss|sub: the issuer exactly as its id_tokens carry it, a bar, and the subject verbatim (the provider's admin console shows it, and an unlinked sign-in names it) |
+
+Example:
+
+```sh
+omniglass user identity-link create <id> --identifier identifier
+```
+
+#### `omniglass user identity-link delete`
+
+Unlink a person from an identity at the provider
+
+```
+omniglass user identity-link delete <id> <link>
+```
+
+Removes one of another person's identity links; every session and token they signed in through it ends with it. Gated by user:link-identity (all-scope) and the same takeover guard as linking. Audited.
+
+Example:
+
+```sh
+omniglass user identity-link delete <id> <link>
+```
+
+#### `omniglass user identity-link list`
+
+List a person's identity links
+
+```
+omniglass user identity-link list <id>
+```
+
+Lists the identities at the identity provider a person signs in through (single sign-on), each iss|sub with who made it and when it was last used. Gated by user:read:admin (all-scope), as the user directory is.
+
+Example:
+
+```sh
+omniglass user identity-link list <id>
 ```
 
 ### `omniglass user impersonate`

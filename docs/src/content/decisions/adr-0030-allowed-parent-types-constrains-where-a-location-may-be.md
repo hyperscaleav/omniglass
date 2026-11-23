@@ -50,5 +50,7 @@ summary: "`allowed_parent_types` constrains where a location may be placed"
 - **Reclassify in place (#251):** a third enforcement point. `UpdateLocation` checks the final type
   against the current parent whenever `location_type` actually changes (a restated type is not a change),
   with the same 422 as a move; grandfathered rows stay untouched until an operator edits their type.
+  It also checks each direct child: every child type's `allowed_parent_types` must admit the new type
+  (#1854); grandchildren are not checked.
 - **Closes:** issue [#239](https://github.com/hyperscaleav/omniglass/issues/239). Design:
   `docs/superpowers/specs/2026-07-14-type-placement-constraints-design.md`.

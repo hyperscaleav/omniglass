@@ -527,8 +527,10 @@ config: {
   credential: {
     shape: sql_table
     id: uuid {constraint: primary_key}
+    linked_by: uuid {constraint: foreign_key}
     oauth_client_id: uuid {constraint: foreign_key}
     user_id: uuid {constraint: foreign_key}
+    via_link: uuid {constraint: foreign_key}
   }
   lab_mark: {
     shape: sql_table
@@ -552,6 +554,11 @@ config: {
     shape: sql_table
     token_hash: bytea {constraint: primary_key}
     credential_id: uuid {constraint: foreign_key}
+  }
+  oidc_state: {
+    shape: sql_table
+    state_hash: bytea {constraint: primary_key}
+    link_user_id: uuid {constraint: foreign_key}
   }
   secret: {
     shape: sql_table
@@ -650,11 +657,14 @@ collection.webhook_token.endpoint_id -> fleet.endpoint.id
 collection.webhook_token.secret_id -> config.secret.id
 config.assistant_conversation.user_id -> identity.users.id
 config.assistant_message.conversation_id -> config.assistant_conversation.id
+config.credential.linked_by -> identity.users.id
 config.credential.oauth_client_id -> config.oauth_client.id
 config.credential.user_id -> identity.users.id
+config.credential.via_link -> config.credential.id
 config.oauth_code.client_id -> config.oauth_client.id
 config.oauth_code.user_id -> identity.users.id
 config.oauth_refresh.credential_id -> config.credential.id
+config.oidc_state.link_user_id -> identity.users.id
 config.secret.component_id -> fleet.component.id
 config.secret.location_id -> fleet.location.id
 config.secret.secret_type -> config.secret_type.id
