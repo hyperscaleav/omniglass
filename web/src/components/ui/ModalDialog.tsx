@@ -1,4 +1,4 @@
-import { type JSX, Show } from "solid-js";
+import { type JSX, Show, createComputed, on } from "solid-js";
 import { CloseButton, Content, Overlay, Portal, Root, Title } from "@kobalte/core/dialog";
 import { Content as AlertContent } from "@kobalte/core/alert-dialog";
 
@@ -40,6 +40,26 @@ export const OVERLAY_CLASS = "fixed inset-0 z-60 bg-black/45";
 
 export default function ModalDialog(props: ModalDialogProps) {
   let panel: HTMLDivElement | undefined;
+  // What had the focus when it opened, caught before Kobalte moves it. A
+  // dialog opened by state (no Kobalte trigger) otherwise sent the focus to
+  // the body on close: Esc out of the New outpost drawer left the keyboard
+  // user at the top of the page.
+  let opener: HTMLElement | null = null;
+  createComputed(
+    on(
+      () => props.open,
+      (o) => {
+        if (o && typeof document !== "undefined") opener = document.activeElement as HTMLElement | null;
+      },
+    ),
+  );
+  const onCloseAutoFocus = (e: Event) => {
+    if (opener && opener !== document.body && opener.isConnected) {
+      e.preventDefault();
+      opener.focus();
+    }
+    opener = null;
+  };
   const onOpenAutoFocus = (e: Event) => {
     const target = props.initialFocus && panel ? props.initialFocus(panel) : null;
     if (target) {
@@ -57,12 +77,12 @@ export default function ModalDialog(props: ModalDialogProps) {
     <Show
       when={props.alert}
       fallback={
-        <Content ref={panel} {...panelProps()} onOpenAutoFocus={onOpenAutoFocus}>
+        <Content ref={panel} {...panelProps()} onOpenAutoFocus={onOpenAutoFocus} onCloseAutoFocus={onCloseAutoFocus}>
           {props.children}
         </Content>
       }
     >
-      <AlertContent ref={panel} {...panelProps()} onOpenAutoFocus={onOpenAutoFocus}>
+      <AlertContent ref={panel} {...panelProps()} onOpenAutoFocus={onOpenAutoFocus} onCloseAutoFocus={onCloseAutoFocus}>
         {props.children}
       </AlertContent>
     </Show>

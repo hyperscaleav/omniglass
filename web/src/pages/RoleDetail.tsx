@@ -70,9 +70,19 @@ export function PermGrid(props: { universe: string[]; held: string[] }) {
     { value: "missing", label: "Missing", count: () => missing().length },
   ].map((t) => ({ value: t.value, label: <>{t.label}<span class="ml-1 tabular-nums text-base-content/50">{t.count()}</span></> }));
   return (
-    <Tabs label="Permissions" size="xs" class="flex flex-col gap-2" value={mode()} onChange={(v) => setMode(v as PermMode)} tabs={tabs}>
+    <Tabs
+      label="Permissions"
+      size="xs"
+      class="flex flex-col gap-2"
+      // The panel is the scroll box: Kobalte makes a panel with no control in
+      // it a tab stop, so a keyboard user can scroll a long list.
+      panelClass="max-h-80 overflow-y-auto rounded-field focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/60"
+      value={mode()}
+      onChange={(v) => setMode(v as PermMode)}
+      tabs={tabs}
+    >
       {() => (
-        <div class="flex max-h-80 flex-col gap-0.5 overflow-y-auto">
+        <div class="flex flex-col gap-0.5">
           <For each={rows()} fallback={<span class="text-xs text-base-content/40">{emptyMsg()}</span>}>
             {(row) => <PermRow perm={row.perm} held={row.held} />}
           </For>
