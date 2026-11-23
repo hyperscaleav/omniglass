@@ -254,6 +254,7 @@ describe("the system zoom", () => {
   it("lists an outside-a-slot member's alarm, states the reason, and names the member not in a slot", () => {
     const outside = {
       ...health,
+      slots: (health.slots ?? []).map((r) => ({ ...r, alarms: [] })),
       health: "degraded",
       reason: "1 member outside a slot has an open alarm (amp-1)",
       members: [{ name: "amp-1", id: uuidFor("szp-c-amp"), health: "outage", outside_slot: true, to_attach: false,
@@ -263,6 +264,8 @@ describe("the system zoom", () => {
     const strip = screen.getByTestId("alarm-strip");
     expect(within(strip).getByText("Amplifier powered off")).toBeTruthy();
     expect(within(strip).getByText(/not in a slot/)).toBeTruthy();
+    // A high alarm outside a slot degrades, never outages: the strip is not red.
+    expect(strip.className).not.toContain("border-error");
     expect(screen.getByTestId("health-reason").textContent).toBe("degraded: 1 member outside a slot has an open alarm (amp-1)");
     expect(screen.getByTestId("outside-slot-notice").textContent).toContain("1 member is not in a slot: amp-1.");
   });

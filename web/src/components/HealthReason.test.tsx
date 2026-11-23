@@ -8,6 +8,11 @@ describe("HealthReason", () => {
     expect(getByTestId("health-reason").textContent).toBe("degraded: 1 member outside a slot has an open alarm (amp-1)");
   });
 
+  it("says nothing for a healthy system: the badge already says it", () => {
+    const { queryByTestId } = render(() => <HealthReason health="healthy" reason="no slot is impaired and no member has an open alarm" />);
+    expect(queryByTestId("health-reason")).toBeNull();
+  });
+
   it("says nothing without a reason", () => {
     const { queryByTestId } = render(() => <HealthReason health="healthy" />);
     expect(queryByTestId("health-reason")).toBeNull();

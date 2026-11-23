@@ -142,7 +142,9 @@ export default function SystemZoom() {
   const timelines = createTimelineToggles();
   // The strip reads red when any alarm on it is at an outage level (the
   // catalog's flag, #917), amber when they only degrade.
-  const inOutage = createMemo(() => alarms().some((a) => scale().outage(a.severity)));
+  // A member outside a slot never takes the system to outage (ADR-2459), so
+  // its alarm's severity does not turn the strip red.
+  const inOutage = createMemo(() => alarms().some((a) => !a.outsideSlot && scale().outage(a.severity)));
   const bodyOf = createMemo(() => (vm() ? componentCards(vm()!) : undefined));
   const metricsQ = useQuery(() => ({ queryKey: systemMetricsKey(id()), queryFn: () => systemMetrics(id()), refetchInterval: LEAF_POLL_MS }));
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards }));

@@ -192,7 +192,6 @@ function SystemBody(props: { id: string }) {
         <SinceLine since={health.data ? sinceOf(health.data, now) : undefined} />
         <HealthReason health={health.data?.health} reason={health.data?.reason} />
       </div>
-      <OutsideSlotNotice members={health.data?.members ?? undefined} placeHref={can(me.data, "system", "update") ? `/systems/${props.id}?tab=configure` : undefined} />
       <Why
         rows={alarms().map((a) => ({
           severity: a.severity,
@@ -204,6 +203,7 @@ function SystemBody(props: { id: string }) {
             : { componentId: a.component, alarm: { id: a.id, message: a.message, component: a.component, raised_at: a.raisedAt }, show: { troubleshoot: true } },
         }))}
       />
+      <OutsideSlotNotice members={health.data?.members ?? undefined} placeHref={can(me.data, "system", "update") ? `/systems/${props.id}?tab=configure` : undefined} />
       {/* The room's only system is the room: the title already names it. */}
       <Show when={cluster()?.location}>{(pid) => <LocationCard locationId={pid()} path showName={!(view.data && isRoomOf(view.data, pid(), [props.id]))} />}</Show>
       {/* Size only: the standard is the form's Classification, said there. */}
