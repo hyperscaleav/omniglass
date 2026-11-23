@@ -8,7 +8,11 @@ import FieldRow from "./FieldRow";
 import InfoTip from "./InfoTip";
 import KVStacked from "./KVStacked";
 import SimStatusBadge from "./SimStatusBadge";
+import SimFaultChip from "./SimFaultChip";
+import SimFaultMenu from "./SimFaultMenu";
+import Collapsible from "./ui/Collapsible";
 import { ArrowUpRight, RotateCcw, Save, Zap } from "./icons";
+import { activeFaults } from "../lib/simfaults";
 import { useFormActions } from "../lib/formactions";
 import { can, useMe } from "../lib/auth";
 import { describeError, rel } from "../lib/format";
@@ -215,12 +219,49 @@ function ComponentBody(props: { id: string; onRemoved: () => void }): JSX.Elemen
         {(s) => (
           <Show when={s().simulated} fallback={<p class="text-sm text-base-content/60">This component is not simulated.</p>}>
             <StatusSection sim={s()} canReclassify={canReclassify()} busy={busy()} setBusy={setBusy} setErr={setErr} id={props.id} />
+            <FaultSection sim={s()} id={props.id} />
             <ImpairmentSection sim={s()} canImpair={canImpair()} draft={draft()} setDraft={setDraft} errors={parsed().errors} stored={stored()} loaded={!!imp.data} />
-            <SurfaceSection sim={s()} canFire={canImpair()} id={props.id} />
+            <Collapsible
+              title={<span class="eyebrow">Advanced: raw requests</span>}
+              triggerClass="group flex w-fit cursor-pointer items-center gap-1 rounded-field text-left focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/60"
+              class="flex flex-col gap-3"
+            >
+              <div class="pt-3">
+                <SurfaceSection sim={s()} canFire={canImpair()} id={props.id} />
+              </div>
+            </Collapsible>
           </Show>
         )}
       </Show>
     </div>
+  );
+}
+
+// FaultSection: what is wrong with the component now, and the named ways to
+// break or restore it (#2462), generated from its profile. The raw request
+// builder is under Advanced, below.
+function FaultSection(props: { sim: ComponentSim; id: string }) {
+  const a = (): SimComponent | undefined => props.sim.activity;
+  return (
+    <section class="flex flex-col gap-3" data-testid="sim-faults">
+      <Eyebrow
+        label="Faults"
+        hint="Break the component on purpose, in one click, and watch monitoring notice: power it off, unplug it, switch its input. Each action is what its profile says it can do. Restore clears everything at once."
+      />
+      <div class="flex min-h-6 items-center gap-2">
+        <Show when={a()} fallback={<span class="text-sm text-base-content/40">not reported</span>}>
+          {(d) => (
+            <>
+              <SimFaultChip componentId={props.id} sim={d()} name={props.sim.activity?.component} />
+              <Show when={activeFaults(d()).length === 0}>
+                <span class="text-sm text-base-content/60" data-testid="sim-no-faults">Nothing is broken.</span>
+              </Show>
+            </>
+          )}
+        </Show>
+      </div>
+      <SimFaultMenu componentId={props.id} sim={a()} name={props.sim.activity?.component} surfaces={props.sim.surface ?? []} layout="inline" />
+    </section>
   );
 }
 

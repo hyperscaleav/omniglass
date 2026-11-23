@@ -6,6 +6,7 @@ import Simulation from "./Simulation";
 import Sidebar from "../components/Sidebar";
 import SimComponentDrawer from "../components/SimComponentDrawer";
 import SimulationSection from "../components/SimulationSection";
+import { SimFaultChipFor } from "../components/SimFaultChip";
 import { ME_KEY, type Me } from "../lib/auth";
 import { COMPONENTS_KEY, type Component } from "../lib/components";
 import { LOCATIONS_KEY } from "../lib/locations";
@@ -172,9 +173,9 @@ describe("the Simulation page", () => {
     expect(headers).not.toContain("Serving");
     expect(headers).not.toContain("Impairment");
     expect(within(rows[0]).getByTestId("sim-state").textContent).toBe("running");
-    expect(within(rows[0]).queryByTestId("sim-impairment-chip")).toBeNull();
+    expect(within(rows[0]).queryByTestId("sim-fault-chip")).toBeNull();
     expect(within(rows[1]).getByTestId("sim-state").textContent).toBe("running");
-    expect(within(rows[1]).getByTestId("sim-impairment-chip").textContent).toBe("unplugged");
+    expect(within(rows[1]).getByTestId("sim-fault-label").textContent).toBe("unplugged");
     expect(screen.getByTestId("outpost-hits").textContent).toBe("3");
     expect(screen.getByText("unavailable")).toBeTruthy();
     // One outpost: no Outpost column.
@@ -194,7 +195,7 @@ describe("the Simulation page", () => {
     const rows = await screen.findAllByTestId("sim-row");
     expect(within(rows[0]).getByTestId("sim-state").textContent).toBe("failed");
     expect(within(rows[1]).getByTestId("sim-state").textContent).toBe("starting");
-    expect(within(rows[1]).getByTestId("sim-impairment-chip").textContent).toBe("150 ms, 2.5% loss");
+    expect(within(rows[1]).getByTestId("sim-fault-label").textContent).toBe("150 ms, 2.5% loss");
     expect(within(rows[1]).getByTestId("sim-not-applied")).toBeTruthy();
   });
 
@@ -215,7 +216,9 @@ describe("the Simulation page", () => {
     };
     filter("status:failed");
     await waitFor(() => expect(screen.getAllByTestId("sim-row").map((r) => r.dataset.component)).toEqual([DISPLAY]));
-    fireEvent.click(screen.getByRole("button", { name: /clear|Clear/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+    // The filter lives in the address now, which settles a tick after the click.
+    await waitFor(() => expect(screen.getAllByTestId("sim-row")).toHaveLength(2));
     filter("impairment:loss");
     await waitFor(() => expect(screen.getAllByTestId("sim-row").map((r) => r.dataset.component)).toEqual([DSP]));
   });
@@ -308,10 +311,16 @@ describe("the Simulation page", () => {
   });
 });
 
+// The raw request builder sits under Advanced (#2462): closed until opened.
+async function openAdvanced() {
+  fireEvent.click(await screen.findByRole("button", { name: /Advanced/ }));
+}
+
 describe("the simulated component drawer", () => {
   it("fires a chosen operation and renders the component's answer", async () => {
     stubFetch({ [`POST /components/${DISPLAY}/simulation:fire`]: { status: 200, body: "{\"device\":{\"model\":\"Edge 55\"}}", took_ms: 3 } });
     mount(() => <SimComponentDrawer id={DISPLAY} onClose={() => {}} />);
+    await openAdvanced();
     fireEvent.click(await screen.findByRole("button", { name: /\/api\/status/ }));
     const panel = await screen.findByTestId("fire-panel");
     fireEvent.click(within(panel).getByRole("button", { name: "Fire" }));
@@ -351,6 +360,7 @@ describe("the simulated component drawer", () => {
     stubFetch();
     mount(() => <SimComponentDrawer id={DISPLAY} onClose={() => {}} />, viewer);
     await screen.findByTestId("sim-impairment");
+    await openAdvanced();
     expect(screen.queryByRole("button", { name: "Save impairment" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Fire/ })).toBeNull();
@@ -940,5 +950,224 @@ describe("removing from the component page", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
     expect(await screen.findByTestId("sim-page")).toBeTruthy();
     expect(window.location.pathname).toBe("/simulation");
+  });
+});
+
+// One-click faults (#2462): the menu a profile generates, the chip the
+// simulator's own read raises, and the list that filters as it is typed and
+// keeps its view in the address.
+const SINCE = new Date(Date.now() - 4 * 60_000).toISOString();
+const powerSurface = [
+  {
+    name: "web-admin", protocol: "http", port: 10080, fireable: true,
+    routes: [
+      { method: "POST", path: "/api/display/power", summary: "Set display power", sets: [{ path: "status.device.power", field: "power", values: ["on", "off", "standby"], default: "on" }] },
+      { method: "POST", path: "/api/display/input", sets: [{ path: "status.display.input", field: "input", values: ["hdmi1", "hdmi2"], default: "hdmi1" }] },
+    ],
+  },
+];
+// The harness seeds the cache with the plain component simulation; a test that
+// wants the profile's surface puts it there (the read would otherwise be skipped).
+const seedSurface = (qc: QueryClient, activity: SimComponent) => qc.setQueryData([...componentSimKey(DISPLAY)], withSurface(activity));
+const withSurface = (activity: SimComponent): ComponentSim => ({ ...componentSim, activity, surface: powerSurface });
+const poweredOff = { path: "status.device.power", value: "off", default: "on", since: SINCE };
+const fireUrl = `POST /components/${DISPLAY}/simulation:fire`;
+const fired = () => calls.filter((c) => c.path.endsWith("simulation:fire")).map((c) => c.body);
+
+describe("one-click faults on the Simulation page", () => {
+  it("powers a display off from the row's menu, with no JSON typed", async () => {
+    stubFetch({ [`GET /components/${DISPLAY}/simulation`]: withSurface(simRow(DISPLAY, "display-1", 7)), [fireUrl]: { status: 200, body: "{}", took_ms: 2 } });
+    const { qc } = mount(() => <Simulation />);
+    seedSurface(qc, simRow(DISPLAY, "display-1", 7));
+    const rows = await screen.findAllByTestId("sim-row");
+    fireEvent.click(within(rows[0]).getByRole("button", { name: "Break display-1" }));
+    // The menu is the profile's: power, the connection, the input; no Restore while healthy.
+    const menu = await screen.findByRole("dialog", { name: "Break or restore" });
+    await within(menu).findByRole("button", { name: "Power off" });
+    expect(within(menu).getAllByRole("button").map((b) => b.textContent)).toEqual(["Power off", "Standby", "Unplug", "Input: hdmi2"]);
+    fireEvent.click(within(menu).getByRole("button", { name: "Power off" }));
+    await waitFor(() => expect(fired()).toHaveLength(1));
+    expect(fired()[0]).toEqual({ surface: "web-admin", method: "POST", path: "/api/display/power", body: '{"power":"off"}' });
+    // The click was the menu's, not the row's: no drawer opened.
+    expect(screen.queryByTestId("sim-status")).toBeNull();
+  });
+
+  it("unplugs from the menu with an impairment write", async () => {
+    stubFetch({ [`GET /components/${DISPLAY}/simulation`]: withSurface(simRow(DISPLAY, "display-1", 7)), [`PUT /components/${DISPLAY}/impairment`]: { unplugged: true } });
+    const { qc } = mount(() => <Simulation />);
+    seedSurface(qc, simRow(DISPLAY, "display-1", 7));
+    const rows = await screen.findAllByTestId("sim-row");
+    fireEvent.click(within(rows[0]).getByRole("button", { name: "Break display-1" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Unplug" }));
+    await waitFor(() => expect(calls.some((c) => c.method === "PUT")).toBe(true));
+    expect(calls.find((c) => c.method === "PUT")!.body).toEqual({ unplugged: true, latency_ms: 0, jitter_ms: 0, loss_pct: 0, rate_kbit: 0 });
+  });
+
+  it("shows a held fault as a chip with its age, from the simulator's read, and restores it in one click", async () => {
+    const f = fleet([0, 0]);
+    f.outposts![0].components = [simRow(DISPLAY, "display-1", 0, { faults: [poweredOff] }), simRow(DSP, "dsp-1", 0)];
+    current = { fleet: f };
+    stubFetch({
+      [`GET /components/${DISPLAY}/simulation`]: withSurface(f.outposts![0].components![0]),
+      [fireUrl]: { status: 200, body: "{}", took_ms: 2 },
+    });
+    const { qc } = mount(() => <Simulation />);
+    seedSurface(qc, f.outposts![0].components![0]);
+    const rows = await screen.findAllByTestId("sim-row");
+    const chip = within(rows[0]).getByTestId("sim-fault-chip");
+    expect(within(chip).getByTestId("sim-fault-label").textContent).toBe("powered off");
+    expect(within(chip).getByTestId("sim-fault-age").textContent).toBe("4m");
+    expect(within(rows[1]).queryByTestId("sim-fault-chip")).toBeNull();
+    fireEvent.click(within(chip).getByTestId("sim-fault-clear"));
+    await waitFor(() => expect(fired()).toHaveLength(1));
+    expect(fired()[0]).toEqual({ surface: "web-admin", method: "POST", path: "/api/display/power", body: '{"power":"on"}' });
+    expect(screen.queryByTestId("sim-status")).toBeNull();
+  });
+
+  it("offers the way back, not the value already held: Power on and Restore while it is off", async () => {
+    const f = fleet([0, 0]);
+    f.outposts![0].components = [simRow(DISPLAY, "display-1", 0, { faults: [poweredOff] })];
+    current = { fleet: f };
+    stubFetch({ [`GET /components/${DISPLAY}/simulation`]: withSurface(f.outposts![0].components![0]) });
+    const { qc } = mount(() => <Simulation />);
+    seedSurface(qc, f.outposts![0].components![0]);
+    const rows = await screen.findAllByTestId("sim-row");
+    fireEvent.click(within(rows[0]).getByRole("button", { name: "Break display-1" }));
+    const menu = await screen.findByRole("dialog", { name: "Break or restore" });
+    await within(menu).findByRole("button", { name: "Power on" });
+    expect(within(menu).getAllByRole("button").map((b) => b.textContent)).toEqual(["Power on", "Standby", "Unplug", "Input: hdmi2", "Restore"]);
+  });
+
+  it("gives a viewer the fault and no way to set or clear it", async () => {
+    const f = fleet([0, 0]);
+    f.outposts![0].components = [simRow(DISPLAY, "display-1", 0, { faults: [poweredOff] })];
+    current = { fleet: f };
+    stubFetch();
+    mount(() => <Simulation />, viewer);
+    const rows = await screen.findAllByTestId("sim-row");
+    expect(within(rows[0]).getByTestId("sim-fault-label").textContent).toBe("powered off");
+    expect(within(rows[0]).queryByTestId("sim-fault-clear")).toBeNull();
+    expect(within(rows[0]).queryByRole("button", { name: /^Break/ })).toBeNull();
+  });
+
+  it("lists the faults in the drawer with the profile's actions as buttons, and the raw builder closed under Advanced", async () => {
+    const act = simRow(DISPLAY, "display-1", 7, { faults: [poweredOff] });
+    stubFetch({ [`GET /components/${DISPLAY}/simulation`]: withSurface(act), [fireUrl]: { status: 200, body: "{}", took_ms: 2 } });
+    const { qc } = mount(() => <SimComponentDrawer id={DISPLAY} onClose={() => {}} />);
+    seedSurface(qc, act);
+    const section = await screen.findByTestId("sim-faults");
+    await waitFor(() => expect(within(section).getByTestId("sim-fault-label").textContent).toBe("powered off"));
+    fireEvent.click(await within(section).findByRole("button", { name: "Power on" }));
+    await waitFor(() => expect(fired()).toHaveLength(1));
+    expect(fired()[0]).toMatchObject({ body: '{"power":"on"}' });
+    // Closed until opened: the request builder does not crowd the faults.
+    expect(screen.queryByRole("button", { name: /Fire on/ })).toBeNull();
+    await openAdvanced();
+    expect(await screen.findByRole("button", { name: /Fire on web-admin/ })).toBeTruthy();
+  });
+
+  it("says nothing is broken for a healthy device, and shows no chip", async () => {
+    stubFetch();
+    const { qc } = mount(() => <SimComponentDrawer id={DISPLAY} onClose={() => {}} />);
+    qc.setQueryData([...componentSimKey(DISPLAY)], withSurface(simRow(DISPLAY, "display-1", 7)));
+    const section = await screen.findByTestId("sim-faults");
+    expect(within(section).getByTestId("sim-no-faults")).toBeTruthy();
+    expect(within(section).queryByTestId("sim-fault-chip")).toBeNull();
+  });
+});
+
+describe("the fault chip on the component's page", () => {
+  it("shows a held fault beside the component, clears from there, and is absent when healthy or not simulated", async () => {
+    stubFetch({
+      [`GET /components/${DISPLAY}/simulation`]: withSurface(simRow(DISPLAY, "display-1", 7, { faults: [poweredOff] })),
+      [fireUrl]: { status: 200, body: "{}", took_ms: 2 },
+    });
+    const { qc } = mount(() => <SimFaultChipFor componentId={DISPLAY} name="display-1" />);
+    seedSurface(qc, simRow(DISPLAY, "display-1", 7, { faults: [poweredOff] }));
+    const chip = await screen.findByTestId("sim-fault-chip");
+    expect(chip.textContent).toContain("powered off");
+    fireEvent.click(within(chip).getByTestId("sim-fault-clear"));
+    await waitFor(() => expect(fired()).toHaveLength(1));
+    cleanup();
+    stubFetch();
+    const healthy = mount(() => <SimFaultChipFor componentId={DISPLAY} />);
+    seedSurface(healthy.qc, simRow(DISPLAY, "display-1", 7));
+    expect(screen.queryByTestId("sim-fault-chip")).toBeNull();
+    cleanup();
+    stubFetch();
+    const notSim = mount(() => <SimFaultChipFor componentId={DSP} />);
+    notSim.qc.setQueryData([...componentSimKey(DSP)], { simulated: false, connected: false, impairments: { available: false } });
+    expect(screen.queryByTestId("sim-fault-chip")).toBeNull();
+  });
+
+  it("shows a viewer the fault and no clear", async () => {
+    stubFetch();
+    const { qc } = mount(() => <SimFaultChipFor componentId={DISPLAY} />, viewer);
+    seedSurface(qc, simRow(DISPLAY, "display-1", 7, { faults: [poweredOff] }));
+    const chip = await screen.findByTestId("sim-fault-chip");
+    expect(within(chip).queryByTestId("sim-fault-clear")).toBeNull();
+  });
+});
+
+describe("the Simulation list's filter and paging", () => {
+  const many = (n: number): SimFleet => {
+    const f = fleet([0, 0]);
+    f.outposts![0].components = Array.from({ length: n }, (_, i) => simRow(uuidFor(`bulk-${i}`), `bulk-${String(i).padStart(3, "0")}`, 0, { product: i % 2 ? "polaris-dsp-8" : "boreal-edge-55" }));
+    return f;
+  };
+
+  it("filters as it is typed, with no Enter, and Enter keeps the text as a chip in the address", async () => {
+    current = { fleet: many(8) };
+    stubFetch();
+    mount(() => <Simulation />);
+    await screen.findAllByTestId("sim-row");
+    const input = screen.getByRole("combobox") as HTMLInputElement;
+    fireEvent.input(input, { target: { value: "bulk-00" } });
+    await waitFor(() => expect(screen.getAllByTestId("sim-row")).toHaveLength(8));
+    fireEvent.input(input, { target: { value: "bulk-003" } });
+    await waitFor(() => expect(screen.getAllByTestId("sim-row")).toHaveLength(1));
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(window.location.search).toContain("chips="));
+    expect(JSON.parse(new URLSearchParams(window.location.search).get("chips")!)).toEqual([{ key: "search", op: "contains", values: ["bulk-003"] }]);
+    expect(screen.getAllByTestId("sim-row")).toHaveLength(1);
+  });
+
+  it("searches the product and the address too, not only the name", async () => {
+    current = { fleet: many(6) };
+    stubFetch();
+    mount(() => <Simulation />);
+    await screen.findAllByTestId("sim-row");
+    fireEvent.input(screen.getByRole("combobox"), { target: { value: "polaris" } });
+    await waitFor(() => expect(screen.getAllByTestId("sim-row")).toHaveLength(3));
+  });
+
+  it("a deep link reproduces the filter and the open device", async () => {
+    current = { fleet: many(8) };
+    stubFetch();
+    const chips = encodeURIComponent(JSON.stringify([{ key: "search", op: "contains", values: ["bulk-00"] }, { key: "product", op: "eq", values: ["polaris-dsp-8"] }]));
+    mount(() => <Simulation />, admin, `/simulation?chips=${chips}&c=${uuidFor("bulk-1")}`);
+    await screen.findByTestId("sim-status");
+    const rows = screen.getAllByTestId("sim-row").map((r) => r.dataset.component);
+    expect(rows).toEqual([1, 3, 5, 7].map((i) => uuidFor(`bulk-${i}`)));
+    // Closing the drawer leaves the filter.
+    expect(window.location.search).toContain("chips=");
+  });
+
+  it("pages a long list: fifty rows, the count, and fifty more on request, starting over when the filter changes", async () => {
+    current = { fleet: many(120) };
+    stubFetch();
+    mount(() => <Simulation />);
+    await screen.findAllByTestId("sim-row");
+    expect(screen.getAllByTestId("sim-row")).toHaveLength(50);
+    const more = screen.getByTestId("list-more");
+    expect(more.textContent).toContain("Showing 50 of 120");
+    fireEvent.click(within(more).getByRole("button", { name: /Show 50 more/ }));
+    await waitFor(() => expect(screen.getAllByTestId("sim-row")).toHaveLength(100));
+    fireEvent.click(within(screen.getByTestId("list-more")).getByRole("button", { name: /Show 20 more/ }));
+    await waitFor(() => expect(screen.getAllByTestId("sim-row")).toHaveLength(120));
+    expect(screen.queryByTestId("list-more")).toBeNull();
+    fireEvent.input(screen.getByRole("combobox"), { target: { value: "bulk-0" } });
+    await waitFor(() => expect(screen.getByTestId("list-more").textContent).toContain("Showing 50 of 100"));
+    expect(screen.getAllByTestId("sim-row")).toHaveLength(50);
   });
 });

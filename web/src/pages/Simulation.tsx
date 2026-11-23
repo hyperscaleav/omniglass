@@ -12,14 +12,17 @@ import ListShell from "../components/ListShell";
 import { IdentityCell } from "../components/IdentityCell";
 import { NAME_MIN_W } from "../components/TreeList";
 import SimComponentDrawer from "../components/SimComponentDrawer";
+import SimFaultChip from "../components/SimFaultChip";
+import SimFaultMenu from "../components/SimFaultMenu";
 import AddSimSystemForm from "../components/AddSimSystemForm";
 import { ChevronRight, FlaskConical, MapPin, Plus, RotateCcw, X } from "../components/icons";
 import SimStatusBadge from "../components/SimStatusBadge";
+import { activeFaults } from "../lib/simfaults";
 import { useFormActions } from "../lib/formactions";
 import { can, useMe } from "../lib/auth";
 import { describeError, rel } from "../lib/format";
 import { entityLabel } from "../lib/entities";
-import type { FilterKey } from "../lib/predicate";
+import { parseChips, type Chip, type FilterKey } from "../lib/predicate";
 import { COMPONENTS_KEY, listComponents, type Component as FleetComponent } from "../lib/components";
 import LocationSelect from "../components/LocationSelect";
 import Picker, { PICKER_CLASS } from "../components/ui/Picker";
@@ -95,6 +98,10 @@ export default function Simulation(): JSX.Element {
   const [params, setParams] = useSearchParams();
   const open = () => (Array.isArray(params.c) ? params.c[0] : params.c) || null;
   const setOpen = (id: string | null) => setParams({ c: id ?? undefined });
+  // The filter is the address's ?chips= too (#2462), beside ?c=, so a link
+  // carries the view it was copied from: the same filter, the same open device.
+  const chips = createMemo<Chip[]>(() => parseChips(Array.isArray(params.chips) ? params.chips[0] : params.chips));
+  const setChips = (next: Chip[]) => setParams({ chips: next.length ? JSON.stringify(next) : undefined }, { replace: true });
 
   // The highlight: each poll's risen components get a token; a timer clears the
   // token it set, so a component hit again before its highlight ends keeps the
@@ -210,7 +217,7 @@ export default function Simulation(): JSX.Element {
               />
             }
           >
-            <SimTable rowBy={rowBy()} byId={byId()} blink={blink()} showOutpost={outpostNames().length > 1} onOpen={setOpen} trailing={<AddButton />} />
+            <SimTable rowBy={rowBy()} byId={byId()} blink={blink()} showOutpost={outpostNames().length > 1} onOpen={setOpen} chips={chips} onChips={setChips} trailing={<AddButton />} />
           </Show>
         </div>
       </Show>
@@ -326,7 +333,8 @@ const COLS: { key: string; label: string; width: number; right?: boolean }[] = [
   { key: "outpost", label: "Outpost", width: 130 },
   { key: "product", label: "Product", width: 160 },
   { key: "address", label: "Address", width: 112 },
-  { key: "status", label: "Status", width: 264 },
+  { key: "status", label: "Status", width: 120 },
+  { key: "faults", label: "Faults", width: 270 },
   { key: "hits", label: "Hits", width: 80, right: true },
   { key: "last", label: "Last hit", width: 132 },
 ];
@@ -342,6 +350,8 @@ function SimTable(props: {
   blink: ReadonlyMap<string, number>;
   showOutpost: boolean;
   onOpen: (id: string) => void;
+  chips: () => Chip[];
+  onChips: (chips: Chip[]) => void;
   trailing: JSX.Element;
 }) {
   const label = (id: string) => {
@@ -357,16 +367,20 @@ function SimTable(props: {
   const cols = () => COLS.filter((c) => c.key !== "outpost" || props.showOutpost);
   const minWidth = () => cols().reduce((s, c) => s + c.width, NAME_MIN_W + OPEN_W);
   const distinct = (rows: string[], get: (id: string) => string | undefined) => [...new Set(rows.map(get).filter((v): v is string => !!v))].sort();
+  // The key bare typed text searches: everything an operator reads off a row.
+  const everything = (id: string) => `${label(id)} ${props.rowBy.get(id)?.sim.component ?? ""} ${location(id)} ${props.rowBy.get(id)?.sim.product ?? ""} ${props.rowBy.get(id)?.sim.address ?? ""}`;
   const filterKeys = (): FilterKey<string>[] => [
+    { key: "search", type: "string", hint: "substring", get: everything, values: () => [] },
     { key: "name", type: "string", hint: "substring", get: (id) => `${label(id)} ${props.rowBy.get(id)?.sim.component ?? ""}`, values: () => [] },
     { key: "location", type: "string", hint: "substring", get: location, values: (rows) => distinct(rows, location) },
     { key: "product", type: "string", hint: "exact", get: (id) => props.rowBy.get(id)?.sim.product, values: (rows) => distinct(rows, (id) => props.rowBy.get(id)?.sim.product) },
     ...(props.showOutpost ? [{ key: "outpost", type: "string" as const, hint: "exact", get: (id: string) => props.rowBy.get(id)?.outpost, values: (rows: string[]) => distinct(rows, (id) => props.rowBy.get(id)?.outpost) }] : []),
     { key: "status", type: "string", hint: "exact", get: (id) => props.rowBy.get(id)?.sim.status, values: () => [...SIM_STATES] },
     { key: "impairment", type: "string", hint: "substring", get: (id) => impairmentText(props.rowBy.get(id)?.sim), values: () => ["unplugged", "not applied", "none"] },
+    { key: "fault", type: "string", hint: "substring", get: (id) => faultText(props.rowBy.get(id)?.sim), values: () => ["none", "unplugged", "powered off"] },
   ];
   return (
-    <ListShell filterKeys={filterKeys()} rows={ids()} placeholder="filter by name, location, product..." trailing={props.trailing}>
+    <ListShell filterKeys={filterKeys()} rows={ids()} chips={props.chips} onChips={props.onChips} live pageSize={PAGE_SIZE} placeholder="filter by name, location, product..." trailing={props.trailing}>
       {(filtered) => (
         <div class="overflow-x-auto">
           <table class="og-rows table table-fixed table-sm" style={{ "min-width": `${minWidth()}px` }} data-testid="sim-table">
@@ -404,6 +418,16 @@ function SimTable(props: {
     </ListShell>
   );
 }
+
+// Rows shown a page at a time: two hundred rows is a scroll nobody reads, and
+// the filter narrows it as it is typed (#2462).
+const PAGE_SIZE = 50;
+
+// What is wrong with a device, as the filter matches it: the chip's words, or "none".
+const faultText = (d: SimComponent | undefined) => {
+  const f = d ? activeFaults(d).map((x) => x.label).join(", ") : "";
+  return f || "none";
+};
 
 // The impairment as the filter matches it: the chip's words and its
 // not-applied note, or "none".
@@ -463,7 +487,14 @@ function SimRow(props: { id: string; row: SimRowData; component?: FleetComponent
       <td class="truncate font-data text-xs text-base-content/70" title={d().product}>{d().product}</td>
       <td class="font-data text-xs">{d().address}</td>
       <td class="py-1.5">
-        <SimStatusBadge sim={d()} />
+        <SimStatusBadge sim={d()} chip={false} />
+      </td>
+      {/* The fault chip and its menu: clicks here are not a click on the row. */}
+      <td class="py-1.5" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+        <span class="flex min-w-0 items-center gap-1.5">
+          <SimFaultChip componentId={props.id} sim={d()} name={props.component?.name ?? d().component} />
+          <span class="ml-auto flex-none"><SimFaultMenu componentId={props.id} sim={d()} name={props.component?.name ?? d().component} /></span>
+        </span>
       </td>
       <td class="text-right font-data tnum text-sm font-semibold" data-testid="row-hits">{d().hits.toLocaleString()}</td>
       <td class="text-xs">

@@ -1,4 +1,4 @@
-import { type Accessor, type JSX, Show, createMemo, createSignal } from "solid-js";
+import { type Accessor, type JSX, Show, createEffect, createMemo, createSignal, on } from "solid-js";
 import FilterBar from "./FilterBar";
 import { buildPredicate, type Chip, type FilterKey } from "../lib/predicate";
 import { describeError } from "../lib/format";
@@ -32,6 +32,13 @@ export default function ListShell<T>(props: {
   // instead of growing the page. The FilterBar header (and any footer) stay
   // pinned. Off (the default), the shell grows with content.
   fill?: boolean;
+  // Live filtering (#2462): typed text narrows the rows as it is typed, not only
+  // once Enter makes it a chip. Opt in; the default keeps the Enter contract.
+  live?: boolean;
+  // Paging (#2462): the body is handed at most this many rows, with a footer
+  // that says how many of how many and shows more. It starts over when the
+  // filter changes. Omit it for the whole list, as every other body gets.
+  pageSize?: number;
   children: (filtered: Accessor<T[]>, chips: Accessor<Chip[]>) => JSX.Element;
 }) {
   const [ownChips, setOwnChips] = createSignal<Chip[]>(props.initialChips ?? []);
@@ -39,7 +46,12 @@ export default function ListShell<T>(props: {
   const setChips = (c: Chip[]) => (props.onChips ? props.onChips(c) : setOwnChips(c));
   // Lazy: a controlled body that filters itself never reads `filtered`, so this
   // memo never runs for it (Solid memos are pull-based).
-  const filtered = createMemo(() => props.rows.filter(buildPredicate(props.filterKeys, chips())));
+  const [draft, setDraft] = createSignal<Chip | null>(null);
+  const matched = createMemo(() => props.rows.filter(buildPredicate(props.filterKeys, draft() ? [...chips(), draft()!] : chips())));
+  const [shown, setShown] = createSignal(props.pageSize ?? Infinity);
+  // A new filter starts the list from its first page again.
+  createEffect(on([chips, draft], () => setShown(props.pageSize ?? Infinity), { defer: true }));
+  const filtered = createMemo(() => (props.pageSize ? matched().slice(0, shown()) : matched()));
   return (
     <div class="og-stack flex flex-col" classList={{ "h-full min-h-0": props.fill }}>
       <Show when={props.error}>
@@ -58,9 +70,18 @@ export default function ListShell<T>(props: {
             clearable
             trailing={props.trailing}
             placeholder={props.placeholder}
+            onDraft={props.live ? setDraft : undefined}
           />
         </div>
         {props.children(filtered, chips)}
+        <Show when={props.pageSize && matched().length > filtered().length}>
+          <div class="flex items-center justify-between gap-3 border-t border-base-300 px-3 py-2 text-xs text-base-content/60" data-testid="list-more">
+            <span class="tnum">Showing {filtered().length.toLocaleString()} of {matched().length.toLocaleString()}</span>
+            <button type="button" class="btn btn-quiet btn-xs" onClick={() => setShown(shown() + props.pageSize!)}>
+              Show {Math.min(props.pageSize!, matched().length - filtered().length).toLocaleString()} more
+            </button>
+          </div>
+        </Show>
       </div>
     </div>
   );
