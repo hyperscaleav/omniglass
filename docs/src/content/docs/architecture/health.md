@@ -307,7 +307,7 @@ down** (nobody assigned, or fewer assigned than the quorum wants) names no alarm
 rather than a duplicated explanation.
 
 **A component's report** (`GET /components/{name}/health`) is the same envelope with no slots and no
-systems: the component's own verdict, from its active alarms, beside the edges that got it there.
+systems: the component's own health, from its active alarms, beside the edges that got it there.
 `omniglass component health list <name>` reads it from the CLI.
 
 All three reports carry the **recorded transitions**, oldest first, one entry per change, never a

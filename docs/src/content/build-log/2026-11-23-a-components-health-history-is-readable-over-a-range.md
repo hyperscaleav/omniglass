@@ -6,7 +6,7 @@ refs: [2305, 1826]
 
 The component's health was recorded (`recordHealth("component", ...)`) but only the roll-ups
 could be read, and the system read was fixed at the last 30 days. `GET /components/{name}/health`
-now returns the component's own verdict and its recorded transitions in the same envelope
+now returns the component's own health and its recorded transitions in the same envelope
 `GET /systems/{name}/health` serves (slots and systems empty), gated by `component:read` with the
 Gateway injecting scope and an out-of-scope name a non-disclosing 404.
 

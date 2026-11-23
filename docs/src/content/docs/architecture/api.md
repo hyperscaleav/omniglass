@@ -1159,13 +1159,13 @@ The reports are one shape over three owners:
 - `GET /locations/{name}/health` (`location:read`) returns the same envelope with `systems` filled
   instead: every system placed **anywhere** beneath the location, with its health, as the drill-down.
 - `GET /components/{name}/health` (`component:read`) returns the same envelope for one component:
-  `health` is its own live verdict (`unknown` for a device nothing has observed), `slots` and
+  `health` is its own live health (`unknown` for a device nothing has observed), `slots` and
   `systems` are empty, and `transitions` are its recorded edges. Out of scope is a non-disclosing 404.
 - `transitions` is the **recorded edges** inside the range, oldest first, each `{ts, health}`: one
   entry per change, never a sample. All three reads take `since` and `until` (RFC 3339); the default
   is the last 30 days (measured on the database's clock), an absent `since` with an `until` is the
   30 days before it, and `since` after `until` is a **400**. A range holds only edges recorded
-  inside it, so a quiet range is empty rather than carrying the verdict it began with.
+  inside it, so a quiet range is empty rather than carrying the health it began with.
 - `GET /systems/{name}/members` (`system:read`) carries each member's own `component_health`, the
   same recorded value a fleet view dot reads. It is the per-system read of the members' health, so a
   system's view polls it with the system's health report rather than the whole fleet view
