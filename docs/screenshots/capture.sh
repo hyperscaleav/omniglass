@@ -61,6 +61,26 @@ export OMNIGLASS_SETTING__SSO__ISSUER=https://login.example.com
 # sparklines draw full lines; for a capture only, never a learner's lab (#1790).
 STACK_SCENARIO=dev lab_up --no-outpost --platform-history
 
+# The lab's standing alarms, raised by rules after the seed: the dev fleet's
+# faults (#2434; reachability-lost on DSP 1 and response-slow on Display 1,
+# internal/devseed/fixtures.yaml) once each rule's sustain has passed, and
+# outpost-silent on edge-hq, which no outpost checks in for, once its
+# check-in age passes 90 s. Wait until those rules hold no pending streak and
+# outpost-silent's alarm is open, before any write of the capture's own, so
+# every capture starts from the same settled fleet: no shot lands before an
+# alarm, no age reads from a different start, and the audit trail holds the
+# same order. Only those rules: a platform rule such as ingest-lag-high can sit
+# pending on a loaded host, and no shot waits on it. LOUD past the deadline: a
+# capture that cannot see the fleet's alarms is not a capture of it.
+for i in $(seq 1 90); do
+  settled="$(curl -fsS -H "Authorization: Bearer $LAB_TOKEN" "$LAB_HOST_URL/api/v1/event-rules" |
+    jq '([.event_rules[] | select(.name == "reachability-lost" or .name == "response-slow") | .pending_streaks] | add) == 0
+      and ([.event_rules[] | select(.name == "outpost-silent") | .open_alarms] | add) > 0')"
+  [ "$settled" = true ] && break
+  [ "$i" = 90 ] && { echo "capture: the lab's standing alarms had not all opened after 180s" >&2; exit 1; }
+  sleep 2
+done
+
 # A couple of secrets so the Secrets surface renders real rows. LOUD on
 # failure: every CLI write here lands an audit row, so a write that silently
 # failed shifts the audit page by one row and the zero-tolerance gate reads
