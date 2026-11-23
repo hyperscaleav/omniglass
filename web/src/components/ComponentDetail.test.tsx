@@ -26,6 +26,7 @@ import { ENDPOINTS_KEY } from "../lib/endpoints";
 import { DRIVERS_KEY } from "../lib/drivers";
 import { uuidFor } from "../lib/testids";
 import { seedSeverityLevels } from "../lib/testseverity";
+import { answerConfirms } from "../lib/confirm.testkit";
 
 // ComponentDetail (#2423): the component page and the component blade render
 // ONE body, so a blade shows every section, tab and action its page shows.
@@ -196,7 +197,7 @@ describe("the tab is the host's", () => {
 
 describe("one edit model", () => {
   it("edits from the blade's Configure, and the leave guard asks before a tab switch drops drafts", async () => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const confirm = answerConfirms(false);
     mountBlade("/web/explore");
     const blade = await screen.findByRole("dialog");
     fireEvent.click(await within(blade).findByRole("tab", { name: "Configure" }));
@@ -210,20 +211,21 @@ describe("one edit model", () => {
   });
 
   it("closing or popping a blade with unsaved drafts asks first, and keeps the blade on No", async () => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    // No to the Close, no to the Escape, then yes.
+    const asked = answerConfirms(false, false, true);
     const r = mountBlade("/web/explore");
     const blade = await screen.findByRole("dialog");
     fireEvent.click(await within(blade).findByRole("tab", { name: "Configure" }));
     fireEvent.click(await within(blade).findByRole("button", { name: "Edit" }));
     fireEvent.input(await within(blade).findByDisplayValue("videobar-1"), { target: { value: "videobar-2" } });
     fireEvent.click(within(blade).getByRole("button", { name: "Close" }));
-    expect(confirm).toHaveBeenCalled();
+    await waitFor(() => expect(asked).toHaveBeenCalledTimes(1));
     expect(r.controller().stack().length).toBe(1);
     fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(asked).toHaveBeenCalledTimes(2));
     expect(r.controller().stack().length).toBe(1);
-    confirm.mockReturnValue(true);
     fireEvent.click(within(blade).getByRole("button", { name: "Close" }));
-    expect(r.controller().stack()).toEqual([]);
+    await waitFor(() => expect(r.controller().stack()).toEqual([]));
   });
 
   it("the page's ?edit=1 lands on Configure, already editing", async () => {
@@ -233,8 +235,19 @@ describe("one edit model", () => {
 });
 
 describe("Delete, by the host's way out", () => {
+  // Delete sits in the Configure face's footer, so a caller who may delete
+  // but not update still gets the tab, read-only, with its Delete (#2463).
+  it("a caller with delete but not update still reaches Delete", async () => {
+    const qc = seed(["delete"]);
+    qc.setQueryData([...ME_KEY], { ...me, permissions: ["*:read", "component:delete"] });
+    mountPage(`/web/components/${CID}?tab=configure`, qc);
+    const face = await screen.findByTestId("configure-face");
+    expect(await within(face).findByRole("button", { name: "Delete" })).toBeTruthy();
+    expect(within(face).queryByRole("button", { name: "Edit" })).toBeNull();
+  });
+
   it("in a blade, refreshes the slots and health reads and closes the stack", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    answerConfirms(true);
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(null, { status: 204 }));
     const r = mountBlade("/web/explore");
     const spy = vi.spyOn(r.qc, "invalidateQueries");
@@ -248,7 +261,7 @@ describe("Delete, by the host's way out", () => {
   });
 
   it("a refused delete keeps the blade open and says why", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    answerConfirms(true);
     const detail = "component is still referenced by another record, for example a system slot it staffs";
     vi.spyOn(globalThis, "fetch").mockImplementation(
       async () => new Response(JSON.stringify({ title: "Conflict", status: 409, detail }), { status: 409, headers: { "Content-Type": "application/problem+json" } }),
@@ -262,7 +275,7 @@ describe("Delete, by the host's way out", () => {
   });
 
   it("on the page, leaves for Explore", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    answerConfirms(true);
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(null, { status: 204 }));
     mountPage(`/web/components/${CID}?tab=configure`);
     fireEvent.click(await screen.findByRole("button", { name: "Delete" }));

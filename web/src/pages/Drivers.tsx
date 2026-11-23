@@ -22,6 +22,7 @@ import { catalogLock } from "../lib/catalog";
 import { createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
+import { confirmDelete } from "../lib/confirm";
 
 // Drivers: the driver catalog (the driver picker on the product form), on the
 // flat FlatList surface. A driver is addressed by its kebab name (ADR-0062:
@@ -113,7 +114,7 @@ function DriverBladeBody(p: { id: string }): JSX.Element {
   async function removeDriver() {
     const r = row();
     if (!r) return;
-    if (!confirm(`Delete driver "${r.name}"?`)) return;
+    if (!(await confirmDelete({ kind: "driver", name: r.name }))) return;
     setErr(null);
     try {
       await deleteDriver(r.name);

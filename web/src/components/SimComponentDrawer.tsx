@@ -40,6 +40,7 @@ import {
   type SimResult,
   type SimSurface,
 } from "../lib/simulation";
+import { confirmDelete } from "../lib/confirm";
 
 // SimComponentDrawer: one simulated component, opened from its Simulation row or
 // its component's page (#890). Status first (where it is served and what has reached
@@ -144,7 +145,7 @@ function ComponentBody(props: { id: string; onRemoved: () => void }): JSX.Elemen
 
   async function remove() {
     const label = sim.data?.activity?.component ?? "this component";
-    if (!confirm(`Remove "${label}"? The component and its endpoints are deleted, and the simulator stops serving it. This cannot be undone.`)) return;
+    if (!(await confirmDelete({ kind: "simulated component", name: label, verb: "Remove", consequence: "The component and its endpoints are deleted, and the simulator stops serving it. This cannot be undone." }))) return;
     setBusy(true);
     setErr(null);
     try {

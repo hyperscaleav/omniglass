@@ -56,6 +56,7 @@ import {
   validateCalcDraft,
   withInputKey,
 } from "../lib/calc_rules";
+import { confirmDelete } from "../lib/confirm";
 
 // Calc rules (Catalog > Actions > Calc rules, #999, #1018; epic #525): the
 // calc rule catalog, a sibling of Rules and Severity in the catalog's Actions
@@ -418,7 +419,7 @@ function CalcBladeBody(p: { name: string }): JSX.Element {
   }
 
   async function remove(r: CalcRule) {
-    if (!confirm(`Delete calc rule "${r.name}"? The values it wrote stay on their owners, as history naming it.`)) return;
+    if (!(await confirmDelete({ kind: "calc rule", name: r.name, consequence: "The values it wrote stay on their owners, as history naming it." }))) return;
     setErr(null);
     try {
       await deleteCalcRule(r.name);

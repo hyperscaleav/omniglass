@@ -17,6 +17,7 @@ import {
 import { useMe, can } from "../lib/auth";
 import { BladeEditContext } from "../lib/blades";
 import { describeError } from "../lib/format";
+import { confirmAction } from "../lib/confirm";
 
 // SlotEditor is the standard detail-blade panel for curating the SLOTS a standard
 // declares: the slots every conforming system needs filled (a table microphone, a
@@ -510,7 +511,7 @@ export default function SlotEditor(props: { id: string; official: boolean }): JS
   const refresh = () => qc.invalidateQueries({ queryKey: key() });
 
   async function withdraw(slot: string) {
-    if (!confirm(`Withdraw "${slot}" from this standard? Every conforming system loses it, and its assignments with it.`)) return;
+    if (!(await confirmAction({ title: `Withdraw "${slot}" from this standard?`, body: "Every conforming system loses it, and its assignments with it.", confirmLabel: "Withdraw slot", tone: "danger" }))) return;
     setBusy(true);
     setErr(null);
     try {
