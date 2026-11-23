@@ -380,15 +380,9 @@ export default function EntityForm(props: {
       <Show when={raw()} fallback={<div class="skeleton h-24 w-full" />}>
         <div class={SECTION}>
           <span class={EYEBROW}>Identity</span>
-          {/* Reading in a blade, the label IS the blade's title, so it is
-              not said again; editing, the pen is where it changes (#872). */}
           <Show
             when={slot.editing()}
-            fallback={
-              <Show when={props.host !== "blade"}>
-                <BladeField bind="label" edit={slot} value={() => (raw() ? entityLabel(raw()!) : "")} />
-              </Show>
-            }
+            fallback={<BladeField bind="label" edit={slot} value={() => (raw() ? entityLabel(raw()!) : "")} />}
           >
             <LabelPenField pen={pen} entity={() => raw()!} placeholder="Operator label" />
           </Show>
@@ -444,10 +438,6 @@ export default function EntityForm(props: {
           </Show>
         </div>
 
-        {/* A system's or component's location is the blade's own location card
-            (#872); only a location's parent, which is the location's own to
-            move, stays in the blade's form. */}
-        <Show when={props.host !== "blade" || props.kind === "location"}>
         <div class={SECTION}>
           <span class={EYEBROW}>Placement</span>
           <Show when={props.kind === "location"} fallback={
@@ -477,7 +467,6 @@ export default function EntityForm(props: {
             />
           </Show>
         </div>
-        </Show>
 
         <Show when={props.kind === "component"}>
           <div class={SECTION}>
@@ -501,12 +490,9 @@ export default function EntityForm(props: {
         </Show>
 
         {/* The kind's panels are configuration (slots, properties and their
-            cascade, reconciliation, endpoints): the page host's Configure tab
-            carries them, and the blade stays the glance an operator landed on
-            from a row (#872). */}
-        <Show when={props.host !== "blade"}>
-          <div class={SECTION}>{panels()}</div>
-        </Show>
+            cascade, reconciliation, endpoints), in every host: a blade shows
+            what the page shows (#2423). */}
+        <div class={SECTION}>{panels()}</div>
 
         <div class={SECTION}>
           <TagAdder kind={props.kind} name={props.id} canUpdate={slot.editing() && canUpdate()} canCreateKey={can(me.data, "tag", "create")} />
