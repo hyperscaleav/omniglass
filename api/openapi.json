@@ -1277,11 +1277,19 @@
           "lab": {
             "description": "Whether this server is a lab started by omniglass lab run: disposable data and a well-known login, never a real deployment",
             "type": "boolean"
+          },
+          "sso_providers": {
+            "description": "The identity providers a person may sign in through, by the name /auth/oidc/start/{provider} takes; empty when single sign-on is not configured",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
           "bootstrapped",
-          "lab"
+          "lab",
+          "sso_providers"
         ],
         "type": "object"
       },
@@ -4092,6 +4100,30 @@
         },
         "required": [
           "name"
+        ],
+        "type": "object"
+      },
+      "CreateIdentityLinkInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/CreateIdentityLinkInputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "identifier": {
+            "description": "The identity at the provider as iss|sub: the issuer exactly as its id_tokens carry it, a bar, and the subject verbatim (the provider's admin console shows it, and an unlinked sign-in names it)",
+            "maxLength": 2048,
+            "minLength": 3,
+            "type": "string"
+          }
+        },
+        "required": [
+          "identifier"
         ],
         "type": "object"
       },
@@ -7651,6 +7683,91 @@
           "owner_name",
           "owner_id",
           "created_at"
+        ],
+        "type": "object"
+      },
+      "IdentityLinkBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/IdentityLinkBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "description": "The link's id, which unlinking names",
+            "type": "string"
+          },
+          "identifier": {
+            "description": "The identity at the provider: its issuer and subject, iss|sub, exactly as its id_tokens carry them",
+            "type": "string"
+          },
+          "issuer": {
+            "description": "The identifier's issuer half",
+            "type": "string"
+          },
+          "last_used_at": {
+            "description": "When the person last signed in through it",
+            "format": "date-time",
+            "type": "string"
+          },
+          "linked_by": {
+            "description": "The username of whoever made the link: the person themselves or an administrator; absent once that user is purged",
+            "type": "string"
+          },
+          "refresh_accepted_at": {
+            "description": "When the provider last accepted the link's refresh token, at sign-in or at a re-check",
+            "format": "date-time",
+            "type": "string"
+          },
+          "self": {
+            "description": "True when the person made the link themselves",
+            "type": "boolean"
+          },
+          "subject": {
+            "description": "The identifier's subject half",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "identifier",
+          "issuer",
+          "subject",
+          "self",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "IdentityLinksOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/IdentityLinksOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "links": {
+            "items": {
+              "$ref": "#/components/schemas/IdentityLinkBody"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "links"
         ],
         "type": "object"
       },
@@ -15014,6 +15131,54 @@
         ],
         "type": "object"
       },
+      "SSOSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "client_secret": {
+            "description": "A platform oauth2-client secret, by name: its client_id field is the client id Omniglass is registered as, its client_secret field authenticates the token exchange. Setting it from the console or API takes secret:bind on it; the settings file and environment are trusted as deployment config",
+            "type": "string"
+          },
+          "groups_claim": {
+            "default": "groups",
+            "description": "The id_token claim carrying the person's groups at the provider (read by group mapping, #2363)",
+            "type": "string"
+          },
+          "issuer": {
+            "description": "The identity provider's issuer URL exactly as its id_tokens carry it (https://login.example.com/realms/corp). Empty turns single sign-on off. An on-premises provider is reached only when the notification settings' egress_allow names it. Moving it from the console or API while client_secret is bound takes secret:bind on that secret; the settings file and environment are trusted as deployment config",
+            "type": "string"
+          },
+          "recheck_grace_minutes": {
+            "default": 60,
+            "description": "Minutes a link may go without a refresh the provider accepted (an outage) before its sessions and tokens are refused until one is; also the length of a session through a provider that issues no refresh token",
+            "format": "int64",
+            "maximum": 10080,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "recheck_minutes": {
+            "default": 15,
+            "description": "Minutes between re-checks: each link with a live session or token through it redeems its refresh token at the provider, and a refusal revokes them",
+            "format": "int64",
+            "maximum": 1440,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "scopes": {
+            "default": "openid email profile offline_access",
+            "description": "The scopes a sign-in asks for, space-separated. offline_access asks for the refresh token the re-check redeems; a provider that issues none gives sessions of recheck_grace_minutes and no API tokens",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issuer",
+          "client_secret",
+          "scopes",
+          "groups_claim",
+          "recheck_minutes",
+          "recheck_grace_minutes"
+        ],
+        "type": "object"
+      },
       "SecretBody": {
         "additionalProperties": false,
         "description": "An encrypted credential set at one level of the fleet and inherited below it.",
@@ -15589,6 +15754,9 @@
           "retention": {
             "$ref": "#/components/schemas/RetentionSettings"
           },
+          "sso": {
+            "$ref": "#/components/schemas/SSOSettings"
+          },
           "ui": {
             "$ref": "#/components/schemas/UISettings"
           }
@@ -15603,7 +15771,8 @@
           "database",
           "agent",
           "assistant",
-          "heartbeat"
+          "heartbeat",
+          "sso"
         ],
         "type": "object"
       },
@@ -16719,6 +16888,55 @@
           "property_type_name",
           "property_type_id",
           "required"
+        ],
+        "type": "object"
+      },
+      "StartSelfLinkInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/StartSelfLinkInputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "current_password": {
+            "description": "Your current password: a link outlives the session that makes it, so it is confirmed as a password change is",
+            "type": "string"
+          },
+          "provider": {
+            "default": "default",
+            "description": "The identity provider to link, by name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "current_password"
+        ],
+        "type": "object"
+      },
+      "StartSelfLinkOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/StartSelfLinkOutputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "url": {
+            "description": "The provider's sign-in page to send the browser to; signing in there links that identity to you and returns to your profile",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
         ],
         "type": "object"
       },
@@ -18419,6 +18637,28 @@
           "last_heard_at",
           "count",
           "last_message"
+        ],
+        "type": "object"
+      },
+      "UnlinkSelfInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/UnlinkSelfInputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "current_password": {
+            "description": "Your current password, as linking asks",
+            "type": "string"
+          }
+        },
+        "required": [
+          "current_password"
         ],
         "type": "object"
       },
@@ -21854,6 +22094,185 @@
           }
         },
         "summary": "Get your own profile picture"
+      }
+    },
+    "/auth/me/identity-links": {
+      "get": {
+        "description": "Lists the identities at the identity provider you sign in through. Requires authentication; self-scoped (never another person's).",
+        "operationId": "list-auth-me-identity-links",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityLinksOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List your own identity links"
+      }
+    },
+    "/auth/me/identity-links/{link}:unlink": {
+      "post": {
+        "description": "Confirms your current password and removes one of your identity links; every session and token through it ends with it. Requires authentication; self-scoped (a link that is not yours is a 404). Refused to an agent token. Audited.",
+        "operationId": "unlink-auth-me-identity-link",
+        "parameters": [
+          {
+            "description": "The link's id",
+            "in": "path",
+            "name": "link",
+            "required": true,
+            "schema": {
+              "description": "The link's id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnlinkSelfInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Unlink one of your own identity links"
+      }
+    },
+    "/auth/me/identity-links:start": {
+      "post": {
+        "description": "Confirms your current password and starts a sign-in at the identity provider bound to this session: send the browser to the returned url, and signing in there links that identity to you (an owner's only way to gain single sign-on). Requires authentication; self-scoped (it only ever links to you). Needs a session; refused to an agent token. A wrong password is a 403; single sign-on not configured is a 409.",
+        "operationId": "start-auth-me-identity-link",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartSelfLinkInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartSelfLinkOutputBody"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Start linking your own identity at the provider"
       }
     },
     "/auth/me/notifications": {
@@ -36363,6 +36782,203 @@
         },
         "summary": "Revoke a grant",
         "x-omniglass-permission": "user_grant:delete"
+      }
+    },
+    "/users/{id}/identity-links": {
+      "get": {
+        "description": "Lists the identities at the identity provider a person signs in through (single sign-on), each iss|sub with who made it and when it was last used. Gated by user:read:admin (all-scope), as the user directory is.",
+        "operationId": "list-user-identity-links",
+        "parameters": [
+          {
+            "description": "The user, addressed by its uuid, a person's username, or a machine user's name",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "The user, addressed by its uuid, a person's username, or a machine user's name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityLinksOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List a person's identity links",
+        "x-omniglass-permission": "user:read:admin"
+      },
+      "post": {
+        "description": "Links another person to an identity at the identity provider (iss|sub), so they sign in through single sign-on as that person. Email never links. Gated by user:link-identity (all-scope) and the takeover guard a password reset takes: refused on yourself (link from your profile), on an owner (an owner links their own identity), or on a person whose capabilities exceed yours. An identity already linked to anyone is a 409. Audited, the link recording who made it; granting the person owner later deletes it.",
+        "operationId": "create-user-identity-link",
+        "parameters": [
+          {
+            "description": "The person, by uuid or username",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "The person, by uuid or username",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateIdentityLinkInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityLinkBody"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Link a person to an identity at the provider",
+        "x-omniglass-permission": "user:link-identity"
+      }
+    },
+    "/users/{id}/identity-links/{link}": {
+      "delete": {
+        "description": "Removes one of another person's identity links; every session and token they signed in through it ends with it. Gated by user:link-identity (all-scope) and the same takeover guard as linking. Audited.",
+        "operationId": "delete-user-identity-link",
+        "parameters": [
+          {
+            "description": "The person, by uuid or username",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "The person, by uuid or username",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The link's id",
+            "in": "path",
+            "name": "link",
+            "required": true,
+            "schema": {
+              "description": "The link's id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "summary": "Unlink a person from an identity at the provider",
+        "x-omniglass-permission": "user:link-identity"
       }
     },
     "/users/{id}/sessions": {

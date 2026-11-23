@@ -29,11 +29,9 @@ steps:
     caption: Save. The simulator applies it on its next pull.
   - goto: /platform
     caption: Back on Platform health, the loop runs on. The window is the last 10 seconds on this lab.
-  - wait: { selector: '[data-testid=platform-sim-gap][data-gap=sent-not-received][data-protocol=snmp][data-tone=expected]', timeout: 30000 }
-    caption: The outpost sent snmp requests the simulator never received. The gap opens, read as impaired, not lost.
+  - wait: { selector: 'body:has([data-testid=platform-sim-gap][data-gap=sent-not-received][data-protocol=snmp][data-tone=expected]):has([data-testid=platform-sim-device]:has(a:text-is("projector-1")) .badge-info)', timeout: 30000 }
+    caption: The outpost sent snmp requests the simulator never received. The gap opens, read as impaired, not lost, and projector-1 reads impaired below.
     poster: true
-  - wait: { selector: '[data-testid=platform-sim-device]:has(a:text-is("projector-1")) .badge-info', timeout: 10000 }
-    caption: Below, projector-1 reads impaired, and the snmp requests it received fall toward 0.
   - click: '[data-testid=platform-sim-device] >> role=link[name="projector-1"s]'
     caption: Open projector-1 again.
   - click: { role: button, name: Repair }

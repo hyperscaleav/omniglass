@@ -114,7 +114,9 @@ mkdir -p "$OUT"
 : >"$OUT/stack.env"
 
 lab_init ogprobe
-lab_up
+# The probe replays every walkthrough, the single sign-on one among them
+# (#2362), so its lab runs the identity provider.
+lab_up --sso
 # The walkthroughs were written against the example fleet; a fresh install
 # has none of the places they drill into.
 walk=1

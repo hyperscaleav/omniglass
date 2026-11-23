@@ -36,45 +36,39 @@
     {
       "n": 6,
       "kind": "wait",
-      "caption": "The outpost sent snmp requests the simulator never received. The gap opens, read as impaired, not lost.",
+      "caption": "The outpost sent snmp requests the simulator never received. The gap opens, read as impaired, not lost, and projector-1 reads impaired below.",
       "still": "step-06.png"
     },
     {
       "n": 7,
-      "kind": "wait",
-      "caption": "Below, projector-1 reads impaired, and the snmp requests it received fall toward 0.",
+      "kind": "click",
+      "caption": "Open projector-1 again.",
       "still": "step-07.png"
     },
     {
       "n": 8,
       "kind": "click",
-      "caption": "Open projector-1 again.",
+      "caption": "Repair it. Every request reaches it again.",
       "still": "step-08.png"
     },
     {
       "n": 9,
-      "kind": "click",
-      "caption": "Repair it. Every request reaches it again.",
+      "kind": "goto",
+      "caption": "The window still holds the change, so the gap still reads impaired.",
       "still": "step-09.png"
     },
     {
       "n": 10,
-      "kind": "goto",
-      "caption": "The window still holds the change, so the gap still reads impaired.",
-      "still": "step-10.png"
-    },
-    {
-      "n": 11,
       "kind": "wait",
       "caption": "Once the window slides past the change, the gap reads 0 and the attribution clears.",
-      "still": "step-11.png"
+      "still": "step-10.png"
     }
   ],
   "poster": "step-06.png",
   "preview": "preview.webp",
   "budget": {
-    "seconds": 59.6,
-    "bytes": 1142492,
-    "previewBytes": 939418
+    "seconds": 50.1,
+    "bytes": 963621,
+    "previewBytes": 877162
   }
 }
