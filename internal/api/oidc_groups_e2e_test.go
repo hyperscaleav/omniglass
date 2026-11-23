@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/egress"
 	"github.com/hyperscaleav/omniglass/internal/sso"
+	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
 // Identity provider groups map to Omniglass groups (#2363, ADR-2361 point 4):
@@ -184,6 +186,13 @@ func TestSSORecheckRefreshDropsAGroupTheProviderRemoved(t *testing.T) {
 	}
 	if hq, _ := s.reads(t, b.session()); hq != http.StatusForbidden {
 		t.Fatalf("read after the refresh dropped the group: %d, want 403", hq)
+	}
+
+	// A link unlinked between the sweep's listing and its accept is nothing
+	// to keep, not an error that would stop the pass over the other links.
+	if err := s.gw.AcceptLinkRefresh(s.ctx, "01a20000-0000-7000-8000-000000000000", "", time.Hour,
+		&storage.IdPGroups{Issuer: s.idp.Issuer()}); err != nil {
+		t.Fatalf("accept for a vanished link = %v, want nil", err)
 	}
 }
 

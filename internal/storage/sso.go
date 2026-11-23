@@ -518,7 +518,9 @@ func (p *PG) AcceptLinkRefresh(ctx context.Context, linkID, rotated string, grac
 			recheck_grace_until = now() + make_interval(secs => $3) where id = $1 and kind = 'oidc' returning user_id::text`,
 		linkID, sealed, grace.Seconds()).Scan(&userID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return ErrIdentityLinkNotFound
+		// Unlinked since the sweep listed it: nothing to keep, and no reason
+		// to stop the pass over the other links.
+		return nil
 	}
 	if err != nil {
 		return fmt.Errorf("storage: accept link refresh: %w", err)
