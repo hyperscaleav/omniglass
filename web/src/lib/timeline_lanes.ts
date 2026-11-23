@@ -239,3 +239,40 @@ export function metricLine(
 ): ChartLayout {
   return bucketLayout([...buckets], { ...f, now: r.to, windowMs: Math.max(r.to - r.from, 1), resolutionMs });
 }
+
+// ruleInputs is what the Metrics and Properties lanes show before the operator
+// picks: the signal each rule that raised an alarm in range watches, so the
+// line that crossed the threshold sits under the span it raised.
+export function ruleInputs(
+  spans: readonly AlarmSpan[],
+  rules: readonly { id: string; name: string; sample_lane: "metric" | "property"; sample_key: string }[],
+): { metrics: string[]; properties: string[] } {
+  const metrics = new Set<string>();
+  const properties = new Set<string>();
+  for (const s of spans) {
+    const r = rules.find((x) => (s.ruleId ? x.id === s.ruleId : x.name === s.rule));
+    if (!r || !r.sample_key) continue;
+    (r.sample_lane === "metric" ? metrics : properties).add(r.sample_key);
+  }
+  return { metrics: [...metrics], properties: [...properties] };
+}
+
+// changedPropertyKeys names the properties with a change inside the range, in
+// key order: the Properties lane's default.
+export function changedPropertyKeys(series: readonly { key: string; points?: readonly { ts: string }[] | null }[], r: TimeWindow): string[] {
+  const keys = new Set<string>();
+  for (const s of series) {
+    if ((s.points ?? []).some((p) => {
+      const t = ms(p.ts);
+      return t !== undefined && t > r.from && t <= r.to;
+    })) keys.add(s.key);
+  }
+  return [...keys].sort();
+}
+
+// cursorStep moves the keyboard's cursor a hundredth of the range, clamped to
+// it; with none set it starts at the range's end, the newest instant.
+export function cursorStep(t: number | undefined, r: TimeWindow, dir: -1 | 1): number {
+  if (t === undefined) return r.to;
+  return Math.min(Math.max(t + dir * ((r.to - r.from) / 100), r.from), r.to);
+}

@@ -5,8 +5,11 @@ import {
   clusterMarkers,
   healthSpans,
   markersInRange,
+  changedPropertyKeys,
+  cursorStep,
   metricLine,
   propertyBands,
+  ruleInputs,
   spanAt,
   xOf,
 } from "./timeline_lanes";
@@ -193,5 +196,33 @@ describe("geometry and the cursor", () => {
     );
     expect(l.linePath).not.toBe("");
     expect(l.points).toHaveLength(2);
+  });
+});
+
+describe("lane defaults", () => {
+  it("defaults the metrics and properties to the inputs of the rules that raised alarms in range", () => {
+    const spans = alarmSpans([alarm({ raised_at: at(10), cleared_at: at(20) })], range, now);
+    const rules = [
+      { id: "r1", name: "reachability-lost", sample_lane: "property" as const, sample_key: "reachable" },
+      { id: "r2", name: "too-hot", sample_lane: "metric" as const, sample_key: "temperature" },
+    ];
+    expect(ruleInputs(spans, rules)).toEqual({ metrics: [], properties: ["reachable"] });
+    const hot = alarmSpans([{ ...alarm({ raised_at: at(10) }), raised_by_rule: "too-hot", raised_by_rule_id: "r2" }], range, now);
+    expect(ruleInputs(hot, rules)).toEqual({ metrics: ["temperature"], properties: [] });
+  });
+
+  it("names the properties that changed inside the range", () => {
+    const series = [
+      { key: "power", instance: "", carried_in: "on", points: [{ ts: at(15), value: "off" }] },
+      { key: "input", instance: "", carried_in: "hdmi1", points: [] },
+      { key: "volume", instance: "", points: [{ ts: at(-10), value: "3" }] },
+    ];
+    expect(changedPropertyKeys(series, range)).toEqual(["power"]);
+  });
+
+  it("steps the cursor a hundredth of the range, starting from the end", () => {
+    expect(cursorStep(undefined, range, -1)).toBe(range.to);
+    expect(cursorStep(range.to, range, -1)).toBe(range.to - 36_000);
+    expect(cursorStep(range.from, range, -1)).toBe(range.from);
   });
 });
