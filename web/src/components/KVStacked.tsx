@@ -1,4 +1,5 @@
-import { Show, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Show } from "solid-js";
 import InfoTip from "./InfoTip";
 import ProvenanceDot from "./ProvenanceDot";
 import { IDENTITY_LABELS, type IdentityBinding } from "../lib/entities";
@@ -52,7 +53,7 @@ export default function KVStacked(props: KVStackedProps): JSX.Element {
           {(from) => <ProvenanceDot label={label()} from={from()} />}
         </Show>
       </div>
-      <div class="text-sm" classList={{ "font-data": props.mono }}>
+      <div class={["text-sm", { "font-data": props.mono }]}>
         {props.value}
       </div>
     </div>

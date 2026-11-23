@@ -1,5 +1,5 @@
-import { For, Show, type JSX } from "solid-js";
-import { A } from "@solidjs/router";
+import type { JSX } from "@solidjs/web";
+import { For, Show } from "solid-js";
 import ReachLadder from "./ReachLadder";
 import { entityLabel } from "../lib/entities";
 import type { Step } from "../lib/assistant";
@@ -25,9 +25,9 @@ function isRef(v: unknown): v is Ref {
 
 function ComponentLink(p: { c: Ref }) {
   return (
-    <A href={`/components/${p.c.id}`} class="link link-hover font-medium">
+    <a href={`/components/${p.c.id}`} class="link link-hover font-medium">
       {entityLabel(p.c)}
-    </A>
+    </a>
   );
 }
 

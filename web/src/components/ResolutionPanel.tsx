@@ -1,4 +1,5 @@
-import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show, createMemo, createSignal } from "solid-js";
 import { useQuery } from "@tanstack/solid-query";
 import { componentSystemsKey, componentSystems, type Member } from "../lib/members";
 import {

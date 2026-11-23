@@ -92,9 +92,9 @@ function mountHost(kind: "system" | "location", id: string, host: "page" | "blad
             const blades = createBladeController();
             slot = createEditSlot();
             return (
-              <BladesContext.Provider value={blades}>
+              <BladesContext value={blades}>
                 <EntityForm kind={kind} id={id} slot={slot} host={host} />
-              </BladesContext.Provider>
+              </BladesContext>
             );
           }}
         />
@@ -274,7 +274,7 @@ describe("a component's memberships, editable from its own face (#767)", () => {
         <Router base="/web">
           <Route path="/x" component={() => {
             slot = createEditSlot();
-            return <BladesContext.Provider value={createBladeController()}><EntityForm kind="component" id={comp} slot={slot} host="blade" /></BladesContext.Provider>;
+            return <BladesContext value={createBladeController()}><EntityForm kind="component" id={comp} slot={slot} host="blade" /></BladesContext>;
           }} />
         </Router>
       </QueryClientProvider>
@@ -661,9 +661,9 @@ describe("the one form, system rename precheck", () => {
               const blades = createBladeController();
               slot = createEditSlot();
               return (
-                <BladesContext.Provider value={blades}>
+                <BladesContext value={blades}>
                   <EntityForm kind="system" id={uuidFor("child-sys")} slot={slot} host="page" />
-                </BladesContext.Provider>
+                </BladesContext>
               );
             }}
           />
@@ -742,9 +742,9 @@ describe("the one form, location rename precheck", () => {
               const blades = createBladeController();
               slot = createEditSlot();
               return (
-                <BladesContext.Provider value={blades}>
+                <BladesContext value={blades}>
                   <EntityForm kind="location" id={uuidFor("child-loc")} slot={slot} host="page" />
-                </BladesContext.Provider>
+                </BladesContext>
               );
             }}
           />

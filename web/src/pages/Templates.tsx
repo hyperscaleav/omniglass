@@ -1,4 +1,5 @@
-import { Show, createContext, createMemo, createSignal, useContext, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Show, createContext, createMemo, createSignal, useContext } from "solid-js";
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
@@ -77,7 +78,7 @@ export default function Templates(): JSX.Element {
   const startRow = () => rows().find((t) => t.name === starting());
 
   return (
-    <TemplatesUiContext.Provider value={{ openStart: (name) => { blades.close(); setStarting(name); } }}>
+    <TemplatesUiContext value={{ openStart: (name) => { blades.close(); setStarting(name); } }}>
       <FlatList<Template>
         config={{
           entity: { name: "template", plural: "templates" },
@@ -111,7 +112,7 @@ export default function Templates(): JSX.Element {
           </Drawer>
         )}
       </Show>
-    </TemplatesUiContext.Provider>
+    </TemplatesUiContext>
   );
 }
 

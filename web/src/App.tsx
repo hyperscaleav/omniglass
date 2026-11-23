@@ -1,4 +1,4 @@
-import { type ParentComponent, Show, createMemo, createSignal, createEffect, onCleanup } from "solid-js";
+import { type ParentComponent, Show, createMemo, createSignal, createEffect, onCleanup, createTrackedEffect } from "solid-js";
 import { useLocation } from "@solidjs/router";
 import { pageHere, pendingTriage } from "./lib/handover";
 import Sidebar from "./components/Sidebar";
@@ -39,15 +39,15 @@ const App: ParentComponent = (props) => {
 
   // An alarm's troubleshoot button (#2164) asks for a triage; the panel runs
   // it once open.
-  createEffect(() => {
+  createTrackedEffect(() => {
     if (pendingTriage() && mayAsk()) setOmnibotOpen(true);
   });
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const me = settingsMe.data;
     applyTheme(me ? themeFromMe(me) : theme());
   });
-  createEffect(() => localStorage.setItem("og-collapsed", collapsed() ? "1" : "0"));
+  createTrackedEffect(() => localStorage.setItem("og-collapsed", collapsed() ? "1" : "0"));
 
   // Global ⌘K / Ctrl-K toggles the command palette.
   const onKey = (e: KeyboardEvent) => {

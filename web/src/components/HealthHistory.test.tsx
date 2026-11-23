@@ -11,7 +11,10 @@ import type { HealthTransition } from "../lib/health";
 const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
 
 const at = (ts: string, health: string): HealthTransition =>
-  ({ ts, health: health }) as HealthTransition;
+  (({
+    ts,
+    health: health
+  }) as HealthTransition);
 
 describe("HealthHistory", () => {
   // #631 made incomplete a recordable health, so this component started

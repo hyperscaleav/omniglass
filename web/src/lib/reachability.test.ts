@@ -37,7 +37,14 @@ describe("reachWord", () => {
 // time an outpost wrote on its samples (#931, #933).
 describe("an endpoint's freshness is the server's last_seen (#931, #933)", () => {
   const ep = (over: Partial<ReachEndpoint>): ReachEndpoint =>
-    ({ endpoint: "tcp", transport: "tcp", reachability: null, layers: [], history: [], ...over }) as ReachEndpoint;
+    (({
+      endpoint: "tcp",
+      transport: "tcp",
+      reachability: null,
+      layers: [],
+      history: [],
+      ...over
+    }) as ReachEndpoint);
   const layer = (msAgo: number) => ({ layer: "port", check: "tcp-open", value: "open", ts: ago(msAgo) });
 
   it("ages an old transition by last_seen, not the transition", () => {
@@ -211,7 +218,14 @@ describe("requestRung", () => {
 
 describe("pendingNotice", () => {
   const ep = (over: Partial<ReachEndpoint>): ReachEndpoint =>
-    ({ endpoint: "tcp", transport: "tcp", reachability: null, layers: [], history: [], ...over }) as ReachEndpoint;
+    (({
+      endpoint: "tcp",
+      transport: "tcp",
+      reachability: null,
+      layers: [],
+      history: [],
+      ...over
+    }) as ReachEndpoint);
 
   it("sends an endpoint no outpost probes to the outpost list", () => {
     const n = pendingNotice(ep({ pending: "no-outpost" }));

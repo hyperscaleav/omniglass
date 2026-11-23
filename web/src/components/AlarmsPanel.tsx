@@ -1,4 +1,5 @@
-import { For, Show, createMemo, createSignal, createUniqueId, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show, createMemo, createSignal, createUniqueId } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
 import { Check, Eye, Siren } from "./icons";

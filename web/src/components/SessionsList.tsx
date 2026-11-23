@@ -39,7 +39,7 @@ export default function SessionsList(props: {
       <For each={props.sessions} fallback={<li class="py-2 text-xs text-base-content/40">{props.emptyLabel}</li>}>
         {(s) => (
           <li class="flex items-center gap-3 py-2.5">
-            <span class="badge badge-soft badge-sm" classList={{ "badge-primary": s.kind === "session", "badge-ghost": s.kind === "token" }}>{s.kind}</span>
+            <span class={["badge badge-soft badge-sm", { "badge-primary": s.kind === "session", "badge-ghost": s.kind === "token" }]}>{s.kind}</span>
             <div class="min-w-0 flex-1 leading-tight">
               <div class="flex items-center gap-2">
                 <span class="truncate text-xs font-medium text-base-content/80">{s.description || deviceLabel(s.user_agent)}</span>

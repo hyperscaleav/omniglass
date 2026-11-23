@@ -254,10 +254,10 @@ describe("the system zoom", () => {
   describe("acknowledging from the Why strip", () => {
     const viewer: Me = { user: { id: "u-v", kind: "person" }, person: { username: "v" }, permissions: ["system:read", "component:read", "location:read"], grants: [] };
     const responder: Me = { ...viewer, permissions: [...(viewer.permissions ?? []), "alarm:acknowledge"] };
-    const withAck = (ack: object): FleetHealth => ({
+    const withAck = (ack: object): FleetHealth => (({
       ...health,
-      slots: (health.slots ?? []).map((r) => ({ ...r, alarms: (r.alarms ?? []).map((a) => ({ ...a, ...ack })) })),
-    }) as FleetHealth;
+      slots: (health.slots ?? []).map((r) => ({ ...r, alarms: (r.alarms ?? []).map((a) => ({ ...a, ...ack })) }))
+    }) as FleetHealth);
 
     it("offers Acknowledge on an unacknowledged causing alarm when the user may", () => {
       mount(undefined, health, [], [], responder);

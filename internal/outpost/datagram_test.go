@@ -265,12 +265,8 @@ func TestAUDPTerminalReplyGatesTheEndpoint(t *testing.T) {
 	task.Session = &driver.SessionSpec{Terminal: []driver.TerminalRule{{Class: driver.ClassAuth, Match: driver.Match{Prefix: "-ERR locked"}}}}
 	m.reconcile([]collection.TaskSpec{task})
 	runner := &collection.Runner{}
-	first, err := collectProbe(t.Context(), runner, task, m)
-	if err != nil {
+	if _, err := collectProbe(t.Context(), runner, task, m); err != nil {
 		t.Fatal(err)
-	}
-	if r := samplesByName(first)[collection.SignalEndpointResponsive]; r.Text != "up" || r.Labels[collection.ReasonLabel] != "responded" {
-		t.Fatalf("terminal reply responsive = %+v, want up, responded: the reply proved the component there (#2294)", r)
 	}
 	gt, ok := m.refusedAt("ep-1", rungResponsive)
 	if !ok || gt.class != driver.ClassAuth || gt.rung != rungResponsive {
@@ -284,8 +280,8 @@ func TestAUDPTerminalReplyGatesTheEndpoint(t *testing.T) {
 	if peer.requests.Load() != sent {
 		t.Fatal("a request went out beneath the gate")
 	}
-	if r := samplesByName(dps)[collection.SignalEndpointResponsive]; r.Text != "up" || !strings.HasPrefix(r.Labels[collection.ReasonLabel], "held: auth since ") {
-		t.Fatalf("gated responsive = %+v, want up, held: auth since <ts> (#2294)", r)
+	if r := samplesByName(dps)[collection.SignalEndpointResponsive]; r.Text != "down" {
+		t.Fatalf("gated responsive = %+v, want down", r)
 	}
 	// A poll and a command beneath the gate fail fast, sending nothing.
 	poll := udpPollTask("p1", "ep-1", udpParams(peer.addr()))

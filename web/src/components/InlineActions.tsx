@@ -1,4 +1,5 @@
-import { Show, createSignal, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Show, createSignal } from "solid-js";
 import { Eye, EyeOff, Copy, Check, RefreshCw } from "./icons";
 
 // The console's one inline-action button family: the reveal / copy / generate

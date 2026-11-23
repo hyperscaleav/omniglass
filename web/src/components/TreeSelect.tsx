@@ -78,7 +78,7 @@ export default function TreeSelect(props: TreeSelectProps) {
           class="flex cursor-pointer items-center rounded-field py-1.5 pr-3 text-sm outline-none data-[highlighted]:bg-base-200 data-[selected]:font-semibold data-[disabled]:cursor-default data-[disabled]:text-base-content/40"
           style={{ "padding-left": padFor(p.item.rawValue.depth) }}
         >
-          <Select.ItemLabel classList={{ "tree-glyph": p.item.rawValue.depth > 0 }}>
+          <Select.ItemLabel class={{ "tree-glyph": p.item.rawValue.depth > 0 }}>
             {p.item.rawValue.label}
           </Select.ItemLabel>
         </Select.Item>

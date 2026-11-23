@@ -1,4 +1,5 @@
-import { For, Show, createMemo, type Accessor, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show, createMemo, type Accessor } from "solid-js";
 
 // KeyedFor renders a list by a key of each item, not by the item itself.
 // Solid's For keeps a row while its item is the same object, but a polled read
@@ -14,7 +15,7 @@ export default function KeyedFor<T extends object>(props: {
   children: (item: Accessor<T>, index: Accessor<number>) => JSX.Element;
 }) {
   const items = () => props.each ?? [];
-  const keys = createMemo(() => items().map(props.by), undefined, {
+  const keys = createMemo(() => items().map(props.by), {
     equals: (a, b) => a.length === b.length && a.every((k, i) => k === b[i]),
   });
   const byKey = createMemo(() => new Map(items().map((it) => [props.by(it), it])));

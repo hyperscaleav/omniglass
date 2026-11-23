@@ -346,10 +346,8 @@ type ObservationSnapshot struct {
 	// the snapshot was read.
 	FleetGeneration int64
 	FleetChanging   bool
-	// ServedIDs is the ids of the devices served when the snapshot was read.
-	ServedIDs []string
-	Protocols []ProtocolObservation
-	Devices   []DeviceObservation
+	Protocols       []ProtocolObservation
+	Devices         []DeviceObservation
 	// Faces lists only the faces that saw an overlap, so the snapshot stays
 	// small at fleet scale; the per-protocol overlap totals are on each row.
 	Faces []FaceOverlap
@@ -468,11 +466,6 @@ func (e *Engine) Observation() ObservationSnapshot {
 	after := e.fleetNow()
 	snap.FleetGeneration = after.generation
 	snap.FleetChanging = before != after || after.changing
-	e.mu.Lock()
-	for _, d := range e.devices {
-		snap.ServedIDs = append(snap.ServedIDs, d.DeviceID)
-	}
-	e.mu.Unlock()
 	return snap
 }
 

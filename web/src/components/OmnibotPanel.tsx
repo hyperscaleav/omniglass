@@ -1,4 +1,4 @@
-import { For, Match, Show, Switch, createEffect, createSignal, onCleanup } from "solid-js";
+import { For, Match, Show, Switch, createEffect, createSignal, onCleanup, createTrackedEffect } from "solid-js";
 import Button from "./Button";
 import Drawer from "./Drawer";
 import OmnibotStep, { StepArgs } from "./OmnibotStep";
@@ -65,14 +65,14 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
   let composer: HTMLTextAreaElement | undefined;
 
   // A prompt handed in (the command palette's query) seeds the composer.
-  createEffect(() => {
+  createTrackedEffect(() => {
     if (props.open && props.prompt) setDraft(props.prompt);
   });
   onCleanup(() => controller?.abort());
 
   // The latest item stays in view as the run streams: the drawer's body is
   // what scrolls, so the transcript's last element brings itself into it.
-  createEffect(() => {
+  createTrackedEffect(() => {
     state();
     end?.scrollIntoView?.({ block: "end" });
   });
@@ -124,7 +124,7 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
   }
 
   // A triage asked for from outside the panel runs once the panel is open.
-  createEffect(() => {
+  createTrackedEffect(() => {
     const s = pendingTriage();
     if (!props.open || !s || busy()) return;
     requestTriage(undefined);

@@ -76,8 +76,8 @@ export function IdentityCell(props: { entity: Labelled; weight?: number }) {
     <span class="flex min-w-0 flex-col gap-0.5 py-0.5">
       <span class="flex min-w-0 items-baseline">
         <span
-          class="truncate"
-          classList={{ "font-data text-[13px]": isIdentifier() }}
+         
+          class={["truncate", { "font-data text-[13px]": isIdentifier() }]}
           style={{ "font-weight": props.weight ?? 500 }}
         >
           {label()}

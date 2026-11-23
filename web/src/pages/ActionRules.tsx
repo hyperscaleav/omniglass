@@ -1,4 +1,5 @@
-import { For, Show, createContext, createMemo, createSignal, useContext, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show, createContext, createMemo, createSignal, useContext } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import Drawer from "../components/Drawer";
@@ -117,7 +118,7 @@ export default function ActionRules(): JSX.Element {
   ];
 
   return (
-    <ActionRulesUiContext.Provider value={{ openEdit: (name) => { blades.close(); setEditing(name); } }}>
+    <ActionRulesUiContext value={{ openEdit: (name) => { blades.close(); setEditing(name); } }}>
       <div class="flex min-h-full flex-col gap-4">
         <FlatList<ActionRule>
           config={{
@@ -164,7 +165,7 @@ export default function ActionRules(): JSX.Element {
           </Drawer>
         )}
       </Show>
-    </ActionRulesUiContext.Provider>
+    </ActionRulesUiContext>
   );
 }
 

@@ -1,4 +1,5 @@
-import { For, Show, createSignal, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show, createSignal } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
@@ -476,8 +477,8 @@ function NameRuleEditor(p: {
       <Show when={p.naming}>
         <div class="flex flex-col gap-2 pl-6">
           <input
-            class="input input-bordered input-sm w-full font-data"
-            classList={{ "input-error": !!p.stemError }}
+           
+            class={["input input-bordered input-sm w-full font-data", { "input-error": !!p.stemError }]}
             aria-label="Name stem"
             placeholder="wing"
             value={p.stem}

@@ -23,8 +23,7 @@ type Engine struct {
 	mu         sync.Mutex    // guards devices and fleet
 	devices    []*Device
 	fleet      fleetState
-	failed     map[string]string // arrivals that failed to start, by device id, as they were tried; guarded by syncMu
-	seamMu     sync.RWMutex      // guards the observer seams below
+	seamMu     sync.RWMutex // guards the observer seams below
 	logger     RequestLogger
 	reqPub     RequestPublisher
 	diffPub    DiffPublisher
@@ -369,15 +368,7 @@ func (e *Engine) Sync(snapshots []DeviceSnapshot) error {
 	// The fleet is changing from here when a device may start or stop. Its
 	// generation advances below only for what did: an arrival that failed to
 	// start changed nothing served.
-	// An arrival that failed to start the way it was already tried binds
-	// nothing served, so its retry does not make the fleet read as changing
-	// (#1962).
-	changing := len(kept) != len(current)
-	for _, snap := range arriving {
-		if e.failed[snap.DeviceID] != attemptKey(snap) {
-			changing = true
-		}
-	}
+	changing := len(arriving) > 0 || len(kept) != len(current)
 	if changing {
 		e.mu.Lock()
 		e.fleet.changing = true
@@ -396,7 +387,6 @@ func (e *Engine) Sync(snapshots []DeviceSnapshot) error {
 	for _, snap := range arriving {
 		dev, err := e.buildDevice(snap, peersByRoom)
 		if err != nil {
-			e.noteFailed(snap)
 			errs = append(errs, fmt.Errorf("device %s: %w", snap.DeviceID, err))
 			continue
 		}
@@ -405,11 +395,9 @@ func (e *Engine) Sync(snapshots []DeviceSnapshot) error {
 		}
 		if err := e.startDevice(dev); err != nil {
 			e.stopDevice(dev)
-			e.noteFailed(snap)
 			errs = append(errs, err)
 			continue
 		}
-		delete(e.failed, snap.DeviceID)
 		started[snap.DeviceID] = dev
 	}
 
@@ -429,19 +417,6 @@ func (e *Engine) Sync(snapshots []DeviceSnapshot) error {
 	e.fleet.changing = false
 	e.mu.Unlock()
 	return errors.Join(errs...)
-}
-
-// attemptKey is what a start attempt of a snapshot depends on.
-func attemptKey(s DeviceSnapshot) string {
-	return s.DeviceID + "|" + s.LoopbackIP + "|" + s.ProfileName + "|" + s.Product
-}
-
-// noteFailed remembers that a snapshot failed to start. Called under syncMu.
-func (e *Engine) noteFailed(s DeviceSnapshot) {
-	if e.failed == nil {
-		e.failed = map[string]string{}
-	}
-	e.failed[s.DeviceID] = attemptKey(s)
 }
 
 // fleetState is which fleet the engine serves (#1895). The generation is zero

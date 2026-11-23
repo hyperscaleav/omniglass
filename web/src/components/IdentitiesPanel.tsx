@@ -1,5 +1,5 @@
-import { For, Show, createEffect, createMemo, createSignal, createUniqueId, type JSX } from "solid-js";
-import { A } from "@solidjs/router";
+import type { JSX } from "@solidjs/web";
+import { For, Show, createEffect, createMemo, createSignal, createUniqueId, createTrackedEffect } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
 import Eyebrow from "./Eyebrow";
@@ -74,16 +74,16 @@ export default function IdentitiesPanel(props: { component: string; canUpdate: b
     queryFn: () => listUnboundIdentities(props.component),
     refetchInterval: live() ? LEAF_POLL_MS : false,
   }));
-  createEffect(() => setLive(hasContent(bindingsQ.data, unboundQ.data)));
+  createTrackedEffect(() => setLive(hasContent(bindingsQ.data, unboundQ.data)));
   const systems = useQuery(() => ({ queryKey: SYSTEMS_KEY, queryFn: listSystems }));
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
 
   const bindings = createMemo(() => bindingsQ.data?.bindings ?? []);
   const unbound = createMemo(() => unboundQ.data?.identities ?? []);
   const hidden = () => bindingsQ.data?.hidden ?? 0;
-  const bindingKeys = createMemo(() => bindings().map((b) => identityRowKey(b.key, b.value)), undefined, stableKeys);
+  const bindingKeys = createMemo(() => bindings().map((b) => identityRowKey(b.key, b.value)), stableKeys);
   const bindingByKey = createMemo(() => new Map(bindings().map((b) => [identityRowKey(b.key, b.value), b])));
-  const unboundKeys = createMemo(() => unbound().map((u) => identityRowKey(u.key, u.value)), undefined, stableKeys);
+  const unboundKeys = createMemo(() => unbound().map((u) => identityRowKey(u.key, u.value)), stableKeys);
   const unboundByKey = createMemo(() => new Map(unbound().map((u) => [identityRowKey(u.key, u.value), u])));
 
   // What an owner reads as: its label from the lists the console already
@@ -219,7 +219,7 @@ export default function IdentitiesPanel(props: { component: string; canUpdate: b
                               <td class="text-base-content/40"><ArrowRight size={13} /></td>
                               <td>
                                 <span class="inline-flex items-baseline gap-2">
-                                  <A href={ownerHref(b())} class="hover:underline">{ownerLabel(b())}</A>
+                                  <a href={ownerHref(b())} class="hover:underline">{ownerLabel(b())}</a>
                                   <span class="text-[11px] text-base-content/45">{b().owner_kind}</span>
                                 </span>
                               </td>

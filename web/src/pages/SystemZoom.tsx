@@ -1,4 +1,4 @@
-import { For, Show, createEffect, createMemo, createSignal } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, createTrackedEffect } from "solid-js";
 import { useLocation, useNavigate, useParams, useSearchParams } from "@solidjs/router";
 import { useQueries, useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
@@ -111,7 +111,7 @@ export default function SystemZoom() {
   const system = createMemo(() => (view.data?.systems ?? []).find((s) => s.id === id()));
 
   // A name-shaped address resolves to the uuid, query kept (#759's rule).
-  createEffect(() => {
+  createTrackedEffect(() => {
     if (!view.data || system()) return;
     const matches = (view.data.systems ?? []).filter((s) => s.name === id());
     if (matches.length === 1) navigate(`/systems/${matches[0].id}${route.search}`, { replace: true });
@@ -316,173 +316,224 @@ export default function SystemZoom() {
   const openComponent = (cid: string) => blades.push({ kind: "component", id: cid });
 
   return (
-    <BladesContext.Provider value={blades}>
-    <Page title={title()} name={system()?.name} breadcrumb={<Breadcrumb crumbs={crumbs()} />}>
-      {/* A create from a template lands here with ?from= (#1329). */}
-      <TemplateNotice />
-      <DetailGate
-        noun="system"
-        missing={missing()}
-        ambiguous={ambiguous()}
-        pending={pending()}
-        error={failure() ? describeError(failure()) : null}
-        retrying={view.isFetching || health.isFetching}
-        onRetry={retry}
-      >
-        <div class="flex flex-col gap-3">
-          <Show when={locationId()}>
-            {(pid) => <LocationCard locationId={pid()} showName={!sole()} />}
-          </Show>
-          <section data-testid="system-card" class="card overflow-hidden border border-base-300 bg-base-200 p-0">
-            <div data-testid="system-header" class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-base-300 px-4 py-3 text-sm">
-              <Eyebrow label="System" hint="The logical group of components that makes this location work, and the thing Omniglass monitors: its health is what the components filling its slots add up to." />
-              <HealthBadge health={health.data?.health} size="sm" />
-              <Show when={health.data && sinceOf(health.data, now())}>
-                {(sc) => <span data-testid="since-line" class="tabular-nums text-base-content/70">since {fmtTime(sc().ts)} · {durationText(sc().ms)}</span>}
-              </Show>
-              <Show when={standard()}>
-                <span class="text-base-content/30">·</span>
-                <span data-testid="standard" class="text-base-content/70">{standardRow() ? entityLabel(standardRow()!) : standard()}</span>
-              </Show>
-              <span class="text-base-content/30">·</span>
-              <span data-testid="component-count" class="tabular-nums text-base-content/70">{componentCount()} {componentCount() === 1 ? "component" : "components"}</span>
-              {/* Slot arithmetic speaks only when hardware is MISSING: a
-                  deployed room fills every slot (#785), and a down occupant
-                  is a failure the alarms explain, not a gap. */}
-              <Show when={strip() && strip()!.empty > 0}>
-                <span class="text-base-content/30">·</span>
-                <span data-testid="slots-short" class="tabular-nums text-incomplete">{strip()!.filled} of {strip()!.total} slots filled</span>
-              </Show>
-            </div>
-            <TabRail tabs={tabs()} activeKey={tab} guard={leave} />
-            <Show when={tab() === "configure"}>
-              {/* A sole system's location has no page of its own: it configures
-                  here, first, as the page reads (its card sits above the
-                  system's), in its own section with its own Edit (#872). A
-                  location shared by several systems keeps its own view and is
-                  configured there. */}
-              <Show when={sole() && locationId()} keyed>
-                {(pid) => (
-                  <section class="border-b border-base-300">
-                    <div class="px-4 pt-4"><Eyebrow label="Location" hint="Where this system sits: the location's own name, type, parent, properties and tags. Its edit is its own, beside the system's." /></div>
-                    <ConfigureFace kind="location" id={pid} editValue="location" testid="configure-face-location" guard={leave} />
-                  </section>
-                )}
-              </Show>
-              {/* Named only beside the location's section; alone it needs no name. */}
-              <Show when={sole() && locationId()}>
-                <div class="px-4 pt-4"><Eyebrow label="System" /></div>
-              </Show>
-              {/* Keyed on the id: another system is another face, so the edit
-                  slot and drafts never carry over (#854). */}
-              <Show when={id()} keyed>{(sid) => <ConfigureFace kind="system" id={sid} guard={leave} />}</Show>
+    <BladesContext value={blades}>
+      <Page title={title()} name={system()?.name} breadcrumb={<Breadcrumb crumbs={crumbs()} />}>
+        {/* A create from a template lands here with ?from= (#1329). */}
+        <TemplateNotice />
+        <DetailGate
+          noun="system"
+          missing={missing()}
+          ambiguous={ambiguous()}
+          pending={pending()}
+          error={failure() ? describeError(failure()) : null}
+          retrying={view.isFetching || health.isFetching}
+          onRetry={retry}
+        >
+          <div class="flex flex-col gap-3">
+            <Show when={locationId()}>
+              {(pid) => <LocationCard locationId={pid()} showName={!sole()} />}
             </Show>
-        <Show when={tab() === "activity"}>
-          <section data-testid="history-tab" class="flex flex-col gap-4 p-4">
-            <div class="flex flex-wrap items-stretch gap-3">
-              <div data-testid="uptime-kpi" class="flex min-w-36 flex-col justify-between gap-1 rounded-box border border-base-300 bg-base-100 p-3.5">
-                <Eyebrow label="Uptime" hint="The healthy share of the recorded window: the health KPI over time, the number a status page leads with. The timeline beside it is the same record drawn out." />
-                <span
-                  class="font-mono text-3xl tabular-nums"
-                  classList={{
-                    "text-healthy": uptimeTone() === "good",
-                    "text-warning": uptimeTone() === "warn",
-                    "text-error": uptimeTone() === "bad",
-                  }}
-                >
-                  {uptime() ?? "–"}<span class="text-lg">%</span>
-                </span>
-                <span class="text-[10px] text-base-content/45">of the last 30 days</span>
+            <section data-testid="system-card" class="card overflow-hidden border border-base-300 bg-base-200 p-0">
+              <div data-testid="system-header" class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-base-300 px-4 py-3 text-sm">
+                <Eyebrow label="System" hint="The logical group of components that makes this location work, and the thing Omniglass monitors: its health is what the components filling its slots add up to." />
+                <HealthBadge health={health.data?.health} size="sm" />
+                <Show when={health.data && sinceOf(health.data, now())}>
+                  {(sc) => <span data-testid="since-line" class="tabular-nums text-base-content/70">since {fmtTime(sc().ts)} · {durationText(sc().ms)}</span>}
+                </Show>
+                <Show when={standard()}>
+                  <span class="text-base-content/30">·</span>
+                  <span data-testid="standard" class="text-base-content/70">{standardRow() ? entityLabel(standardRow()!) : standard()}</span>
+                </Show>
+                <span class="text-base-content/30">·</span>
+                <span data-testid="component-count" class="tabular-nums text-base-content/70">{componentCount()} {componentCount() === 1 ? "component" : "components"}</span>
+                {/* Slot arithmetic speaks only when hardware is MISSING: a
+                    deployed room fills every slot (#785), and a down occupant
+                    is a failure the alarms explain, not a gap. */}
+                <Show when={strip() && strip()!.empty > 0}>
+                  <span class="text-base-content/30">·</span>
+                  <span data-testid="slots-short" class="tabular-nums text-incomplete">{strip()!.filled} of {strip()!.total} slots filled</span>
+                </Show>
               </div>
-              <div class="flex min-w-60 flex-1 flex-col justify-center rounded-box border border-base-300 bg-base-100 p-3.5" data-testid="health-history-full">
-                <HealthHistory compact transitions={health.data?.transitions ?? []} health={health.data?.health} />
-                <div class="relative mt-1 h-2">
-                  <For each={windowAlarms()}>
-                    {(inc) => (
-                      <span
-                        data-testid={`alarm-marker-${inc.id}`}
-                        class="absolute top-0 h-0 w-0 -translate-x-1/2 border-x-4 border-b-6 border-x-transparent"
-                        classList={{ "border-b-error": scale().outage(inc.severity), "border-b-warning": !scale().outage(inc.severity) }}
-                        style={{ left: `${markerX(inc.raisedAt, historyNow(), 30 * 24 * 3600_000) * 100}%` }}
-                        title={`${inc.message} · ${inc.component}`}
-                      />
-                    )}
-                  </For>
+              <TabRail tabs={tabs()} activeKey={tab} guard={leave} />
+              <Show when={tab() === "configure"}>
+                {/* A sole system's location has no page of its own: it configures
+                    here, first, as the page reads (its card sits above the
+                    system's), in its own section with its own Edit (#872). A
+                    location shared by several systems keeps its own view and is
+                    configured there. */}
+                <Show when={sole() && locationId()} keyed>
+                  {(pid) => (
+                    <section class="border-b border-base-300">
+                      <div class="px-4 pt-4"><Eyebrow label="Location" hint="Where this system sits: the location's own name, type, parent, properties and tags. Its edit is its own, beside the system's." /></div>
+                      <ConfigureFace kind="location" id={pid} editValue="location" testid="configure-face-location" guard={leave} />
+                    </section>
+                  )}
+                </Show>
+                {/* Named only beside the location's section; alone it needs no name. */}
+                <Show when={sole() && locationId()}>
+                  <div class="px-4 pt-4"><Eyebrow label="System" /></div>
+                </Show>
+                {/* Keyed on the id: another system is another face, so the edit
+                    slot and drafts never carry over (#854). */}
+                <Show when={id()} keyed>{(sid) => <ConfigureFace kind="system" id={sid} guard={leave} />}</Show>
+              </Show>
+          <Show when={tab() === "activity"}>
+            <section data-testid="history-tab" class="flex flex-col gap-4 p-4">
+              <div class="flex flex-wrap items-stretch gap-3">
+                <div data-testid="uptime-kpi" class="flex min-w-36 flex-col justify-between gap-1 rounded-box border border-base-300 bg-base-100 p-3.5">
+                  <Eyebrow label="Uptime" hint="The healthy share of the recorded window: the health KPI over time, the number a status page leads with. The timeline beside it is the same record drawn out." />
+                  <span
+                   
+                    class={["font-mono text-3xl tabular-nums", {
+                      "text-healthy": uptimeTone() === "good",
+                      "text-warning": uptimeTone() === "warn",
+                      "text-error": uptimeTone() === "bad",
+                    }]}
+                  >
+                    {uptime() ?? "–"}<span class="text-lg">%</span>
+                  </span>
+                  <span class="text-[10px] text-base-content/45">of the last 30 days</span>
+                </div>
+                <div class="flex min-w-60 flex-1 flex-col justify-center rounded-box border border-base-300 bg-base-100 p-3.5" data-testid="health-history-full">
+                  <HealthHistory compact transitions={health.data?.transitions ?? []} health={health.data?.health} />
+                  <div class="relative mt-1 h-2">
+                    <For each={windowAlarms()}>
+                      {(inc) => (
+                        <span
+                          data-testid={`alarm-marker-${inc.id}`}
+                         
+                          class={["absolute top-0 h-0 w-0 -translate-x-1/2 border-x-4 border-b-6 border-x-transparent", { "border-b-error": scale().outage(inc.severity), "border-b-warning": !scale().outage(inc.severity) }]}
+                          style={{ left: `${markerX(inc.raisedAt, historyNow(), 30 * 24 * 3600_000) * 100}%` }}
+                          title={`${inc.message} · ${inc.component}`}
+                        />
+                      )}
+                    </For>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div>
-              <Eyebrow label="Health history" hint="One entry per contiguous stretch away from healthy, however many health changes it contained, ongoing first. Expand an entry for the transitions inside it and the alarms that explain them." />
-              <Show when={stretches().length > 0} fallback={<p class="mt-2 text-sm text-base-content/50">Nothing in this window. The system held healthy the whole way.</p>}>
-                <ul data-testid="stretch-list" class="mt-2 flex flex-col gap-2">
-                  <For each={stretches()}>
-                    {(inc, idx) => {
-                      const reasons = () => stretchReasons(inc, windowAlarms());
-                      const open = () => openStretch() === idx();
-                      return (
-                        <li
-                          data-testid={`stretch-${idx()}`}
-                          class="rounded-box border"
-                          classList={{
-                            "border-error/45 bg-error/5": inc.worst === "outage",
-                            "border-warning/45 bg-warning/5": inc.worst === "degraded",
-                            "border-incomplete/45": inc.worst === "incomplete",
-                            "border-base-300": inc.worst === "healthy",
-                          }}
-                        >
-                          <button type="button" class="flex w-full cursor-pointer flex-wrap items-baseline gap-x-3 gap-y-1 px-3 py-2 text-left text-sm" onClick={() => setOpenStretch(open() ? null : idx())}>
-                            <HealthBadge health={inc.worst} size="xs" />
-                            <span class="font-medium">
-                              {inc.worst === "incomplete" ? "Commissioning" : inc.worst === "outage" ? "Outage" : "Degraded"}
-                              {inc.ongoing ? " · ongoing" : ""}
-                            </span>
-                            <span class="text-xs tabular-nums text-base-content/60">
-                              {fmtTime(new Date(inc.from).toISOString())}
-                              {" → "}
-                              {inc.ongoing ? "now" : fmtTime(new Date(inc.to).toISOString())}
-                              {" · "}
-                              {durationText((inc.ongoing ? now() : inc.to) - inc.from)}
-                            </span>
-                            <span class="ml-auto text-xs text-base-content/40">{open() ? "collapse" : "expand"}</span>
-                          </button>
-                          <Show when={open()}>
-                            <div class="border-t border-base-300 px-3 py-2 text-sm">
-                              {/* One span is the header row said again: list the
-                                  inside only when the stretch actually changed. */}
-                              <Show when={inc.spans.length > 1}>
-                              <ul class="flex flex-col gap-1 text-xs text-base-content/70">
-                                <For each={[...inc.spans].reverse()}>
-                                  {(sp) => (
-                                    <li class="flex flex-wrap items-baseline gap-2">
-                                      <HealthBadge health={sp.value} size="xs" />
-                                      <span class="tabular-nums">{fmtTime(new Date(sp.from).toISOString())}</span>
-                                      <span class="text-base-content/45">held {durationText(sp.to - sp.from)}</span>
-                                    </li>
-                                  )}
-                                </For>
-                              </ul>
-                              </Show>
-                              <Show
-                                when={reasons().length > 0}
-                                fallback={<p class="mt-2 text-xs text-base-content/50">No alarm overlaps this stretch: a commissioning gap (a slot nobody staffed), not a failure.</p>}
-                              >
-                                <ul class="mt-2 flex flex-col gap-1">
-                                  <For each={reasons()}>
-                                    {(r) => (
-                                      <li class="flex flex-wrap items-baseline gap-x-2 text-xs">
-                                        <SeverityBadge name={r.severity} size="xs" />
-                                        <span>{r.message}</span>
-                                        <button type="button" class="cursor-pointer font-mono text-base-content/70 hover:underline" onClick={(e) => { e.stopPropagation(); openComponent(r.componentId); }}>{r.component}</button>
-                                        <span class="text-base-content/45 tabular-nums">
-                                          {fmtTime(r.raisedAt)} → {r.clearedAt ? fmtTime(r.clearedAt) : "ongoing"}
-                                        </span>
+              <div>
+                <Eyebrow label="Health history" hint="One entry per contiguous stretch away from healthy, however many health changes it contained, ongoing first. Expand an entry for the transitions inside it and the alarms that explain them." />
+                <Show when={stretches().length > 0} fallback={<p class="mt-2 text-sm text-base-content/50">Nothing in this window. The system held healthy the whole way.</p>}>
+                  <ul data-testid="stretch-list" class="mt-2 flex flex-col gap-2">
+                    <For each={stretches()}>
+                      {(inc, idx) => {
+                        const reasons = () => stretchReasons(inc, windowAlarms());
+                        const open = () => openStretch() === idx();
+                        return (
+                          <li
+                            data-testid={`stretch-${idx()}`}
+                           
+                            class={["rounded-box border", {
+                              "border-error/45 bg-error/5": inc.worst === "outage",
+                              "border-warning/45 bg-warning/5": inc.worst === "degraded",
+                              "border-incomplete/45": inc.worst === "incomplete",
+                              "border-base-300": inc.worst === "healthy",
+                            }]}
+                          >
+                            <button type="button" class="flex w-full cursor-pointer flex-wrap items-baseline gap-x-3 gap-y-1 px-3 py-2 text-left text-sm" onClick={() => setOpenStretch(open() ? null : idx())}>
+                              <HealthBadge health={inc.worst} size="xs" />
+                              <span class="font-medium">
+                                {inc.worst === "incomplete" ? "Commissioning" : inc.worst === "outage" ? "Outage" : "Degraded"}
+                                {inc.ongoing ? " · ongoing" : ""}
+                              </span>
+                              <span class="text-xs tabular-nums text-base-content/60">
+                                {fmtTime(new Date(inc.from).toISOString())}
+                                {" → "}
+                                {inc.ongoing ? "now" : fmtTime(new Date(inc.to).toISOString())}
+                                {" · "}
+                                {durationText((inc.ongoing ? now() : inc.to) - inc.from)}
+                              </span>
+                              <span class="ml-auto text-xs text-base-content/40">{open() ? "collapse" : "expand"}</span>
+                            </button>
+                            <Show when={open()}>
+                              <div class="border-t border-base-300 px-3 py-2 text-sm">
+                                {/* One span is the header row said again: list the
+                                    inside only when the stretch actually changed. */}
+                                <Show when={inc.spans.length > 1}>
+                                <ul class="flex flex-col gap-1 text-xs text-base-content/70">
+                                  <For each={[...inc.spans].reverse()}>
+                                    {(sp) => (
+                                      <li class="flex flex-wrap items-baseline gap-2">
+                                        <HealthBadge health={sp.value} size="xs" />
+                                        <span class="tabular-nums">{fmtTime(new Date(sp.from).toISOString())}</span>
+                                        <span class="text-base-content/45">held {durationText(sp.to - sp.from)}</span>
                                       </li>
                                     )}
                                   </For>
                                 </ul>
-                              </Show>
-                            </div>
+                                </Show>
+                                <Show
+                                  when={reasons().length > 0}
+                                  fallback={<p class="mt-2 text-xs text-base-content/50">No alarm overlaps this stretch: a commissioning gap (a slot nobody staffed), not a failure.</p>}
+                                >
+                                  <ul class="mt-2 flex flex-col gap-1">
+                                    <For each={reasons()}>
+                                      {(r) => (
+                                        <li class="flex flex-wrap items-baseline gap-x-2 text-xs">
+                                          <SeverityBadge name={r.severity} size="xs" />
+                                          <span>{r.message}</span>
+                                          <button type="button" class="cursor-pointer font-mono text-base-content/70 hover:underline" onClick={(e) => { e.stopPropagation(); openComponent(r.componentId); }}>{r.component}</button>
+                                          <span class="text-base-content/45 tabular-nums">
+                                            {fmtTime(r.raisedAt)} → {r.clearedAt ? fmtTime(r.clearedAt) : "ongoing"}
+                                          </span>
+                                        </li>
+                                      )}
+                                    </For>
+                                  </ul>
+                                </Show>
+                              </div>
+                            </Show>
+                          </li>
+                        );
+                      }}
+                    </For>
+                  </ul>
+                </Show>
+              </div>
+
+              <Show when={otherAlarms().length > 0}>
+                <div>
+                  <Eyebrow label="Other alarms" hint="Alarms in the window that never overlapped an unhealthy stretch: the component complained, and the system absorbed it." />
+                  <ul class="mt-2 divide-y divide-base-300 rounded-box border border-base-300 text-sm">
+                    <For each={otherAlarms()}>
+                      {(r) => (
+                        <li class="flex flex-wrap items-baseline gap-x-2 px-3 py-1.5 text-xs">
+                          <SeverityBadge name={r.severity} size="xs" />
+                          <span>{r.message}</span>
+                          <button type="button" class="cursor-pointer font-mono text-base-content/70 hover:underline" onClick={() => openComponent(r.componentId)}>{r.component}</button>
+                          <span class="ml-auto text-base-content/45 tabular-nums">{fmtTime(r.raisedAt)}</span>
+                        </li>
+                      )}
+                    </For>
+                  </ul>
+                </div>
+              </Show>
+            </section>
+          </Show>
+          <Show when={tab() === "activity"}>
+            <section data-testid="events-tab" class="flex flex-col gap-2 p-4">
+              <Eyebrow label="Events" hint="The system's story on the event lane: the system's own events and its members', newest first, each row labeled by the owner that raised it. The last 24 hours, capped." />
+              <Show when={(eventsQ.data ?? []).length > 0} fallback={<p class="text-sm text-base-content/50">No events in the window.</p>}>
+                <ul class="divide-y divide-base-300 rounded-box border border-base-300 text-sm">
+                  <For each={eventsQ.data ?? []}>
+                    {(e) => {
+                      // Each row owns its toggle: a rule's fire and clear events
+                      // carry the same alarm, and opening one opens only that row.
+                      const eventTimelines = createTimelineToggles();
+                      return (
+                        <li class="flex flex-col gap-1.5 px-3 py-2">
+                          <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                            <span class="text-xs tabular-nums text-base-content/50">{fmtTime(e.ts)}</span>
+                            <span class="font-mono text-xs text-base-content/70">{e.owner}</span>
+                            <span class="font-mono text-xs">{e.key}</span>
+                            <span class="min-w-0 flex-1 truncate text-base-content/80">{e.message}</span>
+                            {/* A rule's event names the rule and carries the alarm it moved (#951). */}
+                            <Show when={e.derived_by_rule}>{(rule) => <RuleLink name={rule()} id={e.derived_by_rule_id} />}</Show>
+                            <Show when={e.alarm_id && e.owner_kind === "component" && e.owner_id}>{eventTimelines.button(e.alarm_id!, e.message)}</Show>
+                          </div>
+                          <Show when={e.alarm_id && e.owner_kind === "component" && e.owner_id && eventTimelines.isOpen(e.alarm_id)}>
+                            <AlarmTimeline component={e.owner_id} alarmId={e.alarm_id!} id={eventTimelines.panelId(e.alarm_id!)} label={eventTimelines.label(e.message)} />
                           </Show>
                         </li>
                       );
@@ -490,190 +541,139 @@ export default function SystemZoom() {
                   </For>
                 </ul>
               </Show>
-            </div>
-
-            <Show when={otherAlarms().length > 0}>
-              <div>
-                <Eyebrow label="Other alarms" hint="Alarms in the window that never overlapped an unhealthy stretch: the component complained, and the system absorbed it." />
-                <ul class="mt-2 divide-y divide-base-300 rounded-box border border-base-300 text-sm">
-                  <For each={otherAlarms()}>
-                    {(r) => (
-                      <li class="flex flex-wrap items-baseline gap-x-2 px-3 py-1.5 text-xs">
-                        <SeverityBadge name={r.severity} size="xs" />
-                        <span>{r.message}</span>
-                        <button type="button" class="cursor-pointer font-mono text-base-content/70 hover:underline" onClick={() => openComponent(r.componentId)}>{r.component}</button>
-                        <span class="ml-auto text-base-content/45 tabular-nums">{fmtTime(r.raisedAt)}</span>
-                      </li>
-                    )}
-                  </For>
-                </ul>
-              </div>
-            </Show>
-          </section>
-        </Show>
-        <Show when={tab() === "activity"}>
-          <section data-testid="events-tab" class="flex flex-col gap-2 p-4">
-            <Eyebrow label="Events" hint="The system's story on the event lane: the system's own events and its members', newest first, each row labeled by the owner that raised it. The last 24 hours, capped." />
-            <Show when={(eventsQ.data ?? []).length > 0} fallback={<p class="text-sm text-base-content/50">No events in the window.</p>}>
-              <ul class="divide-y divide-base-300 rounded-box border border-base-300 text-sm">
-                <For each={eventsQ.data ?? []}>
-                  {(e) => {
-                    // Each row owns its toggle: a rule's fire and clear events
-                    // carry the same alarm, and opening one opens only that row.
-                    const eventTimelines = createTimelineToggles();
-                    return (
-                      <li class="flex flex-col gap-1.5 px-3 py-2">
-                        <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                          <span class="text-xs tabular-nums text-base-content/50">{fmtTime(e.ts)}</span>
-                          <span class="font-mono text-xs text-base-content/70">{e.owner}</span>
-                          <span class="font-mono text-xs">{e.key}</span>
-                          <span class="min-w-0 flex-1 truncate text-base-content/80">{e.message}</span>
-                          {/* A rule's event names the rule and carries the alarm it moved (#951). */}
-                          <Show when={e.derived_by_rule}>{(rule) => <RuleLink name={rule()} id={e.derived_by_rule_id} />}</Show>
-                          <Show when={e.alarm_id && e.owner_kind === "component" && e.owner_id}>{eventTimelines.button(e.alarm_id!, e.message)}</Show>
-                        </div>
-                        <Show when={e.alarm_id && e.owner_kind === "component" && e.owner_id && eventTimelines.isOpen(e.alarm_id)}>
-                          <AlarmTimeline component={e.owner_id} alarmId={e.alarm_id!} id={eventTimelines.panelId(e.alarm_id!)} label={eventTimelines.label(e.message)} />
-                        </Show>
-                      </li>
-                    );
-                  }}
-                </For>
-              </ul>
-            </Show>
-          </section>
-        </Show>
-        <Show when={tab() === "activity"}>
-          <section data-testid="logs-tab" class="flex flex-col gap-2 p-4">
-            <Eyebrow label="Logs" hint="The members' raw log lines merged newest first, each naming the component that wrote it. The last 24 hours, capped; an outpost's own logs live on the outpost." />
-            <LogFilters filter={logFilter()} sources={logsQ.data?.sources ?? []} onChange={setLogFilter} />
-            <Show
-              when={logLines().length > 0}
-              fallback={<p class="text-sm text-base-content/50">{logFilter().severity || logFilter().source ? "No line matches the filter in the window." : "No lines in the window."}</p>}
-            >
-              <div class="overflow-x-auto rounded-box border border-base-300 bg-base-100 p-2 font-mono text-[11.5px] leading-relaxed">
-                <For each={logLines()}>
-                  {(l) => (
-                    <div class="whitespace-pre" classList={{ "text-error": l.severity === "error" || l.severity === "critical" || l.severity === "alert" || l.severity === "emergency", "text-warning": l.severity === "warning", "text-base-content/70": !l.severity || l.severity === "info" || l.severity === "notice" || l.severity === "debug" }}>
-                      {`${fmtTime(l.ts)}  ${(l.component ?? "").padEnd(12)} ${(l.severity ?? "").padEnd(7)} ${l.message}`}
-                    </div>
-                  )}
-                </For>
-              </div>
-            </Show>
-          </section>
-        </Show>
-            <Show when={tab() === "overview" && vm()}>
-              {(z) => (
-                <div data-testid="overview-tab" class="flex flex-col gap-5 p-4">
-                  {/* Cause before arithmetic (#785): what is wrong, on which
-                      component, impairing which slot, since when. */}
-                  <Show when={alarms().length > 0}>
-                    <section data-testid="alarm-strip" class="flex flex-col gap-1.5 rounded-box border p-3" classList={{ "border-error/40 bg-error/5": inOutage(), "border-warning/40 bg-warning/5": !inOutage() }}>
-                      <h2 class="eyebrow">Why</h2>
-                      <For each={alarms()}>
-                        {(a) => (
-                          <div class="flex flex-col gap-1.5">
-                            <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
-                              <SeverityBadge name={a.severity} />
-                              <span>{a.message}</span>
-                              <Show when={a.componentId} fallback={<span class="font-mono text-xs text-base-content/60">{a.component}</span>}>
-                                {(cid) => <button type="button" class="cursor-pointer font-mono text-xs text-base-content/80 hover:underline" onClick={() => openComponent(cid())}>{a.component}</button>}
-                              </Show>
-                              <span class="text-xs text-base-content/50">impairs {a.slotLabel} · {durationText(now() - Date.parse(a.raisedAt))}</span>
-                              <Show when={a.acknowledged}>
-                                <span class="text-xs text-base-content/50">
-                                  · acknowledged{a.acknowledgedBy ? ` by ${a.acknowledgedBy}` : ""}{a.acknowledgedAt ? ` ${fmtTime(a.acknowledgedAt)}` : ""}
-                                </span>
-                              </Show>
-                              <Show when={a.componentId}>{(cid) => <AcknowledgeButton component={cid()} alarm={a} />}</Show>
-                              <Show when={a.componentId}>{timelines.button(a.id, a.message)}</Show>
-                            </div>
-                            <Show when={a.componentId && timelines.isOpen(a.id)}>
-                              <AlarmTimeline component={a.componentId!} alarmId={a.id} id={timelines.panelId(a.id)} label={timelines.label(a.message)} />
-                            </Show>
-                          </div>
-                        )}
-                      </For>
-                    </section>
-                  </Show>
-                  <section class="flex flex-col gap-2">
-                    <Eyebrow label="Components" hint="The pieces of this system, each with the slot it fills. A slot gets its own header only where it says something a column cannot: more than one wanted, a shortfall, or nobody staffing it yet." />
-                    <MemberRows rows={members().rows} groups={members().groups} onOpen={openComponent} />
-                  </section>
-                  <Show when={mapDecl()}>
-                    {(decl) => (
-                      // SystemMap pads itself; the negative margin lines its
-                      // eyebrow up with the sections around it.
-                      <div class="-m-4">
-                        <SystemMap decl={decl()} markers={mapMarkers(decl(), z())} member={memberCtx()} onOpen={openComponent} />
+            </section>
+          </Show>
+          <Show when={tab() === "activity"}>
+            <section data-testid="logs-tab" class="flex flex-col gap-2 p-4">
+              <Eyebrow label="Logs" hint="The members' raw log lines merged newest first, each naming the component that wrote it. The last 24 hours, capped; an outpost's own logs live on the outpost." />
+              <LogFilters filter={logFilter()} sources={logsQ.data?.sources ?? []} onChange={setLogFilter} />
+              <Show
+                when={logLines().length > 0}
+                fallback={<p class="text-sm text-base-content/50">{logFilter().severity || logFilter().source ? "No line matches the filter in the window." : "No lines in the window."}</p>}
+              >
+                <div class="overflow-x-auto rounded-box border border-base-300 bg-base-100 p-2 font-mono text-[11.5px] leading-relaxed">
+                  <For each={logLines()}>
+                    {(l) => (
+                      <div class={["whitespace-pre", { "text-error": l.severity === "error" || l.severity === "critical" || l.severity === "alert" || l.severity === "emergency", "text-warning": l.severity === "warning", "text-base-content/70": !l.severity || l.severity === "info" || l.severity === "notice" || l.severity === "debug" }]}>
+                        {`${fmtTime(l.ts)}  ${(l.component ?? "").padEnd(12)} ${(l.severity ?? "").padEnd(7)} ${l.message}`}
                       </div>
                     )}
-                  </Show>
-        <Show when={kpiMetrics().length > 0}>
-          <section data-testid="data-tab" class="flex flex-col gap-3">
-            <Eyebrow label="Data" hint="Every metric the standard declares, stacked: the last 24 hours as a sparkline beside the latest value. Click a row for the full chart. Raw samples, capped; a series still on its contract default has nothing to chart yet." />
-            <div class="overflow-x-auto rounded-box border border-base-300">
-              <table class="table table-sm">
-                <thead>
-                  <tr>
-                    <th>Metric</th>
-                    <th>Last 24h</th>
-                    <th class="text-right">Latest</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <For each={kpiMetrics()}>
-                    {(m, i) => (
-                      <>
-                        <tr
-                          data-testid={`metric-row-${m.metric_type_name}`}
-                          class="cursor-pointer hover:bg-base-content/5"
-                          onClick={() => setSeriesPick(seriesPick() === m.metric_type_name ? undefined : m.metric_type_name)}
-                        >
-                          <td>{entityLabel({ name: m.metric_type_name, label: m.label })}</td>
-                          <td>
-                            <TimeseriesChart spark buckets={metricSeriesData()[i()]?.buckets ?? []} resolutionMs={SERIES_RESOLUTION_S * 1000} now={historyNow()} windowMs={SERIES_HOURS * 3600_000} />
-                          </td>
-                          <td class="text-right font-mono tabular-nums">{m.value === null || m.value === undefined ? "" : String(m.value)}</td>
-                          <td class="text-right text-[10px] text-base-content/45">
-                            <Show when={m.source_rule && m.source_rule_id} fallback={m.is_sampled ? "sampled" : "contract default"}>
-                              <span onClick={(e) => e.stopPropagation()}><CalcRuleLink name={m.source_rule!} id={m.source_rule_id!} /></span>
-                            </Show>
-                          </td>
-                        </tr>
-                        <Show when={seriesPick() === m.metric_type_name}>
-                          <tr>
-                            <td colspan="4" class="bg-base-200/40">
-                              <TimeseriesChart buckets={metricSeriesData()[i()]?.buckets ?? []} resolutionMs={SERIES_RESOLUTION_S * 1000} now={historyNow()} windowMs={SERIES_HOURS * 3600_000} />
+                  </For>
+                </div>
+              </Show>
+            </section>
+          </Show>
+              <Show when={tab() === "overview" && vm()}>
+                {(z) => (
+                  <div data-testid="overview-tab" class="flex flex-col gap-5 p-4">
+                    {/* Cause before arithmetic (#785): what is wrong, on which
+                        component, impairing which slot, since when. */}
+                    <Show when={alarms().length > 0}>
+                      <section data-testid="alarm-strip" class={["flex flex-col gap-1.5 rounded-box border p-3", { "border-error/40 bg-error/5": inOutage(), "border-warning/40 bg-warning/5": !inOutage() }]}>
+                        <h2 class="eyebrow">Why</h2>
+                        <For each={alarms()}>
+                          {(a) => (
+                            <div class="flex flex-col gap-1.5">
+                              <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
+                                <SeverityBadge name={a.severity} />
+                                <span>{a.message}</span>
+                                <Show when={a.componentId} fallback={<span class="font-mono text-xs text-base-content/60">{a.component}</span>}>
+                                  {(cid) => <button type="button" class="cursor-pointer font-mono text-xs text-base-content/80 hover:underline" onClick={() => openComponent(cid())}>{a.component}</button>}
+                                </Show>
+                                <span class="text-xs text-base-content/50">impairs {a.slotLabel} · {durationText(now() - Date.parse(a.raisedAt))}</span>
+                                <Show when={a.acknowledged}>
+                                  <span class="text-xs text-base-content/50">
+                                    · acknowledged{a.acknowledgedBy ? ` by ${a.acknowledgedBy}` : ""}{a.acknowledgedAt ? ` ${fmtTime(a.acknowledgedAt)}` : ""}
+                                  </span>
+                                </Show>
+                                <Show when={a.componentId}>{(cid) => <AcknowledgeButton component={cid()} alarm={a} />}</Show>
+                                <Show when={a.componentId}>{timelines.button(a.id, a.message)}</Show>
+                              </div>
+                              <Show when={a.componentId && timelines.isOpen(a.id)}>
+                                <AlarmTimeline component={a.componentId!} alarmId={a.id} id={timelines.panelId(a.id)} label={timelines.label(a.message)} />
+                              </Show>
+                            </div>
+                          )}
+                        </For>
+                      </section>
+                    </Show>
+                    <section class="flex flex-col gap-2">
+                      <Eyebrow label="Components" hint="The pieces of this system, each with the slot it fills. A slot gets its own header only where it says something a column cannot: more than one wanted, a shortfall, or nobody staffing it yet." />
+                      <MemberRows rows={members().rows} groups={members().groups} onOpen={openComponent} />
+                    </section>
+                    <Show when={mapDecl()}>
+                      {(decl) => (
+                        // SystemMap pads itself; the negative margin lines its
+                        // eyebrow up with the sections around it.
+                        <div class="-m-4">
+                          <SystemMap decl={decl()} markers={mapMarkers(decl(), z())} member={memberCtx()} onOpen={openComponent} />
+                        </div>
+                      )}
+                    </Show>
+          <Show when={kpiMetrics().length > 0}>
+            <section data-testid="data-tab" class="flex flex-col gap-3">
+              <Eyebrow label="Data" hint="Every metric the standard declares, stacked: the last 24 hours as a sparkline beside the latest value. Click a row for the full chart. Raw samples, capped; a series still on its contract default has nothing to chart yet." />
+              <div class="overflow-x-auto rounded-box border border-base-300">
+                <table class="table table-sm">
+                  <thead>
+                    <tr>
+                      <th>Metric</th>
+                      <th>Last 24h</th>
+                      <th class="text-right">Latest</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <For each={kpiMetrics()}>
+                      {(m, i) => (
+                        <>
+                          <tr
+                            data-testid={`metric-row-${m.metric_type_name}`}
+                            class="cursor-pointer hover:bg-base-content/5"
+                            onClick={() => setSeriesPick(seriesPick() === m.metric_type_name ? undefined : m.metric_type_name)}
+                          >
+                            <td>{entityLabel({ name: m.metric_type_name, label: m.label })}</td>
+                            <td>
+                              <TimeseriesChart spark buckets={metricSeriesData()[i()]?.buckets ?? []} resolutionMs={SERIES_RESOLUTION_S * 1000} now={historyNow()} windowMs={SERIES_HOURS * 3600_000} />
+                            </td>
+                            <td class="text-right font-mono tabular-nums">{m.value === null || m.value === undefined ? "" : String(m.value)}</td>
+                            <td class="text-right text-[10px] text-base-content/45">
+                              <Show when={m.source_rule && m.source_rule_id} fallback={m.is_sampled ? "sampled" : "contract default"}>
+                                <span onClick={(e) => e.stopPropagation()}><CalcRuleLink name={m.source_rule!} id={m.source_rule_id!} /></span>
+                              </Show>
                             </td>
                           </tr>
-                        </Show>
-                      </>
-                    )}
-                  </For>
-                </tbody>
-              </table>
-            </div>
-          </section>
-        </Show>
-                </div>
+                          <Show when={seriesPick() === m.metric_type_name}>
+                            <tr>
+                              <td colspan="4" class="bg-base-200/40">
+                                <TimeseriesChart buckets={metricSeriesData()[i()]?.buckets ?? []} resolutionMs={SERIES_RESOLUTION_S * 1000} now={historyNow()} windowMs={SERIES_HOURS * 3600_000} />
+                              </td>
+                            </tr>
+                          </Show>
+                        </>
+                      )}
+                    </For>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </Show>
+                  </div>
+                )}
+              </Show>
+            </section>
+            <Show when={sole() && hasBeneath() && locationId()}>
+              {(pid) => (
+                <section data-testid="beneath" class="flex flex-col gap-2">
+                  <Eyebrow label={`Beneath ${location() ? entityLabel(location()!) : "this location"}`} hint="The locations inside this one, as Explore draws them, counted by the systems they hold." />
+                  <OutlineWorkspace rootId={pid()} />
+                </section>
               )}
             </Show>
-          </section>
-          <Show when={sole() && hasBeneath() && locationId()}>
-            {(pid) => (
-              <section data-testid="beneath" class="flex flex-col gap-2">
-                <Eyebrow label={`Beneath ${location() ? entityLabel(location()!) : "this location"}`} hint="The locations inside this one, as Explore draws them, counted by the systems they hold." />
-                <OutlineWorkspace rootId={pid()} />
-              </section>
-            )}
-          </Show>
-        </div>
-      </DetailGate>
-    </Page>
-    <BladeStack controller={blades} registry={fleetRegistry} />
-    </BladesContext.Provider>
+          </div>
+        </DetailGate>
+      </Page>
+      <BladeStack controller={blades} registry={fleetRegistry} />
+    </BladesContext>
   );
 }

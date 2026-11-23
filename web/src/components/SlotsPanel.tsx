@@ -1,6 +1,7 @@
+import type { JSX } from "@solidjs/web";
 import { entityLabel } from "../lib/entities";
-import { For, Show, createEffect, createMemo, createSignal, type JSX } from "solid-js";
-import { createStore } from "solid-js/store";
+import { For, Show, createEffect, createMemo, createSignal, createTrackedEffect } from "solid-js";
+import { createStore } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
 import { Check, GripVertical, Pencil, Trash, X } from "./icons";
@@ -117,7 +118,7 @@ export default function SlotsPanel(props: { system: string; canUpdate: boolean }
   // The ad hoc slot open for editing (one at a time). Leaving edit mode closes
   // it, so it does not resurrect on the next pencil press.
   const [editingSlot, setEditingSlot] = createSignal<string | null>(null);
-  createEffect(() => { if (!props.canUpdate) setEditingSlot(null); });
+  createTrackedEffect(() => { if (!props.canUpdate) setEditingSlot(null); });
 
   // Per-slot write state: the picked component, and the server's last refusal.
   const [picked, setPicked] = createStore<Record<string, string>>({});
@@ -247,207 +248,207 @@ export default function SlotsPanel(props: { system: string; canUpdate: boolean }
       (r.assigned_to ?? []).length > 1 &&
       (r.positions ?? []).length === (r.assigned_to ?? []).length;
     return (
-    <div class="flex flex-col gap-1.5 px-3 py-2.5" classList={{ "border-t border-base-300": !first() }}>
-      <div class="flex flex-wrap items-baseline gap-2">
-        <span class="text-sm font-medium">{entityLabel(r)}</span>
-        <span class="font-data text-[11px] text-base-content/45">{r.name}</span>
-        <span class="flex-1" />
-        <Show when={props.canUpdate && !r.from_standard}>
-          <Show when={editingSlot() !== r.name}>
-            <Button square size="xs" icon={Pencil} label={`Edit ${r.name}`} title="Edit" onClick={() => setEditingSlot(r.name)} />
-          </Show>
-          <Button square size="xs" icon={Trash} label={`Withdraw ${r.name}`} title="Withdraw" disabled={busy()} onClick={() => void withdraw(r.name)} />
-        </Show>
-        {/* short/spare are occupancy-aware (health read); understaffed is pure
-            assignment arithmetic (slots read) and only falls back here while
-            health has not loaded yet, so the row never shows undefined. An
-            INACTIVE slot (its choice was answered by a different alternate)
-            gets neither: its own short/spare/impact never counted toward the
-            health, so showing them would be the exact contradiction commit
-            5472723 fixed. */}
-        <Show
-          when={h()}
-          fallback={
-            <Show
-              when={inactiveHealth()}
-              fallback={
-                <Show when={r.understaffed > 0}>
-                  <span class="badge badge-warning badge-soft badge-sm">understaffed</span>
-                </Show>
-              }
-            >
-              {(ih) => (
-                <span
-                  class="badge badge-ghost badge-sm"
-                  title={`${ih().choice}/${ih().alternate} is not the alternate currently answering this choice, so this slot's own figures did not count toward the health`}
-                >
-                  not counted
-                </span>
-              )}
+      <div class={["flex flex-col gap-1.5 px-3 py-2.5", { "border-t border-base-300": !first() }]}>
+        <div class="flex flex-wrap items-baseline gap-2">
+          <span class="text-sm font-medium">{entityLabel(r)}</span>
+          <span class="font-data text-[11px] text-base-content/45">{r.name}</span>
+          <span class="flex-1" />
+          <Show when={props.canUpdate && !r.from_standard}>
+            <Show when={editingSlot() !== r.name}>
+              <Button square size="xs" icon={Pencil} label={`Edit ${r.name}`} title="Edit" onClick={() => setEditingSlot(r.name)} />
             </Show>
+            <Button square size="xs" icon={Trash} label={`Withdraw ${r.name}`} title="Withdraw" disabled={busy()} onClick={() => void withdraw(r.name)} />
+          </Show>
+          {/* short/spare are occupancy-aware (health read); understaffed is pure
+              assignment arithmetic (slots read) and only falls back here while
+              health has not loaded yet, so the row never shows undefined. An
+              INACTIVE slot (its choice was answered by a different alternate)
+              gets neither: its own short/spare/impact never counted toward the
+              health, so showing them would be the exact contradiction commit
+              5472723 fixed. */}
+          <Show
+            when={h()}
+            fallback={
+              <Show
+                when={inactiveHealth()}
+                fallback={
+                  <Show when={r.understaffed > 0}>
+                    <span class="badge badge-warning badge-soft badge-sm">understaffed</span>
+                  </Show>
+                }
+              >
+                {(ih) => (
+                  <span
+                    class="badge badge-ghost badge-sm"
+                    title={`${ih().choice}/${ih().alternate} is not the alternate currently answering this choice, so this slot's own figures did not count toward the health`}
+                  >
+                    not counted
+                  </span>
+                )}
+              </Show>
+            }
+          >
+            {(hr) => (
+              <>
+                <Show when={hr().short > 0}>
+                  <span class="badge badge-warning badge-soft badge-sm">short {hr().short}</span>
+                </Show>
+                <Show when={hr().spare > 0}>
+                  <span class="badge badge-ghost badge-sm">spare {hr().spare}</span>
+                </Show>
+                <Show when={hr().impaired}>
+                  <span class={`badge badge-soft badge-sm ${impactBadgeClass(hr().impact)}`}>{impactPhrase(hr().impact)}</span>
+                </Show>
+              </>
+            )}
+          </Show>
+          <span class="tnum shrink-0 text-[11px] text-base-content/50">
+            <Show when={h()} fallback={staffingLabel(r)}>
+              {(hr) => quorumLabel(hr())}
+            </Show>
+          </span>
+        </div>
+
+        <Show
+          when={props.canUpdate && !r.from_standard && editingSlot() === r.name}
+          fallback={
+        <div class="flex flex-col gap-1">
+          <div class="flex flex-wrap items-center gap-1.5">
+            <span class="text-[10.5px] uppercase tracking-wide text-base-content/40">accepts</span>
+            <Show
+              when={(r.accepted_types ?? []).length}
+              fallback={<span class="text-[11px] italic text-base-content/40">any type</span>}
+            >
+              <For each={r.accepted_types ?? []}>
+                {(c) => <span class="badge badge-ghost badge-sm font-data">{c}</span>}
+              </For>
+            </Show>
+          </div>
+          <Show when={(r.pinned_products ?? []).length}>
+            <div class="flex flex-wrap items-center gap-1.5">
+              <span class="text-[10.5px] uppercase tracking-wide text-base-content/40">pinned to</span>
+              <For each={r.pinned_products ?? []}>
+                {(c) => <span class="badge badge-ghost badge-sm font-data">{c}</span>}
+              </For>
+            </div>
+          </Show>
+          {/* The declared position labels, shown as their own reference list
+              rather than zipped onto the occupant chips below: the wire gives
+              each slot its OCCUPANTS in position order but not each occupant's
+              OWN position number, so pairing label[i] with assigned_to[i] would
+              mislabel the moment a lower position is vacant (TestUnassignLeavesGap
+              leaves exactly that kind of gap). */}
+          <Show when={(r.position_labels ?? []).length}>
+            <div class="flex flex-wrap items-center gap-1.5">
+              <span class="text-[10.5px] uppercase tracking-wide text-base-content/40">positions</span>
+              <For each={r.position_labels ?? []}>
+                {(pl, i) => <span class="badge badge-ghost badge-sm">{i() + 1}. {pl}</span>}
+              </For>
+            </div>
+          </Show>
+        </div>
           }
         >
-          {(hr) => (
-            <>
-              <Show when={hr().short > 0}>
-                <span class="badge badge-warning badge-soft badge-sm">short {hr().short}</span>
-              </Show>
-              <Show when={hr().spare > 0}>
-                <span class="badge badge-ghost badge-sm">spare {hr().spare}</span>
-              </Show>
-              <Show when={hr().impaired}>
-                <span class={`badge badge-soft badge-sm ${impactBadgeClass(hr().impact)}`}>{impactPhrase(hr().impact)}</span>
-              </Show>
-            </>
-          )}
-        </Show>
-        <span class="tnum shrink-0 text-[11px] text-base-content/50">
-          <Show when={h()} fallback={staffingLabel(r)}>
-            {(hr) => quorumLabel(hr())}
-          </Show>
-        </span>
-      </div>
-
-      <Show
-        when={props.canUpdate && !r.from_standard && editingSlot() === r.name}
-        fallback={
-      <div class="flex flex-col gap-1">
-        <div class="flex flex-wrap items-center gap-1.5">
-          <span class="text-[10.5px] uppercase tracking-wide text-base-content/40">accepts</span>
-          <Show
-            when={(r.accepted_types ?? []).length}
-            fallback={<span class="text-[11px] italic text-base-content/40">any type</span>}
-          >
-            <For each={r.accepted_types ?? []}>
-              {(c) => <span class="badge badge-ghost badge-sm font-data">{c}</span>}
-            </For>
-          </Show>
-        </div>
-        <Show when={(r.pinned_products ?? []).length}>
-          <div class="flex flex-wrap items-center gap-1.5">
-            <span class="text-[10.5px] uppercase tracking-wide text-base-content/40">pinned to</span>
-            <For each={r.pinned_products ?? []}>
-              {(c) => <span class="badge badge-ghost badge-sm font-data">{c}</span>}
-            </For>
-          </div>
-        </Show>
-        {/* The declared position labels, shown as their own reference list
-            rather than zipped onto the occupant chips below: the wire gives
-            each slot its OCCUPANTS in position order but not each occupant's
-            OWN position number, so pairing label[i] with assigned_to[i] would
-            mislabel the moment a lower position is vacant (TestUnassignLeavesGap
-            leaves exactly that kind of gap). */}
-        <Show when={(r.position_labels ?? []).length}>
-          <div class="flex flex-wrap items-center gap-1.5">
-            <span class="text-[10.5px] uppercase tracking-wide text-base-content/40">positions</span>
-            <For each={r.position_labels ?? []}>
-              {(pl, i) => <span class="badge badge-ghost badge-sm">{i() + 1}. {pl}</span>}
-            </For>
-          </div>
-        </Show>
-      </div>
-        }
-      >
-        <SlotEditForm
-          owner={owner()}
-          slot={r}
-          onWritten={async () => { await refreshSlots(); }}
-          onClose={() => setEditingSlot(null)}
-        />
-      </Show>
-
-      <div class="flex flex-wrap items-center gap-1.5">
-        <span class="text-[10.5px] uppercase tracking-wide text-base-content/40">
-          filled by{canReorder() ? " · drag to reorder" : ""}
-        </span>
-        <Show
-          when={(r.assigned_to ?? []).length}
-          fallback={<span class="text-[11px] italic text-base-content/40">nobody yet</span>}
-        >
-          <For each={r.assigned_to ?? []}>
-            {(c, i) => (
-              <span
-                class={`badge badge-sm gap-1 font-data ${down().has(c) ? "badge-error badge-soft" : "badge-outline"}`}
-                classList={{ "cursor-grab": canReorder(), "opacity-40": canReorder() && dragIdx() === i() }}
-                title={down().has(c) ? "An active alarm has taken this component down" : "Occupying its slot"}
-                draggable={canReorder()}
-                onDragStart={() => canReorder() && setDragIdx(i())}
-                onDragOver={(e) => { if (canReorder()) e.preventDefault(); }}
-                onDrop={() => {
-                  const from = dragIdx();
-                  if (canReorder() && from !== null && from !== i()) void reorder(r.name, r.positions ?? [], from, i());
-                  setDragIdx(null);
-                }}
-                onDragEnd={() => setDragIdx(null)}
-              >
-                <Show when={canReorder()}>
-                  <GripVertical size={10} />
-                </Show>
-                {c}
-                <Show when={down().has(c)}> down</Show>
-                <Show when={props.canUpdate}>
-                  <button
-                    type="button"
-                    class="ml-0.5 inline-flex opacity-60 hover:opacity-100"
-                    aria-label={`Unassign ${c} from ${r.name}`}
-                    disabled={busy()}
-                    onClick={() => void unassign(r.name, c)}
-                  >
-                    <X size={11} />
-                  </button>
-                </Show>
-              </span>
-            )}
-          </For>
-        </Show>
-      </div>
-
-      <Show when={props.canUpdate}>
-        <div class="flex items-center gap-1.5">
-          <select
-            class="select select-bordered select-sm min-w-0 flex-1"
-            aria-label={`Component to fill ${r.name}`}
-            value={picked[r.name] ?? ""}
-            onChange={(e) => setPicked(r.name, e.currentTarget.value)}
-          >
-            <option value="">Assign a component…</option>
-            <For each={candidates(r)}>
-              {(c) => {
-                const holder = heldElsewhere(c);
-                return (
-                  // The uuid, not the name (#627 review, the pre-existing
-                  // surface): assignSlot resolves the component within the
-                  // caller's component:read scope (ADR-0510,
-                  // internal/storage/slots.go), which dual-accepts a uuid
-                  // unambiguously (ADR-0062) but 404s a name two readable
-                  // components share. A bare name here would contradict the
-                  // duplicate-named-component promise Task 15 already made
-                  // on every other write in this console.
-                  <option value={c.id} disabled={!!holder}>
-                    {label(c)}{holder ? ` (already fills ${holder} here)` : ""}
-                  </option>
-                );
-              }}
-            </For>
-          </select>
-          <Button
-            square
-            size="sm"
-            intent="action"
-            icon={Check}
-            label={`Assign to ${r.name}`}
-            title="Assign"
-            disabled={busy() || !picked[r.name]}
-            onClick={() => void assign(r.name)}
+          <SlotEditForm
+            owner={owner()}
+            slot={r}
+            onWritten={async () => { await refreshSlots(); }}
+            onClose={() => setEditingSlot(null)}
           />
-        </div>
-      </Show>
+        </Show>
 
-      {/* The refusal, verbatim: what the component is, and what the slot wants. */}
-      <Show when={errs[r.name]}>
-        <div role="alert" class="alert alert-error alert-soft py-1.5 text-xs"><span>{errs[r.name]}</span></div>
-      </Show>
-    </div>
+        <div class="flex flex-wrap items-center gap-1.5">
+          <span class="text-[10.5px] uppercase tracking-wide text-base-content/40">
+            filled by{canReorder() ? " · drag to reorder" : ""}
+          </span>
+          <Show
+            when={(r.assigned_to ?? []).length}
+            fallback={<span class="text-[11px] italic text-base-content/40">nobody yet</span>}
+          >
+            <For each={r.assigned_to ?? []}>
+              {(c, i) => (
+                <span
+                 
+                  class={[`badge badge-sm gap-1 font-data ${down().has(c) ? "badge-error badge-soft" : "badge-outline"}`, { "cursor-grab": canReorder(), "opacity-40": canReorder() && dragIdx() === i() }]}
+                  title={down().has(c) ? "An active alarm has taken this component down" : "Occupying its slot"}
+                  draggable={canReorder()}
+                  onDragStart={() => canReorder() && setDragIdx(i())}
+                  onDragOver={(e) => { if (canReorder()) e.preventDefault(); }}
+                  onDrop={() => {
+                    const from = dragIdx();
+                    if (canReorder() && from !== null && from !== i()) void reorder(r.name, r.positions ?? [], from, i());
+                    setDragIdx(null);
+                  }}
+                  onDragEnd={() => setDragIdx(null)}
+                >
+                  <Show when={canReorder()}>
+                    <GripVertical size={10} />
+                  </Show>
+                  {c}
+                  <Show when={down().has(c)}> down</Show>
+                  <Show when={props.canUpdate}>
+                    <button
+                      type="button"
+                      class="ml-0.5 inline-flex opacity-60 hover:opacity-100"
+                      aria-label={`Unassign ${c} from ${r.name}`}
+                      disabled={busy()}
+                      onClick={() => void unassign(r.name, c)}
+                    >
+                      <X size={11} />
+                    </button>
+                  </Show>
+                </span>
+              )}
+            </For>
+          </Show>
+        </div>
+
+        <Show when={props.canUpdate}>
+          <div class="flex items-center gap-1.5">
+            <select
+              class="select select-bordered select-sm min-w-0 flex-1"
+              aria-label={`Component to fill ${r.name}`}
+              value={picked[r.name] ?? ""}
+              onChange={(e) => setPicked(r.name, e.currentTarget.value)}
+            >
+              <option value="">Assign a component…</option>
+              <For each={candidates(r)}>
+                {(c) => {
+                  const holder = heldElsewhere(c);
+                  return (
+                    // The uuid, not the name (#627 review, the pre-existing
+                    // surface): assignSlot resolves the component within the
+                    // caller's component:read scope (ADR-0510,
+                    // internal/storage/slots.go), which dual-accepts a uuid
+                    // unambiguously (ADR-0062) but 404s a name two readable
+                    // components share. A bare name here would contradict the
+                    // duplicate-named-component promise Task 15 already made
+                    // on every other write in this console.
+                    <option value={c.id} disabled={!!holder}>
+                      {label(c)}{holder ? ` (already fills ${holder} here)` : ""}
+                    </option>
+                  );
+                }}
+              </For>
+            </select>
+            <Button
+              square
+              size="sm"
+              intent="action"
+              icon={Check}
+              label={`Assign to ${r.name}`}
+              title="Assign"
+              disabled={busy() || !picked[r.name]}
+              onClick={() => void assign(r.name)}
+            />
+          </div>
+        </Show>
+
+        {/* The refusal, verbatim: what the component is, and what the slot wants. */}
+        <Show when={errs[r.name]}>
+          <div role="alert" class="alert alert-error alert-soft py-1.5 text-xs"><span>{errs[r.name]}</span></div>
+        </Show>
+      </div>
     );
   };
 

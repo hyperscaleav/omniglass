@@ -1,5 +1,6 @@
-import { For, Show, createMemo, createResource } from "solid-js";
-import { A, useLocation, useNavigate } from "@solidjs/router";
+import { createResource } from "../lib/resource_compat";
+import { For, Show, createMemo } from "solid-js";
+import { useLocation, useNavigate } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import { navItems, filterNav, filterWhen, type NavItem } from "../lib/nav";
 import { SIMULATION_KEY, getSimulation, sidebarPollMs, simulatorConnected } from "../lib/simulation";
@@ -59,14 +60,14 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
 
   return (
     <aside
-      class="sticky top-0 flex h-screen flex-none flex-col border-r border-base-300 bg-base-200 transition-[width] duration-200"
-      classList={{ "w-16": props.collapsed, "w-60": !props.collapsed }}
+     
+      class={["sticky top-0 flex h-screen flex-none flex-col border-r border-base-300 bg-base-200 transition-[width] duration-200", { "w-16": props.collapsed, "w-60": !props.collapsed }]}
     >
       {/* The brand mark stays in this h-14 row in both states (vertically centered,
           horizontally centered when collapsed to match the nav icons): collapsing
           only drops the wordmark, never moves the mark. The toggle moves to its own
           row below when collapsed, since the mark and toggle cannot share the w-16. */}
-      <div class="flex h-14 items-center gap-2" classList={{ "justify-center": props.collapsed, "justify-between px-4 pr-2": !props.collapsed }}>
+      <div class={["flex h-14 items-center gap-2", { "justify-center": props.collapsed, "justify-between px-4 pr-2": !props.collapsed }]}>
         <Show when={!props.collapsed} fallback={<BrandMark />}><Lockup /></Show>
         <Show when={!props.collapsed}>
           <Button square icon={PanelLeft} onClick={props.onToggle} title="Collapse" label="Toggle sidebar" class="text-base-content/50" />
@@ -89,11 +90,11 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
       </ul>
 
       <div class="border-t border-base-300 p-3">
-        <div class="flex items-center gap-2.5" classList={{ "justify-center": props.collapsed }}>
-          <A
+        <div class={["flex items-center gap-2.5", { "justify-center": props.collapsed }]}>
+          <a
             href="/profile"
-            class="flex min-w-0 items-center gap-2.5 rounded-field hover:bg-base-300"
-            classList={{ "flex-1 p-1 -m-1": !props.collapsed, "tooltip tooltip-right": props.collapsed }}
+           
+            class={["flex min-w-0 items-center gap-2.5 rounded-field hover:bg-base-300", { "flex-1 p-1 -m-1": !props.collapsed, "tooltip tooltip-right": props.collapsed }]}
             data-tip={props.collapsed ? "Your profile" : undefined}
             title="Your profile"
           >
@@ -119,7 +120,7 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
                 <div class="text-[11px] capitalize text-base-content/40">{ident().role}</div>
               </div>
             </Show>
-          </A>
+          </a>
           <Show when={!props.collapsed}>
             <Button
               square
@@ -151,12 +152,11 @@ function Leaf(props: { item: NavItem; collapsed: boolean }) {
   const live = () => props.item.live;
   return (
     <li>
-      <A
+      <a
         href={props.item.path!}
         end={props.item.path === "/"}
-        activeClass="menu-active"
-        class="gap-3"
-        classList={{ "tooltip tooltip-right justify-center": props.collapsed, "opacity-45": !live() }}
+       
+        class={["gap-3", { "tooltip tooltip-right justify-center": props.collapsed, "opacity-45": !live() }]}
         data-tip={props.collapsed ? (live() ? props.item.label : `${props.item.label} · soon`) : undefined}
       >
         <Icon size={17} />
@@ -164,7 +164,7 @@ function Leaf(props: { item: NavItem; collapsed: boolean }) {
           <span class="flex-1 truncate">{props.item.label}</span>
           <Show when={!live()}><Soon /></Show>
         </Show>
-      </A>
+      </a>
     </li>
   );
 }
@@ -179,9 +179,9 @@ function Group(props: { item: NavItem; rel: string; collapsed: boolean }) {
       when={!props.collapsed}
       fallback={
         <li>
-          <A href={children()[0].path} class="tooltip tooltip-right justify-center" classList={{ "menu-active": childActive() }} data-tip={props.item.label}>
+          <a href={children()[0].path} class={["tooltip tooltip-right justify-center", { "menu-active": childActive() }]} data-tip={props.item.label}>
             <Icon size={17} />
-          </A>
+          </a>
         </li>
       }
     >
@@ -203,10 +203,10 @@ function Group(props: { item: NavItem; rel: string; collapsed: boolean }) {
                     <li class="menu-title px-2 pb-0.5 pt-2 text-[10.5px] uppercase tracking-wider">{c.section}</li>
                   </Show>
                   <li>
-                    <A href={c.path} activeClass="menu-active" classList={{ "opacity-45": !c.live }}>
+                    <a href={c.path} class={{ "opacity-45": !c.live }}>
                       <span class="flex-1 truncate">{c.label}</span>
                       <Show when={!c.live}><Soon /></Show>
-                    </A>
+                    </a>
                   </li>
                 </>
               )}

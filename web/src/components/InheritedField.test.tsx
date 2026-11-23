@@ -24,7 +24,7 @@ function setup(opts: { value?: string; inherited?: InheritedFact } = {}): {
     opts.inherited ?? { value: "from-the-server", from: "mic" },
   );
   const ui = render(() => (
-    <BladeEditContext.Provider value={slot}>
+    <BladeEditContext value={slot}>
       <InheritedField
         label="Stem"
         hint="The auto-generated component name's prefix."
@@ -33,7 +33,7 @@ function setup(opts: { value?: string; inherited?: InheritedFact } = {}): {
         onInput={setDraft}
         inherited={inherited}
       />
-    </BladeEditContext.Provider>
+    </BladeEditContext>
   ));
   return { slot, draft, setDraft, setInherited, ui };
 }

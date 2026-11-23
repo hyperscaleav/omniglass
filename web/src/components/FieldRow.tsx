@@ -1,4 +1,5 @@
-import { Show, children, createUniqueId, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Show, children, createUniqueId } from "solid-js";
 import InfoTip from "./InfoTip";
 import ProvenanceDot from "./ProvenanceDot";
 import { IDENTITY_LABELS, type IdentityBinding } from "../lib/entities";
@@ -75,7 +76,7 @@ export default function FieldRow(p: FieldRowProps): JSX.Element {
   const control = first?.querySelector("[data-field-target]") ?? first;
   if (control && !control.id) control.id = id;
   return (
-    <div class="flex flex-col" classList={{ "gap-1": !p.eyebrow, "gap-1.5": !!p.eyebrow }}>
+    <div class={["flex flex-col", { "gap-1": !p.eyebrow, "gap-1.5": !!p.eyebrow }]}>
       <span class="flex items-center gap-1.5">
         <label
           id={labelId}

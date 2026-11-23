@@ -1,4 +1,5 @@
-import { createSignal, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { createSignal } from "solid-js";
 
 // The toast primitive (#1155): a short notice that an action the operator took
 // has started or finished, raised wherever the action ran and drawn in one place

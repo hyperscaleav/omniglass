@@ -1,5 +1,6 @@
-import { For, Show, createContext, createMemo, createSignal, useContext, type JSX } from "solid-js";
-import { createStore } from "solid-js/store";
+import type { JSX } from "@solidjs/web";
+import { For, Show, createContext, createMemo, createSignal, useContext } from "solid-js";
+import { createStore } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import Drawer from "../components/Drawer";
@@ -109,7 +110,7 @@ export default function SeverityLevels(): JSX.Element {
   };
 
   return (
-    <LevelsUiContext.Provider value={{ openEdit: (name) => { blades.close(); setEditing(name); } }}>
+    <LevelsUiContext value={{ openEdit: (name) => { blades.close(); setEditing(name); } }}>
       <FlatList<SeverityLevel>
         config={{
           entity: { name: "severity level", plural: "severity levels" },
@@ -144,7 +145,7 @@ export default function SeverityLevels(): JSX.Element {
           </Drawer>
         )}
       </Show>
-    </LevelsUiContext.Provider>
+    </LevelsUiContext>
   );
 }
 
@@ -320,8 +321,8 @@ function LevelForm(p: { mode: "create" | "edit"; level?: SeverityLevel; onSaved:
       </Show>
       <FieldRow bind="name" info={SEVERITY_HINTS.name}>
         <input
-          class="input input-bordered w-full font-data"
-          classList={{ "input-error": !!shown("name") }}
+         
+          class={["input input-bordered w-full font-data", { "input-error": !!shown("name") }]}
           aria-required="true"
           value={d.name}
           placeholder="major"
@@ -335,8 +336,8 @@ function LevelForm(p: { mode: "create" | "edit"; level?: SeverityLevel; onSaved:
       <FieldRow label="Color" info={SEVERITY_HINTS.color}>
         <select
           ref={bindSelectValue(() => d.color, () => true)}
-          class="select select-bordered w-full"
-          classList={{ "select-error": !!shown("color") }}
+         
+          class={["select select-bordered w-full", { "select-error": !!shown("color") }]}
           aria-required="true"
           onChange={(e) => { setD("color", e.currentTarget.value as LevelDraft["color"]); touch("color"); }}
         >
@@ -353,8 +354,8 @@ function LevelForm(p: { mode: "create" | "edit"; level?: SeverityLevel; onSaved:
       </div>
       <FieldRow label="Rank" info={SEVERITY_HINTS.rank}>
         <input
-          class="input input-bordered w-full font-data"
-          classList={{ "input-error": !!shown("rank") }}
+         
+          class={["input input-bordered w-full font-data", { "input-error": !!shown("rank") }]}
           aria-required="true"
           inputmode="numeric"
           placeholder="35"

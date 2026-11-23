@@ -1,4 +1,5 @@
-import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show, createEffect, createMemo, createSignal, createTrackedEffect } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Drawer from "./Drawer";
@@ -114,12 +115,12 @@ function ComponentBody(props: { id: string; onRemoved: () => void }): JSX.Elemen
   // after each save, never by a background refetch under the operator's typing.
   const [draft, setDraft] = createSignal<ImpairmentDraft>(draftOf(HEALTHY));
   const [seeded, setSeeded] = createSignal(false);
-  createEffect(on(() => imp.data, (d) => {
+  createEffect(() => imp.data, (d) => {
     if (d && !seeded()) {
       setDraft(draftOf(d));
       setSeeded(true);
     }
-  }));
+  });
   const parsed = createMemo(() => parseImpairment(draft()));
   const stored = (): Impairment => imp.data ?? HEALTHY;
   const dirty = () => !!parsed().value && !sameImpairment(parsed().value!, stored());
@@ -169,7 +170,7 @@ function ComponentBody(props: { id: string; onRemoved: () => void }): JSX.Elemen
   // effect so it follows the user (an impersonation swaps it); each run's
   // binding clears itself when the next replaces it.
   const actions = useFormActions();
-  createEffect(() => {
+  createTrackedEffect(() => {
     if (!canImpair() && !canRemove()) return;
     actions.bind({
       ...(canImpair()
@@ -239,7 +240,7 @@ function StatusSection(props: {
   // operator's choice before they press Change. The memo dedupes by value.
   const [product, setProduct] = createSignal(props.sim.product ?? "");
   const serverProduct = createMemo(() => props.sim.product);
-  createEffect(on(serverProduct, (p) => setProduct(p ?? ""), { defer: true }));
+  createEffect(serverProduct, (p) => setProduct(p ?? ""), { defer: true });
   const variants = () => props.sim.variants ?? [];
 
   async function reclassify() {
@@ -355,8 +356,8 @@ function ImpairmentSection(props: {
         inputmode="decimal"
         autocomplete="off"
         placeholder="0"
-        class="input input-bordered w-full font-data tnum"
-        classList={{ "input-error": !!props.errors[k] }}
+       
+        class={["input input-bordered w-full font-data tnum", { "input-error": !!props.errors[k] }]}
         value={props.draft[k]}
         disabled={!props.loaded}
         aria-invalid={props.errors[k] ? "true" : undefined}
@@ -482,8 +483,8 @@ function OperationList(props: { surface: SimSurface; selectable: boolean; picked
               >
                 <button
                   type="button"
-                  class="block w-full cursor-pointer text-left hover:bg-base-200 focus-visible:bg-base-200 focus-visible:outline-none"
-                  classList={{ "bg-primary/10": props.picked === r.key }}
+                 
+                  class={["block w-full cursor-pointer text-left hover:bg-base-200 focus-visible:bg-base-200 focus-visible:outline-none", { "bg-primary/10": props.picked === r.key }]}
                   aria-pressed={props.picked === r.key}
                   onClick={() => props.onPick(r.key, r.draft())}
                 >

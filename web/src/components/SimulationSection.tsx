@@ -1,4 +1,5 @@
-import { Show, createSignal, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Show, createSignal } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import Eyebrow from "./Eyebrow";

@@ -1,4 +1,5 @@
-import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show, createMemo, createSignal } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import TemplateNotice from "../components/TemplateNotice";

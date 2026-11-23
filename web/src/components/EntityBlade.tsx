@@ -1,4 +1,5 @@
-import { For, Show, createMemo, createSignal, createUniqueId, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show, createMemo, createSignal, createUniqueId } from "solid-js";
 import LocationCard from "./LocationCard";
 import AcknowledgeButton from "./AcknowledgeButton";
 import SnoozeButton, { SnoozedBadge } from "./SnoozeButton";

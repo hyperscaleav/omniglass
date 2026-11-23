@@ -1,4 +1,5 @@
-import { For, Match, Show, Switch, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Match, Show, Switch } from "solid-js";
 import Eyebrow from "./Eyebrow";
 import KVStacked from "./KVStacked";
 import { Box, MapPin } from "./icons";
@@ -103,7 +104,7 @@ function StandardPreview(props: { standard: NonNullable<Template["standard"]> })
                   <span class="font-medium">{entityLabel(c)}</span>
                   <For each={c.alternates ?? []}>
                     {(a, i) => (
-                      <span class="badge badge-sm" classList={{ "badge-ghost": i() > 0, "badge-soft badge-info": i() === 0 }}>
+                      <span class={["badge badge-sm", { "badge-ghost": i() > 0, "badge-soft badge-info": i() === 0 }]}>
                         {entityLabel(a)}{i() === 0 ? " (default)" : ""}
                       </span>
                     )}

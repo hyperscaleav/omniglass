@@ -1,4 +1,5 @@
-import type { JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+
 import type { Notification } from "../lib/action_rules";
 
 // NotificationStatusPill is the console's one word for how a notification's

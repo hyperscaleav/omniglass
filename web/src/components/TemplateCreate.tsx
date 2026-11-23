@@ -1,4 +1,5 @@
-import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show, createMemo, createSignal } from "solid-js";
 import { useQuery } from "@tanstack/solid-query";
 import Button from "./Button";
 import Eyebrow from "./Eyebrow";
@@ -34,8 +35,8 @@ export function CreateModeChoice(props: { mode: CreateMode; onChange: (m: Create
   const opt = (m: CreateMode, label: string) => (
     <button
       type="button"
-      class="tab"
-      classList={{ "tab-active": props.mode === m }}
+     
+      class={["tab", { "tab-active": props.mode === m }]}
       aria-pressed={props.mode === m}
       onClick={() => props.onChange(m)}
     >

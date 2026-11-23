@@ -18,7 +18,12 @@ const iface = (reachability: { value: string; ts: string } | null, outpost?: str
   ({ endpoint: "ssh", transport: "ssh", outpost, reachability, layers: [], history: [] }) as unknown as ReachEndpoint;
 
 const outpost = (heartbeatSecondsAgo: number | null): Outpost =>
-  ({ name: "edge-1", enrolled: true, last_heartbeat_at: heartbeatSecondsAgo === null ? undefined : iso(heartbeatSecondsAgo), tags: {} }) as Outpost;
+  (({
+    name: "edge-1",
+    enrolled: true,
+    last_heartbeat_at: heartbeatSecondsAgo === null ? undefined : iso(heartbeatSecondsAgo),
+    tags: {}
+  }) as Outpost);
 
 describe("collectionState", () => {
   // A push endpoint (#1024) is never down for silence: no outpost collects it,
@@ -88,7 +93,11 @@ describe("collectionState", () => {
   // gone, so freshness alone would read collecting beside a session that
   // polls nothing. A rejected session stops polls; a down one fails them.
   const held = (state: "up" | "down" | "rejected") =>
-    ({ ...iface({ value: "up", ts: iso(10) }, "edge-1"), last_seen: iso(3), session: { state, ts: iso(30) } }) as ReachEndpoint;
+    (({
+      ...iface({ value: "up", ts: iso(10) }, "edge-1"),
+      last_seen: iso(3),
+      session: { state, ts: iso(30) }
+    }) as ReachEndpoint);
   it("a rejected session stops collection, however fresh the probes", () => {
     expect(collectionState(held("rejected"), outpost(5), now).kind).toBe("rejected");
   });
@@ -106,7 +115,12 @@ describe("collectionState", () => {
   // reported down. A login refused on a transport whose polls carry no
   // credential holds no poll, and the card keeps reading the health.
   const gated = (transport: string, rung: "responsive" | "authenticated") =>
-    ({ ...iface({ value: "down", ts: iso(10) }, "edge-1"), transport, last_seen: iso(3), rejection: { rung, class: "auth", ts: iso(30) } }) as ReachEndpoint;
+    (({
+      ...iface({ value: "down", ts: iso(10) }, "edge-1"),
+      transport,
+      last_seen: iso(3),
+      rejection: { rung, class: "auth", ts: iso(30) }
+    }) as ReachEndpoint);
   // An http or https poll carries its driver's credential (#902), so a
   // refused credential holds the polls as an snmp community's refusal does,
   // and an https certificate gate holds them at the transport rung.

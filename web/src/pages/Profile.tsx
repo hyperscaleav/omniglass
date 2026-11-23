@@ -1,5 +1,5 @@
-import { Show, For, createSignal, createEffect, createResource } from "solid-js";
-import { A } from "@solidjs/router";
+import { createResource } from "../lib/resource_compat";
+import { Show, For, createSignal, createEffect, createTrackedEffect } from "solid-js";
 import InfoTip from "../components/InfoTip";
 import PasswordField from "../components/PasswordField";
 import Button from "../components/Button";
@@ -92,7 +92,7 @@ export default function Profile() {
   // are not clobbered by the query settling.
   const [label, setLabel] = createSignal("");
   const [seeded, setSeeded] = createSignal(false);
-  createEffect(() => {
+  createTrackedEffect(() => {
     const h = me.data?.person;
     if (h && !seeded()) {
       setLabel(h.label ?? "");
@@ -272,8 +272,8 @@ export default function Profile() {
           <input
             id="tok-ttl"
             type="number"
-            class="input input-bordered w-full font-data"
-            classList={{ "input-error": !!tokenTtlError(tokenTtl()) }}
+           
+            class={["input input-bordered w-full font-data", { "input-error": !!tokenTtlError(tokenTtl()) }]}
             value={tokenTtl()}
             onInput={(e) => setTokenTtl(e.currentTarget.value === "" ? "" : Number(e.currentTarget.value))}
             disabled={tokenBusy()}
@@ -419,10 +419,10 @@ export default function Profile() {
                   text="Rules you write for yourself: when an alarm on a component you can read is raised or cleared, you are told in your inbox or by email."
                 />
               </div>
-              <A href="/profile/subscriptions" class="btn btn-quiet btn-sm gap-1.5">
+              <a href="/profile/subscriptions" class="btn btn-quiet btn-sm gap-1.5">
                 <Bell size={15} />
                 Manage subscriptions
-              </A>
+              </a>
             </div>
           </div>
         </Show>
@@ -497,8 +497,8 @@ function Note(props: { note: Note }) {
     <Show when={props.note}>
       <div
         role="alert"
-        class="alert alert-soft text-sm"
-        classList={{ "alert-success": props.note!.tone === "success", "alert-error": props.note!.tone === "error" }}
+       
+        class={["alert alert-soft text-sm", { "alert-success": props.note!.tone === "success", "alert-error": props.note!.tone === "error" }]}
       >
         <span>{props.note!.text}</span>
       </div>

@@ -25,10 +25,6 @@ func RequestTallySubject(outpost string) string { return subjectPrefix + "tally.
 // the bus's payload at any fleet size.
 const SimObservationSampleCap = 20
 
-// SimObservationServedCap bounds the device ids an observation lists as served;
-// a larger fleet is reported truncated, not listed.
-const SimObservationServedCap = 2000
-
 // SimObservation is one read of a simulator's endpoint observation.
 type SimObservation struct {
 	Outpost string    `json:"outpost"`
@@ -40,12 +36,6 @@ type SimObservation struct {
 	// changing, saw one fleet throughout (#1895).
 	FleetGeneration int64 `json:"fleet_generation"`
 	FleetChanging   bool  `json:"fleet_changing,omitempty"`
-	// ServedIDs is the devices the simulator serves now (their component
-	// ids), up to SimObservationServedCap; ServedTruncated holds when the
-	// fleet was larger and the list is left empty. A poll sent to a target
-	// outside the list is no loss of the path (#1962).
-	ServedIDs       []string `json:"served_ids,omitempty"`
-	ServedTruncated bool     `json:"served_truncated,omitempty"`
 	// Devices is how many devices the simulator has observed since it
 	// started, served now or not; Impaired how many it serves carry an
 	// applied impairment.

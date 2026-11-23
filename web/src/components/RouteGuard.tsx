@@ -1,4 +1,4 @@
-import { Show, type ParentComponent, createEffect, createMemo } from "solid-js";
+import { Show, type ParentComponent, createEffect, createMemo, createTrackedEffect } from "solid-js";
 import { useLocation, useNavigate } from "@solidjs/router";
 import { useMe, can } from "../lib/auth";
 import { routeAllowed } from "../lib/nav";
@@ -26,7 +26,7 @@ export const RouteGuard: ParentComponent = (props) => {
     return routeAllowed(location.pathname, (tokens) => can(m, ...tokens));
   });
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     if (!allowed()) navigate("/", { replace: true });
   });
 

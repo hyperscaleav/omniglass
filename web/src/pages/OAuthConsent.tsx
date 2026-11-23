@@ -1,4 +1,5 @@
-import { Show, For, createSignal, createResource } from "solid-js";
+import { createResource } from "../lib/resource_compat";
+import { Show, For, createSignal } from "solid-js";
 import { useSearchParams } from "@solidjs/router";
 import Button from "../components/Button";
 import { Ban, Check } from "../components/icons";

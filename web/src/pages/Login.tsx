@@ -1,4 +1,5 @@
-import { Show, createSignal, createResource } from "solid-js";
+import { createResource } from "../lib/resource_compat";
+import { Show, createSignal } from "solid-js";
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import { useLogin, useTokenLogin } from "../lib/auth";
 import { resolveNext } from "../lib/next";

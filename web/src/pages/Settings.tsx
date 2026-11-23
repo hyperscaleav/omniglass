@@ -1,4 +1,4 @@
-import { Show, For, createSignal, createEffect } from "solid-js";
+import { Show, For, createSignal, createEffect, createTrackedEffect } from "solid-js";
 import Button from "../components/Button";
 import KVRow from "../components/KVRow";
 import { RotateCcw, Save, Pencil, Check } from "../components/icons";
@@ -232,7 +232,7 @@ function SettingRow(props: {
   // row (draft still equals what we last seeded) follows the new value while a row
   // the operator has typed into keeps its unsaved edit.
   let seeded = current();
-  createEffect(() => {
+  createTrackedEffect(() => {
     const next = current();
     if (draft() === seeded) setDraft(next);
     seeded = next;
@@ -288,8 +288,8 @@ function SettingRow(props: {
               <input
                 type="text"
                 aria-label={props.settingKey}
-                class="input input-bordered input-sm join-item min-w-0 grow font-data"
-                classList={{ "input-error": !!fieldErr() }}
+               
+                class={["input input-bordered input-sm join-item min-w-0 grow font-data", { "input-error": !!fieldErr() }]}
                 value={draft()}
                 onInput={(e) => setDraft(e.currentTarget.value)}
               />
@@ -297,8 +297,8 @@ function SettingRow(props: {
           >
             <select
               aria-label={props.settingKey}
-              class="select select-bordered select-sm join-item min-w-0 grow"
-              classList={{ "select-error": !!fieldErr() }}
+             
+              class={["select select-bordered select-sm join-item min-w-0 grow", { "select-error": !!fieldErr() }]}
               value={draft()}
               onChange={(e) => setDraft(e.currentTarget.value)}
             >

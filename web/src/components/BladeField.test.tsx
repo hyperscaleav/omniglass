@@ -48,9 +48,9 @@ describe("BladeField", () => {
     it("renders an input for a single-line field while the blade is editing", () => {
       const slot = editingSlot();
       const { container } = render(() => (
-        <BladeEditContext.Provider value={slot}>
+        <BladeEditContext value={slot}>
           <BladeField label="Support phone" value={() => "+1 800 555 0100"} onInput={() => {}} />
-        </BladeEditContext.Provider>
+        </BladeEditContext>
       ));
       const input = container.querySelector("input")!;
       expect(input).toBeTruthy();
@@ -61,11 +61,11 @@ describe("BladeField", () => {
     it("renders the caller's own control when children are given", () => {
       const slot = editingSlot();
       const { container } = render(() => (
-        <BladeEditContext.Provider value={slot}>
+        <BladeEditContext value={slot}>
           <BladeField label="Kind" read={<span>manufacturer</span>}>
             <select><option>manufacturer</option></select>
           </BladeField>
-        </BladeEditContext.Provider>
+        </BladeEditContext>
       ));
       expect(container.querySelector("select")).toBeTruthy();
     });
@@ -73,9 +73,9 @@ describe("BladeField", () => {
     it("associates the label with the control it renders", () => {
       const slot = editingSlot();
       const { getByText, container } = render(() => (
-        <BladeEditContext.Provider value={slot}>
+        <BladeEditContext value={slot}>
           <BladeField label="Website" value={() => "https://example.com"} onInput={() => {}} />
-        </BladeEditContext.Provider>
+        </BladeEditContext>
       ));
       const label = getByText("Website") as HTMLLabelElement;
       const input = container.querySelector("input")!;
@@ -88,9 +88,9 @@ describe("BladeField", () => {
       const slot = editingSlot();
       let typed = "";
       const { container } = render(() => (
-        <BladeEditContext.Provider value={slot}>
+        <BladeEditContext value={slot}>
           <BladeField label="Icon" value={() => ""} onInput={(v) => (typed = v)} />
-        </BladeEditContext.Provider>
+        </BladeEditContext>
       ));
       const input = container.querySelector("input")!;
       input.value = "crestron-logo";
@@ -123,9 +123,9 @@ describe("BladeField", () => {
     it("edits in a textarea rather than a single-line input", () => {
       const slot = editingSlot();
       const { container } = render(() => (
-        <BladeEditContext.Provider value={slot}>
+        <BladeEditContext value={slot}>
           <BladeField label="Description" multiline value={() => "long"} onInput={() => {}} />
-        </BladeEditContext.Provider>
+        </BladeEditContext>
       ));
       expect(container.querySelector("textarea")).toBeTruthy();
       expect(container.querySelector("input")).toBeNull();
@@ -167,7 +167,7 @@ describe("BladeField", () => {
       const slot = createEditSlot();
       const [draft, setDraft] = createSignal("");
       const { queryByRole, getByRole } = render(() => (
-        <BladeEditContext.Provider value={slot}>
+        <BladeEditContext value={slot}>
           <BladeField
             label="Stem"
             value={() => ""}
@@ -175,7 +175,7 @@ describe("BladeField", () => {
             onInput={setDraft}
             provenance={(text) => (text === "" ? "ceiling-mic" : "")}
           />
-        </BladeEditContext.Provider>
+        </BladeEditContext>
       ));
       expect(getByRole("button", { name: /Stem is inherited from ceiling-mic/ })).toBeTruthy();
       slot.begin();
@@ -219,9 +219,9 @@ describe("BladeField", () => {
     it("follows the slot as it enters and leaves edit mode", () => {
       const slot = createEditSlot();
       const { container } = render(() => (
-        <BladeEditContext.Provider value={slot}>
+        <BladeEditContext value={slot}>
           <BladeField label="Icon" value={() => "crestron-logo"} onInput={() => {}} />
-        </BladeEditContext.Provider>
+        </BladeEditContext>
       ));
       expect(container.querySelector("input")).toBeNull();
       slot.begin();

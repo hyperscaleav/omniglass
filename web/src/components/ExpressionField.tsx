@@ -1,4 +1,5 @@
-import { For, Show, createEffect, createSignal, createUniqueId, on, onCleanup, untrack, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show, createEffect, createSignal, createUniqueId, onCleanup, untrack, createTrackedEffect } from "solid-js";
 import InfoTip from "./InfoTip";
 import Button from "./Button";
 import Eyebrow from "./Eyebrow";
@@ -91,8 +92,7 @@ export default function ExpressionField(p: {
   // the source, so it is asked for (with an empty source) whenever those
   // change, on its own clock: typing, which holds the source check back
   // until a pause, never holds back the words the first one completes from.
-  createEffect(
-    on([() => p.sampleKey, () => JSON.stringify(p.inputs ?? null), () => p.ownerKind, () => p.site], ([key]) => {
+  createEffect(() => [() => p.sampleKey, () => JSON.stringify(p.inputs ?? null), () => p.ownerKind, () => p.site].map((f) => f()), ([key]) => {
       clearTimeout(vocabTimer);
       const n = ++vocabSeq;
       if (!key && !p.keyless) {
@@ -110,11 +110,9 @@ export default function ExpressionField(p: {
           if (n === vocabSeq) setVocab(null);
         }
       }, p.debounce ?? 300);
-    }),
-  );
+    });
 
-  createEffect(
-    on([() => p.value, () => p.sampleKey, () => JSON.stringify(p.inputs ?? null), () => p.ownerKind, () => p.site], ([source, key]) => {
+  createEffect(() => [() => p.value, () => p.sampleKey, () => JSON.stringify(p.inputs ?? null), () => p.ownerKind, () => p.site].map((f) => f()), ([source, key]) => {
       clearTimeout(timer);
       const n = ++seq;
       if ((!key && !p.keyless) || !source.trim()) {
@@ -148,8 +146,7 @@ export default function ExpressionField(p: {
           verdict(false);
         }
       }, p.debounce ?? 300);
-    }),
-  );
+    });
   onCleanup(() => {
     clearTimeout(timer);
     clearTimeout(vocabTimer);
@@ -166,8 +163,8 @@ export default function ExpressionField(p: {
 
   const host = (
     <div
-      class="textarea textarea-bordered min-h-0 w-full px-2 py-1.5 font-data text-sm leading-snug"
-      classList={{ "textarea-error": refused() }}
+     
+      class={["textarea textarea-bordered min-h-0 w-full px-2 py-1.5 font-data text-sm leading-snug", { "textarea-error": refused() }]}
     />
   ) as HTMLDivElement;
   // A FieldRow's <label for> points at the host, which is not labelable:
@@ -215,11 +212,11 @@ export default function ExpressionField(p: {
 
   // The form's value is the source of truth: a value set from outside (the
   // builder's expression, a reset) replaces the editor's.
-  createEffect(() => editor()?.setDoc(p.value));
-  createEffect(() => editor()?.setAria(aria()));
-  createEffect(on(() => p.placeholder ?? "", (ph) => editor()?.setPlaceholder(ph), { defer: true }));
+  createTrackedEffect(() => editor()?.setDoc(p.value));
+  createTrackedEffect(() => editor()?.setAria(aria()));
+  createEffect(() => p.placeholder ?? "", (ph) => editor()?.setPlaceholder(ph), { defer: true });
   // Each answer's faults underlined in the source it answered.
-  createEffect(() => {
+  createTrackedEffect(() => {
     const ds = diagnostics();
     editor()?.setDiagnostics(checked, ds, p.onBind);
   });
@@ -272,7 +269,7 @@ export default function ExpressionField(p: {
                     </pre>
                   )}
                 </Show>
-                <span class="flex flex-wrap items-baseline gap-x-2 text-[11px]" classList={{ [SEVERITY_TEXT[d.severity]]: true }}>
+                <span class={["flex flex-wrap items-baseline gap-x-2 text-[11px]", { [SEVERITY_TEXT[d.severity]]: true }]}>
                   <span>
                     <Show when={d.severity !== "error"}>
                       <span class="font-semibold">{SEVERITY_WORD[d.severity]}: </span>

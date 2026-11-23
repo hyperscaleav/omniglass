@@ -1,4 +1,5 @@
-import { type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+
 import { EMPTY_VALUE } from "./BladeField";
 
 // InheritedCell is a type catalog LIST cell for a fact that INHERITS: the stem,

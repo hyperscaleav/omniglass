@@ -11,11 +11,11 @@ import { fleetRegistry } from "../lib/fleetBlades";
 export default function Explore() {
   const blades = createBladeController();
   return (
-    <BladesContext.Provider value={blades}>
+    <BladesContext value={blades}>
       <Page title="Explore" subtitle="Every location in the fleet, and what is in it.">
         <OutlineWorkspace />
       </Page>
       <BladeStack controller={blades} registry={fleetRegistry} />
-    </BladesContext.Provider>
+    </BladesContext>
   );
 }

@@ -1,4 +1,5 @@
-import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show, createMemo, createSignal } from "solid-js";
 import Page from "../components/Page";
 import Breadcrumb from "../components/Breadcrumb";
 import Button from "../components/Button";
@@ -124,7 +125,7 @@ export default function Subscriptions(): JSX.Element {
       <Show when={canSubscribe()}>
         <Show when={note()}>
           {(n) => (
-            <div role="alert" class="alert alert-soft text-sm" classList={{ "alert-error": n().tone === "error", "alert-success": n().tone === "success" }}>
+            <div role="alert" class={["alert alert-soft text-sm", { "alert-error": n().tone === "error", "alert-success": n().tone === "success" }]}>
               <span>{n().text}</span>
             </div>
           )}
@@ -328,8 +329,8 @@ function SubscriptionForm(p: {
           <div class="flex flex-col gap-1">
             <FieldRow bind="name" info="How the API and CLI address this subscription: lowercase letters, digits and hyphens, unique among your own.">
               <input
-                class="input input-bordered w-full font-data"
-                classList={{ "input-error": !!(touched() && errors().name) || !!nameRefused() }}
+               
+                class={["input input-bordered w-full font-data", { "input-error": !!(touched() && errors().name) || !!nameRefused() }]}
                 value={ident.name()}
                 onInput={(e) => { ident.setName(e.currentTarget.value); setNameRefused(null); }}
                 aria-required="true"
@@ -467,7 +468,7 @@ function TestPanel(p: { on: Transition[]; when: string; ready: boolean }): JSX.E
               when={ms().length > 0}
               fallback={<span class="text-[11px] text-base-content/50">You have no recent alarms on components you can read.</span>}
             >
-              <ul class="flex flex-col divide-y divide-base-300 rounded-box border border-base-300" classList={{ "opacity-60": stale() }}>
+              <ul class={["flex flex-col divide-y divide-base-300 rounded-box border border-base-300", { "opacity-60": stale() }]}>
                 <For each={ms()}>{(m) => <MatchRow match={m} />}</For>
               </ul>
             </Show>
@@ -484,8 +485,8 @@ function MatchRow(p: { match: RuleMatch }): JSX.Element {
   return (
     <li class="flex items-start gap-2 px-2.5 py-2 text-xs" data-testid="sub-test-match" data-verdict={verdict()}>
       <span
-        class="mt-0.5 flex-none"
-        classList={{ "text-healthy": verdict() === "matched", "text-base-content/30": verdict() === "missed", "text-error": verdict() === "error" }}
+       
+        class={["mt-0.5 flex-none", { "text-healthy": verdict() === "matched", "text-base-content/30": verdict() === "missed", "text-error": verdict() === "error" }]}
         title={verdict() === "matched" ? "Would have told you" : verdict() === "missed" ? "Would not have told you" : "Could not be judged"}
       >
         <Show when={verdict() === "matched"} fallback={<X size={14} />}>

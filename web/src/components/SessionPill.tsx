@@ -1,5 +1,5 @@
 import { Show, type Component } from "solid-js";
-import { Dynamic } from "solid-js/web";
+import { Dynamic } from "@solidjs/web";
 import { Ban, CircleCheck, CircleDashed, Clock, RefreshCw, WifiOff } from "./icons";
 import { rel } from "../lib/format";
 import { sessionWord, type SessionWord } from "../lib/session";

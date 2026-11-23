@@ -1,4 +1,5 @@
-import { For, Show, createEffect, createMemo, createSignal, createUniqueId, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show, createEffect, createMemo, createSignal, createUniqueId, createTrackedEffect } from "solid-js";
 import { useQuery } from "@tanstack/solid-query";
 import Button from "./Button";
 import Drawer from "./Drawer";
@@ -66,7 +67,7 @@ export default function CommandsPanel(props: { component: string; name: string; 
     });
   // A row asked for by address (the issue's toast) opens, and scrolls into
   // view once it has rendered.
-  createEffect(() => {
+  createTrackedEffect(() => {
     const id = props.open;
     if (!id || !q.data?.some((c) => c.id === id)) return;
     setOpened((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
@@ -74,7 +75,7 @@ export default function CommandsPanel(props: { component: string; name: string; 
   });
   // Rows keyed by id, never by the objects a poll hands back, so an open row
   // and its focus survive the next read.
-  const ids = createMemo(() => (q.data ?? []).map((c) => c.id), undefined, {
+  const ids = createMemo(() => (q.data ?? []).map((c) => c.id), {
     equals: (a, b) => a.length === b.length && a.every((x, i) => x === b[i]),
   });
   const byId = createMemo(() => new Map((q.data ?? []).map((c) => [c.id, c])));
@@ -196,7 +197,7 @@ function CommandDetail(props: { c: Command; id: string }): JSX.Element {
               <Show when={i() > 0}>
                 <span class="text-base-content/25" aria-hidden="true">›</span>
               </Show>
-              <span classList={{ "text-base-content/85": s.reached, "text-base-content/35": !s.reached }}>{s.label}</span>
+              <span class={{ "text-base-content/85": s.reached, "text-base-content/35": !s.reached }}>{s.label}</span>
               <Show when={s.reached && s.at}>
                 <span class="tabular-nums text-base-content/45" title={fmtTime(s.at!)}>
                   {i() === 0 ? clockTime(s.at!) : offsetWords(props.c.issued_at, s.at!)}

@@ -1,4 +1,5 @@
-import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show, createMemo, createSignal } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import { identityColumn } from "../components/IdentityCell";
@@ -46,7 +47,7 @@ function fieldsPreview(s: Secret): JSX.Element {
         {(f, i) => (
           <>
             <Show when={i()}><span class="text-base-content/30">, </span></Show>
-            <span class="text-base-content/45">{f.name}</span>=<span classList={{ "text-base-content/40": f.secret }}>{f.value}</span>
+            <span class="text-base-content/45">{f.name}</span>=<span class={{ "text-base-content/40": f.secret }}>{f.value}</span>
           </>
         )}
       </For>

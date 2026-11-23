@@ -7,5 +7,5 @@ import { createContext, useContext } from "solid-js";
 // name is "Location" plus the value, not the value alone.
 const FieldLabelContext = createContext<string | undefined>(undefined);
 
-export const FieldLabelProvider = FieldLabelContext.Provider;
+export const FieldLabelProvider = FieldLabelContext;
 export const useFieldLabelId = (): string | undefined => useContext(FieldLabelContext);

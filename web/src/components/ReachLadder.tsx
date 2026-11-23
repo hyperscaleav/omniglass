@@ -1,4 +1,4 @@
-import { Index, Show } from "solid-js";
+import { For, Show } from "solid-js";
 import InfoTip from "./InfoTip";
 import { Ban, ChevronRight } from "./icons";
 import { ladder, rungHint, type Rung } from "../lib/session";
@@ -45,7 +45,7 @@ export default function ReachLadder(props: { iface: ReachEndpoint }) {
   const rungs = () => ladder(props.iface);
   return (
     <div class="inline-flex shrink-0 items-center gap-0.5" role="group" aria-label="Reachability ladder, bottom up">
-      <Index each={rungs()}>
+      <For keyed={false} each={rungs()}>
         {(r, i) => (
           <>
             <Show when={i > 0}>
@@ -59,7 +59,7 @@ export default function ReachLadder(props: { iface: ReachEndpoint }) {
             </InfoTip>
           </>
         )}
-      </Index>
+      </For>
     </div>
   );
 }

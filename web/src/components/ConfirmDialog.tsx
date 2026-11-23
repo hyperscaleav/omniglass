@@ -1,4 +1,5 @@
-import { type Component, type JSX, Show } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { type Component, Show } from "solid-js";
 import { AlertDialog } from "@kobalte/core/alert-dialog";
 import Button from "./Button";
 import PanelFooter from "./PanelFooter";

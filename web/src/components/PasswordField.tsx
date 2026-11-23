@@ -52,8 +52,8 @@ export default function PasswordField(props: {
           id={props.id}
           type={reveal() ? "text" : "password"}
           autocomplete={props.autocomplete ?? "new-password"}
-          class="input input-bordered join-item w-full font-data"
-          classList={{ "input-error": !!error() }}
+         
+          class={["input input-bordered join-item w-full font-data", { "input-error": !!error() }]}
           value={props.value}
           placeholder={props.placeholder}
           onInput={(e) => props.onInput(e.currentTarget.value)}

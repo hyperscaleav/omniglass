@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal, createEffect, createUniqueId } from "solid-js";
+import { For, Show, createMemo, createSignal, createEffect, createUniqueId, createTrackedEffect } from "solid-js";
 import { Dialog } from "@kobalte/core/dialog";
 import { useNavigate } from "@solidjs/router";
 import { navItems, filterNav } from "../lib/nav";
@@ -78,13 +78,13 @@ export default function CommandPalette(props: { open: boolean; onClose: () => vo
   });
 
   // Reset query + selection each time it opens; keep active in range as results change.
-  createEffect(() => {
+  createTrackedEffect(() => {
     if (props.open) {
       setQuery("");
       setActive(0);
     }
   });
-  createEffect(() => {
+  createTrackedEffect(() => {
     if (active() >= results().length) setActive(Math.max(0, results().length - 1));
   });
 
@@ -141,8 +141,8 @@ export default function CommandPalette(props: { open: boolean; onClose: () => vo
                         id={optId(i())}
                         role="option"
                         aria-selected={i() === active()}
-                        class="flex w-full items-center gap-3 rounded-field px-3 py-2 text-left text-sm"
-                        classList={{ "bg-primary/15 text-primary": i() === active() }}
+                       
+                        class={["flex w-full items-center gap-3 rounded-field px-3 py-2 text-left text-sm", { "bg-primary/15 text-primary": i() === active() }]}
                         onMouseEnter={() => setActive(i())}
                         onClick={() => go(c)}
                       >

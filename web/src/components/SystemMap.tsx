@@ -1,5 +1,5 @@
-import { createMemo, createSignal, Index, onCleanup, onMount, Show } from "solid-js";
-import { Dynamic } from "solid-js/web";
+import { createMemo, createSignal, For, onCleanup, onSettled, Show } from "solid-js";
+import { Dynamic } from "@solidjs/web";
 import { useNavigate } from "@solidjs/router";
 import { Tooltip } from "@kobalte/core/tooltip";
 import { layoutMarkers, type MapMarker, type Rect, type StandardMapDecl } from "../lib/system_map";
@@ -54,7 +54,7 @@ export default function SystemMap(props: {
   const navigate = useNavigate();
   const [width, setWidth] = createSignal(DEFAULT_WIDTH);
   let mapEl!: HTMLDivElement;
-  onMount(() => {
+  onSettled(() => {
     if (mapEl.clientWidth > 0) setWidth(mapEl.clientWidth);
     // jsdom has no ResizeObserver; there the default width stands.
     if (typeof ResizeObserver === "undefined") return;
@@ -95,7 +95,7 @@ export default function SystemMap(props: {
             so a health poll that rebuilds the marker objects updates each
             marker in place instead of remounting it (which would drop focus
             and close an open tooltip every few seconds). */}
-        <Index each={props.markers}>
+        <For keyed={false} each={props.markers}>
           {(m, i) => {
             const slot = () => slotOf(m());
             const placed = () => placements()[i];
@@ -110,7 +110,7 @@ export default function SystemMap(props: {
                 when={m().occupant}
                 fallback={
                   <Tooltip openDelay={150} closeDelay={100} placement="top" gutter={4}>
-                    <Tooltip.Trigger as="span" tabIndex={0} data-testid={testid()} data-empty aria-label={slot()} class={`${place()} cursor-default`} style={at()}>
+                    <Tooltip.Trigger as="span" tabindex={0} data-testid={testid()} data-empty aria-label={slot()} class={`${place()} cursor-default`} style={at()}>
                       <span data-glyph class={`inline-flex ${healthHue(null)}`}>
                         <CircleDashed size={18} />
                       </span>
@@ -176,7 +176,7 @@ export default function SystemMap(props: {
               </Show>
             );
           }}
-        </Index>
+        </For>
       </div>
     </div>
   );

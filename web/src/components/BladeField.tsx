@@ -1,4 +1,5 @@
-import { Show, useContext, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Show, useContext } from "solid-js";
 import FieldRow from "./FieldRow";
 import KVStacked from "./KVStacked";
 import { BladeEditContext, type BladeEdit } from "../lib/blades";
@@ -144,8 +145,8 @@ export default function BladeField(props: BladeFieldProps): JSX.Element {
             when={props.multiline}
             fallback={
               <input
-                class="input input-bordered w-full"
-                classList={{ "font-data": props.mono }}
+               
+                class={["input input-bordered w-full", { "font-data": props.mono }]}
                 placeholder={props.placeholder}
                 value={editText()}
                 onInput={(e) => props.onInput?.(e.currentTarget.value)}
@@ -153,8 +154,8 @@ export default function BladeField(props: BladeFieldProps): JSX.Element {
             }
           >
             <textarea
-              class="textarea textarea-bordered w-full"
-              classList={{ "font-data": props.mono }}
+             
+              class={["textarea textarea-bordered w-full", { "font-data": props.mono }]}
               rows={props.rows ?? 4}
               placeholder={props.placeholder}
               value={editText()}

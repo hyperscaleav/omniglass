@@ -1,4 +1,5 @@
-import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show, createMemo, createSignal } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { Pencil, Sliders } from "./icons";
 import KVStacked from "./KVStacked";
@@ -449,8 +450,8 @@ export function CreateEndpointForm(props: { onCreated: (i: Endpoint) => void; co
         {/* Probe first: a bare reachability check needs no driver. Attach
             derives the endpoint from a driver's spec (#813), whose poll
             functions the outpost then collects over the transport (#814). */}
-        <button type="button" role="tab" aria-selected={mode() === "probe" ? "true" : "false"} class="tab" classList={{ "tab-active": mode() === "probe" }} onClick={() => setMode("probe")}>Probe</button>
-        <button type="button" role="tab" aria-selected={mode() === "attach" ? "true" : "false"} class="tab" classList={{ "tab-active": mode() === "attach" }} onClick={() => setMode("attach")}>Attach a driver</button>
+        <button type="button" role="tab" aria-selected={mode() === "probe" ? "true" : "false"} class={["tab", { "tab-active": mode() === "probe" }]} onClick={() => setMode("probe")}>Probe</button>
+        <button type="button" role="tab" aria-selected={mode() === "attach" ? "true" : "false"} class={["tab", { "tab-active": mode() === "attach" }]} onClick={() => setMode("attach")}>Attach a driver</button>
       </div>
       <Show when={mode() === "probe"}>
         <div>

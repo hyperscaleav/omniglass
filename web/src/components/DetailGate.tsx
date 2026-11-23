@@ -1,4 +1,5 @@
-import { Show, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Show } from "solid-js";
 import Button from "./Button";
 
 // DetailGate (#872): the states every detail view passes through before its

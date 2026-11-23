@@ -191,14 +191,14 @@ function CreateUserForm(props: { close: () => void; onCreated: (p: User) => void
       </div>
       <div>
         <label class="eyebrow mb-1.5 block" for="new-username">Username</label>
-        <input id="new-username" autocomplete="off" class="input input-bordered w-full font-data" classList={{ "input-error": !!handleError(username()) }} value={username()} placeholder="jordan" onInput={(e) => setUsername(e.currentTarget.value)} disabled={busy()} aria-required="true" />
+        <input id="new-username" autocomplete="off" class={["input input-bordered w-full font-data", { "input-error": !!handleError(username()) }]} value={username()} placeholder="jordan" onInput={(e) => setUsername(e.currentTarget.value)} disabled={busy()} aria-required="true" />
         <Show when={handleError(username())} fallback={<p class="mt-1 text-[11px] text-base-content/40">{nameDerived() ? "Derived from the label. Edit to set your own." : "What they sign in with."}</p>}>
           {(msg) => <p class="mt-1 text-[11px] text-error">{msg()}</p>}
         </Show>
       </div>
       <div>
         <label class="eyebrow mb-1.5 block" for="new-email">Email</label>
-        <input id="new-email" type="email" autocomplete="off" class="input input-bordered w-full" classList={{ "input-error": !!emailError(email()) }} value={email()} placeholder="jordan@example.com" onInput={(e) => setEmail(e.currentTarget.value)} disabled={busy()} />
+        <input id="new-email" type="email" autocomplete="off" class={["input input-bordered w-full", { "input-error": !!emailError(email()) }]} value={email()} placeholder="jordan@example.com" onInput={(e) => setEmail(e.currentTarget.value)} disabled={busy()} />
         <Show when={emailError(email())}>{(msg) => <p class="mt-1 text-[11px] text-error">{msg()}</p>}</Show>
       </div>
       <div>

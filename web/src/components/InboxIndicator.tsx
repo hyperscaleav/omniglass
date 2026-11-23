@@ -1,5 +1,4 @@
 import { Show } from "solid-js";
-import { A } from "@solidjs/router";
 import { Bell } from "./icons";
 import { can, useMe } from "../lib/auth";
 import { badgeText, useUnreadCount } from "../lib/inbox";
@@ -17,10 +16,9 @@ export default function InboxIndicator() {
   const name = () => (text() ? `Inbox, ${count.data} unread` : "Inbox");
   return (
     <Show when={can(me.data, "notification", "read")}>
-      <A
+      <a
         href="/inbox"
         class="relative inline-flex h-8 w-8 flex-none items-center justify-center rounded-field text-base-content/60 transition-colors hover:bg-base-200 hover:text-base-content focus-visible:outline-2 focus-visible:outline-primary"
-        activeClass="bg-base-200 text-base-content"
         title={name()}
         aria-label={name()}
         data-testid="inbox-indicator"
@@ -35,7 +33,7 @@ export default function InboxIndicator() {
             {text()}
           </span>
         </Show>
-      </A>
+      </a>
     </Show>
   );
 }

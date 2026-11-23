@@ -1,4 +1,5 @@
-import { type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+
 import FieldRow from "./FieldRow";
 import PenToggle, { takeOver } from "./PenToggle";
 import { type Pen, penState } from "../lib/namegen";
@@ -110,13 +111,13 @@ export default function LabelPenField(props: {
       hint={hint()}
     >
       <input
-        class="input input-bordered join-item w-full min-w-0"
-        classList={{
+       
+        class={["input input-bordered join-item w-full min-w-0", {
           "input-locked": state() === "generated",
           // The name standing in for an absent label is not a label, so it does
           // not read as one. Same treatment the create form gives the same fact.
           "italic text-base-content/60": state() === "generated" && platform() && !available(),
-        }}
+        }]}
         value={state() === "generated" ? (available() ? rendered() : entityLabel(props.entity())) : props.pen.value()}
         readOnly={state() === "generated"}
         placeholder={props.placeholder}

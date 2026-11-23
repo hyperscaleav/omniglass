@@ -1,4 +1,5 @@
-import { type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+
 
 // PanelFooter is the console's one action rail: the pinned bar at the bottom of a
 // panel that holds its entity actions. It exists so the blade's rail and the
@@ -13,8 +14,8 @@ import { type JSX } from "solid-js";
 export default function PanelFooter(props: { dimmed?: boolean; notice?: JSX.Element; children: JSX.Element }): JSX.Element {
   return (
     <footer
-      class="flex flex-none flex-col gap-2 border-t border-base-300 bg-base-100 px-5 py-3"
-      classList={{ "pointer-events-none opacity-55": !!props.dimmed }}
+     
+      class={["flex flex-none flex-col gap-2 border-t border-base-300 bg-base-100 px-5 py-3", { "pointer-events-none opacity-55": !!props.dimmed }]}
     >
       {props.notice}
       <div class="flex items-center gap-2">{props.children}</div>

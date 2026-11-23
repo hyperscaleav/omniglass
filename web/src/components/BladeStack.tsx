@@ -1,5 +1,6 @@
-import { type JSX, For, Show, createEffect, onCleanup } from "solid-js";
-import { Dynamic, Portal } from "solid-js/web";
+import type { JSX } from "@solidjs/web";
+import { For, Show, createEffect, onCleanup, createTrackedEffect } from "solid-js";
+import { Dynamic, Portal } from "@solidjs/web";
 import { Ban, ChevronLeft, MoreHorizontal, Pencil, RotateCcw, Save, Trash, X } from "./icons";
 import Button from "./Button";
 import PanelFooter from "./PanelFooter";
@@ -55,7 +56,7 @@ export default function BladeStack(props: {
   // below stays as the fallback for a browser without `inert`.
   const setShellInert = (on: boolean) =>
     document.querySelector("[data-app-shell]")?.toggleAttribute("inert", on);
-  createEffect(() => {
+  createTrackedEffect(() => {
     const on = stack().length > 0;
     setShellInert(on);
     // A deep-linked blade opens while the page is still mounting, before the
@@ -68,7 +69,7 @@ export default function BladeStack(props: {
   // focus into the top blade; when it closes, restore focus to that element.
   let priorFocus: HTMLElement | null = null;
   let wasOpen = false;
-  createEffect(() => {
+  createTrackedEffect(() => {
     const open = stack().length > 0;
     if (open && !wasOpen) priorFocus = document.activeElement as HTMLElement | null;
     else if (!open && wasOpen) {
@@ -123,7 +124,7 @@ export default function BladeStack(props: {
           // per blade, dev builds only.
           if (import.meta.env.DEV) {
             let warned = false;
-            createEffect(() => {
+            createTrackedEffect(() => {
               if (warned || !edit.primary()) return;
               if (editLock() == null && deleteLock() == null) return;
               warned = true;
@@ -136,7 +137,7 @@ export default function BladeStack(props: {
           return (
             <Show when={def()}>
               {(d) => (
-                <BladeEditContext.Provider value={edit}>
+                <BladeEditContext value={edit}>
                   <aside
                     data-blade
                     tabindex={-1}
@@ -163,7 +164,7 @@ export default function BladeStack(props: {
                         <Button square icon={X} title="Close" label="Close" onClick={() => props.controller.close()} />
                       </div>
                     </header>
-                    <div class="flex-1 overflow-auto p-5" classList={{ "pointer-events-none opacity-55": !isTop() }}>
+                    <div class={["flex-1 overflow-auto p-5", { "pointer-events-none opacity-55": !isTop() }]}>
                       <Dynamic component={d().Body} id={ref.id} />
                     </div>
                     {/* The action bar: the entity's actions, not the blade's chrome.
@@ -211,7 +212,7 @@ export default function BladeStack(props: {
                               <div class="dropdown dropdown-top dropdown-end">
                                 <Button square icon={MoreHorizontal} label="More actions" tabindex={0} />
                                 <ul tabindex={0} class="dropdown-content menu z-50 mb-1.5 w-48 rounded-box border border-base-300 bg-base-100 p-1.5 shadow-2xl">
-                                  <For each={edit.secondary()}>{(s) => <li><button class="flex items-center gap-2.5" classList={{ "text-error": s.tone === "danger" }} onClick={() => s.onClick()}>{s.icon}{s.label}</button></li>}</For>
+                                  <For each={edit.secondary()}>{(s) => <li><button class={["flex items-center gap-2.5", { "text-error": s.tone === "danger" }]} onClick={() => s.onClick()}>{s.icon}{s.label}</button></li>}</For>
                                 </ul>
                               </div>
                             </Show>
@@ -257,7 +258,7 @@ export default function BladeStack(props: {
                       <div class="absolute inset-0 cursor-pointer" onClick={() => props.controller.push(ref)} />
                     </Show>
                   </aside>
-                </BladeEditContext.Provider>
+                </BladeEditContext>
               )}
             </Show>
           );

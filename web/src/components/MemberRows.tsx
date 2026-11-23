@@ -1,5 +1,5 @@
 import { For, Show } from "solid-js";
-import { Dynamic } from "solid-js/web";
+import { Dynamic } from "@solidjs/web";
 import { HealthGlyph, NARROW_HIDDEN, OUTLINE_FRAME, ROOMY_ONLY, WIDE_ONLY } from "./Outline";
 import { LayoutDashboard, resolveIcon } from "./icons";
 import type { MemberGroup, MemberRow } from "../lib/detail";
@@ -41,7 +41,7 @@ function Row(props: { row: MemberRow; depth: number; onOpen: (id: string) => voi
       </span>
       <span class={`truncate pr-4 text-base-content/55 ${ROOMY_ONLY}`}>{r().noSlot ? "no slot" : r().slot}</span>
       <span class={`truncate pr-4 text-base-content/75 ${WIDE_ONLY}`}>{r().product}</span>
-      <span class={`truncate pr-4 ${NARROW_HIDDEN}`} classList={{ "text-error": !!r().alarm, "text-base-content/55": !r().alarm }} title={r().alarm}>{r().alarm ?? ""}</span>
+      <span class={[`truncate pr-4 ${NARROW_HIDDEN}`, { "text-error": !!r().alarm, "text-base-content/55": !r().alarm }]} title={r().alarm}>{r().alarm ?? ""}</span>
       <span><HealthGlyph health={r().health} /></span>
     </button>
   );
@@ -65,7 +65,7 @@ export default function MemberRows(props: { rows: MemberRow[]; groups: MemberGro
               <span class="flex min-w-0 items-center gap-2 pr-4">
                 <span class="flex-none text-base-content/35"><LayoutDashboard size={16} /></span>
                 <span class="truncate text-[13px] font-medium text-base-content/70">{g.label}</span>
-                <span class="flex-none font-data text-xs tabular-nums" classList={{ [TONE[g.tone!]]: !!g.tone, "text-base-content/50": !g.tone }}>{g.arithmetic}</span>
+                <span class={["flex-none font-data text-xs tabular-nums", { [TONE[g.tone!]]: !!g.tone, "text-base-content/50": !g.tone }]}>{g.arithmetic}</span>
               </span>
               <span class={ROOMY_ONLY} />
               <span class={WIDE_ONLY} />
@@ -78,7 +78,7 @@ export default function MemberRows(props: { rows: MemberRow[]; groups: MemberGro
                 <div data-testid="empty-slot" class={`grid ${MEMBER_COLS} h-9 items-center px-4`}>
                   <span class="flex items-center gap-2 pr-4" style={{ "padding-left": "22px" }}>
                     <span class="h-4 w-4 flex-none rounded border border-dashed border-base-content/30" aria-hidden="true" />
-                    <span class="text-[13px] italic" classList={{ [TONE[g.tone ?? "incomplete"]]: true }}>empty slot</span>
+                    <span class={["text-[13px] italic", { [TONE[g.tone ?? "incomplete"]]: true }]}>empty slot</span>
                   </span>
                   <span class={ROOMY_ONLY} />
                   <span class={WIDE_ONLY} />

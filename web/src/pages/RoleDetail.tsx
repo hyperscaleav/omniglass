@@ -25,11 +25,11 @@ function isAdminTier(perm: string): boolean {
 function PermRow(props: { perm: string; held: boolean }) {
   return (
     <div class="flex items-center gap-2 whitespace-nowrap font-data text-[11px] leading-5">
-      <span class="w-3 shrink-0 text-center" classList={{ "text-success": props.held, "text-base-content/25": !props.held }}>
+      <span class={["w-3 shrink-0 text-center", { "text-success": props.held, "text-base-content/25": !props.held }]}>
         {props.held ? "✓" : "·"}
       </span>
       <span
-        classList={{
+        class={{
           "text-base-content/90": props.held && !isAdminTier(props.perm),
           "text-warning": props.held && isAdminTier(props.perm),
           "text-base-content/40 line-through": !props.held,
@@ -75,8 +75,8 @@ export function PermGrid(props: { universe: string[]; held: string[] }) {
           {(t) => (
             <button
               role="tab"
-              class="tab"
-              classList={{ "tab-active": mode() === t.key }}
+             
+              class={["tab", { "tab-active": mode() === t.key }]}
               onClick={() => setMode(t.key)}
             >
               {t.label}

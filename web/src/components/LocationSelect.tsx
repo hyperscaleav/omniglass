@@ -1,4 +1,5 @@
-import { createMemo, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { createMemo } from "solid-js";
 import { useQuery } from "@tanstack/solid-query";
 import TreeSelect from "./TreeSelect";
 import { LOCATIONS_KEY, listLocations, type Location } from "../lib/locations";

@@ -109,8 +109,8 @@ export default function SessionNotice(props: {
       <div
         data-testid="session-notice"
         data-state={notice()?.kind}
-        class="flex flex-col gap-1.5 rounded-box border px-3 py-2 text-xs"
-        classList={{ "border-warning/40 bg-warning/5": rejected(), "border-error/40 bg-error/5": !rejected() }}
+       
+        class={["flex flex-col gap-1.5 rounded-box border px-3 py-2 text-xs", { "border-warning/40 bg-warning/5": rejected(), "border-error/40 bg-error/5": !rejected() }]}
       >
         <Show
           when={keys()}

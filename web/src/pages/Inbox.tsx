@@ -1,5 +1,6 @@
-import { For, Show, createSignal, type JSX } from "solid-js";
-import { A, useNavigate } from "@solidjs/router";
+import type { JSX } from "@solidjs/web";
+import { For, Show, createSignal } from "solid-js";
+import { useNavigate } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
 import Button from "../components/Button";
@@ -175,8 +176,8 @@ function InboxRow(props: { entry: InboxEntry; busy: boolean; disabled: boolean; 
   const isUnread = () => !e().read_at;
   return (
     <li
-      class="flex items-start gap-3 px-4 py-3"
-      classList={{ "bg-base-100/40": isUnread() }}
+     
+      class={["flex items-start gap-3 px-4 py-3", { "bg-base-100/40": isUnread() }]}
       data-testid="inbox-entry"
       data-unread={isUnread() ? "true" : "false"}
     >
@@ -188,7 +189,7 @@ function InboxRow(props: { entry: InboxEntry; busy: boolean; disabled: boolean; 
       <div class="flex min-w-0 flex-1 flex-col gap-1">
         <div class="flex min-w-0 items-baseline gap-2">
           <span class="sr-only">{isUnread() ? "Unread: " : "Read: "}</span>
-          <span class="truncate text-sm" classList={{ "font-semibold": isUnread(), "text-base-content/70": !isUnread() }}>
+          <span class={["truncate text-sm", { "font-semibold": isUnread(), "text-base-content/70": !isUnread() }]}>
             {e().subject || "(no subject)"}
           </span>
         </div>
@@ -196,9 +197,9 @@ function InboxRow(props: { entry: InboxEntry; busy: boolean; disabled: boolean; 
           <p class="line-clamp-2 whitespace-pre-line text-xs text-base-content/50">{e().text}</p>
         </Show>
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-base-content/60">
-          <A href={inboxEntryHref(e())} class="link link-hover font-data text-base-content/80" onClick={props.onFollow} title="Open the component's activity, where this alarm sits">
+          <a href={inboxEntryHref(e())} class="link link-hover font-data text-base-content/80" onClick={props.onFollow} title="Open the component's activity, where this alarm sits">
             {e().component}
-          </A>
+          </a>
           <span class={TRANSITION_PILL[e().transition] ?? "badge badge-sm badge-ghost"}>{e().transition}</span>
           <span class="tnum" title={fmtTime(e().created_at)}>{rel(e().created_at)}</span>
           <Show when={e().action_rule}>

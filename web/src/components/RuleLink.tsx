@@ -1,5 +1,5 @@
-import { Show, type JSX } from "solid-js";
-import { A } from "@solidjs/router";
+import type { JSX } from "@solidjs/web";
+import { Show } from "solid-js";
 import { calcRuleHref } from "../lib/calc_rules";
 import InfoTip from "./InfoTip";
 
@@ -26,7 +26,7 @@ export default function RuleLink(props: { name: string; id?: string }): JSX.Elem
           </span>
         }
       >
-        <A href={ruleHref(props.id!)} class="font-data text-base-content/70 hover:underline">{props.name}</A>
+        <a href={ruleHref(props.id!)} class="font-data text-base-content/70 hover:underline">{props.name}</a>
       </Show>
     </span>
   );
@@ -40,7 +40,7 @@ export function CalcRuleLink(props: { name: string; id: string }): JSX.Element {
   return (
     <span class="shrink-0 text-[11px] text-base-content/45">
       by calc rule{" "}
-      <A href={calcRuleHref(props.id)} class="font-data text-base-content/70 hover:underline">{props.name}</A>
+      <a href={calcRuleHref(props.id)} class="font-data text-base-content/70 hover:underline">{props.name}</a>
     </span>
   );
 }
@@ -55,7 +55,7 @@ export function CalcWriterLine(props: { writer: CalcWriter }): JSX.Element {
     <span class="inline-flex items-center gap-1.5 text-sm" data-testid="written-by">
       <span>
         Written by calc rule{" "}
-        <A href={calcRuleHref(props.writer.rule_id)} class="font-data hover:underline">{props.writer.rule}</A>
+        <a href={calcRuleHref(props.writer.rule_id)} class="font-data hover:underline">{props.writer.rule}</a>
       </span>
       <InfoTip
         label="written by a calc rule"
@@ -70,9 +70,9 @@ export function CalcWriterCell(props: { writer?: CalcWriter | null }): JSX.Eleme
   return (
     <Show when={props.writer}>
       {(w) => (
-        <A href={calcRuleHref(w().rule_id)} class="truncate font-data text-[12px] hover:underline" title={`Written by calc rule ${w().rule}`}>
+        <a href={calcRuleHref(w().rule_id)} class="truncate font-data text-[12px] hover:underline" title={`Written by calc rule ${w().rule}`}>
           {w().rule}
-        </A>
+        </a>
       )}
     </Show>
   );

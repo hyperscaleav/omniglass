@@ -1,4 +1,5 @@
-import { For, Show, createSignal, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show, createSignal } from "solid-js";
 import { Popover } from "@kobalte/core/popover";
 import { useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";

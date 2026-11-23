@@ -1,6 +1,7 @@
-import { For, Show, createEffect, createMemo, createSignal, on, onCleanup, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show, createEffect, createMemo, createSignal, onCleanup } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
-import { A, useSearchParams } from "@solidjs/router";
+import { useSearchParams } from "@solidjs/router";
 import Page from "../components/Page";
 import Button from "../components/Button";
 import Drawer from "../components/Drawer";
@@ -103,7 +104,7 @@ export default function Simulation(): JSX.Element {
   let seq = 0;
   const timers = new Set<ReturnType<typeof setTimeout>>();
   onCleanup(() => timers.forEach(clearTimeout));
-  createEffect(on(() => sim.data, (d) => {
+  createEffect(() => sim.data, (d) => {
     if (!d) return;
     const risen = risenHits(seen, (d.outposts ?? []).flatMap((n) => n.components ?? []));
     if (!risen.length) return;
@@ -122,9 +123,9 @@ export default function Simulation(): JSX.Element {
       });
     }, BLINK_MS);
     timers.add(t);
-  }));
+  });
 
-  const outpostNames = createMemo(() => (sim.data?.outposts ?? []).map((n) => n.outpost), undefined, { equals: sameList });
+  const outpostNames = createMemo(() => (sim.data?.outposts ?? []).map((n) => n.outpost), { equals: sameList });
   const outpostBy = (name: string) => (sim.data?.outposts ?? []).find((n) => n.outpost === name);
   // Every simulated component by id, with the outpost that serves it; rebuilt on
   // each poll, read by the rows through their stable id.
@@ -237,7 +238,7 @@ function AddedNote(props: { result: AddSimSystemResult; onDismiss: () => void })
     <div role="status" class="alert alert-success alert-soft flex items-center justify-between text-sm" data-testid="sim-system-added">
       <span>
         Added simulated system{" "}
-        <A href={`/systems/${props.result.system_id}`} class="font-data font-semibold hover:underline">{props.result.system}</A> on{" "}
+        <a href={`/systems/${props.result.system_id}`} class="font-data font-semibold hover:underline">{props.result.system}</a> on{" "}
         <span class="font-data">{props.result.outpost}</span>: {n()} {n() === 1 ? "component" : "components"}
         <Show when={short().length > 0}>
           , short <span data-testid="sim-system-short">{short().map((r) => `${r.slot} (${r.reason ?? "nothing simulated fits"})`).join(", ")}</span>
@@ -348,11 +349,7 @@ function SimTable(props: {
     return c ? entityLabel(c) : (props.rowBy.get(id)?.sim.component ?? id);
   };
   const location = (id: string) => props.byId.get(id)?.location ?? "";
-  const ids = createMemo(
-    () => [...props.rowBy.keys()].sort((a, b) => label(a).localeCompare(label(b)) || location(a).localeCompare(location(b)) || a.localeCompare(b)),
-    undefined,
-    { equals: sameList },
-  );
+  const ids = createMemo(() => [...props.rowBy.keys()].sort((a, b) => label(a).localeCompare(label(b)) || location(a).localeCompare(location(b)) || a.localeCompare(b)), { equals: sameList });
   const cols = () => COLS.filter((c) => c.key !== "outpost" || props.showOutpost);
   const minWidth = () => cols().reduce((s, c) => s + c.width, NAME_MIN_W + OPEN_W);
   const distinct = (rows: string[], get: (id: string) => string | undefined) => [...new Set(rows.map(get).filter((v): v is string => !!v))].sort();
@@ -377,7 +374,7 @@ function SimTable(props: {
             <thead>
               <tr>
                 <th>Name</th>
-                <For each={cols()}>{(c) => <th classList={{ "text-right": !!c.right }}>{c.label}</th>}</For>
+                <For each={cols()}>{(c) => <th class={{ "text-right": !!c.right }}>{c.label}</th>}</For>
                 <th />
               </tr>
             </thead>
@@ -418,7 +415,7 @@ function SimRow(props: { id: string; row: SimRowData; component?: FleetComponent
   // (class off, a forced reflow, class on) instead of being swallowed by a
   // class that never left.
   let el!: HTMLTableRowElement;
-  createEffect(on(() => props.blink, (t, prev) => {
+  createEffect(() => props.blink, (t, prev) => {
     if (t === undefined) {
       el.classList.remove("og-blink");
       return;
@@ -428,7 +425,7 @@ function SimRow(props: { id: string; row: SimRowData; component?: FleetComponent
       void el.offsetWidth;
     }
     el.classList.add("og-blink");
-  }));
+  });
   return (
     <tr
       ref={el}
@@ -558,8 +555,8 @@ function AddComponentForm(props: { outposts: string[]; close: () => void }) {
       </FieldRow>
       <FieldRow bind="name" info="The new component's name: lowercase letters, digits and hyphens. The address is chosen for you, the lowest free one in the simulated block." hint={shown("name")}>
         <input
-          class="input input-bordered w-full font-data"
-          classList={{ "input-error": !!shown("name") }}
+         
+          class={["input input-bordered w-full font-data", { "input-error": !!shown("name") }]}
           autocomplete="off"
           placeholder="lab-display-1"
           aria-required="true"

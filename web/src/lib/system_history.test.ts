@@ -71,7 +71,12 @@ describe("markerX", () => {
 // unhealthy stretch with the alarms that explain it.
 import type { Span } from "./timeline";
 const span = (value: string, fromH: number, toH: number): Span<string> =>
-  ({ value, from: now - fromH * 3600_000, to: now - toH * 3600_000, weight: (fromH - toH) / (30 * 24) }) as Span<string>;
+  (({
+    value,
+    from: now - fromH * 3600_000,
+    to: now - toH * 3600_000,
+    weight: (fromH - toH) / (30 * 24)
+  }) as Span<string>);
 
 describe("uptimePct", () => {
   it("is the healthy share of the window, one decimal, statuspage style", () => {

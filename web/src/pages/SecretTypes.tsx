@@ -1,5 +1,6 @@
+import type { JSX } from "@solidjs/web";
 import { byLabel, entityLabel } from "../lib/entities";
-import { For, Show, type JSX } from "solid-js";
+import { For, Show } from "solid-js";
 import { useQuery } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";

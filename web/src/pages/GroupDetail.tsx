@@ -1,5 +1,5 @@
 import { entityLabel } from "../lib/entities";
-import { createEffect, createMemo, createSignal, on, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, Show } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import GrantBuilder from "../components/GrantBuilder";
 import { RelatedList } from "../components/DetailShell";
@@ -59,12 +59,12 @@ export function GroupDetail(props: { id: string }) {
 
   // Seed the profile inputs from the group when edit mode opens (untracked on the
   // group data, so a background refetch does not clobber in-progress edits).
-  createEffect(on(() => edit.editing(), (isEditing) => {
+  createEffect(() => edit.editing(), (isEditing) => {
     if (isEditing) {
       setLabel(group.data?.label ?? "");
       setDescription(group.data?.description ?? "");
     }
-  }));
+  });
 
   const userById = (id: string) => (users.data ?? []).find((p) => p.id === id);
   const memberItems = createMemo(() => {

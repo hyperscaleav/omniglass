@@ -1,5 +1,6 @@
-import { createMemo, createSignal, For, Show, type JSX } from "solid-js";
-import { Dynamic } from "solid-js/web";
+import type { JSX } from "@solidjs/web";
+import { createMemo, createSignal, For, Show } from "solid-js";
+import { Dynamic } from "@solidjs/web";
 import { Popover } from "@kobalte/core/popover";
 import { ChevronRight, CircleCheck, CircleDashed, LayoutDashboard, OctagonX, Plus, TriangleAlert, resolveIcon } from "./icons";
 import type { ComponentGroup, ComponentRow, Lights, LocationNode } from "../lib/outline";
@@ -131,7 +132,7 @@ export default function Outline(props: {
   // The rows are rebuilt whenever anything changes (a toggle, a health read),
   // so <For> runs over their keys, which are strings and so equal across
   // rebuilds: a row's element, its focus and an open menu all survive.
-  const keys = createMemo(() => rows().map((r) => r.key), undefined, { equals: (a, b) => a.length === b.length && a.every((k, i) => k === b[i]) });
+  const keys = createMemo(() => rows().map((r) => r.key), { equals: (a, b) => a.length === b.length && a.every((k, i) => k === b[i]) });
   const byKey = createMemo(() => new Map(rows().map((r, i) => [r.key, { row: r, index: i }] as const)));
 
   const [focusKey, setFocusKey] = createSignal<string | null>(null);
@@ -229,8 +230,8 @@ export default function Outline(props: {
               aria-expanded={expandable(r()) ? (isOpen() ? "true" : "false") : undefined}
               aria-selected={isSel() ? "true" : "false"}
               tabindex={tabKey() === key ? 0 : -1}
-              class={`group/row relative grid ${OUTLINE_COLS} ${INDENT_VARS} h-9 cursor-pointer items-center px-4 outline-none hover:bg-base-content/[0.03] focus-visible:bg-base-content/[0.05] focus-visible:shadow-[inset_0_0_0_1px_var(--color-primary)]`}
-              classList={{ "bg-primary/[0.07] shadow-[inset_2px_0_0_var(--color-primary)]": isSel() }}
+             
+              class={[`group/row relative grid ${OUTLINE_COLS} ${INDENT_VARS} h-9 cursor-pointer items-center px-4 outline-none hover:bg-base-content/[0.03] focus-visible:bg-base-content/[0.05] focus-visible:shadow-[inset_0_0_0_1px_var(--color-primary)]`, { "bg-primary/[0.07] shadow-[inset_2px_0_0_var(--color-primary)]": isSel() }]}
               style={guides(r().depth)}
               onFocus={() => setFocusKey(key)}
               onKeyDown={(e) => onKey(e, r(), i())}
@@ -253,7 +254,7 @@ export default function Outline(props: {
                     aria-label={`${isOpen() ? "Collapse" : "Expand"} ${r().kind === "location" ? node()!.chain[node()!.chain.length - 1].label : ""}`}
                     onClick={(e) => { e.stopPropagation(); if (r().kind === "location") props.onToggle(node()!, e.altKey); }}
                   >
-                    <span class="transition-transform" classList={{ "rotate-90": isOpen() }}><ChevronRight size={12} /></span>
+                    <span class={["transition-transform", { "rotate-90": isOpen() }]}><ChevronRight size={12} /></span>
                   </button>
                 </Show>
                 <Show when={r().kind === "location"}>
@@ -308,8 +309,8 @@ export default function Outline(props: {
                   : r().kind === "component" ? comp()!.product : grp()!.system!.standard}
               </span>
               <span
-                class={`truncate pr-4 ${NARROW_HIDDEN}`}
-                classList={{ "text-error": !!issue(), "text-base-content/55": !issue() }}
+               
+                class={[`truncate pr-4 ${NARROW_HIDDEN}`, { "text-error": !!issue(), "text-base-content/55": !issue() }]}
                 title={issue()}
               >
                 {r().kind === "location" ? node()!.contents : (issue() ?? "")}
@@ -357,7 +358,7 @@ function AddMenu(props: { name: string; targets: AddTarget[]; onAdd: (locationId
         <Popover.Content class="z-50 w-52 rounded-box border border-base-300 bg-base-100 p-1 shadow-2xl focus:outline-none">
           <For each={props.targets}>
             {(t, i) => (
-              <div role="group" aria-label={`Under ${t.label}`} classList={{ "mt-1 border-t border-base-300 pt-1": i() > 0 }}>
+              <div role="group" aria-label={`Under ${t.label}`} class={{ "mt-1 border-t border-base-300 pt-1": i() > 0 }}>
                 <p class="truncate px-2.5 pb-1 pt-1.5 text-xs text-base-content/50">Under {t.label}</p>
                 <For each={t.kinds}>
                   {(k) => (

@@ -32,11 +32,11 @@ export default function TabRail(props: { tabs: { key: string; label: string }[];
               type="button"
               role="tab"
               aria-selected={active() === t.key ? "true" : "false"}
-              class="cursor-pointer rounded-t-md px-3 py-1.5 text-sm"
-              classList={{
+             
+              class={["cursor-pointer rounded-t-md px-3 py-1.5 text-sm", {
                 "border border-b-0 border-base-300 bg-base-100 font-medium": active() === t.key,
                 "text-base-content/60 hover:text-base-content": active() !== t.key,
-              }}
+              }]}
               // Choosing a tab also ends an ?edit=1 landing (useEditParam's
               // intent, consumed once): left in the address it pinned the page
               // to Configure, so Overview, the bare address, resolved straight

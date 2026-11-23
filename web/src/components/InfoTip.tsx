@@ -1,6 +1,6 @@
+import type { JSX } from "@solidjs/web";
 import { Tooltip } from "@kobalte/core/tooltip";
-import { A } from "@solidjs/router";
-import { Show, children, type JSX } from "solid-js";
+import { Show, children } from "solid-js";
 import { Info } from "./icons";
 
 // InfoTip: the small (i) affordance that sits next to a field label and reveals
@@ -57,9 +57,9 @@ export default function InfoTip(props: { text: string; label?: string; href?: st
                     </a>
                   }
                 >
-                  <A href={href()} class="link link-primary whitespace-nowrap font-medium">
+                  <a href={href()} class="link link-primary whitespace-nowrap font-medium">
                     {props.hrefText ?? "Learn more"} {"\u2192"}
-                  </A>
+                  </a>
                 </Show>
               </>
             )}

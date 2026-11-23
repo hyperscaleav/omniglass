@@ -1,7 +1,8 @@
+import type { JSX } from "@solidjs/web";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
-import type { JSX } from "solid-js";
+
 import { ViewHub, bindingKey, createViewBinding, foldMetricBuckets, laterCursor, sseParser, type ViewBinding, type ViewTail } from "./binding";
 import type { ChartBucket } from "./chart";
 

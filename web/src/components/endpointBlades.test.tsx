@@ -48,9 +48,9 @@ function mount() {
   const slot = createEditSlot();
   render(() => (
     <QueryClientProvider client={qc}>
-      <BladeEditContext.Provider value={slot}>
+      <BladeEditContext value={slot}>
         <CreateEndpointForm component="amp-1" onCreated={() => {}} />
-      </BladeEditContext.Provider>
+      </BladeEditContext>
     </QueryClientProvider>
   ));
   // The form binds its primary action on the blade footer slot; invoke it the
@@ -153,11 +153,11 @@ describe("endpoint edit blade, driver-attached", () => {
     const blades = { pop: () => {} } as unknown as BladeController;
     render(() => (
       <QueryClientProvider client={qc}>
-        <BladesContext.Provider value={blades}>
-          <BladeEditContext.Provider value={slot}>
+        <BladesContext value={blades}>
+          <BladeEditContext value={slot}>
             <endpointBlade.Body id={row.id} />
-          </BladeEditContext.Provider>
-        </BladesContext.Provider>
+          </BladeEditContext>
+        </BladesContext>
       </QueryClientProvider>
     ));
     slot.begin();
@@ -252,11 +252,11 @@ describe("endpoint blade, held session", () => {
     const blades = { pop: () => {} } as unknown as BladeController;
     render(() => (
       <QueryClientProvider client={qc}>
-        <BladesContext.Provider value={blades}>
-          <BladeEditContext.Provider value={slot}>
+        <BladesContext value={blades}>
+          <BladeEditContext value={slot}>
             <endpointBlade.Body id={row.id} />
-          </BladeEditContext.Provider>
-        </BladesContext.Provider>
+          </BladeEditContext>
+        </BladesContext>
       </QueryClientProvider>
     ));
     return slot;
@@ -327,11 +327,11 @@ describe("endpoint blade, a probe's gate with no held session", () => {
     const blades = { pop: () => {} } as unknown as BladeController;
     render(() => (
       <QueryClientProvider client={qc}>
-        <BladesContext.Provider value={blades}>
-          <BladeEditContext.Provider value={slot}>
+        <BladesContext value={blades}>
+          <BladeEditContext value={slot}>
             <endpointBlade.Body id={row.id} />
-          </BladeEditContext.Provider>
-        </BladesContext.Provider>
+          </BladeEditContext>
+        </BladesContext>
       </QueryClientProvider>
     ));
     expect(screen.queryByTestId("session-pill")).toBeNull();

@@ -1,4 +1,5 @@
-import { For, Index, Match, Show, Switch, createMemo, createSignal, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Match, Show, Switch, createMemo, createSignal } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FieldRow from "./FieldRow";
 import Eyebrow from "./Eyebrow";
@@ -160,7 +161,7 @@ function OutpostSelect(props: { value: string; onChange: (v: string) => void; ne
       info="The outpost an attached endpoint is placed on, so its collection reaches the component. Needed only when you give an address."
       hint={props.needed ? "An address needs an outpost to place its endpoint on." : undefined}
     >
-      <select class="select select-bordered w-full" classList={{ "select-error": props.needed }} value={props.value} onChange={(e) => props.onChange(e.currentTarget.value)}>
+      <select class={["select select-bordered w-full", { "select-error": props.needed }]} value={props.value} onChange={(e) => props.onChange(e.currentTarget.value)}>
         <option value="">None</option>
         <For each={sorted()}>{(n) => <option value={n.name}>{entityLabel(n)}</option>}</For>
       </select>
@@ -172,7 +173,7 @@ function NameField(props: { value: string; onInput: (v: string) => void; placeho
   const err = () => nameStemError(props.value.trim());
   return (
     <FieldRow bind="name" info={props.info} hint={err() ?? undefined}>
-      <input class="input input-bordered w-full font-data" classList={{ "input-error": !!err() }} autocomplete="off" placeholder={props.placeholder} value={props.value} onInput={(e) => props.onInput(e.currentTarget.value)} />
+      <input class={["input input-bordered w-full font-data", { "input-error": !!err() }]} autocomplete="off" placeholder={props.placeholder} value={props.value} onInput={(e) => props.onInput(e.currentTarget.value)} />
     </FieldRow>
   );
 }
@@ -364,7 +365,7 @@ function SystemForm(props: StartFormProps): JSX.Element {
         <Eyebrow label="Addresses" hint="One per component, by slot, as many as the standard it is built to asks for (yours of that name when you hold one). A component given an address lands attached through its driver with the template's preset; the rest land unattached and are yours to attach later." />
         <For each={slots()}>
           {(s) => (
-            <Index each={Array.from({ length: s.count })}>
+            <For keyed={false} each={Array.from({ length: s.count })}>
               {(_, i) => (
                 <FieldRow label={s.count > 1 ? `${s.label} ${i + 1}` : s.label} hint={i === 0 ? s.fill : undefined}>
                   <input
@@ -376,7 +377,7 @@ function SystemForm(props: StartFormProps): JSX.Element {
                   />
                 </FieldRow>
               )}
-            </Index>
+            </For>
           )}
         </For>
       </section>

@@ -1,7 +1,8 @@
+import type { JSX } from "@solidjs/web";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
-import type { JSX } from "solid-js";
+
 import { useLogin, useTokenLogin, useLogout, useUpdateProfile, useChangePassword, can, type Me } from "./auth";
 import { getToken, setToken } from "../api/client";
 

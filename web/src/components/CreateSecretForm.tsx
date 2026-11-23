@@ -1,4 +1,5 @@
-import { For, Show, createEffect, createMemo, createSignal, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show, createEffect, createMemo, createSignal, createTrackedEffect } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { createIdentity, entityLabel } from "../lib/entities";
 import TreeSelect from "./TreeSelect";
@@ -42,7 +43,7 @@ export default function CreateSecretForm(p: { onCreated: (s: Secret) => void }):
   const ownerKinds = createMemo(() => (tierGap().length > 0 ? OWNER_KINDS.filter((k) => k !== "platform") : OWNER_KINDS));
   // Keep the choice inside the offered set: /auth/me may resolve after the form
   // mounts, and the default ("platform") is exactly the one that can fall away.
-  createEffect(() => {
+  createTrackedEffect(() => {
     if (!ownerKinds().includes(ownerKind())) setOwnerKind(ownerKinds()[0]);
   });
 

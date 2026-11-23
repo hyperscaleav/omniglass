@@ -1,4 +1,5 @@
-import { Show, createMemo, createSignal, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Show, createMemo, createSignal } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams } from "@solidjs/router";
 import TreeList, { type FormState, type ListConfig, type ListCtx, type ListNode, type PageDescriptor } from "../components/TreeList";

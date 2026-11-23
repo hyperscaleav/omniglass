@@ -51,9 +51,9 @@ function mount(opts: { me?: Me; official?: boolean; rows?: DeclaredSlot[]; editi
   if (opts.editing ?? true) edit.begin();
   const result = render(() => (
     <QueryClientProvider client={qc}>
-      <BladeEditContext.Provider value={edit}>
+      <BladeEditContext value={edit}>
         <SlotEditor id="meeting-room" official={opts.official ?? false} />
-      </BladeEditContext.Provider>
+      </BladeEditContext>
     </QueryClientProvider>
   ));
   return { ...result, edit };

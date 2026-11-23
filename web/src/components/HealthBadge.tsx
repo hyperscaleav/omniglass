@@ -1,5 +1,5 @@
 import { Show, type Component } from "solid-js";
-import { Dynamic } from "solid-js/web";
+import { Dynamic } from "@solidjs/web";
 import { useQuery } from "@tanstack/solid-query";
 import { CircleCheck, CircleDashed, OctagonX, TriangleAlert } from "./icons";
 import {

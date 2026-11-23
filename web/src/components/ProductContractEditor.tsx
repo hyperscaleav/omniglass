@@ -1,4 +1,5 @@
-import { type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+
 import ContractEditor, { type ContractLane } from "./ContractEditor";
 
 // The product arc of the shared ContractEditor, in product language: a product

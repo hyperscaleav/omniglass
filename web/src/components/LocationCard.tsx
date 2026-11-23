@@ -1,6 +1,5 @@
 import { Show } from "solid-js";
-import { Dynamic } from "solid-js/web";
-import { A } from "@solidjs/router";
+import { Dynamic } from "@solidjs/web";
 import { can, useMe } from "../lib/auth";
 import { useQuery } from "@tanstack/solid-query";
 import Button from "./Button";
@@ -54,7 +53,7 @@ export default function LocationCard(props: {
           <span class="flex min-w-0 items-center gap-2">
             <span class="flex-none text-base-content/50"><Dynamic component={resolveIcon(type()?.icon || "map-pin")} size={16} /></span>
             <Show when={props.showName}>
-              <A href={`/locations/${p().id}`} class="truncate font-medium hover:underline">{entityLabel(p())}</A>
+              <a href={`/locations/${p().id}`} class="truncate font-medium hover:underline">{entityLabel(p())}</a>
             </Show>
             <span data-testid="location-type" class="text-base-content/60">{type() ? entityLabel(type()!) : p().location_type}</span>
           </span>
@@ -74,7 +73,7 @@ export default function LocationCard(props: {
               is its Configure tab; a sole system's location would otherwise land
               on the system, so the card links there directly. */}
           <Show when={can(me.data, "location", "update")}>
-            <A href={`/locations/${p().id}?tab=configure`} class="text-sm text-base-content/70 hover:underline">Configure location</A>
+            <a href={`/locations/${p().id}?tab=configure`} class="text-sm text-base-content/70 hover:underline">Configure location</a>
           </Show>
           <Show when={!sole()}>
             <Button size="sm" intent="quiet" onClick={() => blades.push({ kind: "location", id: p().id })}>Location details</Button>

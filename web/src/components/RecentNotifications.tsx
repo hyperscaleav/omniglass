@@ -1,5 +1,5 @@
-import { For, Show, type JSX } from "solid-js";
-import { A } from "@solidjs/router";
+import type { JSX } from "@solidjs/web";
+import { For, Show } from "solid-js";
 import { useQuery } from "@tanstack/solid-query";
 import Eyebrow from "./Eyebrow";
 import NotificationStatusPill from "./NotificationStatusPill";
@@ -41,7 +41,7 @@ export default function RecentNotifications(p: { rule?: string; target?: string;
                 {(n) => (
                   <li class="flex flex-col gap-1 px-3 py-2 text-sm" data-testid="recent-notification" data-status={n.status}>
                     <span class="flex min-w-0 items-center gap-2">
-                      <A href={`/components/${n.component_id}`} class="truncate font-medium hover:underline">{n.component}</A>
+                      <a href={`/components/${n.component_id}`} class="truncate font-medium hover:underline">{n.component}</a>
                       <span class={TRANSITION_PILL[n.transition] ?? PILL_NEUTRAL}>{n.transition}</span>
                       <span class="ml-auto flex flex-none items-center gap-2">
                         <NotificationStatusPill status={n.status} />
@@ -60,8 +60,8 @@ export default function RecentNotifications(p: { rule?: string; target?: string;
                     </span>
                     <Show when={n.last_error}>
                       <span
-                        class="line-clamp-2 text-[11px] [overflow-wrap:anywhere]"
-                        classList={{ "text-error": n.status === "failed", "text-base-content/50": n.status !== "failed" }}
+                       
+                        class={["line-clamp-2 text-[11px] [overflow-wrap:anywhere]", { "text-error": n.status === "failed", "text-base-content/50": n.status !== "failed" }]}
                         title={n.last_error}
                         data-testid="recent-notification-error"
                       >

@@ -1,5 +1,5 @@
-import { Show, Suspense } from "solid-js";
-import { Dynamic } from "solid-js/web";
+import { Show, Loading } from "solid-js";
+import { Dynamic } from "@solidjs/web";
 import { useQuery } from "@tanstack/solid-query";
 import { useNavigate } from "@solidjs/router";
 import Page from "../components/Page";
@@ -42,34 +42,34 @@ export default function Home() {
   return (
     <Page title={`Welcome, ${who()}`}>
       <div class="grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-4">
-        <Suspense fallback={<Stat label="Locations" value="…" unit="in scope" />}>
+        <Loading fallback={<Stat label="Locations" value="…" unit="in scope" />}>
           <Stat label="Locations" value={String(locs.data?.length ?? 0)} unit="in your scope" tone="text-primary" onClick={() => navigate("/locations")} />
-        </Suspense>
-        <Suspense fallback={<Stat label="Open alarms" testid="home-open-alarms" value="…" unit="reading alarms" />}>
+        </Loading>
+        <Loading fallback={<Stat label="Open alarms" testid="home-open-alarms" value="…" unit="reading alarms" />}>
           <Stat
             label="Open alarms"
             testid="home-open-alarms"
             {...countOf(fleet.isError, fleet.data?.open_alarms, "open now in your scope", "needs a component read")}
             onClick={() => navigate("/alarms")}
           />
-        </Suspense>
-        <Suspense fallback={<Stat label="Systems" testid="home-systems" value="…" unit="in scope" />}>
+        </Loading>
+        <Loading fallback={<Stat label="Systems" testid="home-systems" value="…" unit="in scope" />}>
           <Stat
             label="Systems"
             testid="home-systems"
             {...countOf(fleet.isError, fleet.data && (fleet.data.systems ?? []).length, "in your scope")}
             onClick={() => navigate("/systems")}
           />
-        </Suspense>
+        </Loading>
         <Show when={readsOutposts()}>
-          <Suspense fallback={<Stat label="Outposts" testid="home-outposts" value="…" unit="enrolled" />}>
+          <Loading fallback={<Stat label="Outposts" testid="home-outposts" value="…" unit="enrolled" />}>
             <Stat
               label="Outposts"
               testid="home-outposts"
               {...countOf(outposts.isError, outposts.data && outposts.data.length, "in your scope")}
               onClick={() => navigate("/outposts")}
             />
-          </Suspense>
+          </Loading>
         </Show>
         <Show when={readsOutposts()}>
           <Stat
@@ -102,14 +102,13 @@ function Stat(props: { label: string; value: string; unit: string; tone?: string
     <Dynamic
       component={props.onClick ? "button" : "div"}
       type={props.onClick ? "button" : undefined}
-      class="card w-full border border-base-300 bg-base-200 text-left"
-      classList={{ "cursor-pointer hover:border-base-content/20": !!props.onClick }}
+      class={["card w-full border border-base-300 bg-base-200 text-left", { "cursor-pointer hover:border-base-content/20": !!props.onClick }]}
       onClick={props.onClick}
       data-testid={props.testid}
     >
       <div class="card-body gap-1 p-5">
         <div class="eyebrow">{props.label}</div>
-        <div class="tnum text-3xl font-semibold leading-none" classList={{ [props.tone ?? ""]: !!props.tone, "text-base-content/30": !props.tone }}>{props.value}</div>
+        <div class={["tnum text-3xl font-semibold leading-none", { [props.tone ?? ""]: !!props.tone, "text-base-content/30": !props.tone }]}>{props.value}</div>
         <div class="text-xs text-base-content/50">{props.unit}</div>
       </div>
     </Dynamic>

@@ -4,7 +4,7 @@
 // hub collects them, opens /views:watch once with each binding's cursor, and
 // hands each its own rows. History and live meet at the cursor the run
 // answered, so a fold sees every row exactly once.
-import { createEffect, createMemo, createSignal, onCleanup } from "solid-js";
+import { createEffect, createMemo, createSignal, onCleanup, createTrackedEffect } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { api, sendRaw } from "../api/client";
 import type { ViewBindingBody, ViewMarkEvent, ViewResetEvent, ViewResultBody, ViewRowsEvent, ViewTailBindingBody } from "../api/api.gen";
@@ -230,7 +230,7 @@ export function createViewBinding<T>(o: {
   const qc = useQueryClient();
   // The same read rebuilt (a polled parent's new object) is the same binding:
   // its fold carries on rather than starting over from the history.
-  const binding = createMemo(o.binding, undefined, {
+  const binding = createMemo(o.binding, {
     equals: (a, b) => (a && bindingKey(a)) === (b && bindingKey(b)),
   });
   const history = useQuery(() => ({
@@ -240,7 +240,7 @@ export function createViewBinding<T>(o: {
     staleTime: Infinity,
   }));
   const [state, setState] = createSignal<T>();
-  createEffect(() => {
+  createTrackedEffect(() => {
     const b = binding();
     const r = history.data;
     if (!b || !r) {

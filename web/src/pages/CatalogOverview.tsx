@@ -1,5 +1,5 @@
-import { For, Show, createMemo, type JSX } from "solid-js";
-import { A } from "@solidjs/router";
+import type { JSX } from "@solidjs/web";
+import { For, Show, createMemo } from "solid-js";
 import { useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
 import { useMe, can } from "../lib/auth";
@@ -64,7 +64,7 @@ function EntryRow(props: { entry: CatalogEntry; catalogName: string }) {
   const rowClass = "-mx-2 flex items-center justify-between gap-2 rounded-field px-2 py-1.5";
   const inner = (): JSX.Element => (
     <>
-      <span class="truncate text-sm" classList={{ "text-base-content/50": props.entry.soon }}>
+      <span class={["truncate text-sm", { "text-base-content/50": props.entry.soon }]}>
         {props.entry.label}
       </span>
       <Show
@@ -84,9 +84,9 @@ function EntryRow(props: { entry: CatalogEntry; catalogName: string }) {
         </div>
       }
     >
-      <A href={entryHref(props.entry)} class={`${rowClass} hover:bg-base-300`} data-entry={props.entry.label}>
+      <a href={entryHref(props.entry)} class={`${rowClass} hover:bg-base-300`} data-entry={props.entry.label}>
         {inner()}
-      </A>
+      </a>
     </Show>
   );
 }

@@ -1,4 +1,5 @@
-import { For, Show, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show } from "solid-js";
 import { diagnosticHref } from "../lib/expressionEditor";
 
 // A stored warning on one of a rule's expressions (criteria_warnings,

@@ -1,5 +1,5 @@
-import { For, Show, createEffect, createMemo } from "solid-js";
-import { Dynamic } from "solid-js/web";
+import { For, Show, createEffect, createMemo, createTrackedEffect } from "solid-js";
+import { Dynamic } from "@solidjs/web";
 import { useLocation, useNavigate, useParams, useSearchParams } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
@@ -60,7 +60,7 @@ export default function LocationZoom() {
   const tags = () => (locations.data ?? []).find((l) => l.id === id())?.effective_tags ?? {};
   // By id, compared by value: the cards key on these strings, so a fresh
   // fleet read updates a card in place rather than rebuilding it.
-  const systemsHere = createMemo(() => (view.data && location() ? systemsAtLocation(view.data, id()).map((s) => s.id) : []), undefined, {
+  const systemsHere = createMemo(() => (view.data && location() ? systemsAtLocation(view.data, id()).map((s) => s.id) : []), {
     equals: (a, b) => a.length === b.length && a.every((x, i) => x === b[i]),
   });
   const hasBeneath = createMemo(() => (view.data ? (childrenIndex(view.data).get(id()) ?? []).length > 0 : false));
@@ -79,14 +79,14 @@ export default function LocationZoom() {
   // A name-shaped address resolves to the uuid, query kept (#759's rule).
   // Only an unambiguous name resolves: names scope to placement, so a bare
   // name can legally be two rows.
-  createEffect(() => {
+  createTrackedEffect(() => {
     if (!view.data || location()) return;
     const matches = (view.data.locations ?? []).filter((l) => l.name === id());
     if (matches.length === 1) navigate(`/locations/${matches[0].id}${route.search}`, { replace: true });
   });
   // A location holding one system lands on it, query kept; a configure intent
   // becomes the system's Configure tab and the location's own edit.
-  createEffect(() => {
+  createTrackedEffect(() => {
     if (!view.data || !location()) return;
     const landing = landingFor(view.data, id());
     if (landing.kind !== "system") return;
@@ -117,7 +117,7 @@ export default function LocationZoom() {
   const missing = () => !!view.data && !view.isFetching && !location() && !ambiguous();
 
   return (
-    <BladesContext.Provider value={blades}>
+    <BladesContext value={blades}>
       <Page title={location() ? entityLabel(location()!) : "Location"} name={location()?.name} breadcrumb={<Breadcrumb crumbs={crumbs()} />}>
         {/* A create from a template lands here with ?from= (#1329). */}
         <TemplateNotice />
@@ -168,6 +168,6 @@ export default function LocationZoom() {
         </DetailGate>
       </Page>
       <BladeStack controller={blades} registry={fleetRegistry} />
-    </BladesContext.Provider>
+    </BladesContext>
   );
 }

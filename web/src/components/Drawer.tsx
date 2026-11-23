@@ -1,4 +1,5 @@
-import { type JSX, Show } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Show } from "solid-js";
 import { Dialog } from "@kobalte/core/dialog";
 import { X } from "./icons";
 import FormActionBar from "./FormActionBar";
@@ -36,8 +37,7 @@ export default function Drawer(props: {
       <Dialog.Portal>
         <Dialog.Overlay class="fixed inset-0 z-60 bg-black/45" style={layer()} />
         <Dialog.Content
-          class="fixed inset-y-0 right-0 z-60 flex w-full flex-col border-l border-base-300 bg-base-100 shadow-2xl"
-          classList={{ "max-w-md": !props.wide, "max-w-2xl": !!props.wide }}
+          class={["fixed inset-y-0 right-0 z-60 flex w-full flex-col border-l border-base-300 bg-base-100 shadow-2xl", { "max-w-md": !props.wide, "max-w-2xl": !!props.wide }]}
           style={layer()}
         >
           <header class="flex items-center justify-between gap-3 border-b border-base-300 px-4 py-3">
@@ -49,13 +49,13 @@ export default function Drawer(props: {
               </Dialog.CloseButton>
             </div>
           </header>
-          <FormActionsContext.Provider value={actions}>
+          <FormActionsContext value={actions}>
             <div class="flex-1 overflow-auto p-5">{props.children}</div>
             <Show when={props.footer}>
               <div class="border-t border-base-300 p-3">{props.footer}</div>
             </Show>
             <FormActionBar actions={actions} />
-          </FormActionsContext.Provider>
+          </FormActionsContext>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog>

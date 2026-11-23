@@ -1,4 +1,5 @@
-import { For, Show, createSignal, onCleanup, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show, createSignal, onCleanup } from "solid-js";
 import { Tooltip } from "@kobalte/core/tooltip";
 import { tagHue } from "../lib/tagcolor";
 
@@ -50,19 +51,20 @@ function OneLine(props: { children: JSX.Element; full: () => JSX.Element }): JSX
   const [open, setOpen] = createSignal(false);
 
   const measure = (el: HTMLElement) => setOverflowing(el.scrollWidth > el.clientWidth + 1);
+  let ro: ResizeObserver | undefined;
+  onCleanup(() => ro?.disconnect());
   const attach = (el: HTMLSpanElement) => {
     // jsdom (the test env) has no ResizeObserver and zero layout, so guard it;
     // there the row never reads as overflowing, which is the correct default.
     if (typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(() => measure(el));
+    ro = new ResizeObserver(() => measure(el));
     ro.observe(el);
-    onCleanup(() => ro.disconnect());
   };
 
   return (
     <Tooltip open={open() && overflowing()} onOpenChange={setOpen} openDelay={200} closeDelay={100} placement="top-start" gutter={4}>
       <Tooltip.Trigger as="span" class="flex w-full min-w-0 cursor-default align-middle">
-        <span ref={attach} class="flex w-full min-w-0 flex-nowrap items-center gap-1 overflow-hidden" classList={{ "tag-fade": overflowing() }}>
+        <span ref={attach} class={["flex w-full min-w-0 flex-nowrap items-center gap-1 overflow-hidden", { "tag-fade": overflowing() }]}>
           {props.children}
         </span>
       </Tooltip.Trigger>

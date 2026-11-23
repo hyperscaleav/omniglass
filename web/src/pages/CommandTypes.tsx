@@ -1,5 +1,6 @@
+import type { JSX } from "@solidjs/web";
 import { entityLabel } from "../lib/entities";
-import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
+import { For, Show, createMemo, createSignal } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
@@ -102,8 +103,8 @@ function SettleWindowField(p: {
   return (
     <FieldRow label={SETTLE_LABEL} hint={SETTLE_HINT} eyebrow={p.eyebrow}>
       <input
-        class="input input-bordered w-full font-data"
-        classList={{ "input-error": !!p.draft.error }}
+       
+        class={["input input-bordered w-full font-data", { "input-error": !!p.draft.error }]}
         type="number"
         aria-required={p.targeted}
         placeholder={p.targeted ? "e.g. 15" : "0"}

@@ -1,4 +1,5 @@
-import type { Component, JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import type { Component } from "solid-js";
 
 // A small lucide-style icon set (stroke-based, currentColor), enough for the
 // console shell and the locations views. Each icon takes an optional size.

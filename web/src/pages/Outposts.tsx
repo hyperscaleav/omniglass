@@ -1,5 +1,6 @@
+import type { JSX } from "@solidjs/web";
 import { createIdentity } from "../lib/entities";
-import { Show, For, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
+import { Show, For, createEffect, createMemo, createSignal } from "solid-js";
 import { Dialog } from "@kobalte/core/dialog";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useSearchParams } from "@solidjs/router";
@@ -193,12 +194,12 @@ function OutpostBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput)
   const [label, setLabel] = createSignal("");
   const [description, setDescription] = createSignal("");
   const [location, setLocation] = createSignal("");
-  createEffect(on([n, () => edit.editing()] as const, ([outpost]) => {
+  createEffect(() => [n, () => edit.editing()].map((f) => f()), ([outpost]) => {
     setLabel(outpost?.label ?? "");
     setDescription(outpost?.description ?? "");
     setLocation(outpost?.location ?? "");
     setErr(null);
-  }));
+  });
 
   async function save() {
     const outpost = n();
@@ -332,7 +333,7 @@ function OutpostBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput)
               <div class="overflow-hidden rounded-box border border-base-300">
                 <For each={outpostTasks()}>
                   {(t, i) => (
-                    <div class="flex items-center gap-2 px-3 py-1.5 text-sm" classList={{ "border-t border-base-300": i() > 0 }}>
+                    <div class={["flex items-center gap-2 px-3 py-1.5 text-sm", { "border-t border-base-300": i() > 0 }]}>
                       <span class="font-data text-base-content/80">{t.iface}</span>
                       <span class="text-base-content/25">/</span>
                       <span class="flex items-center gap-1.5 text-base-content/50">

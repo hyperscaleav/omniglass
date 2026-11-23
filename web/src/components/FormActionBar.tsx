@@ -1,4 +1,5 @@
-import { type JSX, Show } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Show } from "solid-js";
 import { Trash, X } from "./icons";
 import Button from "./Button";
 import PanelFooter from "./PanelFooter";

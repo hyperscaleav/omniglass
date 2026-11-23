@@ -1,4 +1,5 @@
-import type { JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+
 import { useSeverity } from "../lib/severity";
 
 // SeverityBadge is the console's one severity chip (#917). It takes a level NAME

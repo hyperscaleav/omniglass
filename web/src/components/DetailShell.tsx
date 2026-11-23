@@ -1,4 +1,5 @@
-import { type JSX, For, Show, createSignal } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show, createSignal } from "solid-js";
 import { ChevronRight, Plus, Trash } from "./icons";
 import Button from "./Button";
 

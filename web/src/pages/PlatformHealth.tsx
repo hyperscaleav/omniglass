@@ -1,5 +1,6 @@
-import { For, Show, createSignal, type JSX } from "solid-js";
-import { A, useNavigate } from "@solidjs/router";
+import type { JSX } from "@solidjs/web";
+import { For, Show, createSignal } from "solid-js";
+import { useNavigate } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import Eyebrow from "../components/Eyebrow";
 import TimeseriesChart from "../components/TimeseriesChart";
@@ -98,8 +99,8 @@ export default function PlatformHealth() {
       <Show when={view.error}>
         <div
           role="alert"
-          class="alert alert-soft text-sm"
-          classList={{ "alert-warning": (view.error as { status?: number }).status === 403, "alert-error": (view.error as { status?: number }).status !== 403 }}
+         
+          class={["alert alert-soft text-sm", { "alert-warning": (view.error as { status?: number }).status === 403, "alert-error": (view.error as { status?: number }).status !== 403 }]}
         >
           {platformRefusal(view.error)}
         </div>
@@ -132,12 +133,12 @@ function Header(props: { view: PlatformView }) {
       <Fact label="Platform" sub={props.view.system ? "the platform system's health" : "needs a fleet-wide system read"}>
         <Show when={props.view.system} fallback={<span class="text-base-content/30">-</span>}>
           {(s) => (
-            <A href={`/systems/${s().id}`} class="inline-flex items-center gap-1 hover:underline">
+            <a href={`/systems/${s().id}`} class="inline-flex items-center gap-1 hover:underline">
               <span data-testid="platform-health">
                 <HealthBadge health={s().health} size="md" />
               </span>
               <ArrowUpRight size={14} />
-            </A>
+            </a>
           )}
         </Show>
       </Fact>
@@ -145,7 +146,7 @@ function Header(props: { view: PlatformView }) {
         {(s) => (
           <>
             <Fact label="Version" sub={s().name}>
-              <span class="tnum block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap" title={s().version ?? undefined} data-testid="platform-version" classList={{ "text-base-content/30": !s().version }}>{s().version ?? NOT_REPORTED}</span>
+              <span title={s().version ?? undefined} data-testid="platform-version" class={["tnum block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap", { "text-base-content/30": !s().version }]}>{s().version ?? NOT_REPORTED}</span>
             </Fact>
             <Fact label="Up for" sub={s().started_at ? `since ${fmtTime(s().started_at!)}` : "no start time written yet"}>
               <span class="tnum" data-testid="platform-uptime">{serverUptime(props.view.read_at, s().started_at) ?? NOT_REPORTED}</span>
@@ -238,14 +239,14 @@ function OutpostRow(props: { outpost: PlatformOutpost; view: PlatformView }) {
     <tr
       data-testid={`platform-outpost-${props.outpost.name}`}
       data-health={rowHealth() ?? undefined}
-      class={ROW_TONE[rowHealth() ?? ""] ?? ""}
-      classList={{ "cursor-pointer hover:bg-base-200": !!props.outpost.component }}
+     
+      class={[ROW_TONE[rowHealth() ?? ""] ?? "", { "cursor-pointer hover:bg-base-200": !!props.outpost.component }]}
       onClick={open}
     >
       <td class="whitespace-nowrap">
         <div class="flex flex-col">
           <Show when={props.outpost.component} fallback={<span class="font-medium">{title()}</span>}>
-            <A href={`/components/${props.outpost.component}`} class="font-medium hover:underline" onClick={(e) => e.stopPropagation()}>{title()}</A>
+            <a href={`/components/${props.outpost.component}`} class="font-medium hover:underline" onClick={(e) => e.stopPropagation()}>{title()}</a>
           </Show>
           <Show when={props.outpost.label && props.outpost.label !== props.outpost.name}>
             <span class="text-xs text-base-content/50">{props.outpost.name}</span>
@@ -261,24 +262,22 @@ function OutpostRow(props: { outpost: PlatformOutpost; view: PlatformView }) {
       <KeyedFor each={platformColumns(props.view)} by={(c) => c.key}>
         {(c) => {
           const text = () => figureText(props.outpost, c());
-          return (
-            <td class="tnum whitespace-nowrap text-right" data-figure={c().key} classList={{ "text-base-content/30": text() === NOT_REPORTED, "font-semibold text-error": figureTinted(props.outpost, c()) }}>{text()}</td>
-          );
+          return (<td data-figure={c().key} class={["tnum whitespace-nowrap text-right", { "text-base-content/30": text() === NOT_REPORTED, "font-semibold text-error": figureTinted(props.outpost, c()) }]}>{text()}</td>);
         }}
       </KeyedFor>
       <Show when={(props.view.loss_hops ?? []).length > 0}>
         <td
-          class="tnum whitespace-nowrap text-right"
+         
           data-figure="loss"
-          classList={{ "text-base-content/30": props.outpost.loss === undefined, "font-semibold text-error": lossTinted(props.outpost.loss) }}
+          class={["tnum whitespace-nowrap text-right", { "text-base-content/30": props.outpost.loss === undefined, "font-semibold text-error": lossTinted(props.outpost.loss) }]}
         >
           {outpostLossText(props.outpost)}
         </td>
       </Show>
       <td class="text-right">
-        <A href={`/outposts?n=${encodeURIComponent(props.outpost.name)}`} class="btn btn-quiet btn-xs btn-square" aria-label={`Open ${props.outpost.name} in Outposts`} title="Open this outpost's blade on the Outposts page" onClick={(e) => e.stopPropagation()}>
+        <a href={`/outposts?n=${encodeURIComponent(props.outpost.name)}`} class="btn btn-quiet btn-xs btn-square" aria-label={`Open ${props.outpost.name} in Outposts`} title="Open this outpost's blade on the Outposts page" onClick={(e) => e.stopPropagation()}>
           <ArrowUpRight size={14} />
-        </A>
+        </a>
       </td>
     </tr>
   );
@@ -300,9 +299,9 @@ function ServerPanels(props: { server: PlatformServer; view: PlatformView; open:
     >
       <summary class="flex cursor-pointer items-center gap-2 px-4 py-3">
         {/* A flex summary drops the native marker, so the chevron says the set opens. */}
-        <span data-disclosure class="text-base-content/60 transition-transform" classList={{ "rotate-90": open() }}><ChevronRight size={14} /></span>
+        <span data-disclosure class={["text-base-content/60 transition-transform", { "rotate-90": open() }]}><ChevronRight size={14} /></span>
         <span class="eyebrow">Server</span>
-        <A href={`/components/${props.server.component}`} class="font-medium hover:underline" onClick={(e) => e.stopPropagation()}>{props.server.name}</A>
+        <a href={`/components/${props.server.component}`} class="font-medium hover:underline" onClick={(e) => e.stopPropagation()}>{props.server.name}</a>
         <HealthBadge health={props.server.health} size="xs" />
         <Show when={(props.server.alarms ?? []).length > 0}>
           <span class="badge badge-soft badge-warning badge-sm">{(props.server.alarms ?? []).length} open</span>
@@ -329,8 +328,8 @@ function Panel(props: { panel: PlatformPanel; server: PlatformServer; view: Plat
   });
   return (
     <section
-      class="card border bg-base-200"
-      classList={{ "border-warning/60": alarms().length > 0, "border-base-300": alarms().length === 0 }}
+     
+      class={["card border bg-base-200", { "border-warning/60": alarms().length > 0, "border-base-300": alarms().length === 0 }]}
       data-testid={`server-panel-${props.panel.name}`}
       data-panel={props.panel.name}
       data-flagged={alarms().length > 0 ? "true" : "false"}
@@ -457,9 +456,9 @@ function Row(props: { row: PanelRow; server: PlatformServer; view: PlatformView;
       <tr
         data-testid={`panel-row-${props.row.key}`}
         data-instance={props.row.instance}
-        classList={{ "cursor-pointer outline-none hover:bg-base-content/5 focus-visible:bg-base-content/5 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-primary": reported() }}
+        class={{ "cursor-pointer outline-none hover:bg-base-content/5 focus-visible:bg-base-content/5 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-primary": reported() }}
         aria-expanded={reported() ? expanded() : undefined}
-        tabIndex={reported() ? 0 : undefined}
+        tabindex={reported() ? 0 : undefined}
         onClick={() => reported() && setExpanded(!expanded())}
         onKeyDown={(e) => {
           // The row's own keys only: a tooltip trigger inside it keeps its Enter.
@@ -468,11 +467,11 @@ function Row(props: { row: PanelRow; server: PlatformServer; view: PlatformView;
           setExpanded(!expanded());
         }}
       >
-        <td classList={{ "pl-5": !!props.indent }}>{props.children}</td>
+        <td class={{ "pl-5": !!props.indent }}>{props.children}</td>
         <td class="hidden w-40 sm:table-cell">
           <Show when={reported() && props.live}>{chart(true)}</Show>
         </td>
-        <td class="tnum whitespace-nowrap text-right" classList={{ "text-base-content/30": !reported() }}>{text()}</td>
+        <td class={["tnum whitespace-nowrap text-right", { "text-base-content/30": !reported() }]}>{text()}</td>
       </tr>
       <Show when={expanded()}>
         <tr>

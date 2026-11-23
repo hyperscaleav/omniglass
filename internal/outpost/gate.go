@@ -616,35 +616,30 @@ func (g *gates) retain(endpoints, taskIDs map[string]bool) {
 	g.propagateLocked()
 }
 
-// heldReason prefixes the reason a held rung's responsive reading carries:
-// the rung is not run beneath a refusal, so the reading is the last proof the
-// refusal itself gave (the agent answered), not a fresh observation.
-const heldReason = "held: "
-
-// heldReading is the reason a held rung reads responsive up with: the class
-// that holds it and when the hold began.
-func heldReading(gt gate) string {
-	return heldReason + gt.class + " since " + gt.since.UTC().Format(time.RFC3339)
-}
+// rejectedReason prefixes the reason a rung's responsive reading carries when
+// a refusal decided it, not the component: a gated rung's held reading (snmp,
+// udp), or the terminal reply that just gated it.
+const rejectedReason = "rejected: "
 
 // probeReachability is the verdict a probe's samples give the gate (#1650):
-// EndpointReachability, less a held rung's reading. A rung held by a refusal
-// sent nothing, so its up says nothing of whether the endpoint can be reached
-// now: it neither adds to the unreachable streak nor resets it, as an
-// inconclusive probe does not.
+// EndpointReachability, less a down that is only a refusal's echo. A rung that
+// reads down because a refusal holds it says nothing of whether the endpoint
+// can be reached, so it neither adds to the unreachable streak nor resets it,
+// as an inconclusive probe does not. A probe result (a port opened or not) is
+// always the endpoint's own, refused or not.
 func probeReachability(dps []collection.Sample) (up, ok bool) {
 	up, ok = collection.EndpointReachability(dps)
-	if !ok {
+	if !ok || up {
 		return up, ok
 	}
 	for _, d := range dps {
 		if _, isResult := collection.ProbeReached(d); isResult {
-			return up, ok // a port opened or not is the endpoint's own
+			return up, ok
 		}
 	}
 	for _, d := range dps {
 		if d.Name == collection.SignalEndpointResponsive && d.IsText {
-			if strings.HasPrefix(d.Labels[collection.ReasonLabel], heldReason) {
+			if strings.HasPrefix(d.Labels[collection.ReasonLabel], rejectedReason) {
 				return false, false
 			}
 			break

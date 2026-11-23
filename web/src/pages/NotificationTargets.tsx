@@ -1,4 +1,5 @@
-import { For, Match, Show, Switch, createContext, createMemo, createSignal, useContext, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Match, Show, Switch, createContext, createMemo, createSignal, useContext } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import Drawer from "../components/Drawer";
@@ -116,7 +117,7 @@ export default function NotificationTargets(): JSX.Element {
   ];
 
   return (
-    <TargetsUiContext.Provider value={{ openEdit: (name) => { blades.close(); setEditing(name); } }}>
+    <TargetsUiContext value={{ openEdit: (name) => { blades.close(); setEditing(name); } }}>
       <div class="flex min-h-full flex-col gap-4">
         <FlatList<NotificationTarget>
           config={{
@@ -163,7 +164,7 @@ export default function NotificationTargets(): JSX.Element {
           </Drawer>
         )}
       </Show>
-    </TargetsUiContext.Provider>
+    </TargetsUiContext>
   );
 }
 
@@ -415,8 +416,8 @@ function TestPanel(p: { target: NotificationTarget }): JSX.Element {
         {(r) => (
           <div
             role="status"
-            class="alert alert-soft text-sm"
-            classList={{ "alert-success": r().ok, "alert-warning": !r().ok }}
+           
+            class={["alert alert-soft text-sm", { "alert-success": r().ok, "alert-warning": !r().ok }]}
             data-testid="target-test-result"
             data-ok={String(r().ok)}
           >

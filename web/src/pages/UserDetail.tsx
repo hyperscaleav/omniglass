@@ -1,5 +1,7 @@
+import { createResource } from "../lib/resource_compat";
+import type { JSX } from "@solidjs/web";
 import { entityLabel } from "../lib/entities";
-import { type JSX, For, Show, createEffect, createMemo, createResource, createSignal, on } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal } from "solid-js";
 import { useSearchParams } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import GrantBuilder from "../components/GrantBuilder";
@@ -120,14 +122,14 @@ export function UserDetail(props: { id: string }) {
   let grantCancel: () => void = () => {};
 
   // Seed the profile inputs from the user when edit mode opens.
-  createEffect(on(() => edit.editing(), (isEditing) => {
+  createEffect(() => edit.editing(), (isEditing) => {
     if (isEditing) {
       const h = p()?.person;
       setUsername(h?.username ?? "");
       setLabel(h?.label ?? "");
       setEmail(h?.email ?? "");
     }
-  }));
+  });
 
   edit.bind({
     editable: canUpdate,
@@ -410,7 +412,7 @@ export function UserDetail(props: { id: string }) {
               </Show>
               <div>
                 <label class="eyebrow mb-1.5 block" for="edit-username">Username</label>
-                <input id="edit-username" autocomplete="off" class="input input-bordered w-full font-data" classList={{ "input-error": !!handleError(username()) }} value={username()} placeholder="jordan" onInput={(e) => setUsername(e.currentTarget.value)} />
+                <input id="edit-username" autocomplete="off" class={["input input-bordered w-full font-data", { "input-error": !!handleError(username()) }]} value={username()} placeholder="jordan" onInput={(e) => setUsername(e.currentTarget.value)} />
                 <Show when={handleError(username())}>{(msg) => <p class="mt-1 text-[11px] text-error">{msg()}</p>}</Show>
               </div>
               <div>
@@ -419,7 +421,7 @@ export function UserDetail(props: { id: string }) {
               </div>
               <div>
                 <label class="eyebrow mb-1.5 block" for="edit-email">Email</label>
-                <input id="edit-email" type="email" autocomplete="off" class="input input-bordered w-full" classList={{ "input-error": !!emailError(email()) }} value={email()} placeholder="jordan@example.com" onInput={(e) => setEmail(e.currentTarget.value)} />
+                <input id="edit-email" type="email" autocomplete="off" class={["input input-bordered w-full", { "input-error": !!emailError(email()) }]} value={email()} placeholder="jordan@example.com" onInput={(e) => setEmail(e.currentTarget.value)} />
                 <Show when={emailError(email())}>{(msg) => <p class="mt-1 text-[11px] text-error">{msg()}</p>}</Show>
               </div>
             </div>

@@ -1,4 +1,3 @@
-import { A } from "@solidjs/router";
 import { For, Show } from "solid-js";
 import { crumbLayout, type Crumb } from "../lib/breadcrumb";
 
@@ -27,9 +26,9 @@ export default function Breadcrumb(props: { crumbs: Crumb[] }) {
             >
               <Show when={crumb.href} fallback={<span aria-current="page">{crumb.label}</span>}>
                 {(href) => (
-                  <A href={href()} class="truncate hover:text-base-content">
+                  <a href={href()} class="truncate hover:text-base-content">
                     {crumb.label}
-                  </A>
+                  </a>
                 )}
               </Show>
             </span>

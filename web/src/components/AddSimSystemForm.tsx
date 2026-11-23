@@ -1,4 +1,5 @@
-import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show, createMemo, createSignal } from "solid-js";
 import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/solid-query";
 import FieldRow from "./FieldRow";
 import Eyebrow from "./Eyebrow";
@@ -151,8 +152,8 @@ export default function AddSimSystemForm(props: { outposts: string[]; close: () 
       </Show>
       <FieldRow bind="name" info="Optional. Lowercase letters, digits and hyphens; left empty, a name is minted from the system type. Component names are minted the same way, and each gets the lowest free address in the simulated block." hint={shown("name")}>
         <input
-          class="input input-bordered w-full font-data"
-          classList={{ "input-error": !!shown("name") }}
+         
+          class={["input input-bordered w-full font-data", { "input-error": !!shown("name") }]}
           autocomplete="off"
           placeholder="minted from the type"
           value={draft().name}
@@ -271,7 +272,7 @@ function PlanRow(props: { slot: SimSlotFill }) {
           <span class="block truncate font-data text-xs text-base-content/70" title={r().product}>{r().product}</span>
         </Show>
       </td>
-      <td class="text-right font-data tnum text-sm" classList={{ "text-base-content/40": isShort() }}>{r().count}</td>
+      <td class={["text-right font-data tnum text-sm", { "text-base-content/40": isShort() }]}>{r().count}</td>
     </tr>
   );
 }

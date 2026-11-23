@@ -1,4 +1,4 @@
-import { Show, type ParentComponent, createEffect } from "solid-js";
+import { Show, type ParentComponent, createEffect, createTrackedEffect } from "solid-js";
 import { useLocation, useNavigate } from "@solidjs/router";
 import { useMe } from "../lib/auth";
 import { useAuthStatus } from "../lib/authStatus";
@@ -18,7 +18,7 @@ export const AuthGuard: ParentComponent = (props) => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     if (me.isPending) return;
     if (me.data === null) {
       // Not authenticated (no/invalid session cookie): redirect to login carrying

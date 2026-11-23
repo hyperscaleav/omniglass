@@ -1,4 +1,4 @@
-import { For, Show, createEffect, createMemo, createSignal, createUniqueId, on, onMount } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, createUniqueId, onSettled } from "solid-js";
 import { flattenTree, type TreeNode } from "../lib/treeselect";
 import {
   chipStates,
@@ -75,7 +75,7 @@ export default function GrantBuilder(props: {
   // Re-seed the draft when the user or its server grant set changes (a switch
   // or a completed save), but not while the operator is editing locally.
   const baseline = () => props.userId + "|" + props.current.map((g) => g.id).join(",");
-  createEffect(on(baseline, () => resetAll(), { defer: true }));
+  createEffect(baseline, () => resetAll(), { defer: true });
 
   const resetStaging = () => {
     setStage("role");
@@ -96,19 +96,38 @@ export default function GrantBuilder(props: {
     if (stage() === "role") {
       return props.roles
         .filter((r) => r.id.toLowerCase().includes(t) || r.label.toLowerCase().includes(t))
-        .map((r) => ({ kind: "role", value: r.id, label: r.label, title: r.title }) as Suggestion);
+        .map((r) => (({
+        kind: "role",
+        value: r.id,
+        label: r.label,
+        title: r.title
+      }) as Suggestion));
     }
     if (stage() === "kind") {
-      return SCOPE_KINDS.filter((k) => k.includes(t)).map((k) => ({ kind: "scope", value: k, label: k }) as Suggestion);
+      return SCOPE_KINDS.filter((k) => k.includes(t)).map((k) => (({
+        kind: "scope",
+        value: k,
+        label: k
+      }) as Suggestion));
     }
     if (stage() === "op") {
       return SCOPE_OPS.filter((o) => TREE_OP[o].label.toLowerCase().includes(t) || o.includes(t)).map(
-        (o) => ({ kind: "op", value: o, label: `${TREE_OP[o].glyph}  ${TREE_OP[o].label}`, hint: TREE_OP[o].hint }) as Suggestion,
+        (o) => (({
+          kind: "op",
+          value: o,
+          label: `${TREE_OP[o].glyph}  ${TREE_OP[o].label}`,
+          hint: TREE_OP[o].hint
+        }) as Suggestion),
       );
     }
     return flattenTree(props.entities(pendKind()))
       .filter((o) => o.label.toLowerCase().includes(t))
-      .map((o) => ({ kind: "entity", value: o.value, label: o.label, depth: o.depth }) as Suggestion);
+      .map((o) => (({
+      kind: "entity",
+      value: o.value,
+      label: o.label,
+      depth: o.depth
+    }) as Suggestion));
   });
 
   const commit = (role: string, kind: ScopeKind, scopeId?: string, op?: ScopeOp) => {
@@ -226,7 +245,7 @@ export default function GrantBuilder(props: {
 
   // Bound mode: a parent blade's Save drives the commit. `commit` rethrows so the
   // blade can keep edit mode open and surface the error on failure.
-  onMount(() => props.bind?.({ commit: () => props.onSave(diff()), cancel: resetAll, dirty }));
+  onSettled(() => props.bind?.({ commit: () => props.onSave(diff()), cancel: resetAll, dirty }));
 
   const save = async () => {
     setErr(null);
@@ -248,12 +267,12 @@ export default function GrantBuilder(props: {
         <For each={chipStates(props.current, draft())} fallback={<span class="text-xs text-base-content/40">No grants yet. This user can sign in but has no permissions.</span>}>
           {(c) => (
             <span
-              class="inline-flex items-center gap-1 rounded-field border py-[3px] pl-2.5 pr-1 font-data text-[11px]"
-              classList={{
+             
+              class={["inline-flex items-center gap-1 rounded-field border py-[3px] pl-2.5 pr-1 font-data text-[11px]", {
                 "border-primary/40 bg-primary/10": c.kind === "unchanged",
                 "border-success/50 bg-success/10 text-success": c.kind === "added",
                 "border-base-300 bg-base-100 text-base-content/40 line-through": c.kind === "removed",
-              }}
+              }]}
               title={c.kind === "removed" ? "Marked for removal on save" : c.kind === "added" ? "New, applied on save" : undefined}
             >
               {chipLabel(c.grant)}
@@ -324,8 +343,8 @@ export default function GrantBuilder(props: {
                       role="option"
                       aria-selected={sel() === i()}
                       title={s.kind === "role" ? s.title : undefined}
-                      class="flex w-full items-center gap-2 rounded-field px-2 py-1.5 text-left text-sm"
-                      classList={{ "bg-primary/15": sel() === i() }}
+                     
+                      class={["flex w-full items-center gap-2 rounded-field px-2 py-1.5 text-left text-sm", { "bg-primary/15": sel() === i() }]}
                       style={s.kind === "entity" ? { "padding-left": `${0.5 + (s.depth ?? 0) * 0.85}rem` } : undefined}
                       onMouseDown={(e) => {
                         e.preventDefault();
@@ -333,7 +352,7 @@ export default function GrantBuilder(props: {
                       }}
                       onMouseEnter={() => setSel(i())}
                     >
-                      <span classList={{ "font-data": s.kind !== "scope" && s.kind !== "op" && s.kind !== "role" }}>{s.label}</span>
+                      <span class={{ "font-data": s.kind !== "scope" && s.kind !== "op" && s.kind !== "role" }}>{s.label}</span>
                       <Show when={s.kind === "role" && s.value !== s.label}>
                         <span class="font-data text-[11px] text-base-content/40">{(s as { value: string }).value}</span>
                       </Show>

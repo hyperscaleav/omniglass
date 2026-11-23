@@ -39,7 +39,7 @@ export default function ColumnMenu(props: ColumnMenuProps) {
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={() => { const from = drag(); if (from !== null && from !== i()) props.onMove(from, i()); setDrag(null); }}
                   onDragEnd={() => setDrag(null)}
-                  classList={{ "opacity-40": drag() === i() }}
+                  class={{ "opacity-40": drag() === i() }}
                 >
                   <div class="flex items-center gap-2 px-2 py-1.5">
                     <span class="cursor-grab text-base-content/40"><GripVertical size={13} /></span>

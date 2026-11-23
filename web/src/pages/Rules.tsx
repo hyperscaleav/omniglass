@@ -1,6 +1,7 @@
-import { For, Show, createContext, createEffect, createMemo, createSignal, on, useContext, type JSX } from "solid-js";
-import { createStore } from "solid-js/store";
-import { A, useSearchParams } from "@solidjs/router";
+import type { JSX } from "@solidjs/web";
+import { For, Show, createContext, createEffect, createMemo, createSignal, useContext, createTrackedEffect } from "solid-js";
+import { createStore } from "solid-js";
+import { useSearchParams } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import Drawer from "../components/Drawer";
@@ -215,24 +216,16 @@ export default function Rules(): JSX.Element {
   // blade the operator closed.
   const [search, setSearch] = useSearchParams();
   const linked = () => (typeof search.rule === "string" && search.rule ? search.rule : undefined);
-  createEffect(
-    on(linked, (name) => {
+  createEffect(linked, (name) => {
       if (!name) return;
       const top = blades.stack().at(-1);
       if (top?.kind === "rule" && top.id === name) return;
       blades.close();
       blades.push({ kind: "rule", id: name });
-    }),
-  );
-  createEffect(
-    on(
-      () => blades.stack().length,
-      (n, prev) => {
+    });
+  createEffect(() => blades.stack().length, (n, prev) => {
         if (n === 0 && (prev ?? 0) > 0 && linked()) setSearch({ rule: undefined });
-      },
-      { defer: true },
-    ),
-  );
+      }, { defer: true });
 
   const columns: FlatColumn<EventRule>[] = [
     identityColumn<EventRule>(),
@@ -265,7 +258,7 @@ export default function Rules(): JSX.Element {
   ];
 
   return (
-    <RulesUiContext.Provider value={{ openEdit: (name) => { blades.close(); setEditing(name); } }}>
+    <RulesUiContext value={{ openEdit: (name) => { blades.close(); setEditing(name); } }}>
       <div class="flex min-h-full flex-col gap-4">
         <FlatList<EventRule>
           config={{
@@ -315,7 +308,7 @@ export default function Rules(): JSX.Element {
           </Drawer>
         )}
       </Show>
-    </RulesUiContext.Provider>
+    </RulesUiContext>
   );
 }
 
@@ -360,9 +353,9 @@ function SelectorFacts(p: { rule: EventRule }): JSX.Element {
         <For each={types()}>{(t) => <span class="badge badge-ghost badge-sm font-data" title="Component type">{t}</span>}</For>
         <For each={comps()}>
           {(id) => (
-            <A href={`/components/${id}`} class="badge badge-outline badge-sm hover:underline">
+            <a href={`/components/${id}`} class="badge badge-outline badge-sm hover:underline">
               {byId().get(id) ? entityLabel(byId().get(id)!) : id}
-            </A>
+            </a>
           )}
         </For>
       </div>
@@ -402,7 +395,7 @@ function StateList<T extends { component: string; component_id: string; instance
               <span class="flex items-center gap-2">
                 <span class="flex min-w-0 flex-col">
                   <span class="flex min-w-0 items-baseline gap-1.5">
-                    <A href={`/components/${it.component_id}`} class="truncate font-medium hover:underline">{it.component}</A>
+                    <a href={`/components/${it.component_id}`} class="truncate font-medium hover:underline">{it.component}</a>
                     <Show when={it.instance}><span class="font-data text-[11px] text-base-content/50">{it.instance}</span></Show>
                   </span>
                   <Show when={where(it.component_id)}>
@@ -530,7 +523,7 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
                 <span class="inline-flex items-center gap-1.5">
                   {severityCell(r().severity)}
                   <InfoTip label="severity" text={RULE_HINTS.severity} />
-                  <A href="/severity-levels" class="link text-[11px] text-base-content/50 hover:text-base-content">All levels</A>
+                  <a href="/severity-levels" class="link text-[11px] text-base-content/50 hover:text-base-content">All levels</a>
                 </span>
               }
             />
@@ -726,7 +719,7 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
   // until its author picks one (None included). An edit never fills one in:
   // an informational rule (no severity) stays informational unless its author
   // picks a level.
-  createEffect(() => {
+  createTrackedEffect(() => {
     if (p.mode === "create" && !severityChosen() && !d.severity) {
       const s = defaultSeverity(severity().levels);
       if (s) setD("severity", s);
@@ -861,8 +854,8 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
       </Show>
       <FieldRow bind="name" info={RULE_HINTS.name}>
         <input
-          class="input input-bordered w-full font-data"
-          classList={{ "input-error": !!shown("name") }}
+         
+          class={["input input-bordered w-full font-data", { "input-error": !!shown("name") }]}
           aria-required="true"
           value={d.name}
           placeholder="too-hot"
@@ -877,8 +870,8 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
       <FieldRow label="Reads" info={RULE_HINTS.reads}>
         <select
           ref={bindSelectValue(keyValue, propertyOptions, metricOptions)}
-          class="select select-bordered w-full"
-          classList={{ "select-error": !!shown("sampleKey") }}
+         
+          class={["select select-bordered w-full", { "select-error": !!shown("sampleKey") }]}
           aria-required="true"
           onChange={(e) => pickKey(e.currentTarget.value)}
         >
@@ -901,8 +894,8 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
               <OpSelect label="Fire comparison" value={d.fireOp} onChange={(op) => setD("fireOp", op)} />
               <input
                 aria-label="Fire value"
-                class="input input-bordered min-w-0 flex-1 font-data"
-                classList={{ "input-error": !!shown("fireValue") }}
+               
+                class={["input input-bordered min-w-0 flex-1 font-data", { "input-error": !!shown("fireValue") }]}
                 inputmode={d.lane === "metric" ? "decimal" : "text"}
                 placeholder={d.lane === "metric" ? "40" : "down"}
                 value={d.fireValue}
@@ -930,8 +923,8 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
       <ModeToggle side="fire" />
       <FieldRow label="For at least" info={RULE_HINTS.sustain}>
         <input
-          class="input input-bordered w-full font-data"
-          classList={{ "input-error": !!shown("fireSustain") }}
+         
+          class={["input input-bordered w-full font-data", { "input-error": !!shown("fireSustain") }]}
           placeholder="15s"
           value={d.fireSustain}
           onInput={(e) => { setD("fireSustain", e.currentTarget.value); touch("fireSustain"); }}
@@ -958,8 +951,8 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
                 <OpSelect label="Clear comparison" value={d.clearOp} onChange={(op) => setD("clearOp", op)} />
                 <input
                   aria-label="Clear value"
-                  class="input input-bordered min-w-0 flex-1 font-data"
-                  classList={{ "input-error": !!shown("clearValue") }}
+                 
+                  class={["input input-bordered min-w-0 flex-1 font-data", { "input-error": !!shown("clearValue") }]}
                   inputmode={d.lane === "metric" ? "decimal" : "text"}
                   placeholder={d.lane === "metric" ? "35" : "up"}
                   value={d.clearValue}
@@ -988,8 +981,8 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
       </Show>
       <FieldRow label="Clears after at least" info={RULE_HINTS.sustain}>
         <input
-          class="input input-bordered w-full font-data"
-          classList={{ "input-error": !!shown("clearSustain") }}
+         
+          class={["input input-bordered w-full font-data", { "input-error": !!shown("clearSustain") }]}
           placeholder="0s"
           value={d.clearSustain}
           onInput={(e) => { setD("clearSustain", e.currentTarget.value); touch("clearSustain"); }}
@@ -1013,8 +1006,8 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
       <FieldRow label="Fire event type" info={RULE_HINTS.events}>
         <select
           ref={bindSelectValue(() => d.fireEventType, () => eventTypes.data)}
-          class="select select-bordered w-full font-data"
-          classList={{ "select-error": !!shown("fireEventType") }}
+         
+          class={["select select-bordered w-full font-data", { "select-error": !!shown("fireEventType") }]}
           onChange={(e) => { setD("fireEventType", e.currentTarget.value); touch("fireEventType"); }}
         >
           <For each={eventTypes.data ?? []}>{(t) => <option value={t.name}>{t.name}</option>}</For>
@@ -1054,7 +1047,7 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
         <Show when={d.componentTypes.length + d.components.length > 0} fallback={<span class="text-[12px] text-base-content/50">Every component</span>}>
           <For each={d.componentTypes}>
             {(t) => (
-              <span class="badge badge-ghost badge-sm gap-1 font-data" classList={{ "text-base-content/50": typeGone(t) }}>
+              <span class={["badge badge-ghost badge-sm gap-1 font-data", { "text-base-content/50": typeGone(t) }]}>
                 {t}
                 <Show when={typeGone(t)}><DeletedMark what={`component type ${t}`} /></Show>
                 <button type="button" class="opacity-60 hover:opacity-100" aria-label={`Stop watching ${t}`} onClick={() => setD("componentTypes", d.componentTypes.filter((x) => x !== t))}>
@@ -1065,7 +1058,7 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
           </For>
           <For each={d.components}>
             {(id) => (
-              <span class="badge badge-outline badge-sm gap-1" classList={{ "badge-ghost font-data text-base-content/50": componentGone(id) }}>
+              <span class={["badge badge-outline badge-sm gap-1", { "badge-ghost font-data text-base-content/50": componentGone(id) }]}>
                 {componentById().get(id) ? entityLabel(componentById().get(id)!) : id}
                 <Show when={componentGone(id)}><DeletedMark what={`component ${id}`} /></Show>
                 <button type="button" class="opacity-60 hover:opacity-100" aria-label={`Stop watching ${componentById().get(id)?.name ?? id}`} onClick={() => setD("components", d.components.filter((x) => x !== id))}>
@@ -1106,7 +1099,7 @@ function RulePreviewPanel(p: { draft: RuleDraft; ready: boolean }): JSX.Element 
   const [failed, setFailed] = createSignal<string | null>(null);
   let section: HTMLElement | undefined;
   // An answer is to the draft it was asked about: once that changes, it goes.
-  createEffect(on(() => JSON.stringify(previewBody(p.draft)), () => setResult(null), { defer: true }));
+  createEffect(() => JSON.stringify(previewBody(p.draft)), () => setResult(null), { defer: true });
   async function run() {
     setBusy(true);
     setFailed(null);
@@ -1160,7 +1153,7 @@ function RulePreviewPanel(p: { draft: RuleDraft; ready: boolean }): JSX.Element 
                 <For each={r().in_force_now ?? []}>
                   {(s) => (
                     <li class="flex items-center gap-2 text-[12px]">
-                      <A href={`/components/${s.component_id}`} class="link link-hover">{s.component}</A>
+                      <a href={`/components/${s.component_id}`} class="link link-hover">{s.component}</a>
                       <Show when={s.instance}><span class="font-data text-base-content/60">{s.instance}</span></Show>
                       <span class="ml-auto text-[11px] text-base-content/50">
                         {s.since ? <span title={fmtTime(s.since)}>since {rel(s.since)}</span> : "since before the window"}

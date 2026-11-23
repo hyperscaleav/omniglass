@@ -1,4 +1,5 @@
-import { Show, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Show } from "solid-js";
 import { ChevronRight } from "./icons";
 
 // KVRow is the console's one key:value ROW primitive: a label on the left, a
@@ -63,16 +64,16 @@ export default function KVRow(props: {
 
   return (
     <div
-      class="flex items-center gap-2 px-3 py-2"
-      classList={{
+     
+      class={["flex items-center gap-2 px-3 py-2", {
         "border-t border-base-300": !props.first,
         "cursor-pointer hover:bg-base-content/5": rowClickable(),
-      }}
+      }]}
       onClick={rowClickable() ? () => props.onDrillIn?.() : undefined}
     >
       <span
-        class="min-w-0 truncate text-sm"
-        classList={{ "grow basis-32": showInput(), "font-medium": props.emphasize, "font-data": props.labelMono }}
+       
+        class={["min-w-0 truncate text-sm", { "grow basis-32": showInput(), "font-medium": props.emphasize, "font-data": props.labelMono }]}
         title={props.label}
       >
         {props.label}
@@ -89,8 +90,8 @@ export default function KVRow(props: {
             <span class="flex-1" />
             <Show when={props.value !== undefined}>
               <span
-                class="min-w-0 max-w-[60%] truncate text-right font-data text-sm text-base-content/70"
-                classList={{ "font-medium text-base-content": props.emphasize }}
+               
+                class={["min-w-0 max-w-[60%] truncate text-right font-data text-sm text-base-content/70", { "font-medium text-base-content": props.emphasize }]}
               >
                 {props.value}
               </span>

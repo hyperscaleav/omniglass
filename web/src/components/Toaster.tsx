@@ -1,5 +1,6 @@
-import { For, Show, type JSX } from "solid-js";
-import { Portal } from "solid-js/web";
+import type { JSX } from "@solidjs/web";
+import { For, Show } from "solid-js";
+import { Portal } from "@solidjs/web";
 import Button from "./Button";
 import { X } from "./icons";
 import { dismissToast, toasts, type ToastTone } from "../lib/toast";

@@ -1,4 +1,5 @@
-import { type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+
 import Button from "./Button";
 import { LockOpen, RotateCcw } from "./icons";
 import { type Pen, type PenState } from "../lib/namegen";

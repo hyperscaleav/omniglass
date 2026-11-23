@@ -1,4 +1,5 @@
-import { Show, createResource } from "solid-js";
+import { createResource } from "../lib/resource_compat";
+import { Show } from "solid-js";
 import { type User, userAvatarUrl, userInitials, userName } from "../lib/users";
 
 // UserAvatar renders a user's profile picture when it has one, else the

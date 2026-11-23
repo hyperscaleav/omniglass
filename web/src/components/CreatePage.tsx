@@ -44,10 +44,10 @@ export default function CreatePage(props: { kind: "location" | "system" | "compo
         >
           <div class="flex flex-col gap-5" data-testid="create-from-template">
             <h2 class="text-lg font-semibold tracking-tight">New {props.kind} from a template</h2>
-            <FormActionsContext.Provider value={actions}>
+            <FormActionsContext value={actions}>
               <TemplateCreate kind={CREATE_KIND[props.kind]} location={under()} onDone={(href) => navigate(href)} />
               <FormActionBar actions={actions} inline />
-            </FormActionsContext.Provider>
+            </FormActionsContext>
           </div>
         </Show>
       </div>

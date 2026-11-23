@@ -48,9 +48,9 @@ function mount(kind: ClassifierKind, opts: { me?: Me; official?: boolean; lines?
   if (opts.editing ?? true) edit.begin();
   const result = render(() => (
     <QueryClientProvider client={qc}>
-      <BladeEditContext.Provider value={edit}>
+      <BladeEditContext value={edit}>
         <ContractEditor classifier={kind} id="meeting-room" official={opts.official ?? false} />
-      </BladeEditContext.Provider>
+      </BladeEditContext>
     </QueryClientProvider>
   ));
   return { ...result, edit };
@@ -239,9 +239,9 @@ function mountMetric(kind: ClassifierKind, opts: { me?: Me; official?: boolean; 
   if (opts.editing ?? true) edit.begin();
   return render(() => (
     <QueryClientProvider client={qc}>
-      <BladeEditContext.Provider value={edit}>
+      <BladeEditContext value={edit}>
         <ContractEditor classifier={kind} lane="metric" id="meeting-room" official={opts.official ?? false} />
-      </BladeEditContext.Provider>
+      </BladeEditContext>
     </QueryClientProvider>
   ));
 }

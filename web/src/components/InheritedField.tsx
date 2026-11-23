@@ -1,4 +1,5 @@
-import { type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+
 import BladeField from "./BladeField";
 import type { InheritedFact } from "../lib/catalog";
 

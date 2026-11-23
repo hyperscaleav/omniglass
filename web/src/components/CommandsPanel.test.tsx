@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { createEffect } from "solid-js";
+import { createEffect, createTrackedEffect } from "solid-js";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@solidjs/testing-library";
 import { Router, Route, useLocation } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
@@ -100,7 +100,7 @@ function json(body: unknown, status = 200) {
 let where = "";
 function Where() {
   const loc = useLocation();
-  createEffect(() => {
+  createTrackedEffect(() => {
     where = `${loc.pathname}${loc.search}`;
   });
   return null;

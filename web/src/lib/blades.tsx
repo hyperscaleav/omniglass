@@ -1,4 +1,5 @@
-import { type Context, type JSX, createContext, createSignal, useContext } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { type Context, createContext, createSignal, useContext } from "solid-js";
 import { describeError } from "./format";
 
 // The blade stack's shared state and cross-entity refs. A stack entry is a
@@ -169,10 +170,10 @@ export type BladeEdit = {
 };
 
 export function createEditSlot(): BladeEdit {
-  const [editing, setEditing] = createSignal(false);
+  const [editing, setEditing] = createSignal(false, { ownedWrite: true });
   const [saving, setSaving] = createSignal(false);
   const [saveError, setSaveError] = createSignal<string | null>(null);
-  const [bound, setBound] = createSignal(false);
+  const [bound, setBound] = createSignal(false, { ownedWrite: true });
   let handler: { save: () => Promise<void>; cancel: () => void } = { save: async () => {}, cancel: () => {} };
   let editablePred: () => boolean = () => false;
   let validPred: () => boolean = () => true;

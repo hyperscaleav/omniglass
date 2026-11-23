@@ -1,5 +1,6 @@
+import type { JSX } from "@solidjs/web";
 import { Tooltip } from "@kobalte/core/tooltip";
-import { type JSX } from "solid-js";
+
 
 // ProvenanceDot: the console's mark for a value that comes from somewhere that
 // is NOT this row. One teal dot beside the field's label, present or absent,

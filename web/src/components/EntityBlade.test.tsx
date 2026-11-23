@@ -112,9 +112,9 @@ function mountBlade(ref: { kind: string; id: string }) {
             controller = createBladeController();
             controller.push(ref);
             return (
-              <BladesContext.Provider value={controller}>
+              <BladesContext value={controller}>
                 <BladeStack controller={controller} registry={fleetRegistry} />
-              </BladesContext.Provider>
+              </BladesContext>
             );
           }}
         />

@@ -50,7 +50,10 @@ describe("whenError", () => {
 
 describe("matchSummary", () => {
   it("counts what would have told you, what would not, and what could not be judged", () => {
-    const m = (matched: boolean, error?: string) => ({ matched, error }) as RuleMatch;
+    const m = (matched: boolean, error?: string) => (({
+      matched,
+      error
+    }) as RuleMatch);
     expect(matchSummary([m(true), m(false), m(false, "boom"), m(true)])).toEqual({ matched: 2, missed: 1, errored: 1 });
   });
 });

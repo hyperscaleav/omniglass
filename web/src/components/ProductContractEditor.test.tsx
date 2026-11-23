@@ -40,9 +40,9 @@ function mount(opts: { me?: Me; official?: boolean; lines?: ClassifierProperty[]
   if (opts.editing ?? true) edit.begin();
   return render(() => (
     <QueryClientProvider client={qc}>
-      <BladeEditContext.Provider value={edit}>
+      <BladeEditContext value={edit}>
         <ProductContractEditor productId="tsw-1070" official={opts.official ?? false} />
-      </BladeEditContext.Provider>
+      </BladeEditContext>
     </QueryClientProvider>
   ));
 }

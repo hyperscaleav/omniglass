@@ -1,5 +1,6 @@
-import type { JSX } from "solid-js";
-import { createEffect, onCleanup, Show } from "solid-js";
+import type { JSX } from "@solidjs/web";
+
+import { createEffect, onCleanup, Show, createTrackedEffect } from "solid-js";
 import { namePage } from "../lib/handover";
 
 // Page scaffold: an optional breadcrumb slot, a title (string or outpost) + optional
@@ -16,7 +17,7 @@ export default function Page(props: {
   actions?: JSX.Element;
   children: JSX.Element;
 }) {
-  createEffect(() => namePage(props.name));
+  createTrackedEffect(() => namePage(props.name));
   onCleanup(() => namePage(undefined));
   return (
     <section class="og-stack flex flex-col">

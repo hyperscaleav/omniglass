@@ -1,4 +1,5 @@
-import { For, Show, createMemo, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show, createMemo } from "solid-js";
 import BladeField, { EMPTY_VALUE } from "./BladeField";
 import TreeSelect from "./TreeSelect";
 import { X } from "./icons";

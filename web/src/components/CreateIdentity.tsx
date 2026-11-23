@@ -1,4 +1,5 @@
-import { Show, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Show } from "solid-js";
 import FieldRow from "./FieldRow";
 import PenToggle, { takeOver } from "./PenToggle";
 import { type FleetKind, type Pen, ordinalNote, penState } from "../lib/namegen";
@@ -164,8 +165,8 @@ export default function CreateIdentity(props: CreateIdentityProps): JSX.Element 
           }
         >
           <input
-            class="input input-bordered join-item w-full min-w-0 font-data"
-            classList={{ "input-locked": nameState() === "generated" }}
+           
+            class={["input input-bordered join-item w-full min-w-0 font-data", { "input-locked": nameState() === "generated" }]}
             value={nameState() === "generated" ? nameText() : props.namePen.value()}
             readOnly={nameState() === "generated"}
             placeholder={props.namePlaceholder}
@@ -190,11 +191,11 @@ export default function CreateIdentity(props: CreateIdentityProps): JSX.Element 
           }
         >
           <input
-            class="input input-bordered join-item w-full min-w-0"
-            classList={{
+           
+            class={["input input-bordered join-item w-full min-w-0", {
               "input-locked": displayState() === "generated",
               "italic text-base-content/60": displayState() === "generated" && !labelAvailable(),
-            }}
+            }]}
             value={displayState() === "generated" ? labelText() || nameText() : props.displayPen.value()}
             readOnly={displayState() === "generated"}
             placeholder={props.displayPlaceholder}

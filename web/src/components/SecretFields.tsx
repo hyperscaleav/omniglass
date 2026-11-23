@@ -1,4 +1,5 @@
-import { For, Show, createSignal, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show, createSignal } from "solid-js";
 import { revealSecret, copySecret, type SecretField } from "../lib/secrets";
 import { describeError } from "../lib/format";
 import { RevealButton, CopyButton } from "./InlineActions";
@@ -66,8 +67,8 @@ export default function SecretFields(props: { secretId: string; fields: SecretFi
             <div class="join w-full">
               <input
                 readonly
-                class="input input-bordered join-item w-full font-data text-sm"
-                classList={{ "text-base-content/50": f.secret && shown()[f.name] === undefined }}
+               
+                class={["input input-bordered join-item w-full font-data text-sm", { "text-base-content/50": f.secret && shown()[f.name] === undefined }]}
                 value={display(f)}
                 title={shown()[f.name] ?? undefined}
               />

@@ -1,5 +1,6 @@
-import { type Accessor, type Component, type JSX, For, Show, createEffect, createMemo, createSignal, untrack } from "solid-js";
-import { Dynamic } from "solid-js/web";
+import type { JSX } from "@solidjs/web";
+import { type Accessor, type Component, For, Show, createEffect, createMemo, createSignal, untrack, createTrackedEffect } from "solid-js";
+import { Dynamic } from "@solidjs/web";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { resolveFilterKeys, type Chip, type FilterKeys } from "../lib/predicate";
@@ -222,8 +223,8 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
   // refetch. See lib/blades and components/BladeStack.
   const blades = createBladeController();
 
-  createEffect(() => localStorage.setItem(`${cfg.storageKey}-cols`, JSON.stringify(cols())));
-  createEffect(() => localStorage.setItem(`${cfg.storageKey}-view`, viewMode()));
+  createTrackedEffect(() => localStorage.setItem(`${cfg.storageKey}-cols`, JSON.stringify(cols())));
+  createTrackedEffect(() => localStorage.setItem(`${cfg.storageKey}-view`, viewMode()));
 
   // The signal setter treats a function arg as an updater; N is an object but TS
   // cannot prove it is not callable, so set the focused node through a thunk.
@@ -242,7 +243,7 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
   // deleted), and re-resolve the full-page node by id so it shows fresh data. The
   // blade bodies re-resolve themselves from index() by id, so surviving ids stay
   // put. fullPage is read untracked so this effect depends only on index().
-  createEffect(() => {
+  createTrackedEffect(() => {
     const idx = index();
     blades.filter((r) => idx.byId.has(r.id));
     const fp = untrack(fullPage);
@@ -256,7 +257,7 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
   // close any ephemeral blades (the full page is the addressable surface). A
   // focus that matches no id is a miss, judged only once the first fetch has
   // settled.
-  createEffect(() => {
+  createTrackedEffect(() => {
     const f = cfg.focus?.();
     if (!f) {
       showFull(null);
@@ -397,8 +398,8 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
     const active = () => sort()?.key === p.col;
     return (
       <th
-        class="sticky top-0 z-5 select-none bg-base-200 text-left"
-        classList={{ "cursor-pointer": sortable() }}
+       
+        class={["sticky top-0 z-5 select-none bg-base-200 text-left", { "cursor-pointer": sortable() }]}
         onClick={() => sortable() && toggleSort(p.col)}
       >
         <span class="inline-flex items-center gap-1">
@@ -492,8 +493,8 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
                   still reads the pen, which is the half that stayed. */}
               <span class="flex min-w-0 items-baseline">
                 <span
-                  class="truncate font-medium"
-                  classList={{ "font-data text-[13px]": labelIsName(identityOf(n)) }}
+                 
+                  class={["truncate font-medium", { "font-data text-[13px]": labelIsName(identityOf(n)) }]}
                 >
                   {n.display}
                 </span>
@@ -607,7 +608,7 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
     // push or pop, and without the provider it throws before it renders. FlatList has
     // always done this; TreeList did not, which left both interface blades dead on
     // every TreeList page (#336).
-    <BladesContext.Provider value={blades}>
+    <BladesContext value={blades}>
       <Show when={cfg.error?.()}>
         <div role="alert" class="alert alert-error alert-soft mb-4 text-sm">
           <span>Could not load {cfg.entity.plural.toLowerCase()}: {describeError(cfg.error?.())}</span>
@@ -626,6 +627,6 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
           </Drawer>
         )}
       </Show>
-    </BladesContext.Provider>
+    </BladesContext>
   );
 }

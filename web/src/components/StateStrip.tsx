@@ -1,4 +1,5 @@
-import { For, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For } from "solid-js";
 
 // StateStrip is the console's one horizontal state-over-time strip: a rounded bar
 // split into weighted segments, one per contiguous stretch in a single state, with

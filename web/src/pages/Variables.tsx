@@ -1,5 +1,6 @@
+import type { JSX } from "@solidjs/web";
 import { createIdentity, entityLabel } from "../lib/entities";
-import { For, Show, createEffect, createMemo, createSignal, type JSX } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, createTrackedEffect } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeField from "../components/BladeField";
@@ -276,7 +277,7 @@ function CreateVariableForm(p: { onCreated: (v: Variable) => void }): JSX.Elemen
   const ownerKinds = createMemo(() => (tierGap().length > 0 ? OWNER_KINDS.filter((k) => k !== "platform") : OWNER_KINDS));
   // Keep the choice inside the offered set: /auth/me may resolve after the form
   // mounts, and the default ("platform") is exactly the one that can fall away.
-  createEffect(() => {
+  createTrackedEffect(() => {
     if (!ownerKinds().includes(ownerKind())) setOwnerKind(ownerKinds()[0]);
   });
 

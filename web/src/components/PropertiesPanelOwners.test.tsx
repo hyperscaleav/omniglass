@@ -1,7 +1,8 @@
+import type { JSX } from "@solidjs/web";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, fireEvent, within } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
-import type { JSX } from "solid-js";
+
 import PropertiesPanel, { propertyResolutionBlade, ownerPropertyBladeId } from "./PropertiesPanel";
 import { ownerPropertiesKey, type EffectiveProperty, type PropertyOwnerKind } from "../lib/owner_properties";
 import { createEditSlot, type BladeEdit } from "../lib/blades";

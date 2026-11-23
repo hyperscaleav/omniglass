@@ -1,7 +1,7 @@
 /* @refresh reload */
 import { type ParentComponent } from "solid-js";
-import { render } from "solid-js/web";
-import { Router, Route } from "@solidjs/router";
+import { render } from "@solidjs/web";
+import { createRouter, type RouteDefinition } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import "./app.css";
 import { setUnauthorizedHandler, clearToken } from "./api/client";
@@ -46,19 +46,21 @@ const ProtectedShell: ParentComponent = (props) => (
 // The Catalog area stays a layout route: CatalogShell draws the subrail around
 // each catalog's own page while the URL stays canonical (/products, /metrics,
 // ...); each page keeps its own route-guard gate.
-const routesFor = (shell: RouteEntry["shell"]) =>
-  ROUTE_MANIFEST.filter((r) => r.shell === shell).map((r) => <Route path={r.path} component={PAGES[r.page]} />);
+const routesFor = (shell: RouteEntry["shell"]): RouteDefinition[] =>
+  ROUTE_MANIFEST.filter((r) => r.shell === shell).map((r) => ({ path: r.path, component: PAGES[r.page] }));
+
+const Router = createRouter({
+  base: "/web",
+  routes: [
+    ...routesFor("public"),
+    { path: "/", component: ProtectedShell, children: [...routesFor("protected"), { component: CatalogShell, children: routesFor("catalog") }] },
+  ],
+});
 
 render(
   () => (
     <QueryClientProvider client={queryClient}>
-      <Router base="/web" root={AppRoot}>
-        {routesFor("public")}
-        <Route path="/" component={ProtectedShell}>
-          {routesFor("protected")}
-          <Route component={CatalogShell}>{routesFor("catalog")}</Route>
-        </Route>
-      </Router>
+      <Router>{(props) => <AppRoot>{props.children}</AppRoot>}</Router>
     </QueryClientProvider>
   ),
   root,

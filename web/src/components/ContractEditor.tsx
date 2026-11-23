@@ -1,4 +1,5 @@
-import { For, Show, createEffect, createMemo, createSignal, useContext, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show, createEffect, createMemo, createSignal, useContext, createTrackedEffect } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
 import { Check, Pencil, Plus, Trash, X } from "./icons";
@@ -237,7 +238,7 @@ export default function ContractEditor(props: {
   // confirm click would PUT a line the operator believed discarded. Writes
   // here are immediate-apply, so an open draft at footer Save is dropped, not
   // flushed: the blade's Save concerns the fields it staged, never these.
-  createEffect((was: boolean | undefined) => {
+  createTrackedEffect((was: boolean | undefined) => {
     const now = bladeEditing();
     if (was && !now) {
       setEditing(null);

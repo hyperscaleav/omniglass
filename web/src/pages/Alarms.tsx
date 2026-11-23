@@ -1,5 +1,5 @@
 import { Show, createMemo, createSignal } from "solid-js";
-import { A, useSearchParams } from "@solidjs/router";
+import { useSearchParams } from "@solidjs/router";
 import { keepPreviousData, useQuery } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import Button from "../components/Button";
@@ -66,7 +66,7 @@ export default function Alarms() {
     {
       key: "component", label: "Component", cell: (a) => (
         <span class="flex flex-col gap-0.5">
-          <A href={`/components/${a.component_id}`} class="font-data text-sm hover:underline" onClick={(e) => e.stopPropagation()}>{a.component}</A>
+          <a href={`/components/${a.component_id}`} class="font-data text-sm hover:underline" onClick={(e) => e.stopPropagation()}>{a.component}</a>
           <span class="truncate text-xs text-base-content/55" title={a.message}>{a.message}</span>
         </span>
       ),

@@ -1,4 +1,5 @@
-import { Show, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Show } from "solid-js";
 import InfoTip from "./InfoTip";
 
 // Eyebrow: the console's section label, with the explainer as a tooltip

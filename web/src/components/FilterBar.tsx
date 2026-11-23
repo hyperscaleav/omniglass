@@ -1,4 +1,5 @@
-import { For, Show, createMemo, createSignal, createUniqueId, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show, createMemo, createSignal, createUniqueId } from "solid-js";
 import { OP, opsFor, tokenToChip, chipGlyph, valueless, type FilterKey, type Chip, type OpKey } from "../lib/predicate";
 import { Search, X } from "./icons";
 import Button from "./Button";
@@ -244,15 +245,15 @@ export default function FilterBar<T>(props: {
                       id={`${listId}-opt-${i()}`}
                       role="option"
                       aria-selected={sel() === i()}
-                      class="flex w-full items-center justify-between gap-3 rounded-field px-2 py-1.5 text-left text-sm"
-                      classList={{ "bg-primary/15": sel() === i() }}
+                     
+                      class={["flex w-full items-center justify-between gap-3 rounded-field px-2 py-1.5 text-left text-sm", { "bg-primary/15": sel() === i() }]}
                       onMouseDown={(e) => {
                         e.preventDefault();
                         accept(i());
                       }}
                       onMouseEnter={() => setSel(i())}
                     >
-                      <span class="inline-flex items-center gap-2" classList={{ "font-semibold": s.kind === "key" }}>
+                      <span class={["inline-flex items-center gap-2", { "font-semibold": s.kind === "key" }]}>
                         <Show when={s.kind === "op"}>
                           <span class="w-4 text-center font-data text-primary">{(s as { glyph: string }).glyph}</span>
                         </Show>

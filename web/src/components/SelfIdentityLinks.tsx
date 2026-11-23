@@ -1,4 +1,5 @@
-import { Show, createSignal, createResource } from "solid-js";
+import { createResource } from "../lib/resource_compat";
+import { Show, createSignal } from "solid-js";
 import { useSearchParams } from "@solidjs/router";
 import { api } from "../api/client";
 import Button from "./Button";

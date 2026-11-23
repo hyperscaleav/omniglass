@@ -1,4 +1,5 @@
-import type { JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+
 import TreeSelect from "./TreeSelect";
 import type { SystemType } from "../lib/system_types";
 

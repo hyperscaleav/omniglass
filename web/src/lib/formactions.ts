@@ -52,7 +52,7 @@ export type FormActions = {
 };
 
 export function createFormActions(): FormActions {
-  const [binding, setBinding] = createSignal<FormBinding | undefined>();
+  const [binding, setBinding] = createSignal<FormBinding | undefined>(undefined, { ownedWrite: true });
   return {
     binding,
     bind: (b) => {

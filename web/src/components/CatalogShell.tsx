@@ -1,5 +1,5 @@
 import { For, Show, createMemo, type ParentComponent } from "solid-js";
-import { A, useHref, useLocation, useNavigate } from "@solidjs/router";
+import { useHref, useLocation, useNavigate } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import { Soon } from "./Sidebar";
 import { useMe, can } from "../lib/auth";
@@ -34,9 +34,9 @@ const CatalogShell: ParentComponent = (props) => {
       >
         <ul class="menu w-full flex-nowrap gap-0.5 p-0 [&_li>*]:rounded-field">
           <li>
-            <A href={OVERVIEW_PATH} end activeClass="menu-active">
+            <a href={OVERVIEW_PATH} end >
               <span class="flex-1 truncate">Overview</span>
-            </A>
+            </a>
           </li>
           <For each={groups()}>
             {(g) => (
@@ -85,27 +85,27 @@ function Entry(props: { entry: CatalogEntry }) {
             </button>
           }
         >
-          <A href={props.entry.path!} activeClass="menu-active" class="opacity-45">
+          <a href={props.entry.path!} class="opacity-45">
             <span class="flex-1 truncate">{props.entry.label}</span>
             <Soon />
-          </A>
+          </a>
         </Show>
       }
     >
       <Show
         when={props.entry.query}
         fallback={
-          <A href={props.entry.path!} activeClass="menu-active">
+          <a href={props.entry.path!} >
             <span class="flex-1 truncate">{props.entry.label}</span>
             <EntryCount entry={props.entry} />
-          </A>
+          </a>
         }
       >
         {/* A router link marks every query of its path current, so a filtered
             slot is its own anchor: active, and aria-current, on its query. */}
         <a
           href={href()}
-          classList={{ "menu-active": active() }}
+          class={{ "menu-active": active() }}
           aria-current={active() ? "page" : undefined}
           onClick={(e) => {
             if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;

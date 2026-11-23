@@ -1,4 +1,5 @@
-import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show, createEffect, createMemo, createSignal, createTrackedEffect } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
 import BladeField from "./BladeField";
@@ -79,7 +80,7 @@ function NameField(props: {
   const [checking, setChecking] = createSignal(false);
   const [result, setResult] = createSignal<NameCheck | null>(null);
   const [checkError, setCheckError] = createSignal<string | null>(null);
-  createEffect(on(props.name, () => { setResult(null); setCheckError(null); }));
+  createEffect(props.name, () => { setResult(null); setCheckError(null); });
   async function runCheck() {
     setChecking(true);
     setCheckError(null);
@@ -373,7 +374,7 @@ export default function EntityForm(props: {
   };
 
   return (
-    <section data-testid="entity-form" class="flex flex-col gap-5" classList={{ "p-4": props.host === "page" }}>
+    <section data-testid="entity-form" class={["flex flex-col gap-5", { "p-4": props.host === "page" }]}>
       <Show when={err()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
       </Show>
@@ -656,7 +657,7 @@ export function EntityCreateForm(props: {
   };
 
   const formActions = createFormActions();
-  createEffect(() => {
+  createTrackedEffect(() => {
     formActions.bind({
       submitLabel: `Create ${KIND_NOUN[props.kind]}`,
       submitIcon: Plus,
@@ -789,7 +790,7 @@ export function EntityCreateForm(props: {
       {/* Hidden submit button: FormActionBar's buttons are type=button, so without
           this the browser's implicit submission algorithm finds no submit target
           and Enter in a text field does nothing. */}
-      <button type="submit" class="sr-only" tabIndex={-1} />
+      <button type="submit" class="sr-only" tabindex={-1} />
       <FormActionBar actions={formActions} inline />
 
       <div class="flex flex-col gap-1 opacity-50">

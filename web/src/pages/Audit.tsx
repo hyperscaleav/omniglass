@@ -1,4 +1,5 @@
-import { For, Show, createSignal, onMount, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show, createSignal, onSettled } from "solid-js";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import Button from "../components/Button";
 import KVStacked from "../components/KVStacked";
@@ -230,7 +231,7 @@ export default function Audit() {
       older ? setLoadingOlder(false) : setLoading(false);
     }
   }
-  onMount(() => load());
+  onSettled(() => load());
   const oldest = () => {
     const r = rows();
     return r.length ? r[r.length - 1].ts : undefined;

@@ -1,4 +1,5 @@
-import { Show, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Show } from "solid-js";
 import { ValueInput } from "../pages/Variables";
 import { type ValueType } from "../lib/variables";
 import { ChevronRight } from "./icons";
@@ -54,11 +55,11 @@ export default function FieldControl(props: {
       when={props.editing}
       fallback={
         <div
-          class="flex items-center gap-2 px-3 py-2"
-          classList={{
+         
+          class={["flex items-center gap-2 px-3 py-2", {
             "border-t border-base-300": !props.first,
             "cursor-pointer hover:bg-base-content/5": !!props.onDrillIn,
-          }}
+          }]}
           onClick={props.onDrillIn ? () => props.onDrillIn?.() : undefined}
         >
           <span class="min-w-0 truncate text-sm">
@@ -69,8 +70,8 @@ export default function FieldControl(props: {
           </span>
           <span class="flex-1" />
           <span
-            class="min-w-0 max-w-[60%] truncate text-right font-data text-sm"
-            classList={{ "font-medium text-primary": props.isSet, "text-base-content/70": !props.isSet }}
+           
+            class={["min-w-0 max-w-[60%] truncate text-right font-data text-sm", { "font-medium text-primary": props.isSet, "text-base-content/70": !props.isSet }]}
           >
             {hasResolved() ? props.resolved : "—"}
           </span>
@@ -87,7 +88,7 @@ export default function FieldControl(props: {
         </div>
       }
     >
-      <div class="px-3 py-2.5" classList={{ "border-t border-base-300": !props.first }}>
+      <div class={["px-3 py-2.5", { "border-t border-base-300": !props.first }]}>
         <div class="flex items-center justify-between gap-3">
           <span class="text-[13px] font-medium">
             {props.label}
@@ -95,8 +96,8 @@ export default function FieldControl(props: {
             <span class="ml-2 font-data text-[10px] font-normal text-base-content/40">{props.dataType}</span>
           </span>
           <label
-            class="flex shrink-0 items-center gap-1.5 text-[11px]"
-            classList={{ "text-primary": overriding(), "text-base-content/50": !overriding() }}
+           
+            class={["flex shrink-0 items-center gap-1.5 text-[11px]", { "text-primary": overriding(), "text-base-content/50": !overriding() }]}
           >
             <span>Override</span>
             <input

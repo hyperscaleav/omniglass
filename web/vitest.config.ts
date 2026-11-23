@@ -1,5 +1,5 @@
 import { defineConfig, configDefaults } from "vitest/config";
-import solid from "vite-plugin-solid";
+import solid from "@solidjs/vite-plugin";
 
 // jsdom so component tests can render; the data-layer tests need only the
 // happy-dom-free environment for fetch mocking. The browser e2e (Playwright) lives

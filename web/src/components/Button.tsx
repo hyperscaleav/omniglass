@@ -1,5 +1,6 @@
-import { type Component, type JSX, Show } from "solid-js";
-import { Dynamic } from "solid-js/web";
+import type { JSX } from "@solidjs/web";
+import { type Component, Show } from "solid-js";
+import { Dynamic } from "@solidjs/web";
 
 // Button is the console's one button primitive. Every button goes through it so
 // the intent class, size, icon size, leading gap, and the loading spinner are

@@ -1,4 +1,5 @@
-import { createMemo, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { createMemo } from "solid-js";
 import { entityLabel, labelIsName, type Labelled } from "../lib/entities";
 
 // BladeTitle is the console's one blade heading: the label of the row the
@@ -45,5 +46,5 @@ export default function BladeTitle(p: {
     const r = row();
     return r ? labelIsName(r) : true; // the fallback is always an identifier
   };
-  return <span classList={{ "font-data": dataFace() }}>{row() ? entityLabel(row()!) : p.fallback}</span>;
+  return <span class={{ "font-data": dataFace() }}>{row() ? entityLabel(row()!) : p.fallback}</span>;
 }

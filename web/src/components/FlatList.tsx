@@ -1,4 +1,5 @@
-import { type Accessor, type JSX, For, Show, createEffect, createMemo, createSignal } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { type Accessor, For, Show, createEffect, createMemo, createSignal, createTrackedEffect } from "solid-js";
 import ListShell from "./ListShell";
 import Drawer from "./Drawer";
 import BladeStack from "./BladeStack";
@@ -108,7 +109,7 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
   // Deep-link: when openId names a loaded row, open its detail once. Guarded by the
   // last-opened id so closing the Drawer does not immediately re-open it.
   const [openedId, setOpenedId] = createSignal<string | undefined>();
-  createEffect(() => {
+  createTrackedEffect(() => {
     const id = cfg.openId?.();
     if (!id || id === openedId() || !cfg.rowId) return;
     const row = cfg.rows().find((r) => cfg.rowId!(r) === id);
@@ -161,7 +162,7 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
   );
 
   return (
-    <BladesContext.Provider value={blades}>
+    <BladesContext value={blades}>
       <ListShell
         filterKeys={resolveFilterKeys(cfg.filterKeys)}
         rows={cfg.rows()}
@@ -182,13 +183,13 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
           return (
             <>
               <div
-                class="overflow-x-auto"
-                classList={{
+               
+                class={["overflow-x-auto", {
                   // Fill mode: this region absorbs the card's surplus height and
                   // scrolls; the headers stick to its top (bg matches the card so
                   // rows pass beneath them cleanly).
                   "min-h-0 flex-1 overflow-y-auto [&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 [&_thead_th]:bg-base-200": cfg.fill,
-                }}
+                }]}
               >
                 <table class={cfg.fixedLayout ? "table table-sm table-fixed w-full" : "table table-sm"}>
                   <Show when={cfg.columns.some((c) => c.width)}>
@@ -278,6 +279,6 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
       <Show when={cfg.blades}>
         <BladeStack controller={blades} registry={cfg.blades!.registry} />
       </Show>
-    </BladesContext.Provider>
+    </BladesContext>
   );
 }

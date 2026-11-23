@@ -9,7 +9,13 @@ const types = [
   { name: "room", allowed_parent_types: ["building"] },
 ];
 const loc = (id: string, name: string, location_type: string, parent_id?: string, extra: Partial<Location> = {}): Location =>
-  ({ id, name, location_type, parent_id, ...extra }) as Location;
+  (({
+    id,
+    name,
+    location_type,
+    parent_id,
+    ...extra
+  }) as Location);
 
 const rows: Location[] = [
   loc("r1", "zeta-room", "room", "b1", { label: "Zeta Room", path: "hq.b1.zeta-room" }),

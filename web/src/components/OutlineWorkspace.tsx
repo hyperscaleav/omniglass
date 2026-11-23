@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, For, Show, createTrackedEffect } from "solid-js";
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import { useQueries, useQuery } from "@tanstack/solid-query";
 import { Popover } from "@kobalte/core/popover";
@@ -218,7 +218,7 @@ export default function OutlineWorkspace(props: { rootId?: string }) {
   // ?node= reveals one row: a location, a system's location, or a component, by
   // uuid or by a name that names exactly one thing (ADR-0062, #759's rule).
   let revealed = "";
-  createEffect(() => {
+  createTrackedEffect(() => {
     const raw = param("node");
     if (props.rootId || !raw || raw === revealed || !view.data) return;
     // Everything the address could name, of every kind: a name that names a

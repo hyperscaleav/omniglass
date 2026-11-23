@@ -1,5 +1,5 @@
-import { For, Show, type JSX } from "solid-js";
-import { A } from "@solidjs/router";
+import type { JSX } from "@solidjs/web";
+import { For, Show } from "solid-js";
 import { useQuery } from "@tanstack/solid-query";
 import InfoTip from "../components/InfoTip";
 import { can, useMe } from "../lib/auth";
@@ -149,8 +149,8 @@ function Figure(props: { label: string; tip: string; value: string | null; muted
         <InfoTip text={props.tip} label={props.label} />
       </div>
       <div
-        class="tnum text-lg font-semibold"
-        classList={{ "text-base-content/30": props.value == null || props.muted }}
+       
+        class={["tnum text-lg font-semibold", { "text-base-content/30": props.value == null || props.muted }]}
         data-figure={props.label}
       >
         {props.value ?? "-"}
@@ -185,7 +185,7 @@ function GapTable(props: { gaps: PlatformSimGap[] | null }) {
               return (
                 <tr class={ROW_TONE[tone]} data-testid="platform-sim-gap" data-gap={g.gap} data-protocol={g.protocol} data-tone={tone} data-ratio={g.ratio ?? ""}>
                   <td class="whitespace-nowrap">{gapName(g.gap)}</td>
-                  <td classList={{ "text-base-content/40": !g.protocol }}>{gapProtocolText(g)}</td>
+                  <td class={{ "text-base-content/40": !g.protocol }}>{gapProtocolText(g)}</td>
                   <td class={`tnum text-right ${RATIO_TONE[tone]}`}>{ratioText(g.ratio)}</td>
                   <td class="tnum whitespace-nowrap text-right text-base-content/60">{g.count} / {g.in}</td>
                   <td><span class={`badge badge-sm ${READING_BADGE[g.reading] ?? ""}`}>{g.reading}</span></td>
@@ -264,11 +264,11 @@ function DeviceTable(props: { outpost: PlatformSimOutpost }) {
         <tbody>
           <For each={sortDevices(props.outpost.devices)} fallback={<tr><td colSpan={3} class="text-base-content/50">The simulator serves no device on this outpost.</td></tr>}>
             {(d) => (
-              <tr data-testid="platform-sim-device" data-component={d.component_id} data-received={deviceReceived(d)} classList={{ "bg-warning/5": d.unhit }}>
+              <tr data-testid="platform-sim-device" data-component={d.component_id} data-received={deviceReceived(d)} class={{ "bg-warning/5": d.unhit }}>
                 <td>
-                  <A href={`/simulation?c=${encodeURIComponent(d.component_id)}`} class="font-medium hover:underline" title="Open the device's drawer on the Simulation page">
+                  <a href={`/simulation?c=${encodeURIComponent(d.component_id)}`} class="font-medium hover:underline" title="Open the device's drawer on the Simulation page">
                     {d.component || d.component_id}
-                  </A>
+                  </a>
                 </td>
                 <td class="tnum text-right text-sm">
                   {Object.entries(d.received ?? {}).sort(([a], [b]) => a.localeCompare(b)).map(([p, n]) => `${p} ${n}`).join(", ") || "0"}

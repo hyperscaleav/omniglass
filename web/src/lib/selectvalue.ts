@@ -1,4 +1,4 @@
-import { createEffect, type Accessor } from "solid-js";
+import { type Accessor, createEffect, createSignal } from "solid-js";
 
 // bindSelectValue: the one answer to "a <select> was told its value before its
 // options existed".
@@ -38,12 +38,17 @@ export function bindSelectValue(
   value: Accessor<string>,
   ...options: [Accessor<unknown>, ...Accessor<unknown>[]]
 ): (el: HTMLSelectElement) => void {
-  return (el) =>
-    createEffect(() => {
-      // Read every source so this re-runs when a collection lands or is
-      // replaced. Calls, not bare property reads, so no minifier can decide the
-      // statement is dead and drop the subscription with it.
+  // Solid 2 (#2290 spike): no primitives inside a ref callback; the effect lives in
+  // the factory and the ref only hands over the element.
+  const [el, setEl] = createSignal<HTMLSelectElement>(undefined, { ownedWrite: true });
+  createEffect(
+    () => {
       for (const source of options) source();
-      el.value = value();
-    });
+      return [el(), value()] as const;
+    },
+    ([e, v]) => {
+      if (e) e.value = v;
+    },
+  );
+  return (e) => setEl(() => e);
 }

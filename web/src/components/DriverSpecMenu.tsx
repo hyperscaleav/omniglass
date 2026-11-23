@@ -1,4 +1,5 @@
-import { For, Show, type JSX } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { For, Show } from "solid-js";
 import type { DriverSpec, DriverEmit } from "../lib/drivers";
 
 // DriverSpecMenu renders a driver's declarative spec as the menu it is (#813):

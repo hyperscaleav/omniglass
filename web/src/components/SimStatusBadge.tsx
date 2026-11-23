@@ -1,5 +1,5 @@
 import { Show, type Component } from "solid-js";
-import { Dynamic } from "solid-js/web";
+import { Dynamic } from "@solidjs/web";
 import { CircleCheck, CircleDashed, OctagonX, Plug, Sliders, WifiOff } from "./icons";
 import { simStatus, type SimComponent, type SimState } from "../lib/simulation";
 

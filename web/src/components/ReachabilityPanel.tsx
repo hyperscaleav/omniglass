@@ -1,6 +1,5 @@
 import { For, Show, createMemo, createSignal } from "solid-js";
 import { useQuery } from "@tanstack/solid-query";
-import { A } from "@solidjs/router";
 import { ChevronRight, Plus, Sliders } from "./icons";
 import Button from "./Button";
 import StateStrip from "./StateStrip";
@@ -297,7 +296,7 @@ function EndpointRow(p: { iface: ReachEndpoint; component: string; manageId?: st
         {(n) => (
           <div data-testid="endpoint-pending-notice" class="px-3 pb-2.5 text-[12px] text-base-content/60">
             {n().text}{" "}
-            <A href={n().href} class="link link-primary whitespace-nowrap font-medium">{n().linkLabel}</A>
+            <a href={n().href} class="link link-primary whitespace-nowrap font-medium">{n().linkLabel}</a>
           </div>
         )}
       </Show>
@@ -335,7 +334,7 @@ export default function ReachabilityPanel(p: {
   // which would rebuild each row, closing an expanded one and dropping a retry
   // that waits on its session (#1059).
   const keyOf = (it: ReachEndpoint, i: number) => it.id ?? `${it.endpoint}#${i}`;
-  const keys = createMemo(() => ifaces().map(keyOf), undefined, {
+  const keys = createMemo(() => ifaces().map(keyOf), {
     equals: (a, b) => a.length === b.length && a.every((x, i) => x === b[i]),
   });
   const byKey = createMemo(() => new Map(ifaces().map((it, i) => [keyOf(it, i), it])));

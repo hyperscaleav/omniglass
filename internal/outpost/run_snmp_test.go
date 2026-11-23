@@ -108,10 +108,9 @@ func TestOutpostSNMPRungIsAStandardGetAnswered(t *testing.T) {
 	time.Sleep(500 * time.Millisecond) // a get already in flight lands first
 	s.settles("gets to the refusing agent under the refused community", agent.SNMPRequests, agent.SNMPRequests())
 	// Beneath the gate the agent is unobserved and the endpoint not
-	// collectable, but the refusal was an answer: the rung reads up, held,
-	// never a down it did not observe (#2294).
-	s.waitFor("panel-refused", refused.Name, "endpoint-responsive", is("up"), "up: held beneath the gate")
-	s.waitFor("panel-refused", refused.Name, "endpoint-reachable", is("up"), "up")
+	// collectable: the verdict reads down, never frozen at the last answer.
+	s.waitFor("panel-refused", refused.Name, "endpoint-responsive", is("down"), "down: held beneath the gate")
+	s.waitFor("panel-refused", refused.Name, "endpoint-reachable", is("down"), "down")
 	// A restarted outpost adopts the gate from the worklist, and its poll, new
 	// to the schedule and due at once, is held too: still no get.
 	// (The silent endpoint has served its part; it leaves, so a silent get's

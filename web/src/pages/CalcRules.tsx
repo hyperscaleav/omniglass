@@ -1,6 +1,7 @@
-import { For, Index, Show, createContext, createEffect, createMemo, createSignal, createUniqueId, on, useContext, type JSX } from "solid-js";
-import { createStore } from "solid-js/store";
-import { A, useSearchParams } from "@solidjs/router";
+import type { JSX } from "@solidjs/web";
+import { For, Show, createContext, createEffect, createMemo, createSignal, createUniqueId, useContext } from "solid-js";
+import { createStore } from "solid-js";
+import { useSearchParams } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import Drawer from "../components/Drawer";
@@ -190,24 +191,16 @@ export default function CalcRules(): JSX.Element {
   // value on a component or a system points at the rule that derived it.
   const [search, setSearch] = useSearchParams();
   const linked = () => (typeof search.rule === "string" && search.rule ? search.rule : undefined);
-  createEffect(
-    on(linked, (ref) => {
+  createEffect(linked, (ref) => {
       if (!ref) return;
       const top = blades.stack().at(-1);
       if (top?.kind === "calc-rule" && top.id === ref) return;
       blades.close();
       blades.push({ kind: "calc-rule", id: ref });
-    }),
-  );
-  createEffect(
-    on(
-      () => blades.stack().length,
-      (n, prev) => {
+    });
+  createEffect(() => blades.stack().length, (n, prev) => {
         if (n === 0 && (prev ?? 0) > 0 && linked()) setSearch({ rule: undefined });
-      },
-      { defer: true },
-    ),
-  );
+      }, { defer: true });
 
   const columns: FlatColumn<CalcRule>[] = [
     identityColumn<CalcRule>(),
@@ -220,7 +213,7 @@ export default function CalcRules(): JSX.Element {
   ];
 
   return (
-    <CalcUiContext.Provider value={{ openEdit: (name) => { blades.close(); setEditing(name); } }}>
+    <CalcUiContext value={{ openEdit: (name) => { blades.close(); setEditing(name); } }}>
       <div class="flex min-h-full flex-col gap-4">
         <FlatList<CalcRule>
           config={{
@@ -268,7 +261,7 @@ export default function CalcRules(): JSX.Element {
           </Drawer>
         )}
       </Show>
-    </CalcUiContext.Provider>
+    </CalcUiContext>
   );
 }
 
@@ -308,7 +301,7 @@ function SelectorFacts(p: { rule: CalcRule }): JSX.Element {
       <div class="flex flex-wrap gap-1.5">
         <For each={types()}>{(t) => <span class="badge badge-ghost badge-sm font-data" title={sys() ? "System type" : "Component type"}>{t}</span>}</For>
         <For each={ids()}>
-          {(id) => <A href={`/${sys() ? "systems" : "components"}/${id}`} class="badge badge-outline badge-sm hover:underline">{nameOf(id)}</A>}
+          {(id) => <a href={`/${sys() ? "systems" : "components"}/${id}`} class="badge badge-outline badge-sm hover:underline">{nameOf(id)}</a>}
         </For>
       </div>
     </Show>
@@ -345,7 +338,7 @@ function StateRow(p: { o: CalcOwnerState }): JSX.Element {
   return (
     <li class="flex flex-col gap-1 px-3 py-2 text-sm" data-owner={p.o.owner}>
       <span class="flex items-baseline gap-2">
-        <A href={href()} class="truncate font-medium hover:underline">{p.o.owner}</A>
+        <a href={href()} class="truncate font-medium hover:underline">{p.o.owner}</a>
         <Show when={p.o.value !== undefined && p.o.value !== null}>
           <span class="font-data text-[12px]">{stateValue(p.o.value)}</span>
         </Show>
@@ -380,7 +373,7 @@ function StateRow(p: { o: CalcOwnerState }): JSX.Element {
               {(m, i) => (
                 <>
                   {i() > 0 ? ", " : ""}
-                  <A href={`/components/${m.component_id}`} class="hover:underline">{m.component}</A>
+                  <a href={`/components/${m.component_id}`} class="hover:underline">{m.component}</a>
                 </>
               )}
             </For>
@@ -654,8 +647,8 @@ function OutputCreate(p: { lane: "metric" | "property"; onCreated: (name: string
           aria-label={`New ${noun} name`}
           aria-invalid={err("name") ? "true" : undefined}
           aria-describedby={err("name") ? `${id}-name` : undefined}
-          class="input input-bordered input-sm w-full font-data"
-          classList={{ "input-error": !!err("name") }}
+         
+          class={["input input-bordered input-sm w-full font-data", { "input-error": !!err("name") }]}
           placeholder={p.lane === "metric" ? "tcp-worst" : "in-use"}
           value={name()}
           onInput={(e) => setName(e.currentTarget.value)}
@@ -803,8 +796,8 @@ export function CalcRuleForm(p: { mode: "create" | "edit"; rule?: CalcRule; onSa
     <select
       aria-label={q.label}
       ref={bindSelectValue(() => q.value, () => keyOptions())}
-      class="select select-bordered w-full"
-      classList={{ "select-error": !!q.invalid }}
+     
+      class={["select select-bordered w-full", { "select-error": !!q.invalid }]}
       onChange={(e) => q.onChange(e.currentTarget.value)}
     >
       <option value="" disabled>Choose a property or metric…</option>
@@ -835,8 +828,8 @@ export function CalcRuleForm(p: { mode: "create" | "edit"; rule?: CalcRule; onSa
       </Show>
       <FieldRow bind="name" info={CALC_HINTS.name}>
         <input
-          class="input input-bordered w-full font-data"
-          classList={{ "input-error": !!nameErr() }}
+         
+          class={["input input-bordered w-full font-data", { "input-error": !!nameErr() }]}
           aria-required="true"
           value={d.name}
           placeholder="busy-flag"
@@ -928,7 +921,7 @@ export function CalcRuleForm(p: { mode: "create" | "edit"; rule?: CalcRule; onSa
           <span class="text-[11px] text-base-content/50">Key</span>
           <span class="text-[11px] text-base-content/50">Alias in the expression</span>
           <span />
-          <Index each={d.inputs}>
+          <For keyed={false} each={d.inputs}>
             {(x, i) => {
               const errId = `calc-input-${i}-err`;
               return (
@@ -938,8 +931,8 @@ export function CalcRuleForm(p: { mode: "create" | "edit"; rule?: CalcRule; onSa
                     aria-label={`Input ${i + 1} alias`}
                     aria-invalid={inputErr(i) ? "true" : undefined}
                     aria-describedby={inputErr(i) ? errId : undefined}
-                    class="input input-bordered w-full font-data text-[13px]"
-                    classList={{ "input-error": !!inputErr(i) && !!x().key }}
+                   
+                    class={["input input-bordered w-full font-data text-[13px]", { "input-error": !!inputErr(i) && !!x().key }]}
                     placeholder="t"
                     spellcheck={false}
                     autocomplete="off"
@@ -957,7 +950,7 @@ export function CalcRuleForm(p: { mode: "create" | "edit"; rule?: CalcRule; onSa
                 </>
               );
             }}
-          </Index>
+          </For>
         </div>
         <Button intent="quiet" size="xs" class="w-fit" icon={Plus} onClick={() => setD("inputs", [...d.inputs, { alias: "", key: "", aliasEdited: false }])}>
           Add an input
@@ -1029,7 +1022,7 @@ function CalcPreviewPanel(p: { draft: CalcDraft; editing?: string; ready: boolea
   const [busy, setBusy] = createSignal(false);
   const [failed, setFailed] = createSignal<string | null>(null);
   let section: HTMLElement | undefined;
-  createEffect(on(() => JSON.stringify(previewCalcBody(p.draft, p.editing)), () => setResult(null), { defer: true }));
+  createEffect(() => JSON.stringify(previewCalcBody(p.draft, p.editing)), () => setResult(null), { defer: true });
   async function run() {
     setBusy(true);
     setFailed(null);
@@ -1072,7 +1065,7 @@ function CalcPreviewPanel(p: { draft: CalcDraft; editing?: string; ready: boolea
                   {(o) => (
                     <li class="flex flex-col gap-0.5 text-[12px]">
                       <span class="flex items-center gap-2">
-                        <A href={`/${o.owner_kind === "system" ? "systems" : "components"}/${o.owner_id}`} class="link link-hover">{o.owner}</A>
+                        <a href={`/${o.owner_kind === "system" ? "systems" : "components"}/${o.owner_id}`} class="link link-hover">{o.owner}</a>
                         <Show
                           when={o.value !== undefined && o.value !== null}
                           fallback={<span class="text-warning">{o.no_members ? "no members: writes nothing" : o.error ? o.error : `no value of ${o.missing.join(", ")}`}</span>}

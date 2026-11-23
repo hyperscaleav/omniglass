@@ -1,7 +1,8 @@
+import type { JSX } from "@solidjs/web";
 import { CalcRuleLink } from "./RuleLink";
 import { entityLabel } from "../lib/entities";
-import { For, Show, createEffect, createMemo, on, onCleanup, type JSX } from "solid-js";
-import { createStore, reconcile } from "solid-js/store";
+import { For, Show, createEffect, createMemo, onCleanup } from "solid-js";
+import { createStore, reconcile } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import {
   clearOwnerProperty,
@@ -181,14 +182,14 @@ export default function PropertiesPanel(
 
   // Leaving edit mode (Cancel, or the refetch after a committed Save) discards all
   // staged state so the rows re-seed from the effective values.
-  createEffect(on(editing, (isEditing) => {
+  createEffect(editing, (isEditing) => {
     if (!isEditing) {
       setOverriding(reconcile({}));
       setDrafts(reconcile({}));
       setErrs(reconcile({}));
       setInvalid(reconcile({}));
     }
-  }));
+  });
 
   // The Properties panel contributes one saver to the blade's Save. It validates
   // required properties first, setting the per-row invalid flag and aborting before
@@ -295,7 +296,7 @@ export default function PropertiesPanel(
           <div class="overflow-hidden rounded-box border border-base-300">
             <For each={calculated()}>
               {(p, i) => (
-                <div data-property={p.property_type_name} class="flex items-baseline gap-2 px-3 py-2 text-sm" classList={{ "border-t border-base-300": i() > 0 }}>
+                <div data-property={p.property_type_name} class={["flex items-baseline gap-2 px-3 py-2 text-sm", { "border-t border-base-300": i() > 0 }]}>
                   <span class="text-base-content/70">{entityLabel({ name: p.property_type_name, label: p.label })}</span>
                   <span class="font-data text-[12px]">{resolvedStr(p)}</span>
                   <span class="ml-auto"><CalcRuleLink name={p.source_rule!} id={p.source_rule_id!} /></span>
@@ -421,8 +422,8 @@ function PropertyResolutionDetail(props: { kind: PropertyOwnerKind; property: Ef
             }
           >
             <div class="flex items-center gap-2 px-3 py-2">
-              <span class="badge badge-sm shrink-0" classList={{ "badge-primary": !isSet(), "badge-ghost": isSet() }}>contract default</span>
-              <span class="min-w-0 flex-1 truncate font-data text-sm" classList={{ "text-base-content/40 line-through": isSet() }}>
+              <span class={["badge badge-sm shrink-0", { "badge-primary": !isSet(), "badge-ghost": isSet() }]}>contract default</span>
+              <span class={["min-w-0 flex-1 truncate font-data text-sm", { "text-base-content/40 line-through": isSet() }]}>
                 {hasDefault() ? displayValue(p().default_value) : "—"}
               </span>
               <Show when={!isSet()}><span class="shrink-0 text-primary"><Check size={14} /></span></Show>
@@ -430,8 +431,8 @@ function PropertyResolutionDetail(props: { kind: PropertyOwnerKind; property: Ef
           </Show>
           {/* This owner: the winner whenever it declares a value of its own. */}
           <div class="flex items-center gap-2 border-t border-base-300 px-3 py-2">
-            <span class="badge badge-sm shrink-0" classList={{ "badge-primary": isSet(), "badge-ghost": !isSet() }}>{copy().self}</span>
-            <span class="min-w-0 flex-1 truncate font-data text-sm" classList={{ "text-base-content/40": !isSet() }}>
+            <span class={["badge badge-sm shrink-0", { "badge-primary": isSet(), "badge-ghost": !isSet() }]}>{copy().self}</span>
+            <span class={["min-w-0 flex-1 truncate font-data text-sm", { "text-base-content/40": !isSet() }]}>
               {isSet() ? displayValue(p().set_value) : "not set"}
             </span>
             <Show when={isSet()}><span class="shrink-0 text-primary"><Check size={14} /></span></Show>

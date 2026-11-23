@@ -1,5 +1,5 @@
 import { Show, type Component } from "solid-js";
-import { Dynamic } from "solid-js/web";
+import { Dynamic } from "@solidjs/web";
 import { ArrowUpRight, Layers } from "./icons";
 
 // The single placeholder skeleton every not-yet-built section shares. The top bar

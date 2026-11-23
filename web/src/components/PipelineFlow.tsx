@@ -1,5 +1,5 @@
-import { createSignal, For, Show, type JSX } from "solid-js";
-import { A } from "@solidjs/router";
+import type { JSX } from "@solidjs/web";
+import { createSignal, For, Show } from "solid-js";
 import InfoTip from "./InfoTip";
 import KeyedFor from "./KeyedFor";
 import { ArrowRight } from "./icons";
@@ -56,7 +56,7 @@ export default function PipelineFlow(props: { pipeline: PlatformPipeline }): JSX
           <div role="group" aria-label="Kind" class="tabs tabs-box tabs-sm w-fit">
             <For each={choices()}>
               {(k) => (
-                <button type="button" class="tab" classList={{ "tab-active": kind() === k }} aria-pressed={kind() === k} onClick={() => setKind(k)}>
+                <button type="button" class={["tab", { "tab-active": kind() === k }]} aria-pressed={kind() === k} onClick={() => setKind(k)}>
                   {k === "all" ? "All" : KIND_LABEL[k]}
                 </button>
               )}
@@ -100,8 +100,8 @@ function HopButton(props: { hop: PlatformPipelineHop; kind: PipelineKindChoice; 
       data-testid={`pipeline-hop-${props.hop.id}`}
       data-hop={props.hop.id}
       aria-pressed={props.pressed}
-      class="flex min-w-36 cursor-pointer flex-col gap-1 rounded-box border bg-base-100 px-3 py-2 text-left transition-colors hover:border-base-content/30 focus-visible:outline-2 focus-visible:outline-primary"
-      classList={{ "border-primary": props.pressed, "border-base-300": !props.pressed }}
+     
+      class={["flex min-w-36 cursor-pointer flex-col gap-1 rounded-box border bg-base-100 px-3 py-2 text-left transition-colors hover:border-base-content/30 focus-visible:outline-2 focus-visible:outline-primary", { "border-primary": props.pressed, "border-base-300": !props.pressed }]}
       onClick={() => props.onSelect()}
     >
       <span class="text-sm font-medium">{props.hop.label}</span>
@@ -135,8 +135,8 @@ function LossFigure(props: { ratio: number | undefined; absent: boolean; testid:
     <span
       data-testid={props.testid}
       data-tinted={String(tinted())}
-      class="tnum font-semibold"
-      classList={{ "text-error": tinted(), "font-normal text-base-content/40": props.ratio === undefined }}
+     
+      class={["tnum font-semibold", { "text-error": tinted(), "font-normal text-base-content/40": props.ratio === undefined }]}
     >
       {text()}
     </span>
@@ -173,7 +173,7 @@ function HopDetail(props: { hop: PlatformPipelineHop; pipeline: PlatformPipeline
           <KeyedFor each={props.hop.by_component} by={(c) => c.component} fallback={<li class="text-xs text-base-content/50">No component has recorded this hop yet.</li>}>
             {(c) => (
               <li data-testid={`pipeline-component-${c().name}`} class="flex flex-wrap items-baseline justify-between gap-2">
-                <A href={`/components/${c().component}`} class="font-medium hover:underline" title="Open the component, where each delivery series lives">{c().name}</A>
+                <a href={`/components/${c().component}`} class="font-medium hover:underline" title="Open the component, where each delivery series lives">{c().name}</a>
                 <Figures figure={componentFigure(c(), props.kind)} />
               </li>
             )}

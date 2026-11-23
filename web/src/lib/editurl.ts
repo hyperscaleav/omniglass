@@ -1,5 +1,5 @@
 import { useSearchParams } from "@solidjs/router";
-import { createEffect, createSignal, on } from "solid-js";
+import { createEffect, createSignal, createTrackedEffect } from "solid-js";
 import type { BladeEdit } from "./blades";
 
 // The edit face is a URL fact (#759): ?edit=1 beside a detail route (or a blade's
@@ -27,8 +27,8 @@ export function useEditParam(edit: BladeEdit | undefined, opts: { ready: () => b
   // router delivers the param a beat later) must not arm either, or the next
   // Cancel re-begins off the stale intent.
   const [pending, setPending] = createSignal(requested());
-  createEffect(on(requested, (req) => setPending(req && !(edit?.editing() ?? false)), { defer: true }));
-  createEffect(() => {
+  createEffect(requested, (req) => setPending(req && !(edit?.editing() ?? false)), { defer: true });
+  createTrackedEffect(() => {
     if (pending() && opts.ready() && opts.canUpdate() && edit && !edit.editing()) {
       setPending(false);
       edit.begin();
@@ -42,9 +42,9 @@ export function useEditParam(edit: BladeEdit | undefined, opts: { ready: () => b
   // editing false here is always an exit; do not gate on the prev argument, which
   // is undefined on the first post-defer invocation (begin() can land before this
   // effect's first capture, making the exit that very invocation).
-  createEffect(on(() => edit?.editing() ?? false, (editing) => {
+  createEffect(() => edit?.editing() ?? false, (editing) => {
     if (!editing && requested()) setParams({ edit: undefined }, { replace: true });
-  }, { defer: true }));
+  }, { defer: true });
 
   // The detail's own Edit affordance pushes the mode into the URL (a new history
   // entry, so Back returns to read-only) and begins in the same tick: the operator
