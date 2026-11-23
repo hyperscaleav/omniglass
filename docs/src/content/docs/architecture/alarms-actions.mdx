@@ -359,6 +359,18 @@ an edge, not when the edge falls. Creating a rule, enabling one, or a material e
 each selected series' newest sample, so fire criteria that already hold start their sustain then (or
 fires at once with no sustain) instead of waiting for a change the input may never send.
 
+The same holds from the component's side. A rule's selection of a component can change without the
+rule changing, when the component moves to another type (a new product, a product's type, a type's
+parent). The storage step for that move (`reselectComponentRules`, #2475) takes the component's
+selection (its id and its type's lineage) from before and after the write. It runs in the write's
+transaction and reads only the enabled rules that name a type in either lineage. A rule the component
+came into primes from the newest sample of each of the component's series of its input, so a
+`reachable` already down opens its condition after the rule's sustain. A rule it left ends its
+conditions there (each with its clear event, resolving its alarm) and drops its streaks there. A
+rule that held it before and after is left alone. No component, product or type write calls the
+step yet: a component's product edit gains it with #941, a product's type with #1920, and a type's
+parent move with #1921.
+
 Two narrow races can still cost one decision on an input that reports only on change: a rule enabled
 (or re-keyed) while an ingest batch carrying its key is uncommitted primes from committed samples only,
 so the batch's sample is judged by neither side; and a judgment Postgres aborts on a deadlock rolls back
