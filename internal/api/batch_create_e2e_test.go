@@ -120,7 +120,9 @@ func TestBatchCreateAPI(t *testing.T) {
 	}
 
 	comps := decodeBatch(t, f.c.do(f.owner, http.MethodPost, "/components:batchCreate", map[string]any{"requests": []map[string]any{
-		{"product": disp.Name, "location": "bc-floor-0", "system": sys.Systems[0].Name},
+		// System names repeat across placements (each floor has its own
+		// "meeting"), so the component names its system by address.
+		{"product": disp.Name, "location": "bc-floor-0", "system": "bc-campus.bc-floor-0.$sys." + sys.Systems[0].Name},
 		{"product": disp.Name, "location": "bc-floor-1"},
 	}}, http.StatusCreated))
 	if len(comps.Components) != 2 || comps.Components[0].System == nil || *comps.Components[0].System != sys.Systems[0].Name {
