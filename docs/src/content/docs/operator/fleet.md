@@ -38,8 +38,6 @@ screenshots:
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
       - "[data-testid=leaf-alarms]"
-      # The metrics grid's charts (#2424) move with the clock like any chart.
-      - "[data-testid=timeseries-chart]"
   - id: fleet-configure
     path: /web/systems/huddle?tab=configure
     alt: "A sole system's Configure tab: the room's own form first (identity, type, parent, properties, tags, its own Edit), then the system's (identity with the label pen and the name precheck, classification, slots, properties, tags)."
@@ -49,11 +47,9 @@ screenshots:
     path: /web/systems/huddle
     alt: "A system's view: the location as a card of context, the system's header (health, since, standard, size), then Overview: its components as rows naming each one's slot, slots grouped only where they say something."
     # The since-line ages with the capture; the history strip is Activity's
-    # now (#872), so nothing else on Overview moves but the metrics grid's
-    # charts (#2424), when they reach the frame.
+    # now (#872), so nothing else on Overview moves.
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
-      - "[data-testid=timeseries-chart]"
   - id: fleet-map
     path: /web/systems/huddle
     alt: "The map inside Overview: the standard's declared layout rendered top-down, one marker per slot position, each the type icon of the component holding it, in its health colour, with its label under it."
@@ -82,17 +78,22 @@ screenshots:
   - id: fleet-data
     path: /web/systems/huddle
     steps:
+      # A fresh lab charts a metric once its first sample lands.
+      - action: wait
+        selector: "[data-testid=metrics-grid] [data-testid=chart-end-dot]"
+        message: no metric on the huddle system was sampled in range
       - action: hover
-        selector: "[data-testid=metrics-grid] [data-testid=timeseries-chart]"
+        selector: "[data-testid=metrics-grid] [data-testid=chart-end-dot] >> nth=0"
     alt: "The metrics grid inside Overview: a card per declared metric with its latest value and its chart over the page's range, the pointer on one chart and the crosshair standing at the same instant on every other."
-    # The since-line ages with the capture, and every chart x-position
-    # divides seed-to-shoot latency by the window (CI proved it crosses a
-    # pixel boundary), so the plots mask in the BASELINE while the docs
-    # embed them live (the two-render pipeline). The crosshair's readout
-    # sits inside the chart, so the same mask covers its clock time.
+    # The since-line ages with the capture. Each metric card masks whole in
+    # the BASELINE while the docs embed it live (the two-render pipeline): a
+    # chart's x-positions divide seed-to-shoot latency by the window, the
+    # latest value moves with the sim, and a fresh lab may not yet have a
+    # sample in range for every card, so a card is a chart on one capture and
+    # "No data in range" on the next.
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
-      - "[data-testid=timeseries-chart]"
+      - "[data-testid=metrics-grid] article"
   - id: fleet-location
     path: /web/locations/east
     alt: "A location holding no system of its own: its card with its type and tags, its tabs, and the outline of what is beneath it, counted by systems."
