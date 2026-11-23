@@ -69,8 +69,8 @@ export default function Alarms() {
         </span>
       ),
     },
-    { key: "system", label: "System", cell: (a) => <span class="font-data text-xs text-base-content/70">{(a.systems ?? []).join(", ")}</span> },
-    { key: "location", label: "Location", cell: (a) => <span class="font-data text-xs text-base-content/70" title={a.location_path}>{a.location}</span> },
+    { key: "system", label: "System", width: "150px", cell: (a) => <span class="font-data text-xs text-base-content/70">{(a.systems ?? []).join(", ")}</span> },
+    { key: "location", label: "Location", width: "150px", cell: (a) => <span class="font-data text-xs text-base-content/70" title={a.location_path}>{a.location}</span> },
     {
       key: "raised", label: "Raised", width: "110px", cell: (a) => (
         <span class="whitespace-nowrap text-xs tnum text-base-content/60" title={fmtTime(a.raised_at)}>{rel(a.raised_at, now())}</span>
