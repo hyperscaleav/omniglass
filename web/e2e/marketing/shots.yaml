@@ -259,11 +259,13 @@ shots:
         focus: '[data-testid=omnibot-working]'
         expect: ["Working"]
         zoom: 1.4
+      # The first thinking arrives folded; the camera moves to it as the click
+      # opens it, so its frame is checked with the thinking showing.
       - wait: { selector: '[data-testid=omnibot-thinking] >> nth=0', timeout: 30000 }
+      - click: '[data-testid=omnibot-thinking] >> nth=0 >> summary'
         focus: '[data-testid=omnibot-thinking] >> nth=0'
         expect: ["Thinking", "Start with its health", "get-system-health"]
         zoom: 1.4
-      - click: '[data-testid=omnibot-thinking] >> nth=0 >> summary'
         hold: 300
       - wait: { selector: '[data-testid=omnibot-step] >> nth=1', timeout: 30000 }
         hold: 600

@@ -24,7 +24,7 @@
 import { appendFileSync, existsSync, readFileSync, rmSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import {
-  CAPTURE_CSS, beatStill, buildManifest, cameraTail, concatList, retime, budgetProblems, conditionMet, destProblem,
+  CAPTURE_CSS, beatEnds, beatStill, buildManifest, cameraTail, concatList, retime, budgetProblems, conditionMet, destProblem,
   expandAddress, frameFor, frameRect, missingText, parseShots, pick, shotFiles, referencedResources,
 } from './marketinglib.mjs';
 import { describeTarget, locate } from './walkthroughlib.mjs';
@@ -348,7 +348,7 @@ async function record(browser, base, storageState, shot, out) {
       // its frame shows, and the text on screen inside that frame once its step
       // had played. The storyboard takes one still per beat from the finished clip.
       const at = (/** @type {number} */ t) => round3(retime(t, cam.lapses));
-      const beats = cam.beats.map((b) => ({ ...b, from: at(b.from), at: at(b.at), to: at(b.to) }));
+      const beats = beatEnds(cam.beats, cam.events).map((b) => ({ ...b, from: at(b.from), at: at(b.at), to: at(b.to) }));
       writeFileSync(join(out, `${shot.id}.beats.json`), JSON.stringify({ viewport: { width, height }, beats }, null, 2));
       // A beat whose frame misses its expected text does not stop the run: every
       // shot is still recorded and encoded, with its storyboard, so one pass

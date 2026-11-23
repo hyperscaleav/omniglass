@@ -516,6 +516,23 @@ export function frameFor(box, vp, zoom) {
 /** @typedef {{ from: number, at: number, to: number }} BeatTimes */
 
 /**
+ * Ends each beat where the camera leaves it: at the next focus logged after the
+ * beat opened (a step that waits for its target logs once the target shows, so
+ * the beat runs on through that wait), or where the beat was closed when no
+ * focus follows.
+ * @template {{ from: number, to: number }} B
+ * @param {B[]} beats
+ * @param {FocusEvent[]} events the same clock as the beats
+ * @returns {B[]}
+ */
+export function beatEnds(beats, events) {
+  return beats.map((b) => {
+    const next = events.find((e) => e.t > b.from);
+    return next ? { ...b, to: next.t } : b;
+  });
+}
+
+/**
  * The second of the clip a beat's storyboard still is taken at: when its frame
  * was checked, but not before the camera has landed (it eases for CAMERA.ease)
  * and not past the beat's end.

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   CAMERA,
+  beatEnds,
   beatStill,
   CAPTURE_CSS,
   LOOP_MAX_BYTES,
@@ -373,6 +374,14 @@ describe("frameFor", () => {
     // At 1.2 the frame is 750 tall; a 1000-tall card at y=100 keeps its top 75 in.
     const f = frameFor({ x: 400, y: 100, width: 600, height: 1000 }, vp, 1.2);
     expect(f).toEqual({ scale: 1.2, x: 700, y: 100 - 75 + 375 });
+  });
+});
+
+describe("beatEnds", () => {
+  it("ends a beat at the next focus, through a wait that closed it early", () => {
+    const beats = [{ from: 2.468, to: 2.475 }, { from: 4.286, to: 6.9 }];
+    const events = [{ t: 2.468, box: null }, { t: 4.286, box: null }];
+    expect(beatEnds(beats, events)).toEqual([{ from: 2.468, to: 4.286 }, { from: 4.286, to: 6.9 }]);
   });
 });
 
