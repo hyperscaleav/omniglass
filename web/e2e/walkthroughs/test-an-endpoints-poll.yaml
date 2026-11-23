@@ -25,9 +25,13 @@ steps:
     caption: The outpost edge-hq collects it.
   - click: { role: button, name: Attach driver }
     caption: Attach it. The endpoint opens, and its polls carry a Test button.
+  - goto: /components/bay-2-poll-display
+    caption: Back on the component, collection has begun. Its Overview reads the display as it is collected.
+  - wait: { selector: '[data-testid="leaf-vitals"]:has-text("Uptime")', timeout: 30000 }
+    caption: Samples arrive on the outpost's schedule, so the endpoint is collecting.
   - click: { role: button, name: Test scalars }
-    caption: Test the poll now, instead of waiting for the next cycle.
-  - wait: { selector: 'aside[data-blade] [data-testid=poll-result][data-state=ok]', timeout: 20000 }
+    caption: Under the endpoint in Collection, test the poll now instead of waiting for the next cycle.
+  - wait: { selector: '[data-testid=leaf-collection] [data-testid=poll-result][data-state=ok]', timeout: 20000 }
     caption: The outpost ran it and shows each sample it read, with its value and the round trip.
     hold: 2500
     poster: true

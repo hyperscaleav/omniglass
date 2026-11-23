@@ -113,7 +113,7 @@ function ResultCard(props: { poll: string; result: Result; metrics: MetricRow[] 
               <span class="font-data">{props.poll}</span>
               <span class="font-medium">{res.failure.title}</span>
             </span>
-            <span class="pl-4 text-base-content/70">{res.failure.reason}</span>
+            <span class="break-words pl-4 text-base-content/70 [overflow-wrap:anywhere]">{res.failure.reason}</span>
           </div>
         );
       })()}
