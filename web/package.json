@@ -34,7 +34,7 @@
     "@playwright/test": "^1.65.1",
     "@solidjs/testing-library": "^0.8.10",
     "@tailwindcss/vite": "^4.3.5",
-    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/jest-dom": "^8.0.0",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "26.6.6",
     "@types/pngjs": "^6.0.5",
