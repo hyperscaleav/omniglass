@@ -52,7 +52,7 @@ Where the build differs from the present-tense design below (each logged in the
   [ADR-2361](/architecture/decisions/#adr-2361-single-sign-on-links-a-person-to-an-identity-provider-subject-never-by-email)):
   `GET /auth/oidc/start/{provider}` and `/auth/oidc/callback` (code flow, PKCE S256, nonce, a state
   bound to the browser by a short-lived cookie), the id_token verified by the one JWKS-backed
-  `auth.JWTVerifier`, every provider call through `internal/egress` under `notification.egress_allow`;
+  `auth.JWTVerifier`, every provider call through `internal/egress` under the install's egress allow list;
   the link (`oidc` row) keeps the provider's sealed refresh token, the session and any token minted
   from it record `via_link`, and the re-check sweep revokes them when the provider refuses. Admin
   linking (`/users/{id}/identity-links`, `user:link-identity` behind the takeover guard) and the

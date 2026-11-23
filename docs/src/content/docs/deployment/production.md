@@ -137,12 +137,13 @@ environment (`OMNIGLASS_SETTING__SSO__ISSUER`, `OMNIGLASS_SETTING__SSO__CLIENT_S
 omniglass setting update sso --body '{"issuer": "https://login.example.com/realms/corp", "client_secret": "corp-sso"}'
 ```
 
-or, with nothing to create in the console, entirely from the server's environment:
+or, with nothing to create in the console, entirely from the server's environment: the two settings
+below, and the client as an env-backed platform secret named `corp-sso` (an `OMNIGLASS_SECRET__` variable
+holding `{"type":"oauth2-client","fields":{"client_id":"...","client_secret":"..."}}`).
 
 ```bash
 OMNIGLASS_SETTING__SSO__ISSUER=https://login.example.com/realms/corp
 OMNIGLASS_SETTING__SSO__CLIENT_SECRET=corp-sso
-OMNIGLASS_SECRET__CORP_SSO='{"type":"oauth2-client","fields":{"client_id":"omniglass","client_secret":"<the client secret>"}}'
 ```
 
 - `issuer` is the provider's issuer exactly as its tokens carry it (its discovery document is
@@ -157,7 +158,7 @@ OMNIGLASS_SECRET__CORP_SSO='{"type":"oauth2-client","fields":{"client_id":"omnig
 **4. Let the server reach the provider.** Discovery, the key set and the token exchange go through
 the server's outbound client: TLS verified, no redirect followed, no proxy from the environment, every
 call bounded. A cloud provider on the public internet needs nothing more. A provider on your own
-network (an on-premises Keycloak or ADFS) is reached only when `notification.egress_allow` names its
+network (an on-premises Keycloak or ADFS) is reached only when the notification settings' `egress_allow` names its
 host or range, exactly as an internal webhook is, and plain `http` is admitted only to a host named
 there.
 
@@ -189,7 +190,7 @@ How soon a refusal comes depends on the provider (as each one's documentation st
 | --- | --- | --- |
 | Entra ID | Once an admin revokes the person's sessions; disabling the account alone is not documented to revoke refresh tokens. A group change can take up to a day to reach issued tokens, and a B2B guest's tokens are not revoked in the resource tenant. | Disable the account **and** revoke its sessions. |
 | Okta | Once the person is deactivated or suspended (reported, not in Okta's reference). The default refresh token lives without limit with a seven-day idle expiry, which the re-check keeps alive. | Deactivate or suspend the person. |
-| Google Workspace | Suspending an account is not documented to revoke a third party's refresh token, and Google sends no groups claim. | Suspend the person at Google **and** disable them in Omniglass. |
+| Google | Suspending an account is not documented to revoke a third party's refresh token, and Google sends no groups claim. | Suspend the person at Google **and** disable them in Omniglass. |
 
 The model, and what is deferred (SCIM deprovisioning, several providers at once, group mapping,
 provisioning and an enforce mode for everyone but owners), is
