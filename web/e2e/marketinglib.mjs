@@ -20,7 +20,7 @@ import { load } from 'js-yaml';
 /** @typedef {({ kind: 'call' } & Call) | ({ kind: 'await' } & Await)} SetupItem */
 /** @typedef {string | { role: string, name?: string, exact?: boolean } | { text: string, exact?: boolean } | { selector: string }} Target */
 /** @typedef {'out' | 'here' | Target} Focus */
-/** @typedef {{ n: number, kind: string, path?: string, key?: string, target?: Target, text?: string, value?: string, replace?: boolean, timeout: number, hold: number, focus?: Focus, zoom?: number }} Step */
+/** @typedef {{ n: number, kind: string, path?: string, key?: string, target?: Target, text?: string, value?: string, replace?: boolean, timeout: number, hold: number, focus?: Focus, zoom?: number, fast?: number }} Step */
 /** @typedef {{ id: string, kind: 'still' | 'loop', alt: string, viewport: Viewport, start: string, ready: Target | null, setup: SetupItem[], prep: Step[], steps: Step[] }} Shot */
 /** @typedef {{ lab: { scenario: string, systems: number, omnibotReplay: string }, setup: SetupItem[], shots: Shot[] }} ShotList */
 
@@ -36,7 +36,7 @@ export const DEFAULT_WAIT_MS = 15_000;
 const MAX_HOLD_MS = 8000;
 
 export const STEP_KINDS = ['goto', 'click', 'hover', 'type', 'select', 'press', 'wait'];
-const STEP_KEYS = [...STEP_KINDS, 'hold', 'focus', 'zoom'];
+const STEP_KEYS = [...STEP_KINDS, 'hold', 'focus', 'zoom', 'fast'];
 
 // The camera (a loop only): a step's `focus` eases the frame onto a box, so a
 // clip draws the eye to what changed. `here` is the step's own target, `out`
@@ -45,6 +45,7 @@ const STEP_KEYS = [...STEP_KINDS, 'hold', 'focus', 'zoom'];
 // never show past the capture's edge; a clip that ends zoomed eases back out
 // before it loops, so the seam is invisible.
 export const CAMERA = { ease: 0.6, maxZoom: 2, minZoom: 1, margin: 0.1 };
+export const MAX_FAST = 8;
 const ID = /^[a-z0-9][a-z0-9-]*$/;
 const isObj = (/** @type {unknown} */ v) => typeof v === 'object' && v !== null && !Array.isArray(v);
 const isStr = (/** @type {unknown} */ v) => typeof v === 'string' && v.length > 0;
@@ -147,6 +148,14 @@ function parseStep(raw, n, label = 'step') {
     }
     if (!('focus' in o) || o.focus === 'out') problems.push(`${where}: zoom goes with a focus on a target`);
     step.zoom = o.zoom;
+  }
+  // fast: N plays a wait N times faster, the quiet seconds before something
+  // changes (a loop has 9 to spend, and a console that needs 5 to recover is not
+  // one to sit through). The clip is a time-lapse there, and says so in the docs.
+  if ('fast' in o) {
+    if (kind !== 'wait') problems.push(`${where}: fast belongs on a wait`);
+    else if (!(typeof o.fast === 'number' && o.fast > 1 && o.fast <= MAX_FAST)) problems.push(`${where}: fast is a speed-up over 1 and at most ${MAX_FAST}`);
+    else step.fast = o.fast;
   }
   const v = o[kind];
   switch (kind) {
@@ -504,4 +513,60 @@ export function cameraTrack(events, vp, duration) {
     if (dur > 0) moves.push({ at, dur, ...frameFor(null, vp) });
   }
   return moves;
+}
+
+// The frames of a loop are screenshots at twice the viewport's pixels, taken as
+// fast as the page allows (Playwright's own video is CSS-pixel sized, so a 2x
+// recording of it is the 1x frame padded with gray). Each frame shows from its
+// own time to the next one's; the first shows from the clip's start.
+export const FRAME_FALLBACK_SECONDS = 0.04;
+
+/**
+ * The ffmpeg concat-demuxer list for a loop's frames, so a variable frame rate
+ * plays at the pace it was taken.
+ * @param {{ t: number }[]} frames times in seconds from the clip's start, ascending
+ * @param {(i: number) => string} name the file name of frame i, relative to the list
+ * @returns {string}
+ */
+export function concatList(frames, name) {
+  if (frames.length === 0) throw new Error('a loop with no frames cannot be encoded');
+  const lines = [];
+  frames.forEach((f, i) => {
+    const from = i === 0 ? 0 : f.t;
+    const until = i + 1 < frames.length ? frames[i + 1].t : f.t + FRAME_FALLBACK_SECONDS;
+    lines.push(`file '${name(i)}'`, `duration ${Math.max(0.001, until - from).toFixed(4)}`);
+  });
+  // The demuxer ignores the last duration unless its file is named again.
+  lines.push(`file '${name(frames.length - 1)}'`);
+  return lines.join('\n') + '\n';
+}
+
+/** @typedef {{ from: number, to: number, speed: number }} Lapse */
+
+/**
+ * Where a real-time moment lands in a clip whose `lapses` (the waits played
+ * faster) are shortened: each second inside a lapse counts for 1/speed.
+ * @param {number} t seconds in real time from the clip's start
+ * @param {Lapse[]} lapses ascending and not overlapping
+ * @returns {number}
+ */
+export function retime(t, lapses) {
+  let out = t;
+  for (const w of lapses) {
+    const inside = Math.min(Math.max(t, w.from), w.to) - w.from;
+    out -= inside * (1 - 1 / w.speed);
+  }
+  return out;
+}
+
+/**
+ * How long to keep recording once the last step is done, so the camera has the
+ * time to ease back to the whole frame: a clip that ends on a focus would
+ * otherwise loop mid-zoom.
+ * @param {FocusEvent[]} events
+ * @returns {number} seconds
+ */
+export function cameraTail(events) {
+  const last = [...events].sort((a, b) => a.t - b.t).at(-1);
+  return last && last.box ? CAMERA.ease + 0.15 : 0;
 }

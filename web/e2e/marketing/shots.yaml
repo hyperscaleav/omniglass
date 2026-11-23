@@ -65,7 +65,7 @@ shots:
       - click: { role: button, name: Clear }
         focus: out
       - wait: { selector: '[role=treeitem]:has-text("Headquarters")' }
-        hold: 900
+        hold: 2200
 
   # Down the tree: a campus, its building, a floor, then a meeting room, opened
   # to its system page.
@@ -120,18 +120,19 @@ shots:
       - wait: { get: '/components/{hq.hq-annex.hq-annex-1.hq-annex-1-04.$comp.videobar-1}/reachability', field: endpoints.0.session.state, equals: rejected, timeout: 180000 }
     start: /systems/hq-mr65-59
     ready: { text: Video Bar 1 }
-    # Off camera: open the video bar to its own page, where its refusal reads.
+    # Off camera: open the video bar to its own page, then its endpoint, where
+    # the refusal reads in full.
     prep:
       - click: 'button:has([data-label]:text-is("Video Bar 1"))'
       - click: 'aside[data-blade] button[aria-label=Expand]'
       - wait: { selector: '[data-testid=session-notice][data-state=rejected]' }
-    steps:
-      - hover: '[data-testid=session-notice]'
-        focus: here
-        zoom: 1.7
-        hold: 700
       - click: { role: button, name: Open endpoint }
-        focus: out
+      - wait: { selector: 'aside[data-blade] [data-testid=session-notice][data-state=rejected]' }
+    steps:
+      - hover: 'aside[data-blade] [data-testid=session-notice]'
+        focus: here
+        zoom: 1.6
+        hold: 500
       - click: { role: button, name: Edit credential }
         focus: here
         zoom: 1.6
@@ -139,10 +140,13 @@ shots:
         focus: here
         zoom: 1.8
       - click: 'aside[data-blade] button:has-text("Save")'
+      # The outpost asks again at its next check-in, about five quiet seconds on
+      # the lab: played at 4x, so the loop shows the refusal lift, not the wait.
       - wait: { selector: 'aside[data-blade] [data-testid=endpoint-session]:not(:has([data-testid=session-notice])):has([data-testid=ladder-rung][data-rung=authenticated][data-status=pass])', timeout: 30000 }
+        fast: 4
         focus: here
         zoom: 1.6
-        hold: 900
+        hold: 700
 
   # The outage: the main display of hq-mr86-1 unplugged (staged off camera: the
   # shipped rule needs about a minute to hold its alarm), the room degraded with

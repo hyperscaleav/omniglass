@@ -8,6 +8,8 @@ import {
   LOOP_MAX_SECONDS,
   LOOP_MIN_SECONDS,
   budgetProblems,
+  cameraTail,
+  retime,
   buildManifest,
   cameraTrack,
   frameFor,
@@ -346,5 +348,40 @@ describe("cameraTrack", () => {
 
   it("is empty with no focus", () => {
     expect(cameraTrack([], vp, 6)).toEqual([]);
+  });
+});
+
+describe("the camera's tail and time-lapsed waits", () => {
+  it("keeps recording after a clip's last focus, and not after a zoom-out", () => {
+    expect(cameraTail([])).toBe(0);
+    expect(cameraTail([{ t: 1, box: { x: 1, y: 1, width: 5, height: 5 } }])).toBeCloseTo(0.75);
+    expect(cameraTail([{ t: 1, box: { x: 1, y: 1, width: 5, height: 5 } }, { t: 2, box: null }])).toBe(0);
+    // the last event by time, whatever order they were logged in
+    expect(cameraTail([{ t: 5, box: null }, { t: 1, box: { x: 1, y: 1, width: 5, height: 5 } }])).toBe(0);
+  });
+
+  it("shortens each second inside a lapse by its speed and leaves the rest", () => {
+    const lapses = [{ from: 2, to: 6, speed: 4 }];
+    expect(retime(1, lapses)).toBe(1);
+    expect(retime(2, lapses)).toBe(2);
+    expect(retime(4, lapses)).toBeCloseTo(2.5);
+    expect(retime(6, lapses)).toBeCloseTo(3);
+    expect(retime(8, lapses)).toBeCloseTo(5);
+    expect(retime(3, [])).toBe(3);
+  });
+
+  it("composes lapses in order", () => {
+    const lapses = [{ from: 1, to: 3, speed: 2 }, { from: 5, to: 9, speed: 4 }];
+    expect(retime(9, lapses)).toBeCloseTo(9 - 1 - 3);
+    expect(retime(10, lapses)).toBeCloseTo(6);
+  });
+
+  it("takes fast on a wait only, as a speed-up of 1 to 8", () => {
+    const ok = parseShots(`${LAB}shots:\n  - id: s\n    kind: loop\n    alt: x\n    start: /a\n    steps:\n      - wait: { text: Done }\n        fast: 4\n`);
+    expect(ok.problems).toEqual([]);
+    expect(ok.list?.shots[0].steps[0]).toMatchObject({ fast: 4 });
+    const bad = parseShots(`${LAB}shots:\n  - id: s\n    kind: loop\n    alt: x\n    start: /a\n    steps:\n      - click: a\n        fast: 2\n      - wait: { text: Done }\n        fast: 1\n      - wait: { text: Done }\n        fast: 12\n`);
+    expect(bad.problems).toContain("shot s: step 1 (click): fast belongs on a wait");
+    expect(bad.problems.filter((p: string) => p.includes("fast is a speed-up"))).toHaveLength(2);
   });
 });

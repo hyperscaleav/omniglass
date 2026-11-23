@@ -460,12 +460,20 @@ A loop has a camera. A step's `focus` moves it: `here` frames the step's own tar
 (`text`, `role`, `selector`, as a step names one) frames that, and `out` returns to the whole frame. `zoom`
 (1 to 2) sets how close; without it the camera fits the target with a margin, never past 2x. The camera
 eases over 0.6 s, keeps the frame inside the capture, and eases back to the whole frame before the loop
-ends, so the loop's seam lands on the full view. A focus on a still, or on a loop's prep, fails the parse.
-The recorder captures the browser at twice the viewport, so a 2x zoom is still crisp, and writes where
-each focused target sat on screen; a [Revideo](https://github.com/midrender/revideo) (MIT) project in
-`web/e2e/marketing/compose/` then renders the pans and zooms over the recording, offline, with its
-telemetry off, before the budget encode. `frameFor` and `cameraTrack` in `marketinglib.mjs` are the
-framing and the move list, unit tested.
+ends, so the loop's seam lands on the full view: the recorder keeps recording for that last ease when the
+final step leaves the camera zoomed. A focus on a still, or on a loop's prep, fails the parse.
+The recorder takes the loop's frames as screenshots at twice the viewport, as fast as the page allows
+(Playwright's own video has CSS-pixel frames, so a "2x video" is the 1x frame padded with gray), so a 2x zoom
+is still crisp, and writes where each focused target sat on screen. ffmpeg joins the frames, each held for
+as long as it was shown, into one steady clip; a [Revideo](https://github.com/midrender/revideo) (MIT)
+project in `web/e2e/marketing/compose/` then renders the pans and zooms over it, offline, with its
+telemetry off, before the budget encode. `frameFor`, `cameraTrack` and `concatList` in `marketinglib.mjs`
+are the framing, the move list and the frame timing, unit tested.
+
+A `wait` may take `fast: N` (a speed-up over 1, up to 8): the quiet seconds before something changes play
+N times faster, a time-lapse. A loop has 9 seconds to spend and a console that needs five to recover (an
+outpost's next check-in after a credential is fixed) is not one to sit through; the clip says nothing
+false, it just does not wait.
 
 Setup runs off camera, in order, as the lab's owner. `put`, `post` and `patch` call the API (a `{braced}`
 part of a path is one address, percent-encoded whole, so a component's path address names one route

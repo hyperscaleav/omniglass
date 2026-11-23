@@ -15,16 +15,17 @@
 # checked on that lab.
 #
 # Per shot: web/e2e/marketing.mjs plays it in a Playwright container on the lab
-# network (a PNG for a still; for a loop a WebM at twice the viewport's pixels,
-# the poster frame, and the camera's focus log). ffmpeg, in its own pinned
-# container with no network, encodes a still's PNG and every poster to WebP and
-# trims a loop's WebM to where the console first painted. The camera pass
-# (web/e2e/marketing/compose, Revideo, in the Playwright image with no network)
-# then eases the frame onto each focus and renders the loop at the viewport's
-# size, and ffmpeg encodes that to H.264, smaller until it fits the 1.5 MB
-# budget. The loop's length and size are then checked against the budget
-# (marketinglib.mjs), and any shot over it fails the run, naming the shot and the
-# limit.
+# network (a PNG for a still; for a loop its frames, screenshots at twice the
+# viewport's pixels taken as fast as the page allows, the poster frame, and the
+# camera's focus log). ffmpeg, in its own pinned container with no network,
+# encodes a still's PNG and every poster to WebP and joins a loop's frames, each
+# held for as long as it was on screen, into one steady near-lossless clip. The
+# camera pass (web/e2e/marketing/compose, Revideo, in the Playwright image with no
+# network and its telemetry off) then eases the frame onto each focus and renders
+# the loop at the viewport's size, and ffmpeg encodes that to H.264, smaller until
+# it fits the 1.5 MB budget. The loop's length and size are then checked against
+# the budget (marketinglib.mjs), and any shot over it fails the run, naming the
+# shot and the limit.
 #
 # Prereqs: docker, and `make` run first (make marketing-shots does): the lab is
 # the binary and the image it builds.
@@ -74,7 +75,7 @@ compose_deps() {
   [ -d "$COMPOSE/node_modules/@revideo/renderer" ] && return 0
   echo "installing the camera pass (web/e2e/marketing/compose)" >&2
   docker run --rm "${LAB_LABEL_ARGS[@]}" --user "$(id -u):$(id -g)" -e HOME=/tmp \
-    -e PUPPETEER_SKIP_DOWNLOAD=1 -v "$ROOT:/w" -w "/w/$COMPOSE" "$LAB_PWIMG" npm ci --no-audit --no-fund &
+    -e PUPPETEER_SKIP_DOWNLOAD=1 -e DISABLE_TELEMETRY=true -v "$ROOT:/w" -w "/w/$COMPOSE" "$LAB_PWIMG" npm ci --no-audit --no-fund &
   LAB_FG_PID=$!
   wait "$LAB_FG_PID" || { LAB_FG_PID=""; return 1; }
   LAB_FG_PID=""
@@ -85,7 +86,7 @@ compose_deps() {
 compose_shot() {
   local id=$1 seconds=$2 rc=0
   docker run --rm "${LAB_LABEL_ARGS[@]}" --network none --user "$(id -u):$(id -g)" -e HOME=/tmp \
-    -e PLAYWRIGHT_BROWSERS_PATH=/ms-playwright -v "$ROOT:/w" -w "/w/$COMPOSE" "$LAB_PWIMG" \
+    -e PLAYWRIGHT_BROWSERS_PATH=/ms-playwright -e DISABLE_TELEMETRY=true -v "$ROOT:/w" -w "/w/$COMPOSE" "$LAB_PWIMG" \
     node render.mjs "/w/$OUT/$id.src.mp4" "/w/$OUT/$id.camera.json" "$seconds" "/w/$OUT/$id.cam.mp4" &
   LAB_FG_PID=$!
   wait "$LAB_FG_PID" || rc=$?
@@ -96,17 +97,17 @@ compose_shot() {
 # Encode shot $1 of kind $2 from $OUT into $3 (the destination), fitting the
 # budget; prints nothing on success.
 encode_shot() {
-  local id=$1 kind=$2 dest=$3 t0 seconds bytes crf
+  local id=$1 kind=$2 dest=$3 seconds bytes crf
   if [ "$kind" = still ]; then
     ffmpeg_in "$OUT" "$FFMPEG_IMG" -hide_banner -loglevel error -y -i "/o/$id.png" \
       -c:v libwebp -quality "$WEBP_QUALITY" -compression_level 6 "/o/$id.webp" || return 1
     cp -- "$OUT/$id.webp" "$dest/$id.webp"
     return 0
   fi
-  t0=$(mk t0 "${OUT#web/}/dims.json" "$id")
-  # Trimmed at near-lossless quality and full size: the camera zooms into it.
-  ffmpeg_in "$OUT" "$FFMPEG_IMG" -hide_banner -loglevel error -y -ss "$t0" -i "/o/$id.webm" \
-    -c:v libx264 -preset medium -crf 12 -pix_fmt yuv420p -an "/o/$id.src.mp4" || return 1
+  # The frames at twice the viewport, held for as long as each was on screen, at a
+  # steady 25 a second and near-lossless: the camera zooms into it.
+  ffmpeg_in "$OUT" "$FFMPEG_IMG" -hide_banner -loglevel error -y -f concat -safe 0 -i "/o/$id.frames.txt" \
+    -vf fps=25 -c:v libx264 -preset medium -crf 12 -pix_fmt yuv420p -an "/o/$id.src.mp4" || return 1
   seconds=$(ffmpeg_in "$OUT" --entrypoint ffprobe "$FFMPEG_IMG" -v error -show_entries format=duration \
     -of default=noprint_wrappers=1:nokey=1 "/o/$id.src.mp4") || return 1
   compose_shot "$id" "$seconds" || return 1

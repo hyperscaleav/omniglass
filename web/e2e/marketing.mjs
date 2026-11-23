@@ -16,7 +16,6 @@
 //                                                      OG_E2E_PASSWORD)
 //   node e2e/marketing.mjs budget <id> <seconds> <bytes>   a loop's budget, exit 1 over
 //   node e2e/marketing.mjs ids <shots.yaml>            "<id> <kind>" per shot, in order
-//   node e2e/marketing.mjs t0 <dims.json> <id>         where a loop's recording opens, in seconds
 //   node e2e/marketing.mjs manifest <shots.yaml> <dest> <dims.json>   write shots.json
 //
 // A failing step fails the run naming the shot, the step, its kind and what it
@@ -25,14 +24,13 @@
 import { existsSync, readFileSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  CAPTURE_CSS, buildManifest, budgetProblems, conditionMet, destProblem,
+  CAPTURE_CSS, buildManifest, cameraTail, concatList, retime, budgetProblems, conditionMet, destProblem,
   expandAddress, parseShots, pick, shotFiles, referencedResources,
 } from './marketinglib.mjs';
 import { describeTarget, locate } from './walkthroughlib.mjs';
 
 const ACT_TIMEOUT = 15_000;
 // Loops record at twice the viewport's pixels, so the camera's zoom stays sharp.
-const VIDEO_SCALE = 2;
 // Pacing, in milliseconds: how long the cursor glides to a target before it acts,
 // and the delay between typed keys.
 const PACE = { glide: 250, key: 35, load: 350 };
@@ -280,15 +278,13 @@ async function record(browser, base, storageState, shot, out) {
     deviceScaleFactor: 2,
     colorScheme: 'dark',
     storageState,
-    ...(loop ? { recordVideo: { dir: out, size: { width: width * VIDEO_SCALE, height: height * VIDEO_SCALE } } } : {}),
   });
-  const startedAt = Date.now();
   await ctx.addInitScript(STYLE, CAPTURE_CSS);
   if (loop) await ctx.addInitScript(CURSOR);
   const page = await ctx.newPage();
   const cursor = { x: width / 2, y: height / 2 };
   /** @type {Camera} */
-  const cam = { events: [], now: () => 0 };
+  const cam = { events: [], lapses: [], now: () => 0 };
   let current = 'start';
   try {
     await page.goto(`${base}/web${shot.start}`, { waitUntil: 'load', timeout: ACT_TIMEOUT * 2 });
@@ -301,10 +297,11 @@ async function record(browser, base, storageState, shot, out) {
       current = `prep step ${step.n} (${step.kind}${step.target ? ` ${describeTarget(step.target)}` : ''})`;
       await play(page, base, step, cursor, false, cam);
     }
-    // The recording opens here: the video starts when the context does, so the
-    // blank lead-in before the first paint is cut off by this offset.
-    const t0 = (Date.now() - startedAt) / 1000;
-    cam.now = () => (Date.now() - startedAt) / 1000 - t0;
+    // The recording opens here, on the console's first paint: the clip's clock
+    // (the camera's too) starts now.
+    const t0 = Date.now();
+    cam.now = () => (Date.now() - t0) / 1000;
+    const frames = loop ? await startFrames(ctx, page, t0) : null;
     if (loop) await page.mouse.move(cursor.x, cursor.y);
     for (const step of shot.steps) {
       current = `step ${step.n} (${step.kind}${step.target ? ` ${describeTarget(step.target)}` : ''})`;
@@ -316,16 +313,21 @@ async function record(browser, base, storageState, shot, out) {
     current = 'final frame';
     await page.waitForTimeout(shot.kind === 'still' ? 1500 : 300);
     await page.screenshot({ path: join(out, `${shot.id}.png`) });
-    const video = loop ? page.video() : null;
-    await ctx.close();
-    if (video) {
-      await video.saveAs(join(out, `${shot.id}.webm`));
-      await video.delete();
+    if (frames) {
+      // Keep recording while the camera eases back out, so the clip ends on the
+      // whole frame and loops without a jump.
+      await page.waitForTimeout(cameraTail(cam.events) * 1000);
+      const taken = await frames.stop();
+      // Waits played faster are shortened in the frames and in the camera's times
+      // alike, so a focus lands on the frame it was logged for.
+      const events = cam.events.map((e) => ({ ...e, t: retime(e.t, cam.lapses) }));
+      writeFrames(taken.map((f) => ({ ...f, t: retime(f.t, cam.lapses) })), out, shot.id);
       // The camera track's input: where each focus landed, in viewport pixels and
       // seconds from the clip's first frame. The compositor turns it into moves.
-      writeFileSync(join(out, `${shot.id}.camera.json`), JSON.stringify({ viewport: { width, height }, events: cam.events }, null, 2));
+      writeFileSync(join(out, `${shot.id}.camera.json`), JSON.stringify({ viewport: { width, height }, events }, null, 2));
     }
-    return { t0, width, height, scale: loop ? VIDEO_SCALE : 1 };
+    await ctx.close();
+    return { width, height };
   } catch (e) {
     await page.screenshot({ path: join(out, `${shot.id}-failed.png`) }).catch(() => {});
     console.error(`marketing: shot ${shot.id}: ${current} failed: ${/** @type {Error} */ (e).message.split('\n')[0]}`);
@@ -334,7 +336,46 @@ async function record(browser, base, storageState, shot, out) {
   }
 }
 
-/** @typedef {{ events: import('./marketinglib.mjs').FocusEvent[], now: () => number }} Camera */
+/**
+ * Takes the loop's frames: a screenshot at the context's 2x scale as often as the
+ * page can give one, each stamped with when it was taken (the middle of the call),
+ * in seconds from `origin`. Playwright's recordVideo cannot do this: its frames
+ * are CSS pixels, so a video "at 2x" is the 1x frame padded with gray.
+ * @param {import('@playwright/test').BrowserContext} ctx
+ * @param {import('@playwright/test').Page} page
+ * @param {number} origin Date.now() at the clip's start
+ */
+async function startFrames(ctx, page, origin) {
+  const cdp = await ctx.newCDPSession(page);
+  /** @type {{ t: number, data: string }[]} */
+  const frames = [];
+  let running = true;
+  const taking = (async () => {
+    while (running) {
+      const a = Date.now();
+      const r = await cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 92, optimizeForSpeed: true });
+      frames.push({ t: ((a + Date.now()) / 2 - origin) / 1000, data: r.data });
+    }
+  })();
+  return {
+    async stop() {
+      running = false;
+      await taking;
+      return frames;
+    },
+  };
+}
+
+/** @param {{ t: number, data: string }[]} frames @param {string} out @param {string} id */
+function writeFrames(frames, out, id) {
+  const dir = `${id}.frames`;
+  mkdirSync(join(out, dir), { recursive: true });
+  const name = (/** @type {number} */ i) => `${dir}/${String(i).padStart(5, '0')}.jpg`;
+  frames.forEach((f, i) => writeFileSync(join(out, name(i)), Buffer.from(f.data, 'base64')));
+  writeFileSync(join(out, `${id}.frames.txt`), concatList(frames, name));
+}
+
+/** @typedef {{ events: import('./marketinglib.mjs').FocusEvent[], lapses: import('./marketinglib.mjs').Lapse[], now: () => number }} Camera */
 
 /**
  * Logs a step's focus: the box it names (or null for the whole frame), stamped
@@ -349,8 +390,15 @@ async function logFocus(page, step, cam, own) {
   if (step.focus === 'out') return void cam.events.push({ t: cam.now(), box: null });
   const el = step.focus === 'here' ? own : locate(page, step.focus).filter({ visible: true }).first();
   if (!el) throw new Error('focus here needs a step with a target');
-  await el.waitFor({ state: 'visible', timeout: ACT_TIMEOUT });
-  const box = await el.boundingBox();
+  // The console re-renders as a page settles (a blade closing, a route's table
+  // arriving), so a box read the instant an element shows can find it gone; read
+  // it again a moment later before calling the focus lost.
+  let box = null;
+  for (let i = 0; i < 12 && !box; i++) {
+    if (i) await page.waitForTimeout(150);
+    await el.waitFor({ state: 'visible', timeout: ACT_TIMEOUT });
+    box = await el.boundingBox();
+  }
   if (!box) throw new Error('the focus has no box on screen');
   cam.events.push({ t: cam.now(), box, ...(step.zoom ? { zoom: step.zoom } : {}) });
 }
@@ -379,7 +427,9 @@ async function play(page, base, step, cursor, loop, cam) {
       break;
     case 'wait': {
       const el = locate(page, step.target).filter({ visible: true }).first();
+      const from = cam.now();
       await el.waitFor({ state: 'visible', timeout: step.timeout });
+      if (step.fast) cam.lapses.push({ from, to: cam.now(), speed: step.fast });
       await logFocus(page, step, cam, el);
       break;
     }

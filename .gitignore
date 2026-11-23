@@ -70,6 +70,7 @@ coverage.txt
 /web/e2e/marketing/out/
 /web/e2e/marketing/compose/node_modules/
 /web/e2e/marketing/compose/public/
+/web/e2e/marketing/compose/out/
 # terminal demo recordings (make demo)
 /scripts/demo/out/
 /web/e2e/probe/out/

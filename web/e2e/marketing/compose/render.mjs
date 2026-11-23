@@ -9,7 +9,7 @@
 // the viewport's size. web/e2e/marketing.sh runs this offline in the
 // Playwright image, after `npm ci` here.
 import { copyFileSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
-import { basename, dirname, relative, resolve } from 'node:path';
+import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { cameraTrack } from '../../marketinglib.mjs';
 
@@ -40,16 +40,23 @@ process.chdir(here);
 const staged = `${process.pid}-${basename(input)}`;
 mkdirSync('public', { recursive: true });
 copyFileSync(src, `public/${staged}`);
+// Revideo looks for a clip's audio at <outDir>/../public/<src>, so the render
+// writes to ./out here, beside the public/ the recording is staged in, and the
+// result is moved to where the caller asked.
+const made = `${process.pid}-${basename(out)}`;
+mkdirSync('out', { recursive: true });
 const file = await renderVideo({
   projectFile: './src/project.tsx',
   variables: { src: `/${staged}`, width: viewport.width, height: viewport.height, duration, moves },
   settings: {
-    outFile: /** @type {`${string}.mp4`} */ (basename(out)),
-    outDir: relative(here, dirname(out)) || '.',
+    outFile: /** @type {`${string}.mp4`} */ (made),
+    outDir: './out',
     logProgress: false,
     projectSettings: { size: { x: viewport.width, y: viewport.height }, background: '#000000' },
     puppeteer: { executablePath: chrome, args: ['--no-sandbox'] },
     viteConfig: { logLevel: 'error' },
   },
 }).finally(() => rmSync(`public/${staged}`, { force: true }));
-console.log(`marketing: camera ${basename(out)}: ${moves.length} moves (${relative(here, file)})`);
+copyFileSync(resolve(file), out);
+rmSync(resolve(file), { force: true });
+console.log(`marketing: camera ${basename(out)}: ${moves.length} moves`);

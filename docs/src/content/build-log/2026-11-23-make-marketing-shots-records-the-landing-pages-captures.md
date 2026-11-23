@@ -10,6 +10,6 @@ plays, from a corporate lab at 1,000 systems with the `corporate-outage` omnibot
 (`web/e2e/marketing/shots.yaml`): steps in the walkthrough grammar without captions, and off-camera
 setup that stages the faults through the API. Loops are H.264 MP4s of 5 to 9 seconds and at most
 1.5 MB with a WebP poster; stills are 2x WebP. A step's `focus` and `zoom` point a camera that pans and
-zooms over a 2x recording, rendered offline by a Revideo (MIT) pass. A capture-only stylesheet hides the lab banner and the
+zooms over the loop's frames (screenshots at 2x, since a Playwright video is CSS-pixel sized), rendered offline by a Revideo (MIT) pass; a `wait` may play as a time-lapse (`fast`). A capture-only stylesheet hides the lab banner and the
 sidebar's `soon` items (marked `data-soon`) and nothing else. Preconditions fail before the lab
 starts, and a setup that names a component the lab does not have fails before the first shot.
