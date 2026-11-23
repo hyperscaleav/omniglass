@@ -527,8 +527,10 @@ config: {
   credential: {
     shape: sql_table
     id: uuid {constraint: primary_key}
+    linked_by: uuid {constraint: foreign_key}
     oauth_client_id: uuid {constraint: foreign_key}
     user_id: uuid {constraint: foreign_key}
+    via_link: uuid {constraint: foreign_key}
   }
   lab_mark: {
     shape: sql_table
@@ -616,6 +618,14 @@ audit: {
   }
 }
 
+unclustered: {
+  oidc_state: {
+    shape: sql_table
+    state_hash: bytea {constraint: primary_key}
+    link_user_id: uuid {constraint: foreign_key}
+  }
+}
+
 audit.audit_log.actor_user_id -> identity.users.id
 audit.audit_log.real_actor_user_id -> identity.users.id
 catalog.component_type.parent_id -> catalog.component_type.id
@@ -650,8 +660,10 @@ collection.webhook_token.endpoint_id -> fleet.endpoint.id
 collection.webhook_token.secret_id -> config.secret.id
 config.assistant_conversation.user_id -> identity.users.id
 config.assistant_message.conversation_id -> config.assistant_conversation.id
+config.credential.linked_by -> identity.users.id
 config.credential.oauth_client_id -> config.oauth_client.id
 config.credential.user_id -> identity.users.id
+config.credential.via_link -> config.credential.id
 config.oauth_code.client_id -> config.oauth_client.id
 config.oauth_code.user_id -> identity.users.id
 config.oauth_refresh.credential_id -> config.credential.id
@@ -794,6 +806,7 @@ telemetry.property.location_id -> fleet.location.id
 telemetry.property.outpost_id -> collection.outpost.user_id
 telemetry.property.property_type_id -> telemetry.property_type.id
 telemetry.property.system_id -> fleet.system.id
+unclustered.oidc_state.link_user_id -> identity.users.id
 ```
 
 <!-- erd:end -->

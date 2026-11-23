@@ -1318,6 +1318,36 @@ func (UnimplementedGateway) OmnibotModel(context.Context) (*OmnibotModelConfig, 
 func (UnimplementedGateway) MergePatchAssistantSettings(context.Context, string, map[string]any, SecretUse) (*SettingBinding, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) SSOProvider(context.Context, string) (*SSOProvider, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) SSOProviders(context.Context) ([]string, error) { return nil, nil }
+func (UnimplementedGateway) MergePatchSSOSettings(context.Context, string, map[string]any, SecretUse) (*SettingBinding, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CreateOIDCState(context.Context, OIDCState) error { return nil }
+func (UnimplementedGateway) ConsumeOIDCState(context.Context, []byte) (*OIDCState, error) {
+	return nil, ErrOIDCStateNotFound
+}
+func (UnimplementedGateway) LinkIdentity(context.Context, string, string, string) (*IdentityLink, error) {
+	return nil, ErrUserNotFound
+}
+func (UnimplementedGateway) UnlinkIdentity(context.Context, string, string, string) error {
+	return ErrIdentityLinkNotFound
+}
+func (UnimplementedGateway) ListIdentityLinks(context.Context, string) ([]IdentityLink, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) SignInByIdentity(context.Context, SSOSignIn) (*User, error) {
+	return nil, ErrIdentityNotLinked
+}
+func (UnimplementedGateway) LinksToRecheck(context.Context, string) ([]LinkRecheck, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) AcceptLinkRefresh(context.Context, string, string, time.Duration) error {
+	return nil
+}
+func (UnimplementedGateway) RevokeLink(context.Context, string, string) (int, error) { return 0, nil }
 
 func (UnimplementedGateway) ListPersonalRules(context.Context, string) ([]ActionRule, error) {
 	return []ActionRule{}, nil

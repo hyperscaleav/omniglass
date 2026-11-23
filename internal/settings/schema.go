@@ -39,6 +39,10 @@ type Settings struct {
 	// Heartbeat is the outbound dead-man's switch (#1986): platform domain and
 	// not client-visible, since it names where the server announces itself.
 	Heartbeat HeartbeatSettings `json:"heartbeat" settings:"platform"`
+	// SSO is the identity provider people sign in through (#2362, ADR-2361):
+	// platform domain and not client-visible; the sign-in page learns only
+	// whether a provider is configured, from /auth/status.
+	SSO SSOSettings `json:"sso" settings:"platform"`
 }
 
 // UISettings is the ui namespace.
@@ -193,6 +197,21 @@ type AssistantSettings struct {
 	Model            string `json:"model" default:"openai/gpt-4.1-mini" doc:"The model's name on that server (openai/gpt-4.1-mini on OpenRouter, llama3.1 on Ollama)"`
 	BaseURL          string `json:"base_url" default:"https://openrouter.ai/api/v1" doc:"The server's base URL, /chat/completions appended. An internal server is reached only when the notification settings' egress_allow names it. Moving it from the console or API while a key_secret is bound takes secret:bind on that secret; the settings file and environment are trusted as deployment config"`
 	KeySecret        string `json:"key_secret" default:"" doc:"A platform api-key secret, by name, sent as the bearer on every model call; empty calls without a key (a local server). Setting it from the console or API takes secret:bind on it; the settings file and environment are trusted as deployment config. The key never leaves the server"`
+}
+
+// SSOSettings is the sso namespace (#2362, ADR-2361 point 6): the one
+// identity provider, named default. Issuer empty turns single sign-on off.
+// ClientSecret names a platform oauth2-client secret whose client_id field is
+// the client id, so the pair rotates together; naming it, or moving issuer
+// while one is bound, from the console or API takes secret:bind on it, since
+// the token exchange sends the secret to the issuer's token endpoint.
+type SSOSettings struct {
+	Issuer              string `json:"issuer" default:"" doc:"The identity provider's issuer URL exactly as its id_tokens carry it (https://login.example.com/realms/corp). Empty turns single sign-on off. An on-premises provider is reached only when the notification settings' egress_allow names it. Moving it from the console or API while client_secret is bound takes secret:bind on that secret; the settings file and environment are trusted as deployment config"`
+	ClientSecret        string `json:"client_secret" default:"" doc:"A platform oauth2-client secret, by name: its client_id field is the client id Omniglass is registered as, its client_secret field authenticates the token exchange. Setting it from the console or API takes secret:bind on it; the settings file and environment are trusted as deployment config"`
+	Scopes              string `json:"scopes" default:"openid email profile offline_access" doc:"The scopes a sign-in asks for, space-separated. offline_access asks for the refresh token the re-check redeems; a provider that issues none gives sessions of recheck_grace_minutes and no API tokens"`
+	GroupsClaim         string `json:"groups_claim" default:"groups" doc:"The id_token claim carrying the person's groups at the provider (read by group mapping, #2363)"`
+	RecheckMinutes      int    `json:"recheck_minutes" minimum:"1" maximum:"1440" default:"15" doc:"Minutes between re-checks: each link with a live session or token through it redeems its refresh token at the provider, and a refusal revokes them"`
+	RecheckGraceMinutes int    `json:"recheck_grace_minutes" minimum:"1" maximum:"10080" default:"60" doc:"Minutes a link may go without a refresh the provider accepted (an outage) before its sessions and tokens are refused until one is; also the length of a session through a provider that issues no refresh token"`
 }
 
 // AgentClassOverride is one role's override of the class policies (#2088). An
