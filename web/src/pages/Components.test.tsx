@@ -364,7 +364,8 @@ describe("Components create identity", () => {
     expect(display.readOnly).toBe(true);
     // The rule travels with the answer, so the form says where the label came
     // from rather than presenting it as a fact from nowhere.
-    expect(screen.getByText(/Rendered from \{\{\.TypeName\}\}/)).toBeTruthy();
+    expect(screen.getByText(/Rendered by the platform from a label rule/)).toBeTruthy();
+    expect(screen.queryByText(/\{\{\.TypeName\}\}/)).toBeNull();
     // The name is absent from the question, exactly as it will be from the
     // create body: omitted is "the platform names this".
     expect(asked).toMatchObject({ product: "shure-mxa920", location: room.id });
