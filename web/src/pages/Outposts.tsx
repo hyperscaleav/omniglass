@@ -1,6 +1,6 @@
 import { createIdentity } from "../lib/entities";
 import { Show, For, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
-import { Dialog } from "@kobalte/core/dialog";
+import ModalDialog, { DialogHeading } from "../components/ui/ModalDialog";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
@@ -425,8 +425,8 @@ function CreateOutpostForm(props: { close: () => void; onCreated: (row: Outpost)
   );
 }
 
-// EnrollTokenModal reveals the enrollment token exactly once (a centered Kobalte
-// Dialog, portaled so it escapes any overflow). The token is a secret: a clear
+// EnrollTokenModal reveals the enrollment token exactly once (a centered
+// ModalDialog, portaled so it escapes any overflow). The token is a secret: a clear
 // once-only warning, a monospace readonly field, and a copy-to-clipboard button
 // with a copied confirmation. It holds no token of its own; it reads props.result,
 // which the page clears on close, so the secret does not outlive the modal.
@@ -445,28 +445,27 @@ function EnrollTokenModal(props: { result: EnrollOutput | null; onClose: () => v
   }
 
   return (
-    <Dialog open={!!props.result} onOpenChange={(o) => !o && props.onClose()}>
-      <Dialog.Portal>
-        <Dialog.Overlay class="fixed inset-0 z-[70] bg-black/50" />
-        <div class="fixed inset-0 z-[70] flex items-center justify-center p-4">
-          <Dialog.Content class="flex w-full max-w-lg flex-col gap-4 rounded-box border border-base-300 bg-base-100 p-6 shadow-2xl">
-            <Dialog.Title class="text-base font-semibold">Enrollment token for <span class="font-data">{props.result?.name}</span></Dialog.Title>
-            <div role="alert" class="alert alert-warning alert-soft text-sm">
-              <span>This token is shown once. Copy it now; it cannot be retrieved again. Any previously issued token for this outpost stops working.</span>
-            </div>
-            <div class="flex items-stretch gap-2">
-              <input readonly value={props.result?.token ?? ""} aria-label="Enrollment token" class="input input-bordered w-full font-data text-xs" onFocus={(e) => e.currentTarget.select()} />
-              <Button intent="action" onClick={() => props.result && copy(props.result.token)}>
-                <Show when={copied()} fallback={<><Copy size={14} /> Copy</>}><Check size={14} /> Copied</Show>
-              </Button>
-            </div>
-            <p class="text-xs text-base-content/50">Hand it to the outpost deployment; the outpost presents it to claim its NATS credential. The server stores only a hash and never logs it.</p>
-            <div class="flex justify-end">
-              <Button intent="quiet" onClick={props.onClose}>Done</Button>
-            </div>
-          </Dialog.Content>
+    <ModalDialog
+      open={!!props.result}
+      onClose={props.onClose}
+      overlayClass="fixed inset-0 z-[70] bg-black/50"
+      frameClass="fixed inset-0 z-[70] flex items-center justify-center p-4"
+      class="flex w-full max-w-lg flex-col gap-4 rounded-box border border-base-300 bg-base-100 p-6 shadow-2xl"
+    >
+        <DialogHeading class="text-base font-semibold">Enrollment token for <span class="font-data">{props.result?.name}</span></DialogHeading>
+        <div role="alert" class="alert alert-warning alert-soft text-sm">
+          <span>This token is shown once. Copy it now; it cannot be retrieved again. Any previously issued token for this outpost stops working.</span>
         </div>
-      </Dialog.Portal>
-    </Dialog>
+        <div class="flex items-stretch gap-2">
+          <input readonly value={props.result?.token ?? ""} aria-label="Enrollment token" class="input input-bordered w-full font-data text-xs" onFocus={(e) => e.currentTarget.select()} />
+          <Button intent="action" onClick={() => props.result && copy(props.result.token)}>
+            <Show when={copied()} fallback={<><Copy size={14} /> Copy</>}><Check size={14} /> Copied</Show>
+          </Button>
+        </div>
+        <p class="text-xs text-base-content/50">Hand it to the outpost deployment; the outpost presents it to claim its NATS credential. The server stores only a hash and never logs it.</p>
+        <div class="flex justify-end">
+          <Button intent="quiet" onClick={props.onClose}>Done</Button>
+        </div>
+    </ModalDialog>
   );
 }
