@@ -330,7 +330,9 @@ systems: the component's own health, from its active alarms, beside the edges th
 All three reports carry the **recorded transitions**, oldest first, one entry per change, never a
 sample: the availability strip's data and the answer to "since when". The range is `since` and
 `until` (RFC 3339) on each route, defaulting to the last 30 days, so a range picker can drive them;
-`since` after `until` is a 400.
+`since` after `until` is a 400. When the caller bounded the range's start (a `since`, or one derived from an `until`), `carried_in`
+is the health in force when it opened, absent on the default window; `first_recorded_at` says when
+the owner was first recorded and is absent if never.
 
 ## The alarm: what is wrong with one component
 

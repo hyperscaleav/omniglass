@@ -7,6 +7,8 @@ import Eyebrow from "./Eyebrow";
 import DetailGate from "./DetailGate";
 import LocationCard from "./LocationCard";
 import MemberRows from "./MemberRows";
+import HealthReason from "./HealthReason";
+import OutsideSlotNotice from "./OutsideSlotNotice";
 import OutlineWorkspace from "./OutlineWorkspace";
 import { FLEET_VIEW_KEY, fleetView, childrenIndex } from "../lib/fleet";
 import { systemHealth, systemHealthKey, healthOf } from "../lib/health";
@@ -137,7 +139,9 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
   const timelines = createTimelineToggles();
   // The strip reads red when any alarm on it is at an outage level (the
   // catalog's flag, #917), amber when they only degrade.
-  const inOutage = createMemo(() => alarms().some((a) => scale().outage(a.severity)));
+  // A member outside a slot never takes the system to outage (ADR-2459), so
+  // its alarm's severity does not turn the strip red.
+  const inOutage = createMemo(() => alarms().some((a) => !a.outsideSlot && scale().outage(a.severity)));
   const bodyOf = createMemo(() => (vm() ? componentCards(vm()!) : undefined));
   const metricsQ = useQuery(() => ({ queryKey: systemMetricsKey(id()), queryFn: () => systemMetrics(id()), refetchInterval: LEAF_POLL_MS }));
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards }));
@@ -315,6 +319,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
             <div data-testid="system-header" class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-base-300 px-4 py-3 text-sm">
               <Eyebrow label="System" hint="The logical group of components that makes this location work, and the thing Omniglass monitors: its health is what the components filling its slots add up to." />
               <HealthBadge health={health.data?.health} size="sm" />
+              <HealthReason health={health.data?.health} reason={health.data?.reason} />
               <Show when={health.data && sinceOf(health.data, now())}>
                 {(sc) => <span data-testid="since-line" class="tabular-nums text-base-content/70">since {fmtTime(sc().ts)} · {durationText(sc().ms)}</span>}
               </Show>
@@ -561,7 +566,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                               <Show when={a.componentId} fallback={<span class="font-mono text-xs text-base-content/60">{a.component}</span>}>
                                 {(cid) => <button type="button" class="cursor-pointer font-mono text-xs text-base-content/80 hover:underline" onClick={() => openComponent(cid())}>{a.component}</button>}
                               </Show>
-                              <span class="text-xs text-base-content/50">impairs {a.slotLabel} · {durationText(now() - Date.parse(a.raisedAt))}</span>
+                              <span class="text-xs text-base-content/50">{a.where} · {durationText(now() - Date.parse(a.raisedAt))}</span>
                               <Show when={a.acknowledged}>
                                 <span class="text-xs text-base-content/50">
                                   · acknowledged{a.acknowledgedBy ? ` by ${a.acknowledgedBy}` : ""}{a.acknowledgedAt ? ` ${fmtTime(a.acknowledgedAt)}` : ""}
@@ -585,6 +590,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                   </Show>
                   <section class="flex flex-col gap-2">
                     <Eyebrow label="Components" hint="The pieces of this system, each with the slot it fills. A slot gets its own header only where it says something a column cannot: more than one wanted, a shortfall, or nobody staffing it yet." />
+                    <OutsideSlotNotice members={health.data?.members ?? undefined} placeHref={can(me.data, "system", "update") ? `/systems/${id()}?tab=configure` : undefined} />
                     <MemberRows rows={members().rows} groups={members().groups} onOpen={openComponent} />
                   </section>
                   <Show when={mapDecl()}>

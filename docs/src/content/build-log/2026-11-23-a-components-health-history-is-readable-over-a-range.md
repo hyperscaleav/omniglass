@@ -15,3 +15,7 @@ range picker (#2304) can drive them. With neither, the window is the last 30 day
 database's clock as before; `since` after `until` is a 400. The Gateway's `window` argument became
 a `HealthRange`, and the generated CLI verb (`omniglass component health list`), the typed client
 and the MCP catalog came from `make gen`.
+
+A range with no edge inside it would leave a timeline blank, so the reads also answer `carried_in`,
+the health in force when `since` opened the range, and `first_recorded_at`, when the owner's health
+was first recorded.

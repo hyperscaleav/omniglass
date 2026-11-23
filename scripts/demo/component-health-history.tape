@@ -39,6 +39,6 @@ Wait
 Type "# A range that ends before it starts is refused"
 Enter
 Wait
-Type `omniglass component health list panel-2 --since "$(date -u +%FT%TZ)" --until "$(date -u -d '1 day ago' +%FT%TZ)" 2>&1 | head -3`
+Type `omniglass component health list panel-2 --since "$(date -u +%FT%TZ)" --until "$(date -u -d '1 day ago' +%FT%TZ)" 2>/dev/null | jq -r .detail || true`
 Enter
 Wait
