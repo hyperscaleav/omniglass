@@ -93,12 +93,12 @@ export default function Alarms() {
   const now = () => Math.max(queue.dataUpdatedAt, Date.now());
 
   const columns: FlatColumn<Alarm>[] = [
-    { key: "severity", label: "Severity", width: "110px", cell: (a) => <SeverityBadge name={a.severity} /> },
+    { key: "severity", label: "Severity", width: "80px", cell: (a) => <SeverityBadge name={a.severity} /> },
     {
       key: "component", label: "Component", cell: (a) => (
         <span class="flex flex-col gap-0.5">
           <A href={`/components/${a.component_id}`} class="font-data text-sm hover:underline" onClick={(e) => e.stopPropagation()}>{a.component}</A>
-          <span class="truncate text-xs text-base-content/55" title={a.message}>{a.message}</span>
+          <span class="max-w-40 truncate text-xs text-base-content/55" title={a.message}>{a.message}</span>
         </span>
       ),
     },
@@ -128,25 +128,25 @@ export default function Alarms() {
       ),
     },
     {
-      key: "raised", label: "Raised", width: "110px", sortVal: (a) => ms(a.raised_at), cell: (a) => (
+      key: "raised", label: "Raised", width: "84px", sortVal: (a) => ms(a.raised_at), cell: (a) => (
         // A fixed-width box: the age reads from the clock (9s, 17m ago), and its
         // width must not size the column, or the columns after it move between
         // two captures of the same page (the docs shot masks this cell).
-        <span class="inline-block w-[9ch] whitespace-nowrap text-xs tnum text-base-content/60" title={fmtTime(a.raised_at)}>{rel(a.raised_at, now())}</span>
+        <span class="inline-block w-[8ch] whitespace-nowrap text-xs tnum text-base-content/60" title={fmtTime(a.raised_at)}>{rel(a.raised_at, now())}</span>
       ),
     },
     {
-      key: "cleared", label: "Cleared", width: "110px", sortVal: (a) => (a.cleared_at ? ms(a.cleared_at) : Number.MAX_SAFE_INTEGER), cell: (a) => (
-        <span class="inline-block w-[9ch] whitespace-nowrap text-xs tnum text-base-content/60" data-testid="alarm-cleared" title={a.cleared_at ? fmtTime(a.cleared_at) : "Still raised"}>
+      key: "cleared", label: "Cleared", width: "84px", sortVal: (a) => (a.cleared_at ? ms(a.cleared_at) : Number.MAX_SAFE_INTEGER), cell: (a) => (
+        <span class="inline-block w-[8ch] whitespace-nowrap text-xs tnum text-base-content/60" data-testid="alarm-cleared" title={a.cleared_at ? fmtTime(a.cleared_at) : "Still raised"}>
           <Show when={a.cleared_at} fallback="open">{(at) => rel(at(), now())}</Show>
         </span>
       ),
     },
     {
-      key: "duration", label: "Duration", width: "100px", sortVal: (a) => alarmDuration(a, now()), cell: (a) => <AlarmDuration alarm={a} class="text-xs text-base-content/70" />,
+      key: "duration", label: "Duration", width: "80px", sortVal: (a) => alarmDuration(a, now()), cell: (a) => <AlarmDuration alarm={a} class="text-xs text-base-content/70" />,
     },
     {
-      key: "state", label: "State", width: "190px", cell: (a) => (
+      key: "state", label: "State", width: "160px", cell: (a) => (
         <span class="flex flex-wrap items-center gap-1">
           <Show when={a.acknowledged} fallback={<span class="badge badge-ghost badge-xs" title="Nobody has recorded seeing this alarm">new</span>}>
             <span class="badge badge-soft badge-success badge-xs whitespace-nowrap" title={a.acknowledged_by ? `Acknowledged by ${a.acknowledged_by}` : "Acknowledged"}>{a.acknowledged_by ? `acked by ${a.acknowledged_by}` : "acked"}</span>
@@ -156,7 +156,7 @@ export default function Alarms() {
       ),
     },
     {
-      key: "actions", label: "", width: "250px", cell: (a) => (
+      key: "actions", label: "", width: "236px", cell: (a) => (
         // The row opens its drawer on click; the actions are their own targets.
         <span class="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()} data-testid="alarm-actions">
           <AlarmActions componentId={a.component_id} alarm={a} surface={ACTIONS_SURFACE} show={actionsFor(a)} allow={{ snooze: canSnooze() }} />

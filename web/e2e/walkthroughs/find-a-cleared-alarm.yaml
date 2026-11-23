@@ -28,4 +28,4 @@ steps:
   - click: 'tr:has-text("History demo input lost")'
     caption: Open the row for the same drawer the queue uses, with the alarm's history.
   - wait: { text: Lasted }
-    caption: Its raise, who looked and when it cleared, and the time it lasted.
+    caption: Its raise and its clear, with the time between them as Lasted.
