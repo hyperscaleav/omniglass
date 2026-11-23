@@ -29,7 +29,7 @@ const CatalogShell: ParentComponent = (props) => {
   return (
     <div class="flex items-start gap-4">
       <nav
-        class="sticky top-0 max-h-[calc(100vh-3.5rem)] w-52.5 flex-none self-start overflow-y-auto"
+        class="sticky top-0 max-h-[calc(100dvh-6rem)] w-52.5 flex-none self-start overflow-y-auto"
         aria-label="Catalog sections"
       >
         <ul class="menu w-full flex-nowrap gap-0.5 p-0 [&_li>*]:rounded-field">

@@ -122,7 +122,8 @@ A lab's login is well known and its data is disposable, so it is kept apart from
   can reach that address can sign in with the well-known login.
 - **It says it is a lab.** The server runs in lab mode, a setting only `omniglass lab run` passes,
   and reports it on `GET /auth/status`; the console shows the **Lab instance** banner on the sign-in
-  page and in the shell.
+  page and in the shell, as a thin strip across the very top that never scrolls away (the long
+  explanation is in its tooltip).
 - **Lab and real databases refuse each other.** The lab writes a mark into the database it creates.
   A server outside lab mode refuses a database that carries the mark, and a lab refuses a database
   that holds data and no mark (a real deployment's). Each refusal says why and what to do. The mark
