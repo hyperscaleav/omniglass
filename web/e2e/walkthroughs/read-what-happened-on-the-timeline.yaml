@@ -5,6 +5,11 @@
 # lands on it.
 title: Read what happened on the timeline
 description: Open a system's Timeline over the last six hours, rest the pointer on the lanes, and read every lane at that instant, the metrics grid's crosshair standing at the same moment.
+# The lanes' first reads warm off camera, so the scene spends its budget on
+# the timeline, not on a cold lab.
+ready:
+  goto: /systems/huddle?tab=timeline&range=6h
+  wait: { selector: '[data-testid=timeline-health-row] rect', timeout: 120000 }
 steps:
   - goto: /systems/huddle?tab=timeline&range=6h
     caption: A huddle room's system, its Timeline view over the last six hours.
@@ -14,5 +19,5 @@ steps:
     caption: Rest the pointer on the lanes.
   - wait: { selector: '[data-testid=timeline-readout][data-at=cursor]' }
     caption: The cursor crosses every lane and the metrics below, and the line above the lanes reads each lane at that instant.
-    hold: 2500
+    hold: 2000
     poster: true
