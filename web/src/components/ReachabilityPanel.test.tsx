@@ -268,6 +268,17 @@ describe("a held session on the row", () => {
     expect(screen.getByRole("button", { name: /retry/i })).toBeTruthy();
   });
 
+  // The expanded body renders no notice of its own in the row host (#2436): the
+  // row's own notice, above the body, is the one place a refusal reads, so
+  // expanding a rejected row must neither drop the reason nor repeat it.
+  it("keeps a rejected session's reason on an expanded row, once", () => {
+    mount({ component: compId, endpoints: [telnetRow("rejected")] });
+    fireEvent.click(screen.getByRole("button", { expanded: false }));
+    expect(screen.getByTestId("endpoint-detail").dataset.host).toBe("row");
+    expect(screen.getAllByTestId("session-reason")).toHaveLength(1);
+    expect(screen.getByTestId("session-reason").textContent).toBe("auth: auth rejected");
+  });
+
   it("shows no notice for an up session", () => {
     mount({ component: compId, endpoints: [telnetRow("up")] });
     expect(screen.getByTestId("session-pill").dataset.state).toBe("up");
