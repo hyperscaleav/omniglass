@@ -349,10 +349,10 @@ func TestReadViewsFilterSystemAmbiguousNameRefuses(t *testing.T) {
 	all := scope.Set{All: true}
 
 	// Two root systems with the same name in different location placements.
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "site-a", LocationType: "campus"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "site-a", LocationType: "campus"}, all, all); err != nil {
 		t.Fatalf("create location site-a: %v", err)
 	}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "site-b", LocationType: "campus"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "site-b", LocationType: "campus"}, all, all); err != nil {
 		t.Fatalf("create location site-b: %v", err)
 	}
 	locA := "site-a"

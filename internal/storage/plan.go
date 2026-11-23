@@ -187,7 +187,7 @@ func (p *PG) createPlanTx(ctx context.Context, tx pgx.Tx, actorID string, plan P
 			id := parent.ID
 			spec.ParentName = &id
 		}
-		l, err := p.createLocationTx(ctx, tx, actorID, spec, sc.LocationCreate)
+		l, err := p.createLocationTx(ctx, tx, actorID, spec, sc.LocationRead, sc.LocationCreate)
 		if err != nil {
 			return nil, &PlanError{Stage: "location", Ref: pl.Key, Err: err}
 		}

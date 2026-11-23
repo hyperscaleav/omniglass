@@ -83,7 +83,7 @@ func provedByCreate(ctx context.Context, gw *storage.PG) map[string]func(key str
 			return err
 		},
 		"location": func(s string) error {
-			_, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: s, LocationType: "room"}, all)
+			_, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: s, LocationType: "room"}, all, all)
 			return err
 		},
 		"outpost": func(s string) error {

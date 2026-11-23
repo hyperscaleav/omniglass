@@ -63,11 +63,11 @@ func twoDisplayOnes(t *testing.T, gw storage.Gateway) (compA, compB *storage.Com
 	ctx := context.Background()
 	all := scope.Set{All: true}
 
-	roomA, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "room-a", LocationType: "campus"}, all)
+	roomA, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "room-a", LocationType: "campus"}, all, all)
 	if err != nil {
 		t.Fatalf("room-a: %v", err)
 	}
-	roomB, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "room-b", LocationType: "campus"}, all)
+	roomB, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "room-b", LocationType: "campus"}, all, all)
 	if err != nil {
 		t.Fatalf("room-b: %v", err)
 	}
@@ -104,11 +104,11 @@ func twoSameNamedSystems(t *testing.T, gw storage.Gateway) (sysA, sysB *storage.
 	ctx := context.Background()
 	all := scope.Set{All: true}
 
-	locA, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "sys-room-a", LocationType: "campus"}, all)
+	locA, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "sys-room-a", LocationType: "campus"}, all, all)
 	if err != nil {
 		t.Fatalf("sys-room-a: %v", err)
 	}
-	locB, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "sys-room-b", LocationType: "campus"}, all)
+	locB, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "sys-room-b", LocationType: "campus"}, all, all)
 	if err != nil {
 		t.Fatalf("sys-room-b: %v", err)
 	}
