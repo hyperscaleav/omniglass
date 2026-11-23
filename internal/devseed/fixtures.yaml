@@ -2121,6 +2121,15 @@ event_rules:
     fire_event_type: rule-fired
     clear_event_type: rule-cleared
 
+# A lab's people subscribed to the fleet's alarms (personal action rules, the
+# Subscriptions page's rows), so a raised fault lights the bell and lands in
+# the inbox, and its clear follows it. Console inbox only: nothing leaves the
+# lab. Seeded with the simulated fleet only, and only for a person that
+# exists: dev is the lab's own owner.
+subscriptions:
+  - { user: dev, name: fleet-alarms, label: Fleet alarms, on: [raised, cleared], when: "true", channels: [inbox] }
+  - { user: operator, name: fleet-alarms, label: Fleet alarms, on: [raised, cleared], when: "true", channels: [inbox] }
+
 # The conditions the degraded scenarios hand-raise across the fleet (Degrade):
 # a scale fixture for the alarm queue, never raised on the example fleet.
 alarm_templates:

@@ -250,8 +250,27 @@ func TestSimFleetSeedsFaultsOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer gw.Close()
+	// The lab's owner exists before the seed, as the lab's seed makes it.
+	if _, err := gw.CreatePerson(ctx, "", storage.PersonSpec{Username: "dev", Label: "Dev", PasswordHash: "x"}, scope.Set{All: true}); err != nil {
+		t.Fatal(err)
+	}
 	if err := devseed.RunWith(ctx, gw, "", devseed.Options{SimFleet: true}); err != nil {
 		t.Fatal(err)
+	}
+	// Its people are subscribed to the fleet's alarms, in the console inbox
+	// alone, so the first fault lights the bell.
+	for _, user := range []string{"dev", "operator"} {
+		id, err := gw.ResolveUsername(ctx, user)
+		if err != nil {
+			t.Fatal(err)
+		}
+		subs, err := gw.ListPersonalRules(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(subs) != 1 || len(subs[0].Channels) != 1 || subs[0].Channels[0] != "inbox" {
+			t.Errorf("%s's subscriptions = %+v, want one to the inbox", user, subs)
+		}
 	}
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
@@ -288,6 +307,10 @@ func TestSimFleetSeedsFaultsOnce(t *testing.T) {
 	}
 	if got, _ := gw.GetSimImpairment(ctx, ids[1]); got == (impair.Impairment{}) {
 		t.Error("a re-run lifted the fault nobody touched")
+	}
+	id, _ := gw.ResolveUsername(ctx, "dev")
+	if subs, _ := gw.ListPersonalRules(ctx, id); len(subs) != 1 {
+		t.Errorf("after a re-run dev holds %d subscriptions, want 1", len(subs))
 	}
 }
 

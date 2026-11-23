@@ -57,11 +57,14 @@ type Doc struct {
 	Faults []Fault `yaml:"faults"`
 	// EventRules are the fleet's own event rules, beside the official ones
 	// the boot seed ships: what judges a Fault no official rule reads.
-	EventRules     []EventRule   `yaml:"event_rules"`
-	PropertyValues []Property    `yaml:"property_values"`
-	SimSecrets     []SimSecret   `yaml:"sim_secrets"`
-	SimEndpoints   []SimEndpoint `yaml:"sim_endpoints"`
-	SimComponents  []Component   `yaml:"sim_components"`
+	EventRules []EventRule `yaml:"event_rules"`
+	// Subscriptions are a lab's people's own alarm subscriptions, seeded with
+	// the simulated fleet only, so its faults reach their inboxes.
+	Subscriptions  []Subscription `yaml:"subscriptions"`
+	PropertyValues []Property     `yaml:"property_values"`
+	SimSecrets     []SimSecret    `yaml:"sim_secrets"`
+	SimEndpoints   []SimEndpoint  `yaml:"sim_endpoints"`
+	SimComponents  []Component    `yaml:"sim_components"`
 	// SimIdentityBindings tie the simulated conduit's room ids to the
 	// systems they are the rooms of (#1282).
 	SimIdentityBindings []IdentityBinding `yaml:"sim_identity_bindings"`
@@ -860,6 +863,12 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 		if id, ok := compIDs[c.Key]; ok {
 			only[id] = true
 		}
+	}
+	// The people's own subscriptions, before any fault's alarm raises, so the
+	// first one reaches their inboxes. With the simulated fleet only: a
+	// fleet that holds still for the docs' screenshots tells no one.
+	if err := seedSubscriptions(ctx, gw, actorID, base); err != nil {
+		return err
 	}
 	faults, err := faultImpairments(base, compIDs)
 	if err != nil {

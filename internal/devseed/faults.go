@@ -151,3 +151,37 @@ func number(v any) float64 {
 	}
 	return v.(float64)
 }
+
+// Subscription is one person's alarm subscription (a personal action rule,
+// the Subscriptions page's row) the seed gives a lab's people, so the fleet's
+// faults light the bell and fill the inbox from the start. User is a
+// username; one with no such person (the lab's owner, outside a lab) is
+// skipped.
+type Subscription struct {
+	User     string   `yaml:"user"`
+	Name     string   `yaml:"name"`
+	Label    string   `yaml:"label"`
+	On       []string `yaml:"on"`
+	When     string   `yaml:"when"`
+	Channels []string `yaml:"channels"`
+}
+
+// seedSubscriptions creates each subscription for its person. One the person
+// already holds by name is left as it stands, so a re-run changes nothing.
+func seedSubscriptions(ctx context.Context, gw storage.Gateway, actorID string, doc Doc) error {
+	for _, s := range doc.Subscriptions {
+		owner, err := gw.ResolveUsername(ctx, s.User)
+		if errors.Is(err, storage.ErrUserNotFound) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("devseed: subscription owner %q: %w", s.User, err)
+		}
+		if _, err := gw.CreatePersonalRule(ctx, actorID, owner, storage.PersonalRuleSpec{
+			Name: s.Name, Label: s.Label, On: s.On, When: s.When, Channels: s.Channels,
+		}); err != nil && !errors.Is(err, storage.ErrActionRuleExists) {
+			return fmt.Errorf("devseed: subscription %s for %q: %w", s.Name, s.User, err)
+		}
+	}
+	return nil
+}
