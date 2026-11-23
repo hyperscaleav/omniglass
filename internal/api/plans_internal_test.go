@@ -57,6 +57,7 @@ func TestPlanNeedsWhatEachPieceNeeds(t *testing.T) {
 
 // The dry run answers 200 and the apply 201, and the spec declares both.
 func TestApplyPlanDeclaresBothStatuses(t *testing.T) {
+	t.Parallel()
 	raw, err := os.ReadFile("../../api/openapi.json")
 	if err != nil {
 		t.Fatal(err)
