@@ -309,6 +309,69 @@ func TestSimulationFleetAPI(t *testing.T) {
 	hub.fireErr = collection.ErrNoSimulator
 	c.do(ownerTok, http.MethodPost, "/components/panel-1/simulation:fire", map[string]any{"surface": lineSurface, "command": "GET INPUT"}, http.StatusServiceUnavailable)
 
+	// Plan a simulated device before adding it: the address and endpoints the
+	// add would create, read without creating anything.
+	type plannedEndpoint struct {
+		Driver    string            `json:"driver"`
+		Inputs    map[string]string `json:"inputs"`
+		Transport string            `json:"transport"`
+		Target    string            `json:"target"`
+	}
+	var planned struct {
+		Outpost   string            `json:"outpost"`
+		Product   string            `json:"product"`
+		Address   string            `json:"address"`
+		Endpoints []plannedEndpoint `json:"endpoints"`
+	}
+	countComponents := func() int {
+		t.Helper()
+		var n int
+		if err := conn.QueryRow(ctx, `select count(*) from component`).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	before := countComponents()
+	get(viewer, "/outposts/site-a/simulation/components:plan?product="+panel, &planned)
+	if planned.Outpost != "site-a" || planned.Product != panel || !strings.HasPrefix(planned.Address, "127.60.") ||
+		len(planned.Endpoints) != 1 || planned.Endpoints[0].Driver != "newtron-panel-nvp" || len(planned.Endpoints[0].Inputs) == 0 {
+		t.Fatalf("plan = %+v, want a newtron-panel-nvp attach at a free address in 127.60.0.0/16 on site-a", planned)
+	}
+	if got := countComponents(); got != before {
+		t.Fatalf("the plan changed the component count from %d to %d, want it to create nothing", before, got)
+	}
+	planOut := c.do(viewer, http.MethodGet, "/outposts/site-a/simulation/components:plan?product="+storagetest.MintProduct(t, ctx, gw, "").Name, nil, http.StatusUnprocessableEntity)
+	if !strings.Contains(string(planOut), "simulat") {
+		t.Fatalf("an unsimulated product's plan was refused with %s, want it to say why", planOut)
+	}
+	c.do(viewer, http.MethodGet, "/outposts/site-b/simulation/components:plan?product="+panel, nil, http.StatusConflict)
+	c.do(viewer, http.MethodGet, "/outposts/nowhere/simulation/components:plan?product="+panel, nil, http.StatusNotFound)
+	// simulation:read is the gate: an all-scope reader without it is refused.
+	if _, err := conn.Exec(ctx, `insert into role (name, permissions) values ('sim-blind-reader', '{"component:read","outpost:read"}')`); err != nil {
+		t.Fatal(err)
+	}
+	blindTok, blindHash, blindPrefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var blindID string
+	if err := conn.QueryRow(ctx, `insert into users (kind) values ('machine') returning id`).Scan(&blindID); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []struct {
+		sql  string
+		args []any
+	}{
+		{`insert into machine (user_id, name) values ($1, 'simfleet-blind')`, []any{blindID}},
+		{`insert into credential (user_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`, []any{blindID, blindHash, blindPrefix}},
+		{`insert into user_grant (user_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'sim-blind-reader'), 'all', null)`, []any{blindID}},
+	} {
+		if _, err := conn.Exec(ctx, q.sql, q.args...); err != nil {
+			t.Fatalf("%s: %v", q.sql, err)
+		}
+	}
+	c.do(blindTok, http.MethodGet, "/outposts/site-a/simulation/components:plan?product="+panel, nil, http.StatusForbidden)
+
 	// Add a simulated device from a profile: a component of the product,
 	// at a free address in the simulated block, with the endpoint the
 	// planner picks (the NVP attach, no secret needed), on the outpost.
@@ -332,6 +395,21 @@ func TestSimulationFleetAPI(t *testing.T) {
 	if driver != "newtron-panel-nvp" || onOutpost != "site-a" {
 		t.Fatalf("panel-9's endpoint is %q on %q, want a newtron-panel-nvp attach on site-a", driver, onOutpost)
 	}
+	// The plan read before the add is what the add created: its address, its
+	// driver, and every input it sent (the stored set has the driver's
+	// defaults baked in beside them).
+	var storedInputs map[string]string
+	if err := conn.QueryRow(ctx, `select inputs from endpoint where component = (select id from component where name = 'panel-9')`).Scan(&storedInputs); err != nil {
+		t.Fatal(err)
+	}
+	if planned.Address != added.Address || planned.Endpoints[0].Driver != driver {
+		t.Fatalf("plan %+v, but the add created %s on %s", planned, driver, added.Address)
+	}
+	for k, v := range planned.Endpoints[0].Inputs {
+		if storedInputs[k] != v {
+			t.Fatalf("planned input %s=%q, the add stored %q (all: %v)", k, v, storedInputs[k], storedInputs)
+		}
+	}
 	var withNew simulationBody
 	get(ownerTok, "/outposts/site-a/simulation", &withNew)
 	if len(withNew.Devices) != 2 {
@@ -349,7 +427,7 @@ func TestSimulationFleetAPI(t *testing.T) {
 	// A component name repeats across places: the add wires the component it
 	// created, never a namesake elsewhere.
 	for _, l := range []string{"loc-a", "loc-b"} {
-		if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: l, LocationType: "campus"}, all); err != nil {
+		if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: l, LocationType: "campus"}, all, all); err != nil {
 			t.Fatal(err)
 		}
 	}

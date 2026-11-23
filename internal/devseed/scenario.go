@@ -323,8 +323,9 @@ func alarmFits(t Alarm, componentType string, parents map[string]string) bool {
 // Degrade returns base plus an open alarm on every n-th component (in fixture
 // order) that has none, so most rooms carry a fault and the fleet reads as a bad
 // day rather than a quiet one. The severities and messages cycle through the
-// ones the example fleet's own alarms use, so a severity is never named here
-// that the boot seed does not ship. A template that declares AppliesTo is raised
+// fixture's alarm templates, so a severity is never named here that the boot
+// seed does not ship. A component already alarmed or carrying one of the
+// fleet's faults is skipped. A template that declares AppliesTo is raised
 // only on a component whose type (via productTypes, product id to component type,
 // and its ancestors in typeParents) it lists; a component no cycled template
 // fits gets the first unrestricted template instead, so the density holds. Pure;
@@ -333,11 +334,12 @@ func alarmFits(t Alarm, componentType string, parents map[string]string) bool {
 func Degrade(base Doc, n int, productTypes, typeParents map[string]string) Doc {
 	out := base
 	out.Alarms = append([]Alarm(nil), base.Alarms...)
-	if n <= 0 || len(base.Alarms) == 0 {
+	tmpls := base.AlarmTemplates
+	if n <= 0 || len(tmpls) == 0 {
 		return out
 	}
 	fallback := -1
-	for i, a := range base.Alarms {
+	for i, a := range tmpls {
 		if len(a.AppliesTo) == 0 {
 			fallback = i
 			break
@@ -347,17 +349,20 @@ func Degrade(base Doc, n int, productTypes, typeParents map[string]string) Doc {
 	for _, a := range base.Alarms {
 		alarmed[a.Component] = true
 	}
+	for _, f := range base.Faults {
+		alarmed[f.Component] = true
+	}
 	k := 0
 	for i, c := range base.Components {
 		if i%n != 0 || alarmed[c.Key] {
 			continue
 		}
-		tmpl := base.Alarms[k%len(base.Alarms)]
+		tmpl := tmpls[k%len(tmpls)]
 		if !alarmFits(tmpl, productTypes[c.Product], typeParents) {
 			if fallback < 0 {
 				continue
 			}
-			tmpl = base.Alarms[fallback]
+			tmpl = tmpls[fallback]
 		}
 		out.Alarms = append(out.Alarms, Alarm{
 			Component: c.Key, Severity: tmpl.Severity, Message: tmpl.Message,

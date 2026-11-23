@@ -28,6 +28,7 @@ import {
   SYSTEM_HEALTHS_KEY,
   type HealthSlot,
 } from "../lib/health";
+import { confirmAction } from "../lib/confirm";
 
 // SlotsPanel lists the slots a system needs filled, resolved. A SLOT is a slot:
 // a table microphone, a main display. It names the TYPED-SLOT guard (#626) a
@@ -196,8 +197,8 @@ export default function SlotsPanel(props: { system: string; canUpdate: boolean }
       qc.invalidateQueries({ queryKey: systemHealthKey(props.system) }),
       qc.invalidateQueries({ queryKey: SYSTEM_HEALTHS_KEY }),
     ]);
-  const withdraw = (slot: string) => {
-    if (!confirm(`Withdraw "${slot}" from this system? Everything assigned to it is unassigned.`)) return;
+  const withdraw = async (slot: string) => {
+    if (!(await confirmAction({ title: `Withdraw "${slot}" from this system?`, body: "Everything assigned to it is unassigned.", confirmLabel: "Withdraw slot", tone: "danger" }))) return;
     return run(slot, () => deleteSystemSlot(props.system, slot));
   };
 

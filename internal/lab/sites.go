@@ -71,7 +71,7 @@ func readSites(ctx context.Context, c *http.Client, base string, outposts []Site
 		sem <- struct{}{}
 		go func() {
 			defer func() { <-sem; wg.Done() }()
-			n, err := readReach(ctx, c, base, id, planted)
+			n, err := readReach(ctx, c, base, id, planted, false)
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {

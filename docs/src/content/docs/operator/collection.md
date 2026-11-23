@@ -108,6 +108,8 @@ secrets it is bound to (never a value), whether it is an out-of-band management 
 poll with its interval, what it last read, and the **Test** that runs it now. The long
 sections fold under a one-line summary.
 
+- A new device gets its first endpoint in [the add-a-component flow](/operator/add-a-component/),
+  which picks the product's driver and credential and tests it before it ends.
 - With `endpoint:create`, **Add endpoint** on the component detail creates one, in either of
   two faces:
   - **Probe**: give it a **label** (optional, and the only name-like string you type here),

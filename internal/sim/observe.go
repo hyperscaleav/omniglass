@@ -269,8 +269,10 @@ func (d *deviceObservation) openStream(p obsProtocol) func() {
 		return func() {}
 	}
 	row := &d.rows[p]
-	row.openStreams.Add(1)
+	// Total before gauge, and counters() reads them in the reverse order, so a
+	// reader never sees OpenStreams above StreamsOpened.
 	row.streamsOpened.Add(1)
+	row.openStreams.Add(1)
 	var once sync.Once
 	return func() { once.Do(func() { row.openStreams.Add(-1) }) }
 }
@@ -332,8 +334,8 @@ func (d *deviceObservation) counters(p obsProtocol) ObservationCounters {
 	c.Error = r.outcomes[OutcomeError].Load()
 	c.Dropped = r.outcomes[OutcomeDropped].Load()
 	c.Withheld = r.outcomes[OutcomeWithheld].Load()
-	c.StreamsOpened = r.streamsOpened.Load()
 	c.OpenStreams = r.openStreams.Load()
+	c.StreamsOpened = r.streamsOpened.Load()
 	c.Overlapped = r.overlapped.Load()
 	return c
 }
