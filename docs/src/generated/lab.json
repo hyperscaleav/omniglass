@@ -274,6 +274,15 @@
       ]
     },
     {
+      "id": "test-an-endpoints-poll",
+      "title": "Test an endpoint's poll",
+      "description": "Attach a driver to a display, then run its poll now and read what the outpost collected, without waiting for the next cycle.",
+      "lab": [],
+      "setup": [
+        "omniglass component create --label 'Bay 2 Display' --location bay-2 --name bay-2-poll-display --product boreal-edge-55"
+      ]
+    },
+    {
       "id": "triage-the-alarm-queue",
       "title": "Triage the alarm queue",
       "description": "Filter the fleet's alarm queue to the worst severities, acknowledge one alarm, snooze another and hand a third to omnibot, from the rows.",
