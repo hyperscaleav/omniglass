@@ -10,13 +10,12 @@ import DetailGate from "./DetailGate";
 import OutlineWorkspace from "./OutlineWorkspace";
 import SystemSummary from "./SystemSummary";
 import HealthBadge from "./HealthBadge";
-import LocationCard from "./LocationCard";
 import { resolveIcon } from "./icons";
 import { useBlades } from "../lib/blades";
 import { createLeaveGuard } from "../lib/leave_guard";
 import { createTabState, type DetailHost } from "../lib/tabstate";
 import { useEntityDelete } from "../lib/entity_delete";
-import { FLEET_VIEW_KEY, childrenIndex, fleetView, locationIndex } from "../lib/fleet";
+import { FLEET_VIEW_KEY, ancestors, childrenIndex, fleetView, locationIndex } from "../lib/fleet";
 import { LOCATIONS_KEY, deleteLocation, listLocations } from "../lib/locations";
 import { LOCATION_TYPES_KEY, listLocationTypes } from "../lib/location_types";
 import { locationHealth, locationHealthKey } from "../lib/health";
@@ -61,7 +60,7 @@ export default function LocationDetail(props: { id: string; host: DetailHost }) 
   });
   const hasBeneath = createMemo(() => (view.data ? (childrenIndex(view.data).get(id()) ?? []).length > 0 : false));
   const contents = () => (view.data ? contentsOf(view.data, id(), types.data ?? []) : "");
-  const parentId = () => location()?.parent || null;
+  const path = () => (view.data ? ancestors(id(), locationIndex(view.data)).slice(0, -1).map((l) => entityLabel(l)).join(" / ") : "");
 
   const tabs = createMemo(() => [
     { key: "overview", label: "Overview" },
@@ -92,11 +91,6 @@ export default function LocationDetail(props: { id: string; host: DetailHost }) 
         <Show when={err()}>
           <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
         </Show>
-        {/* Where it sits: the page says so in its breadcrumb; a blade has
-            none, so its parent rides a card with the path above it. */}
-        <Show when={props.host === "blade" && parentId()}>
-          {(pid) => <LocationCard locationId={pid()} showName path />}
-        </Show>
         <section data-testid="location-subject" class="card overflow-hidden border border-base-300 bg-base-200 p-0">
           <div data-testid="location-header" class="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-base-300 px-4 py-3 text-sm">
             <Eyebrow label="Location" hint="A location is a folder and its facts. The systems in it, and in the locations beneath it, are what Omniglass monitors; its health is the worst of theirs." />
@@ -104,6 +98,11 @@ export default function LocationDetail(props: { id: string; host: DetailHost }) 
               <span class="flex-none text-base-content/50"><Dynamic component={resolveIcon(type()?.icon || "map-pin")} size={16} /></span>
               <span data-testid="location-type" class="text-base-content/70">{type() ? entityLabel(type()!) : location()?.location_type}</span>
             </span>
+            {/* Where it sits: the page says so in its breadcrumb; a blade has
+                none, so its header names the locations above it. */}
+            <Show when={props.host === "blade" && path()}>
+              <span data-testid="location-path" class="text-base-content/60">{path()}</span>
+            </Show>
             <HealthBadge health={health.data?.health ?? location()?.health ?? undefined} size="sm" />
             <Show when={health.data && sinceOf(health.data, Date.now())}>
               {(sc) => <span data-testid="since-line" class="tabular-nums text-base-content/70">since {fmtTime(sc().ts)} · {durationText(sc().ms)}</span>}

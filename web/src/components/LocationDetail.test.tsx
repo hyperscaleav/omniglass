@@ -129,7 +129,9 @@ describe("one body in two hosts", () => {
     mountBlade(FLOOR);
     const blade = await screen.findByRole("dialog");
     const inBlade = await sectionsPerTab(() => within(blade).getByTestId("location-detail"));
-    expect(inBlade).toEqual(onPage);
+    // The blade's header adds the path the page's breadcrumb says.
+    const strip = (r: Record<string, string[]>) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, v.filter((t) => t !== "location-path")]));
+    expect(strip(inBlade)).toEqual(onPage);
     expect(onPage.Overview).toEqual(expect.arrayContaining(["location-header", "since-line", "location-holds", "beneath"]));
     expect(blade.getAttribute("data-blade-width")).toBe("wide");
   });
@@ -162,14 +164,15 @@ describe("one body in two hosts", () => {
     await waitFor(() => expect(r.controller().stack().map((x) => x.kind)).toEqual(["location", "system"]));
   });
 
-  it("a blade says where the location sits, its parent with the path; the page leaves that to the breadcrumb", async () => {
+  it("a blade's header says where the location sits; the page leaves that to the breadcrumb", async () => {
     mountBlade(ROOM);
     const blade = await screen.findByRole("dialog");
-    expect(await within(blade).findByTestId("location-card")).toBeTruthy();
+    expect((await within(blade).findByTestId("location-path")).textContent).toBe("Level 2");
+    expect(within(blade).queryByTestId("location-card")).toBeNull();
     cleanup();
     mountPage(HALL);
     await screen.findByTestId("location-detail");
-    expect(screen.queryByTestId("location-card")).toBeNull();
+    expect(screen.queryByTestId("location-path")).toBeNull();
   });
 });
 
