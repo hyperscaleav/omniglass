@@ -68,11 +68,11 @@ func scopedSearch[T any](ctx context.Context, p *PG, cfg scopedConfig[T], read s
 	n := len(args)
 	args = append(args, likePattern(text), strings.TrimSpace(text), limit)
 	like, exact, lim := n+1, n+2, n+3
-	prefix := fmt.Sprintf(`lower(left(v.name, char_length($%[1]d))) = lower($%[1]d) or lower(left(v.label, char_length($%[1]d))) = lower($%[1]d)`, exact)
+	prefix := fmt.Sprintf(`coalesce(lower(left(v.name, char_length($%[1]d))) = lower($%[1]d) or lower(left(v.label, char_length($%[1]d))) = lower($%[1]d), false)`, exact)
 	rows, err := p.pool.Query(ctx, fmt.Sprintf(
 		`select v.id::text from (%s) v
 		 where v.name ilike $%d escape '\' or v.label ilike $%d escape '\'
-		 order by (lower(v.name) = lower($%d) or lower(v.label) = lower($%d)) desc, (%s) desc, v.name, v.id
+		 order by coalesce(lower(v.name) = lower($%d) or lower(v.label) = lower($%d), false) desc, (%s) desc, v.name, v.id
 		 limit $%d`,
 		scopedListSQL(cfg.table, "id, name, label", read), like, like, exact, exact, prefix, lim), args...)
 	if err != nil {

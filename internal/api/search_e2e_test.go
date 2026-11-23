@@ -182,3 +182,16 @@ func TestSearchFindsCatalogEntries(t *testing.T) {
 		t.Errorf("a viewer's catalog hits are empty; the catalog is platform-wide")
 	}
 }
+
+// An exact name outranks a row that merely contains the text, even when the
+// other row has no label of its own to compare.
+func TestSearchRanksTheExactNameFirst(t *testing.T) {
+	t.Parallel()
+	f := newSearchFixture(t)
+	f.c.do(f.owner, http.MethodPost, "/locations", map[string]any{"name": "annex-lobby", "location_type": "building", "parent": "east"}, http.StatusCreated)
+	f.c.do(f.owner, http.MethodPost, "/locations", map[string]any{"name": "lobby", "location_type": "building", "parent": "east"}, http.StatusCreated)
+	got := f.search(f.owner, "lobby", 1, http.StatusOK)
+	if n := names(got.Locations); len(n) != 1 || n[0] != "lobby" {
+		t.Errorf("limit 1 for lobby = %v, want the exact name, not annex-lobby", n)
+	}
+}
