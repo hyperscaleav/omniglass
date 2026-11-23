@@ -17,12 +17,12 @@ surface that is neither: an outline of locations over one projection (`GET /view
 the CRUD lists, and the detail views it opens. Its core is one pure model,
 `web/src/lib/outline.ts`, which nests the locations, puts each system on the location where it
 sits, folds single-child chains, counts what a row holds in the catalog's own type labels,
-and counts systems by verdict rather than rolling them up worst-wins; `components/Outline.tsx`
+and counts systems by health rather than rolling them up worst-wins; `components/Outline.tsx`
 renders it as an ARIA tree, and `lib/location_type_graph.ts` reads what may sit under a
 location from `allowed_parent_types`, never from a type's name (ADR-0137). **Platform health**
 (`/platform`, #1644) is the second: Omniglass watching itself, one page over the platform
 projection (`GET /views/platform`) with the running build, its uptime, the platform system's
-verdict, a panel set per server (Requests, Ingest, Queues, Retention, #1645: each key's current
+health, a panel set per server (Requests, Ingest, Queues, Retention, #1645: each key's current
 figure beside its last hour, a window's figure only while that window is current, ranked routes as the server cut them, a panel flagged only by an open
 alarm on its keys) and a row per outpost of its platform figures, each row opening onto the outpost's
 platform component. Its panels and columns are the groups the view returns, named with each key's
@@ -66,7 +66,7 @@ unstaffed slot). The platform-wide sweep of the older pages is tracked in #784.
 **A detail view is one per system, its place a card of context** (ADR-0139). Systems are the
 unit Omniglass monitors; locations are folders and metadata; components are pieces of systems.
 A system's view is its location card (type, tags, the location's own panel) above the system card
-(verdict, since, standard, size, slot arithmetic only while short) with three tabs as `?tab=`
+(health, since, standard, size, slot arithmetic only while short) with three tabs as `?tab=`
 URL facts (`TabRail`): Overview (why, the components, the standard's declared map with live
 occupant state on each marker, ADR-0128, its labels laid out in pixels so none clips or collides, #1072, the data), Activity (the history, the events, the
 logs), and Configure (the one form). A location holding exactly one system lands on it; a location
@@ -80,7 +80,7 @@ location once, the slots a component fills) and `lib/outline.ts` (`rootAt`). Sin
 these faces ARE the identity routes' default, and since #800 the ONLY faces: one way to
 look, one altitude rule (Explore drills the location tree, systems open full screen,
 components open in blades), editing through the one `EntityForm` (ADR-0137). The side
-panel is the glance (verdict, why, context, identity and tags) and the configuration
+panel is the glance (health, why, context, identity and tags) and the configuration
 panels stay on Configure (ADR-0139). The classic detail face is retired; `?view=detail` is
 ignored and `?edit=1` lands Configure already editing.
 
@@ -253,7 +253,7 @@ hang off it (#854):
 
 1. **Invalidation set.** Deleting a component from its blade refreshes everything that read it: the
    components list, the fleet view, the system slots and health reads (prefix keys, so every system's
-   copy), and the verdict read. A component that staffs a slot is refused by the server (409,
+   copy), and the health read. A component that staffs a slot is refused by the server (409,
    referenced); the blade stays open and says why, rather than closing on a delete that did not happen.
 2. **Error placement.** A failed Save keeps the editor open and the slot remembers the reason
    (`saveError`). The host shows it in its footer beside Save (`SaveError`, in the blade footer and the
@@ -312,7 +312,7 @@ longer title.
 **Home today** (`/`) is a row of tiles, each a scoped read of the platform rather than a
 placeholder: Locations, Systems and Open alarms (the last two from `GET /views/fleet`, whose
 `open_alarms` counts the alarms open on the components the caller may read), Outposts (the outpost
-list, shown to a caller who can read outposts) and Platform (the platform system's verdict and the
+list, shown to a caller who can read outposts) and Platform (the platform system's health and the
 outposts not up, same gate). Locations, Systems and Outposts open their lists; Open alarms is a plain
 figure until the alarm list exists. A tile that cannot count says why (loading, an error, a
 permission it needs), never a dash.

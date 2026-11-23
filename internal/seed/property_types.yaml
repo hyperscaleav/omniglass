@@ -27,7 +27,7 @@ property_types:
     validation: { enum: [up, down] }
     label: Endpoint Reachable
     description: >-
-      Per-endpoint reachability verdict, the AND of the endpoint's probe
+      Per-endpoint reachability, the AND of the endpoint's probe
       results (up = every applicable probe reached the target). A built-in state:
       availability is time_in_state over it. Unknown/stale are read-time
       derivations, not stored values.
@@ -39,7 +39,7 @@ property_types:
       The layer-7 rung beside endpoint-reachable: the protocol itself answered
       (an HTTP request drew a response, an SSH exchange completed). A port that
       accepts but never answers is reachable and not responsive, which is the
-      distinction this verdict exists to draw.
+      distinction this reachability exists to draw.
   - name: endpoint-authenticated
     data_type: string
     validation: { enum: [yes, no] }
@@ -132,7 +132,7 @@ property_types:
     validation: { enum: [healthy, incomplete, degraded, outage] }
     label: Health
     description: >-
-      The rolled-up health verdict for a component, system, or location, worst-wins
+      The rolled-up health for a component, system, or location, worst-wins
       over its inputs (a component's active alarms, a system's slots, the systems
       under a location). Recorded transition-only, so the series is the edges: when
       it broke and when it came back, not a sample per check. incomplete ranks

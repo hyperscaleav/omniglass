@@ -70,11 +70,11 @@ rebuilt** in the sidebar: `/guides/`, `/contributing/` and the unbadged `/archit
 set `sidebar.hidden` so the Architecture section lists only rebuilt pages) are where that update
 goes; the section's PR deletes them and their sidebar entries.
 
-A word an operator or an admin reads (an entity, a nav label, a verdict) is a row in
+A word an operator or an admin reads (an entity, a nav label, a health value) is a row in
 `internal/vocab/terms.yaml`: its word and plural, a one-sentence definition, its API collection,
 schema and permission noun, its nav entry, and any word it retired. `make gen` renders the
 [glossary](/reference/glossary/) and the entity descriptions in the OpenAPI spec from it, and the
-guards fail a new collection, nav entry or verdict that names no row, or a retired word back in
+guards fail a new collection, nav entry or health value that names no row, or a retired word back in
 console strings or docs prose. Internal architecture terms stay in the frozen
 [architecture glossary](/architecture/glossary/).
 
@@ -260,7 +260,7 @@ text whose width can change paints a **box the text cannot move**, one of two wa
   and size after its since-line). Check the container's height as well as its width: a
   wrapping row whose wrap depends on the value's width does not hold still.
 - **Declare the box**, when the only container that holds still also holds what the shot
-  exists to show (a since-line beside the verdict it qualifies, #1081):
+  exists to show (a since-line beside the health value it qualifies, #1081):
 
   ```yaml
   mask:

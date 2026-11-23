@@ -46,7 +46,7 @@ after it down shows up as a finding rather than as a quietly smaller run. The sl
 A miss face (a parametrized route visited with an id that does not exist) is expected to answer 404,
 so a 404 on one is not recorded; those pages are only ever probed in that state, so a real 404 on them
 would be hidden too, and their populated state is a mission's to exercise. Everything else is, and nothing in the digest is a gate: the probe exits
-non-zero only when it could not run, since what it found is evidence for a reader, not a verdict.
+non-zero only when it could not run, since what it found is evidence for a reader, not a ruling.
 
 ## A day's run
 

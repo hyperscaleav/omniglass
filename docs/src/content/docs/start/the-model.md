@@ -61,14 +61,14 @@ on the component, which stays raised until the criteria clear.
 
 Health then rolls up. A slot with fewer working components than it wants is impaired, and contributes
 what the standard says losing it means. The system takes the worst contribution, and a location the
-worst of everything in it. A system's health is one of four verdicts:
+worst of everything in it. A system's health is one of four values:
 
 - **healthy**: everything is present and well;
 - **incomplete**: still missing a component its standard requires (commissioning, not a fault);
 - **degraded**: it still works, but has lost something it should have;
 - **outage**: it cannot do its job.
 
-Every change of verdict is recorded, so a system's health has a history.
+Every change of health is recorded, so a system's health has a history.
 
 :::design[Target design, tracked in #1002]
 An event rule can also judge a system's own values, such as a calc rule's result, so an alarm can

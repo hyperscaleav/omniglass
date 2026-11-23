@@ -25,7 +25,7 @@ screenshots:
     # with the clock (`fmtTime` prints the month, a bare day and AM or PM; the
     # age reads 9s or 17s), so the box repainted a pixel narrower or wider on
     # an unchanged blade (#1081). The row around it holds still but also holds
-    # the verdict, the one region on the page a baseline must keep gating. The
+    # the health, the one region on the page a baseline must keep gating. The
     # widest line a capture renders ("since May 28, 12:59 AM · 59m") is 164px
     # in the console's face; a line wider than 184px fails the capture by name.
     mask:
@@ -55,11 +55,11 @@ Enter to open it.
 ::screenshot{#entity-blade}
 
 A fleet entity's blade (a location, a system, a component) is the glance an operator lands on
-from a row. It leads with the verdict and since-when and the active alarms that say why, each
+from a row. It leads with the health and since-when and the active alarms that say why, each
 with its severity, then the context you came for: a system's location (as a card saying where it
 sits, the path above it, since a blade has no breadcrumb) and its size;
 the systems a component serves, with the slot it fills in each, and its location when that is
-somewhere else; a location's systems, each with its verdict, one click from its own blade. Then
+somewhere else; a location's systems, each with its health, one click from its own blade. Then
 the entity's **form**: its name, classification, a location's parent, and tags, read or edited
 in place. Each fact is said once: the blade's title is the label (the Label field appears only
 while editing), a location's only system is the location (its card names no location and offers no second
@@ -335,7 +335,7 @@ Each row is one slot with **where it came from**, **who fills it**, and **how ma
   moment you enter it, with nothing collecting: staffing is a fact about your model, not a
   measurement.
 - **Impact.** Each slot also says what the system loses when the slot is not being filled properly:
-  **outage**, **degraded**, or **none**. That is what turns a broken component into a system-level verdict
+  **outage**, **degraded**, or **none**. That is what turns a broken component into a system-level health
   further down this page, and it is declared on the
   [standard](/admin/standards/#slots-what-a-conforming-system-needs-filled) or on the system.
 - **Assign** picks a component to fill the slot; **unassign** takes it out and the slot goes back to

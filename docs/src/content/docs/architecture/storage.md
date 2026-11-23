@@ -539,7 +539,7 @@ observed-sample round trip and lands on the sample row, so the cycle guard walks
 of the series, so `property` carries one partial owner index per arc a read is built on:
 `property_series_idx` (`component_id, property_type_id, instance, ts desc`) for the component arc, and
 `property_system_owner_idx` (`property_type_id, system_id, id desc`) for the system arc, which the two
-health reads take, the bulk verdict read behind `GET /systems:health` and the location rollup a
+health reads take, the bulk health read behind `GET /systems:health` and the location rollup a
 recompute pays per location ([#725](https://github.com/hyperscaleav/omniglass/issues/725)). Each is
 **partial on its arc column**, so the telemetry lane pays nothing for an index it never uses: a
 component-owned insert does not touch the system index at all (measured: 150,000 of them cost the same
