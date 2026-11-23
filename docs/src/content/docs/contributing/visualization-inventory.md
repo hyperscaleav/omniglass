@@ -135,6 +135,7 @@ component set; the surfaces below are where they are mounted.
 | V48 | `PipelineFlow`, the "where work is lost" hop flow with a lane tab group and a per-hop loss figure (`components/PipelineFlow.tsx`) | `/platform` | derived (counts of metric, property, event and log samples per hop) | `view.pipeline` from `platformView` | follows parent (poll 5 s) | new: pipeline flow |
 | V49 | `SystemMap`, the top-down room map with health-coloured markers (`components/SystemMap.tsx`, `lib/system_map.ts`) | `/systems/<id>` | derived | `systemMembers`, `layoutMarkers` | poll 5 s | new: floor map |
 | V50 | The alarm queue: severity-badged alarm rows with component, systems, location, raised-at and ack and snooze state (`pages/Alarms.tsx`) | `/alarms` | event | `fleetAlarms` (`lib/alarms.ts`), paged by `page_token` | poll 5 s (the leaf cadence) | new: alarm queue |
+| V51 | `DependenciesPanel`: upstream and downstream rows with a kind badge, a health badge and a holding mark (`components/DependenciesPanel.tsx`, `lib/dependencies.ts`) | `/components/<id>` | derived | `listDependencies` (`lib/dependencies.ts`), the fleet view's dot health, `getReachability` | poll 5 s | new: dependency list |
 
 ## Every page
 
@@ -152,7 +153,7 @@ what each page draws itself.
 | `CalcRules.tsx` | `/calc-rules` | V13 |
 | `CatalogOverview.tsx` | `/catalog` | V09 |
 | `CommandTypes.tsx` | `/command-types` | none checked: config chips only |
-| `ComponentLeaf.tsx` | `/components/<id>` (via `Components.tsx`) | V08, V15, V24, V26, V27, V32, V33, V36, V37, V40, V42, V47 |
+| `ComponentLeaf.tsx` | `/components/<id>` (via `Components.tsx`) | V08, V15, V24, V26, V27, V32, V33, V36, V37, V40, V42, V47, V51 |
 | `ComponentTypes.tsx` | `/component-types` | none checked: config chips only |
 | `Components.tsx` | `/components/<id>` | wrapper: mounts `ComponentLeaf`, or the create form for the create route (`components/create`, no leading slash) |
 | `Drivers.tsx` | `/drivers` | none checked: config chips only |
@@ -246,3 +247,4 @@ epic's vocabulary does not yet name; the count says how much of the console it w
 | new: pipeline flow | 1 | V48 |
 | new: floor map | 1 | V49 |
 | new: alarm queue | 1 | V50 |
+| new: dependency list | 1 | V51 |

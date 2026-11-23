@@ -38,6 +38,21 @@ screenshots:
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
       - "[data-testid=leaf-alarms]"
+  # The video bar in Boardroom A is the seed's worked dependency example: fed
+  # from the power conditioner, hosting the touch panel and reached through by
+  # the room display (#2428).
+  - id: fleet-component-dependencies
+    path: /web/locations/boardroom-a
+    steps:
+      - action: click
+        selector: "button:has([data-label]:text-is('Video Bar 1'))"
+      - action: click
+        selector: "aside[data-blade] button[aria-label=Expand]"
+      - action: wait
+        selector: "[data-testid=dep-downstream]"
+    alt: "A video bar's view with its Dependencies card: one upstream, the power conditioner on outlet 1, and two downstream components, the touch panel (hosted by it and reached through it) and the room display, each with its health."
+    # A healthy bar has no since-line or alarm age, and the docs seed carries
+    # no simulation card, so nothing on the page moves with the clock.
   - id: fleet-configure
     path: /web/systems/huddle?tab=configure
     alt: "A sole system's Configure tab: the room's own form first (identity, type, parent, properties, tags, its own Edit), then the system's (identity with the label pen and the name precheck, classification, slots, properties, tags)."
@@ -138,6 +153,7 @@ screenshots:
     alt: "Explore: the outline of locations, Headquarters and West Building folded into one row and opened down to the Huddle Room, which wears its system with the components beneath it; every collapsed location says what it holds and counts its systems by health."
 walkthroughs:
   - id: find-and-fix-a-location
+  - id: add-a-dependency
 ---
 
 The fleet has one door in the sidebar: **Explore**. It is an outline of every location you
@@ -503,6 +519,31 @@ allowed** (a permission one end lacks, named), **Not found** (the owner is gone,
 can see) or **Not a valid binding** (the rules refuse it, such as a location or an outpost as the owner).
 The X on a bound row unbinds it after a confirm, and its next value waits under Heard, not bound
 again. The CLI does the same with `omniglass component identity-binding` (`list`, `update`, `delete`) and `omniglass component unbound-identity list`.
+
+**Dependencies** says what this component needs and what needs it, apart from where it sits. A
+dependency edge is one of three kinds: **power** (fed from an outlet of the upstream, a PDU),
+**host** (hosted by the upstream, a codec and the peripheral it reboots) or **path** (reached
+through the upstream, a gateway or a switch). **Upstream** lists what this component depends on,
+each linked, with its kind (and the outlet, on a power edge), its health, and **holding this** when
+that upstream's gate is closed on this component's endpoints right now, so they are held until it
+opens; when the holder is further up a chain (a core switch behind the switch this one depends on), it is named under the list as **Held through**. **Downstream** lists what depends on this component, one row for each, with every kind it
+depends by: when this one goes down it holds them, so "the switch is down, which holds these six
+devices" reads off the switch's page. A component outside your read is counted (**and 2 more you
+cannot see**), never named. A component with no edges says so in one line.
+
+::screenshot{#fleet-component-dependencies}
+
+**Add upstream** (with update on this component) opens a form in place: filter the fleet by label,
+name or product, pick the component it depends on (never the component itself), choose the kind,
+and for a power edge name the outlet that feeds it. The server stays the authority and says why in
+the form when it refuses: an edge that would close a cycle (the upstream already depends on this
+component through edges of the same kind), a repeat of an edge already recorded, or a power edge
+with no outlet. The X on an upstream row removes that edge after a confirm. A downstream row is the
+other component's own fact, so it is edited from that component's page; without update on this
+component, the card is read-only. The CLI does the same with `omniglass component dependency`
+(`list`, `create`, `delete`).
+
+::walkthrough{#add-a-dependency}
 
 The component's view refreshes on its own while it is open: its Collection, Vitals, and its alarms
 with the health they make every 5 seconds, the outpost behind Collection every 10, so an endpoint you

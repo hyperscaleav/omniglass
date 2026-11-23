@@ -20,6 +20,7 @@ import ReachLadder from "./ReachLadder";
 import SessionPill from "./SessionPill";
 import SessionNotice from "./SessionNotice";
 import PollTest from "./PollTest";
+import DependenciesPanel from "./DependenciesPanel";
 import InfoTip from "./InfoTip";
 import { ChevronRight } from "./icons";
 import { CalcRuleLink } from "./RuleLink";
@@ -595,6 +596,15 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
                 </ul>
               </Show>
             </section>
+            {/* What it needs and what needs it (#2428). */}
+            <Show when={component()}>
+              {(c) => (
+                <DependenciesPanel
+                  component={c().id}
+                  canUpdate={can(me.data, "component", "update") && (Array.isArray(c().actions) ? c().actions!.includes("update") : true)}
+                />
+              )}
+            </Show>
             {/* A component that speaks for many owners (a conduit, #1389):
                 the identities it fans out and the ones it heard unbound. It
                 renders nothing on a component that speaks only for itself. */}
