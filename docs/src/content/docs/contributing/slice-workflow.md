@@ -66,6 +66,12 @@ Not a vibe at each gate, a check:
   API behavior, a walkthrough for a console flow, both when it has both. `n/a` takes a reason (a
   test-only or docs-only change). A demo is a test too: a command that fails or a result that never
   appears fails it. How to write and record either is [demos](/contributing/demos/).
+- **A bug or flake fix ships its regression test.** The `regression-test` check fails a PR that closes a
+  `bug` or `flaky-test` issue unless its diff adds or changes a test file (`*_test.go`, `*.test.ts(x)`,
+  `*.spec.*`, or a file under `web/e2e/`), or its body carries a line of its own,
+  `regression-test: none (<reason>)`, with a non-empty reason. The reviewer treats that reason as a claim
+  to refute: a bug a test can reproduce is a blocking finding. The check only sees that a test changed,
+  not that it would have caught the bug.
 - **Review verifies behavior to the outcome,** not just the call site.
 
 ## The thin-cut discipline
