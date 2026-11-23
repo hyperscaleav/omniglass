@@ -105,7 +105,9 @@ function routeUrl(route: string, params: Params): string {
   const path = route.replace(/\{([^{}]+)\}/g, (_, name: string) => encodeURIComponent(String(params.path?.[name])));
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(params.query ?? {})) {
-    if (value !== undefined && value !== null) query.append(key, String(value));
+    // A list repeats the parameter (severity=a&severity=b), the form the API reads.
+    if (Array.isArray(value)) for (const v of value) query.append(key, String(v));
+    else if (value !== undefined && value !== null) query.append(key, String(value));
   }
   const search = query.toString();
   return search ? `${path}?${search}` : path;

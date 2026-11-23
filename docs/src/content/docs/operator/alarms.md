@@ -25,6 +25,16 @@ screenshots:
         width: 184
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
       - "[data-testid=alarm-strip]"
+  - id: alarm-queue
+    path: /web/alarms?state=active
+    alt: "The Alarms page: the fleet's active alarms, worst first, one row each with its component, system, location, when it was raised and whether it is acknowledged or snoozed, and the Acknowledge, Snooze and omnibot buttons on each row."
+    steps:
+      - action: wait
+        selector: "[data-testid=alarm-queue] tbody tr td:nth-child(5)"
+    # The raised column counts from the capture's own clock, and the count line
+    # follows from the seed's alarms.
+    mask:
+      - "[data-testid=alarm-queue] td:nth-child(5)"
 ---
 
 An **alarm** says what is wrong with one component. **Health** is what that means for the systems the
@@ -148,6 +158,35 @@ button: there is nothing left to troubleshoot. It needs the `assistant:use` perm
 row has no button.
 
 ::screenshot{#alarm-troubleshoot}
+
+## The alarm queue
+
+**Alarms** in the sidebar is the fleet's alarm queue: every active alarm on the components you can read, one
+row each, the worst severity first and the newest first within a severity. Each row names its **component**
+(a link to its page), the **systems** it is a member of, the **location** it sits in, **when** it was raised
+(hover for the exact time) and its state: **new** until somebody acknowledges it, **acked** after, and a
+snooze chip while its notifications are held back. It is the page to triage from, so an operator does not
+open a component at a time. Click a row for its **timeline**, the same one the component's panel opens.
+
+::screenshot{#alarm-queue}
+
+**Filter it** with the chips above the list: **severity** (one level or several), **location** (the named
+location and everything below it), **ack** (yes or no) and **snoozed** (yes or no). The filter is the
+address: `/alarms?state=active&severity=disaster,high&ack=no` is the unacknowledged Disaster and High
+alarms, and a link to it opens the same queue (it is also how the page is handed to omnibot, as its route and
+filter, never a uuid). `state=active` is the one state the queue has; a cleared alarm is history and stays on
+its component's panel. A bare word filters the loaded rows by component, system or message.
+
+**Work it from the row.** **Acknowledge**, **Snooze** (or **Unsnooze**) and the omnibot button are the
+same controls as on the component's panel and need the same permissions (`alarm:acknowledge`,
+`alarm:snooze`, `assistant:use`); a viewer sees the state of every alarm and no buttons. The queue reads
+again the moment you act, and otherwise every few seconds, so another operator's acknowledgement shows
+without a reload. It is a poll, not a stream: nothing pushes alarm transitions yet.
+
+The queue loads 100 alarms and offers **Load 100 more** below them, so a storm of a thousand pages instead
+of cutting off. The same read is `GET /alarms` (`omniglass alarm list`, with `--severity`, `--location`,
+`--acknowledged`, `--snoozed` and `--page-token`), and is scoped the same way: an alarm on a component
+you cannot read is never named. Acknowledging many at once is not built yet.
 
 ## Health on a system or location
 

@@ -131,6 +131,7 @@ component set; the surfaces below are where they are mounted.
 |---|---|---|---|---|---|---|
 | V48 | `PipelineFlow`, the "where work is lost" hop flow with a lane tab group and a per-hop loss figure (`components/PipelineFlow.tsx`) | `/platform` | derived (counts of metric, property, event and log samples per hop) | `view.pipeline` from `platformView` | follows parent (poll 5 s) | new: pipeline flow |
 | V49 | `SystemMap`, the top-down room map with verdict-coloured markers (`components/SystemMap.tsx`, `lib/system_map.ts`) | `/systems/<id>` | derived | `systemMembers`, `layoutMarkers` | poll 5 s | new: floor map |
+| V50 | The alarm queue: severity-badged alarm rows with component, systems, location, raised-at and ack and snooze state (`pages/Alarms.tsx`) | `/alarms` | event | `fleetAlarms` (`lib/alarms.ts`), paged by `page_token` | poll 5 s (the leaf cadence) | new: alarm queue |
 
 ## Every page
 
@@ -143,6 +144,7 @@ what each page draws itself.
 | Page | Route | Result |
 |---|---|---|
 | `ActionRules.tsx` | `/action-rules` | V45 (the rule list's enabled flag is a config chip) |
+| `Alarms.tsx` | `/alarms` | V50 |
 | `Audit.tsx` | `/audit` | V46 |
 | `CalcRules.tsx` | `/calc-rules` | V13 |
 | `CatalogOverview.tsx` | `/catalog` | V09 |
@@ -178,7 +180,7 @@ what each page draws itself.
 | `Rules.tsx` | `/event-rules` | V12, V33, V38 |
 | `SecretTypes.tsx` | `/secret-types` | none checked: config chips only |
 | `Secrets.tsx` | `/secrets` | none checked: config chips only |
-| `SectionStub.tsx` | `/alarms`, `/config`, `/dashboards`, `/learn`, `/log-types` | none checked: placeholder page (`/dashboards` is where the canvas lands) |
+| `SectionStub.tsx` | `/config`, `/dashboards`, `/learn`, `/log-types` | none checked: placeholder page (`/dashboards` is where the canvas lands) |
 | `Settings.tsx` | `/settings` | none checked: effective and lock chips are config |
 | `SeverityLevels.tsx` | `/severity-levels` | none checked: `SeverityBadge` here previews a configured level's look, not an alarm's state |
 | `Simulation.tsx` | `/simulation` | V23, V24 (drawer) |

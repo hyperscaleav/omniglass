@@ -82,10 +82,11 @@ describe("Alarms page", () => {
   });
 
   it("reads its filter from the address and asks the server for exactly that", async () => {
-    mount(me(OPERATOR), "/?state=active&severity=critical&ack=no&location=hq");
+    mount(me(OPERATOR), "/?state=active&severity=critical,high&ack=no&location=hq");
     await screen.findByText("no signal");
     const q = listReads()[0].url.searchParams;
-    expect(q.getAll("severity")).toEqual(["critical"]);
+    // Each level is its own parameter: the server reads occurrences, not a comma list.
+    expect(q.getAll("severity")).toEqual(["critical", "high"]);
     expect(q.get("acknowledged")).toBe("false");
     expect(q.get("location")).toBe("hq");
   });
