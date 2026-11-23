@@ -72,8 +72,15 @@ func reselectNames(before, after componentSelection) []string {
 }
 
 // reselectCandidates reads the enabled event rules whose selector names one
-// of names, FOR SHARE in id order (the lock order newRuleEvaluator
-// documents). Only such a rule can select a component differently before and
+// of names, FOR UPDATE in id order, as a rule write does (the lock order
+// newRuleEvaluator documents). An ingest holds the rules it judges by FOR
+// SHARE for its batch, so a share lock here would not wait for a batch that
+// read the component's old type: its firing on a rule the component left
+// would commit after the release saw nothing to end, and stay stranded,
+// and a sample it judged under the old type would go unprimed by a rule the
+// component came into. FOR UPDATE waits for that batch and then sees what it
+// wrote; a batch starting after it waits in turn and reads the new type.
+// Only such a rule can select a component differently before and
 // after a type move: one selecting every component, or one listing it by id,
 // selects it on both sides. So a move never reads, or re-primes, any other.
 func reselectCandidates(ctx context.Context, tx pgx.Tx, names []string) ([]EventRule, error) {
@@ -82,7 +89,7 @@ func reselectCandidates(ctx context.Context, tx pgx.Tx, names []string) ([]Event
 	}
 	rows, err := tx.Query(ctx, `select `+eventRuleCols+` from event_rule
 		where enabled and coalesce(selector->'component_types', '[]'::jsonb) ?| $1::text[]
-		order by id for share`, names)
+		order by id for update`, names)
 	if err != nil {
 		return nil, fmt.Errorf("storage: reselect event rules: %w", err)
 	}

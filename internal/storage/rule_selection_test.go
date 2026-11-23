@@ -169,3 +169,48 @@ func TestReselectCandidatesBounded(t *testing.T) {
 		}
 	}
 }
+
+// A reselect serializes with an ingest judging by the same rule, as a rule
+// narrowing does: an ingest holds its rules FOR SHARE for its batch, so a
+// reselect that only shared them could release a component while a batch
+// that read the old type was still opening a firing there, stranding it on
+// a rule that no longer selects the component. The reselect waits for the
+// batch instead, then sees what it wrote.
+func TestReselectWaitsForAnIngestHoldingTheRule(t *testing.T) {
+	t.Parallel()
+	f := newReselectRig(t)
+	ctx := context.Background()
+	batch, err := f.conn.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = batch.Rollback(ctx) }()
+	if _, err := batch.Exec(ctx, `select 1 from event_rule where name = 'on-bars' for share`); err != nil {
+		t.Fatal(err)
+	}
+	p := storagetest.MintProduct(t, ctx, f.gw, "interactive-display")
+	done := make(chan error, 1)
+	go func() {
+		done <- storage.ExportReselectComponentRules(ctx, f.gw, "bar-1",
+			`update component set product_id = (select id from product where name = $1) where name = 'bar-1'`, p.Name)
+	}()
+	select {
+	case err := <-done:
+		t.Fatalf("the reselect finished (err %v) while an ingest still held on-bars", err)
+	case <-time.After(500 * time.Millisecond):
+	}
+	if err := batch.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("the reselect never finished after the ingest committed")
+	}
+	if n := openRuleAlarms(t, f, "on-bars"); n != 0 {
+		t.Errorf("bar-1 left on-bars, which still holds %d alarms on it", n)
+	}
+}

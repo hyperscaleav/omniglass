@@ -9,7 +9,8 @@ edit primes it), but nothing settled when the component changed type under a rul
 same. `reselectComponentRules` in `internal/storage/rule_selection.go` is the primitive for that
 move, the event rules' analogue of `markComponentCalcRules`. It takes a component's selection (its
 id and its type's lineage, read before and after the write) and reads only the enabled rules naming
-a type in either lineage. It primes a rule the component came into from that component's newest
+a type in either lineage, FOR UPDATE as a rule write locks them, so it serializes with an ingest
+batch judging by one (`TestReselectWaitsForAnIngestHoldingTheRule`). It primes a rule the component came into from that component's newest
 samples (`primeSeries`, now shared with `primeRule`). It ends the conditions and drops the streaks
 of a rule the component left (`endFiringsOn`, `endRuleFirings` on one component). A rule that held
 the component on both sides is left alone.
