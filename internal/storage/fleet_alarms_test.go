@@ -54,7 +54,7 @@ func TestListFleetAlarmsIsTheActiveSetInScopeWorstFirst(t *testing.T) {
 		}
 		return out
 	}
-	got, _, err := gw.ListFleetAlarms(ctx, all, storage.AlarmFilter{}, 100)
+	got, _, err := gw.ListFleetAlarms(ctx, all, all, storage.AlarmFilter{}, 100)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -65,21 +65,21 @@ func TestListFleetAlarmsIsTheActiveSetInScopeWorstFirst(t *testing.T) {
 		t.Errorf("the worst alarm names component %q, want fleet-mic", got[0].ComponentName)
 	}
 
-	if got, _, err := gw.ListFleetAlarms(ctx, all, storage.AlarmFilter{Unacknowledged: true}, 100); err != nil || len(got) != 2 {
+	if got, _, err := gw.ListFleetAlarms(ctx, all, all, storage.AlarmFilter{Unacknowledged: true}, 100); err != nil || len(got) != 2 {
 		t.Fatalf("unacknowledged = %v (%v), want the two nobody has looked at", names(got), err)
 	}
-	if got, _, err := gw.ListFleetAlarms(ctx, all, storage.AlarmFilter{}, 1); err != nil || len(got) != 1 || got[0].ID != worst.ID {
+	if got, _, err := gw.ListFleetAlarms(ctx, all, all, storage.AlarmFilter{}, 1); err != nil || len(got) != 1 || got[0].ID != worst.ID {
 		t.Fatalf("capped at 1 = %v (%v), want the worst alone", names(got), err)
 	}
 
 	scoped := scope.Set{IDs: []string{ids["fleet-dsp"]}}
-	if got, _, err := gw.ListFleetAlarms(ctx, scoped, storage.AlarmFilter{}, 100); err != nil || len(got) != 1 || got[0].ID != warn.ID {
+	if got, _, err := gw.ListFleetAlarms(ctx, scoped, scoped, storage.AlarmFilter{}, 100); err != nil || len(got) != 1 || got[0].ID != warn.ID {
 		t.Fatalf("scoped to fleet-dsp = %v (%v), want its one alarm and nothing else", names(got), err)
 	}
-	if got, _, err := gw.ListFleetAlarms(ctx, scope.Set{}, storage.AlarmFilter{}, 100); err != nil || len(got) != 0 {
+	if got, _, err := gw.ListFleetAlarms(ctx, scope.Set{}, scope.Set{}, storage.AlarmFilter{}, 100); err != nil || len(got) != 0 {
 		t.Fatalf("empty scope = %v (%v), want nothing", names(got), err)
 	}
-	if got, _, err := gw.ListFleetAlarms(ctx, scope.Set{IDs: []string{"not-a-uuid"}}, storage.AlarmFilter{}, 100); err != nil || len(got) != 0 {
+	if got, _, err := gw.ListFleetAlarms(ctx, scope.Set{IDs: []string{"not-a-uuid"}}, scope.Set{IDs: []string{"not-a-uuid"}}, storage.AlarmFilter{}, 100); err != nil || len(got) != 0 {
 		t.Fatalf("malformed scope root = %v (%v), want nothing", names(got), err)
 	}
 }
@@ -143,7 +143,7 @@ func TestListFleetAlarmsFiltersPagesAndNamesLocationAndSystems(t *testing.T) {
 	}
 	list := func(f storage.AlarmFilter) []string {
 		t.Helper()
-		got, _, err := gw.ListFleetAlarms(ctx, all, f, 100)
+		got, _, err := gw.ListFleetAlarms(ctx, all, all, f, 100)
 		if err != nil {
 			t.Fatalf("list %+v: %v", f, err)
 		}
@@ -157,7 +157,7 @@ func TestListFleetAlarmsFiltersPagesAndNamesLocationAndSystems(t *testing.T) {
 	}
 	tr, fa := true, false
 
-	rows, _, _ := gw.ListFleetAlarms(ctx, all, storage.AlarmFilter{}, 100)
+	rows, _, _ := gw.ListFleetAlarms(ctx, all, all, storage.AlarmFilter{}, 100)
 	if len(rows) != 3 || rows[0].ID != crit.ID {
 		t.Fatalf("rows = %v", ids(rows))
 	}
@@ -180,7 +180,7 @@ func TestListFleetAlarmsFiltersPagesAndNamesLocationAndSystems(t *testing.T) {
 	var walked []string
 	token := ""
 	for range 5 {
-		page, next, err := gw.ListFleetAlarms(ctx, all, storage.AlarmFilter{PageToken: token}, 1)
+		page, next, err := gw.ListFleetAlarms(ctx, all, all, storage.AlarmFilter{PageToken: token}, 1)
 		if err != nil {
 			t.Fatalf("page: %v", err)
 		}
@@ -191,7 +191,7 @@ func TestListFleetAlarmsFiltersPagesAndNamesLocationAndSystems(t *testing.T) {
 		token = next
 	}
 	eq(walked, "crit", "far", "warn")
-	if _, _, err := gw.ListFleetAlarms(ctx, all, storage.AlarmFilter{PageToken: "garbage"}, 1); !errors.Is(err, storage.ErrPageToken) {
+	if _, _, err := gw.ListFleetAlarms(ctx, all, all, storage.AlarmFilter{PageToken: "garbage"}, 1); !errors.Is(err, storage.ErrPageToken) {
 		t.Fatalf("bad token err = %v, want ErrPageToken", err)
 	}
 }

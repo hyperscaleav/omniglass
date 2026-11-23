@@ -103,6 +103,7 @@ func TestFleetAlarmQueueFiltersPagesAndStaysInScope(t *testing.T) {
 	}
 	c.do(owner, http.MethodPost, "/systems", map[string]any{"name": "boardroom"}, http.StatusCreated)
 	c.do(owner, http.MethodPut, "/systems/boardroom/members/cam-1", nil, http.StatusNoContent)
+	c.do(owner, http.MethodPut, "/systems/boardroom/members/cam-2", nil, http.StatusNoContent)
 
 	crit := raiseFor(t, c, owner, "cam-1", "disaster", "dark", "dark")
 	warn := raiseFor(t, c, owner, "cam-2", "warning", "warm", "warm")
@@ -189,5 +190,18 @@ func TestFleetAlarmQueueFiltersPagesAndStaysInScope(t *testing.T) {
 	}
 	if got := comps(read(narrow, "", http.StatusOK)); got != "cam-2 " {
 		t.Errorf("a cam-2-only reader got %q, want its one alarm", got)
+	}
+	// Without system:read the row does not name the system its component is in;
+	// with it, the system is named.
+	if r := read(narrow, "", http.StatusOK).Alarms[0]; len(r.Systems) != 0 {
+		t.Errorf("a cam-2-only reader was told systems %v, want none (no system:read)", r.Systems)
+	}
+	boardID := entityID(t, c, owner, "/systems", "boardroom")
+	both := userWithGrants(t, ctx, dsn, "narrow-both", []grant{
+		{role: "viewer", scopeKind: "component", scopeID: camID},
+		{role: "viewer", scopeKind: "system", scopeID: boardID},
+	})
+	if r := read(both, "?location=hq", http.StatusOK); len(r.Alarms) == 0 {
+		t.Errorf("a reader of cam-2 and boardroom got no rows")
 	}
 }

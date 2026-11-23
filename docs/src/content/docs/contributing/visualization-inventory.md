@@ -135,7 +135,7 @@ component set; the surfaces below are where they are mounted.
 
 ## Every page
 
-Each of the 51 files under `pages/` is either a surface with entries or checked and without one.
+Each of the 53 files under `pages/` is either a surface with entries or checked and without one.
 The four fleet routes (`/explore`, `/locations/<id>`, `/systems/<id>`, `/components/<id>`) also host the
 blade entries V17, V26, V28, V29, V30, V32, V33 and V37 through `fleetRegistry`; the rows below list
 what each page draws itself.
@@ -167,6 +167,7 @@ what each page draws itself.
 | `Login.tsx` | `/login` | none checked: a form |
 | `Metrics.tsx` | `/metrics` | none checked: config chips only (data type, origin) |
 | `NotFound.tsx` | `*` | none checked: static page |
+| `OAuthConsent.tsx` | `/oauth/authorize` | none checked: a consent form |
 | `NotificationTargets.tsx` | `/notification-targets` | V45 (enabled flag and channels are config chips) |
 | `Notifications.tsx` | `/notifications` | none checked: config chips only |
 | `Outposts.tsx` | `/outposts` | V22, V43 |
@@ -216,7 +217,7 @@ what each page draws itself.
 
 ## Widget types
 
-Deduplicated by widget, with the number of call sites (entries above; the 49 entries sum to 49). A `new:` row is a widget the
+Deduplicated by widget, with the number of call sites (entries above; the 50 entries sum to 50). A `new:` row is a widget the
 epic's vocabulary does not yet name; the count says how much of the console it would carry.
 
 | Widget | Call sites | Entries |
@@ -231,6 +232,7 @@ epic's vocabulary does not yet name; the count says how much of the console it w
 | property timeline | 0 | none (`propertySeries` exists and is unused) |
 | new: health badge | 5 | V14, V15, V16, V17, V20 |
 | new: alarm list | 5 | V34, V35, V36, V37, V38 |
+| new: alarm queue | 1 | V50 |
 | new: reachability ladder | 3 | V26, V27, V28 |
 | new: simulator status table | 3 | V23, V24, V25 |
 | new: status table | 1 | V21 |

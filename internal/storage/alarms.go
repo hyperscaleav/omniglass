@@ -505,7 +505,7 @@ func (p *PG) ListSystemAlarms(ctx context.Context, systemID string, window time.
 // The cursor is keyset, on the same (rank, raised_at, id) the list orders by,
 // so a page costs the same however deep it is and an alarm raised mid-walk
 // never shifts the pages.
-func (p *PG) ListFleetAlarms(ctx context.Context, read scope.Set, filter AlarmFilter, limit int) ([]Alarm, string, error) {
+func (p *PG) ListFleetAlarms(ctx context.Context, read, systemRead scope.Set, filter AlarmFilter, limit int) ([]Alarm, string, error) {
 	cur, err := decodeAlarmCursor(filter.PageToken)
 	if err != nil {
 		return nil, "", err
@@ -554,9 +554,7 @@ func (p *PG) ListFleetAlarms(ctx context.Context, read scope.Set, filter AlarmFi
 	lim := bind(limit + 1)
 	rows, err := p.pool.Query(ctx, `
 		with recursive comp as (`+scopedListSQL(componentTable, "id", read)+`)`+ctes+`
-		select `+alarmCols+`, coalesce(l.rank, 0),
-			coalesce((select array_agg(s.name order by s.name) from system_member m join system s on s.id = m.system_id
-				where m.component_id = a.component_id), '{}')
+		select `+alarmCols+`, coalesce(l.rank, 0)
 		from alarm a
 		left join severity_level l on l.name = a.severity
 		where `+strings.Join(where, " and ")+`
@@ -571,12 +569,10 @@ func (p *PG) ListFleetAlarms(ctx context.Context, read scope.Set, filter AlarmFi
 	ranks := []int{}
 	for rows.Next() {
 		var rank int
-		var systems []string
-		a, err := scanAlarmWith(rows, &rank, &systems)
+		a, err := scanAlarmWith(rows, &rank)
 		if err != nil {
 			return nil, "", fmt.Errorf("storage: scan fleet alarm: %w", err)
 		}
-		a.Systems = systems
 		out = append(out, *a)
 		ranks = append(ranks, rank)
 	}
@@ -592,7 +588,54 @@ func (p *PG) ListFleetAlarms(ctx context.Context, read scope.Set, filter AlarmFi
 	if err := p.attachAlarmLocations(ctx, out); err != nil {
 		return nil, "", err
 	}
+	if err := p.attachAlarmSystems(ctx, out, systemRead); err != nil {
+		return nil, "", err
+	}
 	return out, next, nil
+}
+
+// attachAlarmSystems fills each alarm's Systems with the names of the systems
+// its component belongs to that the caller may read (systemRead, the system:read
+// scope), so a narrow component reader is not told which systems a component
+// sits in. One batched query for the page.
+func (p *PG) attachAlarmSystems(ctx context.Context, alarms []Alarm, systemRead scope.Set) error {
+	if len(alarms) == 0 || systemRead.Empty() {
+		return nil
+	}
+	args, ok := scopedListArgs(systemTable, systemRead)
+	if !ok {
+		return nil
+	}
+	ids := make([]string, 0, len(alarms))
+	for _, a := range alarms {
+		ids = append(ids, a.ComponentID)
+	}
+	args = append(args, ids)
+	rows, err := p.pool.Query(ctx, `
+		with recursive vis as (`+scopedListSQL(systemTable, "id", systemRead)+`)
+		select m.component_id::text, s.name
+		from system_member m join system s on s.id = m.system_id
+		where s.id in (select id from vis) and m.component_id = any($`+strconv.Itoa(len(args))+`::uuid[])
+		order by s.name`, args...)
+	if err != nil {
+		return fmt.Errorf("storage: list alarm systems: %w", err)
+	}
+	defer rows.Close()
+	by := map[string][]string{}
+	for rows.Next() {
+		var cid, name string
+		if err := rows.Scan(&cid, &name); err != nil {
+			return fmt.Errorf("storage: scan alarm system: %w", err)
+		}
+		by[cid] = append(by[cid], name)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for i := range alarms {
+		alarms[i].Systems = by[alarms[i].ComponentID]
+	}
+	return nil
 }
 
 // attachAlarmLocations fills each alarm's LocationName and LocationPath from
