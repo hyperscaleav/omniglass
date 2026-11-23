@@ -498,7 +498,7 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
         hint="Everything this recorded over the page's time range on one axis: health, each alarm from raise to clear, the properties and metrics you pick, events, log lines and commands. Hover a lane, or focus the lanes and use the arrow keys, to read every lane at one instant; click a mark to open it."
         right={<span class="hidden text-xs text-base-content/50 @lg:inline">{rangeLabel(props.range)}</span>}
       />
-      <p data-testid="timeline-readout" class="min-h-[1.25rem] truncate text-[11.5px] tabular-nums text-base-content/75" aria-live="polite" title={hovered() ?? readout()}>
+      <p data-testid="timeline-readout" data-at={cursorX() === undefined ? undefined : "cursor"} class="min-h-[1.25rem] truncate text-[11.5px] tabular-nums text-base-content/75" aria-live="polite" title={hovered() ?? readout()}>
         {hovered() ?? readout() ?? <span class="text-base-content/45">Hover the lanes to read them at one instant.</span>}
       </p>
       <Show when={failed()}>

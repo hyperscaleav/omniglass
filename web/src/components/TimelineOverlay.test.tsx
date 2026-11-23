@@ -151,6 +151,7 @@ describe("TimelineOverlay", () => {
     cursor.set(now - 33 * MIN);
     await waitFor(() => expect(screen.getAllByTestId("timeline-cursor").length).toBeGreaterThanOrEqual(5));
     expect(screen.getByTestId("cursor-line")).toBeTruthy();
+    expect(screen.getByTestId("timeline-readout").dataset.at).toBe("cursor");
     const readout = screen.getByTestId("timeline-readout").textContent!;
     expect(readout).toContain("health outage");
     expect(readout).toContain("reachability-lost raised for 14m");
