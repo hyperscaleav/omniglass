@@ -306,10 +306,10 @@ describe("frameFor", () => {
     expect(frameFor({ x: 0, y: 0, width: 1440, height: 900 }, vp).scale).toBe(1);
   });
 
-  it("takes a zoom over the fit, and keeps the frame inside the capture", () => {
-    // A chip in the top-left corner: the centre moves in so no edge shows.
+  it("takes a zoom over the fit, and centres the box even at the capture's edge", () => {
+    // A chip in the top-left corner sits in the middle of the frame.
     const f = frameFor({ x: 10, y: 10, width: 40, height: 20 }, vp, 1.5);
-    expect(f).toEqual({ scale: 1.5, x: 480, y: 300 });
+    expect(f).toEqual({ scale: 1.5, x: 30, y: 20 });
   });
 });
 

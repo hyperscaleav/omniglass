@@ -11,7 +11,7 @@
 import { copyFileSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { cameraTrack } from '../../marketinglib.mjs';
+import { CAMERA, cameraTrack } from '../../marketinglib.mjs';
 
 // Revideo reports usage to its maintainers unless told not to; a capture run
 // sends nothing anywhere.
@@ -52,7 +52,7 @@ const file = await renderVideo({
     outFile: /** @type {`${string}.mp4`} */ (made),
     outDir: './out',
     logProgress: false,
-    projectSettings: { size: { x: viewport.width, y: viewport.height }, background: '#000000' },
+    projectSettings: { size: { x: viewport.width, y: viewport.height }, background: CAMERA.backdrop },
     puppeteer: { executablePath: chrome, args: ['--no-sandbox'] },
     viteConfig: { logLevel: 'error' },
   },

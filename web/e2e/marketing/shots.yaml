@@ -9,8 +9,10 @@
 # step) without captions. On a loop, a step's `focus` moves the camera as the
 # step starts: `here` eases the frame onto the step's own target, a target
 # eases it onto that, and `out` back to the whole frame; `zoom` (1 to 2) sets
-# the scale instead of fitting the box. A clip that ends zoomed eases out before
-# it loops.
+# the scale instead of fitting the box. The target lands in the middle of the
+# frame, even at the capture's edge (the console's dark base shows past it), so
+# focus the information itself, not the row or panel around it. A clip that
+# ends zoomed eases out before it loops.
 #
 # Each loop tells one story in three beats, and the three bullets beside it on
 # the landing page name those beats in the same order. The camera lands once
@@ -89,21 +91,25 @@ shots:
     start: /explore
     ready: { selector: '[role=treeitem]:has-text("Headquarters")' }
     steps:
+      # Beat 1: the campus opens to a building, a floor and its rooms, framed on
+      # the floor so the chain above it and the rooms below sit mid-frame.
       - click: '[role=treeitem][aria-level="1"]:has(:text-is("Headquarters")) svg >> nth=0'
-        focus: '[role=treeitem][aria-level="1"]:has(:text-is("Headquarters"))'
-        zoom: 1.5
         hold: 300
       - click: '[role=treeitem][aria-level="2"]:has(:text-is("Hq Annex")) svg >> nth=0'
         hold: 300
       - click: '[role=treeitem][aria-level="3"]:has(:text-is("Hq Annex 1")) svg >> nth=0'
-        hold: 900
+        focus: '[role=treeitem][aria-level="3"] :text-is("Hq Annex 1")'
+        zoom: 1.5
+        hold: 1100
       - click: '[role=treeitem][aria-level="4"]:has(:text-is("Hq Annex 1 03"))'
         focus: out
       - click: 'aside[data-blade] button[aria-label=Expand]'
+      # Beat 2: the room's system, its components as a table.
       - wait: { text: Scheduling Panel 1 }
-        focus: here
-        zoom: 1.6
+        focus: '[data-testid=overview-tab] section:has(:text-is("Scheduling Panel 1"))'
+        zoom: 1.4
         hold: 1300
+      # Beat 3: each product in its slot.
       - wait: { text: Newtron Slate 5 }
         focus: here
         zoom: 1.6

@@ -47,7 +47,10 @@ const STEP_KEYS = [...STEP_KINDS, 'hold', 'focus', 'zoom', 'fast'];
 // scale instead of fitting the box. Moves ease over CAMERA.ease seconds and
 // never show past the capture's edge; a clip that ends zoomed eases back out
 // before it loops, so the seam is invisible.
-export const CAMERA = { ease: 0.6, maxZoom: 2, minZoom: 1, margin: 0.1 };
+// backdrop is the console's own base colour (--color-base-100, dark): the
+// frame shows it past the capture's edge when a focus near that edge is
+// centred.
+export const CAMERA = { ease: 0.6, maxZoom: 2, minZoom: 1, margin: 0.1, backdrop: '#080c16' };
 export const MAX_FAST = 8;
 const ID = /^[a-z0-9][a-z0-9-]*$/;
 const isObj = (/** @type {unknown} */ v) => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -465,8 +468,9 @@ export function referencedResources(items, start) {
 
 /**
  * The frame a focus asks for: the scale that fits the box with a margin (or the
- * step's zoom), capped, and the centre moved in so the frame never shows past
- * the capture's edge. A null box is the whole frame.
+ * step's zoom), capped, centred on the box. The box is what the beat is about,
+ * so it sits in the middle of the frame even near the capture's edge; past that
+ * edge the frame shows the backdrop. A null box is the whole frame.
  * @param {Box | null} box in CSS pixels of the viewport
  * @param {Viewport} vp
  * @param {number} [zoom]
@@ -480,12 +484,10 @@ export function frameFor(box, vp, zoom) {
     (vp.height * (1 - 2 * CAMERA.margin)) / Math.max(box.height, 1),
   );
   const scale = Math.min(CAMERA.maxZoom, Math.max(CAMERA.minZoom, zoom ?? fit));
-  const halfW = vp.width / (2 * scale), halfH = vp.height / (2 * scale);
-  const clamp = (/** @type {number} */ v, /** @type {number} */ lo, /** @type {number} */ hi) => Math.min(Math.max(v, lo), hi);
   return {
     scale: round(scale),
-    x: round(clamp(box.x + box.width / 2, halfW, vp.width - halfW)),
-    y: round(clamp(box.y + box.height / 2, halfH, vp.height - halfH)),
+    x: round(box.x + box.width / 2),
+    y: round(box.y + box.height / 2),
   };
 }
 
