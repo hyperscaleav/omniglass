@@ -98,6 +98,16 @@ give it one ("Control processor") to say what the connection is FOR, since `ssh`
 reached and reads the same on every component in the fleet. It is optional, and an endpoint
 without one reads its transport name exactly.
 
+An endpoint reads **the same whole story in two places**: the component's expanded endpoint row
+and the endpoint's own drawer (**Manage**) render one body, so neither shows less than the
+other. It holds the identity and target, the driver (a link into its drawer) and version, the
+availability strip with its uptime, the reach ladder with each rung's last result and time, the
+session and any reasons the gate is held, the parameters and inputs with where each value came
+from (set on this endpoint, the driver's default, or derived from inputs), the **names** of the
+secrets it is bound to (never a value), whether it is an out-of-band management path, and each
+poll with its interval, what it last read, and the **Test** that runs it now. The long
+sections fold under a one-line summary.
+
 - With `endpoint:create`, **Add endpoint** on the component detail creates one, in either of
   two faces:
   - **Probe**: give it a **label** (optional, and the only name-like string you type here),
