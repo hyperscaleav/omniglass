@@ -380,8 +380,8 @@ permission and its own audit verb; systems and components read where they sit.
 together (the rename last, so a refusal leaves the rest saved), Cancel reverts. A
 `?edit=1` address lands already editing. A sole system's Configure also carries its location's
 form, in its own section with its own Edit (`?edit=location` opens that one). A location's and a
-component's views carry the same tab. The side panel carries the same form's identity, classification and tags; slots,
-properties and their cascade are configuration, and live here.
+component's views carry the same tab. A blade opened from Explore carries this same Configure
+tab, panels, Edit and Delete included: it is the detail view in a side panel (ADR-2423).
 
 ::screenshot{#fleet-configure}
 
