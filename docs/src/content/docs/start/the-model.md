@@ -60,11 +60,14 @@ minutes, a temperature over its line. A rule that carries a **severity level** r
 on the component, which stays raised until the criteria clear.
 
 Health then rolls up. A slot with fewer working components than it wants is impaired, and contributes
-what the standard says losing it means. The system takes the worst contribution, and a location the
-worst of everything in it. A system's health is one of four values:
+what the standard says losing it means. A member the system holds outside every slot contributes
+**degraded** while it has an open alarm, and never more: only a slot says what losing a component
+costs, so only a slot can make the system an outage. The system takes the worst contribution, and a
+location the worst of everything in it. A system's health is one of four values:
 
 - **healthy**: everything is present and well;
-- **incomplete**: still missing a component its standard requires (commissioning, not a fault);
+- **incomplete**: still missing a component its standard requires, or holding one still to attach
+  (commissioning, not a fault);
 - **degraded**: it still works, but has lost something it should have;
 - **outage**: it cannot do its job.
 

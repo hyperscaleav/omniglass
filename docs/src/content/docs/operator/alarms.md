@@ -214,7 +214,11 @@ the first state and you need to be able to see past it to the second.
 
 A location's health is the **worst** of every system placed anywhere beneath it, so a top-level location reads red
 when one system anywhere beneath it is out. A system's health is the worst contribution among the **slots** it
-needs filled.
+needs filled and its members **not in a slot**: an open alarm on a member that fills no slot makes the
+system **degraded**, never an outage, because only a slot says what losing a component costs the room.
+A slot whose components are still to attach (placed, typically from a template, with no endpoint yet)
+reads **incomplete**, like a slot nobody filled. The line beside the system's health says which of
+these it is.
 
 **The system's view is the answer to "why".** A bare "degraded" gives you nothing to do, so the
 view names the chain instead: **Why** leads its Overview, each alarm naming the down component

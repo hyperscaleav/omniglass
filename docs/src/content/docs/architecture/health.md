@@ -69,8 +69,9 @@ alarm on a component
        it, but it keeps its slot)
       -> a slot falls below its quorum and is impaired
         -> the slot contributes its declared impact
-          -> the system takes the worst contribution
-            -> the location takes the worst of its systems
+          -> a member in no slot with any open alarm contributes degraded
+            -> the system takes the worst contribution
+              -> the location takes the worst of its systems
 ```
 
 - An **[alarm](#the-alarm-what-is-wrong-with-one-component)** is **component-local** and impairs its
@@ -84,6 +85,13 @@ alarm on a component
 - A slot with fewer occupying components than its **quorum** is **impaired**, contributing its
   **impact**; the system takes the **worst** contribution, the location the worst across its
   subtree's systems.
+- A **member outside every slot** (bound into the system, filling none of its slots) contributes
+  **`degraded`** while it carries any open alarm, whatever the alarm's severity, and never `outage`:
+  only a slot declares what losing a component costs the room
+  ([ADR-2459](/architecture/decisions/#adr-2459-a-member-outside-a-slot-degrades-its-system-and-an-occupant-still-to-attach-reads-incomplete)).
+  A hand-built system, with no standard and so no slots, therefore degrades when one of its
+  components does. The alarm counts as it does for an occupant: open until cleared, whether or not
+  anybody acknowledged or snoozed it.
 
 A component's own health is the only thing that travels from the box that breaks to the slot that
 cares: hence the routing key ([ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain), amended #626).
@@ -157,9 +165,15 @@ Two consequences follow from `impact` describing failure rather than absence:
 A slot inside a **choice** whose alternate did not win contributes nothing at all, `incomplete`
 included: the build the room was not made to is not outstanding work.
 
+An occupant **still to attach** (its product is collected through a driver and it has no endpoint
+yet, as a system started from a template leaves it) occupies its slot, since nothing has failed, but
+a slot whose attached occupants fall short of quorum reads `incomplete`. A component whose product has
+no driver (a passive speaker) has nothing to attach and is never pending (ADR-2459).
+
 Health is **distinct from severity**: severity is an alarm's urgency
 ([alarms and actions](/architecture/alarms-actions/)), health an entity's operational state; a
-`high` alarm on a component filling no slot moves nothing above it.
+`high` alarm on a component filling no slot degrades its system exactly as a `warning` does, and no
+further.
 
 ## The rollup is a pure function
 
@@ -174,8 +188,8 @@ Two defaults are deliberate safety calls pointing in **opposite** directions:
 - An **unrecognized recorded value reads `healthy`**: one stray row must not paint a fleet broken.
 
 The rule behind both: **fail loud about a judgement, fail quiet about a record.** Two more defaults
-follow: a **system with no slots is `healthy`** (nothing claimed about it), and a **quorum below
-one reads as one** (a slot no component need fill is not a slot).
+follow: a **system with no slots and no alarmed member is `healthy`** (nothing claimed about it),
+and a **quorum below one reads as one** (a slot no component need fill is not a slot).
 
 ## Health is recorded as a transition
 
@@ -212,6 +226,8 @@ the cause and the health commit together or not at all:
 |---|---|
 | raise or clear an **alarm** | the component's own health, and every slot it occupies, can flip |
 | **assign** or **unassign** a component | a slot reaches or falls below its quorum |
+| **bind** or **unbind** a member, or **delete** a member component | a member outside a slot joins or leaves what decides the system's health |
+| **attach** or **remove** an endpoint, or change a component's **product** | an occupant becomes, or stops being, still to attach |
 | **declare** or **withdraw** a slot | a system gains or loses a slot it can be short of |
 | change a slot's **quorum** or **impact** | the same staffing crosses a different line |
 | **create** a system | its opening health gives its history a beginning |
@@ -297,8 +313,9 @@ remain the source for history**; a missing trigger can cost an **edge**, never a
 Two reads, both scope-injected, both a non-disclosing 404 for an owner outside the caller's scope
 ([API](/architecture/api/#health-and-why)).
 
-**A system's report** is the health, every slot it needs filled, and for an impaired slot the
-causing chain: "the `room-mic` slot wants 2 and has 1, because `mic-pod-2` went down on a high
+**A system's report** is the health, a `reason` line saying it in words, every member with its own
+health, its open alarms and whether it fills a slot (`outside_slot`), every slot it needs filled, and
+for an impaired slot the causing chain: "the `room-mic` slot wants 2 and has 1, because `mic-pod-2` went down on a high
 alarm raised at 14:02" tells the operator where to walk. A slot impaired with **no assigned component
 down** (nobody assigned, or fewer assigned than the quorum wants) names no alarm, distinguishing
 **short-staffed** from **broken**.
@@ -336,7 +353,8 @@ acknowledged and when, and to offer **Acknowledge** on the rest (#990).
 
 Severity drives the **component's own** health (any active alarm makes it `degraded`, one at or above `high`
 one an `outage`) and **nothing above it**: what reaches a slot is only whether its occupant's
-health is `outage`, not the severity that produced it or whether it is merely `degraded`. Severity
+health is `outage`, not the severity that produced it or whether it is merely `degraded`, and what
+reaches a system from a member outside every slot is only whether it has an open alarm. Severity
 is how loudly to page somebody, impact is what the room lost. A component's health records on its
 own arc, so a component filling no slot still carries accurate history.
 
