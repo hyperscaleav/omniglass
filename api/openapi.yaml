@@ -5333,6 +5333,13 @@ components:
           format: uri
           readOnly: true
           type: string
+        carried_in:
+          description: "The health in force when the range opened: the last recorded edge before its start. Present when the caller bounded the start (an explicit since, or the one derived from until); absent on the default window, or when nothing was recorded before it. A timeline draws the stretch before the first transition from it"
+          type: string
+        first_recorded_at:
+          description: When this owner's health was first recorded; absent if never. How long it has been watched, whatever the range
+          format: date-time
+          type: string
         health:
           description: "healthy, incomplete, degraded, or outage: the rollup of the slots or systems served beside it. incomplete is a commissioning gap, a slot short because the hardware was never installed rather than because installed hardware is failing, and it ranks between healthy and degraded"
           type: string
@@ -18056,6 +18063,56 @@ paths:
       summary: List a component's recent events
       x-omniglass-mcp: {}
       x-omniglass-permission: component:read
+  /components/{name}/health:
+    get:
+      description: "The component's own current health (healthy, degraded or outage from its active alarms; unknown for a device nothing has observed) beside the recorded edges that got it there, in the shape the system health read returns: slots and systems are empty, transitions are one entry per change inside since..until (default the last 30 days), oldest first. since after until is a 400. Gated by component:read; an out-of-scope component is a non-disclosing 404."
+      operationId: get-component-health
+      parameters:
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
+            examples:
+              - hq.west.level-2.boardroom-a.$comp.videobar-1
+            type: string
+        - description: Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent
+          explode: false
+          in: query
+          name: since
+          schema:
+            description: Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent
+            examples:
+              - "2026-11-01T00:00:00Z"
+            format: date-time
+            type: string
+        - description: Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since
+          explode: false
+          in: query
+          name: until
+          schema:
+            description: Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since
+            examples:
+              - "2026-11-23T00:00:00Z"
+            format: date-time
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FleetHealthOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Read a component's health
+      x-omniglass-mcp: {}
+      x-omniglass-permission: component:read
   /components/{name}/identity-bindings:
     get:
       description: "The identity bindings of this conduit component: each value it reports under a match key (a registered property type, such as ucc-room-id) and the one system or component that value's samples land on. A component that speaks for many owners (a cloud service, a controller fronting many components) is the conduit, the path rather than the owner. Each binding is named only when its owner is inside the caller's read on its tier (system:read for a system owner, component:read for a component owner); the rest are counted in hidden, never named. Gated by component:read; a conduit outside it is a non-disclosing 404."
@@ -20533,7 +20590,7 @@ paths:
       x-omniglass-permission: location:update
   /locations/{name}/health:
     get:
-      description: The location's current health, worst-wins over every system placed anywhere beneath it, with those systems and their health as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+      description: The location's current health, worst-wins over every system placed anywhere beneath it, with those systems and their health as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges inside since..until (default the last 30 days); since after until is a 400. Gated by location:read; an out-of-scope location is a non-disclosing 404.
       operationId: get-location-health
       parameters:
         - description: The location's name, or a dotted address (e.g. boi.17c.415a)
@@ -20542,6 +20599,26 @@ paths:
           required: true
           schema:
             description: The location's name, or a dotted address (e.g. boi.17c.415a)
+            type: string
+        - description: Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent
+          explode: false
+          in: query
+          name: since
+          schema:
+            description: Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent
+            examples:
+              - "2026-11-01T00:00:00Z"
+            format: date-time
+            type: string
+        - description: Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since
+          explode: false
+          in: query
+          name: until
+          schema:
+            description: Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since
+            examples:
+              - "2026-11-23T00:00:00Z"
+            format: date-time
             type: string
       responses:
         "200":
@@ -23939,7 +24016,7 @@ paths:
       x-omniglass-permission: system:read
   /systems/{name}/health:
     get:
-      description: "The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404."
+      description: "The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Transitions are the recorded edges inside since..until (default the last 30 days), one entry per change; since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404."
       operationId: get-system-health
       parameters:
         - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
@@ -23948,6 +24025,26 @@ paths:
           required: true
           schema:
             description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
+            type: string
+        - description: Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent
+          explode: false
+          in: query
+          name: since
+          schema:
+            description: Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent
+            examples:
+              - "2026-11-01T00:00:00Z"
+            format: date-time
+            type: string
+        - description: Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since
+          explode: false
+          in: query
+          name: until
+          schema:
+            description: Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since
+            examples:
+              - "2026-11-23T00:00:00Z"
+            format: date-time
             type: string
       responses:
         "200":

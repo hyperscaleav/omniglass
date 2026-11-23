@@ -4248,6 +4248,10 @@ export type HealthTransitionBody = {
 export type FleetHealthOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
+  /** The health in force when the range opened: the last recorded edge before its start. Present when the caller bounded the start (an explicit since, or the one derived from until); absent on the default window, or when nothing was recorded before it. A timeline draws the stretch before the first transition from it */
+  carried_in?: string;
+  /** When this owner's health was first recorded; absent if never. How long it has been watched, whatever the range */
+  first_recorded_at?: string;
   /** healthy, incomplete, degraded, or outage: the rollup of the slots or systems served beside it. incomplete is a commissioning gap, a slot short because the hardware was never installed rather than because installed hardware is failing, and it ranks between healthy and degraded */
   health: string;
   owner: string;
@@ -4642,8 +4646,6 @@ export type ListComponentsOutputBody = {
   readonly $schema?: string;
   /** @nullable */
   components: ComponentBody[] | null;
-  /** How many components matched the filters, before limit capped the page. With no filter, how many the caller may read. */
-  total: number;
 };
 
 export type ListDriversOutputBody = {
@@ -5641,8 +5643,6 @@ export type ListSystemsOutputBody = {
   readonly $schema?: string;
   /** @nullable */
   systems: SystemBody[] | null;
-  /** How many systems matched the filter, before limit capped the page. With no filter, how many the caller may read. */
-  total: number;
 };
 
 /**
@@ -9516,20 +9516,6 @@ export type GetCalcRuleStateParams = {
   limit?: number;
 };
 
-export type ListComponentsParams = {
-  /** Only components of this product (name or uuid) */
-  product?: string;
-  /** Only components of a product this driver serves (name or uuid) */
-  driver?: string;
-  /** Only components of a product classified under exactly this component type (name or uuid) */
-  component_type?: string;
-  /**
-   * Cap the page at this many rows; 0 or absent is no cap. total still counts every match.
-   * @minimum 0
-   */
-  limit?: number;
-};
-
 export type ListComponentAlarmsParams = {
   /** Include cleared alarms, so the list is the history rather than what is wrong now */
   include_cleared?: boolean;
@@ -9576,6 +9562,13 @@ export type IssueComponentCommandParams = {
 export type EffectiveTagsParams = {
   /** Resolve against this system, name or uuid (ADR-0062), which the component must be a member of. Omit to resolve against its primary membership, the default for a caller with no system in hand. */
   system?: string;
+};
+
+export type GetComponentHealthParams = {
+  /** Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent */
+  since?: string;
+  /** Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since */
+  until?: string;
 };
 
 export type ListComponentLogsParams = {
@@ -9657,6 +9650,13 @@ export type RunEndpointPollParams = {
   timeout_seconds?: number;
 };
 
+export type GetLocationHealthParams = {
+  /** Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent */
+  since?: string;
+  /** Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since */
+  until?: string;
+};
+
 export type ListNotificationParams = {
   /** Only the notifications about this alarm (its uuid) */
   alarm?: string;
@@ -9683,26 +9683,16 @@ export const ListNotificationStatus = {
   '': '',
 } as const;
 
-export type ListProductsParams = {
-  /** Only products whose contract declares this metric (name or uuid) */
-  declares_metric?: string;
-  /** Only products whose contract declares this property (name or uuid) */
-  declares_property?: string;
-};
-
 /**
  * an RFC 7386 JSON Merge Patch for the namespace; null on a key restores it
  */
 export type PatchSettingsNamespaceBody = {[key: string]: unknown};
 
-export type ListSystemsParams = {
-  /** Only systems built to this standard (name or uuid) */
-  standard?: string;
-  /**
-   * Cap the page at this many rows; 0 or absent is no cap. total still counts every match.
-   * @minimum 0
-   */
-  limit?: number;
+export type GetSystemHealthParams = {
+  /** Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent */
+  since?: string;
+  /** Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since */
+  until?: string;
 };
 
 export type ListSystemLogsParams = {
@@ -12793,28 +12783,21 @@ export type listComponentsResponseError = (listComponentsResponseDefault) & {
 
 export type listComponentsResponse = (listComponentsResponseSuccess | listComponentsResponseError)
 
-export const getListComponentsUrl = (params?: ListComponentsParams,) => {
-  const normalizedParams = new URLSearchParams();
+export const getListComponentsUrl = () => {
 
-  Object.entries(params || {}).forEach(([key, value]) => {
 
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value))
-    }
-  });
 
-  const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/components?${stringifiedParams}` : `/components`
+  return `/components`
 }
 
 /**
- * Lists the components the caller may read, each filtered to its scope subtree. Optional product, driver and component_type filters narrow to the components a catalog row classifies or a driver serves, and limit caps the page while total counts every match (the catalog drawers' used-by reads). Gated by component:read.
+ * Lists the components the caller may read, each filtered to its scope subtree. Gated by component:read.
  * @summary List components in scope
  */
-export const listComponents = async (params?: ListComponentsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listComponentsResponse> => {
+export const listComponents = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listComponentsResponse> => {
 
-  return ogFetch<listComponentsResponse>(getListComponentsUrl(params),
+  return ogFetch<listComponentsResponse>(getListComponentsUrl(),
   {
     ...options,
     method: 'GET'
@@ -13796,6 +13779,59 @@ export const getListComponentEventsUrl = (name: string,) => {
 export const listComponentEvents = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listComponentEventsResponse> => {
 
   return ogFetch<listComponentEventsResponse>(getListComponentEventsUrl(name),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type getComponentHealthResponse200 = {
+  data: FleetHealthOutputBody
+  status: 200
+}
+
+export type getComponentHealthResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type getComponentHealthResponseSuccess = (getComponentHealthResponse200) & {
+  headers: Headers;
+};
+export type getComponentHealthResponseError = (getComponentHealthResponseDefault) & {
+  headers: Headers;
+};
+
+export type getComponentHealthResponse = (getComponentHealthResponseSuccess | getComponentHealthResponseError)
+
+export const getGetComponentHealthUrl = (name: string,
+    params?: GetComponentHealthParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/components/${name}/health?${stringifiedParams}` : `/components/${name}/health`
+}
+
+/**
+ * The component's own current health (healthy, degraded or outage from its active alarms; unknown for a device nothing has observed) beside the recorded edges that got it there, in the shape the system health read returns: slots and systems are empty, transitions are one entry per change inside since..until (default the last 30 days), oldest first. since after until is a 400. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+ * @summary Read a component's health
+ */
+export const getComponentHealth = async (name: string,
+    params?: GetComponentHealthParams, options?: Parameters<typeof ogFetch>[1]): Promise<getComponentHealthResponse> => {
+
+  return ogFetch<getComponentHealthResponse>(getGetComponentHealthUrl(name,params),
   {
     ...options,
     method: 'GET'
@@ -17520,21 +17556,30 @@ export type getLocationHealthResponseError = (getLocationHealthResponseDefault) 
 
 export type getLocationHealthResponse = (getLocationHealthResponseSuccess | getLocationHealthResponseError)
 
-export const getGetLocationHealthUrl = (name: string,) => {
+export const getGetLocationHealthUrl = (name: string,
+    params?: GetLocationHealthParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/locations/${name}/health`
+  return stringifiedParams.length > 0 ? `/locations/${name}/health?${stringifiedParams}` : `/locations/${name}/health`
 }
 
 /**
- * The location's current health, worst-wins over every system placed anywhere beneath it, with those systems and their health as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+ * The location's current health, worst-wins over every system placed anywhere beneath it, with those systems and their health as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges inside since..until (default the last 30 days); since after until is a 400. Gated by location:read; an out-of-scope location is a non-disclosing 404.
  * @summary Read a location's health
  */
-export const getLocationHealth = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getLocationHealthResponse> => {
+export const getLocationHealth = async (name: string,
+    params?: GetLocationHealthParams, options?: Parameters<typeof ogFetch>[1]): Promise<getLocationHealthResponse> => {
 
-  return ogFetch<getLocationHealthResponse>(getGetLocationHealthUrl(name),
+  return ogFetch<getLocationHealthResponse>(getGetLocationHealthUrl(name,params),
   {
     ...options,
     method: 'GET'
@@ -19982,28 +20027,21 @@ export type listProductsResponseError = (listProductsResponseDefault) & {
 
 export type listProductsResponse = (listProductsResponseSuccess | listProductsResponseError)
 
-export const getListProductsUrl = (params?: ListProductsParams,) => {
-  const normalizedParams = new URLSearchParams();
+export const getListProductsUrl = () => {
 
-  Object.entries(params || {}).forEach(([key, value]) => {
 
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value))
-    }
-  });
 
-  const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/products?${stringifiedParams}` : `/products`
+  return `/products`
 }
 
 /**
- * Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. declares_metric and declares_property narrow it to the products whose contract declares that key. Gated by product:read.
+ * Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
  * @summary List products
  */
-export const listProducts = async (params?: ListProductsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listProductsResponse> => {
+export const listProducts = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listProductsResponse> => {
 
-  return ogFetch<listProductsResponse>(getListProductsUrl(params),
+  return ogFetch<listProductsResponse>(getListProductsUrl(),
   {
     ...options,
     method: 'GET'
@@ -22620,28 +22658,21 @@ export type listSystemsResponseError = (listSystemsResponseDefault) & {
 
 export type listSystemsResponse = (listSystemsResponseSuccess | listSystemsResponseError)
 
-export const getListSystemsUrl = (params?: ListSystemsParams,) => {
-  const normalizedParams = new URLSearchParams();
+export const getListSystemsUrl = () => {
 
-  Object.entries(params || {}).forEach(([key, value]) => {
 
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value))
-    }
-  });
 
-  const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/systems?${stringifiedParams}` : `/systems`
+  return `/systems`
 }
 
 /**
- * Lists the systems the caller may read, each filtered to its scope subtree. An optional standard filter narrows to the systems built to one standard, and limit caps the page while total counts every match. Gated by system:read.
+ * Lists the systems the caller may read, each filtered to its scope subtree. Gated by system:read.
  * @summary List systems in scope
  */
-export const listSystems = async (params?: ListSystemsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listSystemsResponse> => {
+export const listSystems = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listSystemsResponse> => {
 
-  return ogFetch<listSystemsResponse>(getListSystemsUrl(params),
+  return ogFetch<listSystemsResponse>(getListSystemsUrl(),
   {
     ...options,
     method: 'GET'
@@ -22936,21 +22967,30 @@ export type getSystemHealthResponseError = (getSystemHealthResponseDefault) & {
 
 export type getSystemHealthResponse = (getSystemHealthResponseSuccess | getSystemHealthResponseError)
 
-export const getGetSystemHealthUrl = (name: string,) => {
+export const getGetSystemHealthUrl = (name: string,
+    params?: GetSystemHealthParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/systems/${name}/health`
+  return stringifiedParams.length > 0 ? `/systems/${name}/health?${stringifiedParams}` : `/systems/${name}/health`
 }
 
 /**
- * The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+ * The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Transitions are the recorded edges inside since..until (default the last 30 days), one entry per change; since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.
  * @summary Read a system's health
  */
-export const getSystemHealth = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getSystemHealthResponse> => {
+export const getSystemHealth = async (name: string,
+    params?: GetSystemHealthParams, options?: Parameters<typeof ogFetch>[1]): Promise<getSystemHealthResponse> => {
 
-  return ogFetch<getSystemHealthResponse>(getGetSystemHealthUrl(name),
+  return ogFetch<getSystemHealthResponse>(getGetSystemHealthUrl(name,params),
   {
     ...options,
     method: 'GET'

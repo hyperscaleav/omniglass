@@ -234,7 +234,7 @@ func TestCreatePlanRecordsOneHealthEdgePerOwner(t *testing.T) {
 	}
 
 	all := scope.Set{All: true}
-	rep, err := gw.SystemHealth(ctx, made.Systems[0].System.ID, 0, all)
+	rep, err := gw.SystemHealth(ctx, made.Systems[0].System.ID, storage.HealthRange{}, all)
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}
@@ -242,7 +242,7 @@ func TestCreatePlanRecordsOneHealthEdgePerOwner(t *testing.T) {
 		t.Errorf("the staffed system reads %q, want healthy", rep.Verdict)
 	}
 	for _, l := range made.Locations {
-		rep, err := gw.LocationHealth(ctx, l.ID, 0, all)
+		rep, err := gw.LocationHealth(ctx, l.ID, storage.HealthRange{}, all)
 		if err != nil {
 			t.Fatalf("location health %s: %v", l.Name, err)
 		}

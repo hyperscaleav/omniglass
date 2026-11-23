@@ -137,3 +137,66 @@ func TestIntegrationPsqlRunsUnderTheDeadline(t *testing.T) {
 		t.Fatalf("the query ran under statement_timeout %dms, want the context's 90s", ms)
 	}
 }
+
+// A window spanning a retention partition drop measures the rows inserted
+// rather than failing as a Postgres restart (#1956): the dropped partition's
+// stats row goes with it, so the totals fall though nothing was reset.
+func TestIntegrationWindowAcrossDroppedPartition(t *testing.T) {
+	h, conn := psqlHarness(t)
+	ctx := context.Background()
+	for _, q := range []string{
+		`create table metric (t int, v int) partition by range (t)`,
+		`create table metric_p1 partition of metric for values from (0) to (100)`,
+		`create table metric_p2 partition of metric for values from (100) to (200)`,
+		`create table metric_p3 partition of metric for values from (200) to (300)`,
+		`create table property (k int)`,
+		`insert into metric select 1, g from generate_series(1, 50) g`,
+		`insert into metric select 150, g from generate_series(1, 10) g`,
+	} {
+		if _, err := conn.Exec(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	read := func() DBCounters {
+		t.Helper()
+		// Stats are flushed to the shared stats system asynchronously.
+		var c DBCounters
+		for end := time.Now().Add(10 * time.Second); ; time.Sleep(200 * time.Millisecond) {
+			out, err := h.psql(ctx, DBCountersQuery)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if c, err = ParseDBCounters(out); err != nil {
+				t.Fatal(err)
+			}
+			if c.MetricRows > 0 || time.Now().After(end) {
+				return c
+			}
+		}
+	}
+	db0 := read()
+	for _, q := range []string{
+		`insert into metric select 250, g from generate_series(1, 7) g`,
+		`insert into metric select 150, g from generate_series(1, 3) g`,
+		`drop table metric_p1`,
+	} {
+		if _, err := conn.Exec(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var db1 DBCounters
+	for end := time.Now().Add(10 * time.Second); ; time.Sleep(200 * time.Millisecond) {
+		db1 = read()
+		if db1.MetricRows >= 10+10 || time.Now().After(end) {
+			break
+		}
+	}
+	db1.At = db0.At.Add(time.Minute)
+	w, err := WindowOf(db0, db1, nil, nil)
+	if err != nil {
+		t.Fatalf("a dropped partition failed the window: %v", err)
+	}
+	if w.SamplesLanded != 10 {
+		t.Fatalf("landed %d rows, want 10", w.SamplesLanded)
+	}
+}
