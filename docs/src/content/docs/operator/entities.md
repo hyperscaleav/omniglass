@@ -123,9 +123,12 @@ link lands reading, quietly. Leaving edit (Cancel or Save) strips the param, so 
 mid-edit keeps your place, while Back and a re-shared URL never reopen an edit you already
 left. A location holding one system is configured on its system's view, so `?edit=1` on that
 location's address lands on the system's Configure with the location's own form editing
-(`?edit=location`). The console itself uses these links for its handoffs: creating an entity lands on
-`/…/<id>?edit=1`, and a user's `?open=<id>&edit=1` deep link keeps the same contract on the
-identity pages (the older `?u=<id>` still opens).
+(`?edit=location`). The console uses these links for its handoffs, for example a user's
+`?open=<id>&edit=1` deep link on the identity pages (the older `?u=<id>` still opens). Creating a
+location, system or component does not: it lands on the new row's **Overview** with a "created" notice
+(#2465), since what you want next is to see it. The **back** link above a create form names the location
+you pressed **+** on (`← West Building`) and goes there; opened from nowhere in particular it is
+`← Explore`.
 
 ::screenshot{#entity-edit-face}
 
@@ -194,8 +197,9 @@ identity pages (the older `?u=<id>` still opens).
   field that arrives filled in.
 
   The locked **label** is the real label, rendered by the same rule engine that will stamp it,
-  against the classification and placement you have just chosen, and against that same number. The form
-  also names the **rule** that produced it, so the value is traceable rather than arriving from nowhere.
+  against the classification and placement you have just chosen, and against that same number. The
+  field's **(i)** carries the **rule** that produced it, so the value is traceable rather than arriving from
+  nowhere; the hint under the field says the label is rendered, not the template itself.
   Nothing is created to work either of them out: it is a render, not a draft row
   ([ADR-0104](/architecture/decisions/)).
 

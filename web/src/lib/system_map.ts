@@ -59,6 +59,33 @@ export function mapMarkers(decl: StandardMapDecl, vm: SystemZoomVM): MapMarker[]
   return markers;
 }
 
+// fitMarkers crops the map to the markers it holds (#2465). The declaration is
+// the whole room at its aspect, so a system that staffs only a few positions
+// drew a mostly empty box. The window is the markers' bounding box plus a
+// margin (never smaller than MIN_WINDOW of the room on either axis), the
+// markers re-projected into it, and `width` is the window's share of the room's
+// width, which the box takes as its size so a small crop is a small map. The
+// aspect follows the crop. A map spanning the room comes back unchanged. Pure.
+const FIT_PAD = 0.15;
+const MIN_WINDOW = 0.4;
+export function fitMarkers(markers: MapMarker[], aspect: number): { markers: MapMarker[]; aspect: number; width: number } {
+  if (markers.length === 0) return { markers, aspect, width: 1 };
+  const span = (vals: number[]) => {
+    const lo = Math.min(...vals);
+    const hi = Math.max(...vals);
+    const size = Math.min(1, Math.max(MIN_WINDOW, hi - lo + 2 * FIT_PAD));
+    const start = Math.min(Math.max((lo + hi) / 2 - size / 2, 0), 1 - size);
+    return { start, size };
+  };
+  const wx = span(markers.map((m) => m.x));
+  const wy = span(markers.map((m) => m.y));
+  return {
+    markers: markers.map((m) => ({ ...m, x: (m.x - wx.start) / wx.size, y: (m.y - wy.start) / wy.size })),
+    aspect: (aspect * wx.size) / wy.size,
+    width: wx.size,
+  };
+}
+
 // The marker's geometry in px, mirroring the classes components/SystemMap
 // puts on it: an 18 px icon whose centre sits on the point, inside px-1 py-0.5
 // padding, a 2 px gap, then the label (11 px type, 1.25 leading, at most 112 px
