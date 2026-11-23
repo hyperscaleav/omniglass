@@ -149,3 +149,38 @@ func TestOmnibotResumeDecidesTheWaitingCall(t *testing.T) {
 		t.Errorf("%d component writes, want only the approved one", n)
 	}
 }
+
+// A transcript stored with an open call and no marker (a client that keeps a
+// turn without it) is asked about that call on resume (#2129), as a kept
+// marker is: the write waits for the person, and runs on a yes. Skipped under
+// -short.
+func TestOmnibotResumeAsksAnOpenCallWithNoMarker(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	handler, tok := omnibotTestHandler(t)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	call(t, srv.URL, tok, http.MethodPost, "/assistant/conversations", map[string]any{"name": "bare"}, http.StatusCreated)
+	call(t, srv.URL, tok, http.MethodPost, "/assistant/conversations/bare:append", map[string]any{
+		"after": 0,
+		"messages": []map[string]any{
+			{"role": "user", "body": provider.Message{Role: provider.RoleUser, Text: "add amp-8"}},
+			{"role": "assistant", "body": provider.Message{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{
+				{ID: "call-1", Name: "create-component", Arguments: map[string]any{"name": "amp-8", "product": "generic-device"}},
+			}}},
+		},
+	}, http.StatusOK)
+
+	rec := recordingOf(t, "turns:\n  - text: amp-8 is added.\n")
+	out, errOut, err := runOmnibot(t, "y\n", "--server", srv.URL, "--token", tok, "--resume", "bare", "--replay", rec)
+	if err != nil || !strings.Contains(out, "amp-8 is added") {
+		t.Fatalf("resume = %q, %v; stderr %s", out, err, errOut)
+	}
+	call(t, srv.URL, tok, http.MethodGet, "/components/amp-8", nil, http.StatusOK)
+	c := readConversation(t, srv.URL, tok, "bare")
+	if len(c.Messages) != 4 || c.Messages[2].Body.ToolCallID != "call-1" {
+		t.Errorf("kept transcript = %+v, want the call's result and the answer after it", c.Messages)
+	}
+}

@@ -12116,6 +12116,14 @@ components:
           type:
             - array
             - "null"
+        served_ids:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        served_truncated:
+          type: boolean
         started:
           format: date-time
           type: string
