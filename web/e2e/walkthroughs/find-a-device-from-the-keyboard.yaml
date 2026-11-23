@@ -18,7 +18,7 @@ steps:
     hold: 1800
   - press: '2'
     caption: Keep typing to narrow it. Only one component is called videobar-2.
-  - wait: { selector: '[role=option][data-first]:has-text("videobar-2")' }
+  - wait: { selector: '[role=option][data-first]:has-text("Video Bar 2")' }
     caption: The first match is the default, and Ask omnibot is only ever the last row.
   - press: Enter
     caption: Enter opens the highlighted match, here the component's own page.
