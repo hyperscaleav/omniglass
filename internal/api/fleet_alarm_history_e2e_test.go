@@ -80,6 +80,7 @@ func TestFleetAlarmsReadHistoryOverARange(t *testing.T) {
 		ID        string     `json:"id"`
 		ClearedAt *time.Time `json:"cleared_at"`
 		Location  string     `json:"location"`
+		SystemIDs []string   `json:"system_ids"`
 	}
 	read := func(tok, query string, want int) []row {
 		t.Helper()
@@ -129,9 +130,13 @@ func TestFleetAlarmsReadHistoryOverARange(t *testing.T) {
 			t.Errorf("cleared alarm %s carries no cleared_at", names[r.ID])
 		}
 	}
+	roomID := entityID(t, c, owner, "/systems", "hist-room")
 	for _, r := range read(owner, "?state=all", http.StatusOK) {
 		if names[r.ID] == "placed" && r.Location != "hist-hq" {
 			t.Errorf("a component placed through its system names location %q, want hist-hq", r.Location)
+		}
+		if names[r.ID] == "placed" && (len(r.SystemIDs) != 1 || r.SystemIDs[0] != roomID) {
+			t.Errorf("a placed alarm names system ids %v, want [%s] so the console can link the system", r.SystemIDs, roomID)
 		}
 	}
 

@@ -628,6 +628,16 @@ describe("the history tab (#792)", () => {
     expect(await within(tab).findByText("Fan speed high")).toBeTruthy();
   });
 
+  // #2426: a cleared alarm says how long it was raised, the same words the
+  // alarms page and a component's panel use.
+  it("says how long a cleared alarm outside every stretch was raised", async () => {
+    const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`);
+    seedAlarms(r.qc);
+    const tab = screen.getByTestId("history-tab");
+    const row = (await within(tab).findByText("Fan speed high")).closest("li")!;
+    expect(row.textContent).toContain("lasted 41m");
+  });
+
   it("Activity is always on the rail, with the timeline and raise markers", async () => {
     const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`);
     seedAlarms(r.qc);

@@ -748,6 +748,16 @@
             "format": "date-time",
             "type": "string"
           },
+          "system_ids": {
+            "description": "Those systems' uuids, in the same order as systems; only on the fleet queue",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "systems": {
             "description": "The names of the systems the alarm's component is a member of; only on the fleet queue",
             "items": {

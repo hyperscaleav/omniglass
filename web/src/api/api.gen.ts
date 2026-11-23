@@ -522,6 +522,11 @@ export type AlarmBody = {
   /** Until when the alarm (by component and dedup_key) is snoozed: its notifications are written suppressed until then. Null while it is not snoozed. Independent of acknowledged and cleared_at */
   snoozed_until?: string;
   /**
+     * Those systems' uuids, in the same order as systems; only on the fleet queue
+     * @nullable
+     */
+  system_ids?: string[] | null;
+  /**
      * The names of the systems the alarm's component is a member of; only on the fleet queue
      * @nullable
      */

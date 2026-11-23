@@ -194,3 +194,103 @@ describe("Alarms page", () => {
     });
   });
 });
+
+// #2426: the history. A state filter held in the address, Raised, Cleared and
+// Duration columns, a cleared row opening the same drawer, and the lifecycle
+// walk's cell fixes (a system-placed location, links, who acknowledged).
+describe("Alarms page history (#2426)", () => {
+  const T0 = Date.now() - 3 * 3_600_000;
+  const open = alarm({ message: "still dark", raised_at: new Date(T0).toISOString(), system_ids: [uuidFor("boardroom")], location: "room-1", location_path: "hq.room-1" });
+  const gone = alarm({
+    message: "was dark",
+    component: "dsp-1",
+    component_id: uuidFor("dsp-1"),
+    raised_at: new Date(T0).toISOString(),
+    cleared_at: new Date(T0 + 12 * 60_000).toISOString(),
+    active: false,
+    acknowledged: true,
+    acknowledged_by: "ada",
+    systems: [],
+  });
+  const mountState = (at: string) => {
+    calls = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const req = input as Request;
+      const url = new URL(typeof input === "string" ? input : req.url, "http://local");
+      calls.push({ method: (init?.method ?? req.method ?? "GET").toUpperCase(), url });
+      const json = (b: unknown) => new Response(JSON.stringify(b), { status: 200, headers: { "Content-Type": "application/json" } });
+      if (url.pathname.endsWith(":timeline")) return json({ component: "dsp-1", alarm_id: "x", entries: [] });
+      const state = url.searchParams.get("state") ?? "active";
+      return json({ alarms: state === "cleared" ? [gone] : state === "all" ? [open, gone] : [open] });
+    });
+    window.history.pushState({}, "", at);
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    qc.setQueryData([...ME_KEY], me(OPERATOR));
+    qc.setQueryData([...severityLevelsKey], []);
+    let search = () => "";
+    const Probe = () => {
+      const loc = useLocation();
+      search = () => loc.search;
+      return <Alarms />;
+    };
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router><Route path="*" component={Probe} /></Router>
+      </QueryClientProvider>
+    ));
+    return { search: () => search() };
+  };
+
+  it("holds the state in the address and reads it from the server", async () => {
+    const { search } = mountState("/");
+    await screen.findByText("still dark");
+    expect(listReads()[0].url.searchParams.get("state")).toBeNull();
+    const group = screen.getByRole("radiogroup", { name: "Alarm state" });
+    fireEvent.click(within(group).getByLabelText("Cleared"));
+    expect(await screen.findByText("was dark")).toBeInTheDocument();
+    expect(search()).toContain("state=cleared");
+    expect(listReads().at(-1)!.url.searchParams.get("state")).toBe("cleared");
+    expect(screen.queryByText("still dark")).toBeNull();
+  });
+
+  it("opens on the state the address names", async () => {
+    mountState("/?state=all");
+    await screen.findByText("was dark");
+    expect(screen.getByText("still dark")).toBeInTheDocument();
+    expect(within(screen.getByRole("radiogroup", { name: "Alarm state" })).getByLabelText("All")).toBeChecked();
+  });
+
+  it("shows when a cleared alarm cleared and how long it lasted", async () => {
+    mountState("/?state=cleared");
+    const row = (await screen.findByText("was dark")).closest("tr")!;
+    expect(within(row).getByTestId("alarm-duration")).toHaveTextContent("12m");
+    expect(within(row).getByTestId("alarm-cleared")).toHaveTextContent(/ago/);
+    expect(screen.getByRole("columnheader", { name: /Duration/ })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /Cleared/ })).toBeInTheDocument();
+  });
+
+  it("ticks an open alarm's duration while it stays open", async () => {
+    mountState("/");
+    const row = (await screen.findByText("still dark")).closest("tr")!;
+    expect(within(row).getByTestId("alarm-duration")).toHaveTextContent("3h");
+    expect(within(row).getByTestId("alarm-duration").getAttribute("data-open")).toBe("true");
+  });
+
+  it("opens a cleared row in the same drawer, with its history and no clear actions", async () => {
+    mountState("/?state=cleared");
+    fireEvent.click(await screen.findByText("was dark"));
+    await waitFor(() => expect(calls.some((c) => c.url.pathname.includes(`/components/${uuidFor("dsp-1")}/alarms/`) && c.url.pathname.endsWith(":timeline"))).toBe(true));
+    const drawer = await screen.findByRole("dialog");
+    expect(within(drawer).getByText("Lasted")).toBeInTheDocument();
+    expect(within(drawer).getByText("12m")).toBeInTheDocument();
+    expect(within(drawer).getByText("Cleared")).toBeInTheDocument();
+  });
+
+  it("links the system and the location, and names who acknowledged", async () => {
+    mountState("/?state=all");
+    await screen.findByText("still dark");
+    expect(screen.getByRole("link", { name: "boardroom" })).toHaveAttribute("href", `/systems/${uuidFor("boardroom")}`);
+    expect(screen.getAllByRole("link", { name: "room-1" })[0]).toHaveAttribute("href", "/locations/hq.room-1");
+    expect(screen.getByText("acked by ada")).toBeInTheDocument();
+  });
+});

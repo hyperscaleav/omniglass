@@ -62,6 +62,7 @@ type alarmBody struct {
 	Location     string   `json:"location,omitempty" doc:"The name of the location the alarm's component sits in (its plane root's location); absent when the component is unplaced, and on every read but the fleet queue"`
 	LocationPath string   `json:"location_path,omitempty" doc:"That location's dotted ancestor path, root first (for example boi.17c)"`
 	Systems      []string `json:"systems,omitempty" doc:"The names of the systems the alarm's component is a member of; only on the fleet queue"`
+	SystemIDs    []string `json:"system_ids,omitempty" doc:"Those systems' uuids, in the same order as systems; only on the fleet queue"`
 }
 
 func toAlarmBody(a *storage.Alarm) alarmBody {
@@ -85,6 +86,7 @@ func toAlarmBody(a *storage.Alarm) alarmBody {
 		Location:       a.LocationName,
 		LocationPath:   strings.Join(a.LocationPath, "."),
 		Systems:        a.Systems,
+		SystemIDs:      a.SystemIDs,
 	}
 }
 

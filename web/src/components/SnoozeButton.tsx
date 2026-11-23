@@ -53,7 +53,7 @@ export function SnoozedBadge(props: { alarm: Snoozable }): JSX.Element {
     <Show when={props.alarm.snoozed_until}>
       {(until) => (
         <span
-          class="badge badge-snoozed badge-xs shrink-0"
+          class="badge badge-snoozed badge-xs h-auto min-h-4 shrink-0 whitespace-nowrap"
           title={`Its notifications are recorded, not sent, until ${fmtTime(until())}${props.alarm.snoozed_by ? `, snoozed by ${props.alarm.snoozed_by}` : ""}`}
         >
           {snoozedUntilWords(until())}
