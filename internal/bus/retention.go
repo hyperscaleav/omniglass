@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/logline"
@@ -277,6 +278,9 @@ func (s *Server) startSampleRetention() {
 	s.sweepDone.Add(1)
 	go func() {
 		defer s.sweepDone.Done()
+		// The lanes the last recorded pass flagged behind, so a lane that
+		// stops being reported is written 0 (#1673).
+		var flagged []string
 		for {
 			start := time.Now()
 			rep, err := retentionPass(ctx, s.store, start, sampleRetentionChunk, sampleRetentionMaxChunks, sampleRetentionTimeout)
@@ -290,8 +294,11 @@ func (s *Server) startSampleRetention() {
 			tellHousekeeping(ctx, s.store, s.platformComponentID, retentionNotes(rep, err), time.Now(), sampleRetentionTimeout)
 			// The pass's figures land on the server's platform component
 			// (#1629); a failed write loses one pass's points, logged.
-			if err := recordRetention(ctx, s.store, s.platformComponentID, rep, time.Now(), sampleRetentionTimeout); err != nil && ctx.Err() == nil {
+			if err := recordRetention(ctx, s.store, s.platformComponentID, rep, flagged, time.Now(), sampleRetentionTimeout); err != nil && ctx.Err() == nil {
 				slog.Warn("retention figures not recorded", "facility", "retention", "error", err.Error())
+				flagged = slices.Compact(slices.Sorted(slices.Values(append(flagged, rep.Behind...))))
+			} else {
+				flagged = slices.Clone(rep.Behind)
 			}
 			t := time.NewTimer(nextRetentionWait(rep))
 			select {

@@ -683,6 +683,11 @@ code). One pass writes one sample per key and instance, at the pass's end:
 - **`retention-behind`** for `metric_trend compaction` and `metric_block compaction`, and
   **`retention-window-days`** (instance `metric`), when the pass ran the compactions (it skips them on
   a metric window out of range).
+- **A lane that stops reporting is written 0.** A lane drops out of a pass when a type override is
+  removed, the override read fails for a pass, a lane's stored window is out of range, or the metric
+  window is out of range (no compactions run). The loop remembers the lanes the last pass flagged
+  behind and writes `retention-behind` = 0 for any of them the pass does not report, so the lane's
+  warning clears instead of firing on its last 1 with no fresh sample to end it (#1673).
 - **`retention-pass-duration`** (seconds), **`retention-pass-failure-count`**, and
   **`metric-partition-created-count`** and **`metric-partition-dropped-count`**, the days the pass
   created ahead and dropped whole.
