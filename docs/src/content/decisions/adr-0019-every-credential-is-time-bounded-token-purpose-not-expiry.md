@@ -13,6 +13,9 @@ summary: "Every credential is time-bounded (reverses tokens-never-expire): sessi
   Expiry is enforced lazily at authentication; there is no background sweep, and session/token lists show
   only live credentials. Deferred: a sliding idle timeout, a housekeeping sweep of long-expired rows, and
   nearing-expiry notifications.
+- **Amended (#2361):** the bound is on credentials that are bearer secrets. An identity provider link
+  (an `oidc` or `saml` row, [ADR-2361](#adr-2361-single-sign-on-links-a-person-to-an-identity-provider-subject-never-by-email)) holds no secret and carries no expiry; the session a
+  sign-in through it mints is the ordinary 12h one.
 - **Context:** The credential-expiry slice ([#157](https://github.com/hyperscaleav/omniglass/issues/157))
   bounded only the web-login session and left the CLI/API token unbounded (`expires_at` null), overloading
   "has an expiry" to mean "is a session". That left an eternal secret in the field, against the every-secret-

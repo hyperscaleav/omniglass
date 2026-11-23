@@ -648,3 +648,15 @@ metric_types:
     unit: d
     label: TLS Certificate Days Left
     description: Days from the probe to the not-after of the certificate a tls probe accepted, to the hundredth, negative once it has expired; one observation per probe, the number a threshold rule reads (an expression cannot read the clock).
+  # Lifecycle (#2366): product facts, set as product-contract defaults.
+  - name: replacement-cost
+    data_type: float
+    unit: USD
+    precision: 2
+    label: Replacement Cost
+    description: What replacing one of this product costs, in US dollars. A product fact, set as the product contract's default.
+  - name: expected-life-years
+    data_type: float
+    unit: years
+    label: Expected Life
+    description: How many years one of this product is expected to last in service. A product fact, set as the product contract's default.

@@ -155,6 +155,13 @@ func (p *PG) SetProductProperty(ctx context.Context, actorID, productID string, 
 	if err := guardTypeMutable(ctx, tx, "product", productID); err != nil {
 		return nil, err
 	}
+	// A reserved key is refused as such before its default is judged.
+	if err := contractKey(spec.PropertyTypeName); err != nil {
+		return nil, err
+	}
+	if err := checkContractDefault(ctx, tx, spec.PropertyTypeName, spec.DefaultValue); err != nil {
+		return nil, err
+	}
 	// The before-image decides create vs update and gives the audit its old side.
 	var before any
 	prior, err := scanProductProperty(tx.QueryRow(ctx,

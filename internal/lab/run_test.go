@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -233,7 +234,7 @@ func testAlive(pid int, start string) bool {
 	return ok && (start == "" || start == got)
 }
 
-func testRunner(eng Engine, out *bytes.Buffer) *Runner {
+func testRunner(eng Engine, out io.Writer) *Runner {
 	return &Runner{
 		Engine: eng, Out: out, Host: "box",
 		Alive:    testAlive,
@@ -348,22 +349,13 @@ func TestRunCreatesAPulledImageFromItsID(t *testing.T) {
 func TestRunHoldsUntilStoppedThenTearsDownKeepingTheData(t *testing.T) {
 	srv := fakeServer(t)
 	eng := newFakeEngine(strings.TrimPrefix(srv.URL, "http://"))
-	var out bytes.Buffer
+	var out syncBuffer
 	cfg := testConfig()
 	cfg.Hold = true
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { _, err := testRunner(eng, &out).Run(ctx, cfg); done <- err }()
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		eng.mu.Lock()
-		n := len(eng.containers)
-		eng.mu.Unlock()
-		if n == 3 || time.Now().After(deadline) {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	waitHolding(t, &out)
 	cancel()
 	if err := <-done; err != nil {
 		t.Fatalf("a stopped lab: %v", err)

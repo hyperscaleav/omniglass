@@ -14015,7 +14015,7 @@ export const getSetComponentPropertyUrl = (name: string,
 }
 
 /**
- * Declares a value for the property on this component, overriding the product contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by component:update; read and update scopes drive the 404 versus 403 split.
+ * Declares a value for the property on this component, overriding the product contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise), and the value must satisfy the property type's data type and validation (422 otherwise). Gated by component:update; read and update scopes drive the 404 versus 403 split.
  * @summary Set a property on a component
  */
 export const setComponentProperty = async (name: string,
@@ -16837,7 +16837,7 @@ export const getSetLocationTypePropertyUrl = (id: string,
 }
 
 /**
- * Declares a catalog property on a location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). A shipped (official) type's contract is writable too: a contract line is a row in its own table and nothing seeds one, so every line is an operator's. An unknown type is a 404 and a property the catalog does not know is a 422. Gated by location_type:update.
+ * Declares a catalog property on a location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). A shipped (official) type's contract is writable too: a contract line is a row in its own table and nothing seeds one, so every line is an operator's. An unknown type is a 404 and a property the catalog does not know is a 422, as is a default its property type refuses. Gated by location_type:update.
  * @summary Declare a property on a location type
  */
 export const setLocationTypeProperty = async (id: string,
@@ -17372,7 +17372,7 @@ export const getSetLocationPropertyUrl = (name: string,
 }
 
 /**
- * Declares a value for the property on this location, overriding the location type contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by location:update; read and update scopes drive the 404 versus 403 split.
+ * Declares a value for the property on this location, overriding the location type contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise), and the value must satisfy the property type's data type and validation (422 otherwise). Gated by location:update; read and update scopes drive the 404 versus 403 split.
  * @summary Set a property on a location
  */
 export const setLocationProperty = async (name: string,
@@ -20104,7 +20104,7 @@ export const getSetProductPropertyUrl = (id: string,
 }
 
 /**
- * Declares a catalog property on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422); an unknown product is a 404 and a property the catalog does not know is a 422. Gated by product:update.
+ * Declares a catalog property on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422); an unknown product is a 404 and a property the catalog does not know is a 422, as is a default its property type refuses. Gated by product:update.
  * @summary Declare a property on a product
  */
 export const setProductProperty = async (id: string,
@@ -21837,7 +21837,7 @@ export const getSetStandardPropertyUrl = (id: string,
 }
 
 /**
- * Declares a catalog property on a custom standard, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official standards are read-only (422); an unknown standard is a 404 and a property the catalog does not know is a 422. Gated by standard:update.
+ * Declares a catalog property on a custom standard, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official standards are read-only (422); an unknown standard is a 404 and a property the catalog does not know is a 422, as is a default its property type refuses. Gated by standard:update.
  * @summary Declare a property on a standard
  */
 export const setStandardProperty = async (id: string,
@@ -23064,7 +23064,7 @@ export const getSetSystemPropertyUrl = (name: string,
 }
 
 /**
- * Declares a value for the property on this system, overriding the standard contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by system:update; read and update scopes drive the 404 versus 403 split.
+ * Declares a value for the property on this system, overriding the standard contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise), and the value must satisfy the property type's data type and validation (422 otherwise). Gated by system:update; read and update scopes drive the 404 versus 403 split.
  * @summary Set a property on a system
  */
 export const setSystemProperty = async (name: string,
