@@ -234,7 +234,7 @@ func TestCreatePlanRecordsOneHealthEdgePerOwner(t *testing.T) {
 	}
 
 	all := scope.Set{All: true}
-	rep, err := gw.SystemHealth(ctx, made.Systems[0].System.ID, storage.HealthRange{}, all)
+	rep, err := gw.SystemHealth(ctx, made.Systems[0].System.ID, storage.HealthRange{}, all, all)
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}

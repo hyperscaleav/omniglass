@@ -7,6 +7,8 @@ import Eyebrow from "./Eyebrow";
 import DetailGate from "./DetailGate";
 import LocationCard from "./LocationCard";
 import MemberRows from "./MemberRows";
+import HealthReason from "./HealthReason";
+import OutsideSlotNotice from "./OutsideSlotNotice";
 import AddComponentLink from "./AddComponentLink";
 import SystemEmpty from "./SystemEmpty";
 import OutlineWorkspace from "./OutlineWorkspace";
@@ -136,7 +138,12 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
   const timelines = createTimelineToggles();
   // The strip reads red when any alarm on it is at an outage level (the
   // catalog's flag, #917), amber when they only degrade.
-  const inOutage = createMemo(() => alarms().some((a) => scale().outage(a.severity)));
+  // An alarm on a member outside every slot moves nothing above it (ADR-2459),
+  // so it gives the strip no fault tone: red only for an outage-level alarm on a
+  // slotted member, amber while one of those is on it, neutral when the strip
+  // holds only alarms that do not count toward the system's health.
+  const inOutage = createMemo(() => alarms().some((a) => !a.outsideSlot && scale().outage(a.severity)));
+  const counts = createMemo(() => alarms().some((a) => !a.outsideSlot));
   const bodyOf = createMemo(() => (vm() ? componentCards(vm()!) : undefined));
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards }));
   const standardRow = createMemo(() => (standards.data ?? []).find((x) => x.name === standard()));
@@ -339,6 +346,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
             <div data-testid="system-header" class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-base-300 px-4 py-3 text-sm">
               <Eyebrow label="System" hint="The logical group of components that makes this location work, and the thing Omniglass monitors: its health is what the components filling its slots add up to." />
               <HealthBadge health={health.data?.health} size="sm" />
+              <HealthReason health={health.data?.health} reason={health.data?.reason} />
               <Show when={health.data && sinceOf(health.data, now())}>
                 {(sc) => <span data-testid="since-line" class="tabular-nums text-base-content/70">since {fmtTime(sc().ts)} · {durationText(sc().ms)}</span>}
               </Show>
@@ -599,7 +607,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                   {/* Cause before arithmetic (#785): what is wrong, on which
                       component, impairing which slot, since when. */}
                   <Show when={alarms().length > 0}>
-                    <section data-testid="alarm-strip" class="flex flex-col gap-1.5 rounded-box border p-3" classList={{ "border-error/40 bg-error/5": inOutage(), "border-warning/40 bg-warning/5": !inOutage() }}>
+                    <section data-testid="alarm-strip" class="flex flex-col gap-1.5 rounded-box border p-3" classList={{ "border-error/40 bg-error/5": inOutage(), "border-warning/40 bg-warning/5": counts() && !inOutage(), "border-base-300": !counts() }}>
                       <h2 class="eyebrow">Why</h2>
                       <For each={alarms()}>
                         {(a) => (
@@ -613,7 +621,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                               <Show when={a.componentId} fallback={<span class="font-mono text-xs text-base-content/60">{a.component}</span>}>
                                 {(cid) => <button type="button" class="cursor-pointer font-mono text-xs text-base-content/80 hover:underline" onClick={() => openComponent(cid())}>{a.component}</button>}
                               </Show>
-                              <span class="text-xs text-base-content/50">impairs {a.slotLabel} · {durationText(now() - Date.parse(a.raisedAt))}</span>
+                              <span class="text-xs text-base-content/50">{a.where} · {durationText(now() - Date.parse(a.raisedAt))}</span>
                               <Show when={a.acknowledged}>
                                 <span class="text-xs text-base-content/50">
                                   · acknowledged{a.acknowledgedBy ? ` by ${a.acknowledgedBy}` : ""}{a.acknowledgedAt ? ` ${fmtTime(a.acknowledgedAt)}` : ""}
@@ -642,6 +650,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                         <AddComponentLink system={id()} size="xs" intent="quiet" />
                       </Show>
                     </div>
+                    <OutsideSlotNotice members={health.data?.members ?? undefined} placeHref={can(me.data, "system", "update") ? `/systems/${id()}?tab=configure` : undefined} />
                     <Show when={!membersQ.isPending && noMembers()}>
                       <SystemEmpty systemId={id()} hasStandard={!!standard()} onStandard={() => tabState.select("configure")} />
                     </Show>

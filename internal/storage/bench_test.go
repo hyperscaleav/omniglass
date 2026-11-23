@@ -536,7 +536,7 @@ func BenchmarkSystemHealth(b *testing.B) {
 		ctx := context.Background()
 		window := time.Duration(0)
 		rows := warmRows(b, func() (int, error) {
-			rep, err := e.gw.SystemHealth(ctx, e.sysName, storage.HealthRange{Window: window}, all)
+			rep, err := e.gw.SystemHealth(ctx, e.sysName, storage.HealthRange{Window: window}, all, all)
 			if err != nil {
 				return 0, err
 			}
@@ -544,7 +544,7 @@ func BenchmarkSystemHealth(b *testing.B) {
 		})
 		b.ResetTimer()
 		for b.Loop() {
-			if _, err := e.gw.SystemHealth(ctx, e.sysName, storage.HealthRange{Window: window}, all); err != nil {
+			if _, err := e.gw.SystemHealth(ctx, e.sysName, storage.HealthRange{Window: window}, all, all); err != nil {
 				b.Fatalf("system health: %v", err)
 			}
 		}

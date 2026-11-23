@@ -303,6 +303,15 @@ alarm raised at 14:02" tells the operator where to walk. A slot impaired with **
 down** (nobody assigned, or fewer assigned than the quorum wants) names no alarm, distinguishing
 **short-staffed** from **broken**.
 
+The system's report also carries a `reason` line naming the slots behind its health, and `members`:
+every component bound into the system with its own health, its open alarms, the slot it fills
+(`slot`) or `outside_slot` when it fills none. A member outside every slot is **shown, not rolled up**
+([ADR-2459](/architecture/decisions/#adr-2459-an-alarm-on-a-member-outside-a-slot-is-shown-on-its-system-not-rolled-up)):
+its alarms appear on the system so nothing is hidden, and they move nothing above the component, since
+the slot and its impact are the system-level health rule. Health comes only from rules somebody
+declared, never implied from an alarm existing; a declared "any member alarm degrades this system" rule
+belongs with system-level rules over system-owned alarms (#1002).
+
 **A location's report** is the health plus every system beneath it with its own health, a map
 rather than a duplicated explanation.
 

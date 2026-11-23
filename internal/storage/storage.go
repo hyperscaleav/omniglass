@@ -1140,7 +1140,9 @@ type Gateway interface {
 	ListAlarms(ctx context.Context, componentName string, filter AlarmFilter) ([]Alarm, error)
 	// The health reads: the current verdict, why it is what it is, and the
 	// recorded transitions inside rng (the zero HealthRange is the whole history).
-	SystemHealth(ctx context.Context, systemName string, rng HealthRange, read scope.Set) (*HealthReport, error)
+	// read scopes the system; compRead scopes its member list, so a member the
+	// caller may not read is never named (#2459, the fleet dots' rule).
+	SystemHealth(ctx context.Context, systemName string, rng HealthRange, read, compRead scope.Set) (*HealthReport, error)
 	// SystemHealths is the BULK health read: every system in the read scope with
 	// its current verdict, in one statement. The read a LIST paints its health
 	// column from, where SystemHealth is the read one system's panel opens (#653).

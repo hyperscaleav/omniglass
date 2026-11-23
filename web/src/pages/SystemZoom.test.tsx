@@ -251,6 +251,32 @@ describe("the system zoom", () => {
     expect(within(strip).getAllByRole("button", { name: /^Timeline of / }).length).toBeGreaterThan(0);
   });
 
+  // #2459 (ADR-2459): a member outside every slot is shown, not rolled up. Its
+  // open alarm is on the strip as "not in a slot" while the badge reads healthy,
+  // the strip carries no fault tone, no reason line speaks for a healthy system,
+  // and the notice teaches that only a slot counts toward the system's health.
+  it("shows an outside-a-slot member's alarm while the system reads healthy", () => {
+    const outside = {
+      ...health,
+      slots: (health.slots ?? []).map((r) => ({ ...r, impaired: false, down: [], alarms: [] })),
+      health: "healthy",
+      reason: "no slot is impaired",
+      members: [{ name: "amp-1", id: uuidFor("szp-c-amp"), health: "outage", outside_slot: true,
+        alarms: [{ id: "al-amp", component: "amp-1", component_id: uuidFor("szp-c-amp"), severity: "high", message: "Amplifier powered off", raised_at: "2026-08-15T15:00:00Z", acknowledged: false }] }],
+    } as unknown as FleetHealth;
+    mount(undefined, outside);
+    expect(within(screen.getByTestId("system-header")).getByText("healthy")).toBeTruthy();
+    const strip = screen.getByTestId("alarm-strip");
+    expect(within(strip).getByText("Amplifier powered off")).toBeTruthy();
+    expect(within(strip).getByText(/not in a slot/)).toBeTruthy();
+    expect(strip.className).not.toContain("border-error");
+    expect(strip.className).not.toContain("border-warning");
+    expect(screen.queryByTestId("health-reason")).toBeNull();
+    const notice = screen.getByTestId("outside-slot-notice").textContent ?? "";
+    expect(notice).toContain("1 component is not in a slot: amp-1.");
+    expect(notice).toContain("does not count toward this system's health");
+  });
+
   // The strip is where a storm is triaged from (#990): acknowledging a causing
   // alarm must not need the component's own page.
   describe("acknowledging from the Why strip", () => {
@@ -373,7 +399,7 @@ describe("the components-first body (#790)", () => {
   it("a no-slot member is a row saying so, not a strip of chips", () => {
     mount();
     const row = screen.getByTestId(`member-${uuidFor("szp-c-power")}`);
-    expect(within(row).getByText("no slot")).toBeTruthy();
+    expect(within(row).getByText("not in a slot")).toBeTruthy();
     expect(screen.queryByTestId("no-slot-strip")).toBeNull();
   });
 
