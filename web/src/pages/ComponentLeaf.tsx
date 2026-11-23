@@ -18,8 +18,8 @@ import Eyebrow from "../components/Eyebrow";
 import DetailGate from "../components/DetailGate";
 import LocationCard from "../components/LocationCard";
 import TemplateNotice from "../components/TemplateNotice";
-import AcknowledgeButton from "../components/AcknowledgeButton";
-import SnoozeButton, { SnoozedBadge } from "../components/SnoozeButton";
+import AlarmActions from "../components/AlarmActions";
+import { SnoozedBadge } from "../components/SnoozeButton";
 import AlarmTimeline, { createTimelineToggles } from "../components/AlarmTimeline";
 import SeverityBadge from "../components/SeverityBadge";
 import { useSeverity } from "../lib/severity";
@@ -28,6 +28,7 @@ import ReachLadder from "../components/ReachLadder";
 import SessionPill from "../components/SessionPill";
 import { ladderObserved } from "../lib/session";
 import SessionNotice from "../components/SessionNotice";
+import PollTest from "../components/PollTest";
 import { FLEET_VIEW_KEY, fleetView } from "../lib/fleet";
 import { COMPONENTS_KEY, listComponents, type Component as FleetComponent } from "../lib/components";
 import { componentSystemsKey, componentSystems } from "../lib/members";
@@ -307,9 +308,7 @@ export default function ComponentLeaf() {
                               {durationText(pageNow() - Date.parse(a.raised_at))} · {a.acknowledged ? "acknowledged" : "unacknowledged"}
                             </span>
                             <SnoozedBadge alarm={a} />
-                            <AcknowledgeButton component={component()?.id ?? id()} alarm={a} />
-                            <SnoozeButton component={component()?.id ?? id()} alarm={a} surface={snoozeSurface} />
-                            {timelines.button(a.id, a.message)}
+                            <AlarmActions componentId={component()?.id ?? id()} alarm={a} surface={snoozeSurface} show={{ ack: true, snooze: true, timeline: timelines }} />
                           </div>
                           <Show when={timelines.isOpen(a.id)}>
                             <AlarmTimeline component={component()?.id ?? id()} alarmId={a.id} id={timelines.panelId(a.id)} label={timelines.label(a.message)} />
@@ -547,6 +546,7 @@ export default function ComponentLeaf() {
                                 onFix={iface().id && can(me.data, "endpoint", "read") ? () => blades.push({ kind: "endpoint", id: iface().id! }) : undefined}
                                 fixLabel="Open endpoint"
                               />
+                              <Show when={iface().id}>{(eid) => <PollTest endpoint={eid()} />}</Show>
                             </li>
                           );
                         }}

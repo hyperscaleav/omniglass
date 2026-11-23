@@ -53,7 +53,7 @@ describe("Properties page", () => {
     mount();
     const row = screen.getByText("rack-unit").closest("tr")!;
     const link = within(row).getByRole("link", { name: "rack-unit-calc" });
-    expect(link.getAttribute("href")).toContain("/calc-rules?rule=11111111-1111-7111-8111-111111111111");
+    expect(link.getAttribute("href")).toContain("/calc-rules?open=11111111-1111-7111-8111-111111111111");
     fireEvent.click(screen.getByText("rack-unit"));
     const blade = await waitFor(() => {
       const el = document.querySelectorAll("aside[data-blade]")[0];
