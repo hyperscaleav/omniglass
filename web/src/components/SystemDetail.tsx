@@ -35,7 +35,8 @@ import AlarmTimeline, { createTimelineToggles } from "./AlarmTimeline";
 import RuleLink from "./RuleLink";
 import SeverityBadge from "./SeverityBadge";
 import AlarmActions from "./AlarmActions";
-import { stretchReasons, memberAlarmRows, stretchesOf, markerX, uptimePct, type MemberAlarms } from "../lib/system_history";
+import { uptimeOver } from "../lib/uptime";
+import { stretchReasons, memberAlarmRows, stretchesOf, markerX, type MemberAlarms } from "../lib/system_history";
 import { spans as timelineSpans } from "../lib/timeline";
 import { systemEvents, systemEventsKey, systemLogs, systemLogsKey, type SystemLogs } from "../lib/system_activity";
 import type { LogFilter } from "../lib/logs";
@@ -214,7 +215,16 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
   const healthSpans = createMemo(() =>
     timelineSpans((health.data?.transitions ?? []).map((t) => ({ ts: t.ts, value: t.health })), health.data?.health ?? null, historyNow()),
   );
-  const uptime = createMemo(() => uptimePct(healthSpans()));
+  const uptimeWindow = createMemo(() =>
+    uptimeOver({
+      transitions: health.data?.transitions ?? [],
+      health: health.data?.health,
+      carriedIn: health.data?.carried_in,
+      firstRecordedAt: health.data?.first_recorded_at,
+      now: historyNow(),
+    }),
+  );
+  const uptime = () => uptimeWindow().pct;
   const stretches = createMemo(() => stretchesOf(healthSpans(), historyNow()));
   // A good uptime wears the muted healthy green (#1067); one that should
   // worry someone wears the trouble hue.
@@ -368,20 +378,25 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                     "text-error": uptimeTone() === "bad",
                   }}
                 >
-                  {uptime() ?? "–"}<span class="text-lg">%</span>
+                  <Show when={uptime() !== null} fallback="–">
+                    {uptime()}<span class="text-lg">%</span>
+                  </Show>
                 </span>
-                <span class="text-[10px] text-base-content/45">of the last 30 days</span>
+                <span class="text-[10px] text-base-content/45">{uptimeWindow().label}</span>
               </div>
               <div class="flex min-w-60 flex-1 flex-col justify-center rounded-box border border-base-300 bg-base-100 p-3.5" data-testid="health-history-full">
                 <HealthHistory compact transitions={health.data?.transitions ?? []} health={health.data?.health} />
-                <div class="relative mt-1 h-2">
+                <div class="relative mt-1 h-3" aria-label="Alarm raises on this timeline">
+                  <Show when={windowAlarms().length > 0}>
+                    <span class="absolute right-3 top-0 text-[10px] leading-3 text-base-content/40">▲ alarm raised</span>
+                  </Show>
                   <For each={windowAlarms()}>
                     {(inc) => (
                       <span
                         data-testid={`alarm-marker-${inc.id}`}
                         class="absolute top-0 h-0 w-0 -translate-x-1/2 border-x-4 border-b-6 border-x-transparent"
                         classList={{ "border-b-error": scale().outage(inc.severity), "border-b-warning": !scale().outage(inc.severity) }}
-                        style={{ left: `${markerX(inc.raisedAt, historyNow(), 30 * 24 * 3600_000) * 100}%` }}
+                        style={{ left: `${markerX(inc.raisedAt, historyNow(), Math.max(historyNow() - (healthSpans()[0]?.from ?? historyNow() - 30 * 24 * 3600_000), 1)) * 100}%` }}
                         title={`${inc.message} · ${inc.component}`}
                       />
                     )}
