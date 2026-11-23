@@ -15,6 +15,7 @@ import { effectiveMetrics, effectiveMetricsKey } from "../lib/component_metrics"
 import { componentSystems, componentSystemsKey } from "../lib/members";
 import { PLATFORM_VIEW_KEY, platformRefusal, platformView, retryPlatformView } from "../lib/platformhealth";
 import { emptyDraft, type RuleDraft, type RuleOp } from "../lib/event_rules";
+import { componentAlarms, componentAlarmsKey } from "../lib/alarms";
 import type { LiveKind } from "../lib/lessons";
 
 // LessonLive renders a lesson step's live element (#2450): an existing console
@@ -42,6 +43,7 @@ export default function LessonLive(props: { kind: LiveKind; componentId: string;
           <ThresholdPreview componentId={props.componentId} />
         </Match>
         <Match when={props.kind === "alarms"}>
+          <PollAlarms componentId={props.componentId} />
           <AlarmsPanel
             component={props.componentId}
             canUpdate={false}
@@ -61,6 +63,19 @@ export default function LessonLive(props: { kind: LiveKind; componentId: string;
       </Switch>
     </div>
   );
+}
+
+// PollAlarms keeps the alarms panel's own read fresh while a lesson waits for
+// an alarm to land: a second observer of the panel's query key, polling, so
+// the panel (which a component page refreshes on its own) lists an alarm the
+// moment the rule opens it. It renders nothing.
+function PollAlarms(props: { componentId: string }): JSX.Element {
+  useQuery(() => ({
+    queryKey: componentAlarmsKey(props.componentId),
+    queryFn: () => componentAlarms(props.componentId),
+    refetchInterval: 3_000,
+  }));
+  return null;
 }
 
 // Samples: the metrics the component owns now, each with its latest value, as

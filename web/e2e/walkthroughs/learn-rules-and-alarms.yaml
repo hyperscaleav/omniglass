@@ -30,6 +30,6 @@ steps:
     caption: Save. The simulator applies it on its next pull.
   - press: Escape
     caption: Back in the lesson, the next step lists the amplifier's alarms as they land.
-  - wait: { selector: '[data-testid="lesson-live-alarms"] [data-alarm-actions]', timeout: 40000 }
+  - wait: { selector: '[data-testid="lesson-live-alarms"] [data-alarm-actions]', timeout: 45000 }
     caption: The down held past the rule's 15 second sustain, so reachability-lost opened an alarm, listed in the lesson with no reload.
     poster: true

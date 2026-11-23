@@ -95,8 +95,8 @@ function NoSimulator(): JSX.Element {
   return (
     <div role="status" data-testid="learn-no-simulator" class="alert alert-info alert-soft text-sm">
       <span>
-        These lessons walk a simulated component, and no simulator is connected to this install. Bring up a lab, which runs one
-        beside its outpost, to follow them live.{" "}
+        These lessons walk a simulated component, and none is available to you: no simulator is connected to this install, or
+        your role cannot read simulation. Bring up a lab, which runs one beside its outpost, to follow them live.{" "}
         <a href={LAB_DOCS} target="_blank" rel="noopener" class="link">Lab instructions</a>
       </span>
     </div>

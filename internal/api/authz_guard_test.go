@@ -44,6 +44,7 @@ var ungated = map[string]bool{
 	"POST /auth/me/tokens":                       true, // authn-only, self-scoped: mints a token only for the caller
 	"POST /auth/me:stopImpersonation":            true, // authn-only, self-scoped: ends only the caller's own impersonation session (identified by the request token)
 	"GET /settings/me":                           true, // authn-only: the caller's own client-visible effective settings (feeds the SPA at boot)
+	"PATCH /settings/me/{namespace}":             true, // authn-only, self-scoped (#2450): merge-patches only the caller's own user-level binding, profile-domain namespaces only, never a platform-locked key
 }
 
 // TestEveryRouteIsGated is the no-unguarded-route guard. It enumerates every
