@@ -25,6 +25,7 @@ import PollTest from "./PollTest";
 import InfoTip from "./InfoTip";
 import { ChevronRight } from "./icons";
 import { CalcRuleLink } from "./RuleLink";
+import AlarmOnThis from "./AlarmOnThis";
 import { useBlades } from "../lib/blades";
 import { createLeaveGuard } from "../lib/leave_guard";
 import { createTabState, type DetailHost } from "../lib/tabstate";
@@ -433,6 +434,7 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
                               <Show when={row().sourceRuleId}>
                                 <CalcRuleLink name={row().sourceRule!} id={row().sourceRuleId!} />
                               </Show>
+                              <AlarmOnThis reads={key} componentId={component()?.id ?? id()} label={row().label} />
                             </dd>
                             {/* Several endpoints collect it (#1020): the row
                                 shows the newest, says which and of how many,

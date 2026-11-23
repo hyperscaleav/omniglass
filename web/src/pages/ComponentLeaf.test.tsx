@@ -337,6 +337,17 @@ describe("the leaf's dispatch facts (#786)", () => {
     expect(within(card).getByText("6.1")).toBeTruthy();
   });
 
+  // #2432: a vitals row offers "Alarm on this", which opens the new-rule form
+  // reading that metric on this component.
+  it("a vitals row links to a new rule reading that metric on this component", () => {
+    const admin: Me = { ...me, fleet_permissions: [">"], grants: [{ role: "owner", scope_kind: "all" }] };
+    mount(undefined, undefined, undefined, admin, undefined, {
+      metrics: [{ metric_type_name: "uptime", label: "Uptime", data_type: "float", unit: "s", value: 306, is_sampled: true, from_contract: false, required: false }],
+    });
+    const link = within(screen.getByTestId("vital-uptime")).getByRole("link", { name: "Alarm on Uptime" });
+    expect(link.getAttribute("href")).toBe(`/web/event-rules?new=1&reads=uptime&component=${uuidFor("cf-c-bar")}`);
+  });
+
   // #1550: a metric's unit rides after its value in the muted style, and a
   // float is rounded to a sane precision with the raw value in the title.
   it("a vitals value carries its unit, rounded, with the raw value in the title", () => {

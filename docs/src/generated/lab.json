@@ -80,6 +80,13 @@
       "setup": []
     },
     {
+      "id": "alarm-on-what-you-are-looking-at",
+      "title": "Alarm on what you are looking at",
+      "description": "From a component's vitals, start a rule on one metric, see the form name what is missing, preview it in plain words, and save it.",
+      "lab": [],
+      "setup": []
+    },
+    {
       "id": "break-a-device-in-one-click",
       "title": "Break a device in one click",
       "description": "Unplug a simulated panel from its row's Break menu, watch the fault chip and the reachability alarm it causes, then clear the fault from the chip.",

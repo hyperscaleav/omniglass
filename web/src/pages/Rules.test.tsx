@@ -9,11 +9,14 @@ import { severityLevelsKey, type SeverityLevel } from "../lib/severity";
 import { PROPERTIES_KEY, type PropertyRow } from "../lib/properties";
 import { METRICS_KEY, type MetricRow } from "../lib/metric_types";
 import { COMPONENT_TYPES_KEY } from "../lib/component_types";
-import { COMPONENTS_KEY } from "../lib/components";
+import { COMPONENTS_KEY, type Component } from "../lib/components";
+import { effectiveMetricsKey } from "../lib/component_metrics";
+import { ownerPropertiesKey } from "../lib/owner_properties";
 import { ME_KEY, type Me } from "../lib/auth";
 import { OFFICIAL_LOCK } from "../lib/catalog";
 import { uuidFor } from "../lib/testids";
 import { EVENT_TYPES_KEY, type EventTypeRow } from "../lib/event_types";
+import { pickInPicker, typeInPicker } from "../components/ui/Picker.testkit";
 import { expressionText, typeExpression, warmExpressionEditor } from "../components/ExpressionField.testing";
 import { answerConfirms } from "../lib/confirm.testkit";
 
@@ -108,7 +111,7 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
-function mount(me: Me = admin, rules: EventRule[] = [reach, hot], opts: { state?: boolean } = {}) {
+function mount(me: Me = admin, rules: EventRule[] = [reach, hot], opts: { state?: boolean; components?: Component[]; own?: Record<string, { metrics: unknown[]; properties: unknown[] }> } = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...EVENT_RULES_KEY], rules);
   if (opts.state !== false) {
@@ -119,7 +122,11 @@ function mount(me: Me = admin, rules: EventRule[] = [reach, hot], opts: { state?
   qc.setQueryData([...PROPERTIES_KEY], properties);
   qc.setQueryData([...METRICS_KEY], metrics);
   qc.setQueryData([...COMPONENT_TYPES_KEY], []);
-  qc.setQueryData([...COMPONENTS_KEY], []);
+  qc.setQueryData([...COMPONENTS_KEY], opts.components ?? []);
+  for (const [name, own] of Object.entries(opts.own ?? {})) {
+    qc.setQueryData([...effectiveMetricsKey(name)], own.metrics);
+    qc.setQueryData([...ownerPropertiesKey("component", name)], own.properties);
+  }
   qc.setQueryData([...EVENT_TYPES_KEY], eventTypes);
   qc.setQueryData([...ME_KEY], me);
   return Object.assign(
@@ -186,6 +193,7 @@ describe("Rules page", () => {
       mount(admin, [reach], { state: false });
       fireEvent.click(screen.getByText("Reachability lost"));
       const b = await blade();
+      fireEvent.click(within(b).getByRole("button", { name: /Show expression/ }));
       for (const id of ["rule-fire-expr", "rule-clear-expr"]) {
         expect(getComputedStyle(within(b).getByTestId(id)).fontVariantLigatures).toBe("none");
       }
@@ -369,7 +377,7 @@ describe("Rules page", () => {
     fireEvent.click(screen.getByText("New rule"));
     const name = await waitFor(() => screen.getByLabelText("Name") as HTMLInputElement);
     fireEvent.input(name, { target: { value: "reach-flap" } });
-    fireEvent.change(screen.getByLabelText("Reads"), { target: { value: "property:endpoint-reachable" } });
+    await pickInPicker(screen.getByLabelText("Reads"), "Endpoint reachable");
     const op = screen.getByLabelText("Fire comparison") as HTMLSelectElement;
     expect([...op.options].map((o) => o.value)).toEqual(["eq", "ne"]);
     fireEvent.change(op, { target: { value: "ne" } });
@@ -381,7 +389,7 @@ describe("Rules page", () => {
     await waitFor(() => expect(writes).toHaveLength(1));
     expect(writes[0].method).toBe("POST");
     expect(writes[0].body).toEqual({
-      name: "reach-flap", sample_key: "endpoint-reachable",
+      name: "reach-flap", label: "Reach flap", sample_key: "endpoint-reachable",
       fire_criteria: { op: "ne", value: "up" }, fire_sustain: "45s", clear_sustain: "0s",
       // The default level: the worst that does not take its component out.
       severity: "average", fire_event_type: "rule-fired", clear_event_type: "rule-cleared", enabled: true, selector: { component_types: [], components: [] },
@@ -414,7 +422,7 @@ describe("Rules page", () => {
     mount();
     fireEvent.click(screen.getByText("New rule"));
     await waitFor(() => screen.getByLabelText("Name"));
-    fireEvent.change(screen.getByLabelText("Reads"), { target: { value: "property:endpoint-reachable" } });
+    await pickInPicker(screen.getByLabelText("Reads"), "Endpoint reachable");
     fireEvent.input(screen.getByLabelText("Fire value"), { target: { value: "down" } });
     expect(screen.getByTestId("fire-lowered").textContent).toBe('value == "down"');
   });
@@ -424,7 +432,7 @@ describe("Rules page", () => {
     mount();
     fireEvent.click(screen.getByText("New rule"));
     fireEvent.input(await waitFor(() => screen.getByLabelText("Name")), { target: { value: "too-hot" } });
-    fireEvent.change(screen.getByLabelText("Reads"), { target: { value: "metric:temperature-c" } });
+    await pickInPicker(screen.getByLabelText("Reads"), "Temperature");
     fireEvent.input(screen.getByLabelText("Fire value"), { target: { value: "40" } });
     fireEvent.click(screen.getByLabelText("Write the fire criteria as an expression"));
     const area = await firesWhen();
@@ -434,7 +442,9 @@ describe("Rules page", () => {
     const diag = await screen.findByTestId("expression-diagnostic", {}, { timeout: 2000 });
     expect(diag.textContent).toContain("Line 2, column 3");
     const submit = screen.getByText("Create rule").closest("button") as HTMLButtonElement;
-    await waitFor(() => expect(submit.disabled).toBe(true));
+    fireEvent.click(submit);
+    expect((await screen.findByTestId("form-problems")).textContent).toContain("Fires when");
+    expect(reqs.some((r) => r.method === "POST" && r.url.endsWith("/event-rules"))).toBe(false);
     typeExpression(area, "value > 40");
     await screen.findByTestId("expression-ok", {}, { timeout: 2000 });
     await waitFor(() => expect(submit.disabled).toBe(false));
@@ -467,7 +477,7 @@ describe("Rules page", () => {
     expect(expressionText(area)).toBe('value == "open"');
     typeExpression(area, "value");
     const submit = screen.getByText("Save rule").closest("button") as HTMLButtonElement;
-    await waitFor(() => expect(submit.disabled).toBe(false), { timeout: 2000 });
+    await screen.findByTestId("expression-ok", {}, { timeout: 2000 });
     fireEvent.click(submit);
     await waitFor(() => expect(reqs.some((r) => r.method === "PATCH")).toBe(true));
     expect((reqs.find((r) => r.method === "PATCH")!.body as { fire_criteria: unknown }).fire_criteria).toEqual({ expr: "value" });
@@ -478,7 +488,7 @@ describe("Rules page", () => {
     mount();
     fireEvent.click(screen.getByText("New rule"));
     await waitFor(() => screen.getByLabelText("Name"));
-    fireEvent.change(screen.getByLabelText("Reads"), { target: { value: "property:endpoint-reachable" } });
+    await pickInPicker(screen.getByLabelText("Reads"), "Endpoint reachable");
     fireEvent.input(screen.getByLabelText("Fire value"), { target: { value: "down" } });
     fireEvent.click(screen.getByRole("button", { name: "Preview" }));
     await screen.findByTestId("preview-result");
@@ -490,6 +500,7 @@ describe("Rules page", () => {
     mount();
     fireEvent.click(screen.getByText("Too hot"));
     const b = await blade();
+    fireEvent.click(within(b).getByRole("button", { name: /Show expression/ }));
     expect(within(b).getByTestId("rule-fire-expr").textContent).toBe("value > 40.0");
     expect(within(b).getByTestId("rule-clear-expr").textContent).toBe("value < 35.0");
   });
@@ -508,7 +519,7 @@ describe("Rules page", () => {
     mount();
     fireEvent.click(screen.getByText("New rule"));
     await waitFor(() => screen.getByLabelText("Name"));
-    fireEvent.change(screen.getByLabelText("Reads"), { target: { value: "property:endpoint-reachable" } });
+    await pickInPicker(screen.getByLabelText("Reads"), "Endpoint reachable");
     fireEvent.input(screen.getByLabelText("Fire value"), { target: { value: "down" } });
     fireEvent.input(screen.getByLabelText("For at least"), { target: { value: "15s" } });
     fireEvent.click(screen.getByRole("button", { name: "Preview" }));
@@ -520,9 +531,12 @@ describe("Rules page", () => {
     expect(within(panel).getAllByTestId("preview-edge").map((e) => e.textContent)).toEqual([
       expect.stringContaining("fire"), expect.stringContaining("clear"),
     ]);
-    expect(within(panel).getByText(/Sustains are ignored/)).toBeTruthy();
+    expect(within(panel).queryByText(/Sustains are ignored/)).toBeNull();
+    // The 15s typed in the form is named, and why the preview cannot hold it.
+    expect(within(panel).getByTestId("preview-sustain").textContent).toContain("at least 15s");
+    expect(within(panel).getByTestId("preview-sustain").textContent).toContain("cannot apply");
     expect(within(panel).getByTestId("preview-truncated").textContent).toContain("Judged 1 of 3 series");
-    expect(within(panel).getByTestId("preview-unknown").textContent).toContain("1 series started unknown");
+    expect(within(panel).getByTestId("preview-unknown").textContent).toContain("had no sample in the week before the window");
     const sent = reqs.find((r) => r.url.endsWith("/event-rules:preview"))!;
     expect(sent.body).toEqual({ sample_key: "endpoint-reachable", selector: { component_types: [], components: [] }, fire_criteria: { op: "eq", value: "down" } });
   });
@@ -533,13 +547,14 @@ describe("Rules page", () => {
     fireEvent.click(screen.getByText("New rule"));
     const name = await waitFor(() => screen.getByLabelText("Name") as HTMLInputElement);
     fireEvent.input(name, { target: { value: "too-hot" } });
-    fireEvent.change(screen.getByLabelText("Reads"), { target: { value: "metric:temperature-c" } });
+    await pickInPicker(screen.getByLabelText("Reads"), "Temperature");
     const op = screen.getByLabelText("Fire comparison") as HTMLSelectElement;
     expect([...op.options].map((o) => o.value)).toEqual(["eq", "ne", "gt", "ge", "lt", "le"]);
     fireEvent.input(screen.getByLabelText("Fire value"), { target: { value: "warm" } });
     expect(screen.getByText(/compares numbers/)).toBeTruthy();
     const submit = screen.getByText("Create rule").closest("button") as HTMLButtonElement;
-    expect(submit.disabled).toBe(true);
+    fireEvent.click(submit);
+    expect((await screen.findByTestId("form-problems")).textContent).toContain("Fires when it reads");
     fireEvent.input(screen.getByLabelText("For at least"), { target: { value: "ninety" } });
     expect(screen.getByText(/A duration like 30s/)).toBeTruthy();
     expect(fetchSpy).not.toHaveBeenCalled();
@@ -721,7 +736,7 @@ describe("Rules page", () => {
     fireEvent.click(screen.getByText("New rule"));
     const name = await waitFor(() => screen.getByLabelText("Name") as HTMLInputElement);
     fireEvent.input(name, { target: { value: "input-watch" } });
-    fireEvent.change(screen.getByLabelText("Reads"), { target: { value: "property:endpoint-reachable" } });
+    await pickInPicker(screen.getByLabelText("Reads"), "Endpoint reachable");
     fireEvent.input(screen.getByLabelText("Fire value"), { target: { value: "down" } });
     const sev = screen.getByLabelText("Severity") as HTMLSelectElement;
     expect([...sev.options].map((o) => o.textContent)).toContain("None (informational)");
@@ -867,3 +882,161 @@ describe("Rules page", () => {
   });
 });
 
+
+// The form a first-time operator gets right (#2432): the key found by typing,
+// the component told apart by its place, what is missing named, the preview in
+// the operator's words, the rule leading to its alarms.
+describe("the rule form, found and explained (#2432)", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    window.history.pushState({}, "", "/");
+  });
+
+  const comp = (id: string, name: string, label: string, location: string, system?: string): Component =>
+    ({ id: uuidFor(id), name, label, location, system, system_count: system ? 1 : 0 }) as Component;
+  const fleet = [
+    comp("d1a", "display-1", "Display 1", "Room A", "Teaching A"),
+    comp("d1b", "display-1", "Display 1", "Room B"),
+  ];
+  const own = {
+    "display-1": {
+      metrics: [{ metric_type_name: "temperature-c", label: "Temperature", data_type: "float", is_sampled: true, from_contract: true, required: false, instance: "", instance_count: 1, metric_type_id: "m" }],
+      properties: [{ property_type_name: "endpoint-reachable", label: "Endpoint reachable", data_type: "string", from_contract: true, is_set: false, required: false, property_type_id: "p" }],
+    },
+  };
+  const opts = { components: fleet, own };
+
+  it("finds the key by typing: grouped by kind, each option showing label, name and unit", async () => {
+    mount(admin, [reach, hot]);
+    fireEvent.click(screen.getByText("New rule"));
+    const reads = await waitFor(() => screen.getByLabelText("Reads"));
+    expect(reads.getAttribute("role")).toBe("combobox");
+    const all = await typeInPicker(reads, "");
+    expect(all).toEqual(["Temperaturetemperature-c · °C", "Endpoint reachableendpoint-reachable"]);
+    const list = screen.getByRole("listbox");
+    expect(within(list).getAllByRole("presentation").map((h) => h.textContent)).toEqual(["Metrics", "Properties"]);
+    expect(await typeInPicker(reads, "°C")).toEqual(["Temperaturetemperature-c · °C"]);
+    expect(await typeInPicker(reads, "reachable")).toEqual(["Endpoint reachableendpoint-reachable"]);
+  });
+
+  it("tells same-named components apart by their place", async () => {
+    mount(admin, [reach, hot], opts);
+    fireEvent.click(screen.getByText("New rule"));
+    const watches = await waitFor(() => screen.getByLabelText("Watches components"));
+    expect(await typeInPicker(watches, "display")).toEqual(["Display 1Room A · Teaching A", "Display 1Room B"]);
+    expect(await typeInPicker(watches, "room b")).toEqual(["Display 1Room B"]);
+    fireEvent.click(within(screen.getByRole("listbox")).getByRole("option"));
+    // The chip names the place too, so a second "Display 1" is not mistaken for it.
+    const chips = await waitFor(() => screen.getByLabelText("Selected"));
+    expect(chips.textContent).toContain("Display 1");
+    expect(chips.textContent).toContain("Room B");
+  });
+
+  it("lists a watched component's own metrics and properties first", async () => {
+    mount(admin, [reach, hot], { ...opts, own: { "display-1": { metrics: own["display-1"].metrics, properties: [] } } });
+    fireEvent.click(screen.getByText("New rule"));
+    const watches = await waitFor(() => screen.getByLabelText("Watches components"));
+    await pickInPicker(watches, "Display 1");
+    const reads = screen.getByLabelText("Reads");
+    await typeInPicker(reads, "");
+    await waitFor(() => expect(within(screen.getByRole("listbox")).getAllByRole("presentation").map((h) => h.textContent)[0]).toBe("On Display 1"));
+  });
+
+  it("names each missing field on an empty submit and puts the focus on the first", async () => {
+    const writes = catchWrites();
+    mount();
+    fireEvent.click(screen.getByText("New rule"));
+    await waitFor(() => screen.getByLabelText("Name"));
+    const submit = screen.getByText("Create rule").closest("button") as HTMLButtonElement;
+    // Not greyed with no reason: it answers.
+    expect(submit.disabled).toBe(false);
+    fireEvent.click(submit);
+    const problems = await screen.findByTestId("form-problems");
+    expect(problems.textContent).toBe("To create the rule, fill in Name, Reads and Fires when it reads.");
+    expect(within(problems).getAllByRole("button").map((b) => b.textContent)).toEqual(["Name", "Reads", "Fires when it reads"]);
+    expect(document.activeElement).toBe(screen.getByLabelText("Name"));
+    // Each field says what it wants beside itself, and each name in the list goes to its field.
+    expect(screen.getByText("A name for the rule.")).toBeTruthy();
+    fireEvent.click(within(problems).getByRole("button", { name: "Reads" }));
+    expect(document.activeElement).toBe(screen.getByLabelText("Reads"));
+    expect(writes).toHaveLength(0);
+  });
+
+  it("fills in the label from the name until the operator writes one", async () => {
+    mount();
+    fireEvent.click(screen.getByText("New rule"));
+    const name = await waitFor(() => screen.getByLabelText("Name") as HTMLInputElement);
+    const label = screen.getByLabelText("Label") as HTMLInputElement;
+    fireEvent.input(name, { target: { value: "catalog-cpu-hot" } });
+    expect(label.value).toBe("Catalog cpu hot");
+    fireEvent.input(label, { target: { value: "CPU hot" } });
+    fireEvent.input(name, { target: { value: "catalog-cpu-hotter" } });
+    expect(label.value).toBe("CPU hot");
+  });
+
+  it("previews in words that match what was entered, naming the series and the sustain", async () => {
+    exprRoutesFor({
+      in_force_now: [{ component: "display-1", component_id: uuidFor("d1a"), instance: "", since: new Date(Date.now() - 3_600_000).toISOString() }],
+      edges: [{ component: "display-1", component_id: uuidFor("d1a"), instance: "", at: new Date(Date.now() - 7_200_000).toISOString(), kind: "fire" }],
+      window: "24h0m0s", row_cap: 5000, truncated: false, sustains_ignored: true, series_judged: 2, series_total: 2, state_unknown: [],
+    });
+    mount(admin, [reach, hot], opts);
+    fireEvent.click(screen.getByText("New rule"));
+    await waitFor(() => screen.getByLabelText("Name"));
+    await pickInPicker(screen.getByLabelText("Reads"), "Temperature");
+    fireEvent.change(screen.getByLabelText("Fire comparison"), { target: { value: "gt" } });
+    fireEvent.input(screen.getByLabelText("Fire value"), { target: { value: "40" } });
+    fireEvent.input(screen.getByLabelText("For at least"), { target: { value: "30s" } });
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    const panel = await screen.findByRole("region", { name: "Preview" });
+    const sentence = await within(panel).findByTestId("preview-sentence");
+    expect(sentence.textContent).toBe("In the last 24h, Temperature above 40 °C would have fired once on 1 of 2 series (display-1). Right now 1 series (display-1) would be in force.");
+    expect(within(panel).getByTestId("preview-sustain").textContent).toContain("hold for at least 30s before firing");
+    expect(within(panel).queryByText(/Sustains are ignored/)).toBeNull();
+    expect(within(panel).getAllByTestId("preview-series").map((e) => e.textContent)).toEqual(
+      [expect.stringMatching(/display-1\s*· Temperature/)],
+    );
+  });
+
+  it("opens from a component's metric with the key and the component filled in", async () => {
+    window.history.pushState({}, "", `/event-rules?new=1&reads=temperature-c&component=${uuidFor("d1a")}`);
+    mount(admin, [reach, hot], opts);
+    const reads = (await waitFor(() => screen.getByLabelText("Reads"))) as HTMLInputElement;
+    await waitFor(() => expect(reads.value).toBe("Temperature"));
+    expect((await waitFor(() => screen.getByLabelText("Selected"))).textContent).toContain("Room A");
+    // The metric's own unit leads the comparison words once chosen.
+    expect((screen.getByLabelText("Fire value") as HTMLInputElement).placeholder).toBe("40");
+  });
+
+  it("states a rule in prose first, the expressions behind Show expression", async () => {
+    mount();
+    fireEvent.click(screen.getByText("Too hot"));
+    const b = await blade();
+    expect(within(b).getByTestId("rule-fire").textContent).toBe("reads above 40 °C for 1m");
+    expect(within(b).queryByTestId("rule-fire-expr")).toBeNull();
+    fireEvent.click(within(b).getByRole("button", { name: /Show expression/ }));
+    expect(within(b).getByTestId("rule-fire-expr").textContent).toBe("value > 40.0");
+  });
+
+  it("links a rule to the alarms it raised", async () => {
+    mount();
+    fireEvent.click(screen.getByText("Reachability lost"));
+    const b = await blade();
+    const link = await waitFor(() => within(b).getByRole("link", { name: /alarms/i }));
+    expect(link.getAttribute("href")).toBe("/alarms?state=active&rule=reachability-lost");
+  });
+});
+
+// exprRoutes lives inside the first describe; the preview here needs the same
+// answers, so the form's routes are stated once more at module scope.
+function exprRoutesFor(preview: unknown) {
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const req = input as Request;
+    const body = req.method === "GET" || req.method === "DELETE" ? undefined : await req.clone().json();
+    if (req.url.endsWith("/event-rules:preview")) return json(preview);
+    if (req.url.endsWith("/expressions:validate")) return json({ ok: true, site: "criteria", value_type: "number", result_type: "bool", diagnostics: [], bindings: [], builtins: [], budget: { iterations: 1, memory: 1, deadline: "5ms" } });
+    if (req.method === "POST") return json({ ...hot, ...(body as object) });
+    if (req.url.endsWith("/state")) return json({ firings: [], open: [], pending: [] });
+    return json({ event_rules: [reach, hot] });
+  });
+}
