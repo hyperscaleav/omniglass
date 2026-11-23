@@ -101,6 +101,7 @@ export default function AddComponentFlow(): JSX.Element {
   const locationTypes = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes }));
   const outposts = useQuery(() => ({ queryKey: OUTPOSTS_KEY, queryFn: () => listOutposts() }));
   const mayReadSim = () => can(me.data, "simulation", "read");
+  const mayAdd = () => can(me.data, "component", "create") && can(me.data, "endpoint", "create");
   // A new simulated device answers from the simulator's next pull, so the
   // test waits until the simulator reports serving it (simWait, below).
   const [simWait, setSimWait] = createSignal(false);
@@ -220,9 +221,20 @@ export default function AddComponentFlow(): JSX.Element {
     setErr(null);
     try {
       const sim = usingSim();
+      // The plan reserves nothing, so a simulated device is planned again at
+      // the commit: another add since the endpoint step may have taken the
+      // address it showed, and the fresh plan names the next free one.
+      let draft: FlowDraft = { ...d, inputs: { ...d.inputs } };
+      if (sim) {
+        const fresh = simChoice(await planSimComponent(simOutpost(), d.product));
+        if (fresh) {
+          draft = { ...draft, outpost: fresh.outpost, driver: fresh.driver, inputs: { ...draft.inputs, ...fresh.inputs } };
+          setD({ outpost: fresh.outpost, driver: fresh.driver, inputs: draft.inputs });
+        }
+      }
       // A system the caller may not bind (one named in the address it arrived
       // by) is not sent: the Where step said so, and the server would refuse it.
-      const made = await commitFlow({ ...d, system: mayBind() ? d.system : "", slot: mayBind() ? d.slot : "" }, IO);
+      const made = await commitFlow({ ...draft, system: mayBind() ? draft.system : "", slot: mayBind() ? draft.slot : "" }, IO);
       await qc.invalidateQueries({ queryKey: [...ENDPOINTS_KEY] });
       setSimWait(sim);
       setCreated(made);
@@ -299,13 +311,11 @@ export default function AddComponentFlow(): JSX.Element {
         setStep(STEPS[stepIndex() + 1].key);
       },
       busy,
-      disabled: () => busy() || !ready() || (s === "test" && simWait()),
+      disabled: () => busy() || !mayAdd() || !ready() || (s === "test" && simWait()),
       cancel: () => void cancel(),
       secondary: () => (s === "product" ? undefined : { label: "Back", icon: ChevronLeft, onClick: () => void back() }),
     });
   });
-
-  const mayAdd = () => can(me.data, "component", "create") && can(me.data, "endpoint", "create");
 
   return (
     <section class="fade-in flex max-w-3xl flex-col gap-4" data-testid="add-component-flow">

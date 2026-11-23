@@ -72,12 +72,13 @@ const slots = [
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": status >= 400 ? "application/problem+json" : "application/json" } });
 
 type Calls = string[];
-function stub(opts: { pollFails?: { status: number; detail: string } } = {}) {
+function stub(opts: { pollFails?: { status: number; detail: string }; addressTaken?: boolean } = {}) {
   const calls: Calls = [];
   let endpoints: unknown[] = [];
   // The simulator takes the new device on at its next pull: the first read
   // after the create does not list it, the next one serves it.
   let simReads = 0;
+  let plans = 0;
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     const req = input as Request;
     const url = new URL(req.url);
@@ -88,7 +89,12 @@ function stub(opts: { pollFails?: { status: number; detail: string } } = {}) {
       return json(b.name ? { name: b.name, label: "", rule: "" } : { name: "display-3", ordinal: 3, label: "Display 3", rule: "" });
     }
     if (line === `GET /systems/${systems[0].id}/slots`) return json({ slots });
-    if (line === "GET /outposts/edge-hq/simulation/components:plan") return json(plan);
+    if (line === "GET /outposts/edge-hq/simulation/components:plan") {
+      plans++;
+      // Another add took the first address between the step and the commit.
+      if (opts.addressTaken && plans > 1) return json({ ...plan, address: "127.60.0.10", endpoints: [{ ...plan.endpoints[0], inputs: { ...plan.endpoints[0].inputs, host: "127.60.0.10" } }] });
+      return json(plan);
+    }
     if (line === "GET /endpoints") return json({ endpoints });
     if (line === "GET /simulation") {
       simReads++;
@@ -129,7 +135,7 @@ function mount(path = "/components/add") {
   qc.setQueryData([...SIMULATION_KEY], fleet);
   qc.setQueryData([...METRICS_KEY], []);
   window.history.pushState({}, "", path);
-  return render(() => (
+  render(() => (
     <QueryClientProvider client={qc}>
       <Router>
         <Route path="/components/add" component={AddComponentFlow} />
@@ -138,6 +144,7 @@ function mount(path = "/components/add") {
       </Router>
     </QueryClientProvider>
   ));
+  return qc;
 }
 
 // The rail's primary button, pressed once it is enabled (the name draft, the
@@ -251,6 +258,25 @@ describe("AddComponentFlow", () => {
     await waitFor(() => expect(current()).toBe("Where"));
     expect(screen.getByLabelText("System").textContent).toBe("Lobby AV");
     expect(screen.getByText(/Taken from Lobby AV/)).toBeTruthy();
+  });
+
+  it("plans the simulated device again at the commit, so an address taken since is not reused", async () => {
+    const calls = stub({ addressTaken: true });
+    mount();
+    await walkToCredentials();
+    await next("Create and test");
+    await waitFor(() => expect(current()).toBe("Test"));
+    const ep = JSON.parse(calls.find((c) => c.startsWith("POST /endpoints "))!.slice("POST /endpoints ".length));
+    expect(ep.inputs.host).toBe("127.60.0.10");
+  });
+
+  it("holds every step for a caller who may not create the endpoint", async () => {
+    stub();
+    const qc = mount("/components/add?product=boreal-edge-55");
+    qc.setQueryData([...ME_KEY], { ...me, permissions: ["component:create", "component:read"] });
+    expect(await screen.findByText(/needs/)).toBeTruthy();
+    const b = await screen.findByRole("button", { name: "Next" });
+    await waitFor(() => expect((b as HTMLButtonElement).disabled).toBe(true));
   });
 
   it("sends an address that did not answer back to the endpoint step", async () => {
