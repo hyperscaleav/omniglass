@@ -10,8 +10,8 @@ import { normalizeMask, paintedBoxes, planMasks, planStandingMasks, shootBaselin
 // selector mask is painted at the bounding box of the element it RESOLVES to. So
 // a mask that names the element holding a value paints a box the size of that
 // value. The console does not render every capture-relative value at one width
-// (Audit.tsx's `d.toLocaleString()` leaves the hour bare, format.ts's fmtTime
-// leaves the day bare and prints a month name and AM or PM, durationText reads 9s,
+// (a relative age reads 9m or 11h, format.ts's fmtTime leaves the day bare and
+// prints a month name and AM or PM, durationText reads 9s,
 // 45s or 12m), so the same unchanged UI paints a narrower box at one hour than
 // another. A moved box is changed pixels, which every recapture rewrites into the
 // baseline on a PR that changed no UI.
@@ -124,23 +124,23 @@ const cases: {
   keeps?: string[]; // what the shot exists to show, which the mask must leave live
 }[] = [
   {
-    name: "audit's When column (an hour that is not zero-padded)",
+    name: "audit's When column (a relative age that counts up)",
     page: "admin/audit.md",
     shot: "audit",
-    value: "text=/\\d+\\/\\d+\\/\\d{4}/",
+    value: "text=/\\d+[smhd] ago/",
     markup: tableRow(190),
-    narrow: "8/15/2026, 9:47:03 PM",
-    wide: "8/15/2026, 11:47:03 PM",
+    narrow: "9m ago",
+    wide: "11h ago",
     pinned: 190,
   },
   {
-    name: "files' Added column (a day that is not zero-padded)",
+    name: "files' Added column (a relative age that counts up)",
     page: "admin/files.md",
     shot: "files",
-    value: "text=/[A-Z][a-z]{2} \\d{1,2}, \\d{2}:\\d{2} (AM|PM)/",
+    value: "text=/\\d+[smhd] ago/",
     markup: tableRow(170),
-    narrow: "Aug 9, 09:47 PM",
-    wide: "Aug 15, 09:47 PM",
+    narrow: "9m ago",
+    wide: "11h ago",
     pinned: 170,
   },
   {
