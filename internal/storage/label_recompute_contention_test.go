@@ -247,11 +247,11 @@ func TestAComponentMovedIntoALocationDuringItsRelabelReadsTheCommittedLabel(t *t
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "building"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "building"}, all, all); err != nil {
 		t.Fatalf("create building: %v", err)
 	}
 	for _, n := range []string{"room-a", "room-b"} {
-		if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: n, LocationType: "room", ParentName: strptr("hq")}, all); err != nil {
+		if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: n, LocationType: "room", ParentName: strptr("hq")}, all, all); err != nil {
 			t.Fatalf("create %s: %v", n, err)
 		}
 	}
