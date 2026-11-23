@@ -142,6 +142,20 @@ func InsertsBetween(a, b map[uint32]int64) (n int64, restarted bool) {
 	return n, false
 }
 
+// partitionDropped reports a partition read at the start that is gone at the
+// end; it needs both readings to carry partitions.
+func partitionDropped(p0, p1 map[uint32]int64) bool {
+	if p0 == nil || p1 == nil {
+		return false
+	}
+	for id := range p0 {
+		if _, ok := p1[id]; !ok {
+			return true
+		}
+	}
+	return false
+}
+
 // rowsBetween is a lane's rows inserted across the window: per partition when
 // both readings carry them, else the totals' difference.
 func rowsBetween(r0, r1 int64, p0, p1 map[uint32]int64) (int64, bool) {
@@ -200,6 +214,11 @@ type Window struct {
 	ReceiptBytesPerDay    float64 `json:"receipt_bytes_per_day"`
 	DatabaseBytesPerDay   float64 `json:"database_bytes_per_day"`
 	WALBytesPerDay        float64 `json:"wal_bytes_per_day"`
+	// PartitionDropped is set when a partition went away inside the window
+	// (retention rolling): the table-size rates (metric, property, database)
+	// would read the drop as shrinkage, so they are left 0. The WAL is a
+	// monotone counter a drop does not move, so its rate stands.
+	PartitionDropped bool `json:"partition_dropped,omitempty"`
 	// WALBytes is the WAL the window itself wrote, before extrapolation.
 	WALBytes int64 `json:"wal_bytes"`
 	// BatchesLanded is the receipts the window inserted, SamplesLanded the
@@ -282,6 +301,10 @@ func WindowOf(db0, db1 DBCounters, use0, use1 map[string]Usage) (Window, error) 
 		WALBytesPerDay:        perDay(db0.WALBytes, db1.WALBytes),
 		WALBytes:              db1.WALBytes - db0.WALBytes,
 		Containers:            map[string]ContainerWindow{},
+	}
+	if partitionDropped(db0.MetricParts, db1.MetricParts) || partitionDropped(db0.PropertyParts, db1.PropertyParts) {
+		w.PartitionDropped = true
+		w.MetricBytesPerDay, w.PropertyBytesPerDay, w.DatabaseBytesPerDay = 0, 0, 0
 	}
 	for name, a := range use0 {
 		b, ok := use1[name]

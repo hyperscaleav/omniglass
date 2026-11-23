@@ -322,8 +322,10 @@ func TestFootprintSystems(t *testing.T) {
 // backwards still is.
 func TestWindowOfAcrossDroppedPartition(t *testing.T) {
 	t0 := time.Date(2026, 11, 14, 23, 57, 0, 0, time.UTC)
-	db0 := DBCounters{At: t0, MetricRows: 1500, MetricParts: map[uint32]int64{1: 1000, 2: 500}}
+	db0 := DBCounters{At: t0, MetricRows: 1500, MetricParts: map[uint32]int64{1: 1000, 2: 500},
+		MetricBytes: 10 << 30, PropertyBytes: 1 << 20, DatabaseBytes: 12 << 30, WALBytes: 100 << 20}
 	db1 := DBCounters{At: t0.Add(5 * time.Minute), MetricRows: 900,
+		MetricBytes: 4 << 30, PropertyBytes: 1 << 20, DatabaseBytes: 6 << 30, WALBytes: 110 << 20,
 		MetricParts: map[uint32]int64{2: 600, 3: 300}} // 1 dropped, 3 new
 	w, err := WindowOf(db0, db1, nil, nil)
 	if err != nil {
@@ -331,6 +333,13 @@ func TestWindowOfAcrossDroppedPartition(t *testing.T) {
 	}
 	if w.SamplesLanded != 400 {
 		t.Fatalf("landed %d, want 400", w.SamplesLanded)
+	}
+	if !w.PartitionDropped || w.MetricBytesPerDay != 0 || w.PropertyBytesPerDay != 0 || w.DatabaseBytesPerDay != 0 {
+		t.Errorf("size rates across a drop: metric %v property %v database %v, want 0 (no negative rate)",
+			w.MetricBytesPerDay, w.PropertyBytesPerDay, w.DatabaseBytesPerDay)
+	}
+	if w.WALBytesPerDay <= 0 {
+		t.Errorf("WAL a day %v, want the monotone WAL rate kept", w.WALBytesPerDay)
 	}
 	reset := DBCounters{At: db1.At, MetricRows: 10, MetricParts: map[uint32]int64{2: 10}}
 	if _, err := WindowOf(db0, reset, nil, nil); err == nil {
