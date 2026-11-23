@@ -276,7 +276,8 @@ describe("Locations create identity", () => {
     fireEvent.change(typeSelect, { target: { value: "room" } });
     await waitFor(() => expect(display.value).toBe("North Boardroom"));
     expect(display.readOnly).toBe(true);
-    expect(screen.getByText(/Rendered from/)).toBeTruthy();
+    expect(screen.getByText(/Rendered by the platform from a label rule/)).toBeTruthy();
+    expect(screen.queryByText(/\{\{title/)).toBeNull();
   });
 
   it("falls back to the name in the locked label field where no rule resolves", async () => {

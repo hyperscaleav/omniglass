@@ -224,7 +224,7 @@ describe("PlatformHealth page", () => {
     mount(full);
     const alpha = screen.getByTestId("platform-outpost-edge-alpha");
     expect(within(alpha).getByRole("link", { name: "Edge Alpha" })).toHaveAttribute("href", `/web/components/${uuidFor("alpha")}`);
-    expect(within(alpha).getByRole("link", { name: "Open edge-alpha in Outposts" })).toHaveAttribute("href", "/web/outposts?n=edge-alpha");
+    expect(within(alpha).getByRole("link", { name: "Open edge-alpha in Outposts" })).toHaveAttribute("href", "/web/outposts?open=edge-alpha");
   });
 
   it("without platform reach renders the outpost rows and the fleet-wide-read line, with no console error", () => {
@@ -511,7 +511,7 @@ describe("PlatformHealth with a simulator", () => {
     expect(rows[2].className).toBe("");
   });
 
-  it("links each device to its drawer on the Simulation page and names the figures not wired yet", () => {
+  it("links each device to its drawer on the Simulation page and names the figures not reported", () => {
     mount(full, { fleet: connected, body: simBody([measured]) });
     const device = screen.getByTestId("platform-sim-device");
     expect(within(device).getByRole("link", { name: "lobby-display" })).toHaveAttribute("href", `/web/simulation?c=${uuidFor("display")}`);

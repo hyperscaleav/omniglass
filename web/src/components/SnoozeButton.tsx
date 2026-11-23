@@ -27,6 +27,9 @@ const acting = (verb: string, alarm: Snoozable) => (alarm.message ? `${verb} ${a
 // dismiss each other.
 const [openMenu, setOpenMenu] = createSignal<string | null>(null);
 const [errors, setErrors] = createSignal<Record<string, string>>({});
+// The write Retry replays, held beside its error and keyed the same way, so a
+// row a poll rebuilds still retries what failed.
+const retries = new Map<string, () => Promise<unknown>>();
 const setError = (key: string, msg: string | null) =>
   setErrors((prev) => {
     const next = { ...prev };
@@ -50,7 +53,7 @@ export function SnoozedBadge(props: { alarm: Snoozable }): JSX.Element {
     <Show when={props.alarm.snoozed_until}>
       {(until) => (
         <span
-          class="badge badge-snoozed badge-xs shrink-0"
+          class="badge badge-snoozed badge-xs h-auto min-h-4 shrink-0 whitespace-nowrap"
           title={`Its notifications are recorded, not sent, until ${fmtTime(until())}${props.alarm.snoozed_by ? `, snoozed by ${props.alarm.snoozed_by}` : ""}`}
         >
           {snoozedUntilWords(until())}
@@ -81,14 +84,14 @@ export function SnoozeControl(props: { componentId: string; alarm: Snoozable; su
   const [busy, setBusy] = createSignal(false);
   const key = () => `${props.surface}:${props.alarm.id}`;
   const err = () => errors()[key()] ?? null;
-  let last: (() => Promise<unknown>) | undefined;
   const run = async (write: () => Promise<unknown>) => {
-    last = write;
+    retries.set(key(), write);
     setBusy(true);
     setError(key(), null);
     setOpenMenu(null);
     try {
       await write();
+      retries.delete(key());
       await Promise.all([
         qc.invalidateQueries({ queryKey: [...COMPONENT_ALARMS_PREFIX] }),
         qc.invalidateQueries({ queryKey: ["system-alarms"] }),
@@ -148,7 +151,7 @@ export function SnoozeControl(props: { componentId: string; alarm: Snoozable; su
         </Popover>
       </Show>
       <Show when={err()}>
-        {(e) => <ActionFailure what={props.alarm.snoozed_until ? "end the snooze" : "snooze"} detail={e()} onRetry={() => last && void run(last)} />}
+        {(e) => <ActionFailure what={props.alarm.snoozed_until ? "end the snooze" : "snooze"} detail={e()} onRetry={() => { const w = retries.get(key()); if (w) void run(w); }} />}
       </Show>
     </Show>
   );

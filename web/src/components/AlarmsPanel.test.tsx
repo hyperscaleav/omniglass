@@ -184,6 +184,14 @@ describe("AlarmsPanel", () => {
     expect(messages).toEqual(["HDMI board failed", "Lamp hours exceeded"]);
   });
 
+  // How long it lasted (#2426), the same reading the alarms page gives.
+  it("says how long a cleared alarm was raised", () => {
+    const { getByRole } = mount();
+    const group = getByRole("group", { name: /recently cleared/i });
+    expect(within(group).getByTestId("alarm-duration")).toHaveTextContent("1d");
+    expect(within(group).getByText(/lasted/)).toBeTruthy();
+  });
+
   // Clearing keeps the row: what was wrong, and when, outlives the fix.
   it("keeps a cleared alarm in its own group rather than dropping it", () => {
     const { getByRole } = mount();
@@ -408,5 +416,18 @@ describe("AlarmsPanel", () => {
     const active = alarmRow(getByText("HDMI board failed")).querySelector("[data-alarm-actions]") as HTMLElement;
     expect(within(active).getByRole("button", { name: /^Acknowledge/ })).toBeTruthy();
     expect(within(active).getByRole("button", { name: /with omnibot$/ })).toBeTruthy();
+  });
+
+  // A failed Acknowledge or Snooze floats its one line under the group: no
+  // ancestor up to the panel may clip it (overflow-hidden on the list swallowed
+  // the line under the last row).
+  it("leaves a failed action's line unclipped by the alarm list", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => json({ title: "Bad", detail: "boom" }, 500));
+    const { getAllByRole, findByRole, container } = mount();
+    fireEvent.click(getAllByRole("button", { name: "Acknowledge" })[0]);
+    const alert = await findByRole("alert");
+    for (let n: HTMLElement | null = alert; n && n !== container; n = n.parentElement) {
+      expect(n.className).not.toContain("overflow-hidden");
+    }
   });
 });

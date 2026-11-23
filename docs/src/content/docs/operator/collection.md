@@ -13,6 +13,7 @@ walkthroughs:
   - id: fix-a-rejected-session
   - id: trust-a-changed-host-key
   - id: fix-a-refused-probe
+  - id: test-an-endpoints-poll
 ---
 
 Collection is how the fleet learns whether a device is reachable and what it reports. An **edge
@@ -97,6 +98,8 @@ give it one ("Control processor") to say what the connection is FOR, since `ssh`
 reached and reads the same on every component in the fleet. It is optional, and an endpoint
 without one reads its transport name exactly.
 
+- A new device gets its first endpoint in [the add-a-component flow](/operator/add-a-component/),
+  which picks the product's driver and credential and tests it before it ends.
 - With `endpoint:create`, **Add endpoint** on the component detail creates one, in either of
   two faces:
   - **Probe**: give it a **label** (optional, and the only name-like string you type here),
@@ -166,6 +169,36 @@ later.
 Because an endpoint belongs to a component, it inherits that component's scope: an endpoint
 on a component outside your scope is not shown. An outpost **purge cascades** its endpoints and
 their derived tasks.
+
+### Test a poll now
+
+A driver-attached endpoint ends with proof that it collects, not a wait for the next cycle. With
+`endpoint:run`, each poll the endpoint's driver declares carries a **Test** button, and an endpoint
+with several also carries **Test all**, on the endpoint's blade (which a new attach opens on) and
+under the endpoint in the component's **Collection** section. A person without the permission sees
+no Test control at all.
+
+A test runs the poll once, now, through the outpost that holds the endpoint, outside its schedule
+(which does not change), and draws the answer in place:
+
+- **Read:** each sample the poll extracted, with its value and unit, the round-trip time the
+  outpost measured, and the outpost that ran it. The samples land as a scheduled run's do. Emits
+  that did not locate their value are listed under the samples, and a poll that answered but
+  read nothing says so.
+- **Gated:** an endpoint the outpost holds (a refusal such as a wrong community, a changed key, an
+  unreachable probe, or a reboot in flight) refuses the run and nothing is sent. The card carries
+  the gate's own reason, the same one the endpoint's notice shows. The notice beside the card
+  offers the way to lift it (**Retry** or **Open endpoint**) where it shows one.
+- **No outpost:** the endpoint is placed on no outpost, or its outpost is not connected, so nothing
+  can run the poll.
+- **Failed or timed out:** the outpost ran the poll and could not complete it (it names why), or
+  did not answer within the run's budget; too many runs in flight at once is told apart too.
+
+Test all runs the polls one after another, since the outpost serves one request at a time per
+endpoint. The same run is one call from the CLI or the API (`run-endpoint-poll`,
+`POST /endpoints/{endpoint}/polls/{poll}:run`).
+
+::walkthrough{#test-an-endpoints-poll}
 
 ## Tasks
 

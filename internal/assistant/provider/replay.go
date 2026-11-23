@@ -17,6 +17,7 @@ import (
 // wherever a run must be the same every time.
 type Replay struct {
 	turns         []Turn
+	prompt        string
 	conversations []conversation
 	next          int
 	calls         int
@@ -25,8 +26,19 @@ type Replay struct {
 // conversation is a recorded script played instead of the default turns when
 // the person's latest message holds its match (#2163).
 type conversation struct {
-	match string
-	turns []Turn
+	match  string
+	prompt string
+	turns  []Turn
+}
+
+// Scripted is a recorded model that knows which messages it answers (#2443):
+// the prompts it was recorded for, to offer, and whether a message is one it
+// plays, so a server can refuse the rest instead of playing an unrelated run.
+type Scripted interface {
+	// Prompts are the questions the recording answers, in recorded order.
+	Prompts() []string
+	// Plays is whether the recording has a script for the message.
+	Plays(message string) bool
 }
 
 type recordedTurn struct {
@@ -47,13 +59,18 @@ func LoadReplay(path string) (*Replay, error) {
 }
 
 // ParseReplay reads a recording: a list of turns, each text, calls, or both,
-// and optionally conversations, each a match and its own turns.
+// and optionally conversations, each a match (what a message must hold) or a
+// prompt (the question it answers, offered to the person) and its own turns.
+// A recording whose top-level turns name their prompt answers only the
+// prompts it names; without one, its turns answer any other message (#2443).
 func ParseReplay(b []byte) (*Replay, error) {
 	var doc struct {
+		Prompt        string         `yaml:"prompt"`
 		Turns         []recordedTurn `yaml:"turns"`
 		Conversations []struct {
-			Match string         `yaml:"match"`
-			Turns []recordedTurn `yaml:"turns"`
+			Match  string         `yaml:"match"`
+			Prompt string         `yaml:"prompt"`
+			Turns  []recordedTurn `yaml:"turns"`
 		} `yaml:"conversations"`
 	}
 	dec := yaml.NewDecoder(bytes.NewReader(b))
@@ -68,11 +85,11 @@ func ParseReplay(b []byte) (*Replay, error) {
 	if err != nil {
 		return nil, err
 	}
-	r := &Replay{turns: turns}
+	r := &Replay{turns: turns, prompt: strings.TrimSpace(doc.Prompt)}
 	for i, c := range doc.Conversations {
 		what := fmt.Sprintf("the recording's conversation %d", i+1)
-		if c.Match == "" {
-			return nil, fmt.Errorf("%s has no match", what)
+		if c.Match == "" && strings.TrimSpace(c.Prompt) == "" {
+			return nil, fmt.Errorf("%s has no match or prompt", what)
 		}
 		if len(c.Turns) == 0 {
 			return nil, fmt.Errorf("%s has no turns", what)
@@ -81,7 +98,7 @@ func ParseReplay(b []byte) (*Replay, error) {
 		if err != nil {
 			return nil, err
 		}
-		r.conversations = append(r.conversations, conversation{match: c.Match, turns: ts})
+		r.conversations = append(r.conversations, conversation{match: c.Match, prompt: strings.TrimSpace(c.Prompt), turns: ts})
 	}
 	return r, nil
 }
@@ -128,12 +145,57 @@ func (r *Replay) Next(_ context.Context, _ []Message, _ []Tool) (Turn, error) {
 // so the server can play one recording to every run, and a run picked up from
 // a stored conversation plays on from there (#2121, #2163).
 func (r *Replay) Positioned() Provider {
-	return positioned{turns: r.turns, conversations: r.conversations}
+	return positioned{turns: r.turns, prompt: r.prompt, conversations: r.conversations}
 }
 
 type positioned struct {
 	turns         []Turn
+	prompt        string
 	conversations []conversation
+}
+
+// normal is a message as a prompt is compared: lowercase, its words spaced
+// singly, without the punctuation that ends a question.
+func normal(s string) string {
+	return strings.TrimRight(strings.Join(strings.Fields(strings.ToLower(s)), " "), "?.! ")
+}
+
+func (c conversation) holds(message string) bool {
+	if c.prompt != "" && strings.Contains(normal(message), normal(c.prompt)) {
+		return true
+	}
+	return c.match != "" && strings.Contains(message, c.match)
+}
+
+// script is the turns the message is played, and whether any are.
+func (p positioned) script(message string) ([]Turn, bool) {
+	for _, c := range p.conversations {
+		if c.holds(message) {
+			return c.turns, true
+		}
+	}
+	if p.prompt == "" || strings.Contains(normal(message), normal(p.prompt)) {
+		return p.turns, true
+	}
+	return nil, false
+}
+
+func (p positioned) Prompts() []string {
+	var out []string
+	if p.prompt != "" {
+		out = append(out, p.prompt)
+	}
+	for _, c := range p.conversations {
+		if c.prompt != "" {
+			out = append(out, c.prompt)
+		}
+	}
+	return out
+}
+
+func (p positioned) Plays(message string) bool {
+	_, ok := p.script(message)
+	return ok
 }
 
 func (p positioned) Next(_ context.Context, messages []Message, _ []Tool) (Turn, error) {
@@ -147,12 +209,9 @@ func (p positioned) Next(_ context.Context, messages []Message, _ []Tool) (Turn,
 			calls += len(m.ToolCalls)
 		}
 	}
-	turns := p.turns
-	for _, c := range p.conversations {
-		if strings.Contains(latest, c.match) {
-			turns = c.turns
-			break
-		}
+	turns, ok := p.script(latest)
+	if !ok {
+		return Turn{}, errors.New("the recording has no answer to that message")
 	}
 	if at >= len(turns) {
 		return Turn{}, fmt.Errorf("the recording ran out after %d turns", len(turns))

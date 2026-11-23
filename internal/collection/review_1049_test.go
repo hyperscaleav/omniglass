@@ -134,8 +134,15 @@ func TestRetryDuringARetryDoesNotDialTwice(t *testing.T) {
 	r, clock := newRecorder(), newFakeClock()
 	s := startRejectingSession(t, d, r, clock, 0)
 	r.waitStates(t, establishing, rejected)
+	// Hold the retry's dial in flight until both Retry calls are made. With
+	// a dial that refuses at once, the first retry's whole attempt could end
+	// before the second call ran, and that second call is then a legitimate
+	// new retry (a third dial), not a double dial: the old test raced on it.
+	release := d.holdDials()
+	defer release()
 	s.Retry()
 	s.Retry()
+	release()
 	r.waitStates(t, establishing, rejected, rejected)
 	clock.Advance(time.Hour, time.Minute)
 	if n := d.dialCount(); n > 3 {

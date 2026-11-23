@@ -105,4 +105,33 @@ describe("SnoozeButton errors", () => {
     expect(alert.textContent).toMatch(/could not end the snooze/i);
     expect(alert.getAttribute("title")).toMatch(/forbidden/i);
   });
+
+  // The failure line outlives a list poll (it is held outside the row), so the
+  // write Retry replays must too: a row rebuilt by a poll still retries.
+  it("retries a failed write after the row is rebuilt, as a poll rebuilds it", async () => {
+    const calls: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      calls.push((input as Request).url);
+      return json({ title: "Bad", status: 500, detail: "boom" }, 500);
+    });
+    const until = new Date(Date.now() + 3_600_000).toISOString();
+    const alarm = { id: "a-retry", snoozed_until: until };
+    const first = mount(operator, alarm);
+    fireEvent.click(first.getAllByRole("button", { name: "Unsnooze" })[0]);
+    await first.findAllByRole("alert");
+    first.unmount();
+    const second = mount(operator, alarm);
+    const before = calls.length;
+    fireEvent.click((await second.findAllByRole("button", { name: "Retry" }))[0]);
+    await waitFor(() => expect(calls.length).toBeGreaterThan(before));
+  });
+});
+
+describe("SnoozedBadge (#2426)", () => {
+  it("keeps its words on one line inside the pill, however long the deadline reads", () => {
+    const { getByText } = render(() => <SnoozedBadge alarm={{ id: "a-1", snoozed_until: "2026-11-24T14:30:00Z" }} />);
+    const pill = getByText(/snoozed until/);
+    expect(pill.className).toContain("whitespace-nowrap");
+    expect(pill.className).toContain("h-auto");
+  });
 });

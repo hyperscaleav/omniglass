@@ -71,7 +71,7 @@ func newInstFixture(t *testing.T) *instFixture {
 		{Name: "hq", LocationType: "building"},
 		{Name: "annex", LocationType: "building"},
 	} {
-		if _, err := gw.CreateLocation(ctx, "", l, all); err != nil {
+		if _, err := gw.CreateLocation(ctx, "", l, all, all); err != nil {
 			t.Fatalf("create %s: %v", l.Name, err)
 		}
 	}

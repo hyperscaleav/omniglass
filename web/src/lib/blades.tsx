@@ -33,26 +33,61 @@ export type BladeController = {
   close: () => void; // clear the stack
   filter: (pred: (r: BladeRef) => boolean) => void; // prune (e.g. a node deleted upstream)
   isTop: (i: number) => boolean;
+  // A body's leave guard, registered against its own blade (#2423): a pop,
+  // close or fold-back that would drop that blade asks it first, so a detail
+  // body's unsaved Configure drafts are never discarded silently. Returns the
+  // unregister function (call it on cleanup).
+  guard: (ref: BladeRef, g: { confirmLeave: () => true | Promise<boolean> }) => () => void;
 };
 
 const key = (r: BladeRef) => `${r.kind}:${r.id}`;
 
 export function createBladeController(): BladeController {
   const [stack, setStack] = createSignal<BladeRef[]>([]);
-  const push = (ref: BladeRef) =>
-    setStack((s) => {
-      const i = s.findIndex((r) => key(r) === key(ref));
-      return i >= 0 ? s.slice(0, i + 1) : [...s, ref];
-    });
-  const pop = () => setStack((s) => s.slice(0, -1));
-  const close = () => setStack([]);
+  const guards = new Map<string, { confirmLeave: () => true | Promise<boolean> }>();
+  // May these blades be dropped? Each one's guard is asked, top first; a clean
+  // guard answers at once, a dirty one in the one confirm dialog (#2463). Only
+  // if every one agrees, and the stack is still the one asked about, does the
+  // drop happen.
+  const whenMayDrop = (dropped: BladeRef[], drop: () => void) => {
+    const asked = stack();
+    const gs = [...dropped].reverse().flatMap((r) => guards.get(key(r)) ?? []);
+    const step = (i: number): void => {
+      if (i >= gs.length) {
+        if (stack() === asked) drop();
+        return;
+      }
+      const a = gs[i].confirmLeave();
+      if (a === true) return step(i + 1);
+      void a.then((ok) => ok && step(i + 1));
+    };
+    step(0);
+  };
+  const push = (ref: BladeRef) => {
+    const s = stack();
+    const i = s.findIndex((r) => key(r) === key(ref));
+    if (i < 0) return setStack([...s, ref]);
+    whenMayDrop(s.slice(i + 1), () => setStack(s.slice(0, i + 1)));
+  };
+  const pop = () => {
+    const s = stack();
+    if (!s.length) return;
+    whenMayDrop(s.slice(-1), () => setStack(s.slice(0, -1)));
+  };
+  const close = () => whenMayDrop(stack(), () => setStack([]));
+  const guard = (ref: BladeRef, g: { confirmLeave: () => true | Promise<boolean> }) => {
+    guards.set(key(ref), g);
+    return () => {
+      if (guards.get(key(ref)) === g) guards.delete(key(ref));
+    };
+  };
   const filter = (pred: (r: BladeRef) => boolean) =>
     setStack((s) => {
       const next = s.filter(pred);
       return next.length === s.length ? s : next;
     });
   const isTop = (i: number) => i === stack().length - 1;
-  return { stack, push, pop, close, filter, isTop };
+  return { stack, push, pop, close, filter, isTop, guard };
 }
 
 export const BladesContext: Context<BladeController | undefined> = createContext<BladeController>();

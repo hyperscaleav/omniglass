@@ -7,6 +7,7 @@ import { COMPONENT_TYPES_KEY, type ComponentType } from "../lib/component_types"
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 import { pickTree, treeOptions } from "../components/TreeSelect.testkit";
+import { answerConfirms } from "../lib/confirm.testkit";
 
 // Component Types (Catalog > Components: Types): the device-class type
 // catalog (ADR-0085, partially reversing ADR-0047), on the same
@@ -317,7 +318,7 @@ describe("ComponentTypes page", () => {
 
   it("a forked shipped row offers Restore default, and a pristine one offers nothing to discard", async () => {
     let restored: string | undefined;
-    vi.spyOn(globalThis, "confirm").mockReturnValue(true);
+    answerConfirms(true);
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       if (req.method === "POST" && req.url.includes(":restore")) {
@@ -373,7 +374,7 @@ describe("ComponentTypes page", () => {
       }
       return new Response(JSON.stringify({ component_types: [shipped] }), { status: 200, headers: { "Content-Type": "application/json" } });
     });
-    vi.spyOn(globalThis, "confirm").mockReturnValue(true);
+    answerConfirms(true);
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
     // The operator's fork: every fact on the blade overridden over the shipped
     // row, so a draft that survives the restore is visible in any of them.

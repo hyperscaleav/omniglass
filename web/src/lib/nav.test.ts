@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { filterNav, filterWhen, lookupNav, navItems, OFF_RAIL, routeAllowed, routeTokens, sectionLabel, STUBS, type NavItem } from "./nav";
+import { filterNav, filterWhen, lookupNav, navItems, OFF_RAIL, routeAllowed, routeTokens, sectionLabel, type NavItem } from "./nav";
 import { can, type Me } from "./auth";
 
 const Dummy = () => null;
@@ -210,7 +210,7 @@ describe("routeTokens", () => {
 
 describe("nav IA rework", () => {
   it("keeps the operator-set values under Values and the re-homed index routes gated off-rail", () => {
-    expect(section("Values", [">"])).toEqual(["Variables", "Secrets", "Declared", "Files"]);
+    expect(section("Values", [">"])).toEqual(["Variables", "Secrets", "Files"]);
     // The old index URLs redirect into the fleet's list face, but their detail
     // routes remain, so the gates and top-bar identities must survive the move.
     expect(routeTokens("/web/locations")).toEqual(["location", "read"]);
@@ -226,19 +226,39 @@ describe("nav IA rework", () => {
     expect(labels).not.toContain("Settings");
   });
 
-  it("keeps governance plus the Settings soon-stub under Admin for an owner", () => {
+  it("keeps governance plus Settings under Admin for an owner", () => {
     expect(section("Admin", [">"])).toEqual(["Users", "Roles", "User groups", "Audit", "Outposts", "Status", "Settings"]);
   });
 
-  it("shows a bare *:read viewer only Outposts, Status and the ungated Settings under Admin", () => {
-    expect(section("Admin", ["*:read"])).toEqual(["Outposts", "Status", "Settings"]);
+  it("shows a bare *:read viewer only Outposts and Status under Admin: settings:read is sensitive (#2442)", () => {
+    expect(section("Admin", ["*:read"])).toEqual(["Outposts", "Status"]);
+    expect(section("Admin", ["settings:read"])).toContain("Settings");
+    expect(routeTokens("/web/settings")).toEqual(["settings", "read"]);
+  });
+
+  // The guard (#2442): an entry with no gate must say so on purpose. A new nav
+  // entry that forgets its permission fails here instead of shipping a door every
+  // signed-in person sees and the server then refuses.
+  it("declares a permission, a resource, or public on every nav entry", () => {
+    type Gate = { label: string; perm?: string; resource?: string; anyResource?: string[]; public?: boolean; children?: Gate[] };
+    const leaves = (xs: Gate[]): Gate[] => xs.flatMap((x) => (x.children ? leaves(x.children) : [x]));
+    const ungated = [...leaves(navItems as Gate[]), ...(OFF_RAIL as Gate[])]
+      .filter((n) => !n.perm && !n.resource && !n.anyResource && !n.public)
+      .map((n) => n.label);
+    expect(ungated).toEqual([]);
+  });
+
+  it("never marks a public entry as also gated", () => {
+    type Gate = { label: string; perm?: string; resource?: string; anyResource?: string[]; public?: boolean; children?: Gate[] };
+    const leaves = (xs: Gate[]): Gate[] => xs.flatMap((x) => (x.children ? leaves(x.children) : [x]));
+    const both = [...leaves(navItems as Gate[]), ...(OFF_RAIL as Gate[])].filter((n) => n.public && (n.perm || n.resource || n.anyResource));
+    expect(both.map((n) => n.label)).toEqual([]);
   });
 
   it("keeps moved entries' gates and leaves the stubs ungated", () => {
     expect(routeTokens("/web/secrets")).toEqual(["secret", "read"]);
     expect(routeTokens("/web/variables")).toEqual(["variable", "read"]);
-    expect(routeTokens("/web/config")).toBeNull();
-    expect(routeTokens("/web/settings")).toBeNull();
+    expect(routeTokens("/web/settings")).toEqual(["settings", "read"]);
     expect(routeTokens("/web/outposts")).toEqual(["outpost", "read"]); // outpost directory is live, gated on outpost:read
   });
 });
@@ -286,7 +306,8 @@ describe("Catalog single entry", () => {
   it("keeps every off-rail page's identity for bookmarks and stubs", () => {
     expect(lookupNav("/web/products").label).toBe("Products");
     expect(lookupNav("/web/event-rules").label).toBe("Event rules");
-    expect(lookupNav("/web/log-types").label).toBe("Logs");
+    // An address with no page (a retired stub) reads as not found, never "coming soon".
+    expect(lookupNav("/web/log-types").label).toBe("Not found");
   });
 
   it("keeps the notification types page's identity now it is live (#618)", () => {
@@ -320,7 +341,6 @@ describe("Catalog single entry", () => {
       "/action-rules": ["rule", "read"],
       "/notification-targets": ["notification_target", "read"],
       "/templates": ["template", "read"],
-      "/log-types": null,
       // The re-homed index routes (#798): off the rail, gates unchanged.
       "/components": ["component", "read"],
       "/systems": ["system", "read"],
@@ -335,13 +355,14 @@ describe("Catalog single entry", () => {
 });
 
 describe("nav paths bind to routes (#608)", () => {
-  it("resolves every unlive nav path to a registered stub, never NotFound", () => {
-    const unlive = navItems.flatMap((i) => (i.children ?? []).filter((c) => !c.live).map((c) => c.path));
-    for (const path of unlive) expect(STUBS, `${path} has a rail entry but no stub route`).toContain(path);
+  it("has no door to an unbuilt page: every rail entry is live (#2445)", () => {
+    const entries: { label: string; live?: boolean }[] = navItems.flatMap((i): { label: string; live?: boolean }[] => (i.children?.length ? i.children : [i]));
+    for (const e of entries) expect(e.live, `${e.label} has a rail entry but no page`).toBe(true);
+    const labels = entries.map((e) => e.label);
+    for (const gone of ["Dashboards", "Learn", "Declared"]) expect(labels).not.toContain(gone);
   });
 
   it("keeps the off-rail /templates page its identity, live and gated on template:read (#1329)", () => {
-    expect(STUBS).not.toContain("/templates");
     expect(lookupNav("/web/templates").label).toBe("Templates");
     expect(sectionLabel("/web/templates")).toBe("Templates");
     expect(routeTokens("/web/templates")).toEqual(["template", "read"]);
@@ -404,17 +425,17 @@ describe("filterWhen", () => {
 
 // Hints on pathless groups (Values, Admin) are never rendered: the sidebar
 // shows the group's label only, and navByPath only indexes items with a path
-// (so SectionStub never reads them). Items with a path carry hints because
-// stubs render them through lookupNav.
+// (so nothing reads them). Items with a path carry hints because
+// the top bar and tests read them through lookupNav.
 describe("nav hints (#2106)", () => {
-  it("pathless group items carry no hint (they cannot reach navByPath or SectionStub)", () => {
+  it("pathless group items carry no hint (they cannot reach navByPath )", () => {
     const pathless = navItems.filter((i) => !i.path);
     for (const item of pathless) {
       expect(item.hint, `${item.label} has no path and must have no hint`).toBeUndefined();
     }
   });
 
-  it("every item with a path carries a hint (stubs render it; live pages document it)", () => {
+  it("every item with a path carries a hint (live pages document it)", () => {
     for (const item of navItems) {
       if (!item.path) continue;
       expect(item.hint, `${item.label} has a path and must carry a hint`).toBeTruthy();

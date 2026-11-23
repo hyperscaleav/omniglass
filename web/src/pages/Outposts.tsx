@@ -2,7 +2,6 @@ import { createIdentity } from "../lib/entities";
 import { Show, For, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import ModalDialog, { DialogHeading } from "../components/ui/ModalDialog";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
-import { useSearchParams } from "@solidjs/router";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
 import BladeField from "../components/BladeField";
@@ -38,6 +37,7 @@ import { useMe, can } from "../lib/auth";
 import { describeError, rel } from "../lib/format";
 import { pushToast } from "../lib/toast";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
+import { confirmDelete } from "../lib/confirm";
 
 // Outposts: the collection-daemon inventory, a config over the shared FlatList (the
 // flat sibling of the inventory TreeList). A row per outpost with its liveness pill
@@ -89,9 +89,8 @@ const columns: FlatColumn<Outpost>[] = [
 export default function Outposts() {
   const me = useMe();
   const outposts = useQuery(() => ({ queryKey: OUTPOSTS_KEY, queryFn: () => listOutposts() }));
-  // ?n=<name> deep-links to an outpost's blade (Platform health's row link, #1644).
-  const [params] = useSearchParams();
-  const openId = () => (Array.isArray(params.n) ? params.n[0] : params.n) || undefined;
+  // ?open=<name> deep-links to an outpost's blade (Platform health's row link, #1644);
+  // the older ?n=<name> still opens it.
 
   // One filter facet per tag key present across the outposts, derived from their
   // effective tags, so the bar can filter by any tag like any other field
@@ -127,7 +126,7 @@ export default function Outposts() {
           columns,
           empty: "No outposts yet.",
           rowId: (n) => n.name,
-          openId,
+          legacyParam: "n",
           blades: { registry: { outpost: outpostBlade }, rootKind: "outpost" },
           create: {
             label: "New outpost",
@@ -174,7 +173,7 @@ function OutpostBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput)
   async function removeOutpost() {
     const outpost = n();
     if (!outpost) return;
-    if (!confirm(`Delete outpost "${outpostLabel(outpost)}"? Its endpoints, tasks, and enrollment are removed. This cannot be undone.`)) return;
+    if (!(await confirmDelete({ kind: "outpost", name: outpostLabel(outpost), consequence: "Its endpoints, tasks, and enrollment are removed. This cannot be undone." }))) return;
     setErr(null);
     try {
       await deleteOutpost(outpost.name);
@@ -335,10 +334,7 @@ function OutpostBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput)
                     <div class="flex items-center gap-2 px-3 py-1.5 text-sm" classList={{ "border-t border-base-300": i() > 0 }}>
                       <span class="font-data text-base-content/80">{t.iface}</span>
                       <span class="text-base-content/25">/</span>
-                      <span class="flex items-center gap-1.5 text-base-content/50">
-                        reachability
-                        <span class="rounded bg-base-content/5 px-1 py-px text-[9px] font-medium uppercase tracking-wide text-base-content/40" title="Named collection functions arrive with device drivers">driver fn soon</span>
-                      </span>
+                      <span class="text-base-content/50">reachability</span>
                       <span class="flex-1" />
                       <span class={`badge badge-xs ${t.enabled ? "badge-soft badge-success" : "bg-base-content/10 text-base-content/70 border-transparent"}`}>{t.enabled ? "enabled" : "disabled"}</span>
                     </div>

@@ -3,7 +3,6 @@ import { useLocation } from "@solidjs/router";
 import { pageHere, pendingTriage } from "./lib/handover";
 import Sidebar from "./components/Sidebar";
 import TopBar from "./components/TopBar";
-import ImpersonationBanner from "./components/ImpersonationBanner";
 import CommandPalette from "./components/CommandPalette";
 import { Toaster } from "./components/ui/Toast";
 import OmnibotPanel from "./components/OmnibotPanel";
@@ -13,7 +12,8 @@ import { useTheme, applyTheme, themeFromMe } from "./lib/theme";
 import { useSettingsMe } from "./lib/settings";
 
 // App is the authenticated shell (the data-app-shell root, which an open blade
-// makes inert): the nav rail, the sticky top bar, the routed
+// makes inert; AppRoot gives it the viewport below the banner strips, and <main>
+// is the scroll region): the nav rail, the top bar, the routed
 // page, the global ⌘K command palette, omnibot's panel (#1167, for a person who
 // may run it, from the top bar, the palette or an alarm's troubleshoot button), and the toasts any surface raises. It
 // owns the rail collapse state, the theme effect (mirrors the mode onto
@@ -65,7 +65,6 @@ const App: ParentComponent = (props) => {
       <Sidebar collapsed={collapsed()} onToggle={() => setCollapsed(!collapsed())} />
       <div class="flex min-w-0 flex-1 flex-col">
         <TopBar section={section()} onOpenPalette={() => setPaletteOpen(true)} onOpenOmnibot={mayAsk() ? () => openOmnibot() : undefined} />
-        <ImpersonationBanner />
         <main id="scroll-main" class="mx-auto w-full max-w-330 flex-1 overflow-y-auto px-8 pb-16 pt-7">
           {props.children}
         </main>

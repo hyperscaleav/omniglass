@@ -79,16 +79,16 @@ func alarmProbe(t *testing.T, staffs, roomsN int) (storage.Gateway, *querycount.
 		t.Fatalf("seed: %v", err)
 	}
 	sc := scope.Set{All: true}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "campus"}, sc); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "campus"}, sc, sc); err != nil {
 		t.Fatalf("create campus: %v", err)
 	}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq-b1", LocationType: "building", ParentName: strptr("hq")}, sc); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq-b1", LocationType: "building", ParentName: strptr("hq")}, sc, sc); err != nil {
 		t.Fatalf("create building: %v", err)
 	}
 	roomNames := make([]string, 0, roomsN)
 	for i := range roomsN {
 		n := fmt.Sprintf("hq-r%d", i)
-		if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: n, LocationType: "room", ParentName: strptr("hq-b1")}, sc); err != nil {
+		if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: n, LocationType: "room", ParentName: strptr("hq-b1")}, sc, sc); err != nil {
 			t.Fatalf("create %s: %v", n, err)
 		}
 		roomNames = append(roomNames, n)
