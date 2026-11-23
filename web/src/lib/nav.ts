@@ -62,6 +62,10 @@ export type NavItem = {
 
 export type NavCondition = "simulator";
 
+// The one name of the Platform health page: its sidebar door, its top bar
+// section and its page heading all read this (#2446).
+export const PLATFORM_HEALTH_NAME = "Platform health";
+
 export const navItems: NavItem[] = [
   { label: "Home", path: "/", icon: Icons.Home, live: true, public: true, hint: "Your environment at a glance, and what needs attention right now." },
   // Explore (#826): the sidebar's one door into the fleet ("fleet" stays the
@@ -112,10 +116,11 @@ export const navItems: NavItem[] = [
       // Outposts and Platform health (#1644) are administration: enrolling an outpost
       // is an admin's job, and whether Omniglass itself is well is read off the
       // platform components every outpost and server already has. Both sit here
-      // (#1767; every tab is one word, so Platform health is Status), behind
-      // outpost:read because Status's rows are the outpost list.
+      // (#1767), behind outpost:read because the page's rows are the outpost list.
+      // The door, the top bar and the page heading all say "Platform health"
+      // (#2446): one name, not the one-word "Status" the door wore before.
       { label: "Outposts", path: "/outposts", live: true, resource: "outpost", hint: "Collection daemons: their health, enrollment, and the collection tasks assigned to each." },
-      { label: "Status", path: "/platform", live: true, resource: "outpost", hint: "Whether Omniglass itself is well: the build running, how long it has been up, and each outpost's check-in, schedule and command queue." },
+      { label: "Platform health", path: "/platform", live: true, resource: "outpost", hint: "Whether Omniglass itself is well: the build running, how long it has been up, and each outpost's check-in, schedule and command queue." },
       { label: "Settings", path: "/settings", live: true, resource: "settings", hint: "Platform preferences resolved down the cascade: the theme, defaults, and keybindings, each with its provenance and lock state." },
     ],
   },

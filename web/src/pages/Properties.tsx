@@ -7,7 +7,8 @@ import FieldRow from "../components/FieldRow";
 import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
-import { CalcWriterCell, CalcWriterLine } from "../components/RuleLink";
+import { WriterCell, WriterLine } from "../components/RuleLink";
+import { KeyUsedBy } from "../components/CatalogUsage";
 import { useFormActions } from "../lib/formactions";
 import { Plus } from "../components/icons";
 import {
@@ -50,7 +51,7 @@ function originBadge(official: boolean): JSX.Element {
 const columns: FlatColumn<PropertyRow>[] = [
   identityColumn<PropertyRow>(),
   { key: "data_type", label: "Type", width: "90px", sortVal: (r) => r.data_type, cell: (r) => typeBadge(r.data_type) },
-  { key: "written_by", label: "Written by", width: "130px", sortVal: (r) => r.written_by?.rule ?? "", cell: (r) => <CalcWriterCell writer={r.written_by} /> },
+  { key: "written_by", label: "Written by", width: "130px", sortVal: (r) => r.written_by?.rule ?? r.writer_class ?? "", cell: (r) => <WriterCell row={r} /> },
   { key: "official", label: "Origin", width: "100px", sortVal: (r) => String(r.official), cell: (r) => originBadge(r.official) },
 ];
 
@@ -177,7 +178,7 @@ function PropertyBladeBody(p: { name: string }): JSX.Element {
             <KVStacked label="Type" value={typeBadge(r().data_type)} />
             <KVStacked label="Origin" value={originBadge(r().official)} />
           </div>
-          <Show when={r().written_by}>{(w) => <CalcWriterLine writer={w()} />}</Show>
+          <WriterLine row={r()} />
           <BladeField
             bind="label"
             value={() => r().label ?? ""}
@@ -198,6 +199,7 @@ function PropertyBladeBody(p: { name: string }): JSX.Element {
               <span class="text-[11px] text-base-content/40">Editing the schema is a follow-up; set it via the API for now.</span>
             </div>
           </Show>
+          <KeyUsedBy lane="property" name={r().name} />
         </div>
       )}
     </Show>

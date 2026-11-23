@@ -281,7 +281,7 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
                 {/* What it was told and where each command stands (#1155),
                     above what it has been saying. */}
                 <Show when={can(me.data, "command", "read")}>
-                  <CommandsPanel component={id()} name={component()?.name ?? id()} componentId={component()?.id} open={openCommand()} />
+                  <CommandsPanel component={id()} name={component()?.name ?? id()} componentId={component()?.id} open={openCommand()} productDriver={product()?.driver} onAddEndpoint={can(me.data, "endpoint", "create") ? () => blades.push({ kind: "endpoint-create", id: component()?.id ?? id() }) : undefined} />
                 </Show>
                 <EventsPanel name={id()} />
                 {/* The component's own words beside its occurrences (#1145):
@@ -312,7 +312,7 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
                             </span>
                             <span data-testid="alarm-controls" class="ml-auto flex shrink-0 items-center gap-1">
                               <SnoozedBadge alarm={a} />
-                              <AlarmActions componentId={component()?.id ?? id()} alarm={a} surface={snoozeSurface} show={{ ack: true, snooze: true, troubleshoot: true, timeline: timelines }} />
+                              <AlarmActions componentId={component()?.id ?? id()} alarm={a} surface={snoozeSurface} show={{ ack: true, snooze: true, troubleshoot: true, command: true, timeline: timelines }} />
                             </span>
                           </div>
                           <Show when={timelines.isOpen(a.id)}>

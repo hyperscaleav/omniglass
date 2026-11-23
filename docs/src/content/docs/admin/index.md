@@ -60,6 +60,8 @@ Omniglass and takes your own entries beside it; each page says which of its rows
 - **[Properties](/admin/properties/)**, **[metrics](/admin/metrics/)**, **[events](/admin/events/)**
   and **[commands](/admin/commands/)**: the canonical names a driver maps a device onto, one catalog
   per lane.
+- **[Follow the catalog](/admin/catalog-links/)**: every reference in a catalog drawer is a link, and each
+  drawer lists what uses the row.
 - **[Standards](/admin/standards/)**: the contract a system is built to, and the slots a conforming
   system fills.
 

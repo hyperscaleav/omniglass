@@ -369,3 +369,29 @@ func TestFleetProjectionCountsTheOpenAlarmsInComponentScope(t *testing.T) {
 		t.Errorf("open alarms scoped to bar-2 = %v, want 1: bar-1's alarm is out of scope", n)
 	}
 }
+
+// A system whose last component is gone (or that never had one) is still a
+// system in scope: the projection carries it, with no dots, so the outline can
+// name it instead of reading its place as empty (#2464).
+func TestFleetProjectionKeepsASystemWithNoMembers(t *testing.T) {
+	t.Parallel()
+	f := newFleetFixture(t)
+	room := "depot-r1"
+	if _, err := f.gw.CreateSystem(context.Background(), "", storage.SystemSpec{Name: "blank-sys", LocationName: &room}, f.all, f.all); err != nil {
+		t.Fatalf("create blank system: %v", err)
+	}
+	v := f.project(t, f.all, f.all, f.all)
+	for _, s := range v.Systems {
+		if s.Name != "blank-sys" {
+			continue
+		}
+		if s.LocationID == nil {
+			t.Error("the blank system must keep its location")
+		}
+		if s.Dots == nil || len(s.Dots) != 0 {
+			t.Errorf("want an empty, non-nil dots list, got %v", s.Dots)
+		}
+		return
+	}
+	t.Fatalf("a system with no members vanished from the fleet projection: %v", sysNames(v))
+}

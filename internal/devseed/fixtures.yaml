@@ -2081,6 +2081,20 @@ component_dependencies:
   - { component: panel-a, upstream: bar-a, kind: path }
   - { component: huddle-touch, upstream: huddle-bar, kind: host }
 
+# Calc rules (#2430): one operator rule, so the Calc rules page, a metric's "Written
+# by" and its drawer's "Read by" come up populated in a lab. It averages a
+# component's room-temperature into a metric of its own; the output metric is
+# created beside it because a calc rule may only write a key nothing collects.
+calc_rules:
+  - name: room-temperature-mean
+    label: Room temperature mean
+    description: The mean of a component's room-temperature readings.
+    owner_kind: component
+    inputs:
+      - { alias: t, key: room-temperature }
+    reduce: avg(t)
+    output: { name: room-temperature-mean, label: Room temperature mean, unit: degC }
+
 # What is really wrong in the fleet (#2434). The seed raises no alarm: it sets
 # up each fault's cause and lets a rule judge it, so every alarm the fleet
 # shows links to its rule, carries the event that raised it, agrees with the

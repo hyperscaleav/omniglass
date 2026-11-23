@@ -8,6 +8,8 @@ import BladeField, { EMPTY_VALUE } from "../components/BladeField";
 import InheritedField from "../components/InheritedField";
 import InheritedCell from "../components/InheritedCell";
 import KVStacked from "../components/KVStacked";
+import CatalogRef from "../components/CatalogRef";
+import { ComponentTypeUsedBy } from "../components/CatalogUsage";
 import { useFormActions } from "../lib/formactions";
 import ComponentTypeSelect from "../components/ComponentTypeSelect";
 import { Plus, resolveIcon } from "../components/icons";
@@ -293,7 +295,7 @@ function ComponentTypeBladeBody(p: { id: string }): JSX.Element {
             <KVStacked label="Id" value={<span class="font-data text-xs text-base-content/60">{r().id}</span>} />
             <KVStacked
               label="Parent"
-              value={r().parent ? <span class="font-data">{r().parent}</span> : <span class="text-base-content/50">Root</span>}
+              value={r().parent ? <CatalogRef kind="component_type" name={r().parent} /> : <span class="text-base-content/50">Root</span>}
             />
           </div>
           <BladeField
@@ -333,6 +335,7 @@ function ComponentTypeBladeBody(p: { id: string }): JSX.Element {
             inherited={() => inheritedFact(r(), "icon")}
             hint="A glyph key."
           />
+          <ComponentTypeUsedBy name={r().name} />
         </div>
       )}
     </Show>
