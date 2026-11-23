@@ -233,6 +233,26 @@ normalizes it to a 256x256 JPEG. An administrator manages **any** user's picture
 (gated by `user:set-avatar`), reading one back with `omniglass user avatar list alice` (gated by
 `user:read:admin`). A user with no picture is a 404.
 
+## Importing a plan
+
+`omniglass plan apply` lands a whole plan of locations, systems and components in one write
+(`POST /plans:apply`, the shape and its rules in
+[templates](/architecture/templates/#a-client-applies-a-plan-directly)). Each part of the plan is
+a JSON flag, so a plan kept in a file goes in with `jq`; dry-run it first, then apply:
+
+```sh
+omniglass plan apply --validate-only \
+  --standards "$(jq -c .standards plan.json)" \
+  --locations "$(jq -c .locations plan.json)" \
+  --systems "$(jq -c .systems plan.json)"
+# the same flags without --validate-only apply it, and print the import_id
+```
+
+The dry run writes nothing and prints the counts and the names the apply would mint, or the
+refusal (its path in the plan, `systems[3].components[1]`, leads the message). An apply prints the
+`import_id` every audit row it wrote carries as `from_import`. A plan holds at most 1000 rows; split
+a bigger import into one plan per building and apply each in turn.
+
 ## Everything else is in the reference
 
 The commands for the rest of the API (collection, secrets, variables, tags, the catalogs, commands,
