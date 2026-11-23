@@ -30,13 +30,18 @@ refs: [2361, 527, 2362, 2363, 2364, 2365, 81]
      `user:reset-password` uses, because a link an admin chooses is a way to sign in as its target:
      so no one links another owner. A person links their own identity with their current password,
      as a password change asks, since a link outlives the session that made it; that is how an
-     owner gains SSO. Unlinking takes the same gate. Every link and unlink is audited.
+     owner gains SSO. Unlinking takes the same gate. Every link and unlink is audited, and a link
+     records who made it: the guard judges the target only at link time, so when a person is granted
+     owner every link someone else made for them is deleted (audited), and they link again themselves.
      Just-in-time provisioning (#2364) is a separate opt-in that only ever creates a new person; when
      the claims' email matches an existing person it refuses and asks for a link instead of adopting
      the account. A new person's email is taken from the claims only when `email_verified` is true.
   3. **OIDC first, SAML on the same model.** OIDC is the authorization code flow with PKCE (S256),
      a `state` and a `nonce`, stored hashed with a short expiry as `oauth_code` is, as a confidential
-     client. The id_token is verified for signature against the provider's JWKS, `iss` equal to the
+     client. The state is also bound to the browser that started the flow: start sets it in a
+     short-lived httpOnly `SameSite=Lax` cookie and the callback refuses a state its cookie does not
+     carry, so a callback URL an attacker completed as themselves cannot sign a victim into the
+     attacker's account (login CSRF). A self-link flow is bound to the signed-in session the same way. The id_token is verified for signature against the provider's JWKS, `iss` equal to the
      configured issuer, `aud` containing the client id (and `azp` when there are several), `exp`
      and `iat` within a small skew, and the nonce; claims come from the id_token alone, so the groups
      claim must be in it. Sign-in starts at Omniglass (no provider-initiated sign-in). The callback is
@@ -53,7 +58,7 @@ refs: [2361, 527, 2362, 2363, 2364, 2365, 81]
      token with no groups claim maps to the empty set (fail closed). Scoped access then follows
      with no authorization change, since a member inherits group grants in the per-request grant load
      (`loadUser`). A mapping to a group that carries an owner grant is refused, and so is an owner
-     grant on a group that has a mapping, so the identity provider can never mint an owner.
+     grant on a group that has a mapping, so no group mapping can make an owner.
   5. **Owners keep password sign-in.** Local password sign-in stays for owners, and
      `omniglass set-password` stays the last resort for a locked-out owner. An enforce mode, off by
      default, refuses password sign-in for every person who is not an owner, with a message pointing
@@ -68,7 +73,9 @@ refs: [2361, 527, 2362, 2363, 2364, 2365, 81]
      [ADR-2223](#adr-2223-settings-read-an-env-layer-between-the-settings-file-and-the-console). The
      client id is the secret's `client_id` field, not a second setting, so the pair rotates together.
      Naming the secret from the console or API takes `secret:bind` on it, as omnibot's `key_secret`
-     does.
+     does, and so does moving `issuer` while a secret is bound, as moving omnibot's `base_url` does:
+     the token exchange sends the client secret to the issuer's token endpoint, so an issuer someone
+     else controls would receive it.
   7. **Every provider call goes through egress, under the install's allow list.** Discovery, JWKS
      and the token exchange use `internal/egress`, so TLS is verified, redirects are not followed and
      each call is bounded. Unlike a client metadata document
@@ -81,7 +88,8 @@ refs: [2361, 527, 2362, 2363, 2364, 2365, 81]
      Cloudflare Access trust of [#81](https://github.com/hyperscaleav/omniglass/issues/81) verifies
      its `Cf-Access-Jwt-Assertion` with it rather than a verifier of its own. An Access identity is
      an `iss|sub` like any other and resolves its person through the same link. #81's preview-only
-     policy of provisioning every Access user as an owner is its own decision to record, and it may
+     policy of provisioning every Access user as an owner is the one exception to point 4's spirit
+     (no identity provider makes an owner): #81 records it, confines it to preview installs, and may
      not match a person by email (point 2).
 - **Context:** ADR-0004 shipped bearer and password credentials and deferred `oidc`. Installs that
   run an identity provider want their people to sign in with it, their leavers cut off there, and
@@ -93,8 +101,10 @@ refs: [2361, 527, 2362, 2363, 2364, 2365, 81]
   - One identity provider per install. Changing `issuer` leaves every existing link on the old
     issuer, so those people cannot sign in by SSO until relinked.
   - A group removed at the provider takes effect at the person's next SSO sign-in, so a session
-    already minted keeps its access for the rest of its 12 hours. Disabling the person in Omniglass,
-    or revoking their sessions, is the immediate cut.
+    already minted keeps its access for the rest of its 12 hours. A person signed in by SSO may also
+    mint an API token (90 days by default, up to 365) that the provider never sees, so removing them
+    at the provider does not cut it. Disabling the person in Omniglass blocks every credential at
+    once and is the leaver cut-off.
   - Only groups claim values: no nested-group expansion, no userinfo call, and no handling of a
     provider that leaves an oversized groups list out of the token (Entra's group overage).
   - No SCIM, so a person removed at the provider stays an Omniglass person (unable to sign in by
