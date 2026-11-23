@@ -287,11 +287,13 @@ var retiredIdentifiers = []BannedTerm{
 	// in backticks (the only code entity ever called `state` was the sample
 	// table, now `property`; hyphenated names like `power-state` cannot match
 	// because the backtick must sit immediately before the word), the
-	// state-plus-storage-noun compounds, and the old two-table pairing.
+	// state-plus-storage-noun compounds, and the old two-table pairing. A
+	// generated parameter table row (| `state` | string |, the alarm list's
+	// state filter, #2426) is the one backticked use that is not the table.
 	{
 		// The compound arm refuses a leading hyphen ([^-\w]) rather than using \b,
 		// so "steady-state rows" and its solid-state cousins stay legal prose.
-		Pattern:     regexp.MustCompile("(?i)`state`|(?:^|[^-\\w])state (?:tables?|series|samples?|rows?|sinks?|kinds?)\\b|\\bmetric`? ?/ ?`?state\\b"),
+		Pattern:     regexp.MustCompile("(?i)`state`(?:$|[^ ]| [^|])|(?:^|[^-\\w])state (?:tables?|series|samples?|rows?|sinks?|kinds?)\\b|\\bmetric`? ?/ ?`?state\\b"),
 		Replacement: "property (the value lane): the sample tables are `metric` and `property`",
 		Origin:      "ADR-0079",
 	},

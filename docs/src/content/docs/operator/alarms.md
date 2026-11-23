@@ -7,6 +7,8 @@ sidebar:
   badge:
     text: Partial
     variant: note
+walkthroughs:
+  - id: find-a-cleared-alarm
 screenshots:
   - id: alarm-troubleshoot
     path: /web/systems/auditorium
@@ -210,7 +212,7 @@ but a snooze still applies.
 A component's own **Recently cleared** list and a system's Activity say the same, "lasted 12m", in the same
 words. It is one formatter everywhere, the coarsest two units (45s, 12m, 3h 12m, 2d 2h).
 
-Over the API it is `GET /alarms?state=cleared` (`omniglass alarm list --state cleared`), with `state` one of
+Over the API it is `GET /alarms?state=cleared` (`omniglass alarm list --state cleared`), with the state parameter one of
 `active` (the default), `cleared` or `all`, and `since` and `until` (RFC 3339) bounding the **overlap** of an
 alarm's raised-to-cleared interval with the range: an alarm raised before `since` and still open in the range
 is included, one cleared before `since` or raised after `until` is not, and `since` after `until` is a 400. The
