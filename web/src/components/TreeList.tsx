@@ -419,16 +419,8 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
     const open = () => expanded().has(n.id);
     return (
       <tr
-        class="group cursor-pointer hover:bg-base-content/5 focus-visible:bg-base-content/5 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-primary"
-        role="button"
-        tabindex={0}
+        class="group cursor-pointer hover:bg-base-content/5 focus-within:bg-base-content/5"
         onClick={() => openNode(n)}
-        onKeyDown={(e) => {
-          if ((e.key === "Enter" || e.key === " ") && e.currentTarget === e.target) {
-            e.preventDefault();
-            openNode(n);
-          }
-        }}
       >
         <td class="min-w-52">
           <span class="inline-flex w-full items-center gap-1.5" style={{ "padding-left": isTree() ? `${p.row.depth * 20}px` : "0" }}>
@@ -449,7 +441,18 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
                 </Show>
               </span>
             </Show>
-            <span class="flex min-w-0 flex-col gap-0.5 py-0.5">
+            {/* The row is not a button; the name cell is (axe nested-interactive:
+                a role="button" row cannot hold the expand and action controls).
+                Pointer users still click anywhere on the row (the tr onClick);
+                keyboard users tab to this one primary control, then the actions. */}
+            <button
+              type="button"
+              class="flex min-w-0 cursor-pointer flex-col items-start gap-0.5 py-0.5 text-left focus-visible:outline-2 focus-visible:outline-primary"
+              onClick={(e) => {
+                e.stopPropagation();
+                openNode(n);
+              }}
+            >
               {/* The list-mode ancestor sub-line. pathRender (the server's own
                   dotted-path dash render, #627 Task 15) wins when present: pathOf's
                   tree-local walk (p.row.path) cannot cross the component-tree-to-
@@ -501,7 +504,7 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
               <Show when={hasLabel(identityOf(n))}>
                 <span class="truncate font-data text-[11px] text-base-content/40">{n.addr ?? n.id}</span>
               </Show>
-            </span>
+            </button>
           </span>
         </td>
         <For each={visible()}>

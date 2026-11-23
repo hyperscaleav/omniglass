@@ -144,6 +144,15 @@ a location holding none or several renders its own subject card,
   real or lab-simulated data, not a static diagram. The flow/graph library for these lands with
   the explore/learn surfaces.
 
+## Rows with actions
+
+A row that carries its own controls (expand toggle, Open / Edit / Delete) is not a button. Giving
+the `<tr>` `role="button"` and `tabindex` nests focusable controls inside it, which axe fails as
+`nested-interactive` (#974). The pattern, built once in `TreeList`: the name cell holds a native
+`<button>` that opens the row; the `<tr>` keeps an `onClick` so pointer users can click anywhere
+(the name button and the action buttons stop propagation so a click fires once); keyboard users
+tab to the name button, then the row's actions. Do not add `role="button"` to a row.
+
 ## Button vocabulary
 
 Buttons use a small set of **semantic intent classes** defined in `app.css`, never the raw daisyUI
