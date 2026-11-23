@@ -1,5 +1,5 @@
 import { For, Show, createSignal, onCleanup, type JSX } from "solid-js";
-import { Tooltip } from "@kobalte/core/tooltip";
+import Tooltip from "./ui/Tooltip";
 import { tagHue } from "../lib/tagcolor";
 
 // TagPills renders an entity's effective tags as colored key=value chips, one per
@@ -60,17 +60,19 @@ function OneLine(props: { children: JSX.Element; full: () => JSX.Element }): JSX
   };
 
   return (
-    <Tooltip open={open() && overflowing()} onOpenChange={setOpen} openDelay={200} closeDelay={100} placement="top-start" gutter={4}>
-      <Tooltip.Trigger as="span" class="flex w-full min-w-0 cursor-default align-middle">
-        <span ref={attach} class="flex w-full min-w-0 flex-nowrap items-center gap-1 overflow-hidden" classList={{ "tag-fade": overflowing() }}>
-          {props.children}
-        </span>
-      </Tooltip.Trigger>
-      <Tooltip.Portal>
-        <Tooltip.Content class="z-100 max-w-sm rounded-box border border-base-300 bg-base-100 p-2 shadow-lg">
-          {props.full()}
-        </Tooltip.Content>
-      </Tooltip.Portal>
+    <Tooltip
+      open={open() && overflowing()}
+      onOpenChange={setOpen}
+      openDelay={200}
+      placement="top-start"
+      as="span"
+      class="flex w-full min-w-0 cursor-default align-middle"
+      contentClass="z-100 max-w-sm rounded-box border border-base-300 bg-base-100 p-2 shadow-lg"
+      content={props.full()}
+    >
+      <span ref={attach} class="flex w-full min-w-0 flex-nowrap items-center gap-1 overflow-hidden" classList={{ "tag-fade": overflowing() }}>
+        {props.children}
+      </span>
     </Tooltip>
   );
 }
