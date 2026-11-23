@@ -6,6 +6,7 @@ import (
 )
 
 func TestRankCatalogOrdersExactThenPrefixThenRest(t *testing.T) {
+	t.Parallel()
 	all := []searchCatalogBody{
 		{Kind: "metric", Name: "ambient-panel-temp", Label: "Ambient Panel Temp"},
 		{Kind: "product", Name: "panel-x", Label: "Panel X"},
@@ -26,6 +27,7 @@ func TestRankCatalogOrdersExactThenPrefixThenRest(t *testing.T) {
 }
 
 func TestLocationPathOfIsTheLocationChainAboveTheEntity(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		segs []string
 		loc  bool
