@@ -80,12 +80,12 @@ export default function ModalDialog(props: ModalDialogProps) {
     <Show
       when={props.alert}
       fallback={
-        <Content ref={setPanel} {...panelProps()} onOpenAutoFocus={onOpenAutoFocus} onCloseAutoFocus={onCloseAutoFocus}>
+        <Content<"div"> ref={setPanel} {...panelProps()} onOpenAutoFocus={onOpenAutoFocus} onCloseAutoFocus={onCloseAutoFocus}>
           {props.children}
         </Content>
       }
     >
-      <AlertContent ref={setPanel} {...panelProps()} onOpenAutoFocus={onOpenAutoFocus} onCloseAutoFocus={onCloseAutoFocus}>
+      <AlertContent<"div"> ref={setPanel} {...panelProps()} onOpenAutoFocus={onOpenAutoFocus} onCloseAutoFocus={onCloseAutoFocus}>
         {props.children}
       </AlertContent>
     </Show>
