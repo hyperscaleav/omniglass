@@ -430,10 +430,10 @@ func TestStormScenarioHoldsAnAlarmStorm(t *testing.T) {
 // filtered page each come back inside the stated budget, and the storm pages
 // through to its last alarm. The measured times are logged for the PR.
 func TestAlarmQueueAtStormScale(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("seeds the storm fleet")
 	}
-	t.Parallel()
 	const budget = 2 * time.Second
 	ctx, gw, _ := openSeededGateway(t)
 	s, err := devseed.LookupScenario("storm")
