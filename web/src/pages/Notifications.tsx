@@ -130,7 +130,7 @@ function NotificationTypeBladeBody(p: { name: string }): JSX.Element {
     if (!confirm(`Delete notification type "${r.name}"?`)) return;
     setErr(null);
     try {
-      await deleteNotificationType(r.name);
+      await deleteNotificationType(r);
       blades.close();
       await qc.invalidateQueries({ queryKey: NOTIFICATION_TYPES_KEY });
     } catch (e) {
@@ -143,7 +143,7 @@ function NotificationTypeBladeBody(p: { name: string }): JSX.Element {
     if (!r) return;
     setErr(null);
     try {
-      await updateNotificationType(r.name, { label: label(), description: description(), subject: subject(), text: text() });
+      await updateNotificationType(r, { label: label(), description: description(), subject: subject(), text: text() });
       await qc.invalidateQueries({ queryKey: NOTIFICATION_TYPES_KEY });
     } catch (e) {
       setErr(describeError(e));

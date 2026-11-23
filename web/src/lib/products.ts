@@ -1,4 +1,5 @@
 import { api } from "../api/client";
+import type { CatalogIdRef } from "./catalog_key";
 import { type ComponentType, resolveComponentTypeIcon } from "./component_types";
 
 // The products data layer: thin typed wrappers over the generated client for the
@@ -19,6 +20,8 @@ export type ProductKind = "device" | "app" | "service";
 // vendor_id/driver_id/parent_product_id/component_type_id the uuids they
 // resolve to.
 export type Product = {
+  // The namespace the row lives in (ADR-0318): og shipped, local the operator's.
+  namespace: string;
   id: string;
   name: string;
   label: string;
@@ -89,13 +92,13 @@ export type UpdateProduct = {
   icon?: string;
 };
 
-export async function updateProduct(id: string, body: UpdateProduct): Promise<Product> {
-  const { data, error } = await api.PATCH("/products/{id}", { params: { path: { id } }, body });
+export async function updateProduct(ref: CatalogIdRef, body: UpdateProduct): Promise<Product> {
+  const { data, error } = await api.PATCH("/products/{namespace}/{id}", { params: { path: { namespace: ref.namespace, id: ref.id } }, body });
   if (error) throw error;
   return data as Product;
 }
 
-export async function deleteProduct(id: string): Promise<void> {
-  const { error } = await api.DELETE("/products/{id}", { params: { path: { id } } });
+export async function deleteProduct(ref: CatalogIdRef): Promise<void> {
+  const { error } = await api.DELETE("/products/{namespace}/{id}", { params: { path: { namespace: ref.namespace, id: ref.id } } });
   if (error) throw error;
 }

@@ -35,7 +35,7 @@ const admins: NotificationTarget = {
   channels: ["inbox"], official: true, enabled: true, created_at: at, updated_at: at,
 };
 const pageOps: ActionRule = {
-  id: uuidFor("r-1"), name: "page-ops", label: "Page ops", on: ["raised"], when: "", targets: ["ops-chat"], official: false,
+  id: uuidFor("r-1"), name: "page-ops", label: "Page ops", on: ["raised"], when: "", targets: ["ops-chat"], namespace: "local", official: false,
   opt_out_allowed: false, enabled: true, created_at: at, updated_at: at,
 };
 const sent: Notification = {

@@ -146,7 +146,7 @@ function VendorBladeBody(p: { id: string }): JSX.Element {
     if (!confirm(`Delete vendor "${r.name}"?`)) return;
     setErr(null);
     try {
-      await deleteVendor(r.name);
+      await deleteVendor(r);
       blades.close();
       await qc.invalidateQueries({ queryKey: VENDORS_KEY });
     } catch (e) {
@@ -159,7 +159,7 @@ function VendorBladeBody(p: { id: string }): JSX.Element {
     if (!r) return;
     setErr(null);
     try {
-      await updateVendor(r.name, {
+      await updateVendor(r, {
         label: label(),
         kind: kind(),
         icon: icon(),

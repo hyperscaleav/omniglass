@@ -1,4 +1,5 @@
 import { api } from "../api/client";
+import type { CatalogIdRef } from "./catalog_key";
 import { pickInheritedFacts, type InheritedFacts } from "./catalog";
 
 // The system_type catalog data layer: the taxonomy of what a system is
@@ -11,6 +12,8 @@ import { pickInheritedFacts, type InheritedFacts } from "./catalog";
 // node: empty on a child means "inherit the nearest ancestor's".
 
 export type SystemType = {
+  // The namespace the row lives in (ADR-0318): og shipped, local the operator's.
+  namespace: string;
   id: string;
   name: string;
   label: string;
@@ -87,13 +90,13 @@ export type UpdateSystemType = {
   abbrev?: string;
 };
 
-export async function updateSystemType(id: string, body: UpdateSystemType): Promise<void> {
-  const { error } = await api.PATCH("/system-types/{id}", { params: { path: { id } }, body });
+export async function updateSystemType(ref: CatalogIdRef, body: UpdateSystemType): Promise<void> {
+  const { error } = await api.PATCH("/system-types/{namespace}/{id}", { params: { path: { namespace: ref.namespace, id: ref.id } }, body });
   if (error) throw error;
 }
 
-export async function deleteSystemType(id: string): Promise<void> {
-  const { error } = await api.DELETE("/system-types/{id}", { params: { path: { id } } });
+export async function deleteSystemType(ref: CatalogIdRef): Promise<void> {
+  const { error } = await api.DELETE("/system-types/{namespace}/{id}", { params: { path: { namespace: ref.namespace, id: ref.id } } });
   if (error) throw error;
 }
 

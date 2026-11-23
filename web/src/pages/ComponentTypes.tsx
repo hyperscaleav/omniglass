@@ -199,7 +199,7 @@ function ComponentTypeBladeBody(p: { id: string }): JSX.Element {
     if (!confirm(`Delete component type "${r.name}"?`)) return;
     setErr(null);
     try {
-      await deleteComponentType(r.id);
+      await deleteComponentType(r);
       blades.close();
       await qc.invalidateQueries({ queryKey: COMPONENT_TYPES_KEY });
     } catch (e) {
@@ -216,7 +216,7 @@ function ComponentTypeBladeBody(p: { id: string }): JSX.Element {
     if (!confirm(`Discard your changes to "${r.name}" and go back to the shipped values?`)) return;
     setErr(null);
     try {
-      await restoreComponentType(r.id);
+      await restoreComponentType(r);
       await qc.invalidateQueries({ queryKey: COMPONENT_TYPES_KEY });
       edit.reseed();
     } catch (e) {
@@ -243,7 +243,7 @@ function ComponentTypeBladeBody(p: { id: string }): JSX.Element {
       //
       // Emptying a ROOT type's stem is refused (422), since a root has no
       // ancestor to inherit one from; the message lands in the blade's alert.
-      await updateComponentType(r.id, {
+      await updateComponentType(r, {
         label: label(),
         stem: stem().trim(),
         abbrev: abbrev().trim(),

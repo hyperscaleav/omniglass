@@ -198,7 +198,7 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
     if (!confirm(`Delete location type "${r.name}"?`)) return;
     setErr(null);
     try {
-      await deleteLocationType(r.name);
+      await deleteLocationType(r);
       blades.close();
       await qc.invalidateQueries({ queryKey: LOCATION_TYPES_KEY });
     } catch (e) {
@@ -214,7 +214,7 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
     if (!confirm(`Discard your changes to "${r.name}" and go back to the shipped values?`)) return;
     setErr(null);
     try {
-      await restoreLocationType(r.name);
+      await restoreLocationType(r);
       await qc.invalidateQueries({ queryKey: LOCATION_TYPES_KEY });
       edit.reseed();
     } catch (e) {
@@ -247,7 +247,7 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
       body.update_mask = [...LOCATION_TYPE_PATCH_FIELDS];
     }
     try {
-      await updateLocationType(r.name, body);
+      await updateLocationType(r, body);
       await qc.invalidateQueries({ queryKey: LOCATION_TYPES_KEY });
     } catch (e) {
       setErr(describeError(e));
@@ -356,8 +356,8 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
               is the operator's, and the gateway writes them on a shipped type on
               purpose (#703). A standard's and a product's contracts do ship, so
               those pages still pass their own official flag. */}
-          <ContractEditor classifier="location-type" id={r().name} official={false} />
-          <ContractEditor classifier="location-type" lane="metric" id={r().name} official={false} />
+          <ContractEditor classifier="location-type" namespace={r().namespace} id={r().name} official={false} />
+          <ContractEditor classifier="location-type" lane="metric" namespace={r().namespace} id={r().name} official={false} />
         </div>
       )}
     </Show>

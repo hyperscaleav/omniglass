@@ -26,10 +26,10 @@ const comp: Component = { id: uuidFor("c-1"), name: "mic-2", label: "Ceiling Mic
 // the classification floor total for anything not yet modeled more
 // specifically.
 const products: Product[] = [
-  { id: uuidFor("prod-shure"), name: "shure-mxa920", label: "Shure MXA920", kind: "device", component_type: "ceiling-mic", component_type_id: uuidFor("ct-ceiling-mic"), official: true },
-  { id: uuidFor("prod-generic-device"), name: "generic-device", label: "Generic Device", kind: "device", component_type: "generic-device", component_type_id: uuidFor("ct-generic-device"), official: true },
-  { id: uuidFor("prod-generic-app"), name: "generic-app", label: "Generic App", kind: "app", component_type: "generic-app", component_type_id: uuidFor("ct-generic-app"), official: true },
-  { id: uuidFor("prod-generic-service"), name: "generic-service", label: "Generic Service", kind: "service", component_type: "generic-service", component_type_id: uuidFor("ct-generic-service"), official: true },
+  { id: uuidFor("prod-shure"), name: "shure-mxa920", label: "Shure MXA920", kind: "device", component_type: "ceiling-mic", component_type_id: uuidFor("ct-ceiling-mic"), namespace: "og", official: true },
+  { id: uuidFor("prod-generic-device"), name: "generic-device", label: "Generic Device", kind: "device", component_type: "generic-device", component_type_id: uuidFor("ct-generic-device"), namespace: "og", official: true },
+  { id: uuidFor("prod-generic-app"), name: "generic-app", label: "Generic App", kind: "app", component_type: "generic-app", component_type_id: uuidFor("ct-generic-app"), namespace: "og", official: true },
+  { id: uuidFor("prod-generic-service"), name: "generic-service", label: "Generic Service", kind: "service", component_type: "generic-service", component_type_id: uuidFor("ct-generic-service"), namespace: "og", official: true },
 ];
 
 // The device-class catalog the create form resolves a generated name's stem

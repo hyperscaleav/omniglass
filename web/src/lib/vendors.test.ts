@@ -66,7 +66,7 @@ describe("vendors data layer", () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse({ id: uuidFor("u-acme"), name: "acme", label: "Acme Corp", official: false }),
     );
-    await updateVendor("acme", { label: "Acme Corp" });
+    await updateVendor({ namespace: "local", id: "acme" }, { label: "Acme Corp" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("PATCH");
@@ -77,12 +77,12 @@ describe("vendors data layer", () => {
 
   it("throws when update errors", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ title: "official vendor is read-only" }, 422));
-    await expect(updateVendor("crestron", { label: "X" })).rejects.toBeTruthy();
+    await expect(updateVendor({ namespace: "og", id: "crestron" }, { label: "X" })).rejects.toBeTruthy();
   });
 
   it("deletes a vendor by id", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
-    await deleteVendor("acme");
+    await deleteVendor({ namespace: "local", id: "acme" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("DELETE");
@@ -91,6 +91,6 @@ describe("vendors data layer", () => {
 
   it("throws when delete errors", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ title: "official vendor is read-only" }, 422));
-    await expect(deleteVendor("crestron")).rejects.toBeTruthy();
+    await expect(deleteVendor({ namespace: "og", id: "crestron" })).rejects.toBeTruthy();
   });
 });

@@ -440,7 +440,7 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
   const ruleName = () => row()?.name ?? p.name;
   const state = useQuery(() => ({
     queryKey: ruleStateKey(ruleName()),
-    queryFn: () => getRuleState(ruleName()),
+    queryFn: () => getRuleState({ namespace: row()?.namespace ?? "local", name: ruleName() }),
     refetchInterval: DETAIL_POLL_MS,
     enabled: !!row(),
   }));
@@ -450,7 +450,7 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
   async function toggleEnabled(r: EventRule) {
     setErr(null);
     try {
-      await updateEventRule(r.name, { enabled: !r.enabled });
+      await updateEventRule(r, { enabled: !r.enabled });
       await qc.invalidateQueries({ queryKey: EVENT_RULES_KEY });
     } catch (e) {
       setErr(describeError(e));
@@ -461,7 +461,7 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
     if (!confirm(`Delete rule "${r.name}"? Deleting it clears the alarms it holds open; its past alarms stay in each component's history, no longer naming it.`)) return;
     setErr(null);
     try {
-      await deleteEventRule(r.name);
+      await deleteEventRule(r);
       blades.close();
       await qc.invalidateQueries({ queryKey: EVENT_RULES_KEY });
     } catch (e) {
@@ -826,8 +826,8 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
       const body = updateBody(d, was);
       let saved = was;
       // A rename alone sends no PATCH: there is nothing else to write.
-      if (to === was.name || Object.keys(body).length > 0) saved = await updateEventRule(was.name, body);
-      if (to !== was.name) saved = await renameEventRule(was.name, to);
+      if (to === was.name || Object.keys(body).length > 0) saved = await updateEventRule(was, body);
+      if (to !== was.name) saved = await renameEventRule(was, to);
       await qc.invalidateQueries({ queryKey: EVENT_RULES_KEY });
       p.onSaved(saved);
     } catch (e) {

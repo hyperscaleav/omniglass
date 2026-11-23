@@ -27,14 +27,14 @@ const reach: EventRule = {
   selector: { component_types: [], components: [] }, sample_key: "endpoint-reachable", sample_lane: "property",
   fire_criteria: { expr: 'value == "down"' }, clear_criteria: { expr: 'value == "up"' },
   fire_sustain: "15s", clear_sustain: "0s", sample_window: "0s", severity: "high",
-  fire_event_type: "rule-fired", clear_event_type: "rule-cleared", enabled: true, official: true, version: 1,
+  fire_event_type: "rule-fired", clear_event_type: "rule-cleared", enabled: true, namespace: "og", official: true, version: 1,
   open_alarms: 1, pending_streaks: 1, firing: 1, last_judged_at: new Date(Date.now() - 30_000).toISOString(),
 };
 const hot: EventRule = {
   id: uuidFor("rule-too-hot"), name: "too-hot", label: "Too hot",
   selector: { component_types: ["display"], components: [] }, sample_key: "temperature-c", sample_lane: "metric",
   fire_criteria: { expr: "value > 40.0" }, clear_criteria: { expr: "value < 35.0" }, fire_sustain: "1m0s", clear_sustain: "30s", sample_window: "0s",
-  severity: "average", fire_event_type: "rule-fired", enabled: false, official: false, version: 2, open_alarms: 0, pending_streaks: 0, firing: 0,
+  severity: "average", fire_event_type: "rule-fired", enabled: false, namespace: "local", official: false, version: 2, open_alarms: 0, pending_streaks: 0, firing: 0,
 };
 // A rule whose component type and component were deleted after it was written:
 // it matches nothing by them, and stays editable.
@@ -48,8 +48,8 @@ const levels: SeverityLevel[] = [
   { name: "average", label: "Average", color: "orange", rank: 30, outage: false },
   { name: "high", label: "High", color: "red", rank: 40, outage: true },
 ] as SeverityLevel[];
-const properties: PropertyRow[] = [{ name: "endpoint-reachable", data_type: "string", label: "Endpoint reachable", official: true }];
-const metrics: MetricRow[] = [{ name: "temperature-c", data_type: "float", label: "Temperature", unit: "°C", official: true }];
+const properties: PropertyRow[] = [{ name: "endpoint-reachable", data_type: "string", label: "Endpoint reachable", namespace: "og", official: true }];
+const metrics: MetricRow[] = [{ name: "temperature-c", data_type: "float", label: "Temperature", unit: "°C", namespace: "og", official: true }];
 
 const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], fleet_permissions: [">"], grants: [{ role: "owner", scope_kind: "all" }] };
 const viewer: Me = { user: { id: "u-view", kind: "person" }, person: { username: "viewer" }, permissions: ["*:read"], fleet_permissions: ["*:read"], grants: [{ role: "viewer", scope_kind: "all" }] };
@@ -70,9 +70,9 @@ const reachState = {
 };
 
 const eventTypes: EventTypeRow[] = [
-  { name: "rule-fired", label: "Rule Fired", official: true },
-  { name: "rule-cleared", label: "Rule Cleared", official: true },
-  { name: "call-started", label: "Call Started", official: true },
+  { name: "rule-fired", label: "Rule Fired", namespace: "og", official: true },
+  { name: "rule-cleared", label: "Rule Cleared", namespace: "og", official: true },
+  { name: "call-started", label: "Call Started", namespace: "og", official: true },
 ];
 // An informational rule: no severity, so it raises no alarm; it holds one
 // firing.
@@ -80,7 +80,7 @@ const watch: EventRule = {
   id: uuidFor("rule-input-watch"), name: "input-watch", label: "Input watch",
   selector: { component_types: [], components: [] }, sample_key: "endpoint-reachable", sample_lane: "property",
   fire_criteria: { expr: 'value == "down"' }, fire_sustain: "0s", clear_sustain: "0s", sample_window: "0s",
-  fire_event_type: "rule-fired", clear_event_type: "rule-cleared", enabled: true, official: false, version: 1,
+  fire_event_type: "rule-fired", clear_event_type: "rule-cleared", enabled: true, namespace: "local", official: false, version: 1,
   open_alarms: 0, pending_streaks: 0, firing: 1,
 };
 const watchState = {

@@ -66,7 +66,7 @@ describe("client requests", () => {
 
   it("fills the route's path params, encoded, under the api base", async () => {
     stub(() => json({}));
-    await api.GET("/calc-rules/{name}", { params: { path: { name: "a b/c" } } });
+    await api.GET("/calc-rules/{namespace}/{name}", { params: { path: { namespace: "local", name: "a b/c" } } });
     expect(seen[0].method).toBe("GET");
     expect(seen[0].url).toBe(`${location.origin}/api/v1/calc-rules/a%20b%2Fc`);
   });
@@ -79,7 +79,7 @@ describe("client requests", () => {
 
   it("writes the query, skipping an unset param", async () => {
     stub(() => json({}));
-    await api.GET("/calc-rules/{name}/state", { params: { path: { name: "r" }, query: { limit: 5 } } });
+    await api.GET("/calc-rules/{namespace}/{name}/state", { params: { path: { namespace: "local", name: "r" }, query: { limit: 5 } } });
     await api.GET("/auth/me/notifications", { params: { query: { unread: undefined, limit: 20 } } });
     expect(new URL(seen[0].url).search).toBe("?limit=5");
     expect(new URL(seen[1].url).search).toBe("?limit=20");
@@ -145,7 +145,7 @@ describe("client requests", () => {
 
   it("returns no data for a 204", async () => {
     stub(() => new Response(null, { status: 204 }));
-    const { data, error, response } = await api.DELETE("/calc-rules/{name}", { params: { path: { name: "r" } } });
+    const { data, error, response } = await api.DELETE("/calc-rules/{namespace}/{name}", { params: { path: { namespace: "local", name: "r" } } });
     expect(data).toBeUndefined();
     expect(error).toBeUndefined();
     expect(response.status).toBe(204);
@@ -190,16 +190,16 @@ describe("client typing", () => {
       // @ts-expect-error a route the spec does not have
       await api.GET("/no-such-route");
       // @ts-expect-error a route with a path param needs it
-      await api.GET("/calc-rules/{name}");
+      await api.GET("/calc-rules/{namespace}/{name}");
       // @ts-expect-error a path param the route does not have
-      await api.GET("/calc-rules/{name}", { params: { path: { nope: "x" } } });
+      await api.GET("/calc-rules/{namespace}/{name}", { params: { path: { nope: "x" } } });
       // @ts-expect-error a required body field missing
       await api.POST("/auth/login", { body: { username: "x" } });
       // @ts-expect-error a required body missing
       await api.POST("/auth/login");
       // @ts-expect-error a query param the route does not take
       await api.GET("/auth/me/notifications", { params: { query: { bogus: 1 } } });
-      const { data, error } = await api.GET("/calc-rules/{name}", { params: { path: { name: "x" } } });
+      const { data, error } = await api.GET("/calc-rules/{namespace}/{name}", { params: { path: { namespace: "local", name: "x" } } });
       if (error) throw error;
       // @ts-expect-error data is the route's typed body (name is a string)
       const n: number = data.name;

@@ -116,7 +116,7 @@ export function useHeldSlots(byName: (name: string) => { id: string } | undefine
   const held = () => byName(name());
   const slots = useQuery(() => ({
     queryKey: standardSlotsKey(held()?.id ?? ""),
-    queryFn: () => standardSlots(held()!.id),
+    queryFn: () => standardSlots({ namespace: "local", id: held()!.id }),
     enabled: !!held(),
   }));
   return () => (held() ? slots.data : undefined);

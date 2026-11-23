@@ -1,4 +1,5 @@
 import { api } from "../api/client";
+import type { CatalogIdRef } from "./catalog_key";
 import { pickInheritedFacts, type InheritedFacts } from "./catalog";
 
 // The component_type catalog data layer: the device-class type a product is
@@ -9,6 +10,8 @@ import { pickInheritedFacts, type InheritedFacts } from "./catalog";
 // any node: empty on a child means "inherit the nearest ancestor's".
 
 export type ComponentType = {
+  // The namespace the row lives in (ADR-0318): og shipped, local the operator's.
+  namespace: string;
   id: string;
   name: string;
   label: string;
@@ -44,6 +47,7 @@ export async function listComponentTypes(): Promise<ComponentType[]> {
   if (error) throw error;
   return (data?.component_types ?? []).map((t) => ({
     id: t.id,
+    namespace: t.namespace,
     name: t.name,
     label: t.label,
     official: t.official,
@@ -79,6 +83,7 @@ export async function createComponentType(body: CreateComponentType): Promise<Co
   const t = data!;
   return {
     id: t.id,
+    namespace: t.namespace,
     name: t.name,
     label: t.label,
     official: t.official,
@@ -104,13 +109,13 @@ export type UpdateComponentType = {
   default_tags?: string[];
 };
 
-export async function updateComponentType(id: string, body: UpdateComponentType): Promise<void> {
-  const { error } = await api.PATCH("/component-types/{id}", { params: { path: { id } }, body });
+export async function updateComponentType(ref: CatalogIdRef, body: UpdateComponentType): Promise<void> {
+  const { error } = await api.PATCH("/component-types/{namespace}/{id}", { params: { path: { namespace: ref.namespace, id: ref.id } }, body });
   if (error) throw error;
 }
 
-export async function deleteComponentType(id: string): Promise<void> {
-  const { error } = await api.DELETE("/component-types/{id}", { params: { path: { id } } });
+export async function deleteComponentType(ref: CatalogIdRef): Promise<void> {
+  const { error } = await api.DELETE("/component-types/{namespace}/{id}", { params: { path: { namespace: ref.namespace, id: ref.id } } });
   if (error) throw error;
 }
 
@@ -118,8 +123,8 @@ export async function deleteComponentType(id: string): Promise<void> {
 // return the values this release ships and later releases can improve them
 // again. It is the only removal a shipped row admits: it removes the fork, not
 // the row.
-export async function restoreComponentType(id: string): Promise<void> {
-  const { error } = await api.POST("/component-types/{id}:restore", { params: { path: { id } } });
+export async function restoreComponentType(ref: CatalogIdRef): Promise<void> {
+  const { error } = await api.POST("/component-types/{namespace}/{id}:restore", { params: { path: { namespace: ref.namespace, id: ref.id } } });
   if (error) throw error;
 }
 

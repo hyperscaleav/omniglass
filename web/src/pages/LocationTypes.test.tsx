@@ -18,19 +18,19 @@ import { uuidFor } from "../lib/testids";
 // declared-property contract. Data is seeded into the query cache so no server
 // is needed (except where a test says otherwise).
 const seed: LocationType[] = [
-  { id: uuidFor("lt-campus"), name: "campus", label: "Campus", official: true, forked: false, icon: "map-pin", allowed_parent_types: [] },
-  { id: uuidFor("lt-wing"), name: "wing", label: "Wing", official: false, forked: false, icon: "map-pin", allowed_parent_types: ["campus", "root"] },
+  { id: uuidFor("lt-campus"), name: "campus", label: "Campus", namespace: "og", official: true, forked: false, icon: "map-pin", allowed_parent_types: [] },
+  { id: uuidFor("lt-wing"), name: "wing", label: "Wing", namespace: "local", official: false, forked: false, icon: "map-pin", allowed_parent_types: ["campus", "root"] },
   // A handle its label does not contain, so filtering by it can only
   // succeed through the name field (the addressing-honesty test below).
-  { id: uuidFor("lt-server-room"), name: "server-room", label: "Machine hall", official: false, forked: false, icon: "map-pin", allowed_parent_types: [] },
+  { id: uuidFor("lt-server-room"), name: "server-room", label: "Machine hall", namespace: "local", official: false, forked: false, icon: "map-pin", allowed_parent_types: [] },
 ];
 
 // The location type contract shown on the wing blade, plus the catalog the editor
 // joins each line to for its label and data type.
 const wingContract: ClassifierProperty[] = [{ property_type_name: "floor_area_sqm", property_type_id: "floor_area_sqm-id", default_value: 40, required: false }];
 const catalog: PropertyRow[] = [
-  { name: "floor_area_sqm", data_type: "int", label: "Floor area", official: true },
-  { name: "seat_count", data_type: "int", label: "Seat count", official: true },
+  { name: "floor_area_sqm", data_type: "int", label: "Floor area", namespace: "og", official: true },
+  { name: "seat_count", data_type: "int", label: "Seat count", namespace: "og", official: true },
 ];
 
 const asides = () => document.querySelectorAll("aside[data-blade]");
@@ -355,7 +355,7 @@ describe("LocationTypes page", () => {
   // TypeScript renders "deck-1, deck-2" and fails here.
   it("reads what a rule produces from the server rather than re-deriving it", async () => {
     mountOne({
-      id: uuidFor("lt-deck"), name: "deck", label: "Deck", official: false, forked: false,
+      id: uuidFor("lt-deck"), name: "deck", label: "Deck", namespace: "local", official: false, forked: false,
       icon: "map-pin", allowed_parent_types: [],
       name_rule: { stem: "deck", examples: ["from-the-server", "from-the-server-2"] },
     });
@@ -371,7 +371,7 @@ describe("LocationTypes page", () => {
   it("sets a name rule on a type that had none", async () => {
     let sent: unknown;
     mountOne({
-      id: uuidFor("lt-deck"), name: "deck", label: "Deck", official: false, forked: false,
+      id: uuidFor("lt-deck"), name: "deck", label: "Deck", namespace: "local", official: false, forked: false,
       icon: "map-pin", allowed_parent_types: [],
     }, (b) => { sent = b; });
     fireEvent.click(screen.getByText("deck"));
@@ -393,7 +393,7 @@ describe("LocationTypes page", () => {
   it("sets a positional rule, with an empty stem, without falling back to no rule", async () => {
     let sent: unknown;
     mountOne({
-      id: uuidFor("lt-deck"), name: "deck", label: "Deck", official: false, forked: false,
+      id: uuidFor("lt-deck"), name: "deck", label: "Deck", namespace: "local", official: false, forked: false,
       icon: "map-pin", allowed_parent_types: [],
     }, (b) => { sent = b; });
     fireEvent.click(screen.getByText("deck"));
@@ -413,7 +413,7 @@ describe("LocationTypes page", () => {
   it("turns naming off from the editor with a masked clear", async () => {
     let sent: unknown;
     mountOne({
-      id: uuidFor("lt-deck"), name: "deck", label: "Deck", official: false, forked: false,
+      id: uuidFor("lt-deck"), name: "deck", label: "Deck", namespace: "local", official: false, forked: false,
       icon: "map-pin", allowed_parent_types: [], name_rule: { stem: "", examples: ["1", "2"] },
     }, (b) => { sent = b; });
     fireEvent.click(screen.getByText("deck"));
@@ -478,7 +478,7 @@ describe("LocationTypes page", () => {
   it("refuses a malformed stem inline and disables Save", async () => {
     let sent: unknown;
     mountOne({
-      id: uuidFor("lt-deck"), name: "deck", label: "Deck", official: false, forked: false,
+      id: uuidFor("lt-deck"), name: "deck", label: "Deck", namespace: "local", official: false, forked: false,
       icon: "map-pin", allowed_parent_types: [],
     }, (b) => { sent = b; });
     fireEvent.click(screen.getByText("deck"));
@@ -499,7 +499,7 @@ describe("LocationTypes page", () => {
   it("sets a rule on a shipped type, which forks it and leaves Restore default", async () => {
     let sent: unknown;
     mountOne({
-      id: uuidFor("lt-floor"), name: "floor", label: "Floor", official: true, forked: false,
+      id: uuidFor("lt-floor"), name: "floor", label: "Floor", namespace: "og", official: true, forked: false,
       icon: "layers", allowed_parent_types: [],
     }, (b) => { sent = b; });
     fireEvent.click(screen.getByText("floor"));
@@ -515,7 +515,7 @@ describe("LocationTypes page", () => {
     // the slot a custom row puts Delete.
     cleanup();
     mountOne({
-      id: uuidFor("lt-floor"), name: "floor", label: "Floor", official: true, forked: true,
+      id: uuidFor("lt-floor"), name: "floor", label: "Floor", namespace: "og", official: true, forked: true,
       icon: "layers", allowed_parent_types: [], name_rule: { stem: "level", examples: ["level-1", "level-2"] },
     });
     fireEvent.click(screen.getByText("floor"));
@@ -532,7 +532,7 @@ describe("LocationTypes page", () => {
   // Restore had taken away.
   it("re-seeds the editor from the restored row rather than holding the discarded rule", async () => {
     const restored: LocationType = {
-      id: uuidFor("lt-floor"), name: "floor", label: "Floor", official: true, forked: false,
+      id: uuidFor("lt-floor"), name: "floor", label: "Floor", namespace: "og", official: true, forked: false,
       icon: "layers", allowed_parent_types: [],
     };
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {

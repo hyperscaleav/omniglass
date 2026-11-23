@@ -144,7 +144,7 @@ function StandardBladeBody(p: { id: string }): JSX.Element {
     if (!confirm(`Delete standard "${r.name}"?`)) return;
     setErr(null);
     try {
-      await deleteStandard(r.name);
+      await deleteStandard(r);
       blades.close();
       await qc.invalidateQueries({ queryKey: STANDARDS_KEY });
     } catch (e) {
@@ -157,7 +157,7 @@ function StandardBladeBody(p: { id: string }): JSX.Element {
     if (!r) return;
     setErr(null);
     try {
-      await updateStandard(r.name, { label: label(), parent_standard_id: parentId() || undefined });
+      await updateStandard(r, { label: label(), parent_standard_id: parentId() || undefined });
       await qc.invalidateQueries({ queryKey: STANDARDS_KEY });
     } catch (e) {
       setErr(describeError(e));
@@ -202,9 +202,9 @@ function StandardBladeBody(p: { id: string }): JSX.Element {
           >
             <ParentStandardSelect value={parentId()} exclude={r().name} onChange={setParentId} />
           </BladeField>
-          <ContractEditor classifier="standard" id={r().name} official={r().official} />
-          <ContractEditor classifier="standard" lane="metric" id={r().name} official={r().official} />
-          <SlotEditor id={r().id} official={r().official} />
+          <ContractEditor classifier="standard" namespace={r().namespace} id={r().name} official={r().official} />
+          <ContractEditor classifier="standard" lane="metric" namespace={r().namespace} id={r().name} official={r().official} />
+          <SlotEditor namespace={r().namespace} id={r().id} official={r().official} />
         </div>
       )}
     </Show>

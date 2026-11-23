@@ -1,4 +1,5 @@
 import { api } from "../api/client";
+import type { CatalogIdRef, CatalogNameRef } from "./catalog_key";
 import type { ClassifierKind } from "./classifier_properties";
 
 // The classifier-metrics data layer: the metric lane of lib/classifier_properties,
@@ -40,43 +41,43 @@ export type SetClassifierMetric = {
 // never collide, and separate from the property lane's namespace.
 export const classifierMetricsKey = (kind: ClassifierKind, id: string) => [`${kind}-metrics`, id] as const;
 
-export async function classifierMetrics(kind: ClassifierKind, id: string): Promise<ClassifierMetric[]> {
+export async function classifierMetrics(kind: ClassifierKind, parent: CatalogIdRef): Promise<ClassifierMetric[]> {
   const res =
     kind === "standard"
-      ? await api.GET("/standards/{id}/metrics", { params: { path: { id } } })
+      ? await api.GET("/standards/{namespace}/{id}/metrics", { params: { path: { namespace: parent.namespace, id: parent.id } } })
       : kind === "location-type"
-        ? await api.GET("/location-types/{id}/metrics", { params: { path: { id } } })
-        : await api.GET("/products/{id}/metrics", { params: { path: { id } } });
+        ? await api.GET("/location-types/{namespace}/{id}/metrics", { params: { path: { namespace: parent.namespace, id: parent.id } } })
+        : await api.GET("/products/{namespace}/{id}/metrics", { params: { path: { namespace: parent.namespace, id: parent.id } } });
   if (res.error) throw res.error;
   return (res.data?.metrics ?? []) as ClassifierMetric[];
 }
 
 export async function setClassifierMetric(
   kind: ClassifierKind,
-  id: string,
-  metric: string,
+  parent: CatalogIdRef,
+  metric: CatalogNameRef,
   body: SetClassifierMetric,
 ): Promise<ClassifierMetric> {
-  const path = { id, metric };
+  const path = { namespace: parent.namespace, id: parent.id, metric_namespace: metric.namespace, metric: metric.name };
   const res =
     kind === "standard"
-      ? await api.PUT("/standards/{id}/metrics/{metric}", { params: { path }, body })
+      ? await api.PUT("/standards/{namespace}/{id}/metrics/{metric_namespace}/{metric}", { params: { path }, body })
       : kind === "location-type"
-        ? await api.PUT("/location-types/{id}/metrics/{metric}", { params: { path }, body })
-        : await api.PUT("/products/{id}/metrics/{metric}", { params: { path }, body });
+        ? await api.PUT("/location-types/{namespace}/{id}/metrics/{metric_namespace}/{metric}", { params: { path }, body })
+        : await api.PUT("/products/{namespace}/{id}/metrics/{metric_namespace}/{metric}", { params: { path }, body });
   if (res.error) throw res.error;
   return res.data as ClassifierMetric;
 }
 
 // deleteClassifierMetric withdraws one line from the contract. Owners keep any
 // samples their series already hold, now off-contract.
-export async function deleteClassifierMetric(kind: ClassifierKind, id: string, metric: string): Promise<void> {
-  const path = { id, metric };
+export async function deleteClassifierMetric(kind: ClassifierKind, parent: CatalogIdRef, metric: CatalogNameRef): Promise<void> {
+  const path = { namespace: parent.namespace, id: parent.id, metric_namespace: metric.namespace, metric: metric.name };
   const res =
     kind === "standard"
-      ? await api.DELETE("/standards/{id}/metrics/{metric}", { params: { path } })
+      ? await api.DELETE("/standards/{namespace}/{id}/metrics/{metric_namespace}/{metric}", { params: { path } })
       : kind === "location-type"
-        ? await api.DELETE("/location-types/{id}/metrics/{metric}", { params: { path } })
-        : await api.DELETE("/products/{id}/metrics/{metric}", { params: { path } });
+        ? await api.DELETE("/location-types/{namespace}/{id}/metrics/{metric_namespace}/{metric}", { params: { path } })
+        : await api.DELETE("/products/{namespace}/{id}/metrics/{metric_namespace}/{metric}", { params: { path } });
   if (res.error) throw res.error;
 }

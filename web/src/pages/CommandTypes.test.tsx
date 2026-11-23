@@ -11,20 +11,20 @@ import { ME_KEY, type Me } from "../lib/auth";
 // Official types are read-only; a custom type is writable only when the caller holds
 // command_type:create / command_type:update. Data is seeded into the query cache.
 const seed: CommandTypeRow[] = [
-  { name: "set-input", label: "Set input", target_property_type: "video-input", settle_window_seconds: 15, official: true },
-  { name: "reboot", label: "Reboot", settle_window_seconds: 0, official: true },
-  { name: "set-volume", label: "Set volume", target_property_type: "audio-level", settle_window_seconds: 5, official: false },
+  { name: "set-input", label: "Set input", target_property_type: "video-input", settle_window_seconds: 15, namespace: "og", official: true },
+  { name: "reboot", label: "Reboot", settle_window_seconds: 0, namespace: "og", official: true },
+  { name: "set-volume", label: "Set volume", target_property_type: "audio-level", settle_window_seconds: 5, namespace: "local", official: false },
   // The other arm of the exclusive arc (#596): a metric-targeted type.
-  { name: "set-gain", label: "Set gain", target_metric_type: "mic-gain", settle_window_seconds: 5, official: false },
+  { name: "set-gain", label: "Set gain", target_metric_type: "mic-gain", settle_window_seconds: 5, namespace: "local", official: false },
 ];
 
 // The target picker draws its menu from both classifier catalogs.
 const properties: PropertyRow[] = [
-  { name: "video-input", data_type: "string", label: "Video input", official: true },
-  { name: "audio-level", data_type: "string", label: "Audio level", official: false },
+  { name: "video-input", data_type: "string", label: "Video input", namespace: "og", official: true },
+  { name: "audio-level", data_type: "string", label: "Audio level", namespace: "local", official: false },
 ];
 const metrics: MetricRow[] = [
-  { name: "mic-gain", data_type: "float", label: "Mic gain", official: false },
+  { name: "mic-gain", data_type: "float", label: "Mic gain", namespace: "local", official: false },
 ];
 
 const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };

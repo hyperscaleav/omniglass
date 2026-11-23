@@ -140,16 +140,16 @@ export function buildSpec(draft: SlotDraft): SlotSpec | string {
 
 // The party a slot is declared on: a standard (every conforming system inherits
 // it) or a system (the slot is its own).
-export type SlotOwner = { kind: "standard"; id: string } | { kind: "system"; name: string };
+export type SlotOwner = { kind: "standard"; namespace: string; id: string } | { kind: "system"; name: string };
 
 // writeSlot declares or revises the slot on its owner.
 function writeSlot(owner: SlotOwner, slot: string, spec: SlotSpec): Promise<DeclaredSlot> {
-  return owner.kind === "standard" ? setStandardSlot(owner.id, slot, spec) : setSystemSlot(owner.name, slot, spec);
+  return owner.kind === "standard" ? setStandardSlot({ namespace: owner.namespace, id: owner.id }, slot, spec) : setSystemSlot(owner.name, slot, spec);
 }
 
 // withdrawSlot removes the slot from its owner.
 export function withdrawSlot(owner: SlotOwner, slot: string): Promise<void> {
-  return owner.kind === "standard" ? deleteStandardSlot(owner.id, slot) : deleteSystemSlot(owner.name, slot);
+  return owner.kind === "standard" ? deleteStandardSlot({ namespace: owner.namespace, id: owner.id }, slot) : deleteSystemSlot(owner.name, slot);
 }
 
 // draftOf opens a declared slot as a draft. Structural over the fields a
@@ -462,14 +462,14 @@ export function SlotDeclareRow(p: { owner: SlotOwner; onWritten: () => Promise<u
   );
 }
 
-export default function SlotEditor(props: { id: string; official: boolean }): JSX.Element {
+export default function SlotEditor(props: { namespace: string; id: string; official: boolean }): JSX.Element {
   const qc = useQueryClient();
   const me = useMe();
-  const owner = (): SlotOwner => ({ kind: "standard", id: props.id });
+  const owner = (): SlotOwner => ({ kind: "standard", namespace: props.namespace, id: props.id });
   const key = () => standardSlotsKey(props.id);
   const q = useQuery(() => ({
     queryKey: key(),
-    queryFn: () => standardSlots(props.id),
+    queryFn: () => standardSlots({ namespace: props.namespace, id: props.id }),
     // Slots are edited inline; a background window-focus refetch would rebuild the
     // list and discard an in-progress edit.
     refetchOnWindowFocus: false,

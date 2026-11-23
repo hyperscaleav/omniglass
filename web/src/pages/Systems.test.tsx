@@ -33,8 +33,8 @@ const systemTypes: SystemType[] = [
 ];
 const standards: Standard[] = [
   // In the order ListStandards serves: by label (#757).
-  { id: uuidFor("huddle-space"), name: "huddle-space", label: "Huddle space", official: false },
-  { id: uuidFor("meeting-room"), name: "meeting-room", label: "Meeting room", official: true },
+  { id: uuidFor("huddle-space"), name: "huddle-space", label: "Huddle space", namespace: "local", official: false },
+  { id: uuidFor("meeting-room"), name: "meeting-room", label: "Meeting room", namespace: "og", official: true },
 ];
 // The standard's contract, resolved against the system: one inherited default and
 // one value the system sets directly with nothing declaring it.

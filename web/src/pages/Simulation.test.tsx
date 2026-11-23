@@ -596,8 +596,8 @@ describe("the Simulation page's writes and stale state", () => {
 
 // Adding a whole simulated system to a standard (#913).
 const standards: Standard[] = [
-  { id: uuidFor("std-meeting"), name: "meeting-room", label: "Meeting room", official: true },
-  { id: uuidFor("std-huddle"), name: "huddle-space", label: "Huddle space", official: true },
+  { id: uuidFor("std-meeting"), name: "meeting-room", label: "Meeting room", namespace: "og", official: true },
+  { id: uuidFor("std-huddle"), name: "huddle-space", label: "Huddle space", namespace: "og", official: true },
 ];
 const systemTypes: SystemType[] = [
   { id: uuidFor("st-room"), name: "room-system", label: "Room system", official: true } as SystemType,

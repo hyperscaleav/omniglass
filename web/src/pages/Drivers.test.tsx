@@ -12,8 +12,8 @@ import { uuidFor } from "../lib/testids";
 // server is needed. Catalog rows carry a uuid id and the name in
 // name (ADR-0062); the console addresses rows by the handle.
 const seed: Driver[] = [
-  { id: uuidFor("drv-snmp-generic"), name: "snmp-generic", label: "Generic SNMP", official: true, version: "1.0.0" },
-  { id: uuidFor("drv-acme-driver"), name: "acme-driver", label: "Acme Driver", official: false },
+  { id: uuidFor("drv-snmp-generic"), name: "snmp-generic", label: "Generic SNMP", namespace: "og", official: true, version: "1.0.0" },
+  { id: uuidFor("drv-acme-driver"), name: "acme-driver", label: "Acme Driver", namespace: "local", official: false },
 ];
 
 const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };

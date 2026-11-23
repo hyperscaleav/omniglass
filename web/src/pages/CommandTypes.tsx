@@ -245,7 +245,7 @@ function CommandTypeBladeBody(p: { name: string }): JSX.Element {
     if (!confirm(`Delete command type "${r.name}"?`)) return;
     setErr(null);
     try {
-      await deleteCommandType(r.name);
+      await deleteCommandType(r);
       blades.close();
       await qc.invalidateQueries({ queryKey: COMMAND_TYPES_KEY });
     } catch (e) {
@@ -268,7 +268,7 @@ function CommandTypeBladeBody(p: { name: string }): JSX.Element {
       // Both target arms ride every save: the chosen arm set, the other
       // explicitly cleared, so a PATCH can change or clear the target wholesale.
       // An unstated window sends no window at all, leaving the row's own.
-      await updateCommandType(r.name, {
+      await updateCommandType(r, {
         label: label(), description: description(),
         settle_window_seconds: w.seconds,
         ...splitTarget(target()),

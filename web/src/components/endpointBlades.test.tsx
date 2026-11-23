@@ -21,14 +21,14 @@ const transports: Transport[] = [
 ];
 const drivers: Driver[] = [
   {
-    id: uuidFor("snmp-generic"), name: "snmp-generic", label: "Generic SNMP", official: true,
+    id: uuidFor("snmp-generic"), name: "snmp-generic", label: "Generic SNMP", namespace: "og", official: true,
     spec: { version: 1, transport: "snmp", inputs: [
       { name: "host", kind: "string", required: true },
       { name: "community", kind: "secret", secret_type: "snmp-community", required: true },
     ], polls: [] },
   },
   {
-    id: uuidFor("line-proto"), name: "line-proto", label: "Line Proto", official: true,
+    id: uuidFor("line-proto"), name: "line-proto", label: "Line Proto", namespace: "og", official: true,
     spec: { version: 1, transport: "tcp", inputs: [
       { name: "host", kind: "string", required: true },
       { name: "channel", kind: "string" },
@@ -132,7 +132,7 @@ describe("CreateEndpointForm", () => {
 // ones changed are sent; no re-attach.
 describe("endpoint edit blade, driver-attached", () => {
   const telnet: Driver = {
-    id: uuidFor("newtron-nvp-telnet"), name: "newtron-nvp-telnet", label: "Newtron NVP over Telnet", official: true,
+    id: uuidFor("newtron-nvp-telnet"), name: "newtron-nvp-telnet", label: "Newtron NVP over Telnet", namespace: "og", official: true,
     spec: { version: 1, transport: "telnet", inputs: [
       { name: "host", kind: "string", required: true },
       { name: "port", kind: "number", default: "23" },
@@ -215,7 +215,7 @@ describe("endpoint edit blade, driver-attached", () => {
 // credential in place, which is this blade's own edit.
 describe("endpoint blade, held session", () => {
   const telnet: Driver = {
-    id: uuidFor("newtron-nvp-telnet"), name: "newtron-nvp-telnet", label: "Newtron NVP over Telnet", official: true,
+    id: uuidFor("newtron-nvp-telnet"), name: "newtron-nvp-telnet", label: "Newtron NVP over Telnet", namespace: "og", official: true,
     spec: { version: 1, transport: "telnet", inputs: [
       { name: "host", kind: "string", required: true },
       { name: "port", kind: "number", default: "23" },
@@ -292,7 +292,7 @@ describe("endpoint blade, held session", () => {
 // same way: the reason, Retry, and Edit credential into the community input.
 describe("endpoint blade, a probe's gate with no held session", () => {
   const snmp: Driver = {
-    id: uuidFor("snmp-generic"), name: "snmp-generic", label: "Generic SNMP", official: true,
+    id: uuidFor("snmp-generic"), name: "snmp-generic", label: "Generic SNMP", namespace: "og", official: true,
     spec: { version: 1, transport: "snmp", inputs: [
       { name: "host", kind: "string", required: true },
       { name: "port", kind: "number", default: "161" },

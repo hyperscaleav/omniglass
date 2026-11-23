@@ -1,4 +1,5 @@
 import { For, Show, createEffect, createMemo, createSignal, useContext, type JSX } from "solid-js";
+import type { CatalogIdRef, CatalogNameRef } from "../lib/catalog_key";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
 import { Check, Pencil, Plus, Trash, X } from "./icons";
@@ -119,9 +120,9 @@ type laneConfig = {
   catalogKey: readonly unknown[];
   listCatalog: () => Promise<catalogRow[]>;
   key: (kind: ClassifierKind, id: string) => readonly unknown[];
-  list: (kind: ClassifierKind, id: string) => Promise<contractLine[]>;
-  set: (kind: ClassifierKind, id: string, name: string, body: SetClassifierProperty) => Promise<unknown>;
-  del: (kind: ClassifierKind, id: string, name: string) => Promise<void>;
+  list: (kind: ClassifierKind, parent: CatalogIdRef) => Promise<contractLine[]>;
+  set: (kind: ClassifierKind, parent: CatalogIdRef, line: CatalogNameRef, body: SetClassifierProperty) => Promise<unknown>;
+  del: (kind: ClassifierKind, parent: CatalogIdRef, line: CatalogNameRef) => Promise<void>;
   nameOf: (line: contractLine) => string;
   pickerLabel: string;
   pickerPrompt: string;
@@ -174,6 +175,8 @@ type ContractRow = { name: string; line: contractLine; meta?: catalogRow };
 const dataTypeOf = (meta?: catalogRow): ValueType => (meta?.data_type as ValueType) ?? "string";
 
 export default function ContractEditor(props: {
+  // The classifier\'s namespace (ADR-0318).
+  namespace: string;
   classifier: ClassifierKind;
   id: string;
   official: boolean;
@@ -186,12 +189,21 @@ export default function ContractEditor(props: {
   const key = () => lane().key(props.classifier, props.id);
   const q = useQuery(() => ({
     queryKey: key(),
-    queryFn: () => lane().list(props.classifier, props.id),
+    queryFn: () => lane().list(props.classifier, parentRef()),
     // Lines are edited inline; a background window-focus refetch would rebuild the
     // list and discard an in-progress edit.
     refetchOnWindowFocus: false,
   }));
   const catalog = useQuery(() => ({ queryKey: lane().catalogKey, queryFn: () => lane().listCatalog() }));
+  // The classifier and a line's key, each in its namespace (ADR-0318): a line
+  // names its key bare, which the search path reads, the operator's local row
+  // before the platform's og one.
+  const parentRef = (): CatalogIdRef => ({ namespace: props.namespace, id: props.id });
+  const lineRef = (name: string): CatalogNameRef => {
+    const rows = (catalog.data ?? []) as unknown as { namespace: string; name: string }[];
+    const local = rows.some((r) => r.name === name && r.namespace === "local");
+    return { namespace: local ? "local" : "og", name };
+  };
 
   const byName = createMemo(() => new Map((catalog.data ?? []).map((p) => [p.name, p])));
   const rows = createMemo<ContractRow[]>(() =>
@@ -278,7 +290,7 @@ export default function ContractEditor(props: {
     setBusy(true);
     setErr(null);
     try {
-      await lane().set(props.classifier, props.id, name, body);
+      await lane().set(props.classifier, parentRef(), lineRef(name), body);
       await qc.invalidateQueries({ queryKey: key() });
       after();
     } catch (e) {
@@ -309,7 +321,7 @@ export default function ContractEditor(props: {
     setBusy(true);
     setErr(null);
     try {
-      await lane().del(props.classifier, props.id, name);
+      await lane().del(props.classifier, parentRef(), lineRef(name));
       await qc.invalidateQueries({ queryKey: key() });
       if (editing() === name) setEditing(null);
     } catch (e) {

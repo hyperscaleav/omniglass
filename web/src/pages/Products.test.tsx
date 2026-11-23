@@ -24,8 +24,8 @@ import { openTree, pickTree } from "../components/TreeSelect.testkit";
 // Wire truth (api/products.go): vendor/driver/parent arrive as BOTH the kebab
 // handle (vendor) and the uuid (vendor_id).
 const seed: Product[] = [
-  { id: uuidFor("prod-crestron-tsw-1070"), name: "crestron-tsw-1070", label: "Crestron TSW-1070", kind: "device", component_type: "touch-panel", component_type_id: uuidFor("ct-touch-panel"), vendor: "crestron", vendor_id: uuidFor("ven-crestron"), driver: "crestron-ct", driver_id: uuidFor("drv-crestron-ct"), official: true },
-  { id: uuidFor("prod-acme-panel"), name: "acme-panel", label: "Acme Panel", kind: "device", component_type: "display", component_type_id: uuidFor("ct-display"), vendor: "acme-av", vendor_id: uuidFor("ven-acme-av"), official: false },
+  { id: uuidFor("prod-crestron-tsw-1070"), name: "crestron-tsw-1070", label: "Crestron TSW-1070", kind: "device", component_type: "touch-panel", component_type_id: uuidFor("ct-touch-panel"), vendor: "crestron", vendor_id: uuidFor("ven-crestron"), driver: "crestron-ct", driver_id: uuidFor("drv-crestron-ct"), namespace: "og", official: true },
+  { id: uuidFor("prod-acme-panel"), name: "acme-panel", label: "Acme Panel", kind: "device", component_type: "display", component_type_id: uuidFor("ct-display"), vendor: "acme-av", vendor_id: uuidFor("ven-acme-av"), namespace: "local", official: false },
 ];
 
 // The seeded component_type tree this page's Type picker renders (a slice of
@@ -40,18 +40,18 @@ const componentTypes: ComponentType[] = [
 ];
 
 const vendors: Vendor[] = [
-  { id: uuidFor("ven-crestron"), name: "crestron", label: "Crestron", kind: "manufacturer", official: true },
-  { id: uuidFor("ven-acme-av"), name: "acme-av", label: "Acme AV", kind: "integrator", official: false },
+  { id: uuidFor("ven-crestron"), name: "crestron", label: "Crestron", kind: "manufacturer", namespace: "og", official: true },
+  { id: uuidFor("ven-acme-av"), name: "acme-av", label: "Acme AV", kind: "integrator", namespace: "local", official: false },
 ];
-const drivers: Driver[] = [{ id: uuidFor("drv-crestron-ct"), name: "crestron-ct", label: "Crestron CT", official: true }];
+const drivers: Driver[] = [{ id: uuidFor("drv-crestron-ct"), name: "crestron-ct", label: "Crestron CT", namespace: "og", official: true }];
 
 // The custom product's declared-property contract and the catalog its editor
 // joins each line to; the metric lane mounts beside it, kept inert with empty
 // seeds.
 const contract: ClassifierProperty[] = [{ property_type_name: "serial-number", property_type_id: "serial-number-id", required: true }];
 const propertyCatalog: PropertyRow[] = [
-  { name: "serial-number", data_type: "string", label: "Serial number", official: true },
-  { name: "port-count", data_type: "int", label: "Port count", official: true },
+  { name: "serial-number", data_type: "string", label: "Serial number", namespace: "og", official: true },
+  { name: "port-count", data_type: "int", label: "Port count", namespace: "og", official: true },
 ];
 
 const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };

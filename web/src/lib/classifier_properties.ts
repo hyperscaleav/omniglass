@@ -1,4 +1,5 @@
 import { api } from "../api/client";
+import type { CatalogIdRef, CatalogNameRef } from "./catalog_key";
 
 // The classifier-properties data layer: thin typed wrappers over the generated
 // client for the CONTRACT side of the property model, generic over the three
@@ -49,43 +50,43 @@ export const CLASSIFIER_RESOURCE: Record<ClassifierKind, string> = {
   "location-type": "location_type",
 };
 
-export async function classifierProperties(kind: ClassifierKind, id: string): Promise<ClassifierProperty[]> {
+export async function classifierProperties(kind: ClassifierKind, parent: CatalogIdRef): Promise<ClassifierProperty[]> {
   const res =
     kind === "standard"
-      ? await api.GET("/standards/{id}/properties", { params: { path: { id } } })
+      ? await api.GET("/standards/{namespace}/{id}/properties", { params: { path: { namespace: parent.namespace, id: parent.id } } })
       : kind === "location-type"
-        ? await api.GET("/location-types/{id}/properties", { params: { path: { id } } })
-        : await api.GET("/products/{id}/properties", { params: { path: { id } } });
+        ? await api.GET("/location-types/{namespace}/{id}/properties", { params: { path: { namespace: parent.namespace, id: parent.id } } })
+        : await api.GET("/products/{namespace}/{id}/properties", { params: { path: { namespace: parent.namespace, id: parent.id } } });
   if (res.error) throw res.error;
   return (res.data?.properties ?? []) as ClassifierProperty[];
 }
 
 export async function setClassifierProperty(
   kind: ClassifierKind,
-  id: string,
-  property: string,
+  parent: CatalogIdRef,
+  property: CatalogNameRef,
   body: SetClassifierProperty,
 ): Promise<ClassifierProperty> {
-  const path = { id, property };
+  const path = { namespace: parent.namespace, id: parent.id, property_namespace: property.namespace, property: property.name };
   const res =
     kind === "standard"
-      ? await api.PUT("/standards/{id}/properties/{property}", { params: { path }, body })
+      ? await api.PUT("/standards/{namespace}/{id}/properties/{property_namespace}/{property}", { params: { path }, body })
       : kind === "location-type"
-        ? await api.PUT("/location-types/{id}/properties/{property}", { params: { path }, body })
-        : await api.PUT("/products/{id}/properties/{property}", { params: { path }, body });
+        ? await api.PUT("/location-types/{namespace}/{id}/properties/{property_namespace}/{property}", { params: { path }, body })
+        : await api.PUT("/products/{namespace}/{id}/properties/{property_namespace}/{property}", { params: { path }, body });
   if (res.error) throw res.error;
   return res.data as ClassifierProperty;
 }
 
 // deleteClassifierProperty withdraws one line from the contract. Owners keep any
 // value they already set for it, now off-contract.
-export async function deleteClassifierProperty(kind: ClassifierKind, id: string, property: string): Promise<void> {
-  const path = { id, property };
+export async function deleteClassifierProperty(kind: ClassifierKind, parent: CatalogIdRef, property: CatalogNameRef): Promise<void> {
+  const path = { namespace: parent.namespace, id: parent.id, property_namespace: property.namespace, property: property.name };
   const res =
     kind === "standard"
-      ? await api.DELETE("/standards/{id}/properties/{property}", { params: { path } })
+      ? await api.DELETE("/standards/{namespace}/{id}/properties/{property_namespace}/{property}", { params: { path } })
       : kind === "location-type"
-        ? await api.DELETE("/location-types/{id}/properties/{property}", { params: { path } })
-        : await api.DELETE("/products/{id}/properties/{property}", { params: { path } });
+        ? await api.DELETE("/location-types/{namespace}/{id}/properties/{property_namespace}/{property}", { params: { path } })
+        : await api.DELETE("/products/{namespace}/{id}/properties/{property_namespace}/{property}", { params: { path } });
   if (res.error) throw res.error;
 }

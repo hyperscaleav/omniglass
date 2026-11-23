@@ -1,4 +1,5 @@
 import { createMemo } from "solid-js";
+import type { CatalogNameRef } from "./catalog_key";
 import { useQuery } from "@tanstack/solid-query";
 import { api } from "../api/client";
 import type { CreateSeverityLevelInputBody, SeverityLevelBody, UpdateSeverityLevelInputBody } from "../api/api.gen";
@@ -131,14 +132,14 @@ export async function createSeverityLevel(body: CreateSeverityLevel): Promise<Se
   return data as SeverityLevel;
 }
 
-export async function updateSeverityLevel(name: string, body: UpdateSeverityLevel): Promise<SeverityLevel> {
-  const { data, error } = await api.PATCH("/severity-levels/{name}", { params: { path: { name } }, body });
+export async function updateSeverityLevel(ref: CatalogNameRef, body: UpdateSeverityLevel): Promise<SeverityLevel> {
+  const { data, error } = await api.PATCH("/severity-levels/{namespace}/{name}", { params: { path: { namespace: ref.namespace, name: ref.name } }, body });
   if (error) throw error;
   return data as SeverityLevel;
 }
 
-export async function deleteSeverityLevel(name: string): Promise<void> {
-  const { error } = await api.DELETE("/severity-levels/{name}", { params: { path: { name } } });
+export async function deleteSeverityLevel(ref: CatalogNameRef): Promise<void> {
+  const { error } = await api.DELETE("/severity-levels/{namespace}/{name}", { params: { path: { namespace: ref.namespace, name: ref.name } } });
   if (error) throw error;
 }
 

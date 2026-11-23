@@ -1,4 +1,5 @@
 import { api } from "../api/client";
+import type { CatalogNameRef } from "./catalog_key";
 import type { NotificationTypeBody, PreviewNotificationTypeOutputBody } from "../api/api.gen";
 
 // The notification types data layer (#618): thin typed wrappers over the
@@ -39,13 +40,13 @@ export type UpdateNotificationType = {
   text?: string;
 };
 
-export async function updateNotificationType(name: string, body: UpdateNotificationType): Promise<void> {
-  const { error } = await api.PATCH("/notification-types/{name}", { params: { path: { name } }, body });
+export async function updateNotificationType(ref: CatalogNameRef, body: UpdateNotificationType): Promise<void> {
+  const { error } = await api.PATCH("/notification-types/{namespace}/{name}", { params: { path: { namespace: ref.namespace, name: ref.name } }, body });
   if (error) throw error;
 }
 
-export async function deleteNotificationType(name: string): Promise<void> {
-  const { error } = await api.DELETE("/notification-types/{name}", { params: { path: { name } } });
+export async function deleteNotificationType(ref: CatalogNameRef): Promise<void> {
+  const { error } = await api.DELETE("/notification-types/{namespace}/{name}", { params: { path: { namespace: ref.namespace, name: ref.name } } });
   if (error) throw error;
 }
 
@@ -59,8 +60,8 @@ export type PreviewRequest = {
   text?: string;
 };
 
-export async function previewNotificationType(name: string, body: PreviewRequest): Promise<NotificationPreview> {
-  const { data, error } = await api.POST("/notification-types/{name}:preview", { params: { path: { name } }, body });
+export async function previewNotificationType(ref: CatalogNameRef, body: PreviewRequest): Promise<NotificationPreview> {
+  const { data, error } = await api.POST("/notification-types/{namespace}/{name}:preview", { params: { path: { namespace: ref.namespace, name: ref.name } }, body });
   if (error) throw error;
   return data as NotificationPreview;
 }

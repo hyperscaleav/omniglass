@@ -36,7 +36,7 @@ const catalog: Template[] = [
 
 const hq: Location = { id: uuidFor("l-hq"), name: "hq", label: "HQ", location_type: "campus", path: "hq" };
 const west: Location = { id: uuidFor("l-west"), name: "west", label: "West", location_type: "building", parent_id: hq.id, path: "hq.west" };
-const mr55: Standard = { id: uuidFor("std-mr55"), name: "mr55", label: "Meeting Room 55", official: false };
+const mr55: Standard = { id: uuidFor("std-mr55"), name: "mr55", label: "Meeting Room 55", namespace: "local", official: false };
 
 const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
 // The seeded deploy role over viewer's read floor: no standard:create, no endpoint:create.

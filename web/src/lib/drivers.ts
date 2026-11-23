@@ -1,4 +1,5 @@
 import { api } from "../api/client";
+import type { CatalogIdRef } from "./catalog_key";
 
 // The drivers data layer: thin typed wrappers over the generated client for the
 // driver catalog (the driver picker on the product form). A driver is the
@@ -32,6 +33,8 @@ export type DriverSpec = {
 };
 
 export type Driver = {
+  // The namespace the row lives in (ADR-0318): og shipped, local the operator's.
+  namespace: string;
   id: string;
   name: string;
   label: string;
@@ -67,13 +70,13 @@ export type UpdateDriver = {
   version?: string;
 };
 
-export async function updateDriver(id: string, body: UpdateDriver): Promise<Driver> {
-  const { data, error } = await api.PATCH("/drivers/{id}", { params: { path: { id } }, body });
+export async function updateDriver(ref: CatalogIdRef, body: UpdateDriver): Promise<Driver> {
+  const { data, error } = await api.PATCH("/drivers/{namespace}/{id}", { params: { path: { namespace: ref.namespace, id: ref.id } }, body });
   if (error) throw error;
   return data as Driver;
 }
 
-export async function deleteDriver(id: string): Promise<void> {
-  const { error } = await api.DELETE("/drivers/{id}", { params: { path: { id } } });
+export async function deleteDriver(ref: CatalogIdRef): Promise<void> {
+  const { error } = await api.DELETE("/drivers/{namespace}/{id}", { params: { path: { namespace: ref.namespace, id: ref.id } } });
   if (error) throw error;
 }

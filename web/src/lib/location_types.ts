@@ -1,4 +1,5 @@
 import { api } from "../api/client";
+import type { CatalogIdRef } from "./catalog_key";
 
 // The location_type catalog data layer: typed wrappers over /location-types.
 // One classifier, one module: the old lib/types.ts aggregated this catalog with
@@ -54,6 +55,8 @@ function toNameRuleRead(r: { stem: string; bare_first?: boolean; examples?: stri
 }
 
 export type LocationType = {
+  // The namespace the row lives in (ADR-0318): og shipped, local the operator's.
+  namespace: string;
   // The uuid, the stable handle that survives a rename; name is the kebab
   // handle the rest of the fleet stores and compares (ADR-0062), so
   // allowed_parent_types members are names and joins go through name.
@@ -88,6 +91,7 @@ export async function listLocationTypes(): Promise<LocationType[]> {
   if (error) throw error;
   return (data?.location_types ?? []).map((t) => ({
     id: t.id,
+    namespace: t.namespace,
     name: t.name,
     label: t.label,
     official: t.official,
@@ -110,7 +114,7 @@ export async function createLocationType(body: CreateLocationType): Promise<Loca
   const { data, error } = await api.POST("/location-types", { body });
   if (error) throw error;
   const t = data!;
-  return { id: t.id, name: t.name, label: t.label, official: t.official, forked: t.forked, icon: t.icon, allowed_parent_types: t.allowed_parent_types ?? [] };
+  return { id: t.id, namespace: "local", name: t.name, label: t.label, official: t.official, forked: t.forked, icon: t.icon, allowed_parent_types: t.allowed_parent_types ?? [] };
 }
 
 export type UpdateLocationType = {
@@ -134,20 +138,20 @@ export type UpdateLocationType = {
 // beside it.
 export const LOCATION_TYPE_PATCH_FIELDS = ["label", "icon", "allowed_parent_types", "name_rule"] as const;
 
-export async function updateLocationType(id: string, body: UpdateLocationType): Promise<void> {
-  const { error } = await api.PATCH("/location-types/{id}", { params: { path: { id } }, body });
+export async function updateLocationType(ref: CatalogIdRef, body: UpdateLocationType): Promise<void> {
+  const { error } = await api.PATCH("/location-types/{namespace}/{id}", { params: { path: { namespace: ref.namespace, id: ref.id } }, body });
   if (error) throw error;
 }
 
 // restoreLocationType discards the operator's fork of a shipped row, so reads
 // return the values this release ships, a rule a later release withdrew
 // included (#703, ADR-0095). 409 when the row carries no fork.
-export async function restoreLocationType(id: string): Promise<void> {
-  const { error } = await api.POST("/location-types/{id}:restore", { params: { path: { id } } });
+export async function restoreLocationType(ref: CatalogIdRef): Promise<void> {
+  const { error } = await api.POST("/location-types/{namespace}/{id}:restore", { params: { path: { namespace: ref.namespace, id: ref.id } } });
   if (error) throw error;
 }
 
-export async function deleteLocationType(id: string): Promise<void> {
-  const { error } = await api.DELETE("/location-types/{id}", { params: { path: { id } } });
+export async function deleteLocationType(ref: CatalogIdRef): Promise<void> {
+  const { error } = await api.DELETE("/location-types/{namespace}/{id}", { params: { path: { namespace: ref.namespace, id: ref.id } } });
   if (error) throw error;
 }

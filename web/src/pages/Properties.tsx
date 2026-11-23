@@ -132,7 +132,7 @@ function PropertyBladeBody(p: { name: string }): JSX.Element {
     if (!confirm(`Delete property "${r.name}"?`)) return;
     setErr(null);
     try {
-      await deleteProperty(r.name);
+      await deleteProperty(r);
       blades.close();
       await qc.invalidateQueries({ queryKey: PROPERTIES_KEY });
     } catch (e) {
@@ -145,7 +145,7 @@ function PropertyBladeBody(p: { name: string }): JSX.Element {
     if (!r) return;
     setErr(null);
     try {
-      await updateProperty(r.name, { label: label(), description: description() });
+      await updateProperty(r, { label: label(), description: description() });
       await qc.invalidateQueries({ queryKey: PROPERTIES_KEY });
     } catch (e) {
       setErr(describeError(e));
