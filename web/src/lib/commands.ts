@@ -37,7 +37,7 @@ export async function getCommand(name: string, id: number): Promise<Command> {
   return data as Command;
 }
 
-export type IssueCommand = { command_type: string; value?: unknown };
+export type IssueCommand = { command_type: string; value?: unknown; params?: Record<string, unknown> };
 
 export async function issueCommand(name: string, body: IssueCommand): Promise<Command> {
   const { data, error } = await api.POST("/components/{name}/commands:issue", { params: { path: { name } }, body });

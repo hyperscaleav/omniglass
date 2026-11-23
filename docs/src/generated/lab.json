@@ -293,6 +293,15 @@
       "setup": []
     },
     {
+      "id": "send-a-command-from-an-alarm",
+      "title": "Send a command from an alarm",
+      "description": "A display has an alarm. Send it the power command from the alarm's own row, picking the value from the list the command accepts, and follow it until the display's reply settles it.",
+      "lab": [],
+      "setup": [
+        "omniglass component alarm create 'hq.west.level-2.boardroom-a.$comp.display-1' --dedup-key walkthrough-send-command --message 'Display left on after hours' --severity high"
+      ]
+    },
+    {
       "id": "send-alarms-to-a-chat-channel",
       "title": "Send alarms to a chat channel",
       "description": "Make a webhook target, test it and read the receiver's answer, then write the action rule that sends high alarms to it.",
