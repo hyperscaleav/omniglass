@@ -27,14 +27,14 @@ import (
 func makeRoomWithLabel(t *testing.T, gw *storage.PG, ctx context.Context, name, label string) *storage.Location {
 	t.Helper()
 	if _, err := gw.GetLocation(ctx, "hq", all); err != nil {
-		if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "building"}, all); err != nil {
+		if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "building"}, all, all); err != nil {
 			t.Fatalf("create building: %v", err)
 		}
 	}
 	hq := "hq"
 	l, err := gw.CreateLocation(ctx, "", storage.LocationSpec{
 		Name: name, Label: label, LocationType: "room", ParentName: &hq,
-	}, all)
+	}, all, all)
 	if err != nil {
 		t.Fatalf("create location %s: %v", name, err)
 	}
@@ -492,7 +492,7 @@ func TestMovingALocationChangesNoLabelUnderIt(t *testing.T) {
 	if _, err := gw.SetLabelRule(ctx, "", "location", "{{.TypeName}} {{.Name}}"); err != nil {
 		t.Fatalf("location rule: %v", err)
 	}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "campus-a", LocationType: "campus"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "campus-a", LocationType: "campus"}, all, all); err != nil {
 		t.Fatalf("create campus: %v", err)
 	}
 	other := "campus-a"

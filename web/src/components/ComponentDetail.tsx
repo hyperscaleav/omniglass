@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createUniqueId } from "solid-js";
+import { For, Show, createMemo, createUniqueId, onCleanup } from "solid-js";
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/solid-query";
 import TabRail from "./TabRail";
@@ -7,6 +7,7 @@ import EventsPanel from "./EventsPanel";
 import LogsPanel from "./LogsPanel";
 import CommandsPanel from "./CommandsPanel";
 import IdentitiesPanel from "./IdentitiesPanel";
+import DependenciesPanel from "./DependenciesPanel";
 import HealthBadge from "./HealthBadge";
 import Eyebrow from "./Eyebrow";
 import DetailGate from "./DetailGate";
@@ -93,6 +94,8 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
   // nested open stacks on whichever host it is in.
   const blades = useBlades();
   const leave = createLeaveGuard();
+  // In a blade, closing or popping it asks the same guard a tab switch does.
+  if (props.host === "blade") onCleanup(blades.guard({ kind: "component", id: props.id }, leave));
   // Three tabs (#826): Overview, Activity, Configure. A legacy ?tab=events
   // address lands on Activity, which absorbed it.
   const leafTabs = createMemo(() => [
@@ -558,6 +561,15 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
                 </ul>
               </Show>
             </section>
+            {/* What it needs and what needs it (#2428). */}
+            <Show when={component()}>
+              {(c) => (
+                <DependenciesPanel
+                  component={c().id}
+                  canUpdate={can(me.data, "component", "update") && (Array.isArray(c().actions) ? c().actions!.includes("update") : true)}
+                />
+              )}
+            </Show>
             {/* A component that speaks for many owners (a conduit, #1389):
                 the identities it fans out and the ones it heard unbound. It
                 renders nothing on a component that speaks only for itself. */}

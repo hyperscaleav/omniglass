@@ -80,7 +80,7 @@ func TestJoinFieldsAcceptEitherForm(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 
-	site, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "site", LocationType: "campus"}, all)
+	site, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "site", LocationType: "campus"}, all, all)
 	if err != nil {
 		t.Fatalf("location: %v", err)
 	}

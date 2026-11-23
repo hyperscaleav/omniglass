@@ -23,6 +23,7 @@ import { COMPONENTS_KEY } from "../lib/components";
 import { PRODUCTS_KEY } from "../lib/products";
 import { COMPONENT_TYPES_KEY } from "../lib/component_types";
 import { uuidFor } from "../lib/testids";
+import { toLocalInput } from "../components/TimeRangePicker";
 import { seedSeverityLevels } from "../lib/testseverity";
 import type { EffectiveSlot } from "../lib/system_zoom";
 
@@ -681,7 +682,7 @@ describe("the events and logs tabs (#793)", () => {
     const tab = screen.getByTestId("events-tab");
     const link = (await within(tab).findByText("reachability-lost")).closest("a")!;
     // By the rule's uuid, which a rename since the event (#977) has not moved.
-    expect(link.getAttribute("href")).toBe(`/web/event-rules?rule=${uuidFor("szp-rule")}`);
+    expect(link.getAttribute("href")).toBe(`/web/event-rules?open=${uuidFor("szp-rule")}`);
     expect(within(tab).getByRole("button", { name: /^Timeline of / })).toBeTruthy();
   });
 
@@ -736,6 +737,111 @@ describe("the data tab (#794, stacked per the #795 review)", () => {
     expect(await screen.findByTestId("timeseries-chart")).toBeTruthy();
     fireEvent.click(screen.getByTestId("metric-row-room-temperature"));
     expect(screen.queryByTestId("timeseries-chart")).toBeNull();
+  });
+
+  // The page's one range (#2304): the picker on the tab rail writes the
+  // address, and every metric's read follows it.
+  describe("the time range", () => {
+    const stubReads = () => {
+      const reads: { method: string; url: string; body?: unknown }[] = [];
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: RequestInfo | URL) => {
+          const req = input instanceof Request ? input : new Request(String(input));
+          const body = req.method === "POST" ? await req.clone().json() : undefined;
+          reads.push({ method: req.method, url: req.url, body });
+          const out = req.method === "POST" ? { results: [{ metric: [], cursor: "b.1", covered_from: "", entities: [], from: "", to: "" }], cursor: "b.1" } : { buckets: [] };
+          return new Response(JSON.stringify(out), { status: 200, headers: { "content-type": "application/json" } });
+        }),
+      );
+      return reads;
+    };
+    afterEach(() => vi.unstubAllGlobals());
+
+    it("reads every metric over the picked preset, and the address carries it", async () => {
+      const reads = stubReads();
+      const r = mount(`/web/systems/${uuidFor("szp-sys")}`, health, METRICS);
+      seedSeries(r.qc);
+      expect(screen.getByTestId("time-range-trigger").textContent).toContain("Last 24 hours");
+      fireEvent.click(screen.getByTestId("time-range-trigger"));
+      fireEvent.click(await screen.findByTestId("time-range-preset-7d"));
+      await waitFor(() => expect(window.location.search).toContain("range=7d"));
+      for (const metric of ["room-temperature", "occupancy-count"]) {
+        await waitFor(() =>
+          expect(reads.some((x) => x.url.includes(`/metrics/${metric}/samples`) && x.url.includes("hours=168") && x.url.includes("resolution=3600"))).toBe(true),
+        );
+      }
+      expect(screen.getByTestId("time-range-trigger").textContent).toContain("Last 7 days");
+      expect(screen.getByTestId("data-tab").textContent).toContain("Last 7d");
+    });
+
+    it("a deep link's range is the one read, with no click", async () => {
+      const reads = stubReads();
+      mount(`/web/systems/${uuidFor("szp-sys")}?range=1h`, health, METRICS);
+      await waitFor(() =>
+        expect(reads.some((x) => x.url.includes("/metrics/room-temperature/samples") && x.url.includes("hours=1&") && x.url.includes("resolution=60"))).toBe(true),
+      );
+    });
+
+    it("reads a custom absolute range through the views binding, from and to as given", async () => {
+      const reads = stubReads();
+      // A recent range, inside the raw samples: read at its own fine step.
+      const minute = 60_000;
+      const to = Math.floor(Date.now() / minute) * minute - 3600_000;
+      const from = to - 2 * 3600_000;
+      const r = mount(`/web/systems/${uuidFor("szp-sys")}`, health, METRICS);
+      seedSeries(r.qc);
+      fireEvent.click(screen.getByTestId("time-range-trigger"));
+      fireEvent.input(await screen.findByLabelText("From"), { target: { value: toLocalInput(from) } });
+      fireEvent.input(screen.getByLabelText("To"), { target: { value: toLocalInput(to) } });
+      fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+      await waitFor(() => expect(window.location.search).toContain(`from=${encodeURIComponent(new Date(from).toISOString())}`));
+      for (const metric of ["room-temperature", "occupancy-count"]) {
+        await waitFor(() => {
+          const run = reads.find((x) => x.url.endsWith("/views:run") && (x.body as { bindings: { keys: string[] }[] }).bindings[0].keys[0] === metric);
+          expect(run?.body).toEqual({
+            bindings: [{ primitive: "metric", kind: "system", refs: [uuidFor("szp-sys")], keys: [metric], from: new Date(from).toISOString(), to: new Date(to).toISOString(), step_seconds: 60 }],
+          });
+        });
+      }
+    });
+
+    it("reads an old custom range in whole hours, which the hourly trends can answer", async () => {
+      const reads = stubReads();
+      const from = Date.now() - 30 * 86400_000;
+      const to = from + 86400_000;
+      mount(`/web/systems/${uuidFor("szp-sys")}?from=${new Date(from).toISOString()}&to=${new Date(to).toISOString()}`, health, METRICS);
+      await waitFor(() => {
+        const run = reads.find((x) => x.url.endsWith("/views:run"));
+        expect((run?.body as { bindings: { step_seconds: number }[] }).bindings[0].step_seconds).toBe(3600);
+      });
+    });
+
+    // A shared link's custom range reads through the views read: a caller
+    // without view:read reads the default instead, and is told why.
+    it("a custom range link opened without view:read reads the default and says so", async () => {
+      const reads = stubReads();
+      const to = Date.now() - 3600_000;
+      mount(`/web/systems/${uuidFor("szp-sys")}?from=${new Date(to - 7200_000).toISOString()}&to=${new Date(to).toISOString()}`, health, METRICS, [], { ...me, permissions: ["system:read"] });
+      await waitFor(() =>
+        expect(reads.some((x) => x.url.includes("/metrics/room-temperature/samples") && x.url.includes("hours=24&") && x.url.includes("resolution=300"))).toBe(true),
+      );
+      expect(reads.some((x) => x.url.endsWith("/views:run"))).toBe(false);
+      expect(screen.getByTestId("time-range-trigger").textContent).toContain("Last 24 hours");
+      expect(screen.getByTestId("range-denied").textContent).toMatch(/view:read/);
+    });
+
+    it("offers no custom range to a caller who may not read views", async () => {
+      mount(`/web/systems/${uuidFor("szp-sys")}`, health, METRICS, [], { ...me, permissions: ["system:read"] });
+      fireEvent.click(screen.getByTestId("time-range-trigger"));
+      await screen.findByTestId("time-range-panel");
+      expect(screen.queryByLabelText("From")).toBeNull();
+    });
+
+    it("carries no range control on Activity, whose reads keep their own fixed windows", () => {
+      mount(`/web/systems/${uuidFor("szp-sys")}?tab=activity`, health, METRICS);
+      expect(screen.queryByTestId("time-range-trigger")).toBeNull();
+    });
   });
 
   it("draws no data section with nothing declared, and no Data tab ever", () => {

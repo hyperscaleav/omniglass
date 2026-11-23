@@ -88,7 +88,7 @@ func (f *lockOrderFixture) location(t *testing.T, ctx context.Context, kind, nam
 	t.Helper()
 	loc, err := f.gw.CreateLocation(ctx, "", storage.LocationSpec{
 		Name: name, LocationType: kind, ParentName: parent,
-	}, f.all)
+	}, f.all, f.all)
 	if err != nil {
 		t.Fatalf("create location %s/%s: %v", kind, name, err)
 	}

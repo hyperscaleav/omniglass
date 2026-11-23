@@ -29,14 +29,14 @@ func TestScopedListByRoot(t *testing.T) {
 	all := scope.Set{All: true}
 
 	// boi (root) with a child, and sjc (a separate root).
-	boi, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "boi", LocationType: "campus"}, all)
+	boi, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "boi", LocationType: "campus"}, all, all)
 	if err != nil {
 		t.Fatalf("create boi: %v", err)
 	}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "17c", LocationType: "building", ParentName: ptr("boi")}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "17c", LocationType: "building", ParentName: ptr("boi")}, all, all); err != nil {
 		t.Fatalf("create 17c: %v", err)
 	}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "sjc", LocationType: "campus"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "sjc", LocationType: "campus"}, all, all); err != nil {
 		t.Fatalf("create sjc: %v", err)
 	}
 

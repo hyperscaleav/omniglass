@@ -427,7 +427,7 @@ func TestSimulationFleetAPI(t *testing.T) {
 	// A component name repeats across places: the add wires the component it
 	// created, never a namesake elsewhere.
 	for _, l := range []string{"loc-a", "loc-b"} {
-		if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: l, LocationType: "campus"}, all); err != nil {
+		if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: l, LocationType: "campus"}, all, all); err != nil {
 			t.Fatal(err)
 		}
 	}

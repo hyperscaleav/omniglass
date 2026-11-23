@@ -54,6 +54,18 @@ describe("TabRail", () => {
     await waitFor(() => expect(screen.getByTestId("active").textContent).toBe("(none)"));
   });
 
+  it("carries a page control at its end, outside the tablist (#2304)", () => {
+    window.history.pushState({}, "", "/x");
+    render(() => (
+      <Router>
+        <Route path="/x" component={() => <TabRail tabs={TABS} state={createTabState("page", () => TABS)} end={<button data-testid="end-control">Range</button>} />} />
+      </Router>
+    ));
+    const rail = screen.getByTestId("tab-rail");
+    const end = within(rail).getByTestId("end-control");
+    expect(screen.getByRole("tablist").contains(end)).toBe(false);
+  });
+
   it("a deep link lands on its tab", () => {
     mount(TABS, "/x?tab=history");
     expect(screen.getByRole("tab", { name: "History" }).getAttribute("aria-selected")).toBe("true");
