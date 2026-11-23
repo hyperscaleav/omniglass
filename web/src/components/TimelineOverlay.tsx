@@ -115,13 +115,13 @@ type Selected =
 type Group = "health" | "alarms" | "properties" | "metrics" | "events" | "logs" | "commands";
 
 export default function TimelineOverlay(props: { kind: TimelineKind; id: string; range: TimeRange }): JSX.Element {
-  // A minute's tick slides a preset; an absolute range holds still.
+  // A minute's tick slides a preset, and every lane's key moves with it, so
+  // each lane re-reads once a minute without a poll of its own; an absolute
+  // range holds still and is read once.
   const now = createClock(60_000);
   const win = createMemo<TimeWindow>(() => resolveRange(props.range, Math.floor(now() / 60_000) * 60_000), resolveRange(props.range, now()), {
     equals: (a, b) => a.from === b.from && a.to === b.to,
   });
-  const live = () => props.range.kind === "preset";
-  const poll = () => (live() ? 60_000 : false);
   const isComponent = () => props.kind === "components";
   const scale = useSeverity();
 
@@ -140,12 +140,10 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
   const healthQ = useQuery(() => ({
     queryKey: healthOverKey(props.kind, props.id, win().from, win().to),
     queryFn: () => healthOver(props.kind, props.id, win().from, win().to),
-    refetchInterval: poll(),
   }));
   const alarmsQ = useQuery(() => ({
     queryKey: alarmsOverKey(props.kind, props.id, win().from, win().to),
     queryFn: () => alarmsOver(props.kind, props.id, win().from, win().to),
-    refetchInterval: poll(),
   }));
   const membersQ = useQuery(() => ({
     queryKey: systemMembersKey(props.id),
@@ -157,8 +155,7 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
     queries: members().map((m) => ({
       queryKey: healthOverKey("components", m.component_id, win().from, win().to),
       queryFn: () => healthOver("components", m.component_id, win().from, win().to),
-      refetchInterval: poll(),
-    })),
+      })),
   }));
   // A component's own commands; a system's are its members'.
   const commandOwners = () => (isComponent() ? [props.id] : members().map((m) => m.component_id));
@@ -166,19 +163,16 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
     queries: commandOwners().map((c) => ({
       queryKey: commandsOverKey(c, win().from, win().to),
       queryFn: () => commandsOver(c, win().from, win().to),
-      refetchInterval: poll(),
-    })),
+      })),
   }));
   const eventsQ = useQuery(() => ({
     queryKey: eventsOverKey(props.kind, props.id, win().from, win().to),
     queryFn: () => eventsOver(props.kind, props.id, win().from, win().to),
-    refetchInterval: poll(),
   }));
   const [logSeverity, setLogSeverity] = createSignal<LogSeverity>("warning");
   const logsQ = useQuery(() => ({
     queryKey: logsOverKey(props.kind, props.id, win().from, win().to, logSeverity()),
     queryFn: () => logsOver(props.kind, props.id, win().from, win().to, logSeverity()),
-    refetchInterval: poll(),
   }));
   const rulesQ = useQuery(() => ({ queryKey: EVENT_RULES_KEY, queryFn: listEventRules, staleTime: 60_000 }));
   const propsListQ = useQuery(() => ({
@@ -196,7 +190,6 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
     queryKey: propertiesOverKey(props.kind, props.id, propertyKeys(), win().from, win().to),
     queryFn: () => propertiesOver(props.kind, props.id, propertyKeys(), win().from, win().to),
     enabled: propertyKeys().length > 0,
-    refetchInterval: poll(),
   }));
 
   // ---- lanes ---------------------------------------------------------------
@@ -250,8 +243,7 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
     queries: shownMetrics().map((m) => ({
       queryKey: metricBucketsBetweenKey(props.kind, props.id, m, win().from, win().to, stepS()),
       queryFn: () => metricBucketsBetween(props.kind, props.id, m, win().from, win().to, stepS()),
-      refetchInterval: poll(),
-    })),
+      })),
   }));
   const METRIC_H = 36;
   const metricLines = createMemo(() =>
