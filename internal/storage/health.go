@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/health"
@@ -131,8 +132,15 @@ type HealthSlot struct {
 // HealthSystem is one system under a location, with its recorded verdict. It is
 // the location report's drill-down: the system health read explains the rest.
 type HealthSystem struct {
+	ID      string
 	Name    string
+	Label   string
 	Verdict string
+	// Path is the system's dotted address, the unique handle GET /systems/{name}
+	// resolves: Name alone repeats across rooms (#1775). Location is the dotted
+	// path of the location the system is placed at, empty for an unplaced one.
+	Path     string
+	Location string
 }
 
 // HealthTransition is one recorded edge: the moment the verdict changed and what
@@ -1235,7 +1243,7 @@ func (p *PG) subtreeSystemHealth(ctx context.Context, q txQuerier, locationID st
 			union
 			select c.id from location c join subtree s on c.parent_id = s.id
 		)
-		select s.name, coalesce((
+		select s.id, s.name, s.label, s.location_id, coalesce((
 			select sd.value #>> '{}' from property sd
 			where sd.system_id = s.id and sd.property_type_id = (select id from property_type_in_effect() property_type where name = $2) and sd.instance = ''
 			  and sd.provenance = 'calculated'
@@ -1251,14 +1259,46 @@ func (p *PG) subtreeSystemHealth(ctx context.Context, q txQuerier, locationID st
 	defer rows.Close()
 
 	out := []HealthSystem{}
+	var locIDs []*string
 	for rows.Next() {
 		var s HealthSystem
-		if err := rows.Scan(&s.Name, &s.Verdict); err != nil {
+		var loc *string
+		if err := rows.Scan(&s.ID, &s.Name, &s.Label, &loc, &s.Verdict); err != nil {
 			return nil, fmt.Errorf("storage: scan subtree system health %q: %w", locationID, err)
 		}
 		out = append(out, s)
+		locIDs = append(locIDs, loc)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+	if len(out) == 0 {
+		return out, nil
+	}
+	sysIDs := make([]string, 0, len(out))
+	var placeIDs []string
+	for i, s := range out {
+		sysIDs = append(sysIDs, s.ID)
+		if locIDs[i] != nil {
+			placeIDs = append(placeIDs, *locIDs[i])
+		}
+	}
+	sysPaths, err := PathsOf(ctx, q, systemTable, sysIDs)
+	if err != nil {
+		return nil, err
+	}
+	locPaths, err := PathsOf(ctx, q, locationTable, placeIDs)
+	if err != nil {
+		return nil, err
+	}
+	for i := range out {
+		out[i].Path = strings.Join(sysPaths[out[i].ID], ".")
+		if locIDs[i] != nil {
+			out[i].Location = strings.Join(locPaths[*locIDs[i]], ".")
+		}
+	}
+	return out, nil
 }
 
 // healthTransitions reads an owner's recorded edges inside window, oldest-first:

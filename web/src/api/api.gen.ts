@@ -4237,7 +4237,16 @@ export type HealthSlotBody = {
 
 export type HealthSystemBody = {
   health: string;
+  /** The system's id */
+  id: string;
+  /** The system's display label */
+  label: string;
+  /** The dotted path of the location the system is placed at; empty when unplaced */
+  location: string;
+  /** The system's short name; not unique across rooms, so address the system by path */
   name: string;
+  /** The system's dotted address, unique: the handle GET /systems/{name} resolves */
+  path: string;
 };
 
 export type HealthTransitionBody = {
