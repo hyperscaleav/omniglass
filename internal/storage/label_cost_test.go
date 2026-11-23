@@ -35,14 +35,14 @@ func labelFleet(t *testing.T, roomCount int) (storage.Gateway, *querycount.Count
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "building"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "building"}, all, all); err != nil {
 		t.Fatalf("create building: %v", err)
 	}
 	names := make([]string, 0, roomCount)
 	for i := range roomCount {
 		name := fmt.Sprintf("room-%d", i)
 		if _, err := gw.CreateLocation(ctx, "",
-			storage.LocationSpec{Name: name, LocationType: "room", ParentName: strptr("hq")}, all); err != nil {
+			storage.LocationSpec{Name: name, LocationType: "room", ParentName: strptr("hq")}, all, all); err != nil {
 			t.Fatalf("create %s: %v", name, err)
 		}
 		names = append(names, name)

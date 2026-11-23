@@ -143,7 +143,7 @@ func registerBatchCreateRoutes(api huma.API, a *authenticator, gw storage.Gatewa
 		for i, r := range in.Body.Requests {
 			specs[i] = storage.LocationSpec{Name: r.Name, Label: r.Label, LocationType: r.LocationType, ParentName: r.Parent, ExpectedName: r.ExpectedName}
 		}
-		made, err := gw.BatchCreateLocations(ctx, actorID(ctx), specs, a.scopeFor(ctx, "location", "create"), in.Body.ValidateOnly)
+		made, err := gw.BatchCreateLocations(ctx, actorID(ctx), specs, a.scopeFor(ctx, "location", "read"), a.scopeFor(ctx, "location", "create"), in.Body.ValidateOnly)
 		if err != nil {
 			return nil, batchErr(err, mapLocationErr)
 		}
