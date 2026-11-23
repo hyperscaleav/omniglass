@@ -1,0 +1,31 @@
+# Break a device in one click (#2462): find a simulated touch panel on the
+# Simulation page, unplug it from the row's Break menu with no JSON typed, see
+# its fault chip, follow it to the panel's page, watch the official
+# reachability rule open its alarm beside the chip, and clear the fault from
+# the chip there. The component is panel-2 (the only one by that name in the
+# seeded fleet). The wait for the alarm is real time (the rule holds a down for
+# its 15s fire sustain), and the 60s budget counts it. Powering a display off is
+# the same menu; the lab's seeded rules do not read a display's power yet.
+title: Break a device in one click
+description: Unplug a simulated panel from its row's Break menu, watch the fault chip and the reachability alarm it causes, then clear the fault from the chip.
+steps:
+  - goto: /simulation
+    caption: The Simulation page lists every simulated component. Each row has a Break menu.
+  - type: { target: { role: combobox }, text: panel-2 }
+    caption: The list filters as you type.
+  - click: { role: button, name: Break panel-2 }
+    caption: The menu is generated from what the panel's profile can do.
+  - click: { role: button, name: Unplug }
+    caption: Unplug it. No request typed, nothing to edit.
+  - wait: { selector: '[data-testid="sim-row"] [data-testid="sim-fault-chip"]', timeout: 15000 }
+    caption: The row now carries a fault chip, read from the simulator, with how long it has held.
+    poster: true
+  - goto: /components/panel-2
+    caption: The panel's own page shows the same chip beside its health.
+  - wait: { selector: '[data-testid="leaf-alarms"]', timeout: 50000 }
+    caption: The down held, so the official rule opened an alarm, with the fault chip beside it.
+    hold: 1200
+  - click: '[data-testid="leaf-header"] [data-testid="sim-fault-clear"] button'
+    caption: Clear the fault from the chip. The panel is plugged back in; the next reading clears the alarm.
+  - wait: { selector: '[data-testid="leaf-header"]:not(:has([data-testid="sim-fault-chip"]))', timeout: 15000 }
+    caption: The chip is gone.

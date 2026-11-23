@@ -1,5 +1,6 @@
 import { Show, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
+import Button from "./Button";
 import { Plug, X } from "./icons";
 import { can, useMe } from "../lib/auth";
 import { describeError } from "../lib/format";
@@ -64,22 +65,21 @@ export default function SimFaultChip(props: {
           {(t) => <span class="tnum text-base-content/60" data-testid="sim-fault-age">{age(t())}</span>}
         </Show>
         <Show when={canClear()}>
-          <button
-            type="button"
-            class="btn btn-ghost btn-circle btn-xs h-4 min-h-0 w-4"
-            disabled={busy()}
-            aria-label={`Clear the fault on ${props.name ?? "the device"}`}
-            title="Clear: repair the impairment and set every held value back to its default"
-            data-testid="sim-fault-clear"
-            onClick={(e) => {
-              e.stopPropagation();
-              void clear();
-            }}
-          >
-            <Show when={busy()} fallback={<X size={11} />}>
-              <span class="loading loading-spinner loading-xs" />
-            </Show>
-          </button>
+          <span data-testid="sim-fault-clear" class="inline-flex">
+            <Button
+              square
+              size="xs"
+              icon={X}
+              loading={busy()}
+              class="h-4 min-h-0 w-4"
+              label={`Clear the fault on ${props.name ?? "the device"}`}
+              title="Clear: repair the impairment and set every held value back to its default"
+              onClick={(e) => {
+                e.stopPropagation();
+                void clear();
+              }}
+            />
+          </span>
         </Show>
       </span>
     </Show>

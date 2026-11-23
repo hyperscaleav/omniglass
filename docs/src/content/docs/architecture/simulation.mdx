@@ -502,6 +502,16 @@ any a killed run left behind when it starts. Without the flag or the capability 
 nothing and says why, in the simulation view. With them, **ping tells the truth**: an ICMP echo to
 a loopback address that is no device is dropped, so only devices answer.
 
+A device is also broken by its own API. A profile's HTTP route that sets a state path from a body field,
+to a fixed list of values (`enum` on the mutation), is a **quick set** (#2462): the surface lists it
+(`routes[].sets`: the path, the field, the values, the profile's default), and the console generates a
+named action from each (Power off, Input: hdmi2, Mute) with no JSON typed. The simulator reads the same
+declaration to answer which of those paths the device holds off its default: every batch it reports
+carries each device's **faults**, which the server keeps with when it first heard each (in memory, like the
+hits, so a restart starts the age again) and returns on the device's row in the fleet and component
+reads (`faults`, with `impairment_since` for the stored impairment). So what the console's fault chip
+shows comes from the simulator, not the browser. A command's own mutations are not quick sets yet.
+
 What the simulator cannot do yet is break one protocol while the others answer, or pin a value so a
 collector reads plausible but wrong data (#909). An unplugged component's **system health** moves on its own: the official
 `reachability-lost` [event rule](/architecture/alarms-actions/#the-event_rule) opens a `high` alarm on it

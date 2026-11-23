@@ -1,5 +1,6 @@
 import { type Accessor, type JSX, Show, createEffect, createMemo, createSignal, on } from "solid-js";
 import FilterBar from "./FilterBar";
+import Button from "./Button";
 import { buildPredicate, type Chip, type FilterKey } from "../lib/predicate";
 import { describeError } from "../lib/format";
 
@@ -77,9 +78,9 @@ export default function ListShell<T>(props: {
         <Show when={props.pageSize && matched().length > filtered().length}>
           <div class="flex items-center justify-between gap-3 border-t border-base-300 px-3 py-2 text-xs text-base-content/60" data-testid="list-more">
             <span class="tnum">Showing {filtered().length.toLocaleString()} of {matched().length.toLocaleString()}</span>
-            <button type="button" class="btn btn-quiet btn-xs" onClick={() => setShown(shown() + props.pageSize!)}>
+            <Button size="xs" onClick={() => setShown(shown() + props.pageSize!)}>
               Show {Math.min(props.pageSize!, matched().length - filtered().length).toLocaleString()} more
-            </button>
+            </Button>
           </div>
         </Show>
       </div>

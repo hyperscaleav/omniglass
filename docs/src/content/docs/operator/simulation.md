@@ -130,6 +130,40 @@ and `outpost:read`; `component:create` and `component:update` must reach the who
 components are created at the top level and each is then assigned its slot), named as any new system and
 component are named, and the simulator serves them from its next pull.
 
+## Break it in one click
+
+Every simulated component has a **Break** menu on its row and a **Faults** section in its drawer, with the
+named ways to break it and **Restore** (with `simulation:update`, which operators hold; a viewer sees
+what is broken and gets no controls). The actions are generated from what the component's profile can
+do, so a display and a microphone get different menus:
+
+- **Power off**, **Power on** and **Standby**, for a profile whose API sets its power.
+- **Unplug** and **Replug**, the [impairment](#break-it-on-purpose) every simulated component has.
+- A **quick set** for each other state path the profile's API sets to a fixed list of values: **Input:
+  hdmi2**, **Mute**, **Shutter: closed**. The menu leaves out the value a path already holds.
+- **Restore**, offered while anything is wrong: it repairs the impairment and sets every held path back
+  to its profile default.
+
+Nothing is typed: an action fires the profile's own route with the body it needs, the same request the
+raw builder below would send. Power a seeded display off and the reachability rule opens its alarm on the
+component once its sustain passes; **Restore** it and the next reading clears the alarm.
+
+What is broken shows as a **fault chip** (its words, how long it has held, and an **x** that clears it) in the
+**Faults** column of the row, in the drawer, and on the component's own page beside its health, where the
+alarm it causes is. The chip is the simulator's own account, not the browser's: the simulator reports every
+state path it holds off its default with each batch (and the impairment is stored), so a reload, or a
+second operator's console, shows the same faults. The age counts from when the server first heard the
+value, so a server restart starts it again. The **x** is **Restore**.
+
+The raw request builder is still there, under **Advanced: raw requests** in the drawer, for an operation
+no profile names as a quick set. A command on a serial or SSH surface is one of those: quick sets are
+generated from HTTP routes only.
+
+The list takes what you type: words with no `key:` narrow the rows as you type them (name, location,
+product or address), and Enter keeps them as a chip beside the keyed filters (`status:failed`,
+`fault:unplugged`). It shows fifty rows at a time (**Show more** adds fifty). The filter and the open
+component are in the address (`?chips=` and `?c=`), so a copied link reproduces the view.
+
 ## Break it on purpose
 
 The drawer's **Impairment** controls (with `simulation:update`) break the component the way real gear

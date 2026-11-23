@@ -54,7 +54,7 @@ export default function SimFaultMenu(props: {
     try {
       await applyFaultSteps(qc, props.componentId, a.steps);
     } catch (e) {
-      pushToast({ tone: "error", title: `${a.label} failed on ${props.name ?? "the device"}`, body: () => <>{describeError(e)}</> });
+      pushToast({ tone: "error", title: `${a.label} failed`, body: () => <>{describeError(e)}</> });
     } finally {
       setBusy(null);
     }
@@ -95,8 +95,7 @@ export default function SimFaultMenu(props: {
           </div>
         }
       >
-        <Popover
-          class="btn btn-quiet btn-xs gap-1.5"
+        <Popover class="btn btn-quiet btn-xs gap-1.5"
           placement="bottom-end"
           open={open()}
           onOpenChange={setOpen}

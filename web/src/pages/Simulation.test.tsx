@@ -1018,7 +1018,7 @@ describe("one-click faults on the Simulation page", () => {
     expect(within(chip).getByTestId("sim-fault-label").textContent).toBe("powered off");
     expect(within(chip).getByTestId("sim-fault-age").textContent).toBe("4m");
     expect(within(rows[1]).queryByTestId("sim-fault-chip")).toBeNull();
-    fireEvent.click(within(chip).getByTestId("sim-fault-clear"));
+    fireEvent.click(within(chip).getByRole("button", { name: /Clear the fault/ }));
     await waitFor(() => expect(fired()).toHaveLength(1));
     expect(fired()[0]).toEqual({ surface: "web-admin", method: "POST", path: "/api/display/power", body: '{"power":"on"}' });
     expect(screen.queryByTestId("sim-status")).toBeNull();
@@ -1046,7 +1046,7 @@ describe("one-click faults on the Simulation page", () => {
     mount(() => <Simulation />, viewer);
     const rows = await screen.findAllByTestId("sim-row");
     expect(within(rows[0]).getByTestId("sim-fault-label").textContent).toBe("powered off");
-    expect(within(rows[0]).queryByTestId("sim-fault-clear")).toBeNull();
+    expect(within(rows[0]).queryByRole("button", { name: /Clear the fault/ })).toBeNull();
     expect(within(rows[0]).queryByRole("button", { name: /^Break/ })).toBeNull();
   });
 
@@ -1086,7 +1086,7 @@ describe("the fault chip on the component's page", () => {
     seedSurface(qc, simRow(DISPLAY, "display-1", 7, { faults: [poweredOff] }));
     const chip = await screen.findByTestId("sim-fault-chip");
     expect(chip.textContent).toContain("powered off");
-    fireEvent.click(within(chip).getByTestId("sim-fault-clear"));
+    fireEvent.click(within(chip).getByRole("button", { name: /Clear the fault/ }));
     await waitFor(() => expect(fired()).toHaveLength(1));
     cleanup();
     stubFetch();
@@ -1105,7 +1105,7 @@ describe("the fault chip on the component's page", () => {
     const { qc } = mount(() => <SimFaultChipFor componentId={DISPLAY} />, viewer);
     seedSurface(qc, simRow(DISPLAY, "display-1", 7, { faults: [poweredOff] }));
     const chip = await screen.findByTestId("sim-fault-chip");
-    expect(within(chip).queryByTestId("sim-fault-clear")).toBeNull();
+    expect(within(chip).queryByRole("button", { name: /Clear the fault/ })).toBeNull();
   });
 });
 
