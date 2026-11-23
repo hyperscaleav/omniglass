@@ -622,7 +622,7 @@ func TestASystemAndALocationGetLabelsToo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create location_type: %v", err)
 	}
-	pod, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "pod-7", LocationType: lt.Name}, all)
+	pod, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "pod-7", LocationType: lt.Name}, all, all)
 	if err != nil {
 		t.Fatalf("create location: %v", err)
 	}
@@ -901,7 +901,7 @@ func TestTheShippedLocationRuleReadsTheNameAsWords(t *testing.T) {
 		t.Fatalf("the shipped location rule is %q, want the words form", shipped.Effective)
 	}
 
-	campus, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "campus"}, all)
+	campus, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "campus"}, all, all)
 	if err != nil {
 		t.Fatalf("create campus: %v", err)
 	}
@@ -910,7 +910,7 @@ func TestTheShippedLocationRuleReadsTheNameAsWords(t *testing.T) {
 	}
 	wing, err := gw.CreateLocation(ctx, "", storage.LocationSpec{
 		Name: "north-wing", LocationType: "building", ParentName: &campus.Name,
-	}, all)
+	}, all, all)
 	if err != nil {
 		t.Fatalf("create building: %v", err)
 	}
@@ -922,7 +922,7 @@ func TestTheShippedLocationRuleReadsTheNameAsWords(t *testing.T) {
 	// AV shipped, a wing named for the AV rack reads AV rather than Av.
 	rack, err := gw.CreateLocation(ctx, "", storage.LocationSpec{
 		Name: "av-store", LocationType: "building", ParentName: &campus.Name,
-	}, all)
+	}, all, all)
 	if err != nil {
 		t.Fatalf("create the second building: %v", err)
 	}
@@ -1358,12 +1358,12 @@ func mustGetSystemByID(t *testing.T, gw *storage.PG, ctx context.Context, id str
 func makeRoom(t *testing.T, gw *storage.PG, ctx context.Context, name string) string {
 	t.Helper()
 	if _, err := gw.GetLocation(ctx, "hq", all); err != nil {
-		if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "building"}, all); err != nil {
+		if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "building"}, all, all); err != nil {
 			t.Fatalf("create building: %v", err)
 		}
 	}
 	hq := "hq"
-	l, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: name, LocationType: "room", ParentName: &hq}, all)
+	l, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: name, LocationType: "room", ParentName: &hq}, all, all)
 	if err != nil {
 		t.Fatalf("create location %s: %v", name, err)
 	}

@@ -831,6 +831,27 @@ components:
         - body
         - created_at
       type: object
+    AssistantOmnibotFacts:
+      additionalProperties: false
+      properties:
+        mode:
+          description: "live: a model answers any question; replay: the server plays a recording, which answers only its prompts; none: omnibot cannot run here"
+          enum:
+            - live
+            - replay
+            - none
+          type: string
+        prompts:
+          description: The questions a recording answers, in recorded order; empty unless mode is replay
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+      required:
+        - mode
+        - prompts
+      type: object
     AssistantSettings:
       additionalProperties: false
       properties:
@@ -6123,8 +6144,12 @@ components:
           type:
             - array
             - "null"
+        omnibot:
+          $ref: "#/components/schemas/AssistantOmnibotFacts"
+          description: What omnibot is answering from, so a client can say so before the first question
       required:
         - conversations
+        - omnibot
       type: object
     ListCalcRulesOutputBody:
       additionalProperties: false
@@ -15733,7 +15758,7 @@ paths:
       x-omniglass-permission: component:read
   /assistant/conversations:
     get:
-      description: Your own stored conversations, most recently moved first, without their messages. Owner-only. Gated by assistant:use.
+      description: "Your own stored conversations, most recently moved first, without their messages, and omnibot's mode: live, replay (the server plays a recording, with the prompts it answers) or none. Owner-only. Gated by assistant:use."
       operationId: list-assistant-conversations
       responses:
         "200":
@@ -15857,7 +15882,7 @@ paths:
       x-omniglass-permission: assistant:use
   /assistant/conversations/{name}:run:
     post:
-      description: "Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {\"stopped\": \"step_limit\", \"steps\": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. The run talks to the model the assistant settings configure, read as it starts; with none, the server's recording, if it has one. A server with no model, or a configured model whose key no longer resolves, is a 503. Gated by assistant:use."
+      description: "Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {\"stopped\": \"step_limit\", \"steps\": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. The run talks to the model the assistant settings configure, read as it starts; with none, the server's recording, if it has one. A recording answers only the prompts it was recorded for: any other question is a 422 (type urn:omniglass:omnibot-replay-unmatched) that touches nothing; the list route names the prompts. A server with no model, or a configured model whose key no longer resolves, is a 503. Gated by assistant:use."
       operationId: run-assistant-conversation
       parameters:
         - description: Your conversation's name
@@ -20440,7 +20465,7 @@ paths:
       x-omniglass-mcp: {}
       x-omniglass-permission: location:read
     post:
-      description: Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. Gated by location:create.
+      description: "Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. The parent resolves within the caller's location:read scope before its location:create scope: a parent the caller cannot read is the same 404 as one that does not exist, so the answer never discloses a location outside the caller's read, and a parent the caller can read but not create under is a 403. Gated by location:create."
       operationId: create-location
       requestBody:
         content:

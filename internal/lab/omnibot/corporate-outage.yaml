@@ -5,6 +5,7 @@
 # of that staged state: the display is dark on ping and SNMP alike, the
 # shipped reachability rule holds a High alarm on it, the room is degraded
 # with its main-display slot short, and the rest of the room answers.
+prompt: Why is the 86-inch meeting room degraded?
 turns:
   - tool_calls:
       - name: get-system-health
@@ -23,7 +24,7 @@ conversations:
   # The triage-alarm skill's run on the display's alarm: read the component,
   # its alarms and its reachability, then assess, changing nothing.
   - match: "# Triage an alarm"
-    turns:
+    turns: &triage
       - tool_calls:
           - name: get-component
             arguments: {name: hq.hq-annex.hq-annex-1.hq-annex-1-05.$comp.display-1}
@@ -37,3 +38,5 @@ conversations:
           the same moment, so the device is dark, not misconfigured. Its room is
           degraded with the main-display slot short. Next step: check the display's
           power and its switch port. I will ask before running anything.
+  - prompt: What is wrong with the main display?
+    turns: *triage

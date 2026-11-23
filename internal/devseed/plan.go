@@ -220,7 +220,7 @@ func seedRows(ctx context.Context, gw storage.Gateway, actorID string, rows plan
 			pid := locIDs[l.Parent]
 			spec.ParentName = &pid
 		}
-		created, err := gw.CreateLocation(ctx, actorID, spec, all)
+		created, err := gw.CreateLocation(ctx, actorID, spec, all, all)
 		if err != nil {
 			return nil, nil, fmt.Errorf("devseed: create location %q: %w", l.Key, err)
 		}

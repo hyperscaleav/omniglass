@@ -1,0 +1,104 @@
+{
+  "id": "add-a-dependency",
+  "title": "Add and remove a dependency",
+  "description": "Read what a video bar depends on and what depends on it, try an edge that would close a cycle and read the server's refusal, then add a real upstream and remove it again.",
+  "steps": [
+    {
+      "n": 1,
+      "kind": "goto",
+      "caption": "Boardroom A holds one system. Its video bar is fed from a power conditioner and hosts the room's touch panel.",
+      "still": "step-01.png"
+    },
+    {
+      "n": 2,
+      "kind": "click",
+      "caption": "Open the video bar.",
+      "still": "step-02.png"
+    },
+    {
+      "n": 3,
+      "kind": "click",
+      "caption": "Expand it to the component's view.",
+      "still": "step-03.png"
+    },
+    {
+      "n": 4,
+      "kind": "click",
+      "caption": "Dependencies lists what the bar needs and what needs it. Add an upstream; the picker never offers the bar itself.",
+      "still": "step-04.png"
+    },
+    {
+      "n": 5,
+      "kind": "select",
+      "caption": "Try the touch panel, which the bar already hosts.",
+      "still": "step-05.png"
+    },
+    {
+      "n": 6,
+      "kind": "select",
+      "caption": "Hosted by the panel.",
+      "still": "step-06.png"
+    },
+    {
+      "n": 7,
+      "kind": "click",
+      "caption": "Add it.",
+      "still": "step-07.png"
+    },
+    {
+      "n": 8,
+      "kind": "wait",
+      "caption": "The server refuses a loop and says why, in place. Nothing was recorded.",
+      "still": "step-08.png"
+    },
+    {
+      "n": 9,
+      "kind": "select",
+      "caption": "A real upstream instead, the amplifier.",
+      "still": "step-09.png"
+    },
+    {
+      "n": 10,
+      "kind": "select",
+      "caption": "Reached through it, a path dependency.",
+      "still": "step-10.png"
+    },
+    {
+      "n": 11,
+      "kind": "click",
+      "caption": "Add it.",
+      "still": "step-11.png"
+    },
+    {
+      "n": 12,
+      "kind": "wait",
+      "caption": "It is recorded, and the amplifier joins the upstream list with its health.",
+      "still": "step-12.png"
+    },
+    {
+      "n": 13,
+      "kind": "click",
+      "caption": "Remove it again. A confirm says what changes first.",
+      "still": "step-13.png"
+    },
+    {
+      "n": 14,
+      "kind": "click",
+      "caption": "Confirm.",
+      "still": "step-14.png"
+    },
+    {
+      "n": 15,
+      "kind": "wait",
+      "caption": "The edge is gone; the power conditioner is still the bar's upstream.",
+      "still": "step-15.png"
+    }
+  ],
+  "poster": "step-15.png",
+  "preview": "preview.webp",
+  "budget": {
+    "seconds": 57,
+    "bytes": 915649,
+    "previewBytes": 663362
+  }
+}
