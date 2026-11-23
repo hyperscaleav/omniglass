@@ -8,6 +8,8 @@ import FieldRow from "../components/FieldRow";
 import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
+import CatalogRef from "../components/CatalogRef";
+import { StandardUsedBy } from "../components/CatalogUsage";
 import { useFormActions } from "../lib/formactions";
 import { bindSelectValue } from "../lib/selectvalue";
 import ContractEditor from "../components/ContractEditor";
@@ -192,12 +194,14 @@ function StandardBladeBody(p: { id: string }): JSX.Element {
             label="Variant of"
             mono
             value={() => r().parent_standard ?? ""}
+            read={r().parent_standard ? <CatalogRef kind="standard" name={r().parent_standard} /> : undefined}
             hint="A standard this one specializes. Leave empty for a standalone standard."
           >
             <ParentStandardSelect value={parentId()} exclude={r().name} onChange={setParentId} />
           </BladeField>
           <ContractEditor classifier="standard" id={r().name} official={r().official} />
           <ContractEditor classifier="standard" lane="metric" id={r().name} official={r().official} />
+          <StandardUsedBy name={r().name} label={entityLabel(r())} />
           <SlotEditor id={r().id} official={r().official} />
         </div>
       )}
