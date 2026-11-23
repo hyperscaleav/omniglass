@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@solidjs/testing-library";
+import { render, screen, fireEvent, waitFor, within } from "@solidjs/testing-library";
 import { Router, Route, useLocation } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Alarms from "./Alarms";
@@ -115,5 +115,82 @@ describe("Alarms page", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Acknowledge" })[0]);
     await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.url.pathname.endsWith(":acknowledge"))).toBe(true));
     await waitFor(() => expect(listReads().length).toBeGreaterThan(before));
+  });
+
+  // #2441: a name is not an address where it is not unique. Two components both
+  // named panel-1: every action and the history read must hit the row's uuid.
+  describe("two components sharing a name", () => {
+    const twins = [
+      alarm({ message: "link down", component: "panel-1", component_id: uuidFor("panel-1:a") }),
+      alarm({ message: "link flap", component: "panel-1", component_id: uuidFor("panel-1:b") }),
+    ];
+    const mountTwins = (fail = false) => {
+      calls = [];
+      vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+        const req = input as Request;
+        const url = new URL(typeof input === "string" ? input : req.url, "http://local");
+        const method = (init?.method ?? req.method ?? "GET").toUpperCase();
+        calls.push({ method, url });
+        const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "Content-Type": "application/json" } });
+        // The bare name addresses nothing: it is ambiguous, so the server says 404.
+        if (url.pathname.includes("/components/panel-1/")) return json({ title: "Not Found", detail: "no such component: " + "x".repeat(300) }, 404);
+        if (fail && method === "POST") return json({ title: "Bad", detail: "boom ".repeat(80) }, 500);
+        if (url.pathname.endsWith(":timeline")) return json({ component: "panel-1", alarm_id: "x", entries: [] });
+        if (method === "POST") return json({ ...twins[1], acknowledged: true });
+        return json({ alarms: twins });
+      });
+      window.history.pushState({}, "", "/");
+      const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      qc.setQueryData([...ME_KEY], me(OPERATOR));
+      qc.setQueryData([...severityLevelsKey], []);
+      render(() => (
+        <QueryClientProvider client={qc}>
+          <Router><Route path="*" component={Alarms} /></Router>
+        </QueryClientProvider>
+      ));
+    };
+
+    it("acknowledges and snoozes by the row's uuid", async () => {
+      mountTwins();
+      await screen.findByText("link flap");
+      fireEvent.click(screen.getAllByRole("button", { name: "Acknowledge" })[1]);
+      await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.url.pathname.includes(`/components/${uuidFor("panel-1:b")}/alarms/`) && c.url.pathname.endsWith(":acknowledge"))).toBe(true));
+      fireEvent.click(screen.getAllByRole("button", { name: /^Snooze/ })[1]);
+      fireEvent.click(await screen.findByRole("button", { name: "15 minutes" }));
+      await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.url.pathname.includes(`/components/${uuidFor("panel-1:b")}/alarms/`) && c.url.pathname.endsWith(":snooze"))).toBe(true));
+      expect(calls.some((c) => c.url.pathname.includes("/components/panel-1/"))).toBe(false);
+    });
+
+    it("reads the drawer's history by the row's uuid", async () => {
+      mountTwins();
+      fireEvent.click(await screen.findByText("link flap"));
+      await waitFor(() => expect(calls.some((c) => c.url.pathname.includes(`/components/${uuidFor("panel-1:b")}/alarms/`) && c.url.pathname.endsWith(":timeline"))).toBe(true));
+      expect(calls.some((c) => c.url.pathname.includes("/components/panel-1/"))).toBe(false);
+    });
+
+    it("shows a failed action as one short line with Retry, never the raw detail", async () => {
+      mountTwins(true);
+      await screen.findByText("link flap");
+      fireEvent.click(screen.getAllByRole("button", { name: "Acknowledge" })[0]);
+      const alert = await screen.findByRole("alert");
+      expect(alert.textContent).not.toContain("boom boom");
+      expect(alert.textContent!.length).toBeLessThan(80);
+      expect(within(alert).getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    });
+
+    it("shows a failed history read with Retry, not an endless spinner", async () => {
+      mountTwins();
+      calls = [];
+      const f = vi.mocked(globalThis.fetch);
+      const base = f.getMockImplementation()!;
+      f.mockImplementation(async (i, init) => {
+        const u = new URL(typeof i === "string" ? i : (i as Request).url, "http://local");
+        if (u.pathname.endsWith(":timeline")) return new Response(JSON.stringify({ detail: "down" }), { status: 500, headers: { "Content-Type": "application/json" } });
+        return base(i, init);
+      });
+      fireEvent.click(await screen.findByText("link flap"));
+      expect(await screen.findByRole("button", { name: "Retry" })).toBeInTheDocument();
+      expect(screen.queryByText("Reading the timeline…")).toBeNull();
+    });
   });
 });
