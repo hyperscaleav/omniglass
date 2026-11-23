@@ -20,6 +20,10 @@ export type BladeDef = {
   // Optional slot beside Close (e.g. Maximize on a Locations blade, or a
   // "manage in <page>" cross-over on a terminal identity blade).
   headerExtra?: (p: { id: string }) => JSX.Element;
+  // "wide" (about 720 px) for a blade whose body is an entity's whole detail
+  // body (#2423): the fleet kinds render the page's body here, reflowed by
+  // container query, and need the room to read without sideways scroll.
+  width?: "wide";
 };
 
 export type BladeController = {

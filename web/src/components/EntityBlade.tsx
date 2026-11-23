@@ -1,10 +1,8 @@
-import { For, Show, createMemo, createSignal, createUniqueId, type JSX } from "solid-js";
+import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import LocationCard from "./LocationCard";
-import AcknowledgeButton from "./AcknowledgeButton";
-import SnoozeButton, { SnoozedBadge } from "./SnoozeButton";
 import AlarmTimeline, { createTimelineToggles } from "./AlarmTimeline";
 import { useNavigate } from "@solidjs/router";
-import { useQueries, useQuery, useQueryClient } from "@tanstack/solid-query";
+import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import HealthBadge from "./HealthBadge";
 import SeverityBadge from "./SeverityBadge";
 import { useSeverity } from "../lib/severity";
@@ -14,21 +12,18 @@ import { Maximize } from "./icons";
 import { useBlades, useBladeEdit, type BladeDef, type BladeDestructive } from "../lib/blades";
 import { FLEET_VIEW_KEY, fleetView } from "../lib/fleet";
 import { entityLabel } from "../lib/entities";
-import { systemHealth, systemHealthKey, locationHealth, locationHealthKey, SYSTEM_HEALTH_PREFIX, SYSTEM_HEALTHS_KEY } from "../lib/health";
+import { systemHealth, systemHealthKey, locationHealth, locationHealthKey } from "../lib/health";
 import { alarmRows, sinceOf } from "../lib/system_zoom";
-import { dotHealth, leafAlarmSince } from "../lib/component_leaf";
 import { SYSTEMS_KEY, listSystems, deleteSystem } from "../lib/systems";
 import { LOCATIONS_KEY, listLocations, deleteLocation } from "../lib/locations";
-import { COMPONENTS_KEY, listComponents, deleteComponent } from "../lib/components";
-import { componentAlarms, componentAlarmsKey, splitAlarms } from "../lib/alarms";
-import { componentSystems, componentSystemsKey } from "../lib/members";
-import { systemSlots, systemSlotsKey, SYSTEM_SLOTS_PREFIX } from "../lib/system_slots";
+import { COMPONENTS_KEY, listComponents } from "../lib/components";
 import { slotStrip } from "../lib/slot_strip";
-import { contentsOf, isRoomOf, slotsOf, systemsAtLocation } from "../lib/detail";
+import { contentsOf, isRoomOf, systemsAtLocation } from "../lib/detail";
 import { LOCATION_TYPES_KEY, listLocationTypes } from "../lib/location_types";
 import { describeError, fmtTime } from "../lib/format";
 import { durationText } from "../lib/timeline";
 import TroubleshootButton from "./TroubleshootButton";
+import ComponentDetail from "./ComponentDetail";
 
 // EntityBlade (#799, refit in #826, the glance since #872): ONE blade per
 // fleet kind, and it is where an operator lands from a row. HealthState and
@@ -208,107 +203,6 @@ function SystemBody(props: { id: string }) {
   );
 }
 
-function ComponentBody(props: { id: string }) {
-  const qc = useQueryClient();
-  const blades = useBlades();
-  const edit = useBladeEdit();
-  const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
-  const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
-  const alarmsQ = useQuery(() => ({ queryKey: componentAlarmsKey(props.id), queryFn: () => componentAlarms(props.id) }));
-  const members = useQuery(() => ({ queryKey: componentSystemsKey(props.id), queryFn: () => componentSystems(props.id) }));
-
-  const now = Date.now();
-  const row = () => (components.data ?? []).find((c) => c.id === props.id);
-  const componentHealth = () => (view.data ? dotHealth(view.data, props.id) : null);
-  const scale = useSeverity();
-  const active = createMemo(() => splitAlarms(alarmsQ.data ?? [], scale().levels).active);
-  // The systems it serves, by uuid, each with the slot it fills there, the
-  // primary first (the read orders by name, and the primary is the one whose
-  // location stands in for a component with none of its own).
-  const served = createMemo(() =>
-    [...(members.data ?? [])]
-      .sort((a, b) => Number(!!b.primary) - Number(!!a.primary))
-      .map((m) => (view.data?.systems ?? []).find((s) => s.id === m.system_id || (!m.system_id && s.name === m.system)))
-      .filter((s): s is NonNullable<typeof s> => !!s),
-  );
-  const slotReads = useQueries(() => ({
-    queries: served().map((s) => ({ queryKey: systemSlotsKey(s.id), queryFn: () => systemSlots(s.id), staleTime: 30_000 })),
-  }));
-  const primarySystem = () => served()[0];
-  const locationId = () => row()?.location_id ?? primarySystem()?.location ?? null;
-
-  // The Why strip's snooze surface: the blade's alarms panel shows the same
-  // alarms at once, with its own.
-  const snoozeSurface = createUniqueId();
-  const { destructive, err } = useDelete({
-    kindLabel: "component",
-    id: props.id,
-    name: () => row()?.name,
-    actions: () => row()?.actions ?? [],
-    remove: (id) => deleteComponent(id),
-    // A blade is page-level, so it may sit over a system workspace whose slot
-    // cards and health read their own keys: refresh those too, or the deleted
-    // component's card stays and opens a blade stuck loading.
-    invalidate: () =>
-      Promise.all([
-        qc.invalidateQueries({ queryKey: [...COMPONENTS_KEY] }),
-        qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] }),
-        qc.invalidateQueries({ queryKey: [...SYSTEM_SLOTS_PREFIX] }),
-        qc.invalidateQueries({ queryKey: [...SYSTEM_HEALTH_PREFIX] }),
-        qc.invalidateQueries({ queryKey: [...SYSTEM_HEALTHS_KEY] }),
-      ]),
-  });
-
-  return (
-    <div class="flex flex-col gap-4 text-sm">
-      <Show when={err()}>
-        <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
-      </Show>
-      <div class="flex flex-wrap items-center gap-2">
-        <HealthBadge health={componentHealth() ?? undefined} size="sm" />
-        <SinceLine since={leafAlarmSince(alarmsQ.data ?? [], now, scale().levels)} />
-      </div>
-      <Why
-        rows={active().map((a) => ({
-          severity: a.severity,
-          message: a.message,
-          rule: a.raised_by_rule,
-          ack: (
-            <>
-              <SnoozedBadge alarm={a} />
-              <AcknowledgeButton component={props.id} alarm={a} />
-              <SnoozeButton component={props.id} alarm={a} surface={snoozeSurface} />
-            </>
-          ),
-          timeline: { component: props.id, alarmId: a.id },
-          troubleshoot: a,
-        }))}
-      />
-      {/* Where its location is the room a system it serves makes, Serves names
-          that room already, so no location card says it again. */}
-      <Show when={locationId() && !(view.data && isRoomOf(view.data, locationId(), served().map((s) => s.id)))}>
-        <LocationCard locationId={locationId()!} path showName provenance={row()?.location_id ? "set here" : "from its system"} />
-      </Show>
-      <Show when={served().length > 0}>
-        <div data-testid="blade-serves" class={section}>
-          <span class={eyebrow}>Serves</span>
-          <For each={served()}>
-            {(s, i) => (
-              <div class="flex flex-wrap items-center gap-2">
-                <button type="button" class="cursor-pointer hover:underline" onClick={() => blades.push({ kind: "system", id: s.id })}>{entityLabel(s)}</button>
-                <For each={slotReads[i()]?.data ? slotsOf(row()?.name ?? "", slotReads[i()]!.data!) : []}>
-                  {(r) => <span class="badge badge-ghost badge-sm">{r}</span>}
-                </For>
-              </div>
-            )}
-          </For>
-        </div>
-      </Show>
-      <EntityForm kind="component" id={props.id} slot={edit} host="blade" destructive={destructive} />
-    </div>
-  );
-}
-
 function LocationBody(props: { id: string }) {
   const qc = useQueryClient();
   const blades = useBlades();
@@ -384,8 +278,10 @@ export const componentBlade: BladeDef = {
     const c = () => (components.data ?? []).find((x) => x.id === p.id);
     return <>{c() ? entityLabel(c()!) : "Component"}</>;
   },
-  Body: ComponentBody,
+  // The component page's own body (#2423): a blade shows what the page shows.
+  Body: (p) => <ComponentDetail id={p.id} host="blade" />,
   headerExtra: (p) => <ExpandButton to={`/components/${p.id}`} />,
+  width: "wide",
 };
 
 export const locationBlade: BladeDef = {

@@ -1,6 +1,6 @@
 import { For, Show, createEffect, createMemo } from "solid-js";
 import { Dynamic } from "solid-js/web";
-import { useLocation, useNavigate, useParams, useSearchParams } from "@solidjs/router";
+import { useLocation, useNavigate, useParams } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
 import TemplateNotice from "../components/TemplateNotice";
@@ -8,6 +8,7 @@ import Breadcrumb from "../components/Breadcrumb";
 import Eyebrow from "../components/Eyebrow";
 import TagPills from "../components/TagPills";
 import TabRail from "../components/TabRail";
+import { createTabState } from "../lib/tabstate";
 import ConfigureFace from "../components/ConfigureFace";
 import DetailGate from "../components/DetailGate";
 import OutlineWorkspace from "../components/OutlineWorkspace";
@@ -48,8 +49,6 @@ export default function LocationZoom() {
   const leave = createLeaveGuard();
   const me = useMe();
   const blades = createBladeController();
-  const [search] = useSearchParams();
-  const param = (k: string) => { const v = search[k]; return Array.isArray(v) ? v[0] : v; };
 
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
   const types = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes }));
@@ -69,12 +68,8 @@ export default function LocationZoom() {
     { key: "overview", label: "Overview" },
     ...(can(me.data, "location", "update") ? [{ key: "configure", label: "Configure" }] : []),
   ]);
-  const tab = () => {
-    const t = param("tab");
-    if (t && tabs().some((x) => x.key === t)) return t;
-    if (param("edit") === "1" && tabs().some((x) => x.key === "configure")) return "configure";
-    return "overview";
-  };
+  const tabState = createTabState("page", tabs);
+  const tab = tabState.active;
 
   // A name-shaped address resolves to the uuid, query kept (#759's rule).
   // Only an unambiguous name resolves: names scope to placement, so a bare
@@ -139,7 +134,7 @@ export default function LocationZoom() {
               </span>
               <Show when={Object.keys(tags()).length > 0}><TagPills tags={tags()} wrap /></Show>
             </div>
-            <TabRail tabs={tabs()} activeKey={tab} guard={leave} />
+            <TabRail tabs={tabs()} state={tabState} guard={leave} />
             <Show when={tab() === "configure"}>
               {/* Keyed on the id: another location is another face (#854). */}
               <Show when={id()} keyed>{(lid) => <ConfigureFace kind="location" id={lid} guard={leave} />}</Show>

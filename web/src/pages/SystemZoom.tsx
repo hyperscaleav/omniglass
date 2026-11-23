@@ -1,5 +1,5 @@
 import { For, Show, createEffect, createMemo, createSignal } from "solid-js";
-import { useLocation, useNavigate, useParams, useSearchParams } from "@solidjs/router";
+import { useLocation, useNavigate, useParams } from "@solidjs/router";
 import { useQueries, useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
 import Breadcrumb from "../components/Breadcrumb";
@@ -23,6 +23,7 @@ import { BladesContext, createBladeController } from "../lib/blades";
 import { createLeaveGuard } from "../lib/leave_guard";
 import { fleetRegistry } from "../lib/fleetBlades";
 import TabRail from "../components/TabRail";
+import { createTabState } from "../lib/tabstate";
 import ConfigureFace from "../components/ConfigureFace";
 import { alarmRows, componentCards, sinceOf, systemZoomVM } from "../lib/system_zoom";
 import { slotStrip } from "../lib/slot_strip";
@@ -155,26 +156,16 @@ export default function SystemZoom() {
   // chart an accordion under its row.
   const [seriesPick, setSeriesPick] = createSignal<string | undefined>(undefined);
 
-  const [search] = useSearchParams();
   // Three tabs (#826): Overview, Activity, Configure. The retired tab
   // addresses map onto the tab that absorbed them, so an old link still
-  // lands on its content.
+  // lands on its content (lib/tabstate, one resolver for every kind).
   const tabs = createMemo(() => [
     { key: "overview", label: "Overview" },
     { key: "activity", label: "Activity" },
     ...(can(me.data, "system", "update") ? [{ key: "configure", label: "Configure" }] : []),
   ]);
-  const LEGACY_TAB: Record<string, string> = { map: "overview", data: "overview", history: "activity", events: "activity", logs: "activity" };
-  const tab = () => {
-    const raw = Array.isArray(search.tab) ? search.tab[0] : search.tab;
-    const t = raw ? (LEGACY_TAB[raw] ?? raw) : raw;
-    if (t && tabs().some((x) => x.key === t)) return t;
-    // ?edit=1 means the one editor (#800): a bare edit intent lands on
-    // Configure, whose own hook then begins the edit.
-    const editing = (Array.isArray(search.edit) ? search.edit[0] : search.edit) === "1";
-    if (editing && tabs().some((x) => x.key === "configure")) return "configure";
-    return "overview";
-  };
+  const tabState = createTabState("page", tabs, { legacy: { map: "overview", data: "overview", history: "activity", events: "activity", logs: "activity" } });
+  const tab = tabState.active;
   // Every member's alarm history, cleared ones included: the causes beside
   // the health spans. One read for the whole system (#940), so the poll is
   // one request however many members the room has.
@@ -354,7 +345,7 @@ export default function SystemZoom() {
                 <span data-testid="slots-short" class="tabular-nums text-incomplete">{strip()!.filled} of {strip()!.total} slots filled</span>
               </Show>
             </div>
-            <TabRail tabs={tabs()} activeKey={tab} guard={leave} />
+            <TabRail tabs={tabs()} state={tabState} guard={leave} />
             <Show when={tab() === "configure"}>
               {/* A sole system's location has no page of its own: it configures
                   here, first, as the page reads (its card sits above the
