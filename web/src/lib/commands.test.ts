@@ -92,7 +92,22 @@ describe("commandSteps", () => {
     expect(steps[1].label).toBe("Delivered to edge-hq");
     expect(steps[3].label).toMatch(/settles, fails or times out/i);
   });
-  it("notes a redelivery on the delivered step: how many times, and when the first came", () => {
+  it("anchors a redelivered command's delivered step on the first delivery and notes the last", () => {
+    const steps = commandSteps(
+      command({
+        phase: "failed",
+        issued_at: "2026-10-25T10:00:00Z",
+        first_delivered_at: "2026-10-25T10:00:06Z",
+        delivered_at: "2026-10-25T10:00:47Z",
+        executed_at: "2026-10-25T10:00:50Z",
+        settled_at: "2026-10-25T10:00:16Z",
+        delivery_count: 2,
+      }),
+    );
+    expect(steps[1].at).toBe("2026-10-25T10:00:06Z");
+    expect(steps[1].note).toBe("delivered 2 times, last +47s");
+  });
+  it("notes a redelivery on the delivered step: how many times, and when the last came", () => {
     const steps = commandSteps(
       command({
         phase: "awaiting-reply",
@@ -101,7 +116,7 @@ describe("commandSteps", () => {
         delivery_count: 3,
       }),
     );
-    expect(steps[1]).toMatchObject({ at: "2026-10-25T10:01:05Z", note: "delivered 3 times, first +2.0s" });
+    expect(steps[1]).toMatchObject({ at: "2026-10-25T10:00:02Z", note: "delivered 3 times, last +1m 5s" });
   });
   it("leaves a single delivery, or none, unnoted", () => {
     expect(commandSteps(command({ delivered_at: "2026-10-25T10:00:01Z", first_delivered_at: "2026-10-25T10:00:01Z", delivery_count: 1 }))[1].note).toBeUndefined();

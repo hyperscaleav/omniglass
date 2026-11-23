@@ -165,7 +165,7 @@ describe("CommandsPanel", () => {
     expect(detail.textContent).toContain("dev");
   });
 
-  it("tells a redelivered command's first delivery and how many times an outpost took it", () => {
+  it("tells a redelivered command's last delivery and how many times an outpost took it", () => {
     const issued = Date.now() - 70_000;
     const iso = (ms: number) => new Date(issued + ms).toISOString();
     mount({
@@ -174,8 +174,8 @@ describe("CommandsPanel", () => {
     fireEvent.click(within(screen.getByTestId("command-5")).getByRole("button", { name: /Details of set-volume command 5/ }));
     const detail = within(screen.getByTestId("command-5")).getByTestId("command-detail");
     const delivered = within(detail).getAllByRole("listitem").find((li) => li.dataset.step === "delivered")!;
-    expect(delivered.textContent).toContain("+1m 2s");
-    expect(within(delivered).getByTestId("command-delivery-note").textContent).toBe("delivered 3 times, first +2.0s");
+    expect(delivered.textContent).toContain("+2.0s");
+    expect(within(delivered).getByTestId("command-delivery-note").textContent).toBe("delivered 3 times, last +1m 2s");
   });
 
   it("shows an observation-settled command's sample, with no wire it never rode", () => {
