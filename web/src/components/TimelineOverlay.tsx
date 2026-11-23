@@ -104,7 +104,7 @@ const logFill = (sev?: string) => {
 
 const FRAME: LaneFrame = { width: 640, padLeft: 0, padRight: 0 };
 const ALARM_ROWS_SHOWN = 8;
-const CLUSTER_GAP_PX = 10;
+const CLUSTER_GAP_PX = 18;
 
 type Selected =
   | { kind: "alarm"; span: AlarmSpan }
