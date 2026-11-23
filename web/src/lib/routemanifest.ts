@@ -92,7 +92,9 @@ export const ROUTE_MANIFEST: RouteEntry[] = [
   { path: "/severity-levels", shell: "catalog", page: "SeverityLevels", smoke: "/severity-levels" },
   { path: "/vendors", shell: "catalog", page: "Vendors", smoke: "/vendors" },
   { path: "/products", shell: "catalog", page: "Products", smoke: "/products" },
-  { path: "/drivers", shell: "catalog", page: "Drivers", smoke: "/drivers" },
+  // Smokes a drawer address (#2429): an `?open=` naming no row renders the list with
+  // the not-found notice and no console error.
+  { path: "/drivers", shell: "catalog", page: "Drivers", smoke: "/drivers?open=no-such-driver" },
   { path: "/component-types", shell: "catalog", page: "ComponentTypes", smoke: "/component-types" },
   { path: "/standards", shell: "catalog", page: "Standards", smoke: "/standards" },
   { path: "/system-types", shell: "catalog", page: "SystemTypes", smoke: "/system-types" },
