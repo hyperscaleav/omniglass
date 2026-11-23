@@ -79,9 +79,10 @@ model behind it is pure, in `lib/detail.ts` (where a location lands, the path th
 location once, the slots a component fills) and `lib/outline.ts` (`rootAt`). Since ADR-0129
 these faces ARE the identity routes' default, and since #800 the ONLY faces: one way to
 look, one altitude rule (Explore drills the location tree, systems open full screen,
-components open in blades), editing through the one `EntityForm` (ADR-0137). The side
-panel is the glance (health, why, context, identity and tags) and the configuration
-panels stay on Configure (ADR-0139). The classic detail face is retired; `?view=detail` is
+components open in blades), editing through the one `EntityForm` (ADR-0137). A fleet
+blade renders its detail page's own body (`ComponentDetail`, `SystemDetail`, `LocationDetail`,
+ADR-2423, reversing ADR-0139's glance): the host holds only the active tab, the edit intent and
+where a Delete leaves to. The classic detail face is retired; `?view=detail` is
 ignored and `?edit=1` lands Configure already editing.
 
 While a blade is open the shell (sidebar, top bar, banners and the routed page, the

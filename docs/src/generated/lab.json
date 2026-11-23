@@ -175,13 +175,6 @@
       "setup": []
     },
     {
-      "id": "pick-a-time-range",
-      "title": "Pick the time range a system page charts",
-      "description": "Open the Huddle Room, open the time range on its tab rail, pick the last 7 days, and read the metrics grid redrawn over the week.",
-      "lab": [],
-      "setup": []
-    },
-    {
       "id": "preview-a-notification",
       "title": "Preview a notification",
       "description": "Open an operator's notification type, preview it against Touch Panel 2's open alarm, and try a draft subject before saving it.",
@@ -199,23 +192,18 @@
       "setup": []
     },
     {
-      "id": "read-every-metric-at-one-instant",
-      "title": "Read every metric at one instant",
-      "description": "Open a boardroom's system over the last hour, rest the pointer on one metric's chart, and read the crosshair and value every other chart draws at the same instant.",
+      "id": "read-an-entity-in-its-blade",
+      "title": "Read an entity in its blade",
+      "description": "Open a system from Explore, open one of its components over it, and read the component's whole detail without leaving the outline.",
       "lab": [],
-      "setup": []
+      "setup": [
+        "omniglass component alarm create 'hq.west.level-4.meeting-405.$comp.videobar-1' --dedup-key walkthrough-blade-detail --message 'Video feed lost' --severity high"
+      ]
     },
     {
       "id": "read-platform-health",
       "title": "Read the platform's health",
       "description": "From Home, open Platform health, read the build, open a hop under where work is lost, fold the server's panels to read the outposts and the simulator's gaps, open them on the Requests panel, then follow the slowest route's figure onto its series on the server's platform component.",
-      "lab": [],
-      "setup": []
-    },
-    {
-      "id": "read-what-happened-on-the-timeline",
-      "title": "Read what happened on the timeline",
-      "description": "Open a system's Timeline over the last six hours, rest the pointer on the lanes, and read every lane at that instant, the metrics grid's crosshair standing at the same moment.",
       "lab": [],
       "setup": []
     },
