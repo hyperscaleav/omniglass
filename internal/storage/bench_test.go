@@ -267,7 +267,7 @@ func mustLocation(b *testing.B, gw storage.Gateway, name, kind string, parent *s
 	b.Helper()
 	if _, err := gw.CreateLocation(context.Background(), "", storage.LocationSpec{
 		Name: name, LocationType: kind, ParentName: parent,
-	}, all); err != nil {
+	}, all, all); err != nil {
 		b.Fatalf("create location %s: %v", name, err)
 	}
 }

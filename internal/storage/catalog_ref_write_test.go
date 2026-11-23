@@ -41,10 +41,10 @@ func TestTypeReferencesAcceptEitherForm(t *testing.T) {
 	}
 
 	// Location create and update, by uuid and by handle.
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq-uuid", LocationType: campusID}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq-uuid", LocationType: campusID}, all, all); err != nil {
 		t.Errorf("create location by type uuid: %v", err)
 	}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq-handle", LocationType: "campus"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq-handle", LocationType: "campus"}, all, all); err != nil {
 		t.Errorf("create location by type handle: %v", err)
 	}
 	campus := "campus"
@@ -72,7 +72,7 @@ func TestTypeReferencesAcceptEitherForm(t *testing.T) {
 
 	// A reference that is neither a live uuid nor a live handle still fails
 	// loudly, in both shapes.
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "ghost", LocationType: "no-such-type"}, all); err == nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "ghost", LocationType: "no-such-type"}, all, all); err == nil {
 		t.Error("create location with unknown type handle succeeded")
 	}
 	if _, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
