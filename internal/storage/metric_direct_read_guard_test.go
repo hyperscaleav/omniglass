@@ -30,6 +30,7 @@ var directMetricReaders = map[string]string{
 	"internal/storage/metric_read.go:metricStoredSQL":    "whether a series holds a raw row or a block, a probe of each, no value read",
 	"internal/storage/metric_block.go:blockDaysSQL":      "the day fold, which writes the blocks from the raw rows",
 	"internal/storage/metric_block.go:blockWeekSQL":      "the week fold, which writes the blocks from the raw rows",
+	"internal/storage/metric_block.go:skippedBlockDays":  "the count of days the fold passed unfolded, which no block covers",
 	"internal/storage/metric_block.go:verifyBlocksSQL":   "the fold's verify, which checks a block against the raw rows it holds",
 	"internal/storage/metric_trend.go:foldTrendHour":     "the trend fold of an hour no block can cover yet (the open hour, before its day folds)",
 	"internal/storage/rule_eval.go:ruleMarksSQL":         "the reconcile's arrival feed, an id cursor over the rows inserted, no sample's value",

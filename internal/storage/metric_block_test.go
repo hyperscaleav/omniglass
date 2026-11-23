@@ -607,3 +607,40 @@ func mapKeys(m map[string]bool) func(func(string) bool) {
 		}
 	}
 }
+
+// TestTheShortestLaneThatFoldsIsThreeDays holds #2144: a day is foldable 48
+// hours after it starts (the day's close and the trend horizon), so a lane of
+// 3 days folds it in its last day intact, and a lane of 2 never can: the day
+// the fold passes after it left its window is counted skipped, not silently
+// marked done.
+func TestTheShortestLaneThatFoldsIsThreeDays(t *testing.T) {
+	t.Parallel()
+	d := func(day int) time.Time { return time.Date(2026, 11, day, 0, 0, 0, 0, time.UTC) }
+	run := func(t *testing.T, lane int) storage.BlockCompaction {
+		t.Helper()
+		r := newBlockRigAt(t, d(7).Add(time.Hour))
+		mustExec(t, r.conn, `update metric_type set retention_days = $1 where name = 'prune-rtt'`, lane)
+		a := r.series("", "observed")
+		r.spaced(a, d(5), 170)
+		if err := r.gw.SetMetricBlockMarks(r.ctx, d(5)); err != nil {
+			t.Fatal(err)
+		}
+		c, err := r.gw.CompactMetricBlocks(r.ctx, storage.BlockFold{MaxDays: 1, LaneDays: lane})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	t.Run("a lane of 3 days folds the day", func(t *testing.T) {
+		t.Parallel()
+		if c := run(t, 3); c.Days != 1 || c.Blocks != 1 || c.Skipped != 0 {
+			t.Fatalf("pass %+v, want the 5th folded into one block, none skipped", c)
+		}
+	})
+	t.Run("a lane of 2 days counts the day skipped", func(t *testing.T) {
+		t.Parallel()
+		if c := run(t, 2); c.Days != 1 || c.Blocks != 0 || c.Skipped != 1 {
+			t.Fatalf("pass %+v, want the 5th passed unfolded and counted skipped", c)
+		}
+	})
+}
