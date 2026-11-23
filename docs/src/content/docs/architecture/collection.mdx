@@ -1238,8 +1238,11 @@ detectably: a terminal `auth` refusal at the session rung, `endpoint-authenticat
 v2c has no request without the community, nothing is sent under that fingerprint, neither the
 probe's get nor a poll's (a restarted outpost adopts the gate too), until the fingerprint moves
 (rotating the community secret brings it up within a tick). The get is snmp's only transport
-probe, so beneath the gate the agent is unobserved: the rung reads down, rejected, and the reachability
-with it, rather than freezing at the last answer. An snmp driver must declare its community, a
+probe, so beneath the gate nothing is sent, but the refusal that holds it was an answer: the rung reads
+up with the reason `held: auth since <ts>` (the class and when the hold began), never a down it did
+not observe, and `endpoint-authenticated` stays no. A held reading gives the gate no
+reading for reachability: it neither adds to the unreachable streak nor resets it. A udp rung reads the same under its
+own terminal reply and the holds after it; a timeout is never held and still reads down. An snmp driver must declare its community, a
 secret input named `community` of type `snmp-community`, which the poll and the rung both read. SNMP v3, whose report PDUs make auth detectable, is #1083. The read serves the rung
 as a `request` layer timed by `snmp-response-time`, and the Endpoints panel names it the get, its
 why-line naming the v2c limit instead of a control port. A v2c scalar get only: no walk, no tables,
