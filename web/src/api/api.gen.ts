@@ -702,6 +702,28 @@ export type AssistantConversationOutputBody = {
 };
 
 /**
+ * live: a model answers any question; replay: the server plays a recording, which answers only its prompts; none: omnibot cannot run here
+ */
+export type AssistantOmnibotFactsMode = typeof AssistantOmnibotFactsMode[keyof typeof AssistantOmnibotFactsMode];
+
+
+export const AssistantOmnibotFactsMode = {
+  live: 'live',
+  replay: 'replay',
+  none: 'none',
+} as const;
+
+export type AssistantOmnibotFacts = {
+  /** live: a model answers any question; replay: the server plays a recording, which answers only its prompts; none: omnibot cannot run here */
+  mode: AssistantOmnibotFactsMode;
+  /**
+     * The questions a recording answers, in recorded order; empty unless mode is replay
+     * @nullable
+     */
+  prompts: string[] | null;
+};
+
+/**
  * The model omnibot runs on: openai (any OpenAI-compatible chat completions server, OpenRouter by default) or none, which leaves the server's recording, if any
  */
 export type AssistantSettingsProvider = typeof AssistantSettingsProvider[keyof typeof AssistantSettingsProvider];
@@ -4559,6 +4581,8 @@ export type ListAssistantConversationsOutputBody = {
   readonly $schema?: string;
   /** @nullable */
   conversations: AssistantConversation[] | null;
+  /** What omnibot is answering from, so a client can say so before the first question */
+  omnibot: AssistantOmnibotFacts;
 };
 
 export type ListCalcRulesOutputBody = {
@@ -10251,7 +10275,7 @@ export const getListAssistantConversationsUrl = () => {
 }
 
 /**
- * Your own stored conversations, most recently moved first, without their messages. Owner-only. Gated by assistant:use.
+ * Your own stored conversations, most recently moved first, without their messages, and omnibot's mode: live, replay (the server plays a recording, with the prompts it answers) or none. Owner-only. Gated by assistant:use.
  * @summary List your omnibot conversations
  */
 export const listAssistantConversations = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listAssistantConversationsResponse> => {
@@ -10472,7 +10496,7 @@ export const getRunAssistantConversationUrl = (name: string,) => {
 }
 
 /**
- * Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {"stopped": "step_limit", "steps": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. The run talks to the model the assistant settings configure, read as it starts; with none, the server's recording, if it has one. A server with no model, or a configured model whose key no longer resolves, is a 503. Gated by assistant:use.
+ * Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {"stopped": "step_limit", "steps": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. The run talks to the model the assistant settings configure, read as it starts; with none, the server's recording, if it has one. A recording answers only the prompts it was recorded for: any other question is a 422 (type urn:omniglass:omnibot-replay-unmatched) that touches nothing; the list route names the prompts. A server with no model, or a configured model whose key no longer resolves, is a 503. Gated by assistant:use.
  * @summary Run omnibot on one of your conversations
  */
 export const runAssistantConversation = async (name: string,
