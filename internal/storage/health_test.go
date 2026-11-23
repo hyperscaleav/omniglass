@@ -88,7 +88,7 @@ func (f *healthFixture) mustLocation(t *testing.T, ctx context.Context, name, ki
 	t.Helper()
 	if _, err := f.gw.CreateLocation(ctx, "", storage.LocationSpec{
 		Name: name, LocationType: kind, ParentName: parent,
-	}, f.all); err != nil {
+	}, f.all, f.all); err != nil {
 		t.Fatalf("create location %s: %v", name, err)
 	}
 }
