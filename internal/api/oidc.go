@@ -218,16 +218,15 @@ func (a *authenticator) oidcCallback(w http.ResponseWriter, r *http.Request, o o
 		fail(sso.ErrFailed, "mint the session: "+err.Error())
 		return
 	}
-	// A provider that issues no refresh token gets no long-lived access
-	// (ADR-2361 point 9): the session lasts the grace, which is also the
-	// link's, since nothing will re-check it.
-	lifetime := sessionCookieLifetime
-	if in.RefreshToken == "" {
-		lifetime = p.Grace
-	}
+	// A link with no refresh token gets no long-lived access (ADR-2361
+	// point 9): the session lasts the grace, which is also the link's, since
+	// nothing will re-check it. A sign-in that brings no new token keeps the
+	// link's stored one, so storage picks the lifetime.
+	now := time.Now()
 	ua, ip := r.UserAgent(), clientIP(r, o.trustedProxies)
-	u, err := a.gw.SignInByIdentity(ctx, storage.SSOSignIn{Identifier: identifier, RefreshToken: in.RefreshToken, Grace: p.Grace,
-		SessionHash: hash, Prefix: prefix, ExpiresAt: time.Now().Add(lifetime), UserAgent: ua, ClientIP: ip})
+	u, expires, err := a.gw.SignInByIdentity(ctx, storage.SSOSignIn{Identifier: identifier, RefreshToken: in.RefreshToken, Grace: p.Grace,
+		SessionHash: hash, Prefix: prefix, ExpiresAt: now.Add(sessionCookieLifetime), GraceExpiresAt: now.Add(p.Grace),
+		UserAgent: ua, ClientIP: ip})
 	switch {
 	case errors.Is(err, storage.ErrIdentityNotLinked):
 		// The identity is named here, in the log, for an administrator to
@@ -245,7 +244,7 @@ func (a *authenticator) oidcCallback(w http.ResponseWriter, r *http.Request, o o
 		return
 	}
 	cookie := a.sessionCookie(token)
-	cookie.MaxAge = int(lifetime.Seconds())
+	cookie.MaxAge = int(time.Until(expires).Seconds())
 	http.SetCookie(w, &cookie)
 	http.Redirect(w, r, "/web/", http.StatusFound)
 }

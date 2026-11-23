@@ -180,8 +180,9 @@ at the next pass, and once a link has gone `recheck_grace_minutes` (60) without 
 sessions and tokens are refused until one is, so an outage suspends SSO access for a while and
 destroys nothing (owners still have their passwords). A provider that issues no refresh token gets no
 long-lived access: a session through it lasts `recheck_grace_minutes`, and minting an API token from
-it is refused. An API token an owner minted from a password session is not an SSO credential and is
-not re-checked.
+it is refused. A provider that issues the refresh token only on first consent (Google does) keeps
+working: a later sign-in that brings none keeps the one the link already holds. An API token
+an owner minted from a password session is not an SSO credential and is not re-checked.
 
 How soon a refusal comes depends on the provider (as each one's documentation stood in November
 2026):

@@ -1347,8 +1347,8 @@ func (UnimplementedGateway) UnlinkIdentity(context.Context, string, string, stri
 func (UnimplementedGateway) ListIdentityLinks(context.Context, string) ([]IdentityLink, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) SignInByIdentity(context.Context, SSOSignIn) (*User, error) {
-	return nil, ErrIdentityNotLinked
+func (UnimplementedGateway) SignInByIdentity(context.Context, SSOSignIn) (*User, time.Time, error) {
+	return nil, time.Time{}, ErrIdentityNotLinked
 }
 func (UnimplementedGateway) LinksToRecheck(context.Context, string) ([]LinkRecheck, error) {
 	return nil, nil

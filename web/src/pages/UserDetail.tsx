@@ -584,7 +584,7 @@ function IdentityLinksSection(props: { id: string; linkable: boolean }) {
           <Button size="sm" intent="action" loading={busy()} disabled={!identifier().includes("|")} onClick={onLink}>Link</Button>
         </div>
         <p class="text-[11px] text-base-content/40">
-          The subject is in the provider's admin console, and an unlinked sign-in names the whole identifier on the sign-in page.
+          The subject is in the provider's admin console, and an unlinked sign-in logs the whole identifier on the server's `sso: sign-in refused` line.
         </p>
       </Show>
     </div>

@@ -1263,7 +1263,7 @@ type Gateway interface {
 	LinkIdentity(ctx context.Context, actorID, userID, identifier string) (*IdentityLink, error)
 	UnlinkIdentity(ctx context.Context, actorID, userID, linkID string) error
 	ListIdentityLinks(ctx context.Context, userID string) ([]IdentityLink, error)
-	SignInByIdentity(ctx context.Context, in SSOSignIn) (*User, error)
+	SignInByIdentity(ctx context.Context, in SSOSignIn) (*User, time.Time, error)
 	LinksToRecheck(ctx context.Context, issuer string) ([]LinkRecheck, error)
 	AcceptLinkRefresh(ctx context.Context, linkID, rotated string, grace time.Duration) error
 	RevokeLink(ctx context.Context, linkID, reason string) (int, error)

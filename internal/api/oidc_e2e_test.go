@@ -588,6 +588,49 @@ func TestSSOWithoutARefreshTokenGivesAShortSessionAndNoAPIToken(t *testing.T) {
 	}
 }
 
+// TestSSOReSignInWithoutARefreshTokenKeepsTheLinksToken: providers such as
+// Google issue a refresh token only on first consent, so a later sign-in that
+// brings none keeps the one the link holds: the link stays re-checked, the
+// session is a full one, and it can still mint an API token.
+func TestSSOReSignInWithoutARefreshTokenKeepsTheLinksToken(t *testing.T) {
+	t.Parallel()
+	s := newSSOStack(t)
+	alice := s.person(t, "alice")
+	s.link(t, alice, "alice-sub")
+	s.browser(t).signIn()
+	var accepted time.Time
+	if err := s.query(t, `select refresh_accepted_at from credential where user_id = $1 and kind = 'oidc'`, alice).Scan(&accepted); err != nil {
+		t.Fatal(err)
+	}
+
+	s.idp.WithholdRefresh()
+	b := s.browser(t)
+	if to := b.signIn(); to != s.base+"/web/" {
+		t.Fatalf("second sign-in landed on %q", to)
+	}
+	var kept bool
+	var acceptedAfter time.Time
+	if err := s.query(t, `select refresh_sealed is not null, refresh_accepted_at from credential where user_id = $1 and kind = 'oidc'`, alice).Scan(&kept, &acceptedAfter); err != nil {
+		t.Fatal(err)
+	}
+	if !kept {
+		t.Fatal("a sign-in with no refresh token wiped the link's stored one")
+	}
+	if !acceptedAfter.Equal(accepted) {
+		t.Fatalf("refresh_accepted_at moved to %v with no token accepted, want %v", acceptedAfter, accepted)
+	}
+	var expires time.Time
+	if err := s.query(t, `select max(expires_at) from credential where user_id = $1 and kind = 'bearer' and purpose = 'session'`, alice).Scan(&expires); err != nil {
+		t.Fatal(err)
+	}
+	if left := time.Until(expires); left < 2*time.Hour {
+		t.Fatalf("second session lasts %v, want a full session while the link holds a refresh token", left)
+	}
+	if code, _ := s.mintToken(t, b.session()); code != http.StatusCreated {
+		t.Fatalf("mint a token from the second session: %d, want 201", code)
+	}
+}
+
 // TestBindingTheSSOClientSecretTakesSecretBind: every sign-in sends the
 // client secret to the issuer's token endpoint, so naming it (or moving the
 // issuer while one is bound) is judged as binding a secret to a target is,

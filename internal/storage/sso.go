@@ -337,8 +337,11 @@ type SSOSignIn struct {
 	SessionHash []byte
 	Prefix      string
 	ExpiresAt   time.Time
-	UserAgent   string
-	ClientIP    string
+	// GraceExpiresAt ends the session instead when the link holds no
+	// refresh token after this sign-in, since nothing will re-check it.
+	GraceExpiresAt time.Time
+	UserAgent      string
+	ClientIP       string
 }
 
 // refreshAAD binds a sealed refresh token to the link it was sealed for.
@@ -360,10 +363,11 @@ func (p *PG) sealRefresh(ctx context.Context, linkID, token string) ([]byte, err
 // session through it, and writes the login auth event with the method. An
 // unlinked identity is ErrIdentityNotLinked; a disabled or archived person
 // ErrAccountDisabled (the user is returned, so the denial is attributed).
-func (p *PG) SignInByIdentity(ctx context.Context, in SSOSignIn) (*User, error) {
+// The session's expiry is returned for the cookie.
+func (p *PG) SignInByIdentity(ctx context.Context, in SSOSignIn) (*User, time.Time, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("storage: begin sso sign-in: %w", err)
+		return nil, time.Time{}, fmt.Errorf("storage: begin sso sign-in: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	var linkID string
@@ -373,38 +377,47 @@ func (p *PG) SignInByIdentity(ctx context.Context, in SSOSignIn) (*User, error) 
 		from credential c join users u on u.id = c.user_id
 		where c.kind = 'oidc' and c.identifier = $1 for update of c`, in.Identifier).Scan(&linkID, &u.ID, &u.Kind, &active, &archived)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrIdentityNotLinked
+		return nil, time.Time{}, ErrIdentityNotLinked
 	}
 	if err != nil {
-		return nil, fmt.Errorf("storage: resolve identity: %w", err)
+		return nil, time.Time{}, fmt.Errorf("storage: resolve identity: %w", err)
 	}
 	if !active || archived {
-		return &u, ErrAccountDisabled
+		return &u, time.Time{}, ErrAccountDisabled
 	}
 	sealed, err := p.sealRefresh(ctx, linkID, in.RefreshToken)
 	if err != nil {
-		return nil, err
+		return nil, time.Time{}, err
 	}
-	if _, err := tx.Exec(ctx, `update credential set refresh_sealed = $2, refresh_accepted_at = now(),
-			recheck_grace_until = now() + make_interval(secs => $3), last_used_at = now() where id = $1`,
-		linkID, sealed, in.Grace.Seconds()); err != nil {
-		return nil, fmt.Errorf("storage: keep the link's refresh token: %w", err)
+	// A provider may issue a refresh token only on first consent (Google
+	// does), so a sign-in that brings none keeps the one the link holds.
+	var holdsRefresh bool
+	if err := tx.QueryRow(ctx, `update credential set refresh_sealed = coalesce($2, refresh_sealed),
+			refresh_accepted_at = case when $2::bytea is null then refresh_accepted_at else now() end,
+			recheck_grace_until = now() + make_interval(secs => $3), last_used_at = now() where id = $1
+			returning refresh_sealed is not null`,
+		linkID, sealed, in.Grace.Seconds()).Scan(&holdsRefresh); err != nil {
+		return nil, time.Time{}, fmt.Errorf("storage: keep the link's refresh token: %w", err)
+	}
+	expiresAt := in.ExpiresAt
+	if !holdsRefresh && !in.GraceExpiresAt.IsZero() {
+		expiresAt = in.GraceExpiresAt
 	}
 	if _, err := tx.Exec(ctx, `insert into credential (user_id, kind, secret_hash, prefix, purpose, expires_at, user_agent, client_ip, via_link)
 		values ($1, 'bearer', $2, $3, 'session', $4, nullif($5,''), nullif($6,''), $7)`,
-		u.ID, in.SessionHash, in.Prefix, in.ExpiresAt, in.UserAgent, in.ClientIP, linkID); err != nil {
-		return nil, fmt.Errorf("storage: issue sso session: %w", err)
+		u.ID, in.SessionHash, in.Prefix, expiresAt, in.UserAgent, in.ClientIP, linkID); err != nil {
+		return nil, time.Time{}, fmt.Errorf("storage: issue sso session: %w", err)
 	}
 	if err := writeAuthEventTx(ctx, tx, u.ID, "login", map[string]string{"method": "oidc", "identifier": in.Identifier}); err != nil {
-		return nil, err
+		return nil, time.Time{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("storage: commit sso sign-in: %w", err)
+		return nil, time.Time{}, fmt.Errorf("storage: commit sso sign-in: %w", err)
 	}
 	if err := p.loadUser(ctx, &u); err != nil {
-		return nil, err
+		return nil, time.Time{}, err
 	}
-	return &u, nil
+	return &u, expiresAt, nil
 }
 
 // writeAuthEventTx is WriteAuthEvent inside a transaction, with a detail
