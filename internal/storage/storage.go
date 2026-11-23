@@ -1149,6 +1149,13 @@ type Gateway interface {
 	// not its components sees the shape of their fleet with no contents.
 	FleetProjection(ctx context.Context, locRead, sysRead, compRead scope.Set) (*FleetView, error)
 
+	// SearchFleet is the read behind the command palette's name search (#2444):
+	// the locations, systems and components whose name or label holds text, at
+	// most limit of each kind (capped at SearchMaxLimit), each kind through its
+	// own read scope so nothing outside the caller's reach is found. Blank text
+	// finds nothing.
+	SearchFleet(ctx context.Context, text string, limit int, locRead, sysRead, compRead scope.Set) (*FleetSearchResult, error)
+
 	// PlatformView is the read behind the Platform health page (#1644): the
 	// platform system's verdict, each server's identity, and one row per outpost
 	// with its platform component's latest figure per PlatformViewGroups key,
