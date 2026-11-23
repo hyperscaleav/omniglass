@@ -2,12 +2,15 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  CAMERA,
   CAPTURE_CSS,
   LOOP_MAX_BYTES,
   LOOP_MAX_SECONDS,
   LOOP_MIN_SECONDS,
   budgetProblems,
   buildManifest,
+  cameraTrack,
+  frameFor,
   conditionMet,
   destProblem,
   expandAddress,
@@ -137,20 +140,20 @@ describe("parseShots", () => {
 
 describe("budgetProblems", () => {
   it("passes a loop inside the budget", () => {
-    expect(budgetProblems("a", { seconds: 12, bytes: 900_000 })).toEqual([]);
+    expect(budgetProblems("a", { seconds: 7, bytes: 900_000 })).toEqual([]);
     expect(budgetProblems("a", { seconds: LOOP_MIN_SECONDS, bytes: LOOP_MAX_BYTES })).toEqual([]);
     expect(budgetProblems("a", { seconds: LOOP_MAX_SECONDS, bytes: 1 })).toEqual([]);
   });
 
   it("names the shot and the limit for a loop too short, too long or too big", () => {
-    expect(budgetProblems("quick", { seconds: 6.2, bytes: 1000 })).toEqual(["shot quick: loop is 6.2s, under the 8s minimum"]);
-    expect(budgetProblems("slow", { seconds: 16, bytes: 1000 })).toEqual(["shot slow: loop is 16.0s, over the 15s maximum"]);
-    expect(budgetProblems("fat", { seconds: 10, bytes: 1_500_001 })).toEqual(["shot fat: loop is 1500001 bytes, over the 1500000-byte limit"]);
+    expect(budgetProblems("quick", { seconds: 4.2, bytes: 1000 })).toEqual(["shot quick: loop is 4.2s, under the 5s minimum"]);
+    expect(budgetProblems("slow", { seconds: 9.5, bytes: 1000 })).toEqual(["shot slow: loop is 9.5s, over the 9s maximum"]);
+    expect(budgetProblems("fat", { seconds: 7, bytes: 1_500_001 })).toEqual(["shot fat: loop is 1500001 bytes, over the 1500000-byte limit"]);
   });
 
   it("reports every limit a loop is over, and an unmeasured duration", () => {
     expect(budgetProblems("both", { seconds: 20, bytes: 2_000_000 })).toHaveLength(2);
-    expect(budgetProblems("nan", { seconds: NaN, bytes: 1000 })[0]).toContain("under the 8s minimum");
+    expect(budgetProblems("nan", { seconds: NaN, bytes: 1000 })[0]).toContain("under the 5s minimum");
   });
 });
 
@@ -239,5 +242,109 @@ describe("the capture-only stylesheet", () => {
     // Placeholders go; data never does: no rule reaches a table, a row or a figure.
     expect(CAPTURE_CSS.split("\n")).toHaveLength(2);
     expect(CAPTURE_CSS).not.toMatch(/table|tr\b|treeitem|health|alarm/i);
+  });
+});
+
+const LOOP = (steps: string) =>
+  `${LAB}shots:\n  - id: a-loop\n    kind: loop\n    alt: A loop.\n    start: /explore\n    steps:\n${steps}`;
+
+describe("focus and zoom on a step", () => {
+  it("takes here, out, a target of its own, and a zoom with a focus", () => {
+    const { list, problems } = parseShots(
+      LOOP(
+        "      - click: { role: button, name: Go }\n        focus: here\n        zoom: 1.5\n" +
+          "      - wait: { text: Done }\n        focus: { selector: '#panel' }\n" +
+          "      - press: Escape\n        focus: out\n",
+      ),
+    );
+    expect(problems).toEqual([]);
+    const steps = list?.shots[0].steps ?? [];
+    expect(steps.map((s: { focus?: unknown; zoom?: number }) => [s.focus, s.zoom])).toEqual([
+      ["here", 1.5],
+      [{ selector: "#panel" }, undefined],
+      ["out", undefined],
+    ]);
+  });
+
+  it("names a zoom out of range, a zoom with no focus, and here on a step with no target", () => {
+    const { problems } = parseShots(
+      LOOP(
+        "      - click: a\n        focus: here\n        zoom: 3\n" +
+          "      - click: b\n        zoom: 1.5\n" +
+          "      - press: Enter\n        focus: here\n",
+      ),
+    );
+    expect(problems).toEqual([
+      `shot a-loop: step 1 (click): zoom must be a number from ${CAMERA.minZoom} to ${CAMERA.maxZoom}`,
+      "shot a-loop: step 2 (click): zoom goes with a focus on a target",
+      "shot a-loop: step 3 (press): focus here needs a step with a target",
+    ]);
+  });
+
+  it("refuses a focus on a still and on a loop's prep, which is cut", () => {
+    const still = parseShots(`${LAB}shots:\n${STILL}    steps:\n      - click: a\n        focus: here\n`);
+    expect(still.problems).toEqual(["shot a-still: step 1 has a focus: the camera moves on a loop only"]);
+    const prep = parseShots(LOOP("      - click: a\n").replace("    steps:", "    prep:\n      - click: b\n        focus: here\n    steps:"));
+    expect(prep.problems).toEqual(["shot a-loop: prep step 1 has a focus: prep is cut from the recording"]);
+  });
+});
+
+describe("frameFor", () => {
+  const vp = { width: 1440, height: 900 };
+
+  it("is the whole frame for no box", () => {
+    expect(frameFor(null, vp)).toEqual({ scale: 1, x: 720, y: 450 });
+  });
+
+  it("fits a box with a margin, capped at the largest zoom", () => {
+    // 576 x 360 with a 10% margin each side fits at 2x.
+    expect(frameFor({ x: 432, y: 270, width: 576, height: 360 }, vp).scale).toBe(2);
+    expect(frameFor({ x: 700, y: 440, width: 10, height: 10 }, vp).scale).toBe(CAMERA.maxZoom);
+    expect(frameFor({ x: 0, y: 0, width: 1440, height: 900 }, vp).scale).toBe(1);
+  });
+
+  it("takes a zoom over the fit, and keeps the frame inside the capture", () => {
+    // A chip in the top-left corner: the centre moves in so no edge shows.
+    const f = frameFor({ x: 10, y: 10, width: 40, height: 20 }, vp, 1.5);
+    expect(f).toEqual({ scale: 1.5, x: 480, y: 300 });
+  });
+});
+
+describe("cameraTrack", () => {
+  const vp = { width: 1440, height: 900 };
+  const box = { x: 600, y: 400, width: 100, height: 50 };
+
+  it("eases in on a focus and back out before the loop's end", () => {
+    const moves = cameraTrack([{ t: 1, box, zoom: 1.5 }], vp, 6);
+    expect(moves).toEqual([
+      { at: 1, dur: CAMERA.ease, scale: 1.5, x: 650, y: 425 },
+      { at: 6 - CAMERA.ease, dur: CAMERA.ease, scale: 1, x: 720, y: 450 },
+    ]);
+  });
+
+  it("waits for a move to land before the next, and drops one that changes nothing", () => {
+    const moves = cameraTrack(
+      [
+        { t: 1, box, zoom: 1.5 },
+        { t: 1.2, box: null },
+        { t: 2.5, box: null },
+      ],
+      vp,
+      6,
+    );
+    expect(moves.map((m: { at: number; scale: number }) => [m.at, m.scale])).toEqual([
+      [1, 1.5],
+      [1 + CAMERA.ease, 1],
+    ]);
+  });
+
+  it("drops a focus too late to land, and still ends on the whole frame", () => {
+    const moves = cameraTrack([{ t: 1, box, zoom: 2 }, { t: 5.8, box: null }], vp, 6);
+    expect(moves.at(-1)).toMatchObject({ scale: 1, x: 720, y: 450 });
+    expect(moves.at(-1)!.at + moves.at(-1)!.dur).toBeLessThanOrEqual(6);
+  });
+
+  it("is empty with no focus", () => {
+    expect(cameraTrack([], vp, 6)).toEqual([]);
   });
 });

@@ -15,12 +15,16 @@
 # checked on that lab.
 #
 # Per shot: web/e2e/marketing.mjs plays it in a Playwright container on the lab
-# network (a PNG for a still; a WebM and the poster frame for a loop). ffmpeg, in
-# its own pinned container with no network, encodes a still's PNG and every poster
-# to WebP and a loop's WebM to H.264 (trimmed to where the console first painted,
-# and re-encoded smaller until it fits the 1.5 MB budget). The loop's length and
-# size are then checked against the budget (marketinglib.mjs), and any shot over
-# it fails the run, naming the shot and the limit.
+# network (a PNG for a still; for a loop a WebM at twice the viewport's pixels,
+# the poster frame, and the camera's focus log). ffmpeg, in its own pinned
+# container with no network, encodes a still's PNG and every poster to WebP and
+# trims a loop's WebM to where the console first painted. The camera pass
+# (web/e2e/marketing/compose, Revideo, in the Playwright image with no network)
+# then eases the frame onto each focus and renders the loop at the viewport's
+# size, and ffmpeg encodes that to H.264, smaller until it fits the 1.5 MB
+# budget. The loop's length and size are then checked against the budget
+# (marketinglib.mjs), and any shot over it fails the run, naming the shot and the
+# limit.
 #
 # Prereqs: docker, and `make` run first (make marketing-shots does): the lab is
 # the binary and the image it builds.
@@ -62,6 +66,33 @@ ffmpeg_in() {
   return "$rc"
 }
 
+COMPOSE=web/e2e/marketing/compose
+
+# The camera pass's packages, installed once in the Playwright image (it renders
+# with that image's Chromium, so puppeteer downloads none).
+compose_deps() {
+  [ -d "$COMPOSE/node_modules/@revideo/renderer" ] && return 0
+  echo "installing the camera pass (web/e2e/marketing/compose)" >&2
+  docker run --rm "${LAB_LABEL_ARGS[@]}" --user "$(id -u):$(id -g)" -e HOME=/tmp \
+    -e PUPPETEER_SKIP_DOWNLOAD=1 -v "$ROOT:/w" -w "/w/$COMPOSE" "$LAB_PWIMG" npm ci --no-audit --no-fund &
+  LAB_FG_PID=$!
+  wait "$LAB_FG_PID" || { LAB_FG_PID=""; return 1; }
+  LAB_FG_PID=""
+}
+
+# The camera pass on loop $1: its trimmed recording and focus log in $OUT, the
+# clip's length $2; writes $OUT/$1.cam.mp4. Offline, like the encoders.
+compose_shot() {
+  local id=$1 seconds=$2 rc=0
+  docker run --rm "${LAB_LABEL_ARGS[@]}" --network none --user "$(id -u):$(id -g)" -e HOME=/tmp \
+    -e PLAYWRIGHT_BROWSERS_PATH=/ms-playwright -v "$ROOT:/w" -w "/w/$COMPOSE" "$LAB_PWIMG" \
+    node render.mjs "/w/$OUT/$id.src.mp4" "/w/$OUT/$id.camera.json" "$seconds" "/w/$OUT/$id.cam.mp4" &
+  LAB_FG_PID=$!
+  wait "$LAB_FG_PID" || rc=$?
+  LAB_FG_PID=""
+  return "$rc"
+}
+
 # Encode shot $1 of kind $2 from $OUT into $3 (the destination), fitting the
 # budget; prints nothing on success.
 encode_shot() {
@@ -73,8 +104,14 @@ encode_shot() {
     return 0
   fi
   t0=$(mk t0 "${OUT#web/}/dims.json" "$id")
+  # Trimmed at near-lossless quality and full size: the camera zooms into it.
+  ffmpeg_in "$OUT" "$FFMPEG_IMG" -hide_banner -loglevel error -y -ss "$t0" -i "/o/$id.webm" \
+    -c:v libx264 -preset medium -crf 12 -pix_fmt yuv420p -an "/o/$id.src.mp4" || return 1
+  seconds=$(ffmpeg_in "$OUT" --entrypoint ffprobe "$FFMPEG_IMG" -v error -show_entries format=duration \
+    -of default=noprint_wrappers=1:nokey=1 "/o/$id.src.mp4") || return 1
+  compose_shot "$id" "$seconds" || return 1
   for crf in "${CRFS[@]}"; do
-    ffmpeg_in "$OUT" "$FFMPEG_IMG" -hide_banner -loglevel error -y -ss "$t0" -i "/o/$id.webm" \
+    ffmpeg_in "$OUT" "$FFMPEG_IMG" -hide_banner -loglevel error -y -i "/o/$id.cam.mp4" \
       -c:v libx264 -preset slow -crf "$crf" -pix_fmt yuv420p -profile:v high -movflags +faststart -an "/o/$id.mp4" || return 1
     bytes=$(stat -c %s "$OUT/$id.mp4")
     [ "$bytes" -le 1500000 ] && break
@@ -147,6 +184,7 @@ mkdir -p "$OUT"
 lab_pw node e2e/marketing.mjs capture "$SHOTS_W" "${OUT#web/}"
 lab_assert_intact
 
+compose_deps
 echo "encoding" >&2
 failed=0
 while read -r id kind; do

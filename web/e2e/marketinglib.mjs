@@ -19,14 +19,15 @@ import { load } from 'js-yaml';
 /** @typedef {{ get: string, field: string, equals: unknown, timeout: number }} Await */
 /** @typedef {({ kind: 'call' } & Call) | ({ kind: 'await' } & Await)} SetupItem */
 /** @typedef {string | { role: string, name?: string, exact?: boolean } | { text: string, exact?: boolean } | { selector: string }} Target */
-/** @typedef {{ n: number, kind: string, path?: string, key?: string, target?: Target, text?: string, value?: string, replace?: boolean, timeout: number, hold: number }} Step */
+/** @typedef {'out' | 'here' | Target} Focus */
+/** @typedef {{ n: number, kind: string, path?: string, key?: string, target?: Target, text?: string, value?: string, replace?: boolean, timeout: number, hold: number, focus?: Focus, zoom?: number }} Step */
 /** @typedef {{ id: string, kind: 'still' | 'loop', alt: string, viewport: Viewport, start: string, ready: Target | null, setup: SetupItem[], prep: Step[], steps: Step[] }} Shot */
 /** @typedef {{ lab: { scenario: string, systems: number, omnibotReplay: string }, setup: SetupItem[], shots: Shot[] }} ShotList */
 
-// A loop plays long enough to read and short enough to loop: 8 to 15 seconds,
-// and small enough to ship on a page: 1.5 MB.
-export const LOOP_MIN_SECONDS = 8;
-export const LOOP_MAX_SECONDS = 15;
+// A loop plays long enough to read and short enough to stay lively: 5 to 9
+// seconds, and small enough to ship on a page: 1.5 MB.
+export const LOOP_MIN_SECONDS = 5;
+export const LOOP_MAX_SECONDS = 9;
 export const LOOP_MAX_BYTES = 1_500_000;
 export const DEFAULT_VIEWPORT = { width: 1440, height: 900 };
 // Longest a wait or an await may be given, in milliseconds.
@@ -35,7 +36,15 @@ export const DEFAULT_WAIT_MS = 15_000;
 const MAX_HOLD_MS = 8000;
 
 export const STEP_KINDS = ['goto', 'click', 'hover', 'type', 'select', 'press', 'wait'];
-const STEP_KEYS = [...STEP_KINDS, 'hold'];
+const STEP_KEYS = [...STEP_KINDS, 'hold', 'focus', 'zoom'];
+
+// The camera (a loop only): a step's `focus` eases the frame onto a box, so a
+// clip draws the eye to what changed. `here` is the step's own target, `out`
+// is the whole frame, and anything else is a target of its own. `zoom` sets the
+// scale instead of fitting the box. Moves ease over CAMERA.ease seconds and
+// never show past the capture's edge; a clip that ends zoomed eases back out
+// before it loops, so the seam is invisible.
+export const CAMERA = { ease: 0.6, maxZoom: 2, minZoom: 1, margin: 0.1 };
 const ID = /^[a-z0-9][a-z0-9-]*$/;
 const isObj = (/** @type {unknown} */ v) => typeof v === 'object' && v !== null && !Array.isArray(v);
 const isStr = (/** @type {unknown} */ v) => typeof v === 'string' && v.length > 0;
@@ -123,6 +132,22 @@ function parseStep(raw, n, label = 'step') {
   }
   /** @type {Step} */
   const step = { n, kind, timeout: DEFAULT_WAIT_MS, hold: o.hold ?? 0 };
+  if ('focus' in o) {
+    const f = o.focus;
+    if (f === 'here') {
+      if (!['click', 'hover', 'type', 'select', 'wait'].includes(kind)) problems.push(`${where}: focus here needs a step with a target`);
+    } else if (f !== 'out') {
+      problems.push(...targetProblems(f, `${where} focus`, true));
+    }
+    step.focus = f;
+  }
+  if ('zoom' in o) {
+    if (!(typeof o.zoom === 'number' && o.zoom >= CAMERA.minZoom && o.zoom <= CAMERA.maxZoom)) {
+      problems.push(`${where}: zoom must be a number from ${CAMERA.minZoom} to ${CAMERA.maxZoom}`);
+    }
+    if (!('focus' in o) || o.focus === 'out') problems.push(`${where}: zoom goes with a focus on a target`);
+    step.zoom = o.zoom;
+  }
   const v = o[kind];
   switch (kind) {
     case 'goto':
@@ -304,6 +329,12 @@ export function parseShots(text) {
         if (step) steps.push(step);
       });
       if (s.kind === 'loop' && steps.length === 0) problems.push(`${at}: a loop needs steps`);
+      for (const st of [...prep, ...steps]) {
+        if (st.focus !== undefined && s.kind !== 'loop') problems.push(`${at}: step ${st.n} has a focus: the camera moves on a loop only`);
+      }
+      for (const st of prep) {
+        if (st.focus !== undefined && s.kind === 'loop') problems.push(`${at}: prep step ${st.n} has a focus: prep is cut from the recording`);
+      }
       shots.push({
         id: s.id, kind: s.kind, alt: s.alt, viewport: vpShot ?? defaultViewport ?? DEFAULT_VIEWPORT,
         start: s.start, ready, setup: ssetup, prep, steps,
@@ -408,4 +439,69 @@ export function referencedResources(items, start) {
     }
   }
   return [...found.values()];
+}
+
+/** @typedef {{ x: number, y: number, width: number, height: number }} Box */
+/** @typedef {{ t: number, box: Box | null, zoom?: number }} FocusEvent */
+/** @typedef {{ at: number, dur: number, scale: number, x: number, y: number }} CameraMove */
+
+/**
+ * The frame a focus asks for: the scale that fits the box with a margin (or the
+ * step's zoom), capped, and the centre moved in so the frame never shows past
+ * the capture's edge. A null box is the whole frame.
+ * @param {Box | null} box in CSS pixels of the viewport
+ * @param {Viewport} vp
+ * @param {number} [zoom]
+ * @returns {{ scale: number, x: number, y: number }}
+ */
+export function frameFor(box, vp, zoom) {
+  const full = { scale: 1, x: vp.width / 2, y: vp.height / 2 };
+  if (!box) return full;
+  const fit = Math.min(
+    (vp.width * (1 - 2 * CAMERA.margin)) / Math.max(box.width, 1),
+    (vp.height * (1 - 2 * CAMERA.margin)) / Math.max(box.height, 1),
+  );
+  const scale = Math.min(CAMERA.maxZoom, Math.max(CAMERA.minZoom, zoom ?? fit));
+  const halfW = vp.width / (2 * scale), halfH = vp.height / (2 * scale);
+  const clamp = (/** @type {number} */ v, /** @type {number} */ lo, /** @type {number} */ hi) => Math.min(Math.max(v, lo), hi);
+  return {
+    scale: round(scale),
+    x: round(clamp(box.x + box.width / 2, halfW, vp.width - halfW)),
+    y: round(clamp(box.y + box.height / 2, halfH, vp.height - halfH)),
+  };
+}
+
+const round = (/** @type {number} */ n) => Math.round(n * 1000) / 1000;
+
+/**
+ * A loop's camera: the focus events the recorder logged (seconds from the
+ * clip's first frame, a box or null for the whole frame) turned into moves the
+ * compositor plays. Moves run one after another: one that would start before
+ * the last has landed waits for it. A move that changes nothing is dropped. A
+ * clip left zoomed eases back to the whole frame so it ends where it began.
+ * @param {FocusEvent[]} events
+ * @param {Viewport} vp
+ * @param {number} duration the clip's length in seconds
+ * @returns {CameraMove[]}
+ */
+export function cameraTrack(events, vp, duration) {
+  /** @type {CameraMove[]} */
+  const moves = [];
+  let cur = frameFor(null, vp);
+  let free = 0;
+  for (const e of [...events].sort((a, b) => a.t - b.t)) {
+    const f = frameFor(e.box, vp, e.zoom);
+    if (f.scale === cur.scale && f.x === cur.x && f.y === cur.y) continue;
+    const at = round(Math.max(0, e.t, free));
+    if (at + CAMERA.ease > duration) break;
+    moves.push({ at, dur: CAMERA.ease, ...f });
+    cur = f;
+    free = at + CAMERA.ease;
+  }
+  if (cur.scale !== 1) {
+    const at = round(Math.max(free, duration - CAMERA.ease));
+    const dur = round(Math.min(CAMERA.ease, duration - at));
+    if (dur > 0) moves.push({ at, dur, ...frameFor(null, vp) });
+  }
+  return moves;
 }

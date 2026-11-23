@@ -449,12 +449,23 @@ and writes the files and a `shots.json` manifest into the directory. The landing
 every image, loop, poster and alt text with no code change there.
 
 A shot is **data**: an id, a kind, a viewport, an `alt`, setup, and steps. A `still` is one 2x WebP. A
-`loop` is an H.264 MP4 of 8 to 15 seconds and at most 1.5 MB, with a WebP poster; the recorder re-encodes
+`loop` is an H.264 MP4 of 5 to 9 seconds and at most 1.5 MB, with a WebP poster; the recorder re-encodes
 a loop smaller until it fits, and a loop that cannot fit, or is too short or too long, fails the run
 naming the shot and the limit. Steps use the walkthrough grammar (`goto`, `click`, `hover`, `type`,
 `select`, `press`, `wait`, and `hold` to linger) with no captions: a capture speaks for itself, and the
 page that hosts it writes the words. A step that never finds its target fails the run, naming the shot,
 the step and what it waited for, and keeps the frame it failed on.
+
+A loop has a camera. A step's `focus` moves it: `here` frames the step's own target, a target of its own
+(`text`, `role`, `selector`, as a step names one) frames that, and `out` returns to the whole frame. `zoom`
+(1 to 2) sets how close; without it the camera fits the target with a margin, never past 2x. The camera
+eases over 0.6 s, keeps the frame inside the capture, and eases back to the whole frame before the loop
+ends, so the loop's seam lands on the full view. A focus on a still, or on a loop's prep, fails the parse.
+The recorder captures the browser at twice the viewport, so a 2x zoom is still crisp, and writes where
+each focused target sat on screen; a [Revideo](https://github.com/midrender/revideo) (MIT) project in
+`web/e2e/marketing/compose/` then renders the pans and zooms over the recording, offline, with its
+telemetry off, before the budget encode. `frameFor` and `cameraTrack` in `marketinglib.mjs` are the
+framing and the move list, unit tested.
 
 Setup runs off camera, in order, as the lab's owner. `put`, `post` and `patch` call the API (a `{braced}`
 part of a path is one address, percent-encoded whole, so a component's path address names one route

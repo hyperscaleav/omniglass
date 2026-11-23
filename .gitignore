@@ -68,6 +68,8 @@ coverage.txt
 /web/e2e/walkthroughs/out/
 # marketing captures (make marketing-shots)
 /web/e2e/marketing/out/
+/web/e2e/marketing/compose/node_modules/
+/web/e2e/marketing/compose/public/
 # terminal demo recordings (make demo)
 /scripts/demo/out/
 /web/e2e/probe/out/

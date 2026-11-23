@@ -3,10 +3,14 @@
 # data; web/e2e/marketinglib.mjs parses and validates it, web/e2e/marketing.mjs
 # plays it, and web/e2e/marketing.sh brings the lab up and encodes the results.
 #
-# A `still` is one 2x WebP of a console state; a `loop` is a 8 to 15 second
+# A `still` is one 2x WebP of a console state; a `loop` is a 5 to 9 second
 # H.264 MP4 of an interaction, with a WebP poster. Steps use the walkthrough
 # grammar (goto, click, hover, type, select, press, wait; `hold` lingers after a
-# step) without captions. Setup items run off camera: `put`/`post`/`patch` call
+# step) without captions. On a loop, a step's `focus` moves the camera as the
+# step starts: `here` eases the frame onto the step's own target, a target
+# eases it onto that, and `out` back to the whole frame; `zoom` (1 to 2) sets
+# the scale instead of fitting the box. A clip that ends zoomed eases out before
+# it loops. Setup items run off camera: `put`/`post`/`patch` call
 # the API as the lab's owner, and `wait` polls a GET until a dotted field equals
 # a value. A {braced} part of a path is one address, percent-encoded whole.
 #
@@ -50,15 +54,18 @@ shots:
     start: /explore
     ready: { selector: '[role=treeitem]:has-text("Headquarters")' }
     steps:
-      - hover: '[role=treeitem]:has-text("Regional Office 01")'
-        hold: 1200
       - click: { role: button, name: need attention }
-        hold: 400
+        focus: here
+        zoom: 1.8
+        hold: 300
       - wait: { text: Regional Office 06 }
-        hold: 3200
+        focus: here
+        zoom: 1.5
+        hold: 1400
       - click: { role: button, name: Clear }
+        focus: out
       - wait: { selector: '[role=treeitem]:has-text("Headquarters")' }
-        hold: 2400
+        hold: 900
 
   # Down the tree: a campus, its building, a floor, then a meeting room, opened
   # to its system page.
@@ -69,16 +76,27 @@ shots:
     ready: { selector: '[role=treeitem]:has-text("Headquarters")' }
     steps:
       - click: '[role=treeitem][aria-level="1"]:has(:text-is("Headquarters")) svg >> nth=0'
-        hold: 500
+        focus: here
+        zoom: 1.7
+        hold: 250
       - click: '[role=treeitem][aria-level="2"]:has(:text-is("Hq Annex")) svg >> nth=0'
-        hold: 500
+        focus: here
+        zoom: 1.7
+        hold: 250
       - click: '[role=treeitem][aria-level="3"]:has(:text-is("Hq Annex 1")) svg >> nth=0'
-        hold: 700
+        focus: here
+        zoom: 1.7
+        hold: 350
       - click: '[role=treeitem][aria-level="4"]:has(:text-is("Hq Annex 1 03"))'
-        hold: 800
+        focus: here
+        zoom: 1.5
+        hold: 400
       - click: 'aside[data-blade] button[aria-label=Expand]'
+        focus: out
       - wait: { text: Main Display }
-        hold: 3000
+        focus: here
+        zoom: 1.4
+        hold: 1300
 
   # The fleet at full size: every campus on the page, the count, and the
   # attention markers the staged faults put there.
@@ -109,13 +127,22 @@ shots:
       - wait: { selector: '[data-testid=session-notice][data-state=rejected]' }
     steps:
       - hover: '[data-testid=session-notice]'
-        hold: 1000
+        focus: here
+        zoom: 1.7
+        hold: 700
       - click: { role: button, name: Open endpoint }
+        focus: out
       - click: { role: button, name: Edit credential }
+        focus: here
+        zoom: 1.6
       - type: { target: '#edit-iface-input-login', text: sim-kestrel-login, replace: true }
+        focus: here
+        zoom: 1.8
       - click: 'aside[data-blade] button:has-text("Save")'
       - wait: { selector: 'aside[data-blade] [data-testid=endpoint-session]:not(:has([data-testid=session-notice])):has([data-testid=ladder-rung][data-rung=authenticated][data-status=pass])', timeout: 30000 }
-        hold: 1200
+        focus: here
+        zoom: 1.6
+        hold: 900
 
   # The outage: the main display of hq-mr86-1 unplugged (staged off camera: the
   # shipped rule needs about a minute to hold its alarm), the room degraded with
@@ -132,12 +159,19 @@ shots:
     ready: { text: Reachability lost }
     steps:
       - hover: '[data-testid=alarm-strip]'
-        hold: 1800
+        focus: here
+        zoom: 1.7
+        hold: 900
       - click: '[data-testid=alarm-strip] button:text-is("display-1")'
-        hold: 1200
+        focus: here
+        zoom: 1.9
+        hold: 500
       - click: 'aside[data-blade] button[aria-label=Expand]'
+        focus: out
       - wait: { text: What it is }
-        hold: 3200
+        focus: here
+        zoom: 1.4
+        hold: 1500
 
   # The same room, still: degraded, its Why card naming the alarm and the slot
   # it impairs, and the components that still answer.
@@ -156,8 +190,12 @@ shots:
     ready: { selector: '[role=treeitem]:has-text("Headquarters")' }
     steps:
       - click: 'button[aria-label="Ask omnibot"]'
-        hold: 600
+        hold: 300
       - type: { target: 'textarea[aria-label="Ask omnibot"]', text: "which systems have open alarms?" }
+        focus: here
+        zoom: 1.8
       - press: Enter
       - wait: { selector: '[data-testid=omnibot-step] >> nth=1', timeout: 30000 }
-        hold: 5500
+        focus: here
+        zoom: 1.5
+        hold: 2600

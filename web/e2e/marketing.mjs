@@ -31,9 +31,11 @@ import {
 import { describeTarget, locate } from './walkthroughlib.mjs';
 
 const ACT_TIMEOUT = 15_000;
+// Loops record at twice the viewport's pixels, so the camera's zoom stays sharp.
+const VIDEO_SCALE = 2;
 // Pacing, in milliseconds: how long the cursor glides to a target before it acts,
 // and the delay between typed keys.
-const PACE = { glide: 450, key: 50, load: 700 };
+const PACE = { glide: 250, key: 35, load: 350 };
 
 /** @param {string} file @returns {import('./marketinglib.mjs').ShotList} */
 function readList(file) {
@@ -278,13 +280,15 @@ async function record(browser, base, storageState, shot, out) {
     deviceScaleFactor: 2,
     colorScheme: 'dark',
     storageState,
-    ...(loop ? { recordVideo: { dir: out, size: { width, height } } } : {}),
+    ...(loop ? { recordVideo: { dir: out, size: { width: width * VIDEO_SCALE, height: height * VIDEO_SCALE } } } : {}),
   });
   const startedAt = Date.now();
   await ctx.addInitScript(STYLE, CAPTURE_CSS);
   if (loop) await ctx.addInitScript(CURSOR);
   const page = await ctx.newPage();
   const cursor = { x: width / 2, y: height / 2 };
+  /** @type {Camera} */
+  const cam = { events: [], now: () => 0 };
   let current = 'start';
   try {
     await page.goto(`${base}/web${shot.start}`, { waitUntil: 'load', timeout: ACT_TIMEOUT * 2 });
@@ -295,16 +299,17 @@ async function record(browser, base, storageState, shot, out) {
     await page.waitForTimeout(PACE.load);
     for (const step of shot.prep) {
       current = `prep step ${step.n} (${step.kind}${step.target ? ` ${describeTarget(step.target)}` : ''})`;
-      await play(page, base, step, cursor, false);
+      await play(page, base, step, cursor, false, cam);
     }
     // The recording opens here: the video starts when the context does, so the
     // blank lead-in before the first paint is cut off by this offset.
     const t0 = (Date.now() - startedAt) / 1000;
+    cam.now = () => (Date.now() - startedAt) / 1000 - t0;
     if (loop) await page.mouse.move(cursor.x, cursor.y);
     for (const step of shot.steps) {
       current = `step ${step.n} (${step.kind}${step.target ? ` ${describeTarget(step.target)}` : ''})`;
       const t = Date.now();
-      await play(page, base, step, cursor, loop);
+      await play(page, base, step, cursor, loop, cam);
       if (process.env.MARKETING_TRACE) console.log(`  ${shot.id} ${current}: ${((Date.now() - t) / 1000).toFixed(1)}s`);
     }
     // Let the last state settle and the stills' data finish arriving.
@@ -316,8 +321,11 @@ async function record(browser, base, storageState, shot, out) {
     if (video) {
       await video.saveAs(join(out, `${shot.id}.webm`));
       await video.delete();
+      // The camera track's input: where each focus landed, in viewport pixels and
+      // seconds from the clip's first frame. The compositor turns it into moves.
+      writeFileSync(join(out, `${shot.id}.camera.json`), JSON.stringify({ viewport: { width, height }, events: cam.events }, null, 2));
     }
-    return { t0, width, height };
+    return { t0, width, height, scale: loop ? VIDEO_SCALE : 1 };
   } catch (e) {
     await page.screenshot({ path: join(out, `${shot.id}-failed.png`) }).catch(() => {});
     console.error(`marketing: shot ${shot.id}: ${current} failed: ${/** @type {Error} */ (e).message.split('\n')[0]}`);
@@ -326,30 +334,60 @@ async function record(browser, base, storageState, shot, out) {
   }
 }
 
+/** @typedef {{ events: import('./marketinglib.mjs').FocusEvent[], now: () => number }} Camera */
+
 /**
- * One step, with the cursor gliding to a target before it acts.
+ * Logs a step's focus: the box it names (or null for the whole frame), stamped
+ * with the clip's clock. `here` is the step's own target, already on screen.
+ * @param {import('@playwright/test').Page} page
+ * @param {import('./marketinglib.mjs').Step} step
+ * @param {Camera} cam
+ * @param {import('@playwright/test').Locator | null} own the step's own target, when it has one
+ */
+async function logFocus(page, step, cam, own) {
+  if (step.focus === undefined) return;
+  if (step.focus === 'out') return void cam.events.push({ t: cam.now(), box: null });
+  const el = step.focus === 'here' ? own : locate(page, step.focus).filter({ visible: true }).first();
+  if (!el) throw new Error('focus here needs a step with a target');
+  await el.waitFor({ state: 'visible', timeout: ACT_TIMEOUT });
+  const box = await el.boundingBox();
+  if (!box) throw new Error('the focus has no box on screen');
+  cam.events.push({ t: cam.now(), box, ...(step.zoom ? { zoom: step.zoom } : {}) });
+}
+
+/**
+ * One step, with the cursor gliding to a target before it acts. A focus is
+ * logged as the step starts, so the camera arrives as the cursor does; on a
+ * wait it is logged once the awaited element shows.
  * @param {import('@playwright/test').Page} page
  * @param {string} base
  * @param {import('./marketinglib.mjs').Step} step
  * @param {{ x: number, y: number }} cursor
  * @param {boolean} loop
+ * @param {Camera} cam
  */
-async function play(page, base, step, cursor, loop) {
+async function play(page, base, step, cursor, loop, cam) {
   switch (step.kind) {
     case 'goto':
       await page.goto(`${base}/web${step.path}`, { waitUntil: 'load', timeout: ACT_TIMEOUT });
       await page.waitForTimeout(PACE.load);
+      await logFocus(page, step, cam, null);
       break;
     case 'press':
+      await logFocus(page, step, cam, null);
       await page.keyboard.press(/** @type {string} */ (step.key));
       break;
-    case 'wait':
-      await locate(page, step.target).filter({ visible: true }).first().waitFor({ state: 'visible', timeout: step.timeout });
+    case 'wait': {
+      const el = locate(page, step.target).filter({ visible: true }).first();
+      await el.waitFor({ state: 'visible', timeout: step.timeout });
+      await logFocus(page, step, cam, el);
       break;
+    }
     default: {
       const el = locate(page, step.target);
       await el.waitFor({ state: 'visible', timeout: ACT_TIMEOUT });
       await el.scrollIntoViewIfNeeded({ timeout: ACT_TIMEOUT });
+      await logFocus(page, step, cam, el);
       const box = await el.boundingBox();
       if (!box) throw new Error('the target has no box on screen');
       const x = step.kind === 'click' || step.kind === 'hover' ? box.x + box.width / 2 : Math.min(box.x + 24, box.x + box.width / 2);
