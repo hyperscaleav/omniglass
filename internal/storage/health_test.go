@@ -1168,7 +1168,7 @@ func TestLocationHealthSystemsAreAddressable(t *testing.T) {
 			t.Fatalf("create meeting in %s: %v", room, err)
 		}
 	}
-	rep, err := f.gw.LocationHealth(ctx, "hq", 0, f.all)
+	rep, err := f.gw.LocationHealth(ctx, "hq", storage.HealthRange{}, f.all)
 	if err != nil {
 		t.Fatalf("location health: %v", err)
 	}
