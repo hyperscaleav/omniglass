@@ -110,6 +110,11 @@ identity: {
     shape: sql_table
     id: uuid {constraint: primary_key}
   }
+  user_group_idp_mapping: {
+    shape: sql_table
+    id: uuid {constraint: primary_key}
+    group_id: uuid {constraint: foreign_key}
+  }
   user_group_member: {
     shape: sql_table
     group_id: uuid {constraint: primary_key}
@@ -724,6 +729,7 @@ identity.system_slot_type.slot_id -> identity.system_slot.id
 identity.user_grant.group_id -> identity.user_group.id
 identity.user_grant.role_id -> identity.role.id
 identity.user_grant.user_id -> identity.users.id
+identity.user_group_idp_mapping.group_id -> identity.user_group.id
 identity.user_group_member.group_id -> identity.user_group.id
 identity.user_group_member.user_id -> identity.users.id
 telemetry.action_rule.notification_type_id -> telemetry.notification_type.id

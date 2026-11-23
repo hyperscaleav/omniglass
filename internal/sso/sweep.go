@@ -26,7 +26,7 @@ type Store interface {
 	SSOProvider(ctx context.Context, name string) (*storage.SSOProvider, error)
 	EgressPolicy(ctx context.Context) (egress.Policy, error)
 	LinksToRecheck(ctx context.Context, issuer string) ([]storage.LinkRecheck, error)
-	AcceptLinkRefresh(ctx context.Context, linkID, rotated string, grace time.Duration) error
+	AcceptLinkRefresh(ctx context.Context, linkID, rotated string, grace time.Duration, groups *storage.IdPGroups) error
 	RevokeLink(ctx context.Context, linkID, reason string) (int, error)
 }
 
@@ -73,10 +73,16 @@ func (s *Sweeper) RunOnce(ctx context.Context) (Pass, time.Duration, error) {
 	}
 	var out Pass
 	for _, l := range links {
-		rotated, err := c.Refresh(ctx, l.RefreshToken)
+		r, err := c.Refresh(ctx, l.RefreshToken)
 		switch {
 		case err == nil:
-			if err := s.store.AcceptLinkRefresh(ctx, l.LinkID, rotated, p.Grace); err != nil {
+			// A refresh whose id_token carries the groups claim syncs the
+			// person's idp memberships (#2363); one that does not verify is
+			// still an accepted refresh, its groups left as they were.
+			if r.ClaimsErr != nil {
+				s.log.Warn("sso: a refresh's id_token did not verify; its groups are not synced", "link", l.LinkID, "err", r.ClaimsErr.Error())
+			}
+			if err := s.store.AcceptLinkRefresh(ctx, l.LinkID, r.Rotated, p.Grace, RefreshGroups(r.Claims, l.Identifier, p.GroupsClaim)); err != nil {
 				return out, p.Recheck, err
 			}
 			out.Accepted++

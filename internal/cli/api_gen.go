@@ -10140,7 +10140,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "create <group>",
 						Short:   "Grant a role to a group",
-						Long:    "Assigns a role at a scope to a group; its members inherit it. Gated by user_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own, exactly as for a direct grant. A duplicate is 409.",
+						Long:    "Assigns a role at a scope to a group; its members inherit it. Gated by user_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own, exactly as for a direct grant. A duplicate is 409, and so is an owner grant on a group an identity provider group mapping feeds (no provider group reaches an owner).",
 						Example: "  omniglass user-group grant create night-shift --role role --scope-kind scope_kind",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -10208,6 +10208,76 @@ func generatedCommands() []*cobra.Command {
 			return parent
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
+				Use:   "idp-mapping",
+				Short: "Commands for the idp-mapping resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					var fClaimValue string
+					var fIssuer string
+					cmd := &cobra.Command{
+						Use:     "create <group>",
+						Short:   "Map an identity provider group to a group",
+						Long:    "Maps a value of the identity provider's groups claim to this group, so a person whose token carries it becomes an idp member at their next sign-in and inherits the group's grants. The issuer defaults to the configured provider's; with none configured and none given it is a 422. Refused (409) when the group carries an owner grant at any scope, since no provider group may reach an owner, and when the group already maps the value. Gated by user_group:update (all-scope). Under an agent token or the agent ceiling, refused (403) when the group's grants exceed the caller's bounded permissions, as adding a member is.",
+						Example: "  omniglass user-group idp-mapping create night-shift --claim-value claim_value",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/user-groups/%s/idp-mappings", pathSegment(args[0]))
+							body := map[string]any{}
+							if cmd.Flags().Changed("claim-value") {
+								body["claim_value"] = fClaimValue
+							}
+							if cmd.Flags().Changed("issuer") {
+								body["issuer"] = fIssuer
+							}
+							return runAPICommand(cmd, "POST", path, body)
+						},
+					}
+					cmd.Flags().StringVar(&fClaimValue, "claim-value", "", "The value of the identity provider's groups claim that puts a person in this group")
+					_ = cmd.MarkFlagRequired("claim-value")
+					cmd.Flags().StringVar(&fIssuer, "issuer", "", "The identity provider's issuer, exactly as its tokens carry it; omit for the configured provider's")
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "delete <group> <mappingId>",
+						Short:   "Remove an identity provider group mapping",
+						Long:    "Removes one mapping. When it was the group's last mapping from its issuer, that issuer's idp memberships of the group are removed with it; otherwise they are re-judged at each person's next sign-in or re-check. Local memberships are never touched. Gated by user_group:update (all-scope).",
+						Example: "  omniglass user-group idp-mapping delete night-shift <mappingId>",
+						Args:    pathArgs(2),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/user-groups/%s/idp-mappings/%s", pathSegment(args[0]), pathSegment(args[1]))
+							return runAPICommand(cmd, "DELETE", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "list <group>",
+						Short:   "List a group's identity provider mappings",
+						Long:    "The identity provider groups that put a person in this group: each a value of the provider's groups claim, keyed by its issuer. At each single sign-on sign-in, and each re-check refresh whose id_token carries the claim, a person's idp memberships from that issuer are set to exactly the mapped set. Gated by user_group:read:admin.",
+						Example: "  omniglass user-group idp-mapping list night-shift",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/user-groups/%s/idp-mappings", pathSegment(args[0]))
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
@@ -10235,7 +10305,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "create <group>",
 						Short:   "Add a member to a group",
-						Long:    "Adds a user to a group; its members inherit the group's grants. Gated by user_group:update (all-scope). Idempotent. Under an agent token or the agent ceiling, refused (403) when the group's grants exceed the caller's bounded permissions, since membership is a grant by another route.",
+						Long:    "Adds a user to a group; its members inherit the group's grants. The membership is local: a member an identity provider's groups brought (idp) becomes local, so it no longer follows the provider. Gated by user_group:update (all-scope). Idempotent. Under an agent token or the agent ceiling, refused (403) when the group's grants exceed the caller's bounded permissions, since membership is a grant by another route.",
 						Example: "  omniglass user-group member create night-shift --user-id user_id",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -10258,7 +10328,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "delete <group> <user>",
 						Short:   "Remove a member from a group",
-						Long:    "Removes a user from a group; it stops inheriting the group's grants. Gated by user_group:update (all-scope).",
+						Long:    "Removes a user from a group; it stops inheriting the group's grants. An idp membership comes back at the person's next sign-in or re-check while a mapping still puts them in the group. Gated by user_group:update (all-scope).",
 						Example: "  omniglass user-group member delete night-shift alice",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -10275,7 +10345,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <group>",
 						Short:   "List a group's members",
-						Long:    "The users in a group. Gated by user_group:read:admin.",
+						Long:    "The users in a group, each with its source: local (an admin added it) or idp (synced from an identity provider's groups claim through a mapping, with the issuer). Gated by user_group:read:admin.",
 						Example: "  omniglass user-group member list night-shift",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
