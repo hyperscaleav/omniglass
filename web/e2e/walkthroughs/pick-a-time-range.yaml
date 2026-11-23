@@ -2,7 +2,7 @@
 # page's tab rail sets the window for every chart on Overview, and the
 # address carries it, so a copied link opens on the same window.
 title: Pick the time range a system page charts
-description: Open the Huddle Room, open the time range on its tab rail, pick the last 7 days, and read the data section redrawn over the week.
+description: Open the Huddle Room, open the time range on its tab rail, pick the last 7 days, and read the metrics grid redrawn over the week.
 steps:
   - goto: /systems/huddle
     caption: The Huddle Room. Its charts read the last 24 hours until you pick another range.
@@ -17,9 +17,7 @@ steps:
     caption: Pick the last 7 days. The address now says range=7d, so a copied link opens on the same week.
   - wait: { text: Last 7 days }
     caption: The control names the range in force.
-  - click: '[data-testid=metric-row-room-temperature]'
-    caption: Open a metric's chart in the data section.
-  - wait: { selector: '[data-testid=timeseries-chart]' }
-    caption: Every metric now reads the week, in hourly buckets with each one's lowest to highest reading behind the line.
+  - wait: { selector: '[data-testid=metrics-grid] [data-testid=timeseries-chart]' }
+    caption: Every metric in the grid now reads the week, in hourly buckets with each one's lowest to highest reading behind the line.
     poster: true
     hold: 2000

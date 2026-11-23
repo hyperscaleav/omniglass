@@ -1,6 +1,6 @@
 import { For, Show, createEffect, createMemo, createSignal } from "solid-js";
 import { useLocation, useNavigate, useParams, useSearchParams } from "@solidjs/router";
-import { useQueries, useQuery } from "@tanstack/solid-query";
+import { useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
 import Breadcrumb from "../components/Breadcrumb";
 import HealthBadge from "../components/HealthBadge";
@@ -14,7 +14,6 @@ import OutlineWorkspace from "../components/OutlineWorkspace";
 import { FLEET_VIEW_KEY, fleetView, childrenIndex } from "../lib/fleet";
 import { systemHealth, systemHealthKey, healthOf } from "../lib/health";
 import { systemSlots, systemSlotsKey } from "../lib/system_slots";
-import { systemMetrics, systemMetricsKey } from "../lib/system_metrics";
 import { STANDARDS_KEY, listStandards } from "../lib/standards";
 import { mapMarkers, parseStandardMap } from "../lib/system_map";
 import SystemMap from "../components/SystemMap";
@@ -45,12 +44,10 @@ import { spans as timelineSpans } from "../lib/timeline";
 import { systemEvents, systemEventsKey, systemLogs, systemLogsKey, type SystemLogs } from "../lib/system_activity";
 import type { LogFilter } from "../lib/logs";
 import LogFilters from "../components/LogFilters";
-import { SERIES_POLL_MS, metricBuckets, metricBucketsBetween, metricBucketsBetweenKey, metricBucketsKey } from "../lib/series";
-import { rangeHours, rangeStepSeconds, resolveRange, useTimeRange } from "../lib/time_range";
 import TimeRangePicker from "../components/TimeRangePicker";
-import { CalcRuleLink } from "../components/RuleLink";
 import { memberModel, systemCrumbs, systemsAtLocation, type MemberContext } from "../lib/detail";
-import TimeseriesChart from "../components/TimeseriesChart";
+import MetricsGrid from "../components/MetricsGrid";
+import { useTimeRange } from "../lib/time_range";
 import { systemMembers, systemMembersKey } from "../lib/members";
 import { LEAF_POLL_MS } from "../lib/component_leaf";
 import { CLOCK_TICK_MS, createClock } from "../lib/clock";
@@ -76,10 +73,6 @@ import { CLOCK_TICK_MS, createClock } from "../lib/clock";
 // is read once, for the location, the path and who the members are; nothing
 // polled grows with the fleet. TanStack holds every poll while the tab is
 // hidden.
-// The Data table reads the page's time range (#2304), a day at five-minute
-// buckets by default (#1269): a few hundred buckets whatever the range, the
-// min/max band and the avg line, so a one-sample spike survives and the read
-// is the same size however busy the metric.
 // HISTORY_TICK_MS is how often the history and the charts take a new now:
 // a thirty-day strip and a day's sparkline move too little in a second to
 // redraw on every tick.
@@ -143,18 +136,12 @@ export default function SystemZoom() {
   // catalog's flag, #917), amber when they only degrade.
   const inOutage = createMemo(() => alarms().some((a) => scale().outage(a.severity)));
   const bodyOf = createMemo(() => (vm() ? componentCards(vm()!) : undefined));
-  const metricsQ = useQuery(() => ({ queryKey: systemMetricsKey(id()), queryFn: () => systemMetrics(id()), refetchInterval: LEAF_POLL_MS }));
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards }));
   const standardRow = createMemo(() => (standards.data ?? []).find((x) => x.name === standard()));
   const mapDecl = createMemo(() => {
     const raw = (standardRow() as { map?: unknown } | undefined)?.map;
     return parseStandardMap(raw === undefined ? undefined : JSON.stringify(raw));
   });
-  // Every declared metric, sampled or not: the Data section's series.
-  const kpiMetrics = createMemo(() => (metricsQ.data ?? []).filter((m) => m.from_contract || m.is_sampled));
-  // The expanded row's metric, if any: the table is the view, the full
-  // chart an accordion under its row.
-  const [seriesPick, setSeriesPick] = createSignal<string | undefined>(undefined);
 
   const [search] = useSearchParams();
   // Three tabs (#826): Overview, Activity, Configure. The retired tab
@@ -191,62 +178,9 @@ export default function SystemZoom() {
     enabled: tab() === "activity",
     refetchInterval: LEAF_POLL_MS,
   }));
-  // The page's one time range (#2304), held in the address: a preset slides
-  // to now and reads `hours` back from it; an absolute range reads its own
-  // [from, to) through the views binding and holds still, so it never polls.
+  // The page's one time range (#2304), held in the address: the metrics
+  // grid charts over it, and the picker on the tab rail writes it.
   const { range, setRange } = useTimeRange();
-  const hours = () => rangeHours(range());
-  // A preset's window is fixed by its key, not the clock, so a tick never
-  // changes a query key.
-  const seriesWindowMs = () => {
-    const h = hours();
-    if (h !== undefined) return h * 3600_000;
-    const r = resolveRange(range(), 0);
-    return r.to - r.from;
-  };
-  // An absolute range reaching back past a day steps in whole hours: the
-  // views read answers the hours past the raw samples from the hourly trends
-  // only at a whole-hour step, where a finer one would read them as empty.
-  const seriesStepS = () => {
-    const r = range();
-    return r.kind === "absolute" ? rangeStepSeconds(seriesWindowMs(), r.from < Date.now() - 86400_000 || undefined) : rangeStepSeconds(seriesWindowMs());
-  };
-  const seriesColumn = () => {
-    const r = range();
-    return r.kind === "preset" ? `Last ${r.preset}` : "In range";
-  };
-  // The charts' right edge: now for a preset, the range's end otherwise.
-  const seriesNow = () => (hours() !== undefined ? historyNow() : resolveRange(range(), 0).to);
-  // One series query per declared metric, alive only on Overview, where the
-  // Data table draws every sparkline at once (#795 review).
-  const seriesQueries = useQueries(() => ({
-    queries: kpiMetrics().map((m) => {
-      // The chart is the series whose latest value sits beside it: a bucket
-      // is one instance (#1485), so a sampled row names the instance it shows.
-      const instance = m.is_sampled ? m.instance : undefined;
-      const h = hours();
-      const step = seriesStepS();
-      if (h === undefined) {
-        const { from, to } = resolveRange(range(), 0);
-        return {
-          queryKey: metricBucketsBetweenKey("systems", id(), m.metric_type_name, from, to, step, instance),
-          queryFn: () => metricBucketsBetween("systems", id(), m.metric_type_name, from, to, step, instance),
-          enabled: tab() === "overview",
-          // A range ending in the future still fills; one wholly past holds.
-          refetchInterval: to > Date.now() ? SERIES_POLL_MS : false,
-        };
-      }
-      return {
-        queryKey: metricBucketsKey("systems", id(), m.metric_type_name, h, step, instance),
-        queryFn: () => metricBuckets("systems", id(), m.metric_type_name, h, step, instance),
-        enabled: tab() === "overview",
-        // A day's sparkline does not visibly move in five seconds; the latest
-        // value beside it rides the metrics read, which does.
-        refetchInterval: SERIES_POLL_MS,
-      };
-    }),
-  }));
-  const metricSeriesData = () => kpiMetrics().map((_, i) => seriesQueries[i]?.data);
   const eventsQ = useQuery(() => ({ queryKey: systemEventsKey(id()), queryFn: () => systemEvents(id()), enabled: tab() === "activity", refetchInterval: LEAF_POLL_MS }));
   // The members' lines under the Logs filter (#1145): a severity threshold
   // and a source, applied by the read.
@@ -660,54 +594,7 @@ export default function SystemZoom() {
                       </div>
                     )}
                   </Show>
-        <Show when={kpiMetrics().length > 0}>
-          <section data-testid="data-tab" class="flex flex-col gap-3">
-            <Eyebrow label="Data" hint="Every metric the standard declares, stacked: the page's time range as a sparkline beside the latest value. Click a row for the full chart. Raw samples, capped; a series still on its contract default has nothing to chart yet." />
-            <div class="overflow-x-auto rounded-box border border-base-300">
-              <table class="table table-sm">
-                <thead>
-                  <tr>
-                    <th>Metric</th>
-                    <th>{seriesColumn()}</th>
-                    <th class="text-right">Latest</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <For each={kpiMetrics()}>
-                    {(m, i) => (
-                      <>
-                        <tr
-                          data-testid={`metric-row-${m.metric_type_name}`}
-                          class="cursor-pointer hover:bg-base-content/5"
-                          onClick={() => setSeriesPick(seriesPick() === m.metric_type_name ? undefined : m.metric_type_name)}
-                        >
-                          <td>{entityLabel({ name: m.metric_type_name, label: m.label })}</td>
-                          <td>
-                            <TimeseriesChart spark buckets={metricSeriesData()[i()]?.buckets ?? []} resolutionMs={seriesStepS() * 1000} now={seriesNow()} windowMs={seriesWindowMs()} />
-                          </td>
-                          <td class="text-right font-mono tabular-nums">{m.value === null || m.value === undefined ? "" : String(m.value)}</td>
-                          <td class="text-right text-[10px] text-base-content/45">
-                            <Show when={m.source_rule && m.source_rule_id} fallback={m.is_sampled ? "sampled" : "contract default"}>
-                              <span onClick={(e) => e.stopPropagation()}><CalcRuleLink name={m.source_rule!} id={m.source_rule_id!} /></span>
-                            </Show>
-                          </td>
-                        </tr>
-                        <Show when={seriesPick() === m.metric_type_name}>
-                          <tr>
-                            <td colspan="4" class="bg-base-200/40">
-                              <TimeseriesChart buckets={metricSeriesData()[i()]?.buckets ?? []} resolutionMs={seriesStepS() * 1000} now={seriesNow()} windowMs={seriesWindowMs()} />
-                            </td>
-                          </tr>
-                        </Show>
-                      </>
-                    )}
-                  </For>
-                </tbody>
-              </table>
-            </div>
-          </section>
-        </Show>
+        <MetricsGrid kind="systems" id={id()} range={range()} />
                 </div>
               )}
             </Show>

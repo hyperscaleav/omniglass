@@ -389,12 +389,12 @@ describe("the components-first body (#790)", () => {
 describe("the metrics are said once (#872)", () => {
   // The KPI tiles retired into Data: two renderings of the same values was
   // the audit's finding. Data stacks every declared metric with its latest.
-  it("draws no tile row; the data section carries each metric's latest value", () => {
+  it("draws no tile row; the metrics grid carries each metric's latest value", async () => {
     mount(undefined, health, [
       { metric_type_name: "room-temperature", label: "Room Temperature", data_type: "float", value: 23.5, is_sampled: true, from_contract: true, required: false },
     ]);
     expect(screen.queryByTestId("kpi-tiles")).toBeNull();
-    const data = screen.getByTestId("data-tab");
+    const data = await screen.findByTestId("metrics-grid");
     expect(within(data).getByText("Room Temperature")).toBeTruthy();
     expect(within(data).getByText("23.5")).toBeTruthy();
     expect(screen.getAllByText("23.5").length).toBe(1);
@@ -702,7 +702,7 @@ describe("the events and logs tabs (#793)", () => {
   });
 });
 
-describe("the data tab (#794, stacked per the #795 review)", () => {
+describe("the metrics grid on the system page (#794, #2424)", () => {
   const METRICS = [
     { metric_type_name: "room-temperature", label: "Room Temperature", data_type: "float", value: 23.5, is_sampled: true, from_contract: true, required: false },
     { metric_type_name: "occupancy-count", label: "Occupancy Count", data_type: "int", value: 0, is_sampled: false, from_contract: true, required: false },
@@ -718,25 +718,15 @@ describe("the data tab (#794, stacked per the #795 review)", () => {
     qc.setQueryData([...metricBucketsKey("systems", uuidFor("szp-sys"), "occupancy-count", 24, 300)], { coveredFrom: null, buckets: [] });
   };
 
-  it("stacks every declared metric as a table row: label, sparkline, the latest value; no picker to hunt through", async () => {
+  it("charts every declared metric as a card over the page range: label, the latest value, a default marked (#2424)", async () => {
     const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=data`, health, METRICS);
     seedSeries(r.qc);
-    const tab = screen.getByTestId("data-tab");
-    const temp = within(tab).getByTestId("metric-row-room-temperature");
-    expect(await within(temp).findByTestId("sparkline")).toBeTruthy();
-    expect(within(temp).getByText("23.5")).toBeTruthy();
-    const occ = within(tab).getByTestId("metric-row-occupancy-count");
+    const grid = await screen.findByTestId("metrics-grid");
+    const temp = within(grid).getByTestId("metric-card-room-temperature");
+    expect(within(temp).getByText("Room Temperature")).toBeTruthy();
+    expect(within(temp).getByTestId("metric-current").textContent).toBe("23.5");
+    const occ = within(grid).getByTestId("metric-card-occupancy-count");
     expect(within(occ).getByText(/contract default/)).toBeTruthy();
-    expect(within(tab).queryByTestId("timeseries-chart")).toBeNull();
-  });
-
-  it("a row expands to the full chart and collapses back", async () => {
-    const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=data`, health, METRICS);
-    seedSeries(r.qc);
-    fireEvent.click(screen.getByTestId("metric-row-room-temperature"));
-    expect(await screen.findByTestId("timeseries-chart")).toBeTruthy();
-    fireEvent.click(screen.getByTestId("metric-row-room-temperature"));
-    expect(screen.queryByTestId("timeseries-chart")).toBeNull();
   });
 
   // The page's one range (#2304): the picker on the tab rail writes the
@@ -772,7 +762,7 @@ describe("the data tab (#794, stacked per the #795 review)", () => {
         );
       }
       expect(screen.getByTestId("time-range-trigger").textContent).toContain("Last 7 days");
-      expect(screen.getByTestId("data-tab").textContent).toContain("Last 7d");
+      expect(screen.getByTestId("metrics-grid").textContent).toContain("Last 7 days");
     });
 
     it("a deep link's range is the one read, with no click", async () => {
@@ -830,10 +820,10 @@ describe("the data tab (#794, stacked per the #795 review)", () => {
     });
   });
 
-  it("draws no data section with nothing declared, and no Data tab ever", () => {
+  it("draws no metrics grid with nothing declared, and no Data tab ever", () => {
     mount(`/web/systems/${uuidFor("szp-sys")}?tab=data`, health, []);
     expect(screen.queryByRole("tab", { name: "Data" })).toBeNull();
-    expect(screen.queryByTestId("data-tab")).toBeNull();
+    expect(screen.queryByTestId("metrics-grid")).toBeNull();
   });
 });
 
@@ -1231,8 +1221,9 @@ describe("the system view refreshes (#940)", () => {
     // No member is read on its own; the members' alarms are one read.
     expect(gets.filter((g) => g.startsWith("/api/v1/components/"))).toEqual([]);
     expect(gets.filter((g) => g.endsWith("/alarms"))).toEqual([`/api/v1/systems/${uuidFor("szp-sys")}/alarms`]);
-    // The whole poll: health, slots, members, metrics, alarms, events, logs.
-    expect([...gets].sort()).toEqual(["/alarms", "/events", "/health", "/logs", "/members", "/metrics", "/slots"].map((p) => `/api/v1/systems/${uuidFor("szp-sys")}${p}`).sort());
+    // The whole poll: health, slots, members, alarms, events, logs. The
+    // metrics read belongs to Overview's metrics grid (#2424).
+    expect([...gets].sort()).toEqual(["/alarms", "/events", "/health", "/logs", "/members", "/slots"].map((p) => `/api/v1/systems/${uuidFor("szp-sys")}${p}`).sort());
   });
 
   it("holds the poll while the tab is hidden", async () => {
