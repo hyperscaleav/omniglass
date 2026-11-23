@@ -25,7 +25,8 @@ steps:
   - wait: { selector: 'tr:has-text("History demo input lost") >> [data-testid=alarm-duration]' }
     caption: Raised, when it cleared and how long it lasted, one row each. Sort by Duration to find the long ones.
     poster: true
-  - click: 'tr:has-text("History demo input lost")'
+    hold: 2500
+  - click: 'tr:has-text("History demo input lost") >> td >> nth=0'
     caption: Open the row for the same drawer the queue uses, with the alarm's history.
   - wait: { text: Lasted }
     caption: Its raise and its clear, with the time between them as Lasted.

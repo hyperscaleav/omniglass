@@ -288,12 +288,12 @@ var retiredIdentifiers = []BannedTerm{
 	// table, now `property`; hyphenated names like `power-state` cannot match
 	// because the backtick must sit immediately before the word), the
 	// state-plus-storage-noun compounds, and the old two-table pairing. A
-	// generated parameter table row (| `state` | string |, the alarm list's
-	// state filter, #2426) is the one backticked use that is not the table.
+	// generated parameter row in the reference pages is exempt in
+	// ScanVocabulary, not here (generatedParamRow).
 	{
 		// The compound arm refuses a leading hyphen ([^-\w]) rather than using \b,
 		// so "steady-state rows" and its solid-state cousins stay legal prose.
-		Pattern:     regexp.MustCompile("(?i)`state`(?:$|[^ ]| [^|])|(?:^|[^-\\w])state (?:tables?|series|samples?|rows?|sinks?|kinds?)\\b|\\bmetric`? ?/ ?`?state\\b"),
+		Pattern:     regexp.MustCompile("(?i)`state`|(?:^|[^-\\w])state (?:tables?|series|samples?|rows?|sinks?|kinds?)\\b|\\bmetric`? ?/ ?`?state\\b"),
 		Replacement: "property (the value lane): the sample tables are `metric` and `property`",
 		Origin:      "ADR-0079",
 	},
@@ -570,6 +570,18 @@ func walkDocs(fn func(rel string, content string) error) error {
 	return nil
 }
 
+// generatedParamRow is a generated reference page's parameter table row naming
+// the query parameter `state` (the alarm list's state filter, #2426). It is the
+// one backticked `state` that is not the retired sample table, and it is
+// emitted from the API, so it is allowed under reference/ only; prose and every
+// other page still fail on it.
+var generatedParamRow = regexp.MustCompile("^\\| `state` \\| ")
+
+// generatedParamRowAllowed reports whether line, on page rel, is that row.
+func generatedParamRowAllowed(rel, line string) bool {
+	return strings.HasPrefix(rel, "reference"+string(filepath.Separator)) && generatedParamRow.MatchString(line)
+}
+
 // ScanVocabulary returns every banned-term hit in the docs content, excluding
 // the allowlisted historical and generated files.
 func ScanVocabulary() ([]Finding, error) {
@@ -579,6 +591,9 @@ func ScanVocabulary() ([]Finding, error) {
 			return nil
 		}
 		for i, line := range strings.Split(content, "\n") {
+			if generatedParamRowAllowed(rel, line) {
+				continue
+			}
 			for _, text := range scanLine(line) {
 				findings = append(findings, Finding{File: rel, Line: i + 1, Text: text})
 			}
