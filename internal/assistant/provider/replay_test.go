@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -155,5 +156,82 @@ func TestParseReplayRefusesMalformedConversations(t *testing.T) {
 		if _, err := ParseReplay([]byte(doc)); err == nil {
 			t.Errorf("%s: parsed, want an error", name)
 		}
+	}
+}
+
+const prompted = `
+prompt: Tag the lobby display with its asset id
+turns:
+  - text: Tagged.
+conversations:
+  - prompt: Why is the lobby down?
+    turns:
+      - text: The lobby display lost power.
+  - match: "# Triage an alarm"
+    turns:
+      - text: Triaged.
+`
+
+// A recording that names what its turns answer is a script of its own: it
+// lists its prompts, plays a prompt however it is cased or punctuated, and
+// does not play at all for a message none of its conversations answer (#2443).
+func TestReplayAnswersOnlyItsRecordedPrompts(t *testing.T) {
+	t.Parallel()
+	r, err := ParseReplay([]byte(prompted))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := r.Positioned()
+	sc, ok := p.(Scripted)
+	if !ok {
+		t.Fatal("a positioned replay is not Scripted")
+	}
+	want := []string{"Tag the lobby display with its asset id", "Why is the lobby down?"}
+	if got := sc.Prompts(); !slices.Equal(got, want) {
+		t.Errorf("prompts = %q, want %q", got, want)
+	}
+	for msg, plays := range map[string]bool{
+		"Tag the lobby display with its asset id":      true,
+		"  tag the LOBBY display   with its asset id.": true,
+		"why is the lobby down":                        true,
+		"# Triage an alarm\n\nThe component: lobby":    true,
+		"Which alarm is worst?":                        false,
+		"":                                             false,
+	} {
+		if got := sc.Plays(msg); got != plays {
+			t.Errorf("Plays(%q) = %v, want %v", msg, got, plays)
+		}
+	}
+	ctx := context.Background()
+	got, err := p.Next(ctx, []Message{{Role: RoleUser, Text: "WHY is the lobby down"}}, nil)
+	if err != nil || got.Text != "The lobby display lost power." {
+		t.Errorf("a recorded prompt plays %+v, %v, want its conversation", got, err)
+	}
+	if got, err = p.Next(ctx, []Message{{Role: RoleUser, Text: "tag the lobby display with its asset id"}}, nil); err != nil || got.Text != "Tagged." {
+		t.Errorf("the default prompt plays %+v, %v, want the default turns", got, err)
+	}
+	if _, err = p.Next(ctx, []Message{{Role: RoleUser, Text: "Which alarm is worst?"}}, nil); err == nil {
+		t.Error("an unanswered message played a run, want an error")
+	}
+}
+
+// A recording whose default turns name no prompt answers any message, as
+// before, and lists only the prompts its conversations name.
+func TestReplayWithoutADefaultPromptAnswersAnything(t *testing.T) {
+	t.Parallel()
+	r, err := ParseReplay([]byte(scripted))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sc := r.Positioned().(Scripted)
+	if len(sc.Prompts()) != 0 || !sc.Plays("what is down") {
+		t.Errorf("prompts %q, plays %v, want none and any message played", sc.Prompts(), sc.Plays("what is down"))
+	}
+}
+
+func TestParseReplayRefusesAConversationWithNeitherMatchNorPrompt(t *testing.T) {
+	t.Parallel()
+	if _, err := ParseReplay([]byte("turns:\n  - text: hi\nconversations:\n  - turns:\n      - text: x")); err == nil {
+		t.Error("parsed, want an error")
 	}
 }

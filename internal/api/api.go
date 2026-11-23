@@ -510,6 +510,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 		viewLog = slog.Default()
 	}
 	registerViewRoutes(api, a, gw, viewLog)
+	registerSearchRoutes(api, a, gw, viewLog)
 	registerViewRunRoutes(api, a, gw, viewLog, o.viewWatch)
 	registerPlatformSimulationView(api, a, gw, o.ring, viewLog)
 	registerOutpostRoutes(api, a, gw, o.natsURL, o.simHub)

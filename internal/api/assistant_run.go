@@ -104,6 +104,7 @@ func registerAssistantRunRoute(api huma.API, a *authenticator, gw storage.Gatewa
 			"Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. " +
 			"forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. " +
 			"The run talks to the model the assistant settings configure, read as it starts; with none, the server's recording, if it has one. " +
+			"A recording answers only the prompts it was recorded for: any other question is a 422 (type urn:omniglass:omnibot-replay-unmatched) that touches nothing; the list route names the prompts. " +
 			"A server with no model, or a configured model whose key no longer resolves, is a 503. Gated by assistant:use.",
 	}, "assistant", "use"), func(ctx context.Context, in *runAssistantConversationInput) (*huma.StreamResponse, error) {
 		u, ok := userFrom(ctx)
@@ -130,6 +131,12 @@ func registerAssistantRunRoute(api huma.API, a *authenticator, gw storage.Gatewa
 		}
 		if len(in.Body.Resume) == 0 && prompt == "" {
 			return nil, huma.Error422UnprocessableEntity("a run needs a user message or a resume")
+		}
+		// A recording answers only what it was recorded for: any other
+		// question is refused here, before the conversation is claimed or
+		// touched, rather than played an unrelated run (#2443).
+		if sc, ok := model.(provider.Scripted); ok && len(in.Body.Resume) == 0 && !sc.Plays(prompt) {
+			return nil, replayUnmatched()
 		}
 
 		tok, hash, prefix, err := auth.NewBearerToken()
@@ -260,6 +267,42 @@ func runProvider(ctx context.Context, gw storage.Gateway, o options) (provider.P
 	}
 	return &provider.OpenAI{BaseURL: cfg.BaseURL, Model: cfg.Model, Key: cfg.Key, System: provider.DefaultSystemPrompt,
 		Client: egress.New(pol, eo)}, nil
+}
+
+// replayUnmatchedType names the refusal of a question the server's recording
+// has no script for, so a client tells it from any other 422.
+const replayUnmatchedType = "urn:omniglass:omnibot-replay-unmatched"
+
+func replayUnmatched() error {
+	err := huma.Error422UnprocessableEntity("This lab plays a recording; connect a model to ask your own question")
+	var em *huma.ErrorModel
+	if errors.As(err, &em) {
+		em.Type = replayUnmatchedType
+		em.Title = "Unrecorded question"
+	}
+	return err
+}
+
+// omnibotFacts is what omnibot answers from, read as a client asks: a
+// configured model is live whatever its key's state, else a server's
+// recording is a replay of the prompts it answers, else omnibot has no model.
+// Nothing of the configuration is told.
+func omnibotFacts(ctx context.Context, gw storage.Gateway, o options) (assistantOmnibotFacts, error) {
+	facts := assistantOmnibotFacts{Mode: "none", Prompts: []string{}}
+	cfg, err := gw.OmnibotModel(ctx)
+	if err != nil && !errors.Is(err, storage.ErrModelKeyInvalid) {
+		return facts, huma.Error500InternalServerError("read omnibot's model")
+	}
+	switch {
+	case err != nil || cfg != nil:
+		facts.Mode = "live"
+	case o.omnibotModel != nil:
+		facts.Mode = "replay"
+		if sc, ok := o.omnibotModel.(provider.Scripted); ok {
+			facts.Prompts = append(facts.Prompts, sc.Prompts()...)
+		}
+	}
+	return facts, nil
 }
 
 // runHistory is the stored transcript as the loop carries it on.

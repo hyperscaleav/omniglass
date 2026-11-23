@@ -4,7 +4,7 @@ description: "Point Claude Code, or any MCP client, at omniglass: the MCP server
 screenshots:
   - id: omnibot-panel
     path: /web/variables
-    alt: "The omnibot panel open over the console before the first prompt: what omnibot may do, how the agent policy decides each write, and the composer with Add a credential."
+    alt: "The omnibot panel open over the console before the first prompt: the Recorded demo note, one line of what omnibot does, the questions the recording answers as chips, the page it will read, and the composer with Add a credential."
     steps:
       - { action: click, selector: 'button[aria-label="Ask omnibot"]' }
       - { action: wait, selector: '[data-testid="omnibot-empty"]' }
@@ -248,9 +248,20 @@ refused. The server runs omnibot only with a model: the one [configured](#pointi
 else the recording `OMNIGLASS_OMNIBOT_REPLAY` names, and with neither a run is a 503. The lab's
 server plays one that tags the meeting 405 video bar, so the commands above run there as written.
 
-A recording for the server can hold `conversations` beside its turns, each a `match` and turns of its
-own. A run plays the first conversation whose match its message contains, else the top-level turns,
-and counts its turns from that message, so each prompt in a conversation starts a script of its own.
+A recording for the server can hold `conversations` beside its turns, each a `match` (text its message
+must contain) or a `prompt` (the question it answers) and turns of its own. A run plays the first
+conversation whose match its message contains, else the top-level turns, and counts its turns from that
+message, so each prompt in a conversation starts a script of its own.
+
+A recording that names a top-level `prompt` answers only the prompts it names (#2443): its top-level
+turns answer that prompt, each conversation with a `prompt` answers its own, and a conversation with
+only a `match` (the skill runs) answers what it matches. A prompt matches however it is cased or
+punctuated. Any other message is a 422 of type `urn:omniglass:omnibot-replay-unmatched`, "This lab
+plays a recording; connect a model to ask your own question", before the conversation is claimed or
+touched, so a recording never plays an unrelated run. `GET /assistant/conversations` says which
+applies: its `omnibot` object has a `mode` (`live`, `replay` or `none`) and, for a replay, the
+`prompts`, and nothing of a configured model. A recording with no top-level `prompt` plays its turns
+for any message, as before.
 The lab's recording triages the video bar's alarm for a [triage-alarm](#skills) skill run, matching
 the skill's heading:
 
@@ -371,6 +382,14 @@ which. A destructive call says it cannot be undone. A run that reaches its step 
 asking again carries on from there; one the server refuses (an agent or impersonation session cannot
 run omnibot) or that fails names the reason. A run whose connection closes before it finished says
 that it ended early, rather than looking busy for good; ask again to carry on.
+
+**A lab without a live model says so.** The lab plays a recording, so the panel shows a **Recorded
+demo** note, and the questions the recording answers as chips: choosing one plays it to its answer. A
+question of your own gets the server's reply, "This lab plays a recording; connect a model to ask your
+own question", with the chips again, and no run. The recording's write still waits on a confirm card,
+marked as part of the recording; Confirm runs it for real. With a model
+[configured](#pointing-omnibot-at-a-model), none of this appears and any question is asked (#2443).
+The empty panel is a line on what omnibot does, those chips, and the page it will read.
 
 **Omnibot reads the page you are on.** Every prompt carries the page as context, shown as a
 **Looking at** chip above the composer: its route and filters, and a system, location or component

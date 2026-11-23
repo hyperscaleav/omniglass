@@ -38,7 +38,7 @@ func TestLocationScopeCRUD(t *testing.T) {
 
 	// Build: hq (campus root) > hq-b1 (building) > hq-r1 (room); plus lab (root).
 	hq := mustCreate(t, gw, storage.LocationSpec{Name: "hq", LocationType: "campus"}, all)
-	mustCreate(t, gw, storage.LocationSpec{Name: "hq-b1", LocationType: "building", ParentName: strptr("hq")}, all)
+	hqB1 := mustCreate(t, gw, storage.LocationSpec{Name: "hq-b1", LocationType: "building", ParentName: strptr("hq")}, all)
 	mustCreate(t, gw, storage.LocationSpec{Name: "hq-r1", LocationType: "room", ParentName: strptr("hq-b1")}, all)
 	mustCreate(t, gw, storage.LocationSpec{Name: "lab", LocationType: "campus"}, all)
 
@@ -95,24 +95,37 @@ func TestLocationScopeCRUD(t *testing.T) {
 		t.Errorf("delete leaf hq-r1 = %v, want ok", err)
 	}
 
-	// Create under a parent outside the create scope is forbidden.
-	_, err = gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "lab-r1", LocationType: "room", ParentName: strptr("lab")}, readHQ)
+	// A create's parent is resolved under read before create (#1343, revising
+	// ruling 2 of #627 for the create path). A parent the caller cannot read
+	// answers exactly what a parent that exists nowhere answers, so a
+	// location:create holder cannot probe location names outside their read.
+	_, err = gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "lab-r1", LocationType: "room", ParentName: strptr("lab")}, readHQ, readHQ)
+	if !errors.Is(err, storage.ErrParentNotFound) {
+		t.Errorf("create under an unreadable parent = %v, want ErrParentNotFound", err)
+	}
+	_, err = gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "x-r1", LocationType: "room", ParentName: strptr("nowhere")}, readHQ, readHQ)
+	if !errors.Is(err, storage.ErrParentNotFound) {
+		t.Errorf("create under a nonexistent parent = %v, want ErrParentNotFound", err)
+	}
+	// A parent the caller can read but not create under is the truthful 403.
+	createB1 := scope.Set{IDs: []string{hqB1.ID}}
+	_, err = gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq-b2", LocationType: "building", ParentName: strptr("hq")}, readHQ, createB1)
 	if !errors.Is(err, storage.ErrLocationForbidden) {
-		t.Errorf("create under out-of-scope parent = %v, want ErrLocationForbidden", err)
+		t.Errorf("create under a readable, uncreatable parent = %v, want ErrLocationForbidden", err)
 	}
 	// A non-all caller cannot create a root.
-	_, err = gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "root2", LocationType: "campus"}, readHQ)
+	_, err = gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "root2", LocationType: "campus"}, all, readHQ)
 	if !errors.Is(err, storage.ErrLocationForbidden) {
 		t.Errorf("create root without all = %v, want ErrLocationForbidden", err)
 	}
 	// An unknown location_type is rejected by the FK.
-	_, err = gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "weird", LocationType: "galaxy"}, all)
+	_, err = gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "weird", LocationType: "galaxy"}, all, all)
 	if !errors.Is(err, storage.ErrUnknownType) {
 		t.Errorf("create unknown type = %v, want ErrUnknownType", err)
 	}
 	// A duplicate root name clashes (location_root_name_key): hq is already a
 	// root, and this create names no parent either.
-	_, err = gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "campus"}, all)
+	_, err = gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "campus"}, all, all)
 	if !errors.Is(err, storage.ErrLocationExistsAtRoot) {
 		t.Errorf("create dup name = %v, want ErrLocationExistsAtRoot", err)
 	}
@@ -123,7 +136,7 @@ func TestLocationScopeCRUD(t *testing.T) {
 
 func mustCreate(t *testing.T, gw storage.Gateway, spec storage.LocationSpec, sc scope.Set) *storage.Location {
 	t.Helper()
-	l, err := gw.CreateLocation(context.Background(), "", spec, sc)
+	l, err := gw.CreateLocation(context.Background(), "", spec, sc, sc)
 	if err != nil {
 		t.Fatalf("create %s: %v", spec.Name, err)
 	}

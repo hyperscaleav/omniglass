@@ -138,17 +138,14 @@ describe("the one form in a blade is the glance (#872)", () => {
   // workspace's Configure tab; the blade keeps what an operator who landed
   // from a row needs. A system's or component's location is the blade's own
   // location card, so the form does not say it a second time.
-  it("renders identity, classification and tags, and none of the configuration panels", async () => {
+  // A blade shows what the page shows (#2423): the form is the same in
+  // every host, panels and placement included.
+  it("renders the same sections in a blade as on a page, the configuration panels included", async () => {
     mountHost("system", uuidFor("ef-sys"), "blade");
     const form = await screen.findByTestId("entity-form");
-    const eyebrows = within(form).getAllByText(/^(Identity|Classification|Placement|Tags|Slots|Properties)$/).map((e) => e.textContent);
-    expect(eyebrows).toEqual(["Identity", "Classification", "Tags"]);
-  });
-
-  it("keeps a location's parent in the blade, where it is the location's own placement to move", async () => {
-    mountHost("location", uuidFor("ef-room"), "blade");
-    const form = await screen.findByTestId("entity-form");
-    expect(within(form).getByText("Parent")).toBeTruthy();
+    const eyebrows = within(form).getAllByText(/^(Identity|Classification|Placement|Tags)$/).map((e) => e.textContent);
+    expect(eyebrows).toEqual(["Identity", "Classification", "Placement", "Tags"]);
+    expect(within(form).getByText("Slots")).toBeTruthy();
   });
 
   it("keeps the configuration panels on the page host", async () => {
