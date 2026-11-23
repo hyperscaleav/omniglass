@@ -32,6 +32,7 @@ import { entityLabel } from "../lib/entities";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
+import { confirmDelete } from "../lib/confirm";
 
 // The endpoint blades, salvaged from the retired standalone page and folded
 // onto the component detail's shared blade stack (an endpoint belongs to its
@@ -157,7 +158,7 @@ function EndpointBladeBody(props: { id: string }): JSX.Element {
   async function removeEndpoint() {
     const iface = i();
     if (!iface) return;
-    if (!confirm(`Delete endpoint "${entityLabel(iface)}"?`)) return;
+    if (!(await confirmDelete({ kind: "endpoint", name: entityLabel(iface) }))) return;
     setErr(null);
     try {
       await deleteEndpoint(iface.id);

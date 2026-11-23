@@ -25,6 +25,7 @@ import { useMe, can } from "../lib/auth";
 import { catalogLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
+import { confirmDelete } from "../lib/confirm";
 
 // Tags: the governed vocabulary on the FlatList surface. A tag is a
 // tenant-wide, normalized label name; this page is the admin directory (mint,
@@ -139,7 +140,7 @@ function TagBladeBody(p: { name: string }): JSX.Element {
   async function removeTag() {
     const t = tag();
     if (!t) return;
-    if (!confirm(`Delete tag "${t.name}"? Its bindings across the fleet are removed too.`)) return;
+    if (!(await confirmDelete({ kind: "tag", name: t.name, consequence: "Its bindings across the fleet are removed too." }))) return;
     setErr(null);
     try {
       await deleteTag(t.name);

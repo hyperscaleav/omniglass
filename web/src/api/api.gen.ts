@@ -3447,6 +3447,66 @@ export type DatabaseSettings = {
   slow_query_ms: number;
 };
 
+/**
+ * The blocking row's own resource, so a client can link it and offer that kind's own remove.
+ */
+export type DeleteBlockerKind = typeof DeleteBlockerKind[keyof typeof DeleteBlockerKind];
+
+
+export const DeleteBlockerKind = {
+  component: 'component',
+  endpoint: 'endpoint',
+  system: 'system',
+  location: 'location',
+} as const;
+
+export type DeleteBlocker = {
+  /** The blocking row's uuid. */
+  id: string;
+  /** The blocking row's own resource, so a client can link it and offer that kind's own remove. */
+  kind: DeleteBlockerKind;
+  /** What an operator reads for the blocking row: its label, or its name when it has none. */
+  label: string;
+  /** The blocking row's name, its operator-facing address (an endpoint's is unique within its component). */
+  name: string;
+};
+
+export type ErrorDetail = {
+  /** Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
+  location?: string;
+  /** Error message text */
+  message?: string;
+  /** The value at the given location */
+  value?: unknown;
+};
+
+export type DeleteRefusal = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The rows in the way that the caller may read, each to be removed or moved before the delete can succeed.
+     * @nullable
+     */
+  blockers?: DeleteBlocker[] | null;
+  /** How many more rows are in the way that are not listed: outside the caller's read scope, or past the listing cap. */
+  blockers_hidden?: number;
+  /** A human-readable explanation specific to this occurrence of the problem. */
+  detail?: string;
+  /**
+     * Optional list of individual error details
+     * @nullable
+     */
+  errors?: ErrorDetail[] | null;
+  /** A URI reference that identifies the specific occurrence of the problem. */
+  instance?: string;
+  /** HTTP status code */
+  status?: number;
+  /** A short, human-readable summary of the problem type. This value should not change between occurrences of the error. */
+  title?: string;
+  /** A URI reference to human-readable documentation for the error. */
+  type?: string;
+};
+
 export type DownloadFileOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -3822,15 +3882,6 @@ export type EntityTagsOutputBody = {
   readonly $schema?: string;
   /** @nullable */
   tags: TagBindingBody[] | null;
-};
-
-export type ErrorDetail = {
-  /** Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
-  location?: string;
-  /** Error message text */
-  message?: string;
-  /** The value at the given location */
-  value?: unknown;
 };
 
 export type ErrorModel = {
@@ -12972,15 +13023,20 @@ export type deleteComponentResponse204 = {
   status: 204
 }
 
+export type deleteComponentResponse409 = {
+  data: DeleteRefusal
+  status: 409
+}
+
 export type deleteComponentResponseDefault = {
   data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
+  status: Exclude<HTTPStatusCodes, 204 | 409>
 }
 
 export type deleteComponentResponseSuccess = (deleteComponentResponse204) & {
   headers: Headers;
 };
-export type deleteComponentResponseError = (deleteComponentResponseDefault) & {
+export type deleteComponentResponseError = (deleteComponentResponse409 | deleteComponentResponseDefault) & {
   headers: Headers;
 };
 
@@ -12995,7 +13051,7 @@ export const getDeleteComponentUrl = (name: string,) => {
 }
 
 /**
- * Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
+ * Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
  * @summary Delete a component
  */
 export const deleteComponent = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteComponentResponse> => {
@@ -17524,15 +17580,20 @@ export type deleteLocationResponse204 = {
   status: 204
 }
 
+export type deleteLocationResponse409 = {
+  data: DeleteRefusal
+  status: 409
+}
+
 export type deleteLocationResponseDefault = {
   data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
+  status: Exclude<HTTPStatusCodes, 204 | 409>
 }
 
 export type deleteLocationResponseSuccess = (deleteLocationResponse204) & {
   headers: Headers;
 };
-export type deleteLocationResponseError = (deleteLocationResponseDefault) & {
+export type deleteLocationResponseError = (deleteLocationResponse409 | deleteLocationResponseDefault) & {
   headers: Headers;
 };
 
@@ -17547,7 +17608,7 @@ export const getDeleteLocationUrl = (name: string,) => {
 }
 
 /**
- * Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
+ * Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
  * @summary Delete a location
  */
 export const deleteLocation = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteLocationResponse> => {
@@ -22898,15 +22959,20 @@ export type deleteSystemResponse204 = {
   status: 204
 }
 
+export type deleteSystemResponse409 = {
+  data: DeleteRefusal
+  status: 409
+}
+
 export type deleteSystemResponseDefault = {
   data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
+  status: Exclude<HTTPStatusCodes, 204 | 409>
 }
 
 export type deleteSystemResponseSuccess = (deleteSystemResponse204) & {
   headers: Headers;
 };
-export type deleteSystemResponseError = (deleteSystemResponseDefault) & {
+export type deleteSystemResponseError = (deleteSystemResponse409 | deleteSystemResponseDefault) & {
   headers: Headers;
 };
 
@@ -22921,7 +22987,7 @@ export const getDeleteSystemUrl = (name: string,) => {
 }
 
 /**
- * Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
+ * Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
  * @summary Delete a system
  */
 export const deleteSystem = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteSystemResponse> => {
