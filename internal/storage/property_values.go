@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/key"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
 	"github.com/jackc/pgx/v5"
@@ -176,6 +177,9 @@ func (p *PG) setPropertyTx(ctx context.Context, tx pgx.Tx, actorID, ownerKind, o
 	// empty value, or a JSON null, would land a row that reads back unset.
 	if len(value) == 0 || string(value) == "null" {
 		return nil, fmt.Errorf("storage: set property value %s/%s: a declared value requires a value", ownerID, propertyName)
+	}
+	if err := checkDeclaredValue(ctx, tx, propertyName, value); err != nil {
+		return nil, err
 	}
 	// One scoped resolve, and its result IS the arc value: no second, scope-blind
 	// re-resolve of the same reference can follow it (ruling 2, #627), because
@@ -405,6 +409,41 @@ var ownerContracts = map[string]ownerContract{
 // joined type row; $2 binds writerclass.ReservedNames().
 func contractDefaultSQL(typeAlias string) string {
 	return `case when ` + typeAlias + `.name = any($2::text[]) then null else c.default_value end`
+}
+
+// ErrPropertyValueInvalid is a declared value its property type refuses: the
+// wrong data type, or a miss of the type's validation (a lifecycle date that is
+// not an ISO-8601 calendar date, #2366). A request error (422).
+var ErrPropertyValueInvalid = errors.New("storage: property value does not satisfy its property type")
+
+// checkDeclaredValue holds an operator's declared value to its property type's
+// data type and validation (key.ValidateValue, the validator every key obeys).
+// An unknown property passes here: the insert's foreign key reports it.
+func checkDeclaredValue(ctx context.Context, q querier, propertyName string, value json.RawMessage) error {
+	var dataType string
+	var validation []byte
+	err := q.QueryRow(ctx, `select data_type, validation from property_type_in_effect() property_type where name = $1`, propertyName).Scan(&dataType, &validation)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("storage: read property type %s: %w", propertyName, err)
+	}
+	if err := key.ValidateValue(dataType, value, validation); err != nil {
+		return fmt.Errorf("%w: %s: %v", ErrPropertyValueInvalid, propertyName, err)
+	}
+	return nil
+}
+
+// checkContractDefault holds a contract line's default (a product's, a
+// standard's or a location type's) to its property type, as checkDeclaredValue
+// holds a declared value: every owner under the contract reads the default as
+// its own effective value. A line with no default has nothing to check.
+func checkContractDefault(ctx context.Context, q querier, propertyName string, def json.RawMessage) error {
+	if len(def) == 0 || string(def) == "null" {
+		return nil
+	}
+	return checkDeclaredValue(ctx, q, propertyName, def)
 }
 
 // EffectiveProperties is the owner's properties read (#1297): one row per

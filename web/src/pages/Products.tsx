@@ -10,6 +10,9 @@ import KVStacked from "../components/KVStacked";
 import { createIdentity, entityLabel } from "../lib/entities";
 import { bindSelectValue } from "../lib/selectvalue";
 import { useFormActions } from "../lib/formactions";
+import { lifecycleRows } from "../lib/lifecycle";
+import { classifierProperties, classifierPropertiesKey } from "../lib/classifier_properties";
+import { classifierMetrics, classifierMetricsKey } from "../lib/classifier_metrics";
 import ProductContractEditor from "../components/ProductContractEditor";
 import ComponentTypeSelect from "../components/ComponentTypeSelect";
 import { Plus, resolveIcon } from "../components/icons";
@@ -235,6 +238,7 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
           <BladeField label="Driver" mono value={() => r().driver ?? ""}>
             <DriverSelect value={driverId()} onChange={setDriverId} />
           </BladeField>
+          <ProductLifecycle productId={r().name} />
           <ProductContractEditor productId={r().name} official={r().official} />
           <ProductContractEditor productId={r().name} official={r().official} lane="metric" />
         </div>
@@ -399,3 +403,29 @@ function IconOverrideField(p: { componentType: string; value: string; onChange: 
   );
 }
 
+
+// ProductLifecycle is the product's lifecycle group (#2366): the contract defaults
+// for the six lifecycle fields, formatted, which every component of the product
+// inherits unless it overrides the dates.
+function ProductLifecycle(props: { productId: string }): JSX.Element {
+  const propsQ = useQuery(() => ({ queryKey: classifierPropertiesKey("product", props.productId), queryFn: () => classifierProperties("product", props.productId) }));
+  const metricsQ = useQuery(() => ({ queryKey: classifierMetricsKey("product", props.productId), queryFn: () => classifierMetrics("product", props.productId) }));
+  const rows = createMemo(() => lifecycleRows(propsQ.data ?? [], metricsQ.data ?? []));
+  return (
+    <Show when={rows().length > 0}>
+      <div data-testid="product-lifecycle" class="rounded-box border border-base-300 p-3 text-sm">
+        <div class="mb-1 text-xs font-medium uppercase tracking-wide text-base-content/50">Lifecycle</div>
+        <dl class="grid grid-cols-[8rem_1fr] gap-x-3 gap-y-1">
+          <For each={rows()}>
+            {(row) => (
+              <>
+                <dt class="text-base-content/50">{row.label}</dt>
+                <dd class="font-mono text-xs" data-lifecycle={row.name}>{row.text}</dd>
+              </>
+            )}
+          </For>
+        </dl>
+      </div>
+    </Show>
+  );
+}
