@@ -1,4 +1,4 @@
-import { For, Show, createMemo } from "solid-js";
+import { For, Show, createMemo, onCleanup } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import { useNavigate } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
@@ -43,6 +43,8 @@ export default function LocationDetail(props: { id: string; host: DetailHost }) 
   const me = useMe();
   const blades = useBlades();
   const leave = createLeaveGuard();
+  // In a blade, closing or popping it asks the same guard a tab switch does.
+  if (props.host === "blade") onCleanup(blades.guard({ kind: "location", id: props.id }, leave));
 
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
   const types = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes }));

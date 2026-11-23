@@ -381,7 +381,7 @@ func TestStoredOrdinalsRecomputeToThemselves(t *testing.T) {
 	}
 
 	edge55, mic := storagetest.MintProduct(t, ctx, pg, "display").Name, storagetest.MintProduct(t, ctx, pg, "ceiling-mic").Name
-	if _, err := pg.CreateLocation(ctx, "", storage.LocationSpec{Name: "invariant-room", LocationType: "campus"}, all); err != nil {
+	if _, err := pg.CreateLocation(ctx, "", storage.LocationSpec{Name: "invariant-room", LocationType: "campus"}, all, all); err != nil {
 		t.Fatalf("create location: %v", err)
 	}
 	room := "invariant-room"

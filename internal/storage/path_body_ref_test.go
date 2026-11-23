@@ -84,7 +84,7 @@ func TestCreateComponentDottedMissingLocationMatchesBareNameForm(t *testing.T) {
 	ctx := context.Background()
 	all := scope.Set{All: true}
 
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "boi", LocationType: "campus"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "boi", LocationType: "campus"}, all, all); err != nil {
 		t.Fatalf("create boi: %v", err)
 	}
 
@@ -162,14 +162,14 @@ func TestCreateLocationDottedMissingParentMatchesBareNameForm(t *testing.T) {
 
 	_, bareErr := gw.CreateLocation(ctx, "", storage.LocationSpec{
 		Name: "l-bare-parent", LocationType: "room", ParentName: strptr("ghost-parent"),
-	}, all)
+	}, all, all)
 	if !errors.Is(bareErr, storage.ErrParentNotFound) {
 		t.Fatalf("bare-name missing location parent = %v, want ErrParentNotFound", bareErr)
 	}
 
 	_, dottedErr := gw.CreateLocation(ctx, "", storage.LocationSpec{
 		Name: "l-dotted-parent", LocationType: "room", ParentName: strptr("$sys.ghost-parent"),
-	}, all)
+	}, all, all)
 	if !errors.Is(dottedErr, storage.ErrParentNotFound) {
 		t.Fatalf("dotted missing location parent = %v, want ErrParentNotFound (same as bare-name form)", dottedErr)
 	}
@@ -185,7 +185,7 @@ func TestCreateOutpostDottedMissingLocationMatchesBareNameForm(t *testing.T) {
 	ctx := context.Background()
 	all := scope.Set{All: true}
 
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "boi", LocationType: "campus"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "boi", LocationType: "campus"}, all, all); err != nil {
 		t.Fatalf("create boi: %v", err)
 	}
 
@@ -214,7 +214,7 @@ func TestCreateVariableDottedMissingOwnerMatchesBareNameForm(t *testing.T) {
 	ctx := context.Background()
 	all := scope.Set{All: true}
 
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "boi", LocationType: "campus"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "boi", LocationType: "campus"}, all, all); err != nil {
 		t.Fatalf("create boi: %v", err)
 	}
 

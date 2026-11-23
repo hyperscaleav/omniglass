@@ -53,8 +53,8 @@ the average line; spark mode is 160 by 36 with no chrome. It is imported by exac
 |---|---|---|---|---|---|---|
 | V01 | `TimeseriesChart spark` in the server panel `Row` (`pages/PlatformHealth.tsx`) | `/platform` | metric | `metricBuckets("components", server, key, 1 h, 60 s)` via `panelSeriesRequest` (`lib/platformhealth.ts`, `lib/series.ts`) | poll 30 s, only while the server's disclosure is open and the key is reported | sparkline row |
 | V02 | `TimeseriesChart` full, the expanded panel row (`pages/PlatformHealth.tsx`) | `/platform` | metric | the same series query as V01 | poll 30 s, shares V01's query | metric chart |
-| V03 | `TimeseriesChart spark` in the data table (`components/SystemDetail.tsx`, `data-testid="data-tab"`) | `/systems/<id>`, its blade | metric | `metricBuckets("systems", id, metric, 24 h, 300 s, instance)` per KPI metric, over `systemMetrics` (`lib/series.ts`) | poll 30 s; the metric list polls 5 s | sparkline row |
-| V04 | `TimeseriesChart` full, the expanded data row (`components/SystemDetail.tsx`) | `/systems/<id>`, its blade | metric | the same series query as V03 | poll 30 s, shares V03's query | metric chart |
+| V03 | `TimeseriesChart spark` in the data table (`components/SystemDetail.tsx`, `data-testid="data-tab"`) | `/systems/<id>`, its blade | metric | per KPI metric over the page range (`useTimeRange`, `rangeStepSeconds`): `metricBuckets("systems", id, metric, hours, step, instance)` for a preset, `metricBucketsBetween` (`/views:run`) for an absolute range (`lib/series.ts`) | poll 30 s, no poll for an absolute range already past; the metric list polls 5 s | sparkline row |
+| V04 | `TimeseriesChart` full, the expanded data row (`components/SystemDetail.tsx`) | `/systems/<id>`, its blade | metric | the same series query as V03 | as V03, shares its query | metric chart |
 
 ## Metric cards and figures
 
@@ -132,6 +132,7 @@ component set; the surfaces below are where they are mounted.
 | V48 | `PipelineFlow`, the "where work is lost" hop flow with a lane tab group and a per-hop loss figure (`components/PipelineFlow.tsx`) | `/platform` | derived (counts of metric, property, event and log samples per hop) | `view.pipeline` from `platformView` | follows parent (poll 5 s) | new: pipeline flow |
 | V49 | `SystemMap`, the top-down room map with health-coloured markers (`components/SystemMap.tsx`, `lib/system_map.ts`) | `/systems/<id>` | derived | `systemMembers`, `layoutMarkers` | poll 5 s | new: floor map |
 | V50 | The alarm queue: severity-badged alarm rows with component, systems, location, raised-at and ack and snooze state (`pages/Alarms.tsx`) | `/alarms` | event | `fleetAlarms` (`lib/alarms.ts`), paged by `page_token` | poll 5 s (the leaf cadence) | new: alarm queue |
+| V51 | `DependenciesPanel`: upstream and downstream rows with a kind badge, a health badge and a holding mark (`components/DependenciesPanel.tsx`, `lib/dependencies.ts`) | `/components/<id>` | derived | `listDependencies` (`lib/dependencies.ts`), the fleet view's dot health, `getReachability` | poll 5 s | new: dependency list |
 
 ## Every page
 
@@ -149,7 +150,7 @@ what each page draws itself.
 | `CalcRules.tsx` | `/calc-rules` | V13 |
 | `CatalogOverview.tsx` | `/catalog` | V09 |
 | `CommandTypes.tsx` | `/command-types` | none checked: config chips only |
-| `ComponentLeaf.tsx` (the body is `components/ComponentDetail.tsx`, also the component blade) | `/components/<id>` (via `Components.tsx`) | V08, V15, V24, V26, V27, V32, V33, V36, V37, V40, V42, V47 |
+| `ComponentLeaf.tsx` (the body is `components/ComponentDetail.tsx`, also the component blade) | `/components/<id>` (via `Components.tsx`) | V08, V15, V24, V26, V27, V32, V33, V36, V37, V40, V42, V47, V51 |
 | `ComponentTypes.tsx` | `/component-types` | none checked: config chips only |
 | `Components.tsx` | `/components/<id>` | wrapper: mounts `ComponentLeaf`, or the create form for the create route (`components/create`, no leading slash) |
 | `Drivers.tsx` | `/drivers` | none checked: config chips only |
@@ -216,7 +217,7 @@ what each page draws itself.
 
 ## Widget types
 
-Deduplicated by widget, with the number of call sites (entries above; the 50 entries sum to 50). A `new:` row is a widget the
+Deduplicated by widget, with the number of call sites (entries above; the 51 entries sum to 51). A `new:` row is a widget the
 epic's vocabulary does not yet name; the count says how much of the console it would carry.
 
 | Widget | Call sites | Entries |
@@ -244,3 +245,4 @@ epic's vocabulary does not yet name; the count says how much of the console it w
 | new: pipeline flow | 1 | V48 |
 | new: floor map | 1 | V49 |
 | new: alarm queue | 1 | V50 |
+| new: dependency list | 1 | V51 |

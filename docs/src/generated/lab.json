@@ -66,9 +66,9 @@
   ],
   "walkthroughs": [
     {
-      "id": "break-a-device-in-one-click",
-      "title": "Break a device in one click",
-      "description": "Unplug a simulated panel from its row's Break menu, watch the fault chip and the reachability alarm it causes, then clear the fault from the chip.",
+      "id": "add-a-dependency",
+      "title": "Add and remove a dependency",
+      "description": "Read what a video bar depends on and what depends on it, try an edge that would close a cycle and read the server's refusal, then add a real upstream and remove it again.",
       "lab": [],
       "setup": []
     },
@@ -85,6 +85,13 @@
       "id": "derive-a-value-with-a-calc-rule",
       "title": "Derive a value with a calc rule",
       "description": "Author a calc rule and the metric it writes in one drawer, write the expression that takes each component's slowest TCP connect time, preview and save it, and find the derived value on a component, linked to its rule.",
+      "lab": [],
+      "setup": []
+    },
+    {
+      "id": "find-a-device-from-the-keyboard",
+      "title": "Find a device from the keyboard",
+      "description": "Open the command palette with Ctrl-K, type part of a name, read which location each match sits under, narrow it to one device and press Enter to open it.",
       "lab": [],
       "setup": []
     },
@@ -192,6 +199,13 @@
       "id": "pick-a-product-by-typing",
       "title": "Pick a product by typing",
       "description": "In the Add simulated component drawer, type part of a product or its profile, read the matches with the profile under each, and choose one from the keyboard.",
+      "lab": [],
+      "setup": []
+    },
+    {
+      "id": "pick-a-time-range",
+      "title": "Pick the time range a system page charts",
+      "description": "Open the Huddle Room, open the time range on its tab rail, pick the last 7 days, and read the data section redrawn over the week.",
       "lab": [],
       "setup": []
     },
