@@ -52,8 +52,17 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
   is no summary row above a table: the KPI chip rows retired (ADR-0137). Adding an entity of
   this class is a data layer + a config + a route (see the `add-inventory-view` skill). A list
   whose loaded page outgrows its first paint (the audit trail) sets the shell's `fill` and sits in
-  a box of definite height, so its rows scroll under sticky headers and its footer stays put; the
-  console scrolls the document, so `fill` with no sized box around it grows like any other list.
+  a box of definite height (`h-full` of the shell's main region, never a viewport height minus a
+  guessed header), so its rows scroll under sticky headers and its footer stays put; `fill` with no
+  sized box around it grows like any other list.
+- **The shell is one viewport high; strips and overlays have one rule.** `AppRoot` is `h-dvh`: the
+  lab strip and the impersonation strip (24 px, one line each, never scrolling away) sit on top and
+  the routed screen takes the rest (`min-h-0`), with `<main>` as the scroll region, so the document
+  never scrolls. The lab strip also shows on the sign-in page; the impersonation strip needs a
+  session. A page region fills what the shell gives it (`h-full`, `flex-1 min-h-0`), never
+  `100vh` minus a guess. Overlays (drawers, the command palette, omnibot) are `fixed` against the
+  viewport and cover the whole window, strips included, dimmed with the shell; the strips are never
+  raised above them.
 - **An open drawer has an address.** Opening a row on a list page (every catalog page, users,
   roles, secrets, variables, outposts, files, alarms) writes it to the URL as
   `?open=<row address>`, the same address the row's API route takes (a name or a uuid, ADR-0062).

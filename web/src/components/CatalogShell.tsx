@@ -20,10 +20,9 @@ import { OVERVIEW_PATH, entryActive, entryCount, entryHref, visibleGroups, type 
 // and secret types hold no entry at all though /secret-types still renders in
 // the pane.
 //
-// Scroll: the shell adds no scroll region of its own. The pane's page grows
-// naturally and the app shell's <main> keeps the document scroll, exactly as
-// when the page stood alone; the subrail sticks to the scrollport top with its
-// own overflow, like the app rail.
+// Scroll: the shell fills the height <main> gives it (h-full). The subrail keeps
+// its own overflow and the pane scrolls beside it, so the subrail never leaves
+// the screen and a page can fill the pane (h-full) without a guessed offset.
 const CatalogShell: ParentComponent = (props) => {
   const me = useMe();
   const groups = createMemo(() => visibleGroups((tokens) => can(me.data, ...tokens)));
@@ -40,14 +39,14 @@ const CatalogShell: ParentComponent = (props) => {
   };
 
   return (
-    <div class="flex flex-col gap-3 min-[1100px]:flex-row min-[1100px]:items-start min-[1100px]:gap-4">
+    <div class="flex h-full flex-col gap-3 min-[1100px]:flex-row min-[1100px]:items-start min-[1100px]:gap-4">
       <Button class="justify-between min-[1100px]:hidden" expanded={open()} controls="catalog-subrail" onClick={() => setOpen(!open())}>
         <span class="truncate">Catalog: {current()}</span>
         <ChevronDown size={14} />
       </Button>
       <nav
         id="catalog-subrail"
-        class="w-full flex-none overflow-y-auto min-[1100px]:sticky min-[1100px]:top-0 min-[1100px]:block min-[1100px]:max-h-[calc(100vh-3.5rem)] min-[1100px]:w-52.5 min-[1100px]:self-start"
+        class="w-full flex-none overflow-y-auto min-[1100px]:block min-[1100px]:max-h-full min-[1100px]:w-52.5 min-[1100px]:self-start"
         classList={{ hidden: !open() }}
         aria-label="Catalog sections"
       >
@@ -74,7 +73,7 @@ const CatalogShell: ParentComponent = (props) => {
         </ul>
       </nav>
 
-      <div class="min-w-0 flex-1">{props.children}</div>
+      <div class="h-full min-w-0 flex-1 overflow-y-auto">{props.children}</div>
     </div>
   );
 };
