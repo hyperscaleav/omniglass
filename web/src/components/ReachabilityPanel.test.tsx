@@ -498,7 +498,7 @@ describe("ReachabilityPanel pending reason", () => {
     });
     const notice = getByTestId("endpoint-pending-notice");
     expect(notice.textContent).toContain("edge-1");
-    expect(notice.querySelector("a")?.getAttribute("href")).toMatch(/\/outposts\?n=edge-1$/);
+    expect(notice.querySelector("a")?.getAttribute("href")).toMatch(/\/outposts\?open=edge-1$/);
   });
 
   it("shows no reason once the endpoint has a state", () => {
