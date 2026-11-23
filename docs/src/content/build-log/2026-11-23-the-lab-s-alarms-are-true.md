@@ -20,4 +20,6 @@ The lab's readiness, the lab-wide data check and the DSP floor treat an impaired
 purpose, and `make test-lab` gains a subtest that every open alarm has a rule, its event, a rule still
 firing and (for reachability) a component reading down, and one that lifting a fault clears its
 alarm. The degraded and storm scenarios keep their hand-raised alarm storm, now from
-`alarm_templates`. The docs capture waits for every rule streak to settle before shooting.
+`alarm_templates`. A lab's people (its owner `dev`, and `operator`) are seeded one subscription,
+Fleet alarms, raised and cleared, to the console inbox alone, so the seeded faults light the bell; a
+fleet seeded without the simulator (the docs' screenshots) subscribes no one. The docs capture waits for every rule streak to settle before shooting.

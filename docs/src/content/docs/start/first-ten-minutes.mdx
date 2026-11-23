@@ -138,7 +138,10 @@ changed host key and fix a refused probe each start from one; try finding them o
 Two devices are broken in the simulator itself, so the fleet's first alarms are true ones: DSP 1 in
 the auditorium is unplugged, and Display 1 in bay 1 answers slowly. A rule raised each alarm, the
 device's own page agrees with it, and repairing the device on the Simulation page clears it
-([two faults the lab starts with](/operator/simulation/#two-faults-the-lab-starts-with)).
+([two faults the lab starts with](/operator/simulation/#two-faults-the-lab-starts-with)). You and
+`operator` are subscribed to the fleet's alarms in the console inbox, so the bell in the top bar
+lights as they raise and your **Inbox** lists each raise and clear (edit or remove the subscription
+under **Profile, Subscriptions**).
 
 Breaking a component yourself works too, from its page or the CLI
 ([break it on purpose](/operator/simulation/#break-it-on-purpose)):
