@@ -20,6 +20,7 @@ import { SimFaultChipFor } from "./SimFaultChip";
 import ReachLadder from "./ReachLadder";
 import SessionPill from "./SessionPill";
 import SessionNotice from "./SessionNotice";
+import PollTest from "./PollTest";
 import InfoTip from "./InfoTip";
 import { ChevronRight } from "./icons";
 import { CalcRuleLink } from "./RuleLink";
@@ -549,6 +550,7 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
                                 onFix={iface().id && can(me.data, "endpoint", "read") ? () => blades.push({ kind: "endpoint", id: iface().id! }) : undefined}
                                 fixLabel="Open endpoint"
                               />
+                              <Show when={iface().id}>{(eid) => <PollTest endpoint={eid()} />}</Show>
                             </li>
                           );
                         }}

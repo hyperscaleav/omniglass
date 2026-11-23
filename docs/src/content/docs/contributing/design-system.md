@@ -73,7 +73,7 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
   where healthy wears a muted green beside the full trouble hues (ADR-0154).
 - **A detail view is one per system, its location as context.** Systems are the unit; locations are
   folders and metadata; components are pieces of systems (#872). A system's view
-  (`pages/SystemZoom.tsx`) is a `LocationCard` (the location's type, tags and its own panel, never its
+  (`components/SystemDetail.tsx`, mounted by `pages/SystemZoom.tsx` and by the system blade) is a `LocationCard` (the location's type, tags and its own panel, never its
   name when the view is already titled by it) above the subject card (an eyebrow, the health, the
   facts said once) with its `TabRail` inside. A location holding exactly one system lands on it
   (`lib/detail.ts` `landingFor`), and its location configures in a second `ConfigureFace` on the
