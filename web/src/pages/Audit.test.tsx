@@ -81,7 +81,8 @@ describe("Audit page", () => {
     // The document scrolls, not the shell, so the list only fills a box with a
     // definite height: without one it grows with its rows and the footer moves.
     const shell = table.closest(".og-stack")!;
-    expect(shell.parentElement!.className).toMatch(/\bh-\[calc\(100dvh/);
+    expect(shell.parentElement!.className).toMatch(/\bh-full\b/);
+    expect(shell.parentElement!.className).not.toMatch(/vh/);
   });
 
   it("renders events with actor, verb, and resource", async () => {

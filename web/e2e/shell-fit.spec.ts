@@ -77,4 +77,13 @@ test.describe("lab banner and the shell fit the viewport", () => {
     expect(b!.height).toBeLessThanOrEqual(28);
     expect(await page.evaluate(() => document.documentElement.scrollHeight === window.innerHeight)).toBe(true);
   });
+
+  test("a stale impersonation flag on the sign-in page shows the lab strip only", async ({ page }) => {
+    await page.setViewportSize({ width: 1320, height: 860 });
+    await stubLab(page);
+    await page.addInitScript(() => localStorage.setItem("og-impersonating", JSON.stringify({ target: "someone", mode: "view_as" })));
+    await page.goto("/web/login");
+    await expect(page.getByTestId("lab-banner")).toBeVisible();
+    await expect(page.getByTestId("impersonation-banner")).toHaveCount(0);
+  });
 });

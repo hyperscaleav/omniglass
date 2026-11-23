@@ -1,7 +1,8 @@
-import { type ParentComponent } from "solid-js";
+import { type ParentComponent, Show } from "solid-js";
 import LabBanner from "./LabBanner";
 import ImpersonationBanner from "./ImpersonationBanner";
 import { useAuthStatus } from "../lib/authStatus";
+import { useMe } from "../lib/auth";
 
 // AppRoot is the router's root layout: the one place the banner strips render
 // (the lab strip #2275, the impersonation strip), above everything a route
@@ -17,10 +18,15 @@ import { useAuthStatus } from "../lib/authStatus";
 // drawer must start below.
 const AppRoot: ParentComponent = (props) => {
   const authStatus = useAuthStatus();
+  // The impersonation strip needs a session: with nobody signed in there is no
+  // one being impersonated, and a stale flag must not show a false strip.
+  const me = useMe();
   return (
     <div class="flex h-dvh flex-col" data-app-root>
       <LabBanner lab={authStatus.data?.lab} />
-      <ImpersonationBanner />
+      <Show when={me.data}>
+        <ImpersonationBanner />
+      </Show>
       <div class="flex min-h-0 min-w-0 flex-1 flex-col">{props.children}</div>
     </div>
   );

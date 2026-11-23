@@ -18,18 +18,17 @@ import { OVERVIEW_PATH, entryActive, entryCount, entryHref, visibleGroups, type 
 // and secret types hold no entry at all though /secret-types still renders in
 // the pane.
 //
-// Scroll: the shell adds no scroll region of its own. The pane's page grows
-// naturally and the app shell's <main> keeps the document scroll, exactly as
-// when the page stood alone; the subrail sticks to the scrollport top with its
-// own overflow, like the app rail.
+// Scroll: the shell fills the height <main> gives it (h-full). The subrail keeps
+// its own overflow and the pane scrolls beside it, so the subrail never leaves
+// the screen and a page can fill the pane (h-full) without a guessed offset.
 const CatalogShell: ParentComponent = (props) => {
   const me = useMe();
   const groups = createMemo(() => visibleGroups((tokens) => can(me.data, ...tokens)));
 
   return (
-    <div class="flex items-start gap-4">
+    <div class="flex h-full items-start gap-4">
       <nav
-        class="sticky top-0 max-h-[calc(100dvh-6rem)] w-52.5 flex-none self-start overflow-y-auto"
+        class="max-h-full w-52.5 flex-none self-start overflow-y-auto"
         aria-label="Catalog sections"
       >
         <ul class="menu w-full flex-nowrap gap-0.5 p-0 [&_li>*]:rounded-field">
@@ -55,7 +54,7 @@ const CatalogShell: ParentComponent = (props) => {
         </ul>
       </nav>
 
-      <div class="min-w-0 flex-1">{props.children}</div>
+      <div class="h-full min-w-0 flex-1 overflow-y-auto">{props.children}</div>
     </div>
   );
 };
