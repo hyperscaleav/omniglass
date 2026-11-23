@@ -115,6 +115,11 @@ func (p *PG) AddMember(ctx context.Context, actorID, systemName, componentName s
 	if err := writeAuditRes(ctx, tx, actorID, "update", "system_member", systemID, before, after); err != nil {
 		return err
 	}
+	// A member outside a slot moves its system's verdict (ADR-2459), so a bind
+	// is a health write: an alarmed component joining degrades the system.
+	if err := p.recomputeChain(ctx, tx, nil, []ownerRef{{ID: systemID, Name: systemName}}, nil); err != nil {
+		return err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("storage: commit add member: %w", err)
 	}
@@ -232,6 +237,10 @@ func (p *PG) RemoveMember(ctx context.Context, actorID, systemName, componentNam
 		return err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "delete", "system_member", systemID, before, nil); err != nil {
+		return err
+	}
+	// The unbound member no longer counts against the system (ADR-2459).
+	if err := p.recomputeChain(ctx, tx, nil, []ownerRef{{ID: systemID, Name: systemName}}, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {

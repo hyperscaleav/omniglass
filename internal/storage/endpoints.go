@@ -496,10 +496,26 @@ func (p *PG) CreateEndpoint(ctx context.Context, actorID string, spec EndpointSp
 	if err != nil {
 		return nil, err
 	}
+	if err := p.recomputeAttached(ctx, tx, it.ComponentID); err != nil {
+		return nil, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("storage: commit create endpoint: %w", err)
 	}
 	return it, nil
+}
+
+// recomputeAttached recomputes the health chain of the component an endpoint
+// was just attached to or removed from: whether a component is still to attach
+// is an input to every slot it fills (ADR-2459), so the first endpoint on it, or
+// the last one off it, can move its systems. A composite write that creates
+// endpoints inside its own transaction (createEndpointTx) recomputes once at its
+// own end instead. An endpoint on no component moves nothing.
+func (p *PG) recomputeAttached(ctx context.Context, tx pgx.Tx, componentID *string) error {
+	if componentID == nil {
+		return nil
+	}
+	return p.recomputeChain(ctx, tx, []ownerRef{{ID: *componentID}}, nil, nil)
 }
 
 // createEndpointTx is CreateEndpoint inside a transaction the caller owns, so a composite write (adding
@@ -1176,6 +1192,9 @@ func (p *PG) DeleteEndpoint(ctx context.Context, actorID, ref string, read, acti
 	}
 	if _, err := tx.Exec(ctx, `delete from endpoint where id = $1`, before.ID); err != nil {
 		return mapEndpointWriteErr(err)
+	}
+	if err := p.recomputeAttached(ctx, tx, before.ComponentID); err != nil {
+		return err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "delete", "endpoint", before.ID, before, nil); err != nil {
 		return err

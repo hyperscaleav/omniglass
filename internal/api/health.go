@@ -103,6 +103,7 @@ type healthSlotBody struct {
 	AssignedTo []string          `json:"assigned_to"`
 	Down       []string          `json:"down" doc:"The assigned components whose own health is outage; empty when the slot is merely short-staffed or only degraded"`
 	Alarms     []healthAlarmBody `json:"alarms" doc:"The active alarms on those down components"`
+	ToAttach   []string          `json:"to_attach" doc:"The assigned components still to attach: their product is collected through a driver and they have no endpoint yet. They occupy the slot, but a slot short of attached occupants reads incomplete"`
 	// Choice, Alternate and Active are the #626 grouping: a slot can belong
 	// to an exclusive-or group instead of contributing unconditionally.
 	// Choice and Alternate are empty for an unconditional slot (it always
@@ -116,6 +117,19 @@ type healthSlotBody struct {
 	Choice    string `json:"choice,omitempty" doc:"The choice this slot belongs to; absent when the slot is unconditional"`
 	Alternate string `json:"alternate,omitempty" doc:"The alternate within choice this slot belongs to; absent when the slot is unconditional"`
 	Active    bool   `json:"active" doc:"True for an unconditional slot, or a slot whose alternate is the one currently answering its choice. False means this slot's own impaired/short/spare figures did not contribute to the system's health"`
+}
+
+// healthMemberBody is one member of a system on its health report (#2459): every
+// member, slotted or not, with its open alarms and whether it fills a slot, so
+// the console lists every alarm in the system without working out which members
+// a slot covers.
+type healthMemberBody struct {
+	Name        string            `json:"name"`
+	ID          string            `json:"id" doc:"The component's uuid"`
+	Health      string            `json:"health" doc:"The component's own health: healthy, degraded or outage from its open alarms, or unknown when nothing has ever observed it"`
+	OutsideSlot bool              `json:"outside_slot" doc:"True when the member fills no slot in this system. An open alarm on such a member makes the system degraded, never outage: only a slot says what losing a component costs (ADR-2459)"`
+	ToAttach    bool              `json:"to_attach" doc:"True when the member's product is collected through a driver and it has no endpoint yet"`
+	Alarms      []healthAlarmBody `json:"alarms" doc:"The member's open alarms, newest first"`
 }
 
 type healthSystemBody struct {
@@ -133,7 +147,9 @@ type fleetHealthOutput struct {
 		OwnerKind   string                 `json:"owner_kind"`
 		Owner       string                 `json:"owner"`
 		Health      string                 `json:"health" doc:"healthy, incomplete, degraded, or outage: the rollup of the slots or systems served beside it. incomplete is a commissioning gap, a slot short because the hardware was never installed rather than because installed hardware is failing, and it ranks between healthy and degraded"`
+		Reason      string                 `json:"reason,omitempty" doc:"A system's health in words: every contributor that is not healthy, worst first, naming the slot or the members (for example: 1 member outside a slot has an open alarm (amp-1)). Absent for a location"`
 		Slots       []healthSlotBody       `json:"slots" doc:"The contributing slots; empty for a location"`
+		Members     []healthMemberBody     `json:"members" doc:"Every member of a system with its own health, its open alarms, and whether it fills a slot; empty for a location"`
 		Systems     []healthSystemBody     `json:"systems" doc:"The systems beneath a location with their health; empty for a system"`
 		Transitions []healthTransitionBody `json:"transitions" doc:"The recorded edges over the window, oldest first: one entry per change, never a sample"`
 	}
@@ -147,6 +163,14 @@ func toHealthOutput(rep *storage.HealthReport) *fleetHealthOutput {
 	out.Body.Slots = make([]healthSlotBody, 0, len(rep.Slots))
 	for i := range rep.Slots {
 		out.Body.Slots = append(out.Body.Slots, toHealthSlotBody(&rep.Slots[i]))
+	}
+	out.Body.Reason = rep.Reason
+	out.Body.Members = make([]healthMemberBody, 0, len(rep.Members))
+	for _, m := range rep.Members {
+		out.Body.Members = append(out.Body.Members, healthMemberBody{
+			Name: m.Name, ID: m.ID, Health: m.Health, OutsideSlot: m.OutsideSlot, ToAttach: m.ToAttach,
+			Alarms: toHealthAlarmBodies(m.Alarms),
+		})
 	}
 	out.Body.Systems = make([]healthSystemBody, 0, len(rep.Systems))
 	for _, s := range rep.Systems {
@@ -171,14 +195,21 @@ func toHealthSlotBody(r *storage.HealthSlot) healthSlotBody {
 		Impaired:   r.Impaired,
 		AssignedTo: nonNil(r.AssignedTo),
 		Down:       nonNil(r.Down),
-		Alarms:     make([]healthAlarmBody, 0, len(r.Alarms)),
+		Alarms:     toHealthAlarmBodies(r.Alarms),
+		ToAttach:   nonNil(r.ToAttach),
 		Choice:     r.Choice,
 		Alternate:  r.Alternate,
 		Active:     r.Active,
 	}
-	for i := range r.Alarms {
-		a := &r.Alarms[i]
-		body.Alarms = append(body.Alarms, healthAlarmBody{
+	return body
+}
+
+// toHealthAlarmBodies renders a health report's alarms, never nil.
+func toHealthAlarmBodies(alarms []storage.Alarm) []healthAlarmBody {
+	out := make([]healthAlarmBody, 0, len(alarms))
+	for i := range alarms {
+		a := &alarms[i]
+		out = append(out, healthAlarmBody{
 			ID:          a.ID,
 			Component:   a.ComponentName,
 			ComponentID: a.ComponentID,
@@ -191,7 +222,7 @@ func toHealthSlotBody(r *storage.HealthSlot) healthSlotBody {
 			Acknowledged:   a.Acknowledged(),
 		})
 	}
-	return body
+	return out
 }
 
 // nonNil keeps a nil slice out of the JSON, so a client never has to tell an
@@ -229,7 +260,7 @@ func registerHealthRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/systems/{name}/health",
 		Summary:     "Read a system's health",
-		Description: "The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Transitions are the recorded edges inside since..until (default the last 30 days), one entry per change; since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+		Description: "The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Members lists every component bound into the system, slotted or not, with its own health and open alarms; an open alarm on a member outside every slot makes the system degraded, never outage (ADR-2459), and a slot whose occupants are still to attach reads incomplete. Reason says the health in words. Transitions are the recorded edges inside since..until (default the last 30 days), one entry per change; since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
 	}, "system", "read"), func(ctx context.Context, in *systemHealthInput) (*fleetHealthOutput, error) {
 		rng, err := healthRange(in.Since, in.Until)
 		if err != nil {

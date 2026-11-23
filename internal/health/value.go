@@ -84,9 +84,16 @@ func ImpactValue(impact string) Value {
 // health, from its active alarms. An alarm impairs a component wholesale
 // now (#626): there is no per-capability degradation left to resolve, so a
 // component's own state is the whole of what a slot it occupies can see.
+//
+// ToAttach marks a component whose product is collected through a driver but
+// which has no endpoint yet (#2459): placed, typically started from a
+// template, and not yet wired. It still occupies its slot (nothing has failed),
+// but a slot counts it as unfinished commissioning, the same gap a slot nobody
+// staffed reads.
 type Component struct {
-	Name  string
-	Value Value
+	Name     string
+	Value    Value
+	ToAttach bool
 }
 
 // Occupies reports whether this component currently satisfies a slot it
@@ -161,6 +168,18 @@ func (r Slot) Down() int {
 	return len(r.Assigned) - r.Satisfying()
 }
 
+// attached counts the assigned components that are installed and attached:
+// every one but those still to attach.
+func (r Slot) attached() int {
+	n := 0
+	for _, c := range r.Assigned {
+		if !c.ToAttach {
+			n++
+		}
+	}
+	return n
+}
+
 // Contributes is the health this slot hands its system, and it distinguishes
 // two different ways of being short.
 //
@@ -179,11 +198,15 @@ func (r Slot) Down() int {
 // commissioning gap on every confidence monitor nobody ever intends to staff,
 // which is the same saturation Incomplete exists to prevent. An unrecognized
 // impact still reads as a gap rather than harmless, matching ImpactValue.
+//
+// An occupant still to attach (Component.ToAttach) is installed for the
+// quorum but not for the gap: a slot staffed only by components nobody has
+// wired yet reads Incomplete, not Healthy (#2459).
 func (r Slot) Contributes() Value {
 	if r.Down() > 0 && r.Impaired() {
 		return ImpactValue(r.Impact)
 	}
-	if len(r.Assigned) < r.want() && ImpactValue(r.Impact) != Healthy {
+	if r.attached() < r.want() && ImpactValue(r.Impact) != Healthy {
 		return Incomplete
 	}
 	return Healthy

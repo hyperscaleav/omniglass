@@ -482,9 +482,16 @@ func pureSlots(rows []storage.HealthSlot) []health.Slot {
 	for _, r := range rows {
 		slot := health.Slot{Name: r.Name, Quorum: r.Quorum, Impact: r.Impact}
 		for i := 0; i < r.Satisfying; i++ {
+			// Occupants still to attach occupy (nothing failed on them), so
+			// they are among the satisfying ones; the report lists them.
 			slot.Assigned = append(slot.Assigned, health.Component{
-				Name: fmt.Sprintf("%s-%d", r.Name, i), Value: health.Healthy,
+				Name: fmt.Sprintf("%s-%d", r.Name, i), Value: health.Healthy, ToAttach: i < len(r.ToAttach),
 			})
+		}
+		// The down ones are assigned too, out of quorum: without them a slot
+		// short because its occupant failed would read as one never installed.
+		for _, d := range r.Down {
+			slot.Assigned = append(slot.Assigned, health.Component{Name: d, Value: health.Outage})
 		}
 		out = append(out, slot)
 	}
@@ -497,7 +504,13 @@ func pureSlots(rows []storage.HealthSlot) []health.Slot {
 // believed.
 func mustAgree(t *testing.T, rep *storage.HealthReport) {
 	t.Helper()
-	want := health.SystemValue(pureSlots(rep.Slots)).String()
+	var outside []health.Component
+	for _, m := range rep.Members {
+		if m.OutsideSlot {
+			outside = append(outside, health.Component{Name: m.Name, Value: health.ParseValue(m.Health)})
+		}
+	}
+	want := health.SystemVerdict(pureSlots(rep.Slots), nil, outside).String()
 	if rep.Verdict != want {
 		t.Fatalf("verdict %q contradicts its own slots (which roll up to %q): %+v", rep.Verdict, want, rep.Slots)
 	}

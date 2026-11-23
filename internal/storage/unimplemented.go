@@ -1045,6 +1045,7 @@ func (UnimplementedGateway) ComponentHealthReport(context.Context, string, Healt
 func (UnimplementedGateway) SystemHealths(context.Context, scope.Set) ([]SystemHealthEntry, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) ReconcileHealth(context.Context) (int, error) { return 0, nil }
 func (UnimplementedGateway) LocationHealth(context.Context, string, HealthRange, scope.Set) (*HealthReport, error) {
 	return nil, nil
 }
