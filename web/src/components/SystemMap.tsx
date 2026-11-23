@@ -2,7 +2,7 @@ import { createMemo, createSignal, Index, onCleanup, onMount, Show } from "solid
 import { Dynamic } from "solid-js/web";
 import { useNavigate } from "@solidjs/router";
 import { Tooltip } from "@kobalte/core/tooltip";
-import { layoutMarkers, type MapMarker, type Rect, type StandardMapDecl } from "../lib/system_map";
+import { fitMarkers, layoutMarkers, type MapMarker, type Rect, type StandardMapDecl } from "../lib/system_map";
 import { healthHue } from "../lib/health";
 import type { MemberContext } from "../lib/detail";
 import { CircleDashed, resolveIcon } from "./icons";
@@ -73,10 +73,15 @@ export default function SystemMap(props: {
   };
   const labelOf = (m: MapMarker) =>
     m.occupant ? (props.member?.label(m.occupant.componentId, m.occupant.name) ?? m.occupant.name) : slotOf(m);
+  // The box is cropped to what it holds, so a system with a few members is a
+  // small map rather than a mostly empty room (#2465). Markers below are the
+  // cropped ones; slotOf and labelOf only read slot and occupant, which a crop
+  // does not touch.
+  const fit = createMemo(() => fitMarkers(props.markers, props.decl.aspect));
   const placements = createMemo(() =>
     layoutMarkers(
-      props.markers.map((m) => ({ x: m.x, y: m.y, text: labelOf(m) })),
-      { w: width(), h: width() / props.decl.aspect },
+      fit().markers.map((m, i) => ({ x: m.x, y: m.y, text: labelOf(props.markers[i]) })),
+      { w: width(), h: width() / fit().aspect },
     ),
   );
   return (
@@ -88,14 +93,14 @@ export default function SystemMap(props: {
       <div
         ref={mapEl}
         data-testid="system-map"
-        class="relative w-full max-w-2xl rounded-box border border-base-300 bg-base-200"
-        style={{ "aspect-ratio": String(props.decl.aspect) }}
+        class="relative w-full rounded-box border border-base-300 bg-base-200"
+        style={{ "aspect-ratio": String(fit().aspect), "max-width": `${Math.max(fit().width * 42, 18).toFixed(2)}rem` }}
       >
         {/* Index, not For: markers are keyed by their slot in the declaration,
             so a health poll that rebuilds the marker objects updates each
             marker in place instead of remounting it (which would drop focus
             and close an open tooltip every few seconds). */}
-        <Index each={props.markers}>
+        <Index each={fit().markers}>
           {(m, i) => {
             const slot = () => slotOf(m());
             const placed = () => placements()[i];

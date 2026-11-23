@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 
 // The browser-driven e2e tier for the console: drive it as an operator would, end
 // to end, against the real binary (the API, the typed client, the SPA), asserting
@@ -6,6 +6,20 @@ import { test, expect } from "@playwright/test";
 // shell, the typed client, the create-as-route draft, the detail, and delete.
 const USER = process.env.OG_E2E_USER;
 const PASSWORD = process.env.OG_E2E_PASSWORD;
+
+// watchTrouble records every failed response and console error from now on, so
+// a flow can assert it ran clean. A 4xx the console logs is an operator-visible
+// defect even when the page recovers (#2465).
+function watchTrouble(page: Page): string[] {
+  const trouble: string[] = [];
+  page.on("response", (r) => {
+    if (r.status() >= 400) trouble.push(`${r.status()} ${r.request().method()} ${new URL(r.url()).pathname}`);
+  });
+  page.on("console", (m) => {
+    if (m.type() === "error") trouble.push(`console.error: ${m.text()}`);
+  });
+  return trouble;
+}
 
 test.describe("operator console", () => {
   test.skip(!USER || !PASSWORD, "set OG_E2E_USER/OG_E2E_PASSWORD (run via `make test-e2e`)");
@@ -30,6 +44,7 @@ test.describe("operator console", () => {
     // carries no name rule, so the operator types the name: the other half of
     // the same form is proven by the component case below.
     const name = `e2e-${Date.now()}`;
+    const trouble = watchTrouble(page);
     // What the LIST will show for it. A shipped fleet renders every location's
     // label from its own name ({{title (words .Name)}}, ADR-0105), and a row
     // whose label is generated shows that label and no second line, so the raw
@@ -42,22 +57,22 @@ test.describe("operator console", () => {
     await page.getByLabel("Name", { exact: true }).fill(name);
     await page.getByRole("button", { name: /create location/i }).click();
 
-    // Create hands off to the new location's own workspace already editing
-    // (#800): the route lands carrying ?edit=1, which the zoom answers with
-    // its Configure tab in edit mode. Cancel leaves edit and strips the
-    // param, so the URL stops requesting an edit the operator left.
-    await page.waitForURL(/\/web\/locations\/[0-9a-f-]{36}\?edit=1/);
-    await expect(page.getByRole("button", { name: /save changes/i })).toBeVisible();
-    await page.getByRole("button", { name: /^cancel$/i }).first().click();
+    // Create lands on the new location's Overview with a "created" notice, not
+    // in its editor (#2465), and the whole walk raised no failed request and no
+    // console error: the nameless :renderLabel ask for a type with no name rule
+    // used to answer 422 on every location create.
+    await page.waitForURL(/\/web\/locations\/[0-9a-f-]{36}$/);
+    await expect(page.getByText("Location created.")).toBeVisible();
     await expect(page.getByRole("heading", { name: label })).toBeVisible();
-    await expect(page).not.toHaveURL(/edit=1/);
+    await expect(page.getByRole("button", { name: /save changes/i })).toHaveCount(0);
 
-    // The edit is deep-linkable: revisiting with ?edit=1 lands the Configure
-    // tab editing directly, no clicks involved.
+    // The edit is deep-linkable: ?edit=1 lands the Configure tab editing
+    // directly, no clicks involved.
     await page.goto(page.url().split("?")[0] + "?edit=1");
     await expect(page.getByRole("button", { name: /save changes/i })).toBeVisible();
     await page.getByRole("button", { name: /^cancel$/i }).first().click();
     await expect(page).not.toHaveURL(/edit=1/);
+    expect(trouble, "failed requests or console errors during the create").toEqual([]);
 
     // It appears as a new top-level location in the outline, under the label the
     // rule rendered from the name typed above.
@@ -70,11 +85,45 @@ test.describe("operator console", () => {
     page.on("dialog", (d) => d.accept());
     await row.click();
     await expect(page.locator("aside[data-blade]")).toBeVisible();
+    // The blade is the detail body (#2423): Delete sits with Configure.
+    await page.locator("aside[data-blade]").getByRole("tab", { name: "Configure" }).click();
     await expect(page.locator('aside[data-blade] button:text-is("Delete")')).toBeVisible();
     await page.locator('aside[data-blade] button:text-is("Delete")').click();
 
     // It is gone from the outline.
     await expect(row).toHaveCount(0);
+  });
+
+  // #2465, and the system half of #1972: creating a location under a parent and
+  // a blank system at it ends on each row's Overview with a notice, the back link
+  // names the parent place, and neither create raised a failed request or a
+  // console error.
+  test("creates a location and a system from a place, clean, landing on Overview", async ({ page }) => {
+    const trouble = watchTrouble(page);
+    const stamp = Date.now();
+    const campus = await page.request.post("/api/v1/locations", { data: { name: `e2e-camp-${stamp}`, location_type: "campus" } });
+    expect(campus.ok(), `create campus: ${campus.status()}`).toBeTruthy();
+    const { id: campusId } = (await campus.json()) as { id: string };
+    const campusLabel = `E2e Camp ${stamp}`;
+    try {
+      await page.goto(`/web/locations/create?under=${campusId}`);
+      await expect(page.getByRole("button", { name: `\u2190 ${campusLabel}` })).toBeVisible();
+      await page.getByLabel("Location type").selectOption("building");
+      await page.getByLabel("Name", { exact: true }).fill(`e2e-bldg-${stamp}`);
+      await page.getByRole("button", { name: /create location/i }).click();
+      await page.waitForURL(/\/web\/locations\/[0-9a-f-]{36}$/);
+      await expect(page.getByText("Location created.")).toBeVisible();
+      const buildingId = page.url().split("/").pop()!;
+
+      await page.goto(`/web/systems/create?under=${buildingId}`);
+      await page.getByLabel("Name", { exact: true }).fill(`e2e-sys-${stamp}`);
+      await page.getByRole("button", { name: /create system/i }).click();
+      await page.waitForURL(/\/web\/systems\/[0-9a-f-]{36}$/);
+      await expect(page.getByText("System created.")).toBeVisible();
+      expect(trouble, "failed requests or console errors during the creates").toEqual([]);
+    } finally {
+      await page.request.delete(`/api/v1/locations/${campusId}`);
+    }
   });
 
   // The acceptance of #688, #699 and #702, and the only tier that can witness
@@ -129,17 +178,10 @@ test.describe("operator console", () => {
     await expect(nameField).toHaveValue(drafted);
 
     await page.getByRole("button", { name: /create component/i }).click();
-    await page.waitForURL(/\/web\/components\/[0-9a-f-]{36}\?edit=1/);
-
-    // Create hands off to the new leaf's Configure tab already editing (#800).
-    // The platform holds the label's pen: the pen field says so in words while
-    // the slot is editing (the old face's "Generated" chip retired in #693).
-    await expect(page.getByRole("button", { name: /save changes/i })).toBeVisible();
-    await expect(page.getByText(/Rendered from a label rule|No label rule applies/).first()).toBeVisible();
-
-    // Cancel drops to the read-only leaf, where the identity is rendered
-    // rather than typed.
-    await page.getByRole("button", { name: /^cancel$/i }).first().click();
+    // Create lands on the new leaf's Overview with a notice (#2465), where the
+    // identity is rendered rather than typed.
+    await page.waitForURL(/\/web\/components\/[0-9a-f-]{36}$/);
+    await expect(page.getByText("Component created.")).toBeVisible();
 
     // What the row actually got, compared with what the operator was shown, on
     // both fields and with nothing substituted into either. A drift between the
@@ -157,6 +199,7 @@ test.describe("operator console", () => {
     const row = page.getByRole("treeitem").filter({ has: page.locator("[data-label]", { hasText: draftedLabel }) });
     await row.first().click();
     await expect(page.locator("aside[data-blade]")).toBeVisible();
+    await page.locator("aside[data-blade]").getByRole("tab", { name: "Configure" }).click();
     await page.locator('aside[data-blade] button:text-is("Delete")').click();
     await expect(row).toHaveCount(0);
   });
