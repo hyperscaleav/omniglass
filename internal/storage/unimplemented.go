@@ -1056,6 +1056,10 @@ func (UnimplementedGateway) FleetProjection(context.Context, scope.Set, scope.Se
 	return nil, nil
 }
 
+func (UnimplementedGateway) SearchFleet(context.Context, string, int, scope.Set, scope.Set, scope.Set) (*FleetSearchResult, error) {
+	return &FleetSearchResult{}, nil
+}
+
 func (UnimplementedGateway) PlatformView(context.Context, scope.Set, scope.Set, scope.Set) (*PlatformView, error) {
 	return nil, nil
 }

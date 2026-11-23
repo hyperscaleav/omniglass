@@ -6974,6 +6974,44 @@ func generatedCommands() []*cobra.Command {
 	}())
 	roots = append(roots, func() *cobra.Command {
 		parent := &cobra.Command{
+			Use:   "search",
+			Short: "Commands for the search resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var qQ string
+				var qLimit int
+				cmd := &cobra.Command{
+					Use:     "list",
+					Short:   "Find locations, systems, components and catalog entries by name",
+					Long:    "The read behind the command palette. Returns up to limit hits of each kind whose name or label holds q, case-insensitively, best match first (exact, then prefix, then the rest by name). Locations, systems and components are searched inside the caller's own read scope for each kind, so nothing outside it appears; a caller with no scope for a kind gets an empty group, not an error. Each fleet hit carries its place, so many components with one name are told apart. Catalog hits cover products (product:read), drivers (driver:read), calc rules and event rules (rule:read) and metrics (metric_type:read), each only for a caller who holds that permission. Gated by location:read, the floor of every fleet reader; the component group also needs component:read.",
+					Example: "  omniglass search list",
+					Args:    pathArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/search")
+						q := url.Values{}
+						if cmd.Flags().Changed("q") {
+							q.Set("q", fmt.Sprintf("%v", qQ))
+						}
+						if cmd.Flags().Changed("limit") {
+							q.Set("limit", fmt.Sprintf("%v", qLimit))
+						}
+						if enc := q.Encode(); enc != "" {
+							path += "?" + enc
+						}
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				cmd.Flags().StringVar(&qQ, "q", "", "The text to find, matched case-insensitively anywhere in a name or label")
+				cmd.Flags().IntVar(&qLimit, "limit", 0, "The most hits returned for each kind")
+				return cmd
+			}()
+			return cmd
+		}())
+		return parent
+	}())
+	roots = append(roots, func() *cobra.Command {
+		parent := &cobra.Command{
 			Use:   "secret",
 			Short: "Commands for the secret resource",
 		}
