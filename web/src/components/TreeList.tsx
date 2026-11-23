@@ -16,6 +16,7 @@ import {
 } from "./icons";
 import BladeStack from "./BladeStack";
 import Button from "./Button";
+import { useDrawerAddress } from "../lib/drawer_address";
 import { type BladeDef, BladesContext, createBladeController, useBladeEdit } from "../lib/blades";
 
 // TreeList: the one config-driven tree-list body (composing ListShell), which
@@ -305,9 +306,17 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
   // Reorder a visible column from one position to another (drag in the menu).
   const moveCol = (from: number, to: number) => setCols((c) => moveItem(c, from, to));
 
+  // The open row is the URL's `?open=<node id>` address (lib/drawer_address): a
+  // row click writes it, and the address opens the root blade (and back). Nested
+  // blades stay the stack's own. A node id is the row's API address here.
+  const addr = useDrawerAddress({
+    exists: (id) => (index().byId.has(id) ? true : cfg.loading?.() ? undefined : false),
+    blades,
+    rootRef: (id) => ({ kind: cfg.entity.name, id }),
+  });
   // Blade ops delegate to the shared controller; a node maps to a { kind, id } ref
   // under this page's entity kind. push truncates-to-existing (breadcrumb collapse).
-  const pushBlade = (n: N) => blades.push({ kind: cfg.entity.name, id: n.id });
+  const pushBlade = (n: N) => addr.open(n.id);
   const closeBlades = () => blades.close();
 
   const openFull = (n: N) => (cfg.onOpenNode ? cfg.onOpenNode(n) : showFull(n));
@@ -534,6 +543,7 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
         onChips={setChips}
         trailing={actions}
         placeholder={cfg.filterPlaceholder}
+        missing={addr.miss() ? { noun: cfg.entity.name, address: addr.miss()!, onDismiss: addr.close } : undefined}
       >
         {() => (
           <div class="overflow-x-auto">

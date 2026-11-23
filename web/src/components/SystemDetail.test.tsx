@@ -200,6 +200,18 @@ describe("the blade's tab and edit are its own", () => {
     expect(window.location.search).toBe("?node=x");
   });
 
+  it("a range chosen in a blade is the blade's own: the page's address keeps its range", async () => {
+    mountBlade("/web/explore?range=1h");
+    const blade = await screen.findByRole("dialog");
+    const trigger = await within(blade).findByTestId("time-range-trigger");
+    // The page's ?range= is the page's, not the blade's.
+    expect(trigger.textContent).toContain("Last 24 hours");
+    fireEvent.click(trigger);
+    fireEvent.click(await screen.findByTestId("time-range-preset-7d"));
+    await waitFor(() => expect(within(blade).getByTestId("time-range-trigger").textContent).toContain("Last 7 days"));
+    expect(window.location.search).toBe("?range=1h");
+  });
+
   it("edits the system from the blade's Configure, and a page ?edit=location does not reach it", async () => {
     mountBlade("/web/explore?edit=location");
     const blade = await screen.findByRole("dialog");
