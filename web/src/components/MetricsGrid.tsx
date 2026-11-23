@@ -1,5 +1,6 @@
 import { For, Show, createMemo } from "solid-js";
 import { useQueries, useQuery } from "@tanstack/solid-query";
+import Button from "./Button";
 import Eyebrow from "./Eyebrow";
 import TimeseriesChart from "./TimeseriesChart";
 import { CalcRuleLink } from "./RuleLink";
@@ -96,7 +97,7 @@ export default function MetricsGrid(props: { kind: "components" | "systems"; id:
                         <div class="flex h-[170px] flex-col items-center justify-center gap-2 text-xs text-base-content/45">
                           <Show when={q()?.isError} fallback="Reading…">
                             <span>Could not read this series.</span>
-                            <button type="button" class="btn btn-xs" onClick={() => void q()?.refetch()}>Retry</button>
+                            <Button size="xs" intent="quiet" loading={q()?.isFetching} onClick={() => void q()?.refetch()}>Retry</Button>
                           </Show>
                         </div>
                       }
