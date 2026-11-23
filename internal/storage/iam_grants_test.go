@@ -71,7 +71,7 @@ func TestGrantsAndOwnerInvariant(t *testing.T) {
 	if err := gw.UpsertLocationType(ctx, storage.LocationType{Name: "campus", Label: "Campus", Official: true}); err != nil {
 		t.Fatalf("seed location type: %v", err)
 	}
-	hq, err := gw.CreateLocation(ctx, owner.ID, storage.LocationSpec{Name: "hq", LocationType: "campus"}, all)
+	hq, err := gw.CreateLocation(ctx, owner.ID, storage.LocationSpec{Name: "hq", LocationType: "campus"}, all, all)
 	if err != nil {
 		t.Fatalf("create hq: %v", err)
 	}

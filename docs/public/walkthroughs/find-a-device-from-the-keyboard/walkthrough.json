@@ -1,0 +1,74 @@
+{
+  "id": "find-a-device-from-the-keyboard",
+  "title": "Find a device from the keyboard",
+  "description": "Open the command palette with Ctrl-K, type part of a name, read which location each match sits under, narrow it to one device and press Enter to open it.",
+  "steps": [
+    {
+      "n": 1,
+      "kind": "goto",
+      "caption": "The console's home. The command palette is a keystroke away from every page.",
+      "still": "step-01.png"
+    },
+    {
+      "n": 2,
+      "kind": "wait",
+      "caption": "The top bar's Search button is the same door, with its shortcut beside it.",
+      "still": "step-02.png"
+    },
+    {
+      "n": 3,
+      "kind": "press",
+      "caption": "Ctrl-K (Cmd-K on a Mac) opens the command palette with the cursor already in its field.",
+      "still": "step-03.png"
+    },
+    {
+      "n": 4,
+      "kind": "wait",
+      "caption": "Before you type, it lists the pages you may open.",
+      "still": "step-04.png"
+    },
+    {
+      "n": 5,
+      "kind": "type",
+      "caption": "Type part of a name. Many components share the name videobar-1, one in every room.",
+      "still": "step-05.png"
+    },
+    {
+      "n": 6,
+      "kind": "wait",
+      "caption": "Matches come in groups. Each component shows the locations it sits under, so one name is told apart from the next.",
+      "still": "step-06.png"
+    },
+    {
+      "n": 7,
+      "kind": "press",
+      "caption": "Keep typing to narrow it. Only one component is called videobar-2.",
+      "still": "step-07.png"
+    },
+    {
+      "n": 8,
+      "kind": "wait",
+      "caption": "The first match is the default, and Ask omnibot is only ever the last row.",
+      "still": "step-08.png"
+    },
+    {
+      "n": 9,
+      "kind": "press",
+      "caption": "Enter opens the highlighted match, here the component's own page.",
+      "still": "step-09.png"
+    },
+    {
+      "n": 10,
+      "kind": "wait",
+      "caption": "The component's page, reached without touching the mouse.",
+      "still": "step-10.png"
+    }
+  ],
+  "poster": "step-10.png",
+  "preview": "preview.webp",
+  "budget": {
+    "seconds": 33.6,
+    "bytes": 387785,
+    "previewBytes": 283438
+  }
+}

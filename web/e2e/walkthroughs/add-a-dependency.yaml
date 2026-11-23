@@ -1,0 +1,40 @@
+# Add and remove a component dependency (#2428): Boardroom A's video bar is fed
+# from the power conditioner and hosts its touch panel (internal/devseed/fixtures.yaml,
+# component_dependencies), so its Dependencies panel reads one upstream and the
+# panel and display downstream. Making the touch panel an upstream of the bar
+# would close a loop, so the server refuses it in place; the amplifier is then a
+# real upstream, added and removed again.
+title: Add and remove a dependency
+description: Read what a video bar depends on and what depends on it, try an edge that would close a cycle and read the server's refusal, then add a real upstream and remove it again.
+steps:
+  - goto: /locations/boardroom-a
+    caption: Boardroom A holds one system. Its video bar is fed from a power conditioner and hosts the room's touch panel.
+  - click: 'button:has([data-label]:text-is("Video Bar 1"))'
+    caption: Open the video bar.
+  - click: 'aside[data-blade] button[aria-label=Expand]'
+    caption: Expand it to the component's view.
+  - click: { role: button, name: Add upstream }
+    caption: Dependencies lists what the bar needs and what needs it. Add an upstream; the picker never offers the bar itself.
+  - select: { target: 'select[aria-label="Upstream component"]', value: 'Touch Panel 1' }
+    caption: Try the touch panel, which the bar already hosts.
+  - select: { target: 'select[aria-label="Dependency kind"]', value: host }
+    caption: Hosted by the panel.
+  - click: { role: button, name: Add dependency }
+    caption: Add it.
+  - wait: { selector: '[data-testid=dep-form] [role=alert]:has-text("cycle")' }
+    caption: The server refuses a loop and says why, in place. Nothing was recorded.
+  - select: { target: 'select[aria-label="Upstream component"]', value: 'Amplifier 1' }
+    caption: A real upstream instead, the amplifier.
+  - select: { target: 'select[aria-label="Dependency kind"]', value: path }
+    caption: Reached through it, a path dependency.
+  - click: { role: button, name: Add dependency }
+    caption: Add it.
+  - wait: { selector: '[data-testid=dep-upstream]:has-text("Amplifier 1")' }
+    caption: It is recorded, and the amplifier joins the upstream list with its health.
+  - click: { role: button, name: 'Remove Amplifier 1 as path upstream' }
+    caption: Remove it again. A confirm says what changes first.
+  - click: '[role=alertdialog] button:has-text("Remove")'
+    caption: Confirm.
+  - wait: { selector: '[data-testid=dep-upstream]:not(:has-text("Amplifier 1"))' }
+    caption: The edge is gone; the power conditioner is still the bar's upstream.
+    poster: true
