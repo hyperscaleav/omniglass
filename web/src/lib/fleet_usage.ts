@@ -12,7 +12,7 @@ import type { Product } from "./products";
 // How many rows a used-by list shows before "see all".
 export const USED_BY_PAGE = 5;
 
-export type FleetRow = { id: string; name: string; label?: string; product?: string };
+export type FleetRow = { id: string; name: string; label?: string; product?: string; location?: string };
 export type FleetUsage = { rows: FleetRow[]; total: number };
 
 export type ComponentFilter = { product?: string; driver?: string; component_type?: string };

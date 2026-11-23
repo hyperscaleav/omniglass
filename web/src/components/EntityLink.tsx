@@ -28,7 +28,7 @@ export default function EntityLink(props: EntityLinkProps): JSX.Element {
   const address = () => props.entity?.name ?? props.address!;
   const href = () => drawerHref(props.kind, address(), props.extra);
   const text = () => (props.entity ? entityLabel(props.entity) : address());
-  const cls = () => `link link-hover truncate ${props.entity && text() !== address() ? "" : "font-data"} ${props.class ?? ""}`;
+  const cls = () => `text-primary hover:underline underline-offset-2 truncate ${props.entity && text() !== address() ? "" : "font-data"} ${props.class ?? ""}`;
   return (
     <Show
       when={inRouter}
@@ -43,13 +43,18 @@ export default function EntityLink(props: EntityLinkProps): JSX.Element {
 // than a list drawer: a component's or a system's workspace, by its uuid (a name is
 // unique only within its placement, so the id is the address that cannot be
 // ambiguous). The text is the row's label as the console reads it everywhere.
-export function FleetLink(props: { kind: "component" | "system"; row: Labelled & { id: string }; class?: string }): JSX.Element {
+export function FleetLink(props: { kind: "component" | "system"; row: Labelled & { id: string; location?: string }; class?: string }): JSX.Element {
   const inRouter = !!useContext(RouterContext);
   const href = () => `/${props.kind === "component" ? "components" : "systems"}/${props.row.id}`;
-  const cls = () => `link link-hover truncate ${props.class ?? ""}`;
+  const cls = () => `text-primary hover:underline underline-offset-2 truncate ${props.class ?? ""}`;
+  // Generated labels repeat across rooms ("Display 1"), so the place disambiguates.
+  const where = () => (props.row.location ? <span class="ml-1.5 shrink-0 text-xs text-base-content/45">{props.row.location}</span> : null);
   return (
-    <Show when={inRouter} fallback={<a href={href()} class={cls()} data-fleet-link={props.kind}>{entityLabel(props.row)}</a>}>
-      <A href={href()} class={cls()} data-fleet-link={props.kind}>{entityLabel(props.row)}</A>
-    </Show>
+    <span class="flex min-w-0 items-baseline">
+      <Show when={inRouter} fallback={<a href={href()} class={cls()} data-fleet-link={props.kind}>{entityLabel(props.row)}</a>}>
+        <A href={href()} class={cls()} data-fleet-link={props.kind}>{entityLabel(props.row)}</A>
+      </Show>
+      {where()}
+    </span>
   );
 }

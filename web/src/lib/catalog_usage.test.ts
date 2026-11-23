@@ -34,9 +34,14 @@ describe("driverCollects", () => {
     expect(driverCollects(snmp.spec, metrics, properties)).toEqual({
       metrics: ["uptime"],
       properties: ["model-number", "power-state"],
+      events: [],
       unknown: ["mystery"],
       commands: ["power-off", "power-on"],
     });
+  });
+
+  it("sorts an emitted key the event catalog names into events", () => {
+    expect(driverCollects(snmp.spec, metrics, properties, new Set(["mystery"])).events).toEqual(["mystery"]);
   });
 
   it("counts a listener's emits beside a poll's and names each key once", () => {
@@ -44,7 +49,7 @@ describe("driverCollects", () => {
   });
 
   it("is empty for a stub with no spec", () => {
-    expect(driverCollects(undefined, metrics, properties)).toEqual({ metrics: [], properties: [], unknown: [], commands: [] });
+    expect(driverCollects(undefined, metrics, properties)).toEqual({ metrics: [], properties: [], events: [], unknown: [], commands: [] });
   });
 });
 

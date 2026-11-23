@@ -63,16 +63,16 @@ function Group(props: { group: UsedByGroup; limit: number }): JSX.Element {
         </ul>
         <div class="flex gap-3 text-xs">
           <Show when={hidden() > 0}>
-            <button type="button" class="link link-hover" onClick={() => setAll(true)}>
+            <button type="button" class="text-primary hover:underline" onClick={() => setAll(true)}>
               Show all {props.group.rows.length}
             </button>
           </Show>
           <Show when={props.group.seeAll && props.group.count > props.group.rows.length}>
             <Show
               when={inRouter}
-              fallback={<a class="link link-hover" href={props.group.seeAll!.href}>{props.group.seeAll!.text ?? `See all ${props.group.count}`}</a>}
+              fallback={<a class="text-primary hover:underline" href={props.group.seeAll!.href}>{props.group.seeAll!.text ?? `See all ${props.group.count}`}</a>}
             >
-              <A class="link link-hover" href={props.group.seeAll!.href}>{props.group.seeAll!.text ?? `See all ${props.group.count}`}</A>
+              <A class="text-primary hover:underline" href={props.group.seeAll!.href}>{props.group.seeAll!.text ?? `See all ${props.group.count}`}</A>
             </Show>
           </Show>
         </div>

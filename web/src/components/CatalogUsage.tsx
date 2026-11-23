@@ -9,6 +9,7 @@ import { PRODUCTS_KEY, listProducts, type Product } from "../lib/products";
 import { DRIVERS_KEY, listDrivers } from "../lib/drivers";
 import { METRICS_KEY, listMetricTypes } from "../lib/metric_types";
 import { PROPERTIES_KEY, listProperties } from "../lib/properties";
+import { EVENT_TYPES_KEY, listEventTypes } from "../lib/event_types";
 import { EVENT_RULES_KEY, listEventRules } from "../lib/event_rules";
 import { CALC_RULES_KEY, listCalcRules } from "../lib/calc_rules";
 import { ACTION_RULES_KEY, listActionRules } from "../lib/action_rules";
@@ -190,13 +191,14 @@ export function CollectedByDriver(p: { driver: string; title: string }): JSX.Ele
   const drivers = useDrivers();
   const metrics = useQuery(() => ({ queryKey: METRICS_KEY, queryFn: listMetricTypes }));
   const properties = useQuery(() => ({ queryKey: PROPERTIES_KEY, queryFn: listProperties }));
+  const events = useQuery(() => ({ queryKey: EVENT_TYPES_KEY, queryFn: listEventTypes }));
   const row = () => (drivers.data ?? []).find((d) => d.name === p.driver);
   const collected = createMemo(() =>
-    driverCollects(row()?.spec, new Set((metrics.data ?? []).map((m) => m.name)), new Set((properties.data ?? []).map((x) => x.name))),
+    driverCollects(row()?.spec, new Set((metrics.data ?? []).map((m) => m.name)), new Set((properties.data ?? []).map((x) => x.name)), new Set((events.data ?? []).map((e) => e.name))),
   );
   const none = () => {
     const c = collected();
-    return c.metrics.length + c.properties.length + c.commands.length + c.unknown.length === 0;
+    return c.metrics.length + c.properties.length + c.events.length + c.commands.length + c.unknown.length === 0;
   };
   return (
     <section class="flex flex-col gap-2 border-t border-base-300 pt-3" aria-label={p.title} data-testid="collected-by-driver">
@@ -205,6 +207,7 @@ export function CollectedByDriver(p: { driver: string; title: string }): JSX.Ele
         <Show when={!none()} fallback={<p class="text-xs text-base-content/45">The driver collects nothing and offers no commands.</p>}>
           <KeyList label="Metrics" kind="metric" names={collected().metrics} />
           <KeyList label="Properties" kind="property" names={collected().properties} />
+          <KeyList label="Events" kind="event_type" names={collected().events} />
           <KeyList label="Commands" kind="command_type" names={collected().commands} />
           <Show when={collected().unknown.length > 0}>
             <div data-testid="collected-unknown" class="flex flex-col gap-1">

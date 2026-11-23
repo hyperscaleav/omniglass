@@ -14,14 +14,15 @@ function emitsOf(spec: DriverSpec | undefined): DriverEmit[] {
 // What a driver collects, sorted into the lanes the catalogs say each key lives in
 // (a key neither catalog names lands in `unknown`, so it still shows), plus the
 // command types it offers. Each name appears once.
-export type Collected = { metrics: string[]; properties: string[]; unknown: string[]; commands: string[] };
+export type Collected = { metrics: string[]; properties: string[]; events: string[]; unknown: string[]; commands: string[] };
 
-export function driverCollects(spec: DriverSpec | undefined, metricNames: Set<string>, propertyNames: Set<string>): Collected {
+export function driverCollects(spec: DriverSpec | undefined, metricNames: Set<string>, propertyNames: Set<string>, eventNames: Set<string> = new Set()): Collected {
   const keys = [...new Set(emitsOf(spec).map((e) => e.name))].sort();
   return {
     metrics: keys.filter((k) => metricNames.has(k)),
     properties: keys.filter((k) => propertyNames.has(k)),
-    unknown: keys.filter((k) => !metricNames.has(k) && !propertyNames.has(k)),
+    events: keys.filter((k) => !metricNames.has(k) && !propertyNames.has(k) && eventNames.has(k)),
+    unknown: keys.filter((k) => !metricNames.has(k) && !propertyNames.has(k) && !eventNames.has(k)),
     commands: [...new Set((spec?.commands ?? []).map((c) => c.command_type))].sort(),
   };
 }
