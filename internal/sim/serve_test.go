@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
+	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
 )
 
 // TestServeHTTP_MuteChannelPropagates exercises the whole loop the
@@ -499,10 +500,9 @@ func TestServeHTTP_MixedRequiredSuccessOptionalFailureReturns200(t *testing.T) {
 
 // TestServeHTTP_MixedRequiredSuccessRequiredFailureReturns400 confirms
 // the partial-failure case: when one required mutation succeeds and a
-// second required mutation fails, the request is 400. State writes from
-// the successful mutation still applied, matching applyMutations'
-// per-entry semantics; the response surfaces the failure so the client
-// knows the batch was not clean.
+// second required mutation fails, the request is 400 and the successful
+// mutation's write is rolled back (#1487): a refused route leaves state
+// exactly as it was.
 func TestServeHTTP_MixedRequiredSuccessRequiredFailureReturns400(t *testing.T) {
 	initial := map[string]any{
 		"status": map[string]any{
@@ -557,5 +557,46 @@ func TestServeHTTP_MixedRequiredSuccessRequiredFailureReturns400(t *testing.T) {
 	}
 	if body.FailedMutations[0].Path != "status.channels.99.mute" {
 		t.Errorf("failed_mutations[0].path = %q, want status.channels.99.mute", body.FailedMutations[0].Path)
+	}
+	if got := dev.State()["status"].(map[string]any)["device"].(map[string]any)["power"]; got != "off" {
+		t.Errorf("refused route wrote state: power = %v, want off", got)
+	}
+}
+
+// The kestrel-vroom dial route (#1445): a refused id pattern must not
+// leave status.call.active or participants written.
+func TestServeHTTP_VroomDialRefusedLeavesStateUntouched(t *testing.T) {
+	store, err := profile.LoadStoreFS(profiles.FS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dp := store.Devices["kestrel-vroom"]
+	var route *profile.Route
+	for i := range dp.Interfaces {
+		for j := range dp.Interfaces[i].Routes {
+			if dp.Interfaces[i].Routes[j].Match == "POST /api/call/dial" {
+				route = &dp.Interfaces[i].Routes[j]
+			}
+		}
+	}
+	if route == nil {
+		t.Fatal("dial route not found")
+	}
+	initial := map[string]any{"status": map[string]any{"call": map[string]any{
+		"id": "", "active": false, "participants": int64(0)}}}
+	dev := NewDevice("d", "h", net.ParseIP("127.0.0.1"), "kestrel-vroom", 1, initial)
+	if err := dev.AddRouteFromProfile(route, `{"ok":true}`); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("POST", "/api/call/dial", strings.NewReader(`{"id":"bad id!","participants":5}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	dev.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; %s", w.Code, w.Body.String())
+	}
+	call := dev.State()["status"].(map[string]any)["call"].(map[string]any)
+	if call["active"] != false || call["participants"] != int64(0) || call["id"] != "" {
+		t.Errorf("refused dial wrote state: %v", call)
 	}
 }
