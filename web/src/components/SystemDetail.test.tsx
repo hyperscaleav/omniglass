@@ -223,6 +223,19 @@ describe("the blade's tab and edit are its own", () => {
     expect(window.location.search).toBe("?edit=location");
   });
 
+  it("closing the blade with unsaved drafts asks first", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const r = mountBlade();
+    const blade = await screen.findByRole("dialog");
+    fireEvent.click(await within(blade).findByRole("tab", { name: "Configure" }));
+    const face = await within(blade).findByTestId("configure-face");
+    fireEvent.click(await within(face).findByRole("button", { name: "Edit" }));
+    fireEvent.input(await within(face).findByDisplayValue("boardroom"), { target: { value: "boardroom-2" } });
+    fireEvent.click(within(blade).getByRole("button", { name: "Close" }));
+    expect(confirm).toHaveBeenCalled();
+    expect(r.controller().stack().length).toBe(1);
+  });
+
   it("deletes from the blade's Configure and closes the stack", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(null, { status: 204 }));

@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal } from "solid-js";
+import { For, Show, createMemo, createSignal, onCleanup } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/solid-query";
 import HealthBadge from "./HealthBadge";
@@ -98,7 +98,6 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
   const qc = useQueryClient();
   const me = useMe();
   // Unsaved Configure drafts (the system's and its sole location's) the tab rail asks about.
-  const leave = createLeaveGuard();
   // Every age on the card reads one ticking clock: a poll that returns the
   // same report changes nothing a query can see, so an age pinned to the data
   // (or to the mount) would stop moving. The history and the charts read a
@@ -335,6 +334,10 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
   // every member, alarm and map marker opens the component's blade on it
   // (ADR-0129's altitude rule), stacking wherever the body is.
   const blades = useBlades();
+  // Unsaved Configure drafts (the system's and its sole location's) the tab
+  // rail asks about; in a blade, closing or popping it asks too.
+  const leave = createLeaveGuard();
+  if (props.host === "blade") onCleanup(blades.guard({ kind: "system", id: props.id }, leave));
   const openComponent = (cid: string) => blades.push({ kind: "component", id: cid });
   const { destructive, err } = useEntityDelete({
     kindLabel: "system",
