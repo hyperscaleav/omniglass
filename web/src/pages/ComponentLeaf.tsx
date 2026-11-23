@@ -19,8 +19,8 @@ import Eyebrow from "../components/Eyebrow";
 import DetailGate from "../components/DetailGate";
 import LocationCard from "../components/LocationCard";
 import TemplateNotice from "../components/TemplateNotice";
-import AcknowledgeButton from "../components/AcknowledgeButton";
-import SnoozeButton, { SnoozedBadge } from "../components/SnoozeButton";
+import AlarmActions from "../components/AlarmActions";
+import { SnoozedBadge } from "../components/SnoozeButton";
 import AlarmTimeline, { createTimelineToggles } from "../components/AlarmTimeline";
 import SeverityBadge from "../components/SeverityBadge";
 import { useSeverity } from "../lib/severity";
@@ -308,9 +308,7 @@ export default function ComponentLeaf() {
                               {durationText(pageNow() - Date.parse(a.raised_at))} · {a.acknowledged ? "acknowledged" : "unacknowledged"}
                             </span>
                             <SnoozedBadge alarm={a} />
-                            <AcknowledgeButton component={component()?.id ?? id()} alarm={a} />
-                            <SnoozeButton component={component()?.id ?? id()} alarm={a} surface={snoozeSurface} />
-                            {timelines.button(a.id, a.message)}
+                            <AlarmActions componentId={component()?.id ?? id()} alarm={a} surface={snoozeSurface} show={{ ack: true, snooze: true, timeline: timelines }} />
                           </div>
                           <Show when={timelines.isOpen(a.id)}>
                             <AlarmTimeline component={component()?.id ?? id()} alarmId={a.id} id={timelines.panelId(a.id)} label={timelines.label(a.message)} />

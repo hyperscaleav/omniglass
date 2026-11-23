@@ -89,7 +89,13 @@ That is why the two are independent, and the panel shows both facts at once:
 - a cleared alarm that was **never acknowledged** says so in the history: it came and went with
   nobody looking, which is worth spotting later.
 
-The **eye** button beside an active alarm acknowledges it. Unlike raising and clearing, it is
+Wherever an alarm is read (a component's **Why** strip, the alarms panel, the Alarms page and its drawer,
+a blade), what you can do with it is **one button group** on one line: **Acknowledge** (the eye),
+**Snooze**, **Clear** where the surface offers it, the omnibot button and the timeline clock, all the same
+height. On a narrow container the group wraps under the alarm's message as a whole, never member by member,
+and a control you may not use is simply absent.
+
+The **Acknowledge** button beside an active alarm acknowledges it. Unlike raising and clearing, it is
 available **without entering edit mode**: edit mode guards this component's own data, and an
 acknowledgement writes none of it. It needs the `alarm:acknowledge` permission, which the
 **Operator** role carries; a viewer sees the indicator and gets no button.
