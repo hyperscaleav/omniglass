@@ -7,7 +7,7 @@ sidebar:
 ---
 
 :::note[Partial]
-Slice-0 ships the **platform** rung end to end: the pure `settings` merge and resolve primitive, the single unscoped `setting_binding` table, the Huma routes, the two `settings:<action>` permissions, the two seeded `profile`-domain namespaces (`ui`, `keybindings`), `ui.theme` wired through to re-theme the SPA, and the Admin settings page ([ADR-0033](/architecture/decisions/#adr-0033-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory), [ADR-0034](/architecture/decisions/#adr-0034-the-settings-gateway-is-unscoped-only-the-permission-gates-it), [ADR-0035](/architecture/decisions/#adr-0035-settings-resolve-as-a-cascade-over-principals-with-a-broader-wins-lock)). The deferred fast-follow list is the design fence under [Slice-0 boundary](#slice-0-boundary). Slice-1 makes a setting a reflected **typed struct** ([ADR-0041](/architecture/decisions/#adr-0041-settings-are-a-reflected-typed-struct-with-generated-client-and-server-validation), [below](#slice-1-boundary)), retiring `defaults.yaml` and the hand-kept namespace list.
+Slice-0 ships the **platform** rung end to end: the pure `settings` merge and resolve primitive, the single unscoped `setting_binding` table, the Huma routes, the two `settings:<action>` permissions, the two seeded `profile`-domain namespaces (`ui`, `keybindings`), `ui.theme` wired through to re-theme the SPA, and the Admin settings page ([ADR-0033](/architecture/decisions/#adr-0033-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory), [ADR-0034](/architecture/decisions/#adr-0034-the-settings-gateway-is-unscoped-only-the-permission-gates-it), [ADR-0035](/architecture/decisions/#adr-0035-settings-resolve-as-a-cascade-over-principals-with-a-broader-wins-lock)). The user rung has since landed for profile namespaces ([layers and levels](#layers-and-levels), #2450); what stays deferred is the design fence under [Slice-0 boundary](#slice-0-boundary). Slice-1 makes a setting a reflected **typed struct** ([ADR-0041](/architecture/decisions/#adr-0041-settings-are-a-reflected-typed-struct-with-generated-client-and-server-validation), [below](#slice-1-boundary)), retiring `defaults.yaml` and the hand-kept namespace list.
 :::
 
 Omniglass resolves a **setting** the same way it resolves a secret or a variable: down a cascade,
@@ -283,6 +283,9 @@ Two read audiences, two read endpoints, and merge-patch writes:
 - **`PATCH /settings/{namespace}`** (`settings:update` **and** `platform:update`): an RFC 7386 JSON
   Merge Patch onto the namespace's binding at the acting scope (`platform` in slice-0); `null`
   restores a key.
+- **`PATCH /settings/me/{namespace}`** (any authenticated user, self-scoped, #2450): a merge patch onto
+  the caller's own `user` binding for a profile-domain namespace; a platform-domain namespace is a 403
+  and a platform-locked key a 409.
 - **`DELETE /settings/{namespace}`** (same gates): drop the binding, restoring the namespace to
   its env layer, file layer and defaults.
 - **`POST /settings:restoreDefaults`** (same gates): an AIP custom method, a factory reset of the
@@ -351,6 +354,6 @@ the single-source struct, the typed effective read, and the generated validation
 **Deferred (future slices, tracked on [#270](https://github.com/hyperscaleav/omniglass/issues/270)):**
 the declarative operator-file machinery (a generated JSONSchema for the operator `settings.json`,
 boot validation of the **file** layer, and the file-wins / read-only GitOps lever); operator-open
-namespaces (a typed map with a `Default()` method); and the group and user cascade rungs, all
-unchanged by slice-1.
+namespaces (a typed map with a `Default()` method); and the group cascade rung (the user rung has since
+landed, #2450), all unchanged by slice-1.
 :::
