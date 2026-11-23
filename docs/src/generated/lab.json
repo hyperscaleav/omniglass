@@ -66,6 +66,13 @@
   ],
   "walkthroughs": [
     {
+      "id": "add-a-dependency",
+      "title": "Add and remove a dependency",
+      "description": "Read what a video bar depends on and what depends on it, try an edge that would close a cycle and read the server's refusal, then add a real upstream and remove it again.",
+      "lab": [],
+      "setup": []
+    },
+    {
       "id": "declare-a-first-slot",
       "title": "Declare a first slot",
       "description": "Give a one-off system its first slot from the console, name it, say what it accepts, and see the slot it opens.",
@@ -185,6 +192,13 @@
       "id": "pick-a-product-by-typing",
       "title": "Pick a product by typing",
       "description": "In the Add simulated component drawer, type part of a product or its profile, read the matches with the profile under each, and choose one from the keyboard.",
+      "lab": [],
+      "setup": []
+    },
+    {
+      "id": "pick-a-time-range",
+      "title": "Pick the time range a system page charts",
+      "description": "Open the Huddle Room, open the time range on its tab rail, pick the last 7 days, and read the data section redrawn over the week.",
       "lab": [],
       "setup": []
     },

@@ -49,7 +49,7 @@ func newViewsFixture(t *testing.T, opts ...api.Option) *viewsFixture {
 	all := scope.Set{All: true}
 	for _, g := range []string{"a", "b"} {
 		loc := "loc-" + g
-		if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: loc, LocationType: "building"}, all); err != nil {
+		if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: loc, LocationType: "building"}, all, all); err != nil {
 			t.Fatalf("create location: %v", err)
 		}
 		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "codec-" + g, LocationName: &loc}, all, all, all, all); err != nil {
