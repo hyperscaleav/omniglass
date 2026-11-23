@@ -89,6 +89,13 @@
       "setup": []
     },
     {
+      "id": "find-a-device-from-the-keyboard",
+      "title": "Find a device from the keyboard",
+      "description": "Open the command palette with Ctrl-K, type part of a name, read which location each match sits under, narrow it to one device and press Enter to open it.",
+      "lab": [],
+      "setup": []
+    },
+    {
       "id": "find-and-fix-a-location",
       "title": "Find a location and fix its label",
       "description": "Drill Explore down to a location, open the system it holds, and rename the location from Configure. The new label follows everywhere the location is read.",
