@@ -107,6 +107,60 @@ describe("FlatList loading placeholder", () => {
   });
 });
 
+// Sorting and opening a row are keyboard operable (#1932): the header label is a
+// button, the th reports aria-sort, and an openable row has a named open control.
+describe("FlatList keyboard operation", () => {
+  const sent = [{ id: "zulu" }, { id: "alpha" }];
+  const mountList = () =>
+    render(() => (
+      <FlatList<{ id: string }>
+        config={{
+          entity: { name: "thing", plural: "things" },
+          rows: () => sent,
+          filterKeys: [{ key: "name", type: "string", hint: "substring", get: (r) => r.id, values: () => [] }],
+          columns: [{ key: "id", label: "Id", sortVal: (r) => r.id, cell: (r) => <span>{r.id}</span> }],
+          rowId: (r) => r.id,
+          rowLabel: (r) => r.id,
+          detail: (r) => ({ title: r.id, body: <div>detail-{r.id}</div> }),
+        }}
+      />
+    ));
+
+  it("sorts from the header button and reports aria-sort", () => {
+    mountList();
+    const th = screen.getByRole("columnheader", { name: "Id" });
+    expect(th).toHaveAttribute("aria-sort", "none");
+    fireEvent.click(screen.getByRole("button", { name: "Id" }));
+    expect(th).toHaveAttribute("aria-sort", "ascending");
+    expect(screen.getAllByRole("row").slice(1).map((tr) => tr.textContent)).toEqual(["alpha", "zulu"]);
+    fireEvent.click(screen.getByRole("button", { name: "Id" }));
+    expect(th).toHaveAttribute("aria-sort", "descending");
+  });
+
+  it("names each open button by its row address when no rowLabel is set", () => {
+    render(() => (
+      <FlatList<{ id: string }>
+        config={{
+          entity: { name: "thing", plural: "things" },
+          rows: () => sent,
+          filterKeys: [{ key: "name", type: "string", hint: "substring", get: (r) => r.id, values: () => [] }],
+          columns: [{ key: "id", label: "Id", cell: (r) => <span>{r.id}</span> }],
+          rowId: (r) => r.id,
+          detail: (r) => ({ title: r.id, body: <div>detail-{r.id}</div> }),
+        }}
+      />
+    ));
+    expect(screen.getByRole("button", { name: "Open thing alpha" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open thing zulu" })).toBeInTheDocument();
+  });
+
+  it("opens a row from a named button", async () => {
+    mountList();
+    fireEvent.click(screen.getByRole("button", { name: "Open alpha" }));
+    expect(await screen.findByText("detail-alpha")).toBeInTheDocument();
+  });
+});
+
 // #2431 item 6: an empty list shows its empty state alone, no column header row
 // above it; a filter that matches nothing keeps the head.
 describe("FlatList empty state", () => {

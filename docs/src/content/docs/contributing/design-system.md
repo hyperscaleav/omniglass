@@ -74,6 +74,7 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
   whether the row is absent or out of scope. A blade drilled over the root keeps its own stack and
   is not in the URL, and the param composes with the page's filter, sort and `?edit=1`. Every
   link into a drawer from another surface is `drawerHref(kind, address)`, never a hand-built string.
+- **A list's sort and open work from the keyboard.** `FlatList`'s sort and open are keyboard operable from the primitive: a sortable header renders its label in a `<button>` and the `<th>` carries `aria-sort`, and an openable row ends in a button named `Open <name>` (`rowLabel`, else the entity noun and the row address), which also gives a scrolling table its focus stop.
 - **Lists render in server order; the SQL rule is the ordering primitive.** A catalog list the
   API serves arrives ordered by `order by label nulls last, name` (a row with no label last,
   otherwise by label, then by name), and the page renders the rows as received: `FlatList` sorts
