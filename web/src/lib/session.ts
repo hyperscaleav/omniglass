@@ -102,7 +102,7 @@ export const isDatagram = (transport: string): boolean => DATAGRAM_TRANSPORTS.ha
 
 // NO_ANSWER_CAUSES is what silence over a datagram transport can mean.
 export const NO_ANSWER_CAUSES =
-  "Silence proves nothing here: the host is off, the agent or service is stopped, the v2c community is wrong (an agent drops it silently), or the port is filtered. A closed port is the affirmative refused (ICMP port-unreachable).";
+  "Silence proves nothing here: the host is off, the agent or service is stopped, the v2c community is wrong (an agent drops it silently), or the port is filtered. A closed port also lands here until the reading carries its reason (#2567).";
 
 // silentDatagram reports a datagram endpoint whose transport rung got no answer.
 export function silentDatagram(iface: ReachEndpoint): boolean {

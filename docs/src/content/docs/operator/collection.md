@@ -247,7 +247,7 @@ below keep their readings: an endpoint whose login was refused still shows its p
 transport answering. Over a datagram transport (udp, snmp) a silent **responsive** rung reads **no answer**,
 not down: silence proves nothing there. The host may be off, the agent or service stopped, the v2c
 community wrong (an agent drops a wrong community without a word), or the port filtered; a closed
-port is different and says so (the affirmative **refused**, an ICMP port-unreachable). The rung's
+port (an ICMP port-unreachable, the affirmative **refused**) lands here too until the reading carries its reason (#2567). The rung's
 hint, the collection badge on the component and the row's pill all name those causes. The reachability reading and
 the unreachable streak are unchanged, so a run of silence still alarms; only what it says changed. A tcp connect that times out
 still reads down. A down endpoint also shows a plain-language **why** line. Every value is a
