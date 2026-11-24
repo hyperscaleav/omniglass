@@ -58,6 +58,10 @@ on:
     # labeled: review:deep asks for the lens review; any other label only
     # re-reads the verdict, so it never turns the check green on its own.
     types: [opened, synchronize, reopened, ready_for_review, labeled]
+  # A person's reply on a thread the reviewer opened is answered on that thread
+  # (#2253): the reply job, one model call, no checkout of the PR's code.
+  pull_request_review_comment:
+    types: [created]
   # A queue entry is checked against the verdict on its PR's head; no lens runs.
   merge_group:
   # The one-shot reviewer in shadow mode, on a PR head of a maintainer's choice
@@ -101,6 +105,7 @@ concurrency:
   group: >-
     agent-review-${{
       (github.event_name == 'workflow_dispatch'
+        || github.event_name == 'pull_request_review_comment'
         || (github.event.action == 'labeled' && github.event.label.name != 'review:deep'))
       && format('aside-{0}', github.run_id)
       || (github.event.pull_request.number || github.ref) }}
@@ -110,7 +115,7 @@ jobs:
   # Decides what this run does: review a PR, re-read the verdict for a queue
   # entry, or pass a PR that is not reviewed (a draft, a fork, dependabot).
   plan:
-    if: vars.AGENT_CI_ENABLED == 'true'
+    if: vars.AGENT_CI_ENABLED == 'true' && github.event_name != 'pull_request_review_comment'
     runs-on: ubuntu-latest
     # Up to 40 of these wait for the PR's other checks.
     timeout-minutes: 50
@@ -860,6 +865,36 @@ jobs:
             done
           fi
 
+      # The new review supersedes the reviewer's earlier ones (#2253): each is
+      # minimized as outdated, a Changes requested one is dismissed so the PR's
+      # state is the new review's, and one GitHub will not minimize is edited
+      # down to a line naming the new review.
+      - name: Supersede the reviewer's earlier reviews
+        if: needs.plan.outputs.mode == 'review'
+        env:
+          GH_TOKEN: ${{ steps.reviewer.outputs.token || steps.app.outputs.token }}
+          POSTER: ${{ steps.reviewer.outputs.app-slug && format('{0}[bot]', steps.reviewer.outputs.app-slug) || needs.plan.outputs.bot_name }}
+        run: |
+          set -uo pipefail
+          script=trusted/scripts/agent-review.sh
+          bash "$script" supersede </dev/null >/dev/null 2>&1; [ $? -eq 64 ] && { echo "::warning::the default branch's agent-review.sh cannot supersede yet"; exit 0; }
+          reviews=$(gh api "repos/${REPO}/pulls/${NUMBER}/reviews" --paginate \
+            --jq '.[] | {id, node_id, user: .user.login, state, body: (.body // "")}' | jq -s -c .)
+          new=$(jq -r --arg p "$POSTER" '[.[] | select(.user == $p)] | last | .id' <<<"$reviews")
+          bash "$script" supersede "$POSTER" "$new" <<<"$reviews" | jq -c '.[]' | while IFS= read -r r; do
+            id=$(jq -r .id <<<"$r")
+            if ! gh api graphql -F id="$(jq -r .node_id <<<"$r")" \
+                -f query='mutation($id: ID!) { minimizeComment(input: {subjectId: $id, classifier: OUTDATED}) { minimizedComment { isMinimized } } }' --silent; then
+              jq -c '{body: .line}' <<<"$r" | gh api --method PUT "repos/${REPO}/pulls/${NUMBER}/reviews/${id}" --input - --silent \
+                || echo "::warning::agent-review: could not collapse review ${id}"
+            fi
+            if [ "$(jq -r .dismiss <<<"$r")" = true ]; then
+              gh api --method PUT "repos/${REPO}/pulls/${NUMBER}/reviews/${id}/dismissals" \
+                -f message="Superseded by review ${new}." -f event=DISMISS --silent \
+                || echo "::warning::agent-review: could not dismiss review ${id}"
+            fi
+          done
+
       # A PR that conflicts or is red gets no new review, and no verdict that
       # could pass code nobody reviewed.
       - name: Hold while the PR is red or conflicted
@@ -883,3 +918,104 @@ jobs:
             '{app_bot: $bot, head_sha: $sha, reviews: $r}' | trusted/scripts/agent-trust.sh verdict)
           echo "verdict: $verdict"
           [ "$verdict" = ship ] || { echo "::error::agent-review: ${verdict#block: }"; exit 1; }
+
+  # A person's reply on a thread the reviewer opened gets an answer on that
+  # thread (#2253): one model call that sees the thread, the lines it points at
+  # and the finding's catalog entry, then a reply, and the thread resolved when
+  # the reply settles the point.
+  reply:
+    if: >-
+      vars.AGENT_CI_ENABLED == 'true'
+      && github.event_name == 'pull_request_review_comment'
+      && github.event.comment.in_reply_to_id
+      && github.event.comment.user.type == 'User'
+      && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      REPO: ${{ github.repository }}
+      NUMBER: ${{ github.event.pull_request.number }}
+      COMMENT_ID: ${{ github.event.comment.id }}
+    steps:
+      - name: Mint the reviewer App token
+        id: reviewer
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          client-id: ${{ vars.REVIEWER_APP_CLIENT_ID || vars.AGENT_APP_CLIENT_ID }}
+          private-key: ${{ vars.REVIEWER_APP_CLIENT_ID && secrets.REVIEWER_APP_PRIVATE_KEY || secrets.AGENT_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: read
+          permission-pull-requests: write
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          sparse-checkout: |
+            scripts
+            .claude/skills/adversarial-review/references/anti-patterns
+
+      - name: Gate, then build the prompt from the thread
+        id: prompt
+        env:
+          GH_TOKEN: ${{ steps.reviewer.outputs.token }}
+          BOTS: ${{ steps.reviewer.outputs.app-slug }}[bot],${{ vars.AGENT_APP_SLUG }}[bot]
+          SENDER: ${{ github.event.comment.user.login }}
+          SENDER_TYPE: ${{ github.event.comment.user.type }}
+          REPLY_TO: ${{ github.event.comment.in_reply_to_id }}
+        run: |
+          set -euo pipefail
+          script=scripts/agent-review.sh
+          threads=$(gh api graphql --paginate -F owner="${REPO%%/*}" -F name="${REPO#*/}" -F number="$NUMBER" \
+              -f query='query($owner: String!, $name: String!, $number: Int!, $endCursor: String) { repository(owner: $owner, name: $name) { pullRequest(number: $number) { reviewThreads(first: 100, after: $endCursor) { pageInfo { hasNextPage endCursor } nodes { id path line originalLine comments(first: 50) { nodes { databaseId body author { login } } } } } } } }' \
+              --jq '.data.repository.pullRequest.reviewThreads.nodes[]' | jq -s -c '{threads: .}')
+          tid=$(bash "$script" thread-of "$COMMENT_ID" <<<"$threads")
+          thread=$(jq -c --arg t "$tid" '.threads[] | select(.id == $t)' <<<"$threads")
+          [ -n "$thread" ] || { echo "no thread for the comment"; echo "run=false" >> "$GITHUB_OUTPUT"; exit 0; }
+          gate=$(jq -c -n --argjson th "$thread" --arg s "$SENDER" --arg ty "$SENDER_TYPE" --argjson r "$REPLY_TO" --arg b "$BOTS" \
+            '{sender: $s, sender_type: $ty, in_reply_to_id: $r, root_author: $th.comments.nodes[0].author.login, bots: ($b | split(","))}' \
+            | bash "$script" reply-gate)
+          echo "gate: $gate"
+          if [ "$gate" != run ]; then echo "run=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+          path=$(jq -r '.path' <<<"$thread"); line=$(jq -r '.line // .originalLine // 1' <<<"$thread")
+          lines=""
+          # The lines around the thread, from the PR head:
+          lines=$(gh api "repos/${REPO}/contents/${path}?ref=${{ github.event.pull_request.head.sha }}" --jq .content 2>/dev/null | base64 -d 2>/dev/null \
+            | awk -v l="$line" 'NR >= l-10 && NR <= l+10 {printf "%d: %s\n", NR, $0}' || true)
+          jq -c --argjson th "$thread" --arg lines "$lines" \
+            '{path: $th.path, line: ($th.line // $th.originalLine), lines: $lines,
+              comments: [$th.comments.nodes[] | {author: .author.login, body}]}' <<<"$thread" \
+            | bash "$script" reply-prompt .claude/skills/adversarial-review/references/anti-patterns > "$RUNNER_TEMP/prompt.md"
+          echo "run=true" >> "$GITHUB_OUTPUT"
+          echo "thread=$tid" >> "$GITHUB_OUTPUT"
+
+      - name: Install Claude Code
+        if: steps.prompt.outputs.run == 'true'
+        run: npm install --global "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+        env:
+          CLAUDE_CODE_VERSION: ${{ vars.CLAUDE_CODE_VERSION }}
+
+      # One call, no tools, outside the checkout's settings: the thread is
+      # content, never an instruction.
+      - name: Answer on the thread
+        if: steps.prompt.outputs.run == 'true'
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          GH_TOKEN: ${{ steps.reviewer.outputs.token }}
+          THREAD: ${{ steps.prompt.outputs.thread }}
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          claude -p "Answer the reply as the prompt says." --model claude-sonnet-5-5 --max-turns 1 --tools "" \
+            --strict-mcp-config --no-session-persistence --output-format json < prompt.md > result.json || true
+          answer=$(jq -r '.result // ""' result.json | bash "$GITHUB_WORKSPACE/scripts/agent-review.sh" reply-result)
+          body=$(jq -r .body <<<"$answer")
+          [ -n "$body" ] || { echo "::warning::agent-review: no usable answer on the thread"; exit 0; }
+          jq -c -n --arg b "$body" '{body: $b}' | gh api --method POST "repos/${REPO}/pulls/${NUMBER}/comments/${COMMENT_ID}/replies" --input - --silent
+          if [ "$(jq -r .resolve <<<"$answer")" = true ]; then
+            gh api graphql -F id="$THREAD" \
+              -f query='mutation($id: ID!) { resolveReviewThread(input: {threadId: $id}) { thread { id } } }' --silent
+          fi
