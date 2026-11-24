@@ -24,7 +24,7 @@ credential be an explicit allow-list of its own subjects (`outpostPermissions` i
 
 | Verb | Direction | What it carries |
 | --- | --- | --- |
-| `worklist` | outpost asks, server answers | the outpost's worklist, synced endpoint by endpoint against a manifest ([ADR-1586](/architecture/decisions/#adr-1586-a-node-syncs-its-worklist-endpoint-by-endpoint-against-a-manifest)) |
+| `worklist` | outpost asks, server answers | the outpost's whole worklist, gzipped past 64 KB ([outposts](/architecture/outposts/)); an endpoint-by-endpoint sync against a manifest is the planned design ([ADR-1586](/architecture/decisions/#adr-1586-a-node-syncs-its-worklist-endpoint-by-endpoint-against-a-manifest), #2606) |
 | `worklist-changed` | server to outpost | an empty nudge to pull now, sent when a commit changes the outpost's worklist ([outposts](/architecture/outposts/#the-change-nudge)) |
 | `heartbeat` | outpost to server | the outpost's check-in |
 | `telemetry` | outpost to stream | each tick's `TelemetryBatch` |

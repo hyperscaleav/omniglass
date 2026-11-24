@@ -179,17 +179,11 @@ alarms on its absence. It is off by default, and hosting the receiver is out of 
 
 ## Which figures alarm
 
-The seeded rules on platform figures:
-
-- `outpost-silent`: `checkin-age` past 90 s, `high`.
-- `worklist-stale`: an outpost's pulls all refused for two minutes, warning.
-- `ingest-lag-high`: the server 30 s behind its samples for two minutes, warning.
-- `rule-sweep-stalled`: `rule-sweep-age` past 30 s, six missed sweeps, `high`.
-- `disk-nearly-full`: `data-dir-disk-used-ratio` over 0.9 for two minutes, warning, cleared at 0.85.
-- `process-heap-growing` and `process-goroutines-growing`: a steady climb for six hours, the shape of
-  a leak, `average`.
-- `db-size-growing`: shipped disabled, since a fleet onboarded in its first week grows as bloat would
-  ([a trend rule reads a window](/architecture/alarms-actions/#a-trend-rule-reads-a-window-not-a-sample)).
+Each figure that alarms does so through a seeded event rule on its key, with the severity and
+thresholds that rule carries. A few are worth knowing by shape: a trend rule fires on a steady climb
+rather than a level, and `db-size-growing` ships disabled, since a fleet onboarded in its first week
+grows as bloat would
+([a trend rule reads a window](/architecture/alarms-actions/#a-trend-rule-reads-a-window-not-a-sample)).
 
 Every figure Platform health reads is the `sample_key` of a shipped rule or is named, with a reason,
 on an exemption list in code (`PlatformRuleExemptions`); a test fails when a figure reaches a panel
