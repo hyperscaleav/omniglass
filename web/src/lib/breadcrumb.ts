@@ -30,6 +30,14 @@ export function crumbLayout(count: number): { flex: string; minWidth: string }[]
 // (the parent) and folds every crumb between into an ellipsis menu. Pure, so
 // the rule is pinned here and the bar only renders it.
 export const TRAIL_BUDGET = 72;
+
+// trailBudget turns the measured width of the path line (px) into the character
+// budget collapseTrail folds against: about 7px a character at the muted size,
+// floored so a sliver still keeps a first and a last crumb. An unmeasured line
+// (no layout yet, or a test DOM) falls back to the fixed budget.
+export function trailBudget(widthPx: number): number {
+  return widthPx > 0 ? Math.max(12, Math.floor(widthPx / 7)) : TRAIL_BUDGET;
+}
 export function collapseTrail(crumbs: Crumb[], budget = TRAIL_BUDGET): { head: Crumb[]; hidden: Crumb[]; tail: Crumb[] } {
   const chars = crumbs.reduce((n, c) => n + c.label.length + 3, 0);
   if (crumbs.length < 3 || chars <= budget) return { head: crumbs, hidden: [], tail: [] };

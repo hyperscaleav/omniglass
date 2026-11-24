@@ -23,6 +23,9 @@ export default function Page(props: {
   subtitle?: string;
   // A detail page's path (each crumb a link), read by the top bar before the h1.
   trail?: Crumb[];
+  // The kind's list (a link before the h1) and the entity's primary system (a muted link after it).
+  kind?: Crumb;
+  system?: Crumb;
   actions?: JSX.Element;
   children: JSX.Element;
 }) {
@@ -32,7 +35,7 @@ export default function Page(props: {
   createEffect(() => namePage(props.name));
   onCleanup(() => namePage(undefined));
   // The top bar is the page header (#2575): the title and hint go there.
-  createRenderEffect(() => setPageHeader({ title: title(), hint: subtitle(), trail: props.trail }));
+  createRenderEffect(() => setPageHeader({ title: title(), hint: subtitle(), trail: props.trail, kind: props.kind, system: props.system }));
   onCleanup(() => setPageHeader(undefined));
   return (
     <section class="og-stack flex flex-col" classList={{ "h-full min-h-0": props.fill }}>

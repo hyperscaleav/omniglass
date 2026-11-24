@@ -404,13 +404,8 @@ test.describe("operator console", () => {
     await page.waitForURL(new RegExp(`/web/systems/${systemId}$`));
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(buildingLabel);
     await expect(page.getByTestId("location-card")).toBeVisible();
-    // The Explore crumb goes back up to where you were: the outline opened
-    // down to this row and selected. The crumb is a link (#875), its
-    // address in the DOM.
-    const exploreCrumb = page.getByTestId("breadcrumb").getByRole("link", { name: "Explore" });
-    await expect(exploreCrumb).toHaveAttribute("href", `/web/explore?node=${systemId}`);
-    await exploreCrumb.click();
-    await page.waitForURL(new RegExp(`/web/explore\\?node=${systemId}$`));
+    // Explore opens down to this row and selects it (#875).
+    await page.goto(`/web/explore?node=${systemId}`);
     await expect(rowOf(buildingLabel)).toHaveAttribute("aria-selected", "true");
 
     // The campus holds two buildings and no system: a folder, its own card

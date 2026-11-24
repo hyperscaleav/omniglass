@@ -65,12 +65,8 @@ export default function LocationZoom() {
   const crumbs = createMemo(() => {
     if (!view.data) return [];
     const chain = ancestors(id(), locationIndex(view.data));
-    return [
-      // Back up lands where you were: the outline opened down to this row.
-      { key: "explore", label: "Explore", href: `/explore?node=${encodeURIComponent(id())}` },
-      // The trail ends at the parent: the location itself is the page title.
-      ...chain.slice(0, -1).map((l) => ({ key: l.id, label: entityLabel(l), href: `/locations/${l.id}` })),
-    ];
+    // The path ends at the parent: the location itself is the page title.
+    return chain.slice(0, -1).map((l) => ({ key: l.id, label: entityLabel(l), href: `/locations/${l.id}` }));
   });
 
   // A miss is judged only once the fleet view is current: the create
@@ -80,7 +76,7 @@ export default function LocationZoom() {
 
   return (
     <BladesContext.Provider value={blades}>
-      <Page title={location() ? entityLabel(location()!) : "Location"} name={location()?.name} trail={crumbs()}>
+      <Page title={location() ? entityLabel(location()!) : "Location"} name={location()?.name} trail={crumbs()} kind={{ key: "locations", label: "Locations", href: "/locations" }}>
         {/* A create from a template lands here with ?from= (#1329). */}
         <TemplateNotice />
         <DetailGate

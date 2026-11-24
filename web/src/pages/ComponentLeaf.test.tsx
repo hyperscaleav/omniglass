@@ -138,39 +138,25 @@ describe("the component leaf", () => {
     expect(screen.getByTestId("time-range-trigger")).toBeTruthy();
   });
 
-  // The path names the room once (#872): the room holds one system, so the
-  // room's crumb IS the system's, whose view is the room's.
-  it("arriving directly walks the places to its one-system room, named once, as the system", () => {
-    mount();
-    const trail = screen.getByTestId("breadcrumb");
-    expect(within(trail).getByText("Explore")).toBeTruthy();
-    expect(within(trail).getByText("Headquarters")).toBeTruthy();
-    expect(within(trail).getByText("Boardroom System")).toBeTruthy();
-    expect(within(trail).queryByText("Boardroom A")).toBeNull();
-    expect(within(trail).queryByText("Video Bar 1")).toBeNull();
-    expect(pageHeader()?.title).toBe("Video Bar 1");
-  });
-
-  // The one-row header (#2575): the path rides the top bar before the entity's
-  // label, the page body spends no row on it.
-  it("renders the location trail inside the top bar, the label as the one h1, no breadcrumb row in the body", () => {
+  // The two-line header (#2575): line 1 is the kind's list, the label as the one
+  // h1 and the primary system; line 2 is the location path, as links.
+  it("line 1 reads Components / label (system), line 2 the location path, one h1, no body breadcrumb", () => {
     mount();
     const bar = document.querySelector("header")!;
+    const line1 = within(bar).getByTestId("header-line-1");
+    expect(within(line1).getByRole("link", { name: "Components" })).toBeTruthy();
+    expect(within(line1).getByRole("link", { name: "Boardroom System" })).toBeTruthy();
+    expect(line1.textContent).toBe("Components/Video Bar 1(Boardroom System)");
     const trail = within(bar).getByTestId("breadcrumb");
+    expect(line1.contains(trail)).toBe(false);
     expect(within(trail).getByRole("link", { name: "Headquarters" })).toBeTruthy();
+    expect(within(trail).queryByText("Video Bar 1")).toBeNull();
     const h1s = screen.getAllByRole("heading", { level: 1 });
     expect(h1s).toHaveLength(1);
     expect(h1s[0].textContent).toBe("Video Bar 1");
-    expect(bar.contains(h1s[0])).toBe(true);
+    expect(pageHeader()?.title).toBe("Video Bar 1");
     expect(screen.getAllByTestId("breadcrumb")).toHaveLength(1);
     expect(document.querySelector("section")!.querySelector('[data-testid="breadcrumb"]')).toBeNull();
-  });
-
-  it("links Explore back to this component's row in the outline", async () => {
-    mount();
-    fireEvent.click(within(screen.getByTestId("breadcrumb")).getByRole("link", { name: "Explore" }));
-    expect(await screen.findByTestId("fleet-page")).toBeTruthy();
-    expect(window.location.pathname + window.location.search).toBe(`/web/explore?node=${uuidFor("cf-c-bar")}`);
   });
 
   it("says what it is: product (label with its handle), vendor, driver, once each", () => {

@@ -943,7 +943,8 @@ describe("the location is context, the system the subject (#872)", () => {
   it("titles a sole system's view by its location and ends the path at the location's parent", () => {
     mount();
     expect(pageHeader()?.title).toBe("Boardroom A");
-    expect(within(screen.getByTestId("breadcrumb")).queryByText("Boardroom A")).toBeNull();
+    expect(screen.queryByTestId("breadcrumb")?.textContent ?? "").not.toContain("Boardroom A");
+    expect(within(screen.getByTestId("header-line-1")).getByRole("link", { name: "Systems" })).toBeTruthy();
   });
 
   it("shows the location as a card naming its type, without repeating its name", () => {
@@ -969,15 +970,6 @@ describe("the location is context, the system the subject (#872)", () => {
     fireEvent.click(within(screen.getByTestId("location-card")).getByRole("link", { name: "Configure location" }));
     expect(await screen.findByTestId("location-page")).toBeTruthy();
     expect(window.location.pathname + window.location.search).toBe(`/web/locations/${uuidFor("szp-room")}?tab=configure`);
-  });
-
-  // Going back up lands where you were (#872): the Explore crumb opens the
-  // outline down to this system's row, not at the top of the fleet.
-  it("links Explore back to this system's row in the outline", async () => {
-    mount();
-    fireEvent.click(within(screen.getByTestId("breadcrumb")).getByRole("link", { name: "Explore" }));
-    expect(await screen.findByTestId("fleet-page")).toBeTruthy();
-    expect(window.location.pathname + window.location.search).toBe(`/web/explore?node=${uuidFor("szp-sys")}`);
   });
 
   it("gives an unplaced system its own title and no location card", () => {

@@ -86,7 +86,9 @@ export function namePage(name: string | undefined) {
 }
 
 // A detail page also hands the bar its trail: the path above its title, each crumb a link.
-export type PageHeader = { title: string | JSX.Element; hint?: string; trail?: Crumb[] };
+// `kind` is the list link before the h1, `system` the primary system after it, and
+// `trail` the location path on the second line.
+export type PageHeader = { title: string | JSX.Element; hint?: string; trail?: Crumb[]; kind?: Crumb; system?: Crumb };
 const [header, setHeader] = createSignal<PageHeader | undefined>();
 
 // pageHeader is the title and hint of the mounted Page, which the top bar renders

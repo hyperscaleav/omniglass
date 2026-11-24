@@ -8,7 +8,7 @@ import { pageHeader } from "./handover";
 export function withTopBar(Page: Component): Component {
   return () => (
     <>
-      <TopBar section="" title={pageHeader()?.title} hint={pageHeader()?.hint} trail={pageHeader()?.trail} onOpenPalette={() => {}} />
+      <TopBar section="" title={pageHeader()?.title} hint={pageHeader()?.hint} trail={pageHeader()?.trail} kind={pageHeader()?.kind} system={pageHeader()?.system} onOpenPalette={() => {}} />
       <Page />
     </>
   );
