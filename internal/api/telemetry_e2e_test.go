@@ -118,7 +118,7 @@ func TestTelemetryPushAPI(t *testing.T) {
 		return err == nil && s != nil && s.Value == "hdmi2"
 	})
 	waitFor(t, "the caught event", func() bool {
-		evs, err := gw.ListComponentEvents(ctx, "bar-1", time.Hour, 50)
+		evs, err := gw.ListComponentEvents(ctx, "bar-1", time.Hour, 50, storage.EventFilter{})
 		if err != nil {
 			return false
 		}

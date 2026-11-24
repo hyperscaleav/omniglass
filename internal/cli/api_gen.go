@@ -2443,17 +2443,36 @@ func generatedCommands() []*cobra.Command {
 			}
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
+					var qKey string
+					var qSource string
+					var qQ string
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a component's recent events",
-						Long:    "Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours, narrowed by an optional event type (key), source and message text (q). Gated by component:read; an out-of-scope component is a non-disclosing 404.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component event list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/components/%s/events", pathSegment(args[0]))
+							q := url.Values{}
+							if cmd.Flags().Changed("key") {
+								q.Set("key", fmt.Sprintf("%v", qKey))
+							}
+							if cmd.Flags().Changed("source") {
+								q.Set("source", fmt.Sprintf("%v", qSource))
+							}
+							if cmd.Flags().Changed("q") {
+								q.Set("q", fmt.Sprintf("%v", qQ))
+							}
+							if enc := q.Encode(); enc != "" {
+								path += "?" + enc
+							}
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
+					cmd.Flags().StringVar(&qKey, "key", "", "Only occurrences of this event type, by name")
+					cmd.Flags().StringVar(&qSource, "source", "", "Only occurrences from this transport")
+					cmd.Flags().StringVar(&qQ, "q", "", "Only occurrences whose message contains this text, case-insensitively")
 					return cmd
 				}()
 				return cmd
@@ -2720,6 +2739,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := func() *cobra.Command {
 					var qSeverity string
 					var qSource string
+					var qQ string
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a component's recent log lines",
@@ -2735,6 +2755,9 @@ func generatedCommands() []*cobra.Command {
 							if cmd.Flags().Changed("source") {
 								q.Set("source", fmt.Sprintf("%v", qSource))
 							}
+							if cmd.Flags().Changed("q") {
+								q.Set("q", fmt.Sprintf("%v", qQ))
+							}
 							if enc := q.Encode(); enc != "" {
 								path += "?" + enc
 							}
@@ -2743,6 +2766,7 @@ func generatedCommands() []*cobra.Command {
 					}
 					cmd.Flags().StringVar(&qSeverity, "severity", "", "Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out")
 					cmd.Flags().StringVar(&qSource, "source", "", "Only lines that arrived on this channel")
+					cmd.Flags().StringVar(&qQ, "q", "", "Only lines whose message contains this text, case-insensitively")
 					return cmd
 				}()
 				return cmd
@@ -8403,17 +8427,36 @@ func generatedCommands() []*cobra.Command {
 			}
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
+					var qKey string
+					var qSource string
+					var qQ string
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a system's recent events, members included",
-						Long:    "Returns the system's own events and its members', newest first, bounded to the last 24 hours, each row labeled by the owner that raised it. A component shared with another system appears in both systems' lists. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "Returns the system's own events and its members', newest first, bounded to the last 24 hours, each row labeled by the owner that raised it, narrowed by an optional event type (key), source and message text (q). A component shared with another system appears in both systems' lists. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass system event list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/systems/%s/events", pathSegment(args[0]))
+							q := url.Values{}
+							if cmd.Flags().Changed("key") {
+								q.Set("key", fmt.Sprintf("%v", qKey))
+							}
+							if cmd.Flags().Changed("source") {
+								q.Set("source", fmt.Sprintf("%v", qSource))
+							}
+							if cmd.Flags().Changed("q") {
+								q.Set("q", fmt.Sprintf("%v", qQ))
+							}
+							if enc := q.Encode(); enc != "" {
+								path += "?" + enc
+							}
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
+					cmd.Flags().StringVar(&qKey, "key", "", "Only occurrences of this event type, by name")
+					cmd.Flags().StringVar(&qSource, "source", "", "Only occurrences from this transport")
+					cmd.Flags().StringVar(&qQ, "q", "", "Only occurrences whose message contains this text, case-insensitively")
 					return cmd
 				}()
 				return cmd
@@ -8542,6 +8585,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := func() *cobra.Command {
 					var qSeverity string
 					var qSource string
+					var qQ string
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a system's members' recent log lines",
@@ -8557,6 +8601,9 @@ func generatedCommands() []*cobra.Command {
 							if cmd.Flags().Changed("source") {
 								q.Set("source", fmt.Sprintf("%v", qSource))
 							}
+							if cmd.Flags().Changed("q") {
+								q.Set("q", fmt.Sprintf("%v", qQ))
+							}
 							if enc := q.Encode(); enc != "" {
 								path += "?" + enc
 							}
@@ -8565,6 +8612,7 @@ func generatedCommands() []*cobra.Command {
 					}
 					cmd.Flags().StringVar(&qSeverity, "severity", "", "Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out")
 					cmd.Flags().StringVar(&qSource, "source", "", "Only lines that arrived on this channel")
+					cmd.Flags().StringVar(&qQ, "q", "", "Only lines whose message contains this text, case-insensitively")
 					return cmd
 				}()
 				return cmd

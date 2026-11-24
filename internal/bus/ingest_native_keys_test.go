@@ -142,7 +142,7 @@ func TestOutpostLaneLandsEveryNativeKey(t *testing.T) {
 			var landed bool
 			switch {
 			case isEvent[key]:
-				evs, err := gw.ListComponentEvents(ctx, "disp-1", 0, 10)
+				evs, err := gw.ListComponentEvents(ctx, "disp-1", 0, 10, storage.EventFilter{})
 				if err != nil {
 					t.Fatalf("events: %v", err)
 				}

@@ -44,7 +44,7 @@ func TestInsertEvents(t *testing.T) {
 		t.Fatalf("insert events: %v", err)
 	}
 
-	got, err := gw.ListComponentEvents(ctx, "disp-1", time.Hour, 10)
+	got, err := gw.ListComponentEvents(ctx, "disp-1", time.Hour, 10, storage.EventFilter{})
 	if err != nil {
 		t.Fatalf("list events: %v", err)
 	}
@@ -61,12 +61,36 @@ func TestInsertEvents(t *testing.T) {
 	}
 
 	// The since window excludes the older occurrence.
-	windowed, err := gw.ListComponentEvents(ctx, "disp-1", time.Minute, 10)
+	windowed, err := gw.ListComponentEvents(ctx, "disp-1", time.Minute, 10, storage.EventFilter{})
 	if err != nil {
 		t.Fatalf("list windowed events: %v", err)
 	}
 	if len(windowed) != 1 || windowed[0].Message != "call joined by 4 participants" {
 		t.Fatalf("windowed events: want only 'call joined by 4 participants', got %+v", windowed)
+	}
+
+	// The filter narrows the read itself (#2437): by event type, source, and a
+	// case-insensitive substring of the message.
+	for _, c := range []struct {
+		name   string
+		filter storage.EventFilter
+		want   int
+	}{
+		{"key", storage.EventFilter{Key: "call-started"}, 2},
+		{"an unknown key", storage.EventFilter{Key: "no-such-type"}, 0},
+		{"source", storage.EventFilter{Source: "xapi"}, 2},
+		{"another source", storage.EventFilter{Source: "seed"}, 0},
+		{"text, any case", storage.EventFilter{Text: "JOINED BY"}, 1},
+		{"text that is a LIKE wildcard", storage.EventFilter{Text: "%"}, 0},
+		{"all three", storage.EventFilter{Key: "call-started", Source: "xapi", Text: "started"}, 1},
+	} {
+		narrowed, err := gw.ListComponentEvents(ctx, "disp-1", time.Hour, 10, c.filter)
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		if len(narrowed) != c.want {
+			t.Errorf("%s: got %d events, want %d: %+v", c.name, len(narrowed), c.want, narrowed)
+		}
 	}
 
 	// An owner component that does not exist violates the component FK.
@@ -120,7 +144,7 @@ func TestListSystemEvents(t *testing.T) {
 		t.Fatalf("insert events: %v", err)
 	}
 
-	got, err := gw.ListSystemEvents(ctx, sys.ID, time.Hour, 10)
+	got, err := gw.ListSystemEvents(ctx, sys.ID, time.Hour, 10, storage.EventFilter{})
 	if err != nil {
 		t.Fatalf("list system events: %v", err)
 	}

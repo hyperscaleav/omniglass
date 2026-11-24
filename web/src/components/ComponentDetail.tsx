@@ -3,8 +3,7 @@ import { useNavigate, useSearchParams } from "@solidjs/router";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/solid-query";
 import TabRail from "./TabRail";
 import ConfigureFace from "./ConfigureFace";
-import EventsPanel from "./EventsPanel";
-import LogsPanel from "./LogsPanel";
+import OccurrenceList from "./OccurrenceList";
 import CommandsPanel from "./CommandsPanel";
 import DependenciesPanel from "./DependenciesPanel";
 import IdentitiesPanel from "./IdentitiesPanel";
@@ -322,11 +321,19 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
                 <Show when={can(me.data, "command", "read")}>
                   <CommandsPanel component={id()} name={component()?.name ?? id()} componentId={component()?.id} open={openCommand()} productDriver={product()?.driver} onAddEndpoint={can(me.data, "endpoint", "create") ? () => blades.push({ kind: "endpoint-create", id: component()?.id ?? id() }) : undefined} />
                 </Show>
-                <EventsPanel name={id()} />
+                <OccurrenceList
+                  kind="events"
+                  scope={{ type: "component", name: id() }}
+                  hint="Discrete occurrences a component published natively (its driver maps them to their event types) or a rule derived, as opposed to the sampled metric and state values above. Newest first, last 24 hours."
+                />
                 {/* The component's own words beside its occurrences (#1145):
                     the log lines its driver read and its listeners left
                     unclaimed. */}
-                <LogsPanel name={id()} />
+                <OccurrenceList
+                  kind="logs"
+                  scope={{ type: "component", name: id() }}
+                  hint="Raw log lines the component emitted, the ingest lane, untyped, that a rule may later derive events from: what its driver read as a log line, and anything its listeners did not claim. Newest first, last 24 hours."
+                />
               </div>
             </Show>
             <Show when={leafTab() === "overview"}>

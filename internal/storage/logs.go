@@ -91,6 +91,8 @@ const logArrival = "coalesce(log_line.received_at, log_line.ts)"
 type LogFilter struct {
 	Severity string
 	Source   string
+	// Text is a case-insensitive substring of the message (#2437).
+	Text string
 }
 
 // ErrUnknownSeverity is a filter naming a severity outside the canonical set.
@@ -111,6 +113,10 @@ func (f LogFilter) where(args []any) (string, []any, error) {
 	if f.Source != "" {
 		args = append(args, f.Source)
 		cond += fmt.Sprintf(" and log_line.source = $%d", len(args))
+	}
+	if f.Text != "" {
+		args = append(args, f.Text)
+		cond += fmt.Sprintf(" and strpos(lower(log_line.message), lower($%d)) > 0", len(args))
 	}
 	return cond, args, nil
 }

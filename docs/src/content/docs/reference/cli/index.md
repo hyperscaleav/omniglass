@@ -1685,13 +1685,19 @@ Commands for the event resource
 List a component's recent events
 
 ```
-omniglass component event list <name>
+omniglass component event list <name> [flags]
 ```
 
-Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours, narrowed by an optional event type (key), source and message text (q). Gated by component:read; an out-of-scope component is a non-disclosing 404.
 
 Arguments:
   <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--key` | string | (none) | Only occurrences of this event type, by name |
+| `--q` | string | (none) | Only occurrences whose message contains this text, case-insensitively |
+| `--source` | string | (none) | Only occurrences from this transport |
 
 Example:
 
@@ -1923,6 +1929,7 @@ Arguments:
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--q` | string | (none) | Only lines whose message contains this text, case-insensitively |
 | `--severity` | string | (none) | Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out |
 | `--source` | string | (none) | Only lines that arrived on this channel |
 
@@ -6504,13 +6511,19 @@ Commands for the event resource
 List a system's recent events, members included
 
 ```
-omniglass system event list <name>
+omniglass system event list <name> [flags]
 ```
 
-Returns the system's own events and its members', newest first, bounded to the last 24 hours, each row labeled by the owner that raised it. A component shared with another system appears in both systems' lists. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+Returns the system's own events and its members', newest first, bounded to the last 24 hours, each row labeled by the owner that raised it, narrowed by an optional event type (key), source and message text (q). A component shared with another system appears in both systems' lists. Gated by system:read; an out-of-scope system is a non-disclosing 404.
 
 Arguments:
   <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--key` | string | (none) | Only occurrences of this event type, by name |
+| `--q` | string | (none) | Only occurrences whose message contains this text, case-insensitively |
+| `--source` | string | (none) | Only occurrences from this transport |
 
 Example:
 
@@ -6636,6 +6649,7 @@ Arguments:
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--q` | string | (none) | Only lines whose message contains this text, case-insensitively |
 | `--severity` | string | (none) | Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out |
 | `--source` | string | (none) | Only lines that arrived on this channel |
 
