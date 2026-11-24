@@ -65,16 +65,16 @@ export default function TopBar(props: { section: string; title?: string | JSX.El
   const hint = shortcutHint(hostPlatform(), "K");
   return (
     <header class="navbar sticky top-0 z-20 min-h-14 gap-3 border-b border-base-300 bg-base-100/80 px-6 backdrop-blur">
-      <div data-testid="page-header" class="flex min-w-0 flex-1 flex-col justify-center py-1">
+      <div data-testid="page-header" class="flex min-w-0 flex-1 flex-col justify-center overflow-hidden py-1">
         <div data-testid="header-line-1" class="flex min-w-0 items-baseline gap-2 whitespace-nowrap">
           <Show when={props.kind} fallback={<Show when={props.section}>
             <span class="eyebrow flex-none text-base-content/70">{props.section.replaceAll(" · ", " / ")} /</span>
           </Show>}>
             {(k) => <span class="eyebrow flex flex-none items-baseline gap-2 text-base-content/70"><TrailLink crumb={k()} /><span class="text-base-content/30">/</span></span>}
           </Show>
-          <h1 class="min-w-0 truncate text-lg font-semibold leading-tight tracking-tight">{props.title}</h1>
+          <h1 class="min-w-[4ch] shrink truncate text-lg font-semibold leading-tight tracking-tight">{props.title}</h1>
           <Show when={props.system}>
-            {(sys) => <span class="min-w-0 max-w-[40%] flex-none truncate text-sm text-base-content/60">(<TrailLink crumb={sys()} />)</span>}
+            {(sys) => <span class="min-w-0 shrink truncate text-sm text-base-content/60">(<TrailLink crumb={sys()} />)</span>}
           </Show>
         </div>
         <Show when={props.trail?.length} fallback={<Show when={props.hint}>

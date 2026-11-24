@@ -68,7 +68,7 @@ const App: ParentComponent = (props) => {
     <div data-app-shell class="flex min-h-0 flex-1 bg-base-100">
       <Sidebar collapsed={collapsed()} onToggle={() => setCollapsed(!collapsed())} />
       <div class="flex min-w-0 flex-1 flex-col">
-        <TopBar section={section()} title={title()} hint={pageHeader()?.hint} trail={pageHeader()?.trail} onOpenPalette={() => setPaletteOpen(true)} onOpenOmnibot={mayAsk() ? () => openOmnibot() : undefined} />
+        <TopBar section={section()} title={title()} hint={pageHeader()?.hint} trail={pageHeader()?.trail} kind={pageHeader()?.kind} system={pageHeader()?.system} onOpenPalette={() => setPaletteOpen(true)} onOpenOmnibot={mayAsk() ? () => openOmnibot() : undefined} />
         <main id="scroll-main" class="mx-auto w-full max-w-330 flex-1 overflow-y-auto px-8 pb-16 pt-7">
           {props.children}
         </main>
