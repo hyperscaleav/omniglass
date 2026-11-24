@@ -122,26 +122,36 @@ export function phaseHint(c: Command): string {
 // One step of a command's arc, as the detail renders it: reached steps carry
 // their time, a step the command skips (no endpoint carries it, or it set
 // nothing so it settled at its issue) is left out. A note says what the time
-// alone hides: the delivered step's time is its latest delivery, so a
-// redelivered command notes how many times an outpost took it and when the first
-// came.
+// alone hides: the delivered step is anchored on the first delivery, so the
+// arc reads in time order, and a redelivered command notes how many times an
+// outpost took it and when the last came.
 export type CommandStep = { key: "issued" | "delivered" | "executed" | "terminal"; label: string; at?: string; reached: boolean; note?: string };
 
 // deliveryNote is a redelivered command's history in words: how many times a
-// outpost took it, and the first delivery as an offset from the issue. A command
+// outpost took it, and the last delivery as an offset from the issue. A command
 // taken once, or not yet, has nothing the step's own time does not say.
-export function deliveryNote(c: Pick<Command, "delivery_count" | "first_delivered_at" | "issued_at">): string | undefined {
+export function deliveryNote(c: Pick<Command, "delivery_count" | "delivered_at" | "issued_at">): string | undefined {
   if (!c.delivery_count || c.delivery_count < 2) return undefined;
   const times = `delivered ${c.delivery_count} times`;
-  return c.first_delivered_at ? `${times}, first ${offsetWords(c.issued_at, c.first_delivered_at)}` : times;
+  return c.delivered_at ? `${times}, last ${offsetWords(c.issued_at, c.delivered_at)}` : times;
 }
 
 export function commandSteps(c: Command): CommandStep[] {
   const steps: CommandStep[] = [{ key: "issued", label: "Issued", at: c.issued_at, reached: true }];
   const carried = !!c.endpoint && c.settled_by !== "issue";
   if (carried) {
-    steps.push({ key: "delivered", label: c.outpost ? `Delivered to ${c.outpost}` : "Delivered", at: c.delivered_at, reached: !!c.delivered_at, note: deliveryNote(c) });
-    steps.push({ key: "executed", label: "Answered", at: c.executed_at, reached: !!c.executed_at });
+    steps.push({ key: "delivered", label: c.outpost ? `Delivered to ${c.outpost}` : "Delivered", at: c.first_delivered_at ?? c.delivered_at, reached: !!c.delivered_at, note: deliveryNote(c) });
+    // A report can land after the command settled (a timeout, then the outpost's
+    // late answer): the step is anchored on the settle so the arc reads in time
+    // order, and notes when the report came.
+    const late = !!c.executed_at && !!c.settled_at && !inFlight(c) && new Date(c.executed_at) > new Date(c.settled_at);
+    steps.push({
+      key: "executed",
+      label: "Answered",
+      at: late ? c.settled_at : c.executed_at,
+      reached: !!c.executed_at,
+      note: late ? `reported ${offsetWords(c.issued_at, c.executed_at!)}, after it settled` : undefined,
+    });
   }
   const terminal = !inFlight(c);
   steps.push({
