@@ -10,7 +10,7 @@ form: bullet
   `GET /components/{name}/effective-secrets` / `GET /components/{name}/effective-variables` routes (with the
   generated `omniglass effective-secret list` / `effective-variable list` commands and the matching typed-client
   methods), are **removed** ([#281](https://github.com/hyperscaleav/omniglass/issues/281), under the
-  [field](/architecture/variables/#property-one-typed-name-a-product-contract-a-stored-value) epic
+  [field](/architecture/core-entities/#declared-properties-the-classifier-contracts-and-the-declared-rows) epic
   [#266](https://github.com/hyperscaleav/omniglass/issues/266)). The panels listed **every** cascade-resolving cell
   that reached a component, mostly inherited noise; the **field** primitive is the schema-over-cells consumer, so a
   component's values are now its **fields** (override versus type-default, the **Effective fields** panel), and a

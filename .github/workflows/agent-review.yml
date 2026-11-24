@@ -267,7 +267,7 @@ jobs:
           # This workflow's own checks, and agent-fix's; and docs-shots freshness,
           # which the reviewer does not wait on while main recaptures the docs
           # shots after merges (#2561), so a PR need not re-render them.
-          IGNORE: '^(plan|agent-review|oneshot|fix|lens \(.*\)|freshness)$'
+          IGNORE: '^(plan|agent-review|oneshot|fix|agent-fix|lens \(.*\)|freshness)$'
           # The checks that must exist, and finish, before a review starts:
           # each one reports on every push (a skip passes), so none is waited
           # on forever.
@@ -284,7 +284,7 @@ jobs:
           while :; do
             mergeable=$(gh pr view "$NUMBER" --repo "$REPO" --json mergeable --jq .mergeable)
             checks=$(gh api "repos/${REPO}/commits/${HEAD_SHA}/check-runs?per_page=100" --paginate \
-              --jq '.check_runs[] | {name, status, conclusion}' | jq -s -c .)
+              --jq '.check_runs[] | {id, name, status, conclusion}' | jq -s -c .)
             said=$(jq -cn --arg m "$mergeable" --arg ig "$IGNORE" --argjson rq "$REQUIRE" --argjson c "$checks" \
               '{mergeable: $m, ignore: $ig, require: $rq, checks: $c}' | bash "$script" gate)
             case "$said" in
@@ -877,7 +877,17 @@ jobs:
         run: |
           set -uo pipefail
           script=trusted/scripts/agent-review.sh
-          bash "$script" supersede </dev/null >/dev/null 2>&1; [ $? -eq 64 ] && { echo "::warning::the default branch's agent-review.sh cannot supersede yet"; exit 0; }
+          # Does the default branch's script know supersede yet? Ask it a real,
+          # harmless question (no bots, review 0, no reviews: it answers []). A
+          # script from before supersede exits 64 on usage; the step runs under
+          # bash -e, so the status is taken with || and not read from $? after
+          # the call (#2634).
+          rc=0
+          echo '[]' | bash "$script" supersede "" 0 >/dev/null 2>&1 || rc=$?
+          if [ "$rc" -eq 64 ]; then
+            echo "::warning::the default branch's agent-review.sh cannot supersede yet"
+            exit 0
+          fi
           reviews=$(gh api "repos/${REPO}/pulls/${NUMBER}/reviews" --paginate \
             --jq '.[] | {id, node_id, user: .user.login, state, body: (.body // "")}' | jq -s -c .)
           new=$(jq -r --arg p "$POSTER" '[.[] | select(.user == $p)] | last | .id' <<<"$reviews")

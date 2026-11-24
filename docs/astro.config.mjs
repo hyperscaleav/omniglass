@@ -197,21 +197,6 @@ export default defineConfig({
           label: 'Being rebuilt',
           items: [
             {
-              label: 'Architecture',
-              collapsed: true,
-              items: [
-                // the fleet model, then the shapes it pins
-                { label: 'Core entities', slug: 'architecture/core-entities' },
-                // the journey, in the order the data travels
-                { label: 'Metrics and properties', slug: 'architecture/properties' },
-                { label: 'Commands', slug: 'architecture/commands' },
-                { label: 'Config & credentials', slug: 'architecture/variables' },
-                { label: 'Cascade', slug: 'architecture/cascade' },
-                // the foundations underneath
-                { label: 'Data model', slug: 'architecture/data-model' },
-              ],
-            },
-            {
               label: 'Contributing',
               collapsed: true,
               items: [

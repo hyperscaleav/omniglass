@@ -19,7 +19,7 @@ summary: "retire the standalone effective-secrets and effective-variables per-co
 - **Context:** The per-component effective-* panels predated the field primitive and listed **every**
   cascade-resolving cell that reached a component, which at any real depth is mostly inherited noise (a global SNMP
   community, a location poll interval) rather than anything set on that component. The
-  [field](/architecture/variables/#property-one-typed-name-a-product-contract-a-stored-value) primitive
+  [field](/architecture/core-entities/#declared-properties-the-classifier-contracts-and-the-declared-rows) primitive
   ([#266](https://github.com/hyperscaleav/omniglass/issues/266)) is the schema-over-cells consumer the design always
   intended: a component carries a typed set of fields, each resolving to a set literal or its type default, and the
   intended `sources` model lets a field draw its value from a variable, a secret, a datapoint, or a file. Once fields

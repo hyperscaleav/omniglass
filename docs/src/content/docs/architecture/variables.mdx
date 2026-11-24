@@ -1,415 +1,209 @@
 ---
 title: "Variables, secrets, and declared values"
-description: "Three kinds of operator-set value resolved by one cascade: declared values keyed to a signal, secrets encrypted at rest, and free variables."
-# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
+description: "How operator-set values are built: variables and secrets as cascaded cells, secrets sealed at rest behind an audited reveal, and declared values as rows in the property series."
 sidebar:
-  hidden: true
+  order: 7
+  badge:
+    text: Partial
+    variant: note
 ---
 
 import SchemaTable from '../../../components/SchemaTable.astro';
 
-:::caution[Direction: ADR-0079 folds declared values into the series]
-The separate value store retired: a declared value is a **series row** (`provenance='declared'`) in the `property` sample table, an edit appends, an unset is a tombstone row, and every current value is the latest series row per `(owner, type, instance, provenance)` ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)). **Reconciliation** is built: every row of an owner's properties read carries its want/told/is pivot over series reads, with **drift computed on read**; `intended` rows are opened by the [command pillar](/architecture/commands/) and name their command.
-:::
+Three kinds of value are **set** by an operator rather than collected. They share the
+[cascade](/architecture/cascade/), but differ in what they are keyed by and what lifecycle they
+carry:
 
-:::note[Partial: the secret and variable members are built; declared values are Design]
-The **`secret`** member is built ([ADR-0017](/architecture/decisions/#adr-0017-credential-is-renamed-secret-the-cascade-is-the-reuse-mechanism),
-[#155](https://github.com/hyperscaleav/omniglass/issues/155)), as is the **`variable`** member
-([#183](https://github.com/hyperscaleav/omniglass/issues/183)); each section below carries its shipped shape,
-the built surfaces the Secrets and Variables **directories** plus the **property** slot that consumes a
-cell. The standalone per-component effective panels were retired
-([#281](https://github.com/hyperscaleav/omniglass/issues/281), [decision log](/architecture/decisions/)); the
-cascade-resolution surface lives on as the **ResolutionPanel** on the component details, backed by the
-still-live `GET /components/{name}/effective-variables` and `GET /components/{name}/effective-secrets` routes.
-The related **`property`** primitive also lands `Partial` (its section below); the standalone **fields**
-feature folded into it, a field having been a property with `declared` provenance
-([ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)). The
-**declared value** member stays `Design`, so this page is `Partial`. (`secret` was renamed from `credential`; the ADR
-anchor keeps the old term.)
-:::
-
-Everything an operator **sets** resolves the same way: a typed value, owned at a scope, resolved
-most-specific-wins down the [cascade](/architecture/cascade/). Three kinds share that resolution but
-differ in what they are keyed to and what lifecycle they carry:
-
-| | **declared value** | **secret** | **variable** (macro) |
+| | **variable** | **secret** | **declared value** |
 |---|---|---|---|
-| what it is | a declared device setting | an access secret, encrypted at rest | a free interpolated value |
-| keyed by | a canonical signal (`property_type`) | its own `secret_type` shape name | its own `name`, an org-local cascade namespace |
-| has an observed side? | yes, a sample the driver's poll or listener emits | its **validity**, not the secret value | no |
-| lifecycle | drift → reconcile (the driver's command binding) | refresh + rotation + expiry (deferred) | none; resolved and interpolated |
-| example | `video-input = HDMI1` | an `snmp-community`, a `basic-auth` | `poll-interval = 30s`, a base URL, a label |
+| what it is | a free named value | a credential, encrypted at rest | the state a component or system should hold |
+| keyed by | its own name | its own name, shaped by a `secret_type` | a canonical [property type](/architecture/properties/#the-two-catalogs) |
+| resolves | down the cascade | down the cascade, no system band | on one owner, over its classifier's default |
+| has an observed side | no | its validity, never its value | yes: what the device reports |
+| example | `poll-interval = 30`, a base URL | an `snmp-community`, a `basic-auth` | `video-input = hdmi1` |
 
-The common thread is the cascade and an exclusive-arc scope (exactly one of
-`platform | location | system | component`): the same exclusive-arc ownership as samples (and unlike
-samples, a declared value is not `outpost`-owned). The product and standard classifier bands above the trees are
-still ahead ([#184](https://github.com/hyperscaleav/omniglass/issues/184)); a
-[template](/architecture/templates/) is never one, since a fork leaves no row to bind to.
+To operate them, see [variables](/admin/variables/), [secrets](/admin/secrets/) and
+[properties](/admin/properties/).
 
-## Declared values: device state, keyed to a signal
+## variable: a free cascaded value
 
-::::design[The declared value member's reconcile policy, tracked in #1248]
-A **declared value** is the **declared side of a canonical signal**: `video-input` is one key with two
-sides, the **observed** value the device reports (a `property` sample, provenance=observed) and the
-**declared** value you set, sharing the **key**: under the lane model the declared value is itself
-a declared series row ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)). Their gap is **drift**.
+A **variable** is a named value set at one level of the fleet and inherited below it: anything
+spliced into behavior that is not a device signal and has no lifecycle. It is owned on the exclusive
+arc at `platform`, a location, a system or a component, and resolves by scalar shadow down the
+cascade.
 
-A driver **brings no keys, it references registered ones**: two display drivers touching
-`video-input` are two references to one governed key, not a collision. A declared value reuses the
-`property_type`'s value domain for validation.
-
-**The driver is the source of truth for configurability**: a signal becomes settable on a class of
-component when its [driver](/architecture/collection/#drivers-the-declarative-menu) both reads it (a
-poll function or listener emitting the observed sample) and writes it (a **command binding** that
-actuates the signal's command over the driver's protocol); the catalog's soft `settable` hint is
-never authoritative.
-
-Each piece of a declared value has one home, joined by the canonical key:
-
-| Piece | What it holds | Lives in |
-|---|---|---|
-| signal definition | name, value domain | `property_type` (the catalog; a numeric signal's unit lives on `metric_type`) |
-| read / write binding | how this class of component reads and writes the signal | the **driver** attached to the component's endpoint (an emit, and a command binding) |
-| declared value | the intent (`HDMI1`), plus the per-item `reconcile` policy | a `property` series row, `provenance='declared'` (built, [ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)); the policy is #1248 |
-| observed value | what the device reports (`HDMI2`) | `property` rows (observed) |
-| drift | declared ≠ observed | **computed on read**, not stored (built: each properties-read row's reconciliation) |
-
-### Drift and reconcile
-
-Drift is the same
-[`disagree(declared, observed)`](/architecture/properties/#disagree-and-divergence) comparison used
-everywhere, with the declared side sourced from the declared value. A per-item `reconcile` policy turns it into
-action:
-
-- **`observe`** (default): record the drift, raise **no** alarm; it stays visible through
-  [`disagree`](/architecture/properties/#disagree-and-divergence) and the declared values view.
-- **`warn`**: raise a **warning**-severity alarm; change nothing.
-- **`enforce`**: declared wins. Send the signal's command through the driver's command binding; that
-  issues a command, writes an [`intended`](/architecture/properties/#intended-the-declared-effect-of-a-command)
-  sample, and reconciles against the next observation (convergence on the declared value). If the set
-  **fails**, raise a real alarm (enforcement failure).
-
-Adopting the observed value as the declared one is **not** an ongoing mode but a separate
-**one-shot import action**.
-
-:::caution[Open question]
-The `reconcile: enforce` execution (the command push and the enforcement-failure alarm) and the
-separate one-shot import action: the controller shape behind the reserved seam.
-:::
-
-**Remediation needs no rule**: declare the value, set `enforce`, and the cascade plus drift plus the
-driver's command binding close the loop, guarded at action dispatch
-([alarms and actions](/architecture/alarms-actions/)) with a per-item backoff so a refusing device
-does not hammer. Reconcile runs **per item**; an item's capability is what the driver binds for its
-signal (a read alone: observe or warn; a command binding makes it enforceable).
-
-### Declaring at the system level
-
-Because a declared value rides the cascade, you rarely declare on the device: declare `video-input = HDMI1` for
-the **main-display slot** on the system's standard and the cascade resolves it onto whichever display
-fills that slot; drift and reconcile follow.
-
-:::caution[Open question]
-Resolving a value scoped to a slot (the [system slot](/architecture/core-entities/#system-slots-what-a-system-needs-filled)
-where quorum already lives) may need a new cascade level between system and component, alongside the
-per-item read and write binding shape on the driver.
-:::
-::::
-
-## secret: a typed, encrypted cascaded value
-
-A **secret** is a typed value, encrypted at rest, owned on the exclusive arc
-(`platform | location | component`; secrets have no system band, ADR-0052) and resolved down the
-[cascade](/architecture/cascade/)
-([ADR-0017](/architecture/decisions/#adr-0017-credential-is-renamed-secret-the-cascade-is-the-reuse-mechanism),
-**built**). A secret is its own primitive (stored encrypted, read back only through a masked, audited
-path), not a sensitivity flag on ordinary values; within it, the `admin_sensitive` flag below splits
-admin-only platform credentials from operator-visible device secrets.
-
-A secret carries a **`label`** beside its name for the same reason a variable does: the name is the
-cascade key, unique per owner and on the entity name rule, and the label is what an operator reads in
-the directory. It reaches every projection the name reaches, the directory and the per-component
-cascade both; the reveal and the copy carry no identity at all, only the decrypted field map, so
-there is nothing there for it to appear in.
-
-**Two senses of "platform", kept apart.** A **platform credential** is a *kind of secret* (a Zoom
-client secret), marked by `admin_sensitive` at whatever scope it sits; the **`platform` tier** is a
-*rung on the cascade*, the install-wide one. The words are unrelated.
-
-**Shape is a `secret_type` catalog**: a per-field list of `{name, type, secret, origin}`, so one
-field is secret (a password) while another is plaintext (a username), `origin` marking whether the
-operator or the lifecycle fills it. A **`default_admin_sensitive`** boolean seeds the create form's
-`admin_sensitive` default: a device type (`snmp-community`, `basic-auth`) defaults operational, a
-platform-integration type (`oauth2-client`) admin-sensitive; those are the ship-with types, with
-`official` marking shipped-canonical versus org-local as in the sample and role catalogs.
-
-**Envelope-encrypted at rest.** Crypto is **envelope AES-256-GCM** behind a pluggable **KEK
-provider**: the **encryption key** comes from the env (`OMNIGLASS_ENCRYPTION_KEY`), a file
-(`OMNIGLASS_ENCRYPTION_KEY_FILE`), or a warned fallback under `OMNIGLASS_DATA_DIR`, a KMS or Vault
-able to drop in behind the same seam. It is the encryption key and never the "secret key", which
-would read as a secret's own key (its identifier, `og_session`); the variables carried that name
-until #558, and the old pair (`OMNIGLASS_SECRET_KEY`, `OMNIGLASS_SECRET_KEY_FILE`) is still read
-for one deprecation window when neither new name is set, warning on every boot with the
-replacement it should be renamed to
-([ADR-0558](/architecture/decisions/#adr-0558-the-key-that-seals-every-secret-is-the-encryption-key-and-its-old-names-are-read-for-one-release)). Each secret field is sealed under a **per-value DEK wrapped by the
-KEK**, `(owner, name, field)` bound as **AAD** so a ciphertext cannot be lifted from one row into
-another, and stored as its `{ciphertext, nonce, wrapped_dek, key_id}` envelope (a non-secret field
-plaintext).
-
-**Consumed at the site, by token.** The cascade is the reuse mechanism (define once high, inherit
-below); interpolation is a **`$sec:name.path`** token in an endpoint input or function arg, never
-inside a secret's own fields (the splicing consumer is the deferred collection-driver slice).
-
-**Masked everywhere except an audited decrypt.** A secret's value is masked (`••••••`) in every read.
-Reading the plaintext is a separate, privileged action: `secret:reveal` gates the decrypt (on-screen
-**reveal** and clipboard **copy**, recorded under distinct `reveal` and `copy` verbs), and **every
-decrypt writes an [audit](/architecture/audit/) row**.
-
-**Two axes decide who reaches a secret** ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)).
-**Placement scope** gives locality: a Singapore-scoped field tech works device secrets under
-Singapore, not one attached at the `platform` tier. The per-secret **`admin_sensitive` flag** gives
-same-scope sensitivity: when set, every action on that secret lifts to the **`:admin` tier**, so a
-platform credential stays admin/owner-only beside an operational device secret. `secret` is also a
-**sensitive resource** off the bare `*:read` floor: a `viewer` reads no secrets, an
-`operator`/`deploy` holds an explicit scoped `secret:read,reveal,create,update`. Concretely:
-
-- The `/secrets` **directory is scope-filtered** and **hides admin-sensitive rows** from a caller
-  without the admin tier.
-- **Reveal, update, and delete** of an admin-sensitive secret without the admin tier is a
-  **non-disclosing 404** (identical to an out-of-read-scope row), never a 403.
-- **Creating** a secret marked `admin_sensitive` needs `secret:create:admin` (nor may an operator
-  pick a type that defaults admin-sensitive).
-- Sealing, editing, and revealing an **operational** secret are open to **operators** in scope;
-  **delete** stays admin-and-owner. `admin` holds `secret:>` (reaching the `:admin` tier a two-token
-  `secret:*` cannot); `owner`'s `>` covers everything.
-
-:::design[The secret lifecycle and validity health: rotation flows are ADR-0050, the timer #419]
-**Lifecycle is a later slice**, each behavior a declared use of driver commands, time, and flows:
-
-- **refresh** (an `oauth2` access token) is **lazy**: refreshed on use within a skew window of
-  expiry, coordinated across replicas by a NATS KV lock (CAS on the secret key); the refreshed token
-  is a separate encrypted cache, not an operator secret.
-- **rotation** (a password on a schedule) is a **flow**: generate → set on the device (a driver
-  command) → update the store → verify → invalidate the old, driven by
-  [time](/architecture/time/).
-- **expiry and reminders** are an expiry timestamp plus a **watchdog** firing an event and an
-  **alarm** before the secret lapses.
-
-**Secret health is its validity, not its value**: **intrinsic expiry** (an `oauth2` token, a
-`tls-cert` `notAfter`) warns proactively, and **observed-use failure** flips it unhealthy after N
-consecutive auth failures consumers report, both through the ordinary sample-to-alarm pipeline.
-:::
-
-**Shared versus per-device is just scope**: a fleet-wide SNMP community sits high in the cascade, a
-unique-per-device secret at component scope. Nothing else to model.
-
-**A platform secret may come from the environment** ([ADR-2223.2](/architecture/decisions/#adr-22232-a-platform-secret-may-be-declared-by-the-servers-environment), #2223). A
-variable `OMNIGLASS_SECRET__<NAME>` declares a `$platform` secret named `<name>` (lowercased, each
-`_` a `-`, so `OMNIGLASS_SECRET__BEDROCK_KEY` is `bedrock-key`), its value one JSON object
-`{"type": "<secret type>", "fields": {...}}`. The boot checks it against the `secret_type` catalog
-as a create is checked (a known type, no unknown or lifecycle field, every operator field present)
-and fails naming the variable, never quoting the value, when it does not fit; a stored platform
-secret of the same name also fails the boot, naming both. It is held in the server's memory only:
-nothing is sealed, written to Postgres or audited, and changing it is a restart. Every consumer
-resolves it as it resolves a stored platform secret, so omnibot's `key_secret`, the mail relay's
-`mail_secret` and an endpoint's secret input take one unchanged, and naming it in any of them still
-takes `secret:bind` (the all scope, as for any platform secret; the admin tier too when its type is
-admin-sensitive). The directory lists it with `source: env`, its name, type and `source_var`, and
-**no fields**; an update, delete, reveal or copy of it, or a stored platform secret created under its
-name, is a **409** naming the variable to change instead. A notification target binds a stored
-secret by its row, so an env secret does not sign a webhook; only `$platform` secrets are declared
-this way.
-
-## variable: free interpolated values (macros)
-
-:::note[Built: slice 1, plaintext cell + cascade]
-The first slice ([#183](https://github.com/hyperscaleav/omniglass/issues/183)) is **built**: the typed plaintext
-cell (a `value_type` of `string` / `int` / `float` / `bool` / `json`, stored as jsonb, validated against the type
-in the app), owned on the exclusive arc and resolved down the cascade, with a Variables directory. It **grants
-`variable:create,update` to operators** (delete stays admin and owner), mirroring the secret member. Deferred from
-the design below: the classifier owner bands (slice 1 mirrors the secret arc,
-`platform | location | system | component`; the product and standard bands and cascade groups are
-[#184](https://github.com/hyperscaleav/omniglass/issues/184)); a **`variable_type` catalog** (slice 1 types
-inline with the `value_type` enum, matching the "operator-defined, not curated" model); and the **`$var:`**
-consumer and the **secret-flagged** variable. Logged in the [decision log](/architecture/decisions/).
-:::
-
-A **variable** is the leftover, and the most familiar: a value spliced into behavior that is
-**not** a device signal and carries no lifecycle (a poll interval, a base URL, an environment
-label). Zabbix-style **macros**, resolved down the same [cascade](/architecture/cascade/) and
-interpolated as `$var:<name>` into functions, endpoint definitions, and rule scopes.
-
-- **A name is org-specific, not a canonical signal**, the one place the "operator-defined, not
-  curated" namespace applies: no catalog, no pre-registration. The ordinary entity name rule still
-  holds, though (one segment of lowercase letters, digits, and hyphens, no dot), so `newtron-ssh`
-  names a variable and `newtron.ssh` is refused. Sprawl is controlled by a creation **role-gate**
-  ([IAM](/architecture/identity-access/)) and by every variable being **surfaced in the tree**.
-- **A label rides beside the name**, the friendly string an operator reads ("Poll Interval") where
-  the name is what the cascade resolves by
+- **The name is the operator's own**, with no catalog behind it, on the ordinary entity name rule
+  (`newtron-ssh`, never `newtron.ssh`) and unique per owner. A **label** rides beside it for a person
+  to read; the cascade resolves by name alone
   ([ADR-0119](/architecture/decisions/#adr-0119-a-table-an-operator-names-carries-a-label-or-declares-why-it-does-not)).
-  Optional, not an identifier, and never interpolated: `$var:` reads the name and only the name. A
-  variable with no label reads its name **verbatim**.
-- **Install-wide and component-local are the same primitive at different scopes** (a company-wide NTP
-  server versus one component's poll interval).
-- **No observed side and no reconcile**, exactly what separates it from a declared value.
-
-Scalar shapes (`string`, `int`, `float`, `bool`, `json`) cover the common case; a variable may be
-flagged secret (a webhook signing token) without being a full secret cell, since it has no lifecycle.
-
-## property: one typed name, a classifier contract, a stored value
-
-:::note[Partial: the catalog, the three classifier contracts, and the declared value on an instance]
-Three pieces are **built**. The **`property_type` catalog**: the catalog of typed value names
-(`name`, `data_type` over `string` / `bool` / `json`, optional label, a JSON Schema
-`validation`), `official` rows read-only; numeric names live in its `metric_type` sibling
-([ADR-0043](/architecture/decisions/#adr-0043-the-property-catalog),
-[ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)). The three **classifier contracts**
-(**`product_property`**, **`standard_property`**, **`location_type_property`**), one shape: a catalog property
-with an optional `default_value` and a `required` flag, unique per `(classifier, property)`. And the declared rows in the
-**`property`** series, on the **same owner exclusive-arc** as every sample, with an `instance`
-discriminator; the write path appends `provenance=declared` rows. The read is
-**`EffectiveProperties(ownerKind, ownerID)`**, one parameterized query serving **component, system, location,
-and outpost**: `coalesce(the instance's value, the contract default)` plus the off-contract values, so a
-**productless** component, a **one-off** system, and a classifier-less **outpost** still resolve
-([ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model)). The
-vertical is whole: transactional audited storage; the API (each contract gated by its owner catalog's
-permission, values by the owning entity's `:read` / `:update`, ABAC-scoped on **every** arc); the generated CLI
-and typed client; the console (**Declared properties** editors on the product, standard, and location type
-blades, a **Properties** panel on the component, system, and location details). The rest of the design is
-**deferred**, listed so a built badge never hides drift
-([ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)).
-:::
-
-A **property** is one typed name used three ways: the **catalog** says the name exists and what it
-means, a **classifier contract** says which names its instances carry (and their defaults), and a
-**value** row says what one owner holds. Where a variable or secret is a single cascaded cell, a
-property is a named slot a whole class carries, set per instance ("every Boreal Edge 55 carries an
-`asset_tag`" is one declaration, the fix for Zabbix's fixed `inventory_1..40`).
-
-The **provenance** column is why this is one primitive: the same name and store hold a value a device
-**observed**, a rule **calculated**, a command **intended**, and an operator **declared**.
-All four have writers: ingest lands `observed`, the command pillar `intended`, the operator's write
-`declared`, and since #1017 a [calc rule](/architecture/calculations/) writes `calculated` through the
-same sample-write path.
-
-:::design[Target design: the cross-owner cascade (#1255), interpolation and sources (#296), file typing (#242), and the driver column (#1248)]
-What the design intends, and this slice does **not** yet do:
-
-- **The cross-owner cascade** (`product -> location -> system -> component`, deepest-wins): today a
-  value resolves on **one instance alone** (its own declared value, else its classifier's contract
-  default), no walk **across** owners yet.
-- **Macro interpolation of a value** (the consumer of `$var:` / `$sec:` / `$sample:`): a value
-  holds a literal today.
-- **The `sources` model**: per-property allowed origins
-  (`literal` / `variable` / `secret` / `sample` / `file`), the inline pickers, and override rules.
-- **File typing**: a `file` `data_type` with accepted MIME types and formats, giving an attached
-  file a semantic role by the property it fills (a `floor_plan`, a `firmware`).
-- **A driver access/mode column** on the contract (get, set, or declare-only): settability comes
-  from the driver spec's command bindings today, and a contract-level column lands with the
-  reconcile policy (#1248); an **outpost** still has no classifier to declare a contract, by design.
-:::
-
-The Properties panel can set, re-set, and **clear** a value: the effective read returns the
-`property` id (`value_id`) alongside the literal, so each override row offers a **revert** deleting
-the value and falling back to the contract default (the owning entity's own `:update` write).
-
-## tag: a normalized label vocabulary
-
-:::note[Built: slice 1, the catalog, the bindings, and the cascade. See the [tags](/architecture/tags/) page.]
-The tag primitive's first slice is **built** ([ADR-0021](/architecture/decisions/#adr-0021-tag-slice-1-a-governed-key-registry-with-entity-update-gated-bindings)):
-the governed `tag` key catalog, the per-entity `tag_binding` cell on the exclusive arc, and the union-on-key /
-shadow-on-value cascade resolver. The [tags](/architecture/tags/) page is its home; this section is the
-conceptual frame for how tags share the cascade.
-:::
-
-A **tag** is an operator **`key: value`** label for dimensions Omniglass does not model natively
-(`category: audio-dsp`, `environment: prod`): not a signal, no lifecycle, riding the cascade with a
-**union-on-key, shadow-on-value** combinator over a tenant-wide **governed vocabulary**. The
-[tags](/architecture/tags/) page owns the model and the [cascade](/architecture/cascade/) the
-precedence.
-
-:::caution[Open question]
-Value-domain normalization. Key governance and the enum constraint are settled (`tag.allowed_values`,
-[ADR-0024](/architecture/decisions/#adr-0024-a-tag-key-may-constrain-its-values-to-an-enum)); open is
-whether a key may **normalize** values on input through an Expr transform (lowercase, trim, fold
-synonyms) so `Prod`, `prod `, and `PROD` resolve to one value.
-:::
-
-## What's shared
-
-- **The cascade.** One resolver serves all four kinds; the structural chain, precedence key, and
-  fall-through to a declaration default are stated once, on [cascade](/architecture/cascade/); tags
-  ride it with their own combinator ([tags](/architecture/tags/)).
-- **Interpolation** renders variables (`$var:`) and secret fields (`$sec:`) into requests (a later
-  consumer slice for both); a declared value is read by key like a sample.
-
-There is no observed-side worker for declared values. A design once kept a cached observed value per declared
-value, refreshed by a worker as `property` samples landed; [ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)
-retired every maintained current-value cache, so the observed side is the latest `observed` series
-row, read on demand, and the properties read pivots it against the declared row (want, told, is),
-with drift computed on read.
-
-## How this changes provenance
-
-Declared intent is the fourth sample provenance, beside
-[observed, calculated and intended](/architecture/properties/#provenance-how-we-know-a-value): a
-declared value is a `property` series row with `provenance='declared'`, keyed to the same signal as
-the observed rows, so an edit appends and an unset is a tombstone row
-([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus),
-built). The lane is unchanged (an observed `power-state = on` is still a `property` sample). The
-earlier design kept declared out of the samples in a separate store; ADR-0079 reversed it.
-
-## Storage
-
-The shape catalogs, the value cells, and the operator-label tables; the physical layout (the owner
-arc, the cascade key) lives on [storage](/architecture/storage/). The **secret** and **variable**
-cells are **built**; the **declared value** cell is `Design`.
-
-The two shipped members each got their own table rather than a shared discriminated cell (the
-`secret_type` + `secret` pair carries encryption and a masked read path; `variable` types inline).
-Whether the declared value cell joins `variable` in one table with a discriminator is open; they share the
-cascade and the exclusive-arc scope either way.
-
-`secret_type` (**Built**) is the secret **shape** catalog (`snmp-community`, `basic-auth` seeded);
-`official` marks shipped-canonical versus org-local.
-
-<SchemaTable
-  table="secret_type"
-  notes={{
-    schema: 'The per-field shape: {name, type, secret, origin} per field',
-    official: 'Shipped-canonical versus org-local; official rows are read-only',
-  }}
-/>
-
-`secret` (**Built**) is the encrypted cell and the `$sec:` cascade key; scope is the exclusive arc
-without its system arm (ADR-0052); visibility and the masked read path are per
-[ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)
-above.
-
-<SchemaTable
-  table="secret"
-  notes={{
-    label: 'The friendly string an operator reads; NULL falls back to the name, verbatim',
-    secret_type_id: 'The shape this cell instantiates',
-    admin_sensitive: 'Flips the secret to the admin tier regardless of placement',
-    value: 'Secret fields as {ciphertext, nonce, wrapped_dek, key_id} envelopes; non-secret fields plaintext',
-  }}
-/>
-
-`variable` (**Built**) is the plaintext variable cell and the `$var:` cascade key; scope is the
-exclusive arc. Typed inline (no `variable_type` catalog: the value is validated against
-`value_type` in the app), no observed side. The **declared value** cell is a separate, deferred member.
+- **The type is inline**: a `value_type` of `string`, `int`, `float`, `bool` or `json`, stored as
+  jsonb and checked against the type on write.
+- **Operators write, admins delete**: `variable:create,update` sits on the operator role, `delete` on
+  admin and owner. A write at the `platform` rung also needs `platform:<action>`.
 
 <SchemaTable
   table="variable"
   notes={{
-    label: 'The friendly string an operator reads; NULL falls back to the name, verbatim',
-    value_type: 'string, int, float, bool, or json; the app validates value against it',
-    value: 'The cascade-resolved payload',
+    value_type: 'string, int, float, bool or json; the value is validated against it',
+    owner_kind: 'platform, location, system or component',
+    label: 'The friendly string a person reads; null falls back to the name, verbatim',
   }}
 />
 
-The other value-bearing tables this page leans on are rendered on their home pages, once each:
-**`property_type`**, the classifier contracts (**`product_property`** and siblings), and the
-**`property`** series on [samples](/architecture/properties/); **`tag`** and
-**`tag_binding`** on [tags](/architecture/tags/).
+:::design[Variables in text, tracked in #296]
+A variable is written into text as `$var:<name>` (and a secret field as `$sec:<name>.<field>`), in an
+endpoint input, a driver argument or a property value, and resolved at the moment it is consumed.
+The token parser exists (`internal/secret`); no consumer splices a token yet, and the property value
+that holds a source reference rather than a literal is
+[#296](https://github.com/hyperscaleav/omniglass/issues/296).
+:::
+
+## secret: an encrypted cascaded value
+
+A **secret** is an encrypted credential set at one level of the fleet and inherited below it
+([ADR-0017](/architecture/decisions/#adr-0017-credential-is-renamed-secret-the-cascade-is-the-reuse-mechanism)).
+It is its own primitive, stored sealed and read back only through a masked, audited path, never a
+sensitivity flag on an ordinary value. It is owned at `platform`, a location or a component: a
+secret authenticates a session with the device itself, so it has no system band. Shared versus
+per-device is just where it is owned.
+
+**Shape is a `secret_type`**: a per-field list of `{name, type, secret, origin}`, so a password field
+is sealed while a username beside it stays plaintext, and `origin` says whether the operator or the
+lifecycle fills it. `default_admin_sensitive` seeds the create form: a device type (`snmp-community`,
+`basic-auth`) defaults to operational, a platform integration type (`oauth2-client`) to
+admin-sensitive.
+
+**Sealed at rest.** Each secret field is sealed with AES-256-GCM under its own data key, wrapped by
+the **encryption key** and stored as a `{ciphertext, nonce, wrapped_dek, key_id}` envelope, with
+`(owner, name, field)` bound as additional data so a ciphertext cannot be lifted into another row.
+The key comes from `OMNIGLASS_ENCRYPTION_KEY`, from `OMNIGLASS_ENCRYPTION_KEY_FILE`, or from a
+warned fallback under `OMNIGLASS_DATA_DIR`, behind a seam a KMS can later fill. The old names
+(`OMNIGLASS_SECRET_KEY` and its `_FILE`) are still read, with a warning, when neither new name is set
+([ADR-0558](/architecture/decisions/#adr-0558-the-key-that-seals-every-secret-is-the-encryption-key-and-its-old-names-are-read-for-one-release)).
+
+**Masked everywhere but an audited decrypt.** Every read masks a secret field (`••••••`). Reading
+the plaintext is `secret:reveal`, as an on-screen `:reveal` or a clipboard `:copy`, each recorded on
+the [audit log](/architecture/audit/) under its own verb. Naming a secret where it will be used (an
+endpoint's input, a notification target, the mail relay) takes `secret:bind` on it
+([identity and access](/architecture/identity-access/)).
+
+**Two axes decide who reaches a secret**
+([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)).
+Placement scope gives locality: a field tech scoped to Singapore works the device secrets under
+Singapore, not one owned at `platform`. The per-secret `admin_sensitive` flag gives same-scope
+sensitivity: when set, every action on that secret lifts to the `:admin` tier.
+
+- `secret` is a sensitive resource off the bare read floor: a viewer reads none, an operator holds a
+  scoped `secret:read,reveal,bind,create,update`, and `admin` holds `secret:>`, which reaches the
+  `:admin` tier.
+- The `/secrets` directory is scope-filtered and hides admin-sensitive rows from a caller without the
+  admin tier; revealing, updating or deleting one without it is the non-disclosing 404.
+- Creating an admin-sensitive secret needs `secret:create:admin`. Delete stays with admin and owner.
+
+**A platform secret may come from the environment**
+([ADR-2223.2](/architecture/decisions/#adr-22232-a-platform-secret-may-be-declared-by-the-servers-environment)).
+`OMNIGLASS_SECRET__<NAME>` declares a `platform` secret named `<name>` (lowercased, each `_` a `-`),
+its value one JSON object `{"type": "<secret type>", "fields": {...}}`. The boot checks it against
+the `secret_type` catalog as a create would and fails naming the variable, never quoting the value,
+when it does not fit or collides with a stored platform secret. It is held in memory only: never
+sealed, stored or audited, and changed by a restart. The directory lists it with `source: env` and no
+fields, and a write to it is a 409 naming the variable to change instead.
+
+<SchemaTable
+  table="secret"
+  notes={{
+    owner_kind: 'platform, location or component; never system',
+    secret_type: 'The shape this secret instantiates',
+    admin_sensitive: 'Lifts every action on this secret to the admin tier',
+    value: 'Secret fields as sealed envelopes; plaintext fields as they are',
+    label: 'The friendly string a person reads; null falls back to the name, verbatim',
+  }}
+/>
+
+<SchemaTable
+  table="secret_type"
+  notes={{
+    schema: 'The per-field shape: {name, type, secret, origin}',
+    default_admin_sensitive: 'The admin_sensitive default a create form starts from',
+  }}
+/>
+
+:::design[The secret lifecycle and validity health, tracked in #2615 and #1119]
+A secret gains a lifecycle, each part a declared use of driver commands and the clock:
+
+- **Refresh** of an oauth2 access token, lazily on use within a skew of expiry
+  ([#1119](https://github.com/hyperscaleav/omniglass/issues/1119)).
+- **Rotation** as a flow: generate, set on the device through a driver command, store, verify, retire
+  the old value, on a schedule ([#2615](https://github.com/hyperscaleav/omniglass/issues/2615)).
+- **Expiry**: a stated or intrinsic expiry (a certificate's `notAfter`) raises an alarm before it
+  lapses.
+- **Validity health**: authentication failures consumers report flip a secret unhealthy after a run
+  of them. A secret's health is its validity, never its value.
+:::
+
+## Declared values: device state, keyed to a signal
+
+A **declared value** is the state an operator says a component or system should hold. It is the
+declared side of a canonical signal: `video-input` is one key with two sides, the **observed** value
+the device reports and the **declared** value an operator sets, and their gap is **drift**.
+
+A declared value is a row in the property series itself, `provenance = 'declared'`
+([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)):
+an edit appends, an unset appends a tombstone, and the current value is the latest row
+([properties](/architecture/properties/#declared-an-operators-assertion-as-a-series-row)). It
+resolves on one owner, over the default its classifier's contract declares
+([declared properties](/architecture/core-entities/#declared-properties-the-classifier-contracts-and-the-declared-rows)),
+and is written with `PUT /{components,systems,locations}/{name}/properties/{property}`. Each piece
+has one home:
+
+| Piece | Lives in |
+|---|---|
+| the signal: name and value domain | the `property_type` catalog |
+| how a class of component reads and writes it | the **driver**: an emit reads it, a command binding writes it |
+| the declared value | a `declared` row in the `property` series |
+| the observed value | `observed` rows in the same series |
+| drift | computed on read, never stored |
+
+The driver is the source of truth for whether a signal is settable on a class of component: it
+must both read it and bind a command that writes it. A driver brings no keys of its own; it references
+registered ones.
+
+### Drift and reconcile
+
+Drift is computed on every properties read: each row carries **want** (the declared value, or the
+contract default), **told** (the last command's intended value) and **is** (the observed value), and
+`drift` is true when an observed instance disagrees with want
+([reconciliation](/architecture/properties/#reconciliation-want-told-is)). Nothing acts on drift yet.
+
+::::design[A declared value's reconcile policy, tracked in #1248]
+A per-item `reconcile` policy turns drift into action:
+
+- **`observe`** (default): record the drift and show it; no alarm.
+- **`warn`**: raise a warning alarm on the owner; change nothing.
+- **`enforce`**: the declared value wins. Issue the signal's command through the driver's binding,
+  which writes an intended row and settles against the next observation; raise an alarm if the set
+  fails.
+
+Adopting the observed value as the declared one is a separate one-shot import, never a mode. With
+`enforce`, remediation needs no rule: declare, enforce, and the cascade, drift and the command
+binding close the loop, with a per-item backoff so a refusing device is not hammered. Declaring on a
+standard's slot (`video-input = hdmi1` on the main-display slot) reaches whichever display fills it.
+The contract gains a driver access column (get, set, or declare-only) beside the policy.
+::::
+
+:::design[Target design: values across owners, sources and files, tracked in #1255, #296 and #242]
+- **Across owners**: a value resolving down the cascade (product, location, system, component),
+  deepest wins, rather than on one owner over its default
+  ([#1255](https://github.com/hyperscaleav/omniglass/issues/1255)).
+- **Sources**: a value that holds a reference (a variable, a secret, a sample, a file) rather than a
+  literal, with the picker that sets one ([#296](https://github.com/hyperscaleav/omniglass/issues/296)).
+- **File typing**: a `file` data type giving an attached file a role by the property it fills, a
+  floor plan or a firmware image ([#242](https://github.com/hyperscaleav/omniglass/issues/242)).
+:::
+
+## Storage
+
+`variable` and `secret` are separate tables, since a secret carries sealing and a masked read path a
+variable does not; both own on the exclusive arc and are keyed for the cascade by name. A declared
+value has no table of its own: it is a [`property`](/architecture/properties/#the-sample-tables)
+row. The physical layout is on [storage](/architecture/storage/).
