@@ -353,3 +353,134 @@ func TestAComponentMovedIntoALocationDuringItsRelabelReadsTheCommittedLabel(t *t
 		t.Fatalf("STALE: mover label %q, want %q", after.Label, want)
 	}
 }
+
+// The system twin of the component test above (#2552): MoveSystem takes the same
+// label lock, and removing it must turn this red. The pin is a system at
+// room-a: the cascade scans components first, and each scan takes its own snapshot,
+// so only a pin in the system scan makes its snapshot predate the move.
+//
+// Unlike the component test, this one is an outcome guard and does not fail when
+// the early lock alone is removed: MoveSystem restamps the mover a second time
+// after cascadeSiblingSystemLabels, which takes the same lock, so that restamp
+// reads the committed label either way. It fails if both are gone.
+func TestASystemMovedIntoALocationDuringItsRelabelReadsTheCommittedLabel(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	t.Cleanup(gw.Close)
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "building"}, all, all); err != nil {
+		t.Fatalf("create building: %v", err)
+	}
+	for _, n := range []string{"room-a", "room-b"} {
+		if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: n, LocationType: "room", ParentName: strptr("hq")}, all, all); err != nil {
+			t.Fatalf("create %s: %v", n, err)
+		}
+	}
+	pinSys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
+		Name: "pin-sys", SystemTypeID: strptr("board"), LocationName: strptr("room-a"),
+	}, all, all)
+	if err != nil {
+		t.Fatalf("create pin system: %v", err)
+	}
+	moverSys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
+		Name: "mover-sys", SystemTypeID: strptr("board"), LocationName: strptr("room-b"),
+	}, all, all)
+	if err != nil {
+		t.Fatalf("create system: %v", err)
+	}
+	for _, kind := range []string{"component", "system"} {
+		if _, err := gw.SetLabelRule(ctx, "", kind, "at {{.LocationLabel}}"); err != nil {
+			t.Fatalf("set %s rule: %v", kind, err)
+		}
+		if _, err := gw.RecomputeLabels(ctx, "", kind, all, all); err != nil {
+			t.Fatalf("settle the %s rule: %v", kind, err)
+		}
+	}
+
+	holder, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(func() { _ = holder.Close(context.Background()) })
+	watcher, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(func() { _ = watcher.Close(context.Background()) })
+	blocked := func() int {
+		var n int
+		if err := watcher.QueryRow(ctx, `select count(*) from pg_stat_activity
+			where datname = current_database() and wait_event_type = 'Lock'`).Scan(&n); err != nil {
+			t.Fatalf("watch locks: %v", err)
+		}
+		return n
+	}
+	waitFor := func(what string, ok func() bool) {
+		t.Helper()
+		deadline := time.Now().Add(15 * time.Second)
+		for !ok() {
+			if time.Now().After(deadline) {
+				t.Fatalf("%s never happened: the interleaving this test forces did not occur", what)
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
+
+	tx, err := holder.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin holder: %v", err)
+	}
+	if _, err := tx.Exec(ctx, `update system set updated_at = now() where id = $1`, pinSys.ID); err != nil {
+		t.Fatalf("hold the pin row: %v", err)
+	}
+
+	newRoom := "Renamed Room"
+	var wg sync.WaitGroup
+	var cascadeErr, moveErr error
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, cascadeErr = gw.UpdateLocation(ctx, "", "room-a", storage.LocationPatch{Label: &newRoom}, all, all)
+	}()
+	waitFor("the cascade blocking mid-scan", func() bool { return blocked() >= 1 })
+
+	moved := make(chan struct{})
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer close(moved)
+		_, moveErr = gw.MoveSystem(ctx, "", moverSys.Name, storage.SystemMove{LocationName: strptr("room-a")}, all, all, all)
+	}()
+	// The move either commits inside the window (the bug) or queues behind the
+	// cascade (the fix); both leave this wait satisfied.
+	waitFor("the move committing or queueing", func() bool {
+		select {
+		case <-moved:
+			return true
+		default:
+			return blocked() >= 2
+		}
+	})
+
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatalf("commit holder: %v", err)
+	}
+	wg.Wait()
+	if cascadeErr != nil || moveErr != nil {
+		t.Fatalf("cascade err=%v move err=%v", cascadeErr, moveErr)
+	}
+	after, err := gw.GetSystem(ctx, moverSys.Name, all)
+	if err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	if want := "at " + newRoom; after.Label != want {
+		t.Fatalf("STALE: mover system label %q, want %q", after.Label, want)
+	}
+}
