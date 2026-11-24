@@ -83,7 +83,7 @@ func (s Set) Empty() bool {
 // is an inclusive subtree root, or a strict ancestor is an excluded root. It
 // ignores LocationIDs: a chain is one tier's ancestry and carries no placement,
 // so a set admitted only across tiers admits nothing here (fail closed).
-// TODO(#1981): admit a component by its placement for the recipient filter.
+// AdmitsPlacement is its cross-tier half (#2554).
 func (s Set) AdmitsChain(chain []string) bool {
 	if s.All {
 		return true
@@ -108,6 +108,28 @@ func (s Set) AdmitsChain(chain []string) bool {
 	}
 	for i, id := range chain {
 		if inclusive[id] || (i > 0 && excluded[id]) {
+			return true
+		}
+	}
+	return false
+}
+
+// AdmitsPlacement reports whether a system or component whose effective
+// placement is locChain (the locations it is placed in, each with its
+// ancestors, any order) is inside s through a cross-tier location root, or s is
+// all. An empty chain is an unplaced row, which no location root admits. It is
+// the placement counterpart of AdmitsChain; a caller admits a row when either
+// does (#2554).
+func (s Set) AdmitsPlacement(locChain []string) bool {
+	if s.All {
+		return true
+	}
+	roots := make(map[string]bool, len(s.LocationIDs))
+	for _, id := range s.LocationIDs {
+		roots[id] = true
+	}
+	for _, id := range locChain {
+		if roots[id] {
 			return true
 		}
 	}

@@ -101,22 +101,22 @@ func recipientsFor(ctx context.Context, q querier, componentID string, targetIDs
 // as a request of theirs would resolve it (scope.Resolve over the role
 // index), judged against the component's ancestry walked once.
 func readersOf(ctx context.Context, q querier, componentID string, userIDs []string) (map[string]bool, error) {
-	grants, idx, chain, err := accessOf(ctx, q, componentID, userIDs)
+	grants, idx, chain, placed, err := accessOf(ctx, q, componentID, userIDs)
 	if err != nil {
 		return nil, err
 	}
-	return admitReaders(userIDs, grants, idx, chain), nil
+	return admitReaders(userIDs, grants, idx, chain, placed), nil
 }
 
 // subscribersOf reports which personal rule owners may be told about the
 // component (#1353): they read it, and they still hold notification:subscribe,
 // so withholding the permission from a person stops their existing rules too.
 func subscribersOf(ctx context.Context, q querier, componentID string, ownerIDs []string) (map[string]bool, error) {
-	grants, idx, chain, err := accessOf(ctx, q, componentID, ownerIDs)
+	grants, idx, chain, placed, err := accessOf(ctx, q, componentID, ownerIDs)
 	if err != nil {
 		return nil, err
 	}
-	out := admitReaders(ownerIDs, grants, idx, chain)
+	out := admitReaders(ownerIDs, grants, idx, chain, placed)
 	for id := range out {
 		roles := make([]string, 0, len(grants[id]))
 		for _, g := range grants[id] {
@@ -130,9 +130,9 @@ func subscribersOf(ctx context.Context, q querier, componentID string, ownerIDs 
 }
 
 // accessOf loads what judging users against one component takes, in
-// three statements whatever their number: their effective grants, the role
-// index, and the component's ancestry.
-func accessOf(ctx context.Context, q querier, componentID string, userIDs []string) (map[string][]scope.Grant, rbac.RoleIndex, []string, error) {
+// four statements whatever their number: their effective grants, the role
+// index, the component's ancestry and its placement.
+func accessOf(ctx context.Context, q querier, componentID string, userIDs []string) (map[string][]scope.Grant, rbac.RoleIndex, []string, []string, error) {
 	grants := make(map[string][]scope.Grant, len(userIDs))
 	if err := eachUserGrant(ctx, q, userIDs, func(owner string, g Grant) {
 		sg := scope.Grant{Role: g.Role, ScopeKind: g.ScopeKind, ScopeOp: g.ScopeOp}
@@ -141,25 +141,31 @@ func accessOf(ctx context.Context, q querier, componentID string, userIDs []stri
 		}
 		grants[owner] = append(grants[owner], sg)
 	}); err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	idx, err := roleIndexOf(ctx, q)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	chain, err := componentChain(ctx, q, componentID)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
-	return grants, idx, chain, nil
+	placed, err := componentPlaceChain(ctx, q, componentID)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	return grants, idx, chain, placed, nil
 }
 
 // admitReaders is the pure half of readersOf: a user is admitted when
-// its component read scope admits the component whose ancestry is chain.
-func admitReaders(userIDs []string, grants map[string][]scope.Grant, idx rbac.RoleIndex, chain []string) map[string]bool {
+// its component read scope admits the component whose ancestry is chain, or
+// whose placement (locations with their ancestors) is placed (#2554).
+func admitReaders(userIDs []string, grants map[string][]scope.Grant, idx rbac.RoleIndex, chain, placed []string) map[string]bool {
 	out := make(map[string]bool, len(userIDs))
 	for _, id := range userIDs {
-		if scope.Resolve(grants[id], idx, "component", "read").AdmitsChain(chain) {
+		set := scope.Resolve(grants[id], idx, "component", "read")
+		if set.AdmitsChain(chain) || set.AdmitsPlacement(placed) {
 			out[id] = true
 		}
 	}
@@ -208,6 +214,53 @@ func componentChain(ctx context.Context, q querier, componentID string) ([]strin
 		var id string
 		if err := rows.Scan(&id); err != nil {
 			return nil, fmt.Errorf("storage: scan component ancestry: %w", err)
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
+// componentPlaceChain is the locations a component is effectively placed in,
+// each with its ancestors, in one statement (#2554). It mirrors placedCTEs: a
+// component in the ancestry (itself first up) is placed at its own location,
+// or, with none, at its primary system's location or that of a system above
+// that one; a placed ancestor places its descendants. A component placed
+// nowhere has an empty chain, which no location root admits.
+func componentPlaceChain(ctx context.Context, q querier, componentID string) ([]string, error) {
+	rows, err := q.Query(ctx, `
+		with recursive anc(id, parent_id) as (
+			select id, parent_id from component where id = $1::uuid
+			union all
+			select c.id, c.parent_id from component c join anc on c.id = anc.parent_id
+		) cycle id set is_cycle using path,
+		psys(id, parent_id) as (
+			select s.id, s.parent_id from system s
+			  join system_member m on m.system_id = s.id and m.is_primary
+			  join component c on c.id = m.component_id
+			 where c.location_id is null and c.id in (select id from anc)
+			union all
+			select s.id, s.parent_id from system s join psys on s.id = psys.parent_id
+		) cycle id set is_cycle2 using path2,
+		placed(id) as (
+			select c.location_id from component c where c.id in (select id from anc) and c.location_id is not null
+			union
+			select s.location_id from system s where s.id in (select id from psys) and s.location_id is not null
+		),
+		up(id, parent_id) as (
+			select l.id, l.parent_id from location l where l.id in (select id from placed)
+			union all
+			select l.id, l.parent_id from location l join up on l.id = up.parent_id
+		) cycle id set is_cycle3 using path3
+		select distinct id::text from up where not is_cycle3`, componentID)
+	if err != nil {
+		return nil, fmt.Errorf("storage: component placement: %w", err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("storage: scan component placement: %w", err)
 		}
 		out = append(out, id)
 	}
