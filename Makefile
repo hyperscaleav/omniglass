@@ -236,8 +236,23 @@ migration-check:
 # scripts/preflight_test.go fails if a step here and its check drift apart.
 # Needs Docker (make test and gen's erdgen use testcontainers) and BASE fetched:
 # git fetch origin main.
+#
+# Which steps run is not decided here (#2629): the changed files go through
+# scripts/ci-changes.sh, the rule CI's changes job uses, and a step runs when its
+# area is true (gen, web, go, docs). The guard runs always. A path no area claims
+# runs everything, as in CI. scripts/preflight_test.go holds each step to its area.
+PREFLIGHT_AREAS = $(shell { git diff --name-only $$(git merge-base $(BASE) HEAD); git ls-files --others --exclude-standard; } | sort -u | bash scripts/ci-changes.sh)
 preflight:
 	bash scripts/check-go-pin.sh
+	@echo 'preflight areas (scripts/ci-changes.sh): $(PREFLIGHT_AREAS)'
+	$(if $(filter gen=true,$(PREFLIGHT_AREAS)),$(MAKE) preflight-gen)
+	$(if $(filter web=true,$(PREFLIGHT_AREAS)),$(MAKE) test-web)
+	$(if $(filter go=true,$(PREFLIGHT_AREAS)),$(MAKE) test-go test-netadmin)
+	$(if $(filter docs=true,$(PREFLIGHT_AREAS)),cd docs && pnpm install --frozen-lockfile && pnpm build)
+	$(if $(filter go=true,$(PREFLIGHT_AREAS)),$(MAKE) migration-check BASE=$(BASE))
+	bash scripts/agent-sync.sh guard $(BASE)
+
+preflight-gen:
 	@$(TREE_SNAPSHOT) > $(GEN_SNAPSHOT).before
 	$(MAKE) gen
 	@$(TREE_SNAPSHOT) > $(GEN_SNAPSHOT).after
@@ -245,10 +260,6 @@ preflight:
 	if [ $$status -ne 0 ]; then diff $(GEN_SNAPSHOT).before $(GEN_SNAPSHOT).after | head -40; fi; \
 	rm -f $(GEN_SNAPSHOT).before $(GEN_SNAPSHOT).after; \
 	if [ $$status -ne 0 ]; then echo 'preflight: make gen changed the tree (above); commit the regenerated files' >&2; exit 1; fi
-	$(MAKE) test
-	cd docs && pnpm install --frozen-lockfile && pnpm build
-	$(MAKE) migration-check BASE=$(BASE)
-	bash scripts/agent-sync.sh guard $(BASE)
 
 # Full gate: every test, including the testcontainer-backed integration and
 # end-to-end tests (real Postgres) plus the SPA (vitest). Green before commit and

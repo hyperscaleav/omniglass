@@ -200,8 +200,12 @@ are skipped.
 ## Green before it pushes
 
 Both agents run `make preflight` before their last push, and before an agent-build PR is marked ready, and push the finished work only when it passes (agent-build's earlier pushes, [below](#work-survives-an-early-stop), need the step's own tests). It runs what
-the PR's required checks run: `make gen` with a drift check, `make test`, the docs build and
-the migration check against `origin/main`. The e2e tier and the image smoke stay CI-only.
+the PR's required checks run for the files the change touches: it pipes them through
+`scripts/ci-changes.sh`, the rule CI's changes job uses, and runs `make gen` with a drift check
+(gen area), the web tests (web), the Go and netadmin tests and the migration check against
+`origin/main` (go), and the docs build (docs). A docs-only change runs no Go or web tests; a
+path no area claims, or anything under `scripts/`, runs everything. The agent-config guard runs
+on every push. The e2e tier and the image smoke stay CI-only.
 `scripts/preflight_test.go` fails if the target and the workflows it mirrors drift apart.
 Run it yourself before you push a PR by hand; it needs Docker and a fetched `origin/main`.
 
