@@ -1,0 +1,252 @@
+---
+title: Calculations
+description: "How calc rules are built: a rule derives one key on each component or system it selects from aliased inputs folded by an expression, checked acyclic at write and run on a durable pending set."
+sidebar:
+  order: 42
+  badge:
+    text: Partial
+    variant: note
+---
+
+import SchemaTable from '../../../components/SchemaTable.astro';
+
+A **calc rule** derives a new value from other signals on each owner it applies to: a 5-minute average
+of a round-trip time, `room-in-use` from a display's power and a codec's call state, a system's mean
+temperature across its members. Its output is an ordinary sample, so anything downstream (an event
+rule, another calc rule, a chart) reads it like any other. To author one, see
+[the admin Calc rules guide](/admin/calc-rules/).
+
+Three rule families run server-side over typed samples, each its own table with typed columns:
+
+- a **calc rule** turns samples into a sample (this page);
+- an **event rule** turns a sample change into a firing, its events and an optional alarm
+  ([alarms and actions](/architecture/alarms-actions/#the-event_rule));
+- an **action rule** turns an alarm transition into notifications
+  ([alarms and actions](/architecture/alarms-actions/#the-action_rule-when-a-message-is-sent)).
+
+Parsing a raw payload into samples is not a rule: it is a driver's job at the edge
+([collection](/architecture/collection/)). Reconciling one key reported by several sources is the key's
+fusion policy, not a calc ([fusion](/architecture/properties/#fusion)); a calc rule derives a **new**
+key.
+
+## The calc rule
+
+A calc rule is a catalog row (#995,
+[ADR-0147](/architecture/decisions/#adr-0147-a-calc-rule-is-a-typed-sibling-registry-checked-acyclic-at-authoring)):
+
+- **`owner_kind`**, fixed at create: `component` or `system`. Its **`selector`** has the event rule's
+  shape over that kind: types (subtypes included) and owners by id, both empty for every owner.
+- **`inputs`**: one to sixteen `{alias, key}` pairs (#1018), one `calc_rule_input` row each. The key is
+  a registered property or metric, written by name or uuid and **held by its id**, so renaming the key
+  changes nothing and a key a rule reads cannot be deleted. The alias is the name the expression binds
+  it by. A component rule's input may carry a `window_seconds` ([below](#windowed-inputs)).
+- **`reduce`**: an expression over the aliases, `{expr}`.
+- **`output_key`**: a registered property or metric, held by its id on its lane, so a key a rule writes
+  cannot be deleted either.
+- `name` (unique, renameable with `:rename`), `label`, `description`, `enabled`, `official` (read-only),
+  and `version`, which bumps on every update that changes something.
+
+Rules read like a catalog, gated `rule:read` on any grant, and are written with `rule:*` on an all-scope
+grant, as event rules are; every write is audited on the rule's uuid and returns it. The routes are on
+[the API](/architecture/api/), and the console authors, previews and reads them under
+**Catalog > Actions > Calc rules** (#999), linking a calculated value on a component or a system back to
+its rule.
+
+### What a reduce may say
+
+The reduce compiles at the **calc site** of the [expression engine](/architecture/expressions/), whose
+bindings, list functions and budget are in the generated sites table there.
+
+- **Each input binds by its alias as the list of its current values**, typed by its key. On a component
+  the list holds one value per instance of the key; on a system, every slot-bound member's values in
+  member order ([system rules](#system-rules)). A windowed input binds its samples instead.
+- **List functions fold a list into one value**: `max`, `min`, `avg`, `sum`, `majority` (the most common
+  text or bool, a tie to the value that sorts first), `any` and `all` (over bools, or with a predicate),
+  `len` and `count` (a predicate's matches). A list of records with a `value` field folds by that field,
+  so `avg(rtt)` over a window is the mean of its samples.
+- **The result must be the output key's type**, else a type error. A name no alias binds is refused at
+  its position, naming it (the console offers to bind it to a key); a `let` that would shadow an alias is
+  refused where it is declared.
+
+The named reducers a rule once chose from (`average`, `min`, `count` and the rest) were retired by
+#1018; each is one expression (`avg(x)`, `min(x)`, `len(x)`), proven equal to it on both owner kinds.
+
+### Aliases
+
+An alias is an identifier (a letter or underscore, then letters, digits or underscores) of at most 64
+characters, unique in the rule, and **not reserved**: no keyword, no builtin or list function name
+(admitted at a site or not, so admitting one later never changes a stored rule), and none of the names
+the calc site keeps (`component`, `has`, `members`, `system`, `value`). The console's form holds the same
+rules, generated from the server's, and fills an alias from its key's name in snake_case:
+`tcp-connect-time` reads as `tcp_connect_time`.
+
+### The authoring checks
+
+Every write is refused, with a 422 naming the field, when:
+
+- **it would close a cycle.** The graph runs from each enabled rule's input keys to its output key; a
+  rule whose output can reach one of its own inputs is refused with the chain of keys
+  (`temp-twice -> avg-temp -> temp-twice`) and the rules along it. The graph is read under a
+  transaction lock, so two writes cannot each close half a loop. This topology check sits beside
+  [ADR-0069](/architecture/decisions/#adr-0069-cycle-safety-is-provenance-based-not-topology-based)'s
+  provenance rule; a loop through an event rule and an alarm is not in this graph.
+- **it reads `health`, or writes a reserved key.** An alarm moves health, so a rule reading it could
+  feed back; a native probe key belongs to the outpost and `health` to the rollup
+  ([the writer class](/architecture/properties/#who-writes-a-key-the-writer-class)).
+- **its output is a key another enabled rule writes.** Two writers would mix their values on an owner.
+- **its output is a key a collection or a command writes.** Once a rule outputs a key it is of the
+  `calc` writer class, and the reverse is held too: a driver spec emitting it, a command type targeting
+  it, or a push carrying it is refused at its own write
+  ([ADR-0161](/architecture/decisions/#adr-0161-every-key-has-one-writer-class-held-at-the-storage-gateway)).
+
+The graph and the one-writer check are key-level and ignore owner kinds. That can refuse a rule that
+would never meet the other on an owner, but never admits a loop, so it is deliberate.
+
+A patch is judged on what it changes: unchanged inputs and reduce are not recompiled, so a rule whose
+input key was since retyped stays editable. A stored reduce that no longer compiles is not silent: every
+read carries `calc_error` (the field, line and column, message and diagnostic code), and such a rule
+cannot be enabled until it compiles. A compile warning, such as an input the reduce never names, rides
+in `calc_warnings` and never refuses a save.
+
+## How a calc rule runs
+
+A rule runs where samples are written, on a durable pending set and a server tick
+([ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer)):
+
+- **Marking.** The sample-write transaction, the same one in which event rules judge each sample, inserts
+  a mark in `calc_pending` for every enabled rule that reads one of the batch's keys on an owner it
+  selects. An index probe of `calc_rule_input` finds them, so a batch no rule reads pays nothing more. A
+  mark already present keeps its time, so a burst is one computation. Creating, enabling or editing a
+  rule marks every owner it selects that already holds one of its inputs, so a rule over stable values
+  computes at once. A product edit or reclassification that moves a component's type marks the rules it
+  came into and drops the state of those it left.
+- **The tick.** Every server drains due marks once a second, oldest first, up to 500 a pass under a 10 s
+  deadline, each mark in its own transaction taken `FOR UPDATE SKIP LOCKED`. Replicas share one queue
+  and never compute a mark twice, and a mark is deleted only by the transaction that computes it, so a
+  restart loses nothing. A mark whose computation fails is recorded and pushed back 30 s. Latency is up
+  to one tick.
+- **Reducing.** The rule reads each input's current values on the owner, never intended values (a rule
+  reads observed and calculated values as truth): each instance's newest value, the aggregate instance
+  `''` only when the key has no other instance there, and an instance whose newest sample is over an hour
+  old left out and named as stale. A missing input (an empty list) is not guessed at: the rule writes
+  nothing and its state names the missing inputs.
+- **Writing.** The result is written on the aggregate instance through the same sample-write path, as a
+  **calculated** sample naming the rule and its version (`source_rule`, `source_rule_version`), so event
+  rules judge it and downstream calc rules are marked in turn. An unchanged result writes no row, except
+  that a metric output whose newest row is over 12 hours old is written again, so a steady value always
+  has a row inside the metric lane's retention.
+- **The value check.** A property output passes the same check ingest applies to the key (its data type,
+  enum, pattern or JSON schema). A result it cannot hold is not retried: nothing is written, and the
+  rule's state names the key, the value and the reason. The metric lane needs no check.
+- **Never itself.** A write knows the rule that produced it and never marks that rule, which stops a
+  rule feeding itself at run time; longer loops are refused at authoring.
+
+### Windowed inputs
+
+An input with a `window_seconds` reads its key **over a time window** (#1142): its alias binds the key's
+samples on the component in the last `window_seconds`, oldest first, each a record of `value`, `at` (unix
+seconds) and `instance`. So `avg(rtt)` over a 300 s window is a 5-minute rolling mean, `max(rtt)` its
+peak, and `count(rtt, .value > 50)` how many samples crossed 50.
+
+- **Bounds.** A window is 1 s to an hour, the staleness bound on a current value, and one read keeps the
+  window's newest 1,000 samples, so a key sampled faster than expected cannot make a computation
+  unbounded.
+- **Time.** The window is in the samples' own timestamps against the server's clock, so a collector
+  whose clock lags by more than the window has no sample in it.
+- **Aging out.** A window moves with no new sample, so its value must too. Each computation records in
+  `calc_rule_state.window_due_at` when its oldest kept sample leaves the window, and the tick marks every
+  owner whose due time has passed. An empty window is a missing input.
+- **Preview** weighs a windowed input as a range read, so a windowed candidate previews fewer owners.
+
+:::design[The rest of windowed inputs, tracked in #1143]
+A sample's outcome (a lost probe) and `rate`, which need the observation model of #1063; windows on a
+system rule; the console's window field (a windowed rule is written from the CLI or the API today); a
+window cap derived from the key's declared cadence; and a backtest over the window.
+:::
+
+### System rules
+
+A **system rule** derives on each system it selects from the system's **slot-bound members**: the
+components assigned to one of its slots, the same set the health rollup resolves. A member's sample marks
+every system rule reading its key on the systems it staffs; assigning, unassigning, declaring or
+withdrawing a slot, and creating, retyping or re-standarding a system, mark the system's rules.
+
+Each input binds the list of **every member's values**, in member order (name, then id), so `avg(temp)`
+is the systems' mean temperature. Beside the lists an expression reads the members as records:
+`members`, each with `id`, `name`, `value.<alias>` (its own value of each input) and `has.<alias>`
+(whether it holds one). One record per member keeps a member's inputs together, so
+`count(members, .has.power && .value.power == "on")` counts members, never a mix of two members' values.
+A member with no value of an input is named in the rule's state as skipped; when no member has a value
+the input is missing and nothing is written. The output is a system-owned calculated sample.
+
+A system with **no members** writes nothing and keeps its last calculated value; its state says since
+when (`no_members_since`), and the console flags the value as unsupported. A system-owned sample feeds
+no calc rule (system rules read their members).
+
+:::design[Event rules over a system's calculated value, tracked in #1002]
+Event rules judge component samples only, so a system rule's output cannot raise an alarm yet.
+:::
+
+## State and preview
+
+A rule's **state**, `GET /calc-rules/{name}/state`, is what it last did on each owner: the value, when
+and at which version, the inputs missing, members skipped and instances left out as stale, an error, and
+whether the owner is pending. It lists failing owners first, then pending, then those it wrote nothing
+for, then those holding a value, at most `limit` (100 by default, up to 1,000), with the `total`. It is
+fenced to the owners the caller may read, and a member the caller may not read is counted, never named.
+
+A **preview**, `POST /calc-rules:preview`, computes a candidate now on up to 200 owners the caller may
+read, with the reduce the tick runs, in a read-only transaction: the value it would write, the current
+output and whether they differ, and what was missing. A candidate is checked as a save would be, so a
+rule that could not be saved is refused before it is. On a system with a member the caller may not read,
+an expression that could expose **one member's value** (`members[1].value.t`) is withheld, while one that
+reads each list only whole (`avg(t)`, `len(members)`) is previewed.
+
+:::design[More calc expressions, tracked in #1023]
+Per-input filters, a `worst` fold once property types declare an order, and a windowed `time_in_state`
+for service levels ([health](/architecture/health/)).
+:::
+
+## Storage
+
+The physical layout lives on [storage](/architecture/storage/). A calc rule is its `calc_rule` row and
+its `calc_rule_input` rows; `calc_pending` holds the marks the tick drains, and `calc_rule_state` what
+each rule last did on each owner. `version` is a single integer that bumps on update, so a backtest that
+pins a rule version is a later additive widening.
+
+<SchemaTable
+  table="calc_rule"
+  notes={{
+    owner_kind: 'component or system, fixed at create',
+    selector: 'Types (subtypes included) and owners by id; empty, every owner',
+    reduce: 'The expression folding the inputs, {"expr": "..."}',
+    output_lane: 'Which catalog the output key is in; the matching type id column holds it',
+    version: 'Bumps on every update that changes something',
+  }}
+/>
+
+<SchemaTable
+  table="calc_rule_input"
+  notes={{
+    alias: 'The name the reduce binds this input by',
+    lane: 'Which catalog the key is in; the matching type id column holds it by id',
+    window_seconds: 'NULL reads current values; 1 to 3600 reads the key over that window',
+  }}
+/>
+
+<SchemaTable
+  table="calc_pending"
+  notes={{
+    marked_at: 'When the owner was first marked; a mark already present keeps its time',
+  }}
+/>
+
+<SchemaTable
+  table="calc_rule_state"
+  notes={{
+    missing: 'The inputs with no value on this owner at the last computation',
+    skipped: 'A system rule\'s members with no value of an input',
+    no_members_since: 'Since when a system has had no slot-bound members',
+    window_due_at: 'When the oldest kept sample of a windowed input leaves its window',
+  }}
+/>

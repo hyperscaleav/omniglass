@@ -2,6 +2,7 @@ package scripts
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -18,12 +19,12 @@ var preflightMirrors = []struct {
 	workflow string // under .github/workflows
 	command  string // that workflow must still run
 }{
-	{"$(MAKE) gen", "gen-drift.yml", "make gen"},
-	{"$(MAKE) test", "test.yml", "make test-go-storage"},
-	{"$(MAKE) test", "test.yml", "make test-go-devseed"},
-	{"$(MAKE) test", "test.yml", "make test-go-rest"},
-	{"$(MAKE) test", "test.yml", "make test-web"},
-	{"$(MAKE) test", "test.yml", "make test-netadmin"},
+	{"$(MAKE) preflight-gen", "gen-drift.yml", "make gen"},
+	{"$(MAKE) test-go test-netadmin", "test.yml", "make test-go-storage"},
+	{"$(MAKE) test-go test-netadmin", "test.yml", "make test-go-devseed"},
+	{"$(MAKE) test-go test-netadmin", "test.yml", "make test-go-rest"},
+	{"$(MAKE) test-web", "test.yml", "make test-web"},
+	{"$(MAKE) test-go test-netadmin", "test.yml", "make test-netadmin"},
 	{"pnpm install --frozen-lockfile && pnpm build", "docs-build.yml", "pnpm build"},
 	{"$(MAKE) migration-check", "migrations.yml", "go run ./cmd/migrationcheck"},
 }
@@ -114,6 +115,70 @@ func TestAgentToolchainPinsMatchTheChecks(t *testing.T) {
 		}
 		if !strings.Contains(read(p.workflow), p.line) {
 			t.Errorf("%s no longer has %q: move agent-toolchain.sh's pin with it", p.workflow, p.line)
+		}
+	}
+}
+
+// Which steps run is ci-changes.sh's rule, not a second copy (#2629): preflight
+// must ask it, and each step must sit behind the area CI runs it for.
+func TestPreflightGatesEachStepOnItsCIArea(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("..", "Makefile"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "scripts/ci-changes.sh") {
+		t.Error("make preflight no longer asks scripts/ci-changes.sh which areas changed")
+	}
+	recipe := preflightRecipe(t)
+	for step, area := range map[string]string{
+		"$(MAKE) preflight-gen":          "gen=true",
+		"$(MAKE) test-web":               "web=true",
+		"$(MAKE) test-go test-netadmin":  "go=true",
+		"pnpm install --frozen-lockfile": "docs=true",
+		"$(MAKE) migration-check":        "go=true",
+	} {
+		ok := false
+		for _, l := range strings.Split(recipe, "\n") {
+			if strings.Contains(l, step) && strings.Contains(l, "filter "+area+",") {
+				ok = true
+			}
+		}
+		if !ok {
+			t.Errorf("preflight's %q is not gated on %s", step, area)
+		}
+	}
+	for _, l := range strings.Split(recipe, "\n") {
+		if strings.Contains(l, "agent-sync.sh guard") && strings.Contains(l, "$(if") {
+			t.Error("the agent-config guard must run on every push, whatever the area")
+		}
+	}
+}
+
+// A docs-only change runs the docs build and the guard, and no Go or web tests.
+func TestPreflightDocsOnlyRunsNoTests(t *testing.T) {
+	plan := func(areas string) string {
+		t.Helper()
+		out, err := exec.Command("make", "-n", "-C", "..", "preflight", "PREFLIGHT_AREAS="+areas).CombinedOutput()
+		if err != nil {
+			t.Fatalf("make -n preflight: %v\n%s", err, out)
+		}
+		return string(out)
+	}
+	docs := plan("docs=true go=false web=false gen=false image=false")
+	for _, want := range []string{"pnpm build", "agent-sync.sh guard"} {
+		if !strings.Contains(docs, want) {
+			t.Errorf("a docs-only preflight must run %q:\n%s", want, docs)
+		}
+	}
+	for _, not := range []string{"test-web", "test-go", "test-netadmin", "migration-check", "preflight-gen"} {
+		if strings.Contains(docs, not) {
+			t.Errorf("a docs-only preflight must not run %q:\n%s", not, docs)
+		}
+	}
+	all := plan("docs=true go=true web=true gen=true image=true")
+	for _, want := range []string{"test-web", "test-go", "test-netadmin", "migration-check", "preflight-gen", "pnpm build"} {
+		if !strings.Contains(all, want) {
+			t.Errorf("an everything preflight must run %q:\n%s", want, all)
 		}
 	}
 }

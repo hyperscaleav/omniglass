@@ -202,26 +202,11 @@ export default defineConfig({
               items: [
                 // the journey, in the order the data travels
                 { label: 'Data collection', slug: 'architecture/collection' },
-                { label: 'Health & KPIs', slug: 'architecture/health' },
-                { label: 'Alarms and actions', slug: 'architecture/alarms-actions' },
                 { label: 'Messaging', slug: 'architecture/messaging' },
                 // the foundations underneath
                 { label: 'Outposts', slug: 'architecture/outposts' },
                 { label: 'Simulation', slug: 'architecture/simulation' },
                 { label: 'Workers', slug: 'architecture/workers' },
-              ],
-            },
-            {
-              // The pages that describe entirely unbuilt capability: every one is a
-              // :::design sketch, and graduates out of this group as its subsystem
-              // lands (#434).
-              label: 'Design sketches',
-              collapsed: true,
-              items: [
-                { label: 'Templates', slug: 'architecture/templates' },
-                { label: 'Calculations', slug: 'architecture/calculations' },
-                { label: 'Expressions', slug: 'architecture/expressions' },
-                { label: 'Time', slug: 'architecture/time' },
               ],
             },
             {
