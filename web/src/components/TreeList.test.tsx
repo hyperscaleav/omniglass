@@ -5,6 +5,22 @@ import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import TreeList, { type ListConfig, type ListNode } from "./TreeList";
 import { ME_KEY, type Me } from "../lib/auth";
 
+// Opening the same row twice lands on the same ?open= address and renders one drawer, so a
+// double open is invisible in the DOM. Record every open the list issues to count them.
+const opens: string[] = [];
+vi.mock("../lib/drawer_address", async (orig) => {
+  const mod = await orig<typeof import("../lib/drawer_address")>();
+  return {
+    ...mod,
+    useDrawerAddress: (...args: Parameters<typeof mod.useDrawerAddress>) => {
+      const a = mod.useDrawerAddress(...args);
+      const open = a.open;
+      a.open = (id: string) => { opens.push(id); open(id); };
+      return a;
+    },
+  };
+});
+
 // The row-with-actions pattern (#974): a row is not a button. axe's
 // nested-interactive rule fails a role="button" element that holds focusable
 // descendants, and a row holds the expand toggle and the action buttons. The
@@ -70,7 +86,17 @@ describe("TreeList rows", () => {
 
   it("clicking elsewhere on the row still opens the node, once", async () => {
     mount(true);
+    opens.length = 0;
     fireEvent.click(screen.getByText("gamma").closest("tr")!.querySelectorAll("td")[1]);
     await waitFor(() => expect(document.querySelectorAll("aside[data-blade]").length).toBe(1));
+    expect(opens).toEqual(["gamma"]);
+  });
+
+  it("clicking the name button opens the node exactly once (the click does not also reach the row)", async () => {
+    mount(true);
+    opens.length = 0;
+    fireEvent.click(screen.getByRole("button", { name: /gamma/ }));
+    await waitFor(() => expect(document.querySelectorAll("aside[data-blade]").length).toBe(1));
+    expect(opens).toEqual(["gamma"]);
   });
 });
