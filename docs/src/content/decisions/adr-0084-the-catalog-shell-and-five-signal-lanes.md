@@ -6,7 +6,7 @@ summary: "Catalog is one rail entry opening a shell: a grouped subrail (Telemetr
 ---
 
 - **Date:** 2026-08-07 | **Status:** Accepted | **Pages:** [UI](/architecture/ui/),
-  [glossary](/architecture/glossary/)
+  [glossary](/reference/glossary/)
 - **Decision:** Catalog is a single rail entry opening a **shell**: a grouped subrail whose
   entries navigate to the real per-registry pages, rendered in the pane at their canonical flat
   URLs, with an **Overview** landing of teaching cards; the subrail and the Overview derive from

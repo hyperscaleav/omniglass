@@ -6,7 +6,7 @@ summary: "The verdict domain gains a fourth value: a role short because its hard
 ---
 
 - **Date:** 2026-08-09 | **Status:** Accepted | **Pages:** [health](/architecture/health/),
-  [glossary](/architecture/glossary/)
+  [glossary](/reference/glossary/)
 - **Decision:** the verdict domain becomes **`healthy` < `incomplete` < `degraded` < `outage`**.
   A role short of quorum because its assigned hardware is **failing** contributes its declared
   `impact`, unchanged; a role short because the hardware was **never installed** contributes

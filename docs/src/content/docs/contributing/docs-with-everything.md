@@ -75,8 +75,8 @@ A word an operator or an admin reads (an entity, a nav label, a health value) is
 schema and permission noun, its nav entry, and any word it retired. `make gen` renders the
 [glossary](/reference/glossary/) and the entity descriptions in the OpenAPI spec from it, and the
 guards fail a new collection, nav entry or health value that names no row, or a retired word back in
-console strings or docs prose. Internal architecture terms stay in the frozen
-[architecture glossary](/architecture/glossary/).
+console strings or docs prose. A term only the code's internals use is defined on the Architecture
+page that owns it, in bold where the page first uses it.
 
 When a feature introduces a concept an operator must understand, the teaching surface ships with it
 ([the learning-tool restriction](/contributing/learning-tool/)).

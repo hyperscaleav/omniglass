@@ -6,7 +6,7 @@ summary: "A generated **system** name suppresses the ordinal on the first of its
 ---
 
 - **Date:** 2026-08-10 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
-  [storage](/architecture/storage/), [glossary](/architecture/glossary/)
+  [storage](/architecture/storage/), [glossary](/reference/glossary/)
 - **Decision (epic D3, ordinal suppression):** A generated **system** name suppresses the ordinal on
   the first of its stem in a placement bucket: a room's only boardroom is `boardroom` and the second
   is `boardroom-2`. The order dependence this buys is accepted rather than mitigated, and it is

@@ -5,7 +5,7 @@ status: "Accepted"
 summary: "The totality-of-managed-things noun becomes **fleet**, everywhere at once (code identifiers, routes, docs prose, glossary, scope grammar, nav): a fleet of SYSTEMS, uniform units maintained at scale against a standard, stationed across the location tree. The old noun retires to the docs denylist. Ruled all-in rather than surface-only: two words for one referent is a permanent translation tax"
 ---
 
-- **Date:** 2026-08-14 | **Status:** Accepted | **Pages:** [glossary](/architecture/glossary/),
+- **Date:** 2026-08-14 | **Status:** Accepted | **Pages:** [glossary](/reference/glossary/),
   [ui](/architecture/ui/), [health](/architecture/health/), [identity and access](/architecture/identity-access/)
 - **Decision:** the totality an install manages is a **fleet**: the systems are the fleet's
   units, the components staff them, and the location tree is the geography they are stationed

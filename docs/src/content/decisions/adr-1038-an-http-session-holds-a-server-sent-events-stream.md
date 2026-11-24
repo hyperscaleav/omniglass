@@ -6,7 +6,7 @@ refs: [1038, 1113]
 summary: "An http session may declare `session.stream` (#1038, slice 3 of epic #1113): a GET held open as the endpoint's session through the staged dialer every held session uses, its auth step the session's scheme or login (shared with the endpoint's polls and commands), its events offered to the listeners. The held connection's unit widens from a line to a message (a line, an event, later a frame), and the router gains an event-name match and a JSON field match beside prefix and regex. A drop resumes with Last-Event-ID (carried across a reconnect that saw no event) after the server's retry, held to the session backoff's bounds, and the replayed event a resume is sent again first is dropped. A stream refusal gates the polls, a poll's refusal stops the stream, and the polls wait for the stream's first verdict under a fingerprint"
 ---
 
-- **Date:** 2026-10-25 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [glossary](/architecture/glossary/), [drivers](/admin/drivers/), [simulation](/architecture/simulation/)
+- **Date:** 2026-10-25 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [glossary](/reference/glossary/), [drivers](/admin/drivers/), [simulation](/architecture/simulation/)
 - **Decision:** (#1038, under the architect's approval of epic #1113.)
   1. **The stream is declared in the session block.** `session.stream` is a request: a `GET` with a
      path, a query and headers (never `Accept`, `Last-Event-ID` or `Cache-Control`, which the node

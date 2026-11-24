@@ -29,7 +29,7 @@ the dispatcher), or does it **trigger** automation (`run:*`)?
 
 ### `area:<subsystem>` describes
 
-The subsystem a change touches, named to match the architecture glossary. The set grows as
+The subsystem a change touches, named to match the [glossary](/reference/glossary/). The set grows as
 subsystems land; today:
 
 `area:foundation` `area:api` `area:storage` `area:auth` `area:identity`

@@ -8,7 +8,7 @@ refs: [1155]
 
 - **Date:** 2026-10-25 | **Status:** Accepted | **Pages:** [commands](/architecture/commands/),
   [api](/architecture/api/), [identity and access](/architecture/identity-access/),
-  [metrics and properties](/architecture/properties/), [glossary](/architecture/glossary/)
+  [metrics and properties](/architecture/properties/), [glossary](/reference/glossary/)
 - **Decision:** (#1155, approved in session on 2026-10-25.)
   1. **A command is read whole, under its component.** `GET /components/{name}/commands/{id}` and
      the history, `GET /components/{name}/commands` (newest first, narrowed by status, by when it was

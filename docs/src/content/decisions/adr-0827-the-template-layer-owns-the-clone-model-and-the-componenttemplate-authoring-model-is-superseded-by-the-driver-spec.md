@@ -6,7 +6,7 @@ summary: "#827 owns only ADR-0071's clone model: standard, component, system and
 refs: [827, 1322, 1331, 318, 1330, 1348]
 ---
 
-- **Date:** 2026-10-28 | **Status:** Accepted | **Pages:** [templates](/architecture/templates/), [data collection](/architecture/collection/), [glossary](/architecture/glossary/), [expressions](/architecture/expressions/), [nodes](/architecture/nodes/), [metrics and properties](/architecture/properties/#key-scope-org-and-official), [cascade](/architecture/cascade/), [config and variables](/architecture/variables/), [the spine](/architecture/), [roadmap](/architecture/roadmap/), [identity and access](/architecture/identity-access/), [health](/architecture/health/), [API](/architecture/api/)
+- **Date:** 2026-10-28 | **Status:** Accepted | **Pages:** [templates](/architecture/templates/), [data collection](/architecture/collection/), [glossary](/reference/glossary/), [expressions](/architecture/expressions/), [nodes](/architecture/nodes/), [metrics and properties](/architecture/properties/#key-scope-org-and-official), [cascade](/architecture/cascade/), [config and variables](/architecture/variables/), [the spine](/architecture/), [roadmap](/architecture/roadmap/), [identity and access](/architecture/identity-access/), [health](/architecture/health/), [API](/architecture/api/)
 - **Decision:** #827 owns the clone model of
   [ADR-0071](#adr-0071-a-template-is-a-clonable-example-not-a-versioned-shape-an-instance-pins) and
   nothing else. Four kinds (`standard_template`, `component_template`, `system_template`,

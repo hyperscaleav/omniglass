@@ -6,7 +6,7 @@ summary: "A system's, location's or component's result is its health (a system's
 refs: [2086, 2029, 2038, 2030, 2102, 2103, 2104]
 ---
 
-- **Date:** 2026-11-17 | **Status:** Accepted | **Pages:** [glossary](/architecture/glossary/),
+- **Date:** 2026-11-17 | **Status:** Accepted | **Pages:** [glossary](/reference/glossary/),
   [health](/architecture/health/)
 - **Decision:** (#2086.) Health's result is named by the concept it belongs to.
   - A system, a location and a component each **have a health**, one of the ordered values
