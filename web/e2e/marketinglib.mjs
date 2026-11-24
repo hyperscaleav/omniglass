@@ -20,7 +20,7 @@ import { load } from 'js-yaml';
 /** @typedef {({ kind: 'call' } & Call) | ({ kind: 'await' } & Await)} SetupItem */
 /** @typedef {string | { role: string, name?: string, exact?: boolean } | { text: string, exact?: boolean } | { selector: string }} Target */
 /** @typedef {'out' | 'here' | Target} Focus */
-/** @typedef {{ n: number, kind: string, path?: string, key?: string, target?: Target, text?: string, value?: string, replace?: boolean, timeout: number, hold: number, focus?: Focus, zoom?: number, fast?: number, expect?: string[] }} Step */
+/** @typedef {{ n: number, kind: string, method?: 'PUT' | 'POST' | 'PATCH', body?: Record<string, unknown>, path?: string, key?: string, target?: Target, text?: string, value?: string, replace?: boolean, timeout: number, hold: number, focus?: Focus, zoom?: number, fast?: number, expect?: string[] }} Step */
 /** @typedef {{ id: string, kind: 'still' | 'loop', alt: string, viewport: Viewport, start: string, ready: Target | null, setup: SetupItem[], prep: Step[], steps: Step[], maxSeconds: number }} Shot */
 /** @typedef {{ lab: { scenario: string, systems: number, omnibotReplay: string }, setup: SetupItem[], shots: Shot[] }} ShotList */
 
@@ -29,16 +29,20 @@ import { load } from 'js-yaml';
 export const LOOP_MIN_SECONDS = 5;
 export const LOOP_MAX_SECONDS = 9;
 // A loop may raise its own maximum up to this, for a story that cannot be told
-// faster without lying about it: omnibot's answer takes as long as inference does.
-export const LOOP_MAX_SECONDS_CAP = 15;
+// faster without lying about it: omnibot's answer takes as long as inference
+// does, and the page's teaser runs from the fleet to a room back to healthy.
+export const LOOP_MAX_SECONDS_CAP = 30;
+// The byte budget of a loop at up to 15 seconds; a longer one earns the same
+// rate for its length (loopMaxBytes), so the teaser may weigh twice the clip.
 export const LOOP_MAX_BYTES = 1_500_000;
+const LOOP_BUDGET_SECONDS = 15;
 export const DEFAULT_VIEWPORT = { width: 1440, height: 900 };
 // Longest a wait or an await may be given, in milliseconds.
 export const MAX_WAIT_MS = 180_000;
 export const DEFAULT_WAIT_MS = 15_000;
 const MAX_HOLD_MS = 8000;
 
-export const STEP_KINDS = ['goto', 'click', 'hover', 'type', 'select', 'press', 'wait'];
+export const STEP_KINDS = ['goto', 'click', 'hover', 'type', 'select', 'press', 'wait', 'call'];
 const STEP_KEYS = [...STEP_KINDS, 'hold', 'focus', 'zoom', 'fast', 'expect'];
 
 // The camera (a loop only): a step's `focus` eases the frame onto a box, so a
@@ -53,7 +57,7 @@ const STEP_KEYS = [...STEP_KINDS, 'hold', 'focus', 'zoom', 'fast', 'expect'];
 // centred.
 // spotPad is the lit margin round a focus box, in viewport pixels; dim is how
 // dark the rest of the frame goes while the camera is on a box.
-export const CAMERA = { ease: 0.6, maxZoom: 2, minZoom: 1, margin: 0.1, backdrop: '#080c16', spotPad: 12, dim: 0.5 };
+export const CAMERA = { ease: 0.6, maxZoom: 3, minZoom: 1, margin: 0.1, backdrop: '#080c16', spotPad: 12, dim: 0.5 };
 // A wait played faster runs at up to MAX_FAST times real speed: an alarm that
 // takes a minute to raise plays in a couple of seconds, under a badge that says
 // the clip is sped up (render.mjs).
@@ -193,6 +197,28 @@ function parseStep(raw, n, label = 'step') {
       if (!isStr(v)) problems.push(`${where} must name a key`);
       step.key = v;
       break;
+    // call: an API request mid-clip, off camera, as the lab's owner: what
+    // happens in the room (someone plugs the display back in) while the console
+    // shows what it makes of it. Nothing on screen moves for it, so it takes no
+    // focus and nothing to check.
+    case 'call': {
+      if (!isObj(v)) {
+        problems.push(`${where} must be { put | post | patch, body }`);
+        break;
+      }
+      const methods = ['put', 'post', 'patch'].filter((m) => m in v);
+      for (const k of Object.keys(v)) if (!['put', 'post', 'patch', 'body'].includes(k)) problems.push(`${where} has unknown key "${k}"`);
+      if (methods.length !== 1) problems.push(`${where} needs exactly one of put, post, patch`);
+      else if (!isStr(v[methods[0]]) || !v[methods[0]].startsWith('/')) problems.push(`${where}: ${methods[0]} must be an API path starting with "/"`);
+      if (!isObj(v.body)) problems.push(`${where}: needs a body mapping`);
+      if ('focus' in o) problems.push(`${where}: a call is off camera, so it takes no focus`);
+      if (methods.length === 1) {
+        step.method = /** @type {any} */ (methods[0].toUpperCase());
+        step.path = v[methods[0]];
+      }
+      step.body = v.body ?? {};
+      break;
+    }
     case 'type':
     case 'select': {
       const field = kind === 'type' ? 'text' : 'value';
@@ -398,10 +424,20 @@ export function parseShots(text) {
 export function budgetProblems(id, { seconds, bytes }, max = LOOP_MAX_SECONDS) {
   /** @type {string[]} */
   const out = [];
+  const maxBytes = loopMaxBytes(max);
   if (!(seconds >= LOOP_MIN_SECONDS)) out.push(`shot ${id}: loop is ${seconds.toFixed(1)}s, under the ${LOOP_MIN_SECONDS}s minimum`);
   if (seconds > max) out.push(`shot ${id}: loop is ${seconds.toFixed(1)}s, over the ${max}s maximum`);
-  if (bytes > LOOP_MAX_BYTES) out.push(`shot ${id}: loop is ${bytes} bytes, over the ${LOOP_MAX_BYTES}-byte limit`);
+  if (bytes > maxBytes) out.push(`shot ${id}: loop is ${bytes} bytes, over the ${maxBytes}-byte limit`);
   return out;
+}
+
+/**
+ * The byte budget of a loop allowed `maxSeconds`: LOOP_MAX_BYTES up to 15
+ * seconds, the same rate beyond, so a 30 second teaser may weigh 3 MB.
+ * @param {number} maxSeconds
+ */
+export function loopMaxBytes(maxSeconds) {
+  return Math.round(LOOP_MAX_BYTES * Math.max(1, maxSeconds / LOOP_BUDGET_SECONDS));
 }
 
 /**

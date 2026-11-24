@@ -23,7 +23,8 @@
 # camera pass (web/e2e/marketing/compose, Revideo, in the Playwright image with no
 # network and its telemetry off) then eases the frame onto each focus and renders
 # the loop at the viewport's size, and ffmpeg encodes that to H.264, smaller until
-# it fits the 1.5 MB budget. The loop's length and size are then checked against
+# it fits the byte budget (1.5 MB, at that rate past 15 seconds). The loop's
+# length and size are then checked against
 # the budget (marketinglib.mjs), and any shot over it fails the run, naming the
 # shot and the limit. Each loop also gets a storyboard (one still per beat,
 # $OUT/storyboard/), and a beat whose frame misses the text its step `expect`s
@@ -113,11 +114,13 @@ encode_shot() {
   seconds=$(ffmpeg_in "$OUT" --entrypoint ffprobe "$FFMPEG_IMG" -v error -show_entries format=duration \
     -of default=noprint_wrappers=1:nokey=1 "/o/$id.src.mp4") || return 1
   compose_shot "$id" "$seconds" || return 1
+  local limit
+  limit=$(mk max-bytes "$max") || return 1
   for crf in "${CRFS[@]}"; do
     ffmpeg_in "$OUT" "$FFMPEG_IMG" -hide_banner -loglevel error -y -i "/o/$id.cam.mp4" \
       -c:v libx264 -preset slow -crf "$crf" -pix_fmt yuv420p -profile:v high -movflags +faststart -an "/o/$id.mp4" || return 1
     bytes=$(stat -c %s "$OUT/$id.mp4")
-    [ "$bytes" -le 1500000 ] && break
+    [ "$bytes" -le "$limit" ] && break
   done
   seconds=$(ffmpeg_in "$OUT" --entrypoint ffprobe "$FFMPEG_IMG" -v error -show_entries format=duration \
     -of default=noprint_wrappers=1:nokey=1 "/o/$id.mp4") || return 1

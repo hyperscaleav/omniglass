@@ -107,6 +107,83 @@ shots:
         zoom: 1.2
         hold: 2000
 
+  # The page's hero: thirty seconds from the whole fleet to one room and back
+  # to healthy, every beat in the drawer the console opens beside the list, so
+  # nothing jumps to a full page. Beats: the count of rooms that need attention;
+  # those rooms; the headquarters boardroom's Why, naming its main display; the
+  # alarm snoozed from that row; the display plugged back in (off camera, the
+  # wait for the console to see it sped up under its badge), the room reading
+  # healthy and its Why clear; its Activity, the stretch it spent degraded in
+  # its health history. It leaves the boardroom healthy, as the outage clip
+  # below expects to find it.
+  - id: omniglass-teaser
+    kind: loop
+    max_seconds: 30
+    alt: "Omniglass from the fleet to a fix: the count of rooms that need attention, the list of them, a headquarters boardroom's Why naming the reachability alarm on its main display, the alarm snoozed, the display back online and the room healthy again, then its health history showing the stretch it was degraded."
+    setup:
+      - put: /components/{hq.hq-annex.hq-annex-1.hq-annex-1-05.$comp.display-1}/impairment
+        body: { unplugged: true }
+      - wait: { get: /systems/hq-mr86-1/health, field: health, equals: degraded, timeout: 180000 }
+    start: /explore
+    ready: { selector: '[role=treeitem]:has-text("Headquarters")' }
+    steps:
+      # Beat 1: the fleet's count, and how many rooms need attention.
+      - hover: { role: button, name: need attention }
+        focus: '[data-testid=explore-counts]'
+        expect: ["systems", "need attention"]
+        zoom: 2.6
+        hold: 1500
+      # Beat 2: only those rooms, the boardroom among them.
+      - click: { role: button, name: need attention }
+        focus: 'ul[role=list][aria-label=Matches]'
+        expect: ["Hq Annex 1 05"]
+        zoom: 1.6
+        hold: 1300
+      # Beat 3: the boardroom opens in the drawer, and the camera pans to its Why.
+      - click: 'ul[role=list][aria-label=Matches] li:has(:text-is("Hq Annex 1 05"))'
+        hold: 200
+      - wait: { selector: 'aside[data-blade] [data-testid=alarm-strip]' }
+        focus: here
+        expect: ["Why", "Reachability lost", "display-1"]
+        zoom: 2.2
+        hold: 1800
+      # Beat 4: the alarm snoozed from its own row while someone goes to the room.
+      - click: 'aside[data-blade] [data-testid=alarm-strip] [data-testid=alarm-controls] button:has-text("Snooze")'
+        focus: 'aside[data-blade] [data-testid=alarm-strip]'
+        zoom: 2.2
+        expect: ["Reachability lost", "Snooze"]
+        hold: 500
+      - click: 'button:text-is("1 hour")'
+        hold: 200
+      - wait: { selector: 'aside[data-blade] [data-testid=alarm-strip] :text("snoozed until")' }
+        focus: here
+        expect: ["snoozed until"]
+        zoom: 2.6
+        hold: 1300
+      # Beat 5: the display is plugged back in. The console sees it at its next
+      # check, sped up under the badge: the room reads healthy, its Why clear.
+      - call: { put: '/components/{hq.hq-annex.hq-annex-1.hq-annex-1-05.$comp.display-1}/impairment', body: { unplugged: false } }
+      - wait: { selector: 'aside[data-blade] [data-testid=alarm-strip-clear]', timeout: 180000 }
+        fast: 40
+        focus: 'aside[data-blade] [data-testid=system-header]'
+        expect: ["healthy"]
+        zoom: 2.4
+        hold: 1300
+      - hover: 'aside[data-blade] [data-testid=alarm-strip-clear]'
+        focus: here
+        expect: ["No active alarms"]
+        zoom: 2.4
+        hold: 1200
+      # Beat 6: its Activity, the stretch it spent degraded on its health history.
+      - click: 'aside[data-blade] [role=tab]:text-is("Activity")'
+        focus: out
+        hold: 200
+      - wait: { selector: 'aside[data-blade] [data-testid=health-history-full]' }
+        focus: 'aside[data-blade] [data-testid=history-tab] div:has(> [data-testid=uptime-kpi])'
+        expect: ["Uptime", "History"]
+        zoom: 2
+        hold: 2200
+
   # Systems. The page's bullets, in order:
   #   1. Locations nest to any depth, in any shape you define.
   #   2. Every room opens to the system and its components.
@@ -198,9 +275,9 @@ shots:
       - click: 'aside[data-blade] button:has-text("Save")'
       # Beat 3: the ladder passes. The outpost asks again at its next check-in,
       # about five quiet seconds on the lab, played at 4x.
-      - wait: { selector: 'aside[data-blade] [data-testid=endpoint-session]:not(:has([data-testid=session-notice])):has([data-testid=ladder-rung][data-rung=authenticated][data-status=pass])', timeout: 30000 }
+      - wait: { selector: 'aside[data-blade] [data-testid=endpoint-detail]:not(:has([data-testid=session-notice])):has([data-testid=ladder-rung][data-rung=authenticated][data-status=pass])', timeout: 30000 }
         fast: 4
-        focus: 'aside[data-blade] [data-testid=endpoint-session]'
+        focus: 'aside[data-blade] [data-field=ladder]'
         expect: ["reachable", "responsive", "authenticated"]
         zoom: 1.7
         hold: 1500

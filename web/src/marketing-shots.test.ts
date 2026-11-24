@@ -11,6 +11,7 @@ import {
   LOOP_MAX_SECONDS_CAP,
   LOOP_MIN_SECONDS,
   budgetProblems,
+  loopMaxBytes,
   cameraTail,
   retime,
   buildManifest,
@@ -129,7 +130,7 @@ describe("parseShots", () => {
     expect(parseShots("{ unclosed").problems[0]).toContain("is not YAML");
   });
 
-  it("parses the committed shot list: seven shots, the two kinds, every one with alt", () => {
+  it("parses the committed shot list: eight shots, the two kinds, every one with alt", () => {
     const text = readFileSync(join(__dirname, "../e2e/marketing/shots.yaml"), "utf8");
     const { list, problems } = parseShots(text);
     expect(problems).toEqual([]);
@@ -137,6 +138,7 @@ describe("parseShots", () => {
     const byId = Object.fromEntries((list?.shots ?? []).map((s: { id: string; kind: string }) => [s.id, s.kind]));
     expect(byId).toEqual({
       "fleet-overview": "loop",
+      "omniglass-teaser": "loop",
       "fleet-explore": "loop",
       "fleet-scale": "still",
       "credential-fix": "loop",
@@ -286,7 +288,7 @@ describe("focus and zoom on a step", () => {
   it("names a zoom out of range, a zoom with no focus, and here on a step with no target", () => {
     const { problems } = parseShots(
       LOOP(
-        "      - click: a\n        focus: here\n        zoom: 3\n" +
+        "      - click: a\n        focus: here\n        zoom: 3.5\n" +
           "      - click: b\n        zoom: 1.5\n" +
           "      - press: Enter\n        focus: here\n",
       ),
@@ -516,5 +518,46 @@ describe("a loop's own maximum", () => {
   it("is the limit the budget holds the loop to", () => {
     expect(budgetProblems("long", { seconds: 12, bytes: 1000 }, 14)).toEqual([]);
     expect(budgetProblems("long", { seconds: 14.5, bytes: 1000 }, 14)).toEqual(["shot long: loop is 14.5s, over the 14s maximum"]);
+  });
+
+  it("earns a byte budget at the same rate past 15 seconds, and only past it", () => {
+    expect(loopMaxBytes(LOOP_MAX_SECONDS)).toBe(LOOP_MAX_BYTES);
+    expect(loopMaxBytes(15)).toBe(LOOP_MAX_BYTES);
+    expect(loopMaxBytes(30)).toBe(2 * LOOP_MAX_BYTES);
+    expect(budgetProblems("teaser", { seconds: 28, bytes: 2_900_000 }, 30)).toEqual([]);
+    expect(budgetProblems("teaser", { seconds: 28, bytes: 3_000_001 }, 30)).toEqual(["shot teaser: loop is 3000001 bytes, over the 3000000-byte limit"]);
+    expect(budgetProblems("short", { seconds: 8, bytes: 1_500_001 })).toHaveLength(1);
+  });
+});
+
+describe("a call step", () => {
+  const CALL = "      - call: { put: '/components/{a.$comp.display-1}/impairment', body: { unplugged: false } }\n";
+
+  it("is an API request mid-clip, with its method, path and body", () => {
+    const { list, problems } = parseShots(LOOP("      - click: a\n" + CALL + "        hold: 500\n"));
+    expect(problems).toEqual([]);
+    expect(list?.shots[0].steps[1]).toMatchObject({ kind: "call", method: "PUT", path: "/components/{a.$comp.display-1}/impairment", body: { unplugged: false }, hold: 500 });
+  });
+
+  it("names a missing method, a bad path, a missing body and a focus", () => {
+    const { problems } = parseShots(
+      LOOP(
+        "      - call: { body: {} }\n" +
+          "      - call: { put: components/x, body: {} }\n" +
+          "      - call: { post: /secrets }\n" +
+          "      - call: { patch: /endpoints/x, body: {} }\n        focus: '#x'\n",
+      ),
+    );
+    expect(problems).toEqual([
+      "shot a-loop: step 1 (call) needs exactly one of put, post, patch",
+      'shot a-loop: step 2 (call): put must be an API path starting with "/"',
+      "shot a-loop: step 3 (call): needs a body mapping",
+      "shot a-loop: step 4 (call): a call is off camera, so it takes no focus",
+    ]);
+  });
+
+  it("addresses the lab the way a setup item does, so the preflight checks it", () => {
+    const refs = referencedResources([{ kind: "call", method: "PUT", path: "/components/{a.$comp.display-1}/impairment", body: {} }], null);
+    expect(refs).toEqual([{ kind: "component", id: "a.$comp.display-1", path: "/components/{a.$comp.display-1}" }]);
   });
 });

@@ -465,17 +465,19 @@ and writes the files and a `shots.json` manifest into the directory. The landing
 every image, loop, poster and alt text with no code change there.
 
 A shot is **data**: an id, a kind, a viewport, an `alt`, setup, and steps. A `still` is one 2x WebP. A
-`loop` is an H.264 MP4 of 5 to 9 seconds (a loop's `max_seconds` may raise that to 15, for a story such as
-omnibot's answer that cannot be told faster without faking it) and at most 1.5 MB, with a WebP poster; the recorder re-encodes
+`loop` is an H.264 MP4 of 5 to 9 seconds (a loop's `max_seconds` may raise that to 30, for a story such as
+omnibot's answer that cannot be told faster without faking it, or the page's teaser) and at most 1.5 MB (a
+loop allowed past 15 seconds earns that rate for its length, so a 30 second one may weigh 3 MB), with a WebP poster; the recorder re-encodes
 a loop smaller until it fits, and a loop that cannot fit, or is too short or too long, fails the run
 naming the shot and the limit. Steps use the walkthrough grammar (`goto`, `click`, `hover`, `type`,
-`select`, `press`, `wait`, and `hold` to linger) with no captions: a capture speaks for itself, and the
+`select`, `press`, `wait`, and `hold` to linger), plus `call`, with no captions: a capture speaks for itself, and the
 page that hosts it writes the words. A step that never finds its target fails the run, naming the shot,
 the step and what it waited for, and keeps the frame it failed on.
 
 A loop has a camera. A step's `focus` moves it: `here` frames the step's own target, a target of its own
 (`text`, `role`, `selector`, as a step names one) frames that, and `out` returns to the whole frame. `zoom`
-(1 to 2) sets how close; without it the camera fits the target with a margin, never past 2x. The camera
+(1 to 3) sets how close; without it the camera fits the target with a margin, never past 3x. A loop is
+watched on a phone too, where the console's 13-pixel text needs 2x or more to read. The camera
 eases over 0.6 s and centres the target, even near the capture's edge, where the frame shows the console's
 own dark base past it; so focus the thing the beat is about, not the panel around it. A target bigger than
 the frame at its `zoom` (a whole card) keeps its top and left edges in view instead, so its heading shows. It eases back to the whole frame before the loop
@@ -493,7 +495,7 @@ the part of the capture it frames) ride along in `shots.json`. Write an `expect`
 page's bullet rests on, as the console renders them (an input's value is not text on screen).
 The recorder takes the loop's frames as screenshots at twice the viewport, as fast as the page allows
 (Playwright's own video has CSS-pixel frames, so a "2x video" is the 1x frame padded with gray), so a 2x zoom
-is still crisp, and writes where each focused target sat on screen. ffmpeg joins the frames, each held for
+is still crisp (past 2x the frame is upscaled, a little soft), and writes where each focused target sat on screen. ffmpeg joins the frames, each held for
 as long as it was shown, into one steady clip; a [Revideo](https://github.com/midrender/revideo) (MIT)
 project in `web/e2e/marketing/compose/` then renders the pans and zooms over it, offline, with its
 telemetry off, before the budget encode. While the camera is on a box, the rest of the capture dims to
@@ -517,6 +519,12 @@ alarm. A loop that shows the fault arriving (`alarm-outage`) unplugs the display
 waits for the alarm on camera at `fast: 32`; the others record the console reading a fault that is already
 true. The shots run in the order listed on one lab, and a later shot relies on the state an earlier setup
 left.
+
+A `call` step is the same request in the middle of a clip, off camera: `call: { put: <path>, body: {...} }`.
+It is what happens in the room while the console shows what it makes of it: the teaser
+(`omniglass-teaser`) plugs the boardroom's display back in with one, then waits at `fast: 40` for the room
+to read healthy. It takes no focus, since nothing on screen moves for it, and the preflight checks the
+resource it names as it does a setup item's.
 
 Two things are hidden and nothing else: the lab banner, and a sidebar item still marked `soon`. The
 capture-only stylesheet (`CAPTURE_CSS` in

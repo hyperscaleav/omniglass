@@ -15,6 +15,7 @@
 //                                                      OG_E2E_BASE, OG_TOKEN, OG_E2E_USER,
 //                                                      OG_E2E_PASSWORD)
 //   node e2e/marketing.mjs budget <id> <seconds> <bytes> [max]   a loop's budget, exit 1 over
+//   node e2e/marketing.mjs max-bytes [max]             the byte budget of a loop allowed max seconds
 //   node e2e/marketing.mjs ids <shots.yaml>            "<id> <kind> <max seconds>" per shot, in order
 //   node e2e/marketing.mjs manifest <shots.yaml> <dest> <dims.json>   write shots.json
 //
@@ -25,7 +26,7 @@ import { appendFileSync, existsSync, readFileSync, rmSync, statSync, writeFileSy
 import { dirname, join } from 'node:path';
 import {
   CAPTURE_CSS, beatEnds, beatStill, buildManifest, cameraTail, concatList, retime, budgetProblems, conditionMet, destProblem,
-  expandAddress, frameFor, frameRect, missingText, parseShots, pick, shotFiles, referencedResources,
+  expandAddress, frameFor, frameRect, missingText, parseShots, pick, shotFiles, referencedResources, loopMaxBytes, LOOP_MAX_SECONDS,
 } from './marketinglib.mjs';
 import { describeTarget, locate } from './walkthroughlib.mjs';
 
@@ -73,6 +74,8 @@ async function main() {
     const problems = budgetProblems(id, { seconds: Number(seconds), bytes: Number(bytes) }, max ? Number(max) : undefined);
     for (const p of problems) console.error(`marketing: ${p}`);
     process.exit(problems.length ? 1 : 0);
+  } else if (mode === 'max-bytes') {
+    console.log(loopMaxBytes(args[0] ? Number(args[0]) : LOOP_MAX_SECONDS));
   } else if (mode === 't0') {
     console.log(JSON.parse(readFileSync(args[0], 'utf8'))[args[1]].t0);
   } else if (mode === 'beat-times') {
@@ -128,7 +131,12 @@ async function capture(file, out, only) {
   const bad = [];
   for (const [where, items, start] of [
     ['the list', list.setup, null],
-    ...list.shots.map((s) => [`shot ${s.id}`, s.setup, s.start]),
+    ...list.shots.map((s) => [
+      `shot ${s.id}`,
+      // A mid-clip call addresses the lab the same way a setup item does.
+      [...s.setup, ...[...s.prep, ...s.steps].filter((st) => st.kind === 'call').map((st) => ({ kind: 'call', method: st.method, path: st.path, body: st.body }))],
+      s.start,
+    ]),
   ]) {
     for (const ref of referencedResources(items, start)) {
       const status = await api.status(ref.path);
@@ -152,7 +160,7 @@ async function capture(file, out, only) {
     for (const shot of list.shots.filter((x) => only.length === 0 || only.includes(x.id))) {
       console.log(`marketing: shot ${shot.id} (${shot.kind})`);
       await runSetup(api, `shot ${shot.id}`, shot.setup);
-      dims[shot.id] = await record(browser, base, state, shot, out);
+      dims[shot.id] = await record(browser, base, state, shot, out, api);
       writeFileSync(dimsFile, JSON.stringify(dims, null, 2));
     }
   } finally {
@@ -286,8 +294,9 @@ const STYLE = (/** @type {string} */ css) => {
  * @param {any} storageState
  * @param {import('./marketinglib.mjs').Shot} shot
  * @param {string} out
+ * @param {ReturnType<typeof makeApi>} api
  */
-async function record(browser, base, storageState, shot, out) {
+async function record(browser, base, storageState, shot, out, api) {
   const { width, height } = shot.viewport;
   const loop = shot.kind === 'loop';
   const ctx = await browser.newContext({
@@ -312,7 +321,7 @@ async function record(browser, base, storageState, shot, out) {
     await page.waitForTimeout(PACE.load);
     for (const step of shot.prep) {
       current = `prep step ${step.n} (${step.kind}${step.target ? ` ${describeTarget(step.target)}` : ''})`;
-      await play(page, base, step, cursor, false, cam);
+      await play(page, base, step, cursor, false, cam, api);
     }
     // The recording opens here, on the console's first paint: the clip's clock
     // (the camera's too) starts now.
@@ -323,7 +332,7 @@ async function record(browser, base, storageState, shot, out) {
     for (const step of shot.steps) {
       current = `step ${step.n} (${step.kind}${step.target ? ` ${describeTarget(step.target)}` : ''})`;
       const t = Date.now();
-      await play(page, base, step, cursor, loop, cam);
+      await play(page, base, step, cursor, loop, cam, api);
       if (process.env.MARKETING_TRACE) console.log(`  ${shot.id} ${current}: ${((Date.now() - t) / 1000).toFixed(1)}s`);
     }
     if (loop) {
@@ -519,8 +528,9 @@ async function logFocus(page, step, cam, own) {
  * @param {{ x: number, y: number }} cursor
  * @param {boolean} loop
  * @param {Camera} cam
+ * @param {ReturnType<typeof makeApi>} api
  */
-async function play(page, base, step, cursor, loop, cam) {
+async function play(page, base, step, cursor, loop, cam, api) {
   // A focus ends the beat before it: its frame is read as the camera leaves.
   if (loop && step.focus !== undefined) await closeBeat(page, cam);
   // A focus on a selector of its own is what the step reveals, so it is looked
@@ -531,6 +541,10 @@ async function play(page, base, step, cursor, loop, cam) {
       await page.goto(`${base}/web${step.path}`, { waitUntil: 'load', timeout: ACT_TIMEOUT });
       await page.waitForTimeout(PACE.load);
       await logFocus(page, step, cam, null);
+      break;
+    case 'call':
+      // Off camera: the lab changes, and the console shows what it makes of it.
+      await api.send(/** @type {string} */ (step.method), /** @type {string} */ (step.path), step.body);
       break;
     case 'press':
       if (!later) await logFocus(page, step, cam, null);
