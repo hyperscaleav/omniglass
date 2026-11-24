@@ -74,7 +74,7 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
   whether the row is absent or out of scope. A blade drilled over the root keeps its own stack and
   is not in the URL, and the param composes with the page's filter, sort and `?edit=1`. Every
   link into a drawer from another surface is `drawerHref(kind, address)`, never a hand-built string.
-- **The page header is the top bar: one row.** A page's title and one-line hint are read from the
+- **The top bar is the page header: two lines.** A page's title and one-line hint are read from the
   nav metadata (`<Page route="/roles">`) and rendered by the top bar in two lines, the same shape on
   every page. Line 1 is the `h1` row, with the search, omnibot and notification controls at its right:
   `Admin / Roles` on a list page, and on a detail page the kind's list as a link, the entity's label as the

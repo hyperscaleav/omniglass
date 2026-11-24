@@ -33,16 +33,17 @@ function Trail(props: { crumbs: Crumb[]; lead?: Crumb }) {
   const [width, setWidth] = createSignal(0);
   let el: HTMLElement | undefined;
   onMount(() => {
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(() => setWidth(el!.clientWidth));
-    ro.observe(el);
-    setWidth(el.clientWidth);
+    const node = el;
+    if (!node || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setWidth(node.clientWidth));
+    ro.observe(node);
+    setWidth(node.clientWidth);
     onCleanup(() => ro.disconnect());
   });
   const parts = () => collapseTrail(props.crumbs, trailBudget(width()));
   const sep = () => <span class="flex-none text-base-content/30">/</span>;
   return (
-    <nav ref={el} aria-label="Breadcrumb" data-testid="breadcrumb" class="flex min-w-0 items-baseline gap-1.5 overflow-hidden whitespace-nowrap text-xs text-base-content/60">
+    <nav ref={(node) => (el = node)} aria-label="Breadcrumb" data-testid="breadcrumb" class="flex min-w-0 items-baseline gap-1.5 overflow-hidden whitespace-nowrap text-xs text-base-content/60">
       <Show when={props.lead}>
         {(l) => <span data-testid="lead-system" class="flex flex-none items-baseline gap-1.5 sm:hidden"><TrailLink crumb={l()} /><span class="text-base-content/30">·</span></span>}
       </Show>
