@@ -24,6 +24,7 @@ import { ATTENTION, ATTENTION_CHIP, attentionCount, attentionParts } from "../li
 import OutlineName, { type NameKind } from "./OutlineName";
 import { describeError } from "../lib/format";
 import { entityLabel } from "../lib/entities";
+import Tooltip from "./ui/Tooltip";
 
 // OutlineWorkspace (#861, extracted in #872): the outline of locations with its
 // counts line, need-attention, New, the chip filter and the matches list.
@@ -391,10 +392,10 @@ function Results(props: { entries: OutlineEntry[]; outlineRoots: LocationNode[];
           const Icon = e.kind === "system" ? LayoutDashboard : resolveIcon(location()?.icon || (e.kind === "component" ? "box" : "map-pin"));
           const nameKind: NameKind = e.kind;
           return (
-            <li
+            <Tooltip as="li"
               role="listitem"
               tabindex={0}
-              title="Enter shows it in the tree, Space opens it"
+              content="Enter shows it in the tree, Space opens it"
               class={`grid ${OUTLINE_COLS} h-9 cursor-pointer items-center px-4 outline-none hover:bg-base-content/[0.03] focus-visible:shadow-[inset_0_0_0_1px_var(--color-primary)]`}
               onClick={() => props.onOpen(e)}
               onKeyDown={(ev) => {
@@ -413,7 +414,7 @@ function Results(props: { entries: OutlineEntry[]; outlineRoots: LocationNode[];
               <span class={`pr-4 text-[13px] leading-4 text-base-content/55 ${NARROW_HIDDEN}`}><DetailText text={location()?.contents ?? ""} /></span>
               <span>{e.health ? <HealthSlots single={e.health} /> : null}</span>
               <span />
-            </li>
+            </Tooltip>
           );
         }}
       </For>

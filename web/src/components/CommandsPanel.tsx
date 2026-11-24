@@ -26,6 +26,7 @@ import { createBoundCommands } from "../lib/bound_commands";
 import { commandGap } from "../lib/command_form";
 import { CLOCK_TICK_MS, createClock } from "../lib/clock";
 import { describeError, fmtClock, fmtTime, rel } from "../lib/format";
+import Tooltip from "./ui/Tooltip";
 
 // CommandsPanel (#1155): a component's commands, newest first, each where it
 // stands: in flight (queued for its outpost, delivered, awaiting the reply or the
@@ -202,7 +203,7 @@ function CommandRow(props: { c: Command; now: number; open: boolean; controls: s
   const want = () => intendedText(props.c);
   return (
     <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
-      <span class="w-14 shrink-0 text-[11px] tabular-nums text-base-content/45" title={fmtTime(props.c.issued_at)}>{rel(props.c.issued_at, props.now)}</span>
+      <Tooltip as="span" tabIndex={0} class="w-14 shrink-0 text-[11px] tabular-nums text-base-content/45" content={fmtTime(props.c.issued_at)}>{rel(props.c.issued_at, props.now)}</Tooltip>
       <span class="font-data">{props.c.command_type}</span>
       <Show when={want()}>
         <span class="text-[11.5px] text-base-content/45">to</span>
@@ -249,14 +250,14 @@ function CommandDetail(props: { c: Command; id: string }): JSX.Element {
               </Show>
               <span classList={{ "text-base-content/85": s.reached, "text-base-content/35": !s.reached }}>{s.label}</span>
               <Show when={s.reached && s.at}>
-                <span class="tabular-nums text-base-content/45" title={fmtTime(s.at!)}>
+                <Tooltip as="span" tabIndex={0} class="tabular-nums text-base-content/45" content={fmtTime(s.at!)}>
                   {i() === 0 ? clockTime(s.at!) : offsetWords(props.c.issued_at, s.at!)}
-                </span>
+                </Tooltip>
               </Show>
               <Show when={s.note}>
-                <span class="text-base-content/55" data-testid="command-delivery-note" title={props.c.delivered_at ? `Last delivered ${fmtTime(props.c.delivered_at)}` : undefined}>
+                <Tooltip as="span" tabIndex={0} class="text-base-content/55" data-testid="command-delivery-note" content={props.c.delivered_at ? `Last delivered ${fmtTime(props.c.delivered_at)}` : undefined}>
                   {s.note}
-                </span>
+                </Tooltip>
               </Show>
             </li>
           )}

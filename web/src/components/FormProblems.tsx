@@ -1,5 +1,6 @@
 import { For, Show, type JSX } from "solid-js";
 import { type FormProblem, separator } from "../lib/form_problems";
+import Tooltip from "./ui/Tooltip";
 
 // FormProblems is what a submit with gaps says (#2432): one sentence naming each
 // field to fix, each name a button that moves the focus to its field. It reads
@@ -20,7 +21,7 @@ export default function FormProblems(p: {
           <For each={p.problems}>
             {(pr, i) => (
               <>
-                <button type="button" class="link font-medium" title={pr.message} onClick={() => p.onFocus(pr.key)}>{pr.label}</button>
+                <Tooltip type="button" class="link font-medium" content={pr.message} onClick={() => p.onFocus(pr.key)}>{pr.label}</Tooltip>
                 {separator(i(), p.problems.length)}
               </>
             )}

@@ -8,6 +8,7 @@ import { Bot, MoreHorizontal, Search } from "./icons";
 import Popover from "./ui/Popover";
 import Button from "./Button";
 import InboxIndicator from "./InboxIndicator";
+import Tooltip from "./ui/Tooltip";
 
 // The sticky top bar (daisyUI navbar) is the page header, one row (#2575): the
 // group trail and the page's one h1 title with its hint on the left, the
@@ -16,11 +17,11 @@ import InboxIndicator from "./InboxIndicator";
 // its unread count.
 function TrailLink(props: { crumb: Crumb; class?: string }) {
   return (
-    <Show when={props.crumb.href} fallback={<span class={props.class} title={props.crumb.title ?? props.crumb.label}>{props.crumb.label}</span>}>
+    <Show when={props.crumb.href} fallback={<Tooltip as="span" class={props.class} content={props.crumb.title ?? props.crumb.label}>{props.crumb.label}</Tooltip>}>
       {(href) => (
-        <A href={href()} title={props.crumb.title ?? props.crumb.label} class={`hover:text-base-content ${props.class ?? ""}`}>
+        <Tooltip as={A} href={href()} content={props.crumb.title ?? props.crumb.label} class={`hover:text-base-content ${props.class ?? ""}`}>
           {props.crumb.label}
-        </A>
+        </Tooltip>
       )}
     </Show>
   );
@@ -87,10 +88,11 @@ export default function TopBar(props: { section: string; title?: string | JSX.El
           <div data-testid="header-line-2" class="min-w-0"><Trail crumbs={props.trail!} lead={props.system} /></div>
         </Show>
       </div>
-      <button
+      <Tooltip
         class="hidden h-8 w-56 items-center gap-2 rounded-field border border-base-300 bg-base-200 px-3 text-sm text-base-content/40 sm:flex"
         onClick={props.onOpenPalette}
-        title={`Search and jump (${hint})`}
+        data-testid="topbar-search"
+        content={`Search and jump (${hint})`}
       >
         <Search size={15} />
         <span>Search</span>
@@ -98,7 +100,7 @@ export default function TopBar(props: { section: string; title?: string | JSX.El
           <kbd class="kbd kbd-sm leading-none">{mod}</kbd>
           <kbd class="kbd kbd-sm leading-none">K</kbd>
         </span>
-      </button>
+      </Tooltip>
       <Button square icon={Search} onClick={props.onOpenPalette} title="Search and jump" label="Search and jump" class="sm:hidden" />
       <Show when={props.onOpenOmnibot}>
         {(open) => <Button square icon={Bot} onClick={open()} title="Ask omnibot" label="Ask omnibot" />}

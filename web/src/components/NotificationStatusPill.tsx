@@ -1,5 +1,6 @@
 import type { JSX } from "solid-js";
 import type { Notification } from "../lib/action_rules";
+import Tooltip from "./ui/Tooltip";
 
 // NotificationStatusPill is the console's one word for how a notification's
 // delivery stands (#1413), worn alike by an alarm's timeline and a blade's
@@ -17,13 +18,13 @@ const STATUS: Record<Notification["status"], { word: string; tone: string; tip: 
 export default function NotificationStatusPill(props: { status: string; size?: "xs" | "sm" }): JSX.Element {
   const look = () => STATUS[props.status as Notification["status"]];
   return (
-    <span
+    <Tooltip as="span" tabIndex={0}
       class={`badge badge-${props.size ?? "sm"} ${look()?.tone ?? "badge-ghost"}`}
       data-testid="notification-status"
       data-status={props.status}
-      title={look()?.tip}
+      content={look()?.tip}
     >
       {look()?.word ?? props.status}
-    </span>
+    </Tooltip>
   );
 }

@@ -5,6 +5,7 @@ import { formatAttributes } from "../lib/events";
 import { arrivedApart, messageParts, type Occurrence } from "../lib/occurrence";
 import AlarmTimeline, { createTimelineToggles } from "./AlarmTimeline";
 import RuleLink from "./RuleLink";
+import Tooltip from "./ui/Tooltip";
 
 // OccurrenceRow is the one row an event or a log line wears wherever it is listed
 // (#2437), laid out as a grid: the relative time (the absolute on hover), a kind
@@ -24,9 +25,9 @@ function Message(p: { text: string }): JSX.Element {
     <For each={parts()}>
       {(part) =>
         "ref" in part ? (
-          <span class="badge badge-ghost badge-xs align-baseline font-data" title={part.ref} data-testid="message-ref">
+          <Tooltip as="span" class="badge badge-ghost badge-xs align-baseline font-data" content={part.ref} data-testid="message-ref">
             {part.label} {part.short}
-          </span>
+          </Tooltip>
         ) : (
           part.text
         )
@@ -76,12 +77,12 @@ export default function OccurrenceRow(p: { o: Occurrence; showSource?: boolean }
           <span data-testid="occurrence-time" class="text-[11px] text-base-content/45"><Time iso={p.o.ts} /></span>
           <span class={`badge badge-sm max-w-full justify-self-start truncate font-data text-[10px] ${muted() ? "badge-ghost text-base-content/45" : p.o.badgeClass}`}>{p.o.badge}</span>
           <Show when={p.showSource}>
-            <span data-testid="occurrence-source" class="truncate font-data text-[11px] text-base-content/60" title={p.o.owner ?? p.o.source}>{p.o.owner ?? p.o.source}</span>
+            <Tooltip as="span" data-testid="occurrence-source" class="truncate font-data text-[11px] text-base-content/60" content={p.o.owner ?? p.o.source}>{p.o.owner ?? p.o.source}</Tooltip>
           </Show>
           <Show when={p.o.kind === "log"}>
-            <span data-testid="occurrence-facility" class="truncate font-data text-[11px] text-base-content/40" title={p.o.facility}>{p.o.facility}</span>
+            <Tooltip as="span" data-testid="occurrence-facility" class="truncate font-data text-[11px] text-base-content/40" content={p.o.facility}>{p.o.facility}</Tooltip>
           </Show>
-          <span class="min-w-0 truncate text-sm text-base-content/80" title={p.o.message} data-testid="occurrence-message"><Message text={p.o.message} /></span>
+          <Tooltip as="span" class="min-w-0 truncate text-sm text-base-content/80" content={p.o.message} data-testid="occurrence-message"><Message text={p.o.message} /></Tooltip>
         </button>
         {/* A rule's event names the rule and carries the alarm it moved (#951):
             beside the row's button, never inside it. */}

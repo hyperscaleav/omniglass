@@ -2,6 +2,7 @@ import { For, Show, createEffect, createMemo, createSignal, createUniqueId, type
 import { OP, opsFor, tokenToChip, chipGlyph, valueless, type FilterKey, type Chip, type OpKey } from "../lib/predicate";
 import { Search, X } from "./icons";
 import Button from "./Button";
+import Tooltip from "./ui/Tooltip";
 
 // FilterBar: the keyboard-driven chip search. A staged pipeline over one input:
 // type a key, pick an operator, pick/enter a value; each commit is a chip. The
@@ -205,9 +206,9 @@ export default function FilterBar<T>(props: {
           {(c, i) => (
             <span class="inline-flex items-center gap-1 rounded-field border border-base-300 bg-base-100 py-[3px] pl-2.5 pr-1 text-xs">
               <span class="text-base-content/50">{c.key}</span>
-              <button class="font-data font-semibold text-primary" title="cycle operator" onClick={() => cycleOp(i())}>
+              <Tooltip class="font-data font-semibold text-primary" content="cycle operator" onClick={() => cycleOp(i())}>
                 {chipGlyph(c.op)}
-              </button>
+              </Tooltip>
               <Show when={c.values.length}>
                 {/* The label, not the raw value (review finding 4,
                     task-15-review.md #4): a facet whose value is opaque (a

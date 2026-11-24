@@ -1,5 +1,6 @@
 import type { JSX } from "solid-js";
 import { useSeverity } from "../lib/severity";
+import Tooltip from "./ui/Tooltip";
 
 // SeverityBadge is the console's one severity chip (#917). It takes a level NAME
 // as it rides an alarm and renders the catalog's label in the catalog's color,
@@ -18,12 +19,12 @@ export default function SeverityBadge(props: { name: string; size?: "xs" | "sm";
           ? `${look().label}: an active alarm at this level does not affect its component's health`
           : `${look().label}: an active alarm at this level degrades its component`;
   return (
-    <span
+    <Tooltip as="span" tabIndex={0}
       class={`badge badge-${props.size ?? "sm"} shrink-0 ${look().badge} ${props.class ?? ""}`}
       data-severity={props.name}
-      title={hint()}
+      content={hint()}
     >
       {look().label}
-    </span>
+    </Tooltip>
   );
 }

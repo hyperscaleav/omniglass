@@ -6,6 +6,7 @@ import { REACHABILITY_KEY, type Reachability } from "../lib/reachability";
 import { ENDPOINTS_KEY, type Endpoint } from "../lib/endpoints";
 import { uuidFor } from "../lib/testids";
 import { Router, Route } from "@solidjs/router";
+import { tipOf } from "../test-tip";
 
 // The panel is read-only and derives state/strip/reason client-side from the
 // real API fields. Data is seeded into the query cache so no server is needed.
@@ -361,14 +362,14 @@ describe("a tls endpoint", () => {
     tls: { mode, key: mode === "pin" ? key : undefined, handshake_ms: 12.5, expires: "2026-11-03T12:00:00Z", days_left: daysLeft },
   });
 
-  it("lists the handshake, the days left and the pinned key in the breakdown", () => {
-    const { getByText, getByTitle } = mount({ component: "panel-1", endpoints: [tlsRow("pin", 10.02)] });
+  it("lists the handshake, the days left and the pinned key in the breakdown", async () => {
+    const { getByText } = mount({ component: "panel-1", endpoints: [tlsRow("pin", 10.02)] });
     fireEvent.click(getByText("Panel over TLS"));
     expect(getByText("handshake")).toBeTruthy();
     expect(getByText(/12\.5 ms/)).toBeTruthy();
     expect(getByText("10 days left")).toBeTruthy();
     expect(getByText("pinned on first use")).toBeTruthy();
-    expect(getByTitle(key)).toBeTruthy();
+    expect(await tipOf(getByText(/SHA256:/, { selector: "[tabindex]" }))).toBe(key);
   });
 
   // The handshake row follows the latest probe: a handshake time from an

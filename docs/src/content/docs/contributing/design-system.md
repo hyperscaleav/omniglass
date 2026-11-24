@@ -97,7 +97,7 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
   component: relative ("4m ago") with the absolute time and the exact RFC 3339 instant on hover
   and focus (`Time absolute` where a relative age says nothing, such as a before/after pair). A
   recorded field name in the audit change table is humanized (`humanizeField`: "Last orphaned at"),
-  the recorded key kept as the hover title.
+  the recorded key kept in the field's tooltip, shown on hover and on focus.
 - **A filter bar's placeholder is lower case** ("filter by name, type…"), pinned by
   `filter-placeholder-guard.test.ts`.
 - **An empty list that has a create action teaches.** `FlatList`'s `empty` takes a function that
@@ -360,7 +360,7 @@ same keys and focus, and the library underneath is swappable in one directory.
 | A decision that needs reading | `ConfirmDialog` | Cancel takes the focus; the body can teach |
 | Any destructive confirm | `confirmDelete` / `confirmAction` (`lib/confirm`) | one line at the site; renders the one `ConfirmDialog`; `run` lists a refused delete's blockers |
 | A floating panel from a button | `Popover` | the column menu, Snooze, Add under |
-| Help on hover or focus | `Tooltip` | `InfoTip` is the (i) built on it; never inside a `<label>` |
+| Help on hover or focus | `Tooltip` | `InfoTip` is the (i) built on it; never inside a `<label>`. Never the native `title` attribute: it never shows on keyboard focus (a guard test bars it). `Button` and `Popover` take a `title` prop and render the tooltip; a truncated value is `Truncate` |
 | A short fixed list with drawn options | `Select` | `TreeSelect` is built on it |
 | Choose from a long list by typing | `Picker` | single or `multiple`; `detail` tells two same-named rows apart; `onCreate` adds the create row; works inside a `Drawer` |
 | Find by typing, results from the server | `Search` | grouped rows the caller already filtered; the palette's field. The list renders inside its dialog (never portalled out of it); the first row is the default and Enter takes it |

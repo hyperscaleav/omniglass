@@ -47,6 +47,7 @@ import {
   type SimComponent,
   type SimOutpost,
 } from "../lib/simulation";
+import Truncate from "../components/ui/Truncate";
 
 // Simulation (#890): the simulated fleet, live. Per outpost a card that answers
 // "is monitoring working": the simulator's link and what it may do (ports below
@@ -486,7 +487,7 @@ function SimRow(props: { id: string; row: SimRowData; component?: FleetComponent
       <Show when={props.showOutpost}>
         <td class="truncate font-data text-xs">{props.row.outpost}</td>
       </Show>
-      <td class="truncate font-data text-xs text-base-content/70" title={d().product}>{d().product}</td>
+      <td class="font-data text-xs text-base-content/70"><Truncate text={d().product} /></td>
       <td class="font-data text-xs">{d().address}</td>
       <td class="py-1.5">
         <SimStatusBadge sim={d()} chip={false} />

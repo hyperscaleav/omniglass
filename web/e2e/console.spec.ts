@@ -312,9 +312,9 @@ test.describe("operator console", () => {
         await page.setViewportSize({ width, height: 800 });
         await page.goto(`/web/explore?node=${id}`);
         // The component's label is its product's ("Generic Device"); the chip is what finds it.
-        const row = page.getByRole("treeitem").filter({ has: page.getByTitle(/^Also in/) }).first();
+        const row = page.getByRole("treeitem").filter({ has: page.locator("[data-also-in]") }).first();
         await expect(row).toBeVisible();
-        await expect(row.getByTitle(/^Also in/)).toBeVisible();
+        await expect(row.locator("[data-also-in]")).toBeVisible();
         const name = row.locator("[data-label]");
         const box = (await name.boundingBox())!;
         expect(box.width, `the name is ${Math.round(box.width)}px beside the chip at ${width}px`).toBeGreaterThanOrEqual(64);

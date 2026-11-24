@@ -1,3 +1,4 @@
+import { tipOf } from "../test-tip";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, fireEvent, within, waitFor, cleanup } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
@@ -91,14 +92,14 @@ describe("OccurrenceList events", () => {
     expect(getByRole("button", { name: /^Timeline of / })).toBeTruthy();
   });
 
-  it("names a deleted rule as recorded, as plain text that says it is gone, never as a dead link", () => {
+  it("names a deleted rule as recorded, as plain text that says it is gone, never as a dead link", async () => {
     const { getByText } = mountEvents({
       component: "disp-1",
       events: [{ ts: nowIso, key: "rule-cleared", event_type_id: "x", origin: "derived", message: "Old watch", provenance: "observed", source: "rule", derived_by_rule: "old-watch" }],
     });
     const name = getByText("old-watch");
     expect(name.closest("a")).toBeNull();
-    expect(name.closest("[title]")?.getAttribute("title")).toMatch(/deleted/);
+    expect(await tipOf(name.parentElement)).toMatch(/deleted/);
   });
 });
 
@@ -115,7 +116,7 @@ describe("OccurrenceRow", () => {
     expect(detail.className).toMatch(/overflow-wrap:anywhere/);
   });
 
-  it("never shows a 64-hex id in a row: the collection-failed fixture reads as a short labelled reference", () => {
+  it("never shows a 64-hex id in a row: the collection-failed fixture reads as a short labelled reference", async () => {
     const { getByTestId, getAllByTestId, container } = mountEvents({
       component: "disp-1",
       events: [{ ts: nowIso, key: "collection-failed", event_type_id: "x", origin: "caught", message: `collection failed for task ${TASK}: connection refused`, provenance: "observed" }],
@@ -123,7 +124,7 @@ describe("OccurrenceRow", () => {
     const row = getAllByTestId("occurrence-row")[0];
     expect(row.textContent).not.toContain(TASK);
     expect(within(row).getByTestId("message-ref").textContent).toBe(`task ${TASK.slice(0, 8)}`);
-    expect(within(row).getByTestId("message-ref").getAttribute("title")).toBe(TASK);
+    expect(await tipOf(within(row).getByTestId("message-ref"))).toBe(TASK);
     expect(container.textContent).not.toMatch(/[0-9a-f]{64}/);
     expect(getByTestId("occurrence-message").textContent).toContain("connection refused");
   });
@@ -264,12 +265,12 @@ describe("OccurrenceRow columns", () => {
     expect(comp.queryByTestId("occurrence-source")).toBeNull();
   });
 
-  it("lays a log out as time, severity, facility, message and keeps the message to one line", () => {
+  it("lays a log out as time, severity, facility, message and keeps the message to one line", async () => {
     const { getByTestId, getAllByTestId } = mount(log, false);
     expect(getByTestId("occurrence-time")).toBeTruthy();
     expect(getByTestId("occurrence-facility").textContent).toBe("retention");
     expect(getByTestId("occurrence-message").classList.contains("truncate")).toBe(true);
-    expect(getByTestId("occurrence-message").getAttribute("title")).toBe("retention swept 4 partitions");
+    expect(await tipOf(getByTestId("occurrence-message"))).toBe("retention swept 4 partitions");
     expect(getAllByTestId("occurrence-row")[0].querySelector("button")!.style.gridTemplateColumns).not.toBe("");
   });
 
