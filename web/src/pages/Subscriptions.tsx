@@ -36,6 +36,8 @@ import {
   type Transition,
 } from "../lib/subscriptions";
 import { confirmDelete } from "../lib/confirm";
+import Tooltip from "../components/ui/Tooltip";
+import Truncate from "../components/ui/Truncate";
 
 // My alarm subscriptions (#1355, epic #1341): the signed-in person's own action
 // rules, each telling them alone, on the channels they pick, when an alarm they
@@ -189,7 +191,7 @@ export default function Subscriptions(): JSX.Element {
                         </td>
                         <td class="max-w-80">
                           <Show when={s.when} fallback={<span class="text-xs text-base-content/40">every alarm you can see</span>}>
-                            <code class="block truncate font-data text-xs" title={s.when}>{s.when}</code>
+                            <Truncate as="code" class="font-data text-xs" text={s.when} />
                           </Show>
                         </td>
                         <td>
@@ -460,7 +462,7 @@ function TestPanel(p: { on: Transition[]; when: string; ready: boolean }): JSX.E
                 <span class="badge badge-sm badge-soft badge-error">{summary().errored} could not be judged</span>
               </Show>
               <Show when={stale()}>
-                <span class="badge badge-sm badge-ghost" title="The draft changed since this test ran">stale</span>
+                <Tooltip as="span" tabIndex={0} class="badge badge-sm badge-ghost" content="The draft changed since this test ran">stale</Tooltip>
               </Show>
             </div>
             <Show
@@ -483,22 +485,22 @@ function MatchRow(p: { match: RuleMatch }): JSX.Element {
   const verdict = () => (m().error ? "error" : m().matched ? "matched" : "missed");
   return (
     <li class="flex items-start gap-2 px-2.5 py-2 text-xs" data-testid="sub-test-match" data-verdict={verdict()}>
-      <span
+      <Tooltip as="span" tabIndex={0}
         class="mt-0.5 flex-none"
         classList={{ "text-healthy": verdict() === "matched", "text-base-content/30": verdict() === "missed", "text-error": verdict() === "error" }}
-        title={verdict() === "matched" ? "Would have told you" : verdict() === "missed" ? "Would not have told you" : "Could not be judged"}
+        content={verdict() === "matched" ? "Would have told you" : verdict() === "missed" ? "Would not have told you" : "Could not be judged"}
       >
         <Show when={verdict() === "matched"} fallback={<X size={14} />}>
           <Check size={14} />
         </Show>
-      </span>
+      </Tooltip>
       <span class="sr-only">{verdict() === "matched" ? "Would have told you:" : verdict() === "missed" ? "Would not have told you:" : "Could not be judged:"}</span>
       <div class="flex min-w-0 flex-1 flex-col gap-0.5">
         <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span class="font-data font-medium">{m().component}</span>
           <SeverityBadge name={m().severity} size="xs" />
           <span class={TRANSITION_PILL[m().transition] ?? PILL_NEUTRAL}>{m().transition}</span>
-          <span class="tnum text-base-content/50" title={fmtTime(m().at)}>{rel(m().at)}</span>
+          <Tooltip as="span" tabIndex={0} class="tnum text-base-content/50" content={fmtTime(m().at)}>{rel(m().at)}</Tooltip>
         </div>
         <Show when={m().message}>
           <span class="truncate text-base-content/60">{m().message}</span>

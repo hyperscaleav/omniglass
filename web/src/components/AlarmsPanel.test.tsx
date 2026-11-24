@@ -8,6 +8,7 @@ import { MAJOR_LEVEL, SEEDED_LEVELS, seedSeverityLevels } from "../lib/testsever
 import type { SeverityLevel } from "../lib/severity";
 import { ME_KEY, type Me } from "../lib/auth";
 import { pendingTriage, requestTriage } from "../lib/handover";
+import { tipOf } from "../test-tip";
 
 // The alarms panel is where fleet health starts: an alarm on this component
 // that impairs its own health wholesale (#626). Rows are seeded into the query
@@ -284,9 +285,10 @@ describe("AlarmsPanel", () => {
   // The queue an operator actually works, at a glance: raised, and unseen. The
   // acknowledged-but-still-raised alarm is deliberately not in it, which is the
   // whole point of the two facts being independent.
-  it("counts only the raised alarms nobody has looked at", () => {
-    const { getByTitle } = mount();
-    expect(getByTitle(/nobody has recorded seeing it yet/i).textContent).toBe("1 unacknowledged");
+  it("counts only the raised alarms nobody has looked at", async () => {
+    const { getByText } = mount();
+    const chip = getByText("1 unacknowledged");
+    expect(await tipOf(chip)).toMatch(/nobody has recorded seeing it yet/i);
   });
 
   it("shows no unacknowledged counter once every raised alarm has been seen", () => {

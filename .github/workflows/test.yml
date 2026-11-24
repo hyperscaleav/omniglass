@@ -193,9 +193,11 @@ jobs:
 
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
-      - name: Build id
+      - name: Build id and Go version
         id: id
-        run: echo "id=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "id=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          echo "go=$(bash scripts/go-version.sh)" >> "$GITHUB_OUTPUT"
 
       - name: Build the image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -207,6 +209,7 @@ jobs:
             omniglass:dev-${{ steps.id.outputs.id }}
           build-args: |
             VERSION=${{ steps.id.outputs.id }}
+            GO_VERSION=${{ steps.id.outputs.go }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -218,6 +221,7 @@ jobs:
           outputs: type=local,dest=bin
           build-args: |
             VERSION=${{ steps.id.outputs.id }}
+            GO_VERSION=${{ steps.id.outputs.go }}
             HOSTOS=linux
             HOSTARCH=amd64
           cache-from: type=gha

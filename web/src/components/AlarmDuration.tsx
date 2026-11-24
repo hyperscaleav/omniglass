@@ -1,6 +1,7 @@
 import { Show, type JSX } from "solid-js";
 import { CLOCK_TICK_MS, createClock } from "../lib/clock";
 import { alarmDurationText } from "../lib/alarms";
+import Tooltip from "./ui/Tooltip";
 
 type Timed = { raised_at: string; cleared_at?: string | null };
 
@@ -24,13 +25,13 @@ function Live(props: { alarm: Timed; class?: string }): JSX.Element {
 
 function Span(props: { alarm: Timed; class?: string; open: boolean; now: () => number }): JSX.Element {
   return (
-    <span
+    <Tooltip as="span" tabIndex={0}
       data-testid="alarm-duration"
       data-open={props.open ? "true" : "false"}
       class={`inline-block whitespace-nowrap tnum ${props.class ?? ""}`}
-      title={props.open ? "Still raised: this grows until it clears" : "Raised to cleared"}
+      content={props.open ? "Still raised: this grows until it clears" : "Raised to cleared"}
     >
       {alarmDurationText(props.alarm, props.now())}
-    </span>
+    </Tooltip>
   );
 }

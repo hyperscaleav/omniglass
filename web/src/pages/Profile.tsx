@@ -18,6 +18,7 @@ import { kindLabel, getUser } from "../lib/users";
 import { scopeWords, permissionLabel } from "../lib/access";
 import { useQuery } from "@tanstack/solid-query";
 import { confirmAction } from "../lib/confirm";
+import Tooltip from "../components/ui/Tooltip";
 
 // Profile is the signed-in operator's own account surface: edit your label
 // and email, change your password, and (pedagogically) see the identity model you
@@ -408,7 +409,7 @@ export default function Profile() {
                     value={
                       <span class="flex flex-wrap items-baseline gap-x-2">
                         <span class="font-data text-sm">{g.role}</span>
-                        <span class="text-xs text-base-content/60" title={g.scope_id}>{scopeWords(g)}</span>
+                        <Tooltip as="span" tabIndex={0} class="text-xs text-base-content/60" content={g.scope_id}>{scopeWords(g)}</Tooltip>
                       </span>
                     }
                   />
@@ -436,7 +437,7 @@ export default function Profile() {
               >
                 <div class="flex flex-wrap gap-1.5">
                   <For each={me.data?.permissions ?? []} fallback={<span class="text-xs text-base-content/40">none</span>}>
-                    {(p) => <span class="badge badge-ghost font-data text-[11px]" title={p === ">" ? "The > wildcard: every permission" : undefined}>{permissionLabel(p)}</span>}
+                    {(p) => <Tooltip as="span" tabIndex={0} class="badge badge-ghost font-data text-[11px]" content={p === ">" ? "The > wildcard: every permission" : undefined}>{permissionLabel(p)}</Tooltip>}
                   </For>
                 </div>
               </Collapsible>

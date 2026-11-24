@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
 import { useMe, can } from "../lib/auth";
 import { entryCount, entryHref, visibleGroups, type CatalogEntry, type CatalogGroup } from "../lib/catalog";
+import Tooltip from "../components/ui/Tooltip";
 
 // The Catalog overview (/catalog): the landing the shell's Overview entry
 // opens, inside the shell's pane. One card per catalog group, DERIVED from the
@@ -93,12 +94,12 @@ function Count(props: { entry: CatalogEntry; name: string }) {
     <Show
       when={!q.isError}
       fallback={
-        <span
+        <Tooltip as="span" tabIndex={0}
           class="badge badge-sm border-error/40 text-error"
-          title={`The ${props.name} catalog did not load. The rest of the page stands; retry from its own page.`}
+          content={`The ${props.name} catalog did not load. The rest of the page stands; retry from its own page.`}
         >
           unavailable
-        </span>
+        </Tooltip>
       }
     >
       <Show when={q.data} fallback={<span class="skeleton h-4 w-7" aria-hidden="true" />}>

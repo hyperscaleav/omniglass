@@ -27,6 +27,7 @@ import {
   type PlatformSimGap,
   type PlatformSimOutpost,
 } from "../lib/platformhealth";
+import Tooltip from "../components/ui/Tooltip";
 
 // Platform health's simulation section (#1647): with a simulator connected,
 // what each device saw against what the platform collected. The simulator is
@@ -314,9 +315,9 @@ function DeviceTable(props: { outpost: PlatformSimOutpost; query: Signal<string>
               {(d) => (
                 <tr data-testid="platform-sim-device" data-component={d.component_id} data-received={deviceReceived(d)} classList={{ "bg-warning/5": d.unhit }}>
                   <td class="whitespace-nowrap align-middle">
-                    <A href={`/simulation?c=${encodeURIComponent(d.component_id)}`} class="font-medium hover:underline" title="Open the device's drawer on the Simulation page">
+                    <Tooltip as={A} href={`/simulation?c=${encodeURIComponent(d.component_id)}`} class="font-medium hover:underline" content="Open the device's drawer on the Simulation page">
                       {d.component || d.component_id}
-                    </A>
+                    </Tooltip>
                   </td>
                   <td class="align-middle text-xs text-base-content/60" data-testid="platform-sim-device-place">{devicePlaceText(d)}</td>
                   <td class="tnum whitespace-nowrap text-right align-middle text-sm">

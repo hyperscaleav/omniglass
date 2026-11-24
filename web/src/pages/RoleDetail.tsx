@@ -5,6 +5,7 @@ import KVStacked from "../components/KVStacked";
 import { type BladeDef } from "../lib/blades";
 import Tabs from "../components/ui/Tabs";
 import { type Role, ROLES_KEY, listRoles } from "../lib/users";
+import Tooltip from "../components/ui/Tooltip";
 
 // RoleDetail is a role's blade body: read-only this slice (custom-role editing is a
 // later slice). It teaches the RBAC model against the real role by showing its NET
@@ -29,16 +30,16 @@ function PermRow(props: { perm: string; held: boolean }) {
       <span class="w-3 shrink-0 text-center" classList={{ "text-success": props.held, "text-base-content/25": !props.held }}>
         {props.held ? "✓" : "·"}
       </span>
-      <span
+      <Tooltip as="span" tabIndex={0}
         classList={{
           "text-base-content/90": props.held && !isAdminTier(props.perm),
           "text-warning": props.held && isAdminTier(props.perm),
           "text-base-content/40 line-through": !props.held,
         }}
-        title={isAdminTier(props.perm) ? "admin-sensitive" : undefined}
+        content={isAdminTier(props.perm) ? "admin-sensitive" : undefined}
       >
         {props.perm}
-      </span>
+      </Tooltip>
     </div>
   );
 }

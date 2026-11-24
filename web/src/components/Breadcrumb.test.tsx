@@ -45,7 +45,7 @@ describe("Breadcrumb", () => {
       { key: "b", label: "B", href: "/b" },
       { key: "c", label: "C" },
     ]);
-    const flexOf = (label: string) => (trail.getByText(label).closest("span[title]") as HTMLElement).style.flex;
+    const flexOf = (label: string) => (trail.getByText(label).closest("[style]") as HTMLElement).style.flex;
     expect(flexOf("A")).toBe("0 1 auto");
     expect(flexOf("B")).toBe("0 0 auto");
     expect(flexOf("C")).toBe("0 0 auto");

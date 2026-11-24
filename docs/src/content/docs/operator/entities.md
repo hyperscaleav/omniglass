@@ -66,8 +66,8 @@ reflowed to the narrower panel, so you never leave Explore to answer a question 
 entity. Switching a tab inside the blade changes only the blade; the page behind it keeps its
 own address. A blade has no breadcrumb, so where the entity sits is said by a location card
 with the path above it. Opening something from inside a blade (a system a component serves, a
-component on a system's Why) stacks another blade over it. Edit and Delete sit in the
-**Configure** tab's footer, as on the page; Delete asks first and is gated by your permissions
+component on a system's Why) stacks another blade over it. Edit and a ⋯ menu holding Delete sit on the
+**Configure** tab's rail, as on the page; Delete asks first and is gated by your permissions
 on that row. **Expand** still opens the page, for its breadcrumb and its shareable address.
 
 The identity pages (Users, User groups, and Roles) use the same blade, and there drilling crosses entities: from a
@@ -94,7 +94,7 @@ notice, not a blank drawer. The notice reads the same either way, so it does not
 
 A blade opens **read-only**, and the header is chrome only (back, full-page, close). A fleet
 blade (a location, a system, a component) is its detail view, so it edits as the page does: on its
-**Configure** tab, whose footer carries **Edit** and, on the left, **Delete** behind a confirm (see
+**Configure** tab, whose tab rail carries **Edit** and a **⋯** menu holding **Delete** behind a confirm (see
 [Configure](/operator/fleet/) and [what is in the way](#delete-and-what-is-in-the-way)). The rest of this section is the identity and catalog blades, whose
 actions live in the blade's own **footer action bar**: **Edit** turns the whole blade live in place,
 its profile, members and grants.
@@ -192,7 +192,7 @@ row; anything that waits for the entity to exist (its tags) appears on the detai
   is in. Moving the component from one system to another is not here: it is **Move to...** under
   Placement, below. **Save** applies the memberships with the rest of the edit; if the server refuses
   one (a system outside your `system:update` scope, or a slot the component still fills there), the
-  reason shows in the footer beside **Save** and the form stays in edit. Without `system:update` the
+  reason shows at the top of the Configure body, under the tab rail, and the form stays in edit. Without `system:update` the
   field reads but does not edit. The system's member list updates without a reload.
 
   Identity is two fields you may fill and one you never see: the **name** is the identifier the API,
@@ -365,7 +365,7 @@ row; anything that waits for the entity to exist (its tags) appears on the detai
 
 A component, a system, and a location each carry a **Properties** panel on their detail: one row per
 property their classifier declares, resolved to the value set here or the classifier's default.
-Overrides are staged with the rest of the edit and committed by the same **Save changes**. It is one
+Overrides are staged with the rest of the edit and committed by the same **Save**. It is one
 surface over one resolver, so the panel reads the same on all three; the full walkthrough is in the
 [Properties guide](/admin/properties/#set-a-property-on-an-instance).
 

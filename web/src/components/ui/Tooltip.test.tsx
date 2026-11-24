@@ -56,3 +56,12 @@ describe("Tooltip keyboard contract", () => {
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
 });
+
+describe("empty and disabled triggers (#2486)", () => {
+  it("renders the trigger bare, with no tab stop, when the tip is empty", () => {
+    render(() => <Tooltip as="span" tabIndex={0} content={undefined}>plain</Tooltip>);
+    const el = screen.getByText("plain");
+    expect(el.tagName).toBe("SPAN");
+    expect(el.hasAttribute("tabindex")).toBe(false);
+  });
+});

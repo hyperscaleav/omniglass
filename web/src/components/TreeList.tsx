@@ -18,6 +18,7 @@ import BladeStack from "./BladeStack";
 import Button from "./Button";
 import { useDrawerAddress } from "../lib/drawer_address";
 import { type BladeDef, BladesContext, createBladeController, useBladeEdit } from "../lib/blades";
+import Tooltip from "./ui/Tooltip";
 
 // TreeList: the one config-driven tree-list body (composing ListShell), which
 // Files is a config over. It owns the filter header (the faceted chip search),
@@ -439,9 +440,9 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
             <Show when={isTree()}>
               <span class="inline-flex w-4 flex-none justify-center text-base-content/40">
                 <Show when={canExpand()} fallback={<span class="font-data text-[11px]">{"·"}</span>}>
-                  <button
+                  <Tooltip
                     class="inline-flex"
-                    title={open() ? "Collapse" : "Expand"}
+                    content={open() ? "Collapse" : "Expand"}
                     style={{ transform: open() ? "none" : "rotate(-90deg)", transition: "transform .15s" }}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -449,7 +450,7 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
                     }}
                   >
                     <ChevronDown size={14} />
-                  </button>
+                  </Tooltip>
                 </Show>
               </span>
             </Show>

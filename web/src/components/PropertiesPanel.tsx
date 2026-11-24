@@ -276,7 +276,10 @@ export default function PropertiesPanel(
       <Show when={q.error}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{describeError(q.error)}</span></div>
       </Show>
-      <Show when={!q.isLoading && !q.error && !rows().length}>
+      {/* The empty line is the claim that nothing resolves: it never shows
+          while the owner has rows the Reconciliation table above lists from
+          this same read (#2439). */}
+      <Show when={!q.isLoading && !q.error && !rows().length && !(q.data ?? []).length}>
         <p class="text-sm text-base-content/50">{copy().empty}</p>
       </Show>
       <Show when={contract().length}>

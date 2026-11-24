@@ -6,6 +6,7 @@ import NotificationStatusPill from "./NotificationStatusPill";
 import { RECENT_SHOWN, listRecentNotifications, ofRule, recentNotificationsKey } from "../lib/action_rules";
 import { PILL_NEUTRAL, TRANSITION_PILL } from "../lib/subscriptions";
 import { describeError, fmtTime, rel } from "../lib/format";
+import Tooltip from "./ui/Tooltip";
 
 // RecentNotifications is a blade's view of what an action rule or a target has
 // sent lately (#1346): each message's component, the edge it is about, where
@@ -45,7 +46,7 @@ export default function RecentNotifications(p: { rule?: string; target?: string;
                       <span class={TRANSITION_PILL[n.transition] ?? PILL_NEUTRAL}>{n.transition}</span>
                       <span class="ml-auto flex flex-none items-center gap-2">
                         <NotificationStatusPill status={n.status} />
-                        <span class="w-16 text-right text-[11px] tabular-nums text-base-content/50" title={fmtTime(n.created_at)}>{rel(n.created_at)}</span>
+                        <Tooltip as="span" tabIndex={0} class="w-16 text-right text-[11px] tabular-nums text-base-content/50" content={fmtTime(n.created_at)}>{rel(n.created_at)}</Tooltip>
                       </span>
                     </span>
                     <span class="flex min-w-0 items-center gap-1.5 text-[11px] text-base-content/50">
@@ -59,14 +60,14 @@ export default function RecentNotifications(p: { rule?: string; target?: string;
                       </span>
                     </span>
                     <Show when={n.last_error}>
-                      <span
+                      <Tooltip as="span" tabIndex={0}
                         class="line-clamp-2 text-[11px] [overflow-wrap:anywhere]"
                         classList={{ "text-error": n.status === "failed", "text-base-content/50": n.status !== "failed" }}
-                        title={n.last_error}
+                        content={n.last_error}
                         data-testid="recent-notification-error"
                       >
                         {n.status === "queued" ? `Retrying: ${n.last_error}` : n.last_error}
-                      </span>
+                      </Tooltip>
                     </Show>
                   </li>
                 )}

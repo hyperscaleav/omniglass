@@ -28,6 +28,7 @@ import { uuidFor } from "../lib/testids";
 import { pickInPicker } from "../components/ui/Picker.testkit";
 import type { SimProfile } from "../lib/simulation";
 import { answerConfirms } from "../lib/confirm.testkit";
+import { tipOf } from "../test-tip";
 
 // The simulation console (#890): the sidebar door that follows a connected
 // simulator, the live table and its highlight, the simulated component drawer's fire and
@@ -744,8 +745,8 @@ describe("adding a simulated system", () => {
     stubFetch();
     mount(() => <Simulation />);
     const sys = (await screen.findByRole("button", { name: /Add simulated system/ })) as HTMLButtonElement;
-    expect(sys.disabled).toBe(true);
-    expect(sys.getAttribute("title")).toBe("No simulator is connected");
+    expect(sys.getAttribute("aria-disabled")).toBe("true");
+    expect(await tipOf(sys)).toBe("No simulator is connected");
   });
 
   it("hides the action from a reader", async () => {

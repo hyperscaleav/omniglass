@@ -29,6 +29,7 @@ import {
   type HealthSlot,
 } from "../lib/health";
 import { confirmAction } from "../lib/confirm";
+import Tooltip from "./ui/Tooltip";
 
 // SlotsPanel lists the slots a system needs filled, resolved. A SLOT is a slot:
 // a table microphone, a main display. It names the TYPED-SLOT guard (#626) a
@@ -278,12 +279,12 @@ export default function SlotsPanel(props: { system: string; canUpdate: boolean }
               }
             >
               {(ih) => (
-                <span
+                <Tooltip as="span" tabIndex={0}
                   class="badge badge-ghost badge-sm"
-                  title={`${ih().choice}/${ih().alternate} is not the alternate currently answering this choice, so this slot's own figures did not count toward the health`}
+                  content={`${ih().choice}/${ih().alternate} is not the alternate currently answering this choice, so this slot's own figures did not count toward the health`}
                 >
                   not counted
-                </span>
+                </Tooltip>
               )}
             </Show>
           }
@@ -367,10 +368,10 @@ export default function SlotsPanel(props: { system: string; canUpdate: boolean }
         >
           <For each={r.assigned_to ?? []}>
             {(c, i) => (
-              <span
+              <Tooltip as="span" tabIndex={0}
                 class={`badge badge-sm gap-1 font-data ${down().has(c) ? "badge-error badge-soft" : "badge-outline"}`}
                 classList={{ "cursor-grab": canReorder(), "opacity-40": canReorder() && dragIdx() === i() }}
-                title={down().has(c) ? "An active alarm has taken this component down" : "Occupying its slot"}
+                content={down().has(c) ? "An active alarm has taken this component down" : "Occupying its slot"}
                 draggable={canReorder()}
                 onDragStart={() => canReorder() && setDragIdx(i())}
                 onDragOver={(e) => { if (canReorder()) e.preventDefault(); }}
@@ -397,7 +398,7 @@ export default function SlotsPanel(props: { system: string; canUpdate: boolean }
                     <X size={11} />
                   </button>
                 </Show>
-              </span>
+              </Tooltip>
             )}
           </For>
         </Show>

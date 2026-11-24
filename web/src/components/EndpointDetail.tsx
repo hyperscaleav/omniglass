@@ -20,6 +20,7 @@ import { CLOCK_TICK_MS, createClock } from "../lib/clock";
 import { ladder } from "../lib/session";
 import { rel } from "../lib/format";
 import { inputRows, paramRows, boundSecrets, pollRows } from "../lib/endpoint_detail";
+import Tooltip from "./ui/Tooltip";
 
 // EndpointDetail (#2436): the one body that tells an endpoint's whole story.
 // The component page's endpoint row (expanded) and the endpoint drawer both
@@ -229,7 +230,7 @@ export default function EndpointDetail(props: {
                       <>
                         <dt class="font-data text-base-content/60">
                           {r.name}
-                          <Show when={r.required}><span class="text-error" title="required"> *</span></Show>
+                          <Show when={r.required}><Tooltip as="span" tabIndex={0} class="text-error" content="required"> *</Tooltip></Show>
                         </dt>
                         <dd class="font-data break-all">
                           <Show when={r.value} fallback={<span class="text-base-content/40">not set</span>}>
@@ -251,9 +252,9 @@ export default function EndpointDetail(props: {
                 <ul class="flex flex-wrap gap-1.5">
                   <For each={secrets()}>
                     {(s) => (
-                      <li class="badge badge-ghost gap-1 font-data" title={`input ${s.input}${s.type ? `, ${s.type}` : ""}`}>
+                      <Tooltip as="li" tabIndex={0} class="badge badge-ghost gap-1 font-data" content={`input ${s.input}${s.type ? `, ${s.type}` : ""}`}>
                         {s.secret}
-                      </li>
+                      </Tooltip>
                     )}
                   </For>
                 </ul>
@@ -278,7 +279,7 @@ export default function EndpointDetail(props: {
                         <span class="flex flex-wrap items-baseline gap-x-3">
                           <span class="font-data font-medium">{p.name}</span>
                           <span class="text-base-content/50">every {p.every}</span>
-                          <Show when={p.lastRun}>{(ts) => <span class="text-base-content/50" title={ts()}>last run {rel(ts(), now())}</span>}</Show>
+                          <Show when={p.lastRun}>{(ts) => <Tooltip as="span" tabIndex={0} class="text-base-content/50" content={ts()}>last run {rel(ts(), now())}</Tooltip>}</Show>
                           <Show when={p.duration}>{(d) => <span class="text-base-content/50">{Number(d().value.toFixed(1))} {d().unit} mean</span>}</Show>
                         </span>
                         <span class={p.reads.length ? "text-base-content/70" : "text-base-content/45"}>{p.result}</span>

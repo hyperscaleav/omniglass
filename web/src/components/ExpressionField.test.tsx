@@ -353,9 +353,9 @@ describe("ExpressionField's verdict", () => {
   it("disables a fix once the author types past the source it was for, until the next answer", async () => {
     mount("sum(c) > 0");
     const fix = (await screen.findByRole("button", { name: "Use count" })) as HTMLButtonElement;
-    expect(fix.disabled).toBe(false);
+    expect(fix.getAttribute("aria-disabled")).toBeNull();
     typeExpression(await screen.findByRole("textbox", { name: "Fires when" }), "sum(c) > 0 ");
-    expect(fix.disabled).toBe(true);
+    expect(fix.getAttribute("aria-disabled")).toBe("true");
   });
 
   it("links a diagnostic's code to its entry in the docs", async () => {

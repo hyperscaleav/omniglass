@@ -7,6 +7,7 @@ import { describeError } from "../lib/format";
 import { pushToast } from "../lib/toast";
 import { FAULT_GROUPS, FAULT_GROUP_LABEL, applyFaultSteps, faultActions, type FaultAction, type HeldFault } from "../lib/simfaults";
 import { componentSimKey, getComponentSim, toImpairment, type SimComponent, type SimSurface } from "../lib/simulation";
+import Tooltip from "./ui/Tooltip";
 
 // SimFaultMenu: the named ways to break a simulated device, and Restore (#2462),
 // generated from what its profile can do (lib/simfaults). One button opens the
@@ -61,18 +62,18 @@ export default function SimFaultMenu(props: {
   }
 
   const item = (a: FaultAction) => (
-    <button
+    <Tooltip
       type="button"
       class={inline() ? "btn btn-quiet btn-sm" : "w-full px-2 py-1.5 text-left text-[12px]"}
       classList={{ "btn-danger": inline() && a.group === "restore" }}
-      title={a.hint}
+      content={a.hint}
       disabled={busy() !== null}
       data-testid="sim-fault-action"
       data-action={a.id}
       onClick={() => void run(a)}
     >
       {a.label}
-    </button>
+    </Tooltip>
   );
 
   return (
