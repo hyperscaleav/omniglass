@@ -36,6 +36,7 @@ describe("the page title is not repeated in the top bar", () => {
     expect(screen.getAllByRole("heading", { name: "Roles" })).toHaveLength(1);
     const bar = screen.getByRole("banner");
     expect(within(bar).queryByText(/Roles/)).toBeNull();
+    expect(within(bar).getByText("Admin")).toBeTruthy();
     expect(within(bar).getByRole("button", { name: "Search and jump" })).toBeTruthy();
   });
 

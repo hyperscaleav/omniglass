@@ -255,10 +255,23 @@ export function sectionLabel(pathname: string): string {
 
 // sectionTrail is sectionLabel without its last entry: the group and section a
 // page sits in, for the top bar of a page whose own header carries the title.
+// An unsectioned entry under a nav group falls back to that group, so the bar
+// still says where you are (Admin) without repeating the title.
 export function sectionTrail(pathname: string): string {
   const label = sectionLabel(pathname);
   const i = label.lastIndexOf(" · ");
-  return i < 0 ? "" : label.slice(0, i);
+  if (i >= 0) return label.slice(0, i);
+  const path = relative(pathname);
+  let group = "";
+  let best = -1;
+  for (const [p, meta] of Object.entries(navByPath)) {
+    const hit = p === "/" ? path === "/" : path === p || path.startsWith(`${p}/`);
+    if (hit && p.length > best) {
+      group = meta.group ?? "";
+      best = p.length;
+    }
+  }
+  return group;
 }
 
 // navPerms maps a gated route path to the permission tokens it requires, from the
