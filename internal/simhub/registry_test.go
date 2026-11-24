@@ -281,3 +281,39 @@ func TestRegistryTakesAOutpostBackAfterEviction(t *testing.T) {
 		t.Fatalf("Outposts() = %v, want [edge-a]", got)
 	}
 }
+
+// The simulator reports each device's faults with every batch, as a whole
+// account: the hub keeps what is held off its default, since when (the time
+// the hub first heard it, kept while the same value holds), and drops it the
+// batch the simulator stops reporting it. A device the outpost was not handed
+// cannot report one.
+func TestRegistryKeepsFaultsAndWhenTheyBegan(t *testing.T) {
+	r := New()
+	now := at(0)
+	r.now = func() time.Time { return now }
+	r.Pulled("edge-a", collection.SimCapabilities{}, []string{"c1"})
+	off := collection.SimFault{Path: "status.device.power", Value: "off", Default: "on"}
+
+	r.Report("edge-a", collection.SimHitBatch{Faults: map[string][]collection.SimFault{"c1": {off}, "c9": {off}}})
+	st, _ := r.Status("edge-a")
+	if got := st.Faults["c1"]; len(got) != 1 || got[0].Path != off.Path || got[0].Value != "off" || got[0].Default != "on" || !got[0].Since.Equal(at(0)) {
+		t.Fatalf("c1 faults = %+v", got)
+	}
+	if _, ok := st.Faults["c9"]; ok {
+		t.Fatal("a fault on an unlisted component was recorded")
+	}
+
+	now = at(30)
+	r.Report("edge-a", collection.SimHitBatch{Faults: map[string][]collection.SimFault{"c1": {off}}})
+	st, _ = r.Status("edge-a")
+	if !st.Faults["c1"][0].Since.Equal(at(0)) {
+		t.Fatalf("since moved to %v while the same fault held", st.Faults["c1"][0].Since)
+	}
+
+	now = at(60)
+	r.Report("edge-a", collection.SimHitBatch{})
+	st, _ = r.Status("edge-a")
+	if len(st.Faults["c1"]) != 0 {
+		t.Fatalf("a fault the simulator stopped reporting stayed: %+v", st.Faults["c1"])
+	}
+}

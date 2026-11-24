@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { filterNav, filterWhen, lookupNav, navItems, OFF_RAIL, routeAllowed, routeTokens, sectionLabel, STUBS, type NavItem } from "./nav";
+import { filterNav, filterWhen, lookupNav, navByPath, navItems, OFF_RAIL, PLATFORM_HEALTH_NAME, routeAllowed, routeTokens, sectionLabel, type NavItem } from "./nav";
 import { can, type Me } from "./auth";
 
 const Dummy = () => null;
@@ -52,9 +52,8 @@ describe("filterNav", () => {
 
   // Outposts and Platform health (#1644) are administration, so both doors sit
   // under Admin (#1767) behind outpost:read: enrolling an outpost is an admin's job,
-  // and Status's rows are the outpost list. Platform health keeps its page name;
-  // only the door is one word.
-  it("keeps Outposts and Status under Admin, and only for an outpost:read holder", () => {
+  // and the page's rows are the outpost list.
+  it("keeps Outposts and Platform health under Admin, and only for an outpost:read holder", () => {
     expect(rail([">"])).not.toContain("Outposts");
     expect(section("Admin", ["outpost:read"])).toContain("Outposts");
     expect(section("Admin", ["component:read", "system:read"])).not.toContain("Outposts");
@@ -62,19 +61,31 @@ describe("filterNav", () => {
     expect(sectionLabel("/web/outposts")).toBe("Outposts");
     expect(rail([">"])).not.toContain("Status");
     expect(rail([">"])).not.toContain("Platform health");
-    expect(section("Admin", ["outpost:read"])).toContain("Status");
-    expect(section("Admin", ["component:read", "system:read"])).not.toContain("Status");
+    expect(section("Admin", ["outpost:read"])).toContain("Platform health");
+    expect(section("Admin", ["component:read", "system:read"])).not.toContain("Platform health");
     expect(routeTokens("/web/platform")).toEqual(["outpost", "read"]);
-    expect(sectionLabel("/web/platform")).toBe("Status");
+  });
+
+  // One name (#2446): the sidebar door, the top bar's section and the page's own
+  // heading are the same string, and the old one-word door is gone.
+  it("names the Platform health page once, in the door, the top bar and the heading", () => {
+    expect(PLATFORM_HEALTH_NAME).toBe("Platform health");
+    expect(lookupNav("/web/platform").label).toBe(PLATFORM_HEALTH_NAME);
+    expect(sectionLabel("/web/platform")).toBe(PLATFORM_HEALTH_NAME);
+    const labels = Object.values(navByPath).map((m) => m.label);
+    expect(labels).not.toContain("Status");
+    expect(labels.filter((l) => l === PLATFORM_HEALTH_NAME)).toHaveLength(1);
   });
 
   // Every sidebar tab is one word (#1767): a group, a leaf, and a group's child.
   // A tab needing two words is a sign it names a page rather than a door.
   // User groups is the one exception: IAM gave up the bare word group (ADR-2036)
   // and no single word names a set of users without colliding with the fleet's.
+  // Platform health is the other (ADR-2446): the page's own name beats the bare
+  // "Status", which the top bar and the heading had to be taught to share.
   it("labels every sidebar tab with one word", () => {
     const labels = navItems.flatMap((i) => [i.label, ...(i.children ?? []).map((c) => c.label)]);
-    expect(labels.filter((l) => /\s/.test(l) && l !== "User groups")).toEqual([]);
+    expect(labels.filter((l) => /\s/.test(l) && l !== "User groups" && l !== PLATFORM_HEALTH_NAME)).toEqual([]);
   });
 
   it("on the real nav, a user who can read none of the fleet kinds loses Explore but keeps Outposts", () => {
@@ -210,7 +221,7 @@ describe("routeTokens", () => {
 
 describe("nav IA rework", () => {
   it("keeps the operator-set values under Values and the re-homed index routes gated off-rail", () => {
-    expect(section("Values", [">"])).toEqual(["Variables", "Secrets", "Declared", "Files"]);
+    expect(section("Values", [">"])).toEqual(["Variables", "Secrets", "Files"]);
     // The old index URLs redirect into the fleet's list face, but their detail
     // routes remain, so the gates and top-bar identities must survive the move.
     expect(routeTokens("/web/locations")).toEqual(["location", "read"]);
@@ -227,11 +238,11 @@ describe("nav IA rework", () => {
   });
 
   it("keeps governance plus Settings under Admin for an owner", () => {
-    expect(section("Admin", [">"])).toEqual(["Users", "Roles", "User groups", "Audit", "Outposts", "Status", "Settings"]);
+    expect(section("Admin", [">"])).toEqual(["Users", "Roles", "User groups", "Audit", "Outposts", "Platform health", "Settings"]);
   });
 
-  it("shows a bare *:read viewer only Outposts and Status under Admin: settings:read is sensitive (#2442)", () => {
-    expect(section("Admin", ["*:read"])).toEqual(["Outposts", "Status"]);
+  it("shows a bare *:read viewer only Outposts and Platform health under Admin: settings:read is sensitive (#2442)", () => {
+    expect(section("Admin", ["*:read"])).toEqual(["Outposts", "Platform health"]);
     expect(section("Admin", ["settings:read"])).toContain("Settings");
     expect(routeTokens("/web/settings")).toEqual(["settings", "read"]);
   });
@@ -258,7 +269,6 @@ describe("nav IA rework", () => {
   it("keeps moved entries' gates and leaves the stubs ungated", () => {
     expect(routeTokens("/web/secrets")).toEqual(["secret", "read"]);
     expect(routeTokens("/web/variables")).toEqual(["variable", "read"]);
-    expect(routeTokens("/web/config")).toBeNull();
     expect(routeTokens("/web/settings")).toEqual(["settings", "read"]);
     expect(routeTokens("/web/outposts")).toEqual(["outpost", "read"]); // outpost directory is live, gated on outpost:read
   });
@@ -307,7 +317,8 @@ describe("Catalog single entry", () => {
   it("keeps every off-rail page's identity for bookmarks and stubs", () => {
     expect(lookupNav("/web/products").label).toBe("Products");
     expect(lookupNav("/web/event-rules").label).toBe("Event rules");
-    expect(lookupNav("/web/log-types").label).toBe("Logs");
+    // An address with no page (a retired stub) reads as not found, never "coming soon".
+    expect(lookupNav("/web/log-types").label).toBe("Not found");
   });
 
   it("keeps the notification types page's identity now it is live (#618)", () => {
@@ -341,7 +352,6 @@ describe("Catalog single entry", () => {
       "/action-rules": ["rule", "read"],
       "/notification-targets": ["notification_target", "read"],
       "/templates": ["template", "read"],
-      "/log-types": null,
       // The re-homed index routes (#798): off the rail, gates unchanged.
       "/components": ["component", "read"],
       "/systems": ["system", "read"],
@@ -356,13 +366,14 @@ describe("Catalog single entry", () => {
 });
 
 describe("nav paths bind to routes (#608)", () => {
-  it("resolves every unlive nav path to a registered stub, never NotFound", () => {
-    const unlive = navItems.flatMap((i) => (i.children ?? []).filter((c) => !c.live).map((c) => c.path));
-    for (const path of unlive) expect(STUBS, `${path} has a rail entry but no stub route`).toContain(path);
+  it("has no door to an unbuilt page: every rail entry is live (#2445)", () => {
+    const entries: { label: string; live?: boolean }[] = navItems.flatMap((i): { label: string; live?: boolean }[] => (i.children?.length ? i.children : [i]));
+    for (const e of entries) expect(e.live, `${e.label} has a rail entry but no page`).toBe(true);
+    const labels = entries.map((e) => e.label);
+    for (const gone of ["Dashboards", "Learn", "Declared"]) expect(labels).not.toContain(gone);
   });
 
   it("keeps the off-rail /templates page its identity, live and gated on template:read (#1329)", () => {
-    expect(STUBS).not.toContain("/templates");
     expect(lookupNav("/web/templates").label).toBe("Templates");
     expect(sectionLabel("/web/templates")).toBe("Templates");
     expect(routeTokens("/web/templates")).toEqual(["template", "read"]);
@@ -425,17 +436,17 @@ describe("filterWhen", () => {
 
 // Hints on pathless groups (Values, Admin) are never rendered: the sidebar
 // shows the group's label only, and navByPath only indexes items with a path
-// (so SectionStub never reads them). Items with a path carry hints because
-// stubs render them through lookupNav.
+// (so nothing reads them). Items with a path carry hints because
+// the top bar and tests read them through lookupNav.
 describe("nav hints (#2106)", () => {
-  it("pathless group items carry no hint (they cannot reach navByPath or SectionStub)", () => {
+  it("pathless group items carry no hint (they cannot reach navByPath )", () => {
     const pathless = navItems.filter((i) => !i.path);
     for (const item of pathless) {
       expect(item.hint, `${item.label} has no path and must have no hint`).toBeUndefined();
     }
   });
 
-  it("every item with a path carries a hint (stubs render it; live pages document it)", () => {
+  it("every item with a path carries a hint (live pages document it)", () => {
     for (const item of navItems) {
       if (!item.path) continue;
       expect(item.hint, `${item.label} has a path and must carry a hint`).toBeTruthy();

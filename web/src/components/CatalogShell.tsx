@@ -1,7 +1,8 @@
-import { For, Show, createMemo, type ParentComponent } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, on, type ParentComponent } from "solid-js";
 import { A, useHref, useLocation, useNavigate } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
-import { Soon } from "./Sidebar";
+import Button from "./Button";
+import { ChevronDown } from "./icons";
 import { useMe, can } from "../lib/auth";
 import { OVERVIEW_PATH, entryActive, entryCount, entryHref, visibleGroups, type CatalogEntry } from "../lib/catalog";
 
@@ -25,10 +26,27 @@ const CatalogShell: ParentComponent = (props) => {
   const me = useMe();
   const groups = createMemo(() => visibleGroups((tokens) => can(me.data, ...tokens)));
 
+  // Below 1100 px the app rail plus a 210 px subrail leave the list about 300 px
+  // (150 with a drawer open), so the subrail folds behind one button naming the
+  // section you are in; it opens in place and closes on navigation (#2431).
+  const location = useLocation();
+  const [open, setOpen] = createSignal(false);
+  createEffect(on(() => location.pathname + location.search, () => setOpen(false), { defer: true }));
+  const current = () => {
+    for (const g of groups()) for (const e of g.entries) if (entryActive(e, location.pathname, location.search)) return e.label;
+    return location.pathname.replace(/^\/web/, "") === OVERVIEW_PATH ? "Overview" : "sections";
+  };
+
   return (
-    <div class="flex h-full items-start gap-4">
+    <div class="flex h-full flex-col gap-3 min-[1100px]:flex-row min-[1100px]:items-start min-[1100px]:gap-4">
+      <Button class="justify-between min-[1100px]:hidden" expanded={open()} controls="catalog-subrail" onClick={() => setOpen(!open())}>
+        <span class="truncate">Catalog: {current()}</span>
+        <ChevronDown size={14} />
+      </Button>
       <nav
-        class="max-h-full w-52.5 flex-none self-start overflow-y-auto"
+        id="catalog-subrail"
+        class="w-full flex-none overflow-y-auto min-[1100px]:block min-[1100px]:max-h-full min-[1100px]:w-52.5 min-[1100px]:self-start"
+        classList={{ hidden: !open() }}
         aria-label="Catalog sections"
       >
         <ul class="menu w-full flex-nowrap gap-0.5 p-0 [&_li>*]:rounded-field">
@@ -54,16 +72,14 @@ const CatalogShell: ParentComponent = (props) => {
         </ul>
       </nav>
 
-      <div class="h-full min-w-0 flex-1 overflow-y-auto">{props.children}</div>
+      <div class="min-h-0 min-w-0 flex-1 overflow-y-auto min-[1100px]:h-full">{props.children}</div>
     </div>
   );
 };
 
 export default CatalogShell;
 
-// One subrail entry. A live catalog links to its page with its live count; a
-// soon slot wears the rail's SOON treatment, linking when its stub page is
-// routed (Notifications) and rendering disabled when no page exists yet. A
+// One subrail entry: a catalog links to its page with its live count. A
 // filtered slot (the three Templates slots, one page) lights by its query too,
 // so only the slot whose kinds are showing reads active.
 function Entry(props: { entry: CatalogEntry }) {
@@ -73,49 +89,29 @@ function Entry(props: { entry: CatalogEntry }) {
   const href = useHref(() => entryHref(props.entry));
   return (
     <Show
-      when={!props.entry.soon}
+      when={props.entry.query}
       fallback={
-        <Show
-          when={props.entry.path}
-          fallback={
-            <button type="button" disabled class="opacity-45">
-              <span class="flex-1 truncate">{props.entry.label}</span>
-              <Soon />
-            </button>
-          }
-        >
-          <A href={props.entry.path!} activeClass="menu-active" class="opacity-45">
-            <span class="flex-1 truncate">{props.entry.label}</span>
-            <Soon />
-          </A>
-        </Show>
-      }
-    >
-      <Show
-        when={props.entry.query}
-        fallback={
-          <A href={props.entry.path!} activeClass="menu-active">
-            <span class="flex-1 truncate">{props.entry.label}</span>
-            <EntryCount entry={props.entry} />
-          </A>
-        }
-      >
-        {/* A router link marks every query of its path current, so a filtered
-            slot is its own anchor: active, and aria-current, on its query. */}
-        <a
-          href={href()}
-          classList={{ "menu-active": active() }}
-          aria-current={active() ? "page" : undefined}
-          onClick={(e) => {
-            if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
-            e.preventDefault();
-            navigate(entryHref(props.entry));
-          }}
-        >
+        <A href={props.entry.path!} activeClass="menu-active">
           <span class="flex-1 truncate">{props.entry.label}</span>
           <EntryCount entry={props.entry} />
-        </a>
-      </Show>
+        </A>
+      }
+    >
+      {/* A router link marks every query of its path current, so a filtered
+          slot is its own anchor: active, and aria-current, on its query. */}
+      <a
+        href={href()}
+        classList={{ "menu-active": active() }}
+        aria-current={active() ? "page" : undefined}
+        onClick={(e) => {
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+          e.preventDefault();
+          navigate(entryHref(props.entry));
+        }}
+      >
+        <span class="flex-1 truncate">{props.entry.label}</span>
+        <EntryCount entry={props.entry} />
+      </a>
     </Show>
   );
 }

@@ -1,14 +1,10 @@
 import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
-import { Pencil, Sliders } from "./icons";
-import KVStacked from "./KVStacked";
+import { Sliders } from "./icons";
 import InfoTip from "./InfoTip";
 import BladeTitle from "./BladeTitle";
-import Eyebrow from "./Eyebrow";
-import SessionPill from "./SessionPill";
-import ReachLadder from "./ReachLadder";
-import SessionNotice from "./SessionNotice";
-import PollTest from "./PollTest";
+import EndpointDetail from "./EndpointDetail";
+import DriverInputFields from "./DriverInputFields";
 import {
   type Endpoint,
   type UpdateEndpoint,
@@ -23,7 +19,6 @@ import {
 } from "../lib/endpoints";
 import { REACHABILITY_KEY, getReachability } from "../lib/reachability";
 import { LEAF_POLL_MS } from "../lib/component_leaf";
-import { CLOCK_TICK_MS, createClock } from "../lib/clock";
 import { DRIVERS_KEY, listDrivers, type Driver } from "../lib/drivers";
 import { COMPONENTS_KEY, listComponents } from "../lib/components";
 import { OUTPOSTS_KEY, listOutposts } from "../lib/outposts";
@@ -32,6 +27,7 @@ import { entityLabel } from "../lib/entities";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
+import { confirmDelete } from "../lib/confirm";
 
 // The endpoint blades, salvaged from the retired standalone page and folded
 // onto the component detail's shared blade stack (an endpoint belongs to its
@@ -54,7 +50,7 @@ function useEndpointById(id: string): () => Endpoint | null {
 
 // An outpost-placement select shared by the create and edit forms: the enrolled outposts
 // plus an unassigned option. The value is the outpost's name (its address).
-function OutpostSelect(props: { value: string; onChange: (v: string) => void; disabled?: boolean; id?: string; allowNone?: boolean }) {
+export function OutpostSelect(props: { value: string; onChange: (v: string) => void; disabled?: boolean; id?: string; allowNone?: boolean }) {
   const outposts = useQuery(() => ({ queryKey: OUTPOSTS_KEY, queryFn: () => listOutposts() }));
   // The enrolled-outpost list answers on its own schedule, and the edit face is
   // routinely on screen first, so the control takes its value through the shared
@@ -72,6 +68,8 @@ function OutpostSelect(props: { value: string; onChange: (v: string) => void; di
 // inline edit of the mutable fields (outpost placement, target), and Delete as the one
 // destructive action.
 export const endpointBlade: BladeDef = {
+  // The whole story of an endpoint (#2436) wants the room the detail pages get.
+  width: "wide",
   Title: (p) => <EndpointBladeTitle id={p.id} />,
   Body: (p) => <EndpointBladeBody id={p.id} />,
 };
@@ -111,7 +109,6 @@ function EndpointBladeBody(props: { id: string }): JSX.Element {
   // reachability read: the same cache entry the component's view polls, so
   // the pill moves here as it moves there, and polled here too for a blade
   // opened where nothing else polls it.
-  const now = createClock(CLOCK_TICK_MS);
   const reach = useQuery(() => ({
     queryKey: REACHABILITY_KEY(i()?.component_id ?? ""),
     queryFn: () => getReachability(i()!.component_id!),
@@ -157,7 +154,7 @@ function EndpointBladeBody(props: { id: string }): JSX.Element {
   async function removeEndpoint() {
     const iface = i();
     if (!iface) return;
-    if (!confirm(`Delete endpoint "${entityLabel(iface)}"?`)) return;
+    if (!(await confirmDelete({ kind: "endpoint", name: entityLabel(iface) }))) return;
     setErr(null);
     try {
       await deleteEndpoint(iface.id);
@@ -225,47 +222,15 @@ function EndpointBladeBody(props: { id: string }): JSX.Element {
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
 
-          <Show when={held()}>
-            {(h) => (
-              <section data-testid="endpoint-session" class="flex flex-col gap-2">
-                <Eyebrow
-                  label="Connection"
-                  hint="The outpost checks an endpoint bottom up: a ping (informational only), the transport answering (the gate), then the login. A held session's state sits beside the ladder. Hover a rung for what it checks and what it says now."
-                />
-                <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                  <SessionPill iface={h()} now={now()} />
-                  <ReachLadder iface={h()} />
-                </div>
-                <SessionNotice
-                  iface={h()}
-                  component={iface().component_id!}
-                  now={now()}
-                  onFix={!edit.editing() && edit.editable() ? fixEndpoint : undefined}
-                  fixLabel={authRefused() ? "Edit credential" : "Edit endpoint"}
-                  fixIcon={Pencil}
-                />
-              </section>
-            )}
-          </Show>
-
-          <Show when={!edit.editing()}>
-            <PollTest endpoint={iface().id} />
-          </Show>
-
           <Show
             when={edit.editing()}
             fallback={
-              <div class="grid grid-cols-2 gap-4">
-                <KVStacked bind="label" value={iface().label ? <span>{iface().label}</span> : <span class="text-base-content/40">unset</span>} />
-                <KVStacked bind="name" value={<span class="font-data">{iface().name}</span>} />
-                <KVStacked label="Type" value={<span class="badge badge-ghost badge-sm">{iface().transport}</span>} />
-                <KVStacked label="Component" value={iface().component ? <span class="font-data">{iface().component}</span> : <span class="text-base-content/40">server-hosted</span>} />
-                <KVStacked label="Outpost" value={iface().outpost ? <span class="font-data">{iface().outpost}</span> : <span class="text-base-content/40">unassigned</span>} />
-                <KVStacked label="Target" value={endpointTarget(iface()) ? <span class="font-data">{endpointTarget(iface())}</span> : <span class="text-base-content/40">not set</span>} />
-                <Show when={iface().driver}>
-                  <KVStacked label="Driver" value={<span class="font-data">{iface().driver}</span>} />
-                </Show>
-              </div>
+              <EndpointDetail
+                id={iface().id}
+                host="blade"
+                onFix={!edit.editing() && edit.editable() ? fixEndpoint : undefined}
+                fixLabel={authRefused() ? "Edit credential" : "Edit endpoint"}
+              />
             }
           >
             <div class="flex flex-col gap-3">
@@ -480,28 +445,13 @@ export function CreateEndpointForm(props: { onCreated: (i: Endpoint) => void; co
         </div>
         <Show when={chosenDriver()}>
           {(d) => (
-            <For each={d().spec?.inputs ?? []}>
-              {(input) => (
-                <div>
-                  <label class="eyebrow mb-1.5 block" for={`new-iface-input-${input.name}`}>
-                    {input.name}
-                    <Show when={!input.required}><span class="ml-1 normal-case text-base-content/40">optional</span></Show>
-                  </label>
-                  <input
-                    id={`new-iface-input-${input.name}`}
-                    autocomplete="off"
-                    class="input input-bordered w-full font-data"
-                    value={inputs()[input.name] ?? ""}
-                    placeholder={input.default || (input.kind === "secret" ? `a ${input.secret_type} secret's name` : input.name)}
-                    onInput={(e) => setInputs({ ...inputs(), [input.name]: e.currentTarget.value })}
-                    disabled={busy()}
-                  />
-                  <Show when={input.kind === "secret"}>
-                    <p class="mt-1 text-[11px] text-base-content/40">A secret reference: the name of a {input.secret_type} secret, never the value itself.</p>
-                  </Show>
-                </div>
-              )}
-            </For>
+            <DriverInputFields
+              inputs={d().spec?.inputs ?? []}
+              values={inputs()}
+              onChange={(name, value) => setInputs({ ...inputs(), [name]: value })}
+              disabled={busy()}
+              idPrefix="new-iface-input-"
+            />
           )}
         </Show>
       </Show>

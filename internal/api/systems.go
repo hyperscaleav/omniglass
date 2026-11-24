@@ -53,7 +53,16 @@ func toSystemBody(s *storage.System) systemBody {
 type listSystemsOutput struct {
 	Body struct {
 		Systems []systemBody `json:"systems"`
+		Total   int          `json:"total" doc:"How many systems matched the filter, before limit capped the page. With no filter, how many the caller may read."`
 	}
+}
+
+// listSystemsInput narrows the system list to the systems built to one standard
+// (#2430, the standard drawer's used-by read). standard is a name or uuid; one
+// that names nothing matches nothing. Scope is unchanged.
+type listSystemsInput struct {
+	Standard string `query:"standard" doc:"Only systems built to this standard (name or uuid)"`
+	Limit    int    `query:"limit" minimum:"0" doc:"Cap the page at this many rows; 0 or absent is no cap. total still counts every match."`
 }
 
 type systemOutput struct {
@@ -220,11 +229,25 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/systems",
 		Summary:     "List systems in scope",
-		Description: "Lists the systems the caller may read, each filtered to its scope subtree. Gated by system:read.",
-	}, "system", "read"), func(ctx context.Context, _ *struct{}) (*listSystemsOutput, error) {
+		Description: "Lists the systems the caller may read, each filtered to its scope subtree. An optional standard filter narrows to the systems built to one standard, and limit caps the page while total counts every match. Gated by system:read.",
+	}, "system", "read"), func(ctx context.Context, in *listSystemsInput) (*listSystemsOutput, error) {
 		systems, err := gw.ListSystems(ctx, a.scopeFor(ctx, "system", "read"))
 		if err != nil {
 			return nil, huma.Error500InternalServerError("list systems")
+		}
+		if in.Standard != "" {
+			kept := systems[:0:0]
+			for i := range systems {
+				s := &systems[i]
+				if (s.StandardName != nil && *s.StandardName == in.Standard) || (s.StandardID != nil && *s.StandardID == in.Standard) {
+					kept = append(kept, *s)
+				}
+			}
+			systems = kept
+		}
+		total := len(systems)
+		if in.Limit > 0 && len(systems) > in.Limit {
+			systems = systems[:in.Limit]
 		}
 		ids := make([]string, len(systems))
 		for i := range systems {
@@ -239,6 +262,7 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 			return nil, huma.Error500InternalServerError("list systems")
 		}
 		out := &listSystemsOutput{}
+		out.Body.Total = total
 		out.Body.Systems = make([]systemBody, 0, len(systems))
 		for i := range systems {
 			b := toSystemBody(&systems[i])
@@ -398,17 +422,17 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		return out, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.gated(withDeleteRefusal(api, huma.Operation{
 		OperationID:   "delete-system",
 		Method:        http.MethodDelete,
 		Path:          "/systems/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a system",
-		Description:   "Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.",
-	}, "system", "delete"), func(ctx context.Context, in *systemPathInput) (*struct{}, error) {
+		Description:   "Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.",
+	}), "system", "delete"), func(ctx context.Context, in *systemPathInput) (*struct{}, error) {
 		if err := gw.DeleteSystem(ctx, actorID(ctx), in.Name,
 			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "delete")); err != nil {
-			return nil, mapSystemErr(err)
+			return nil, a.deleteRefusal(ctx, gw, "system", in.Name, err, mapSystemErr(err))
 		}
 		return nil, nil
 	})

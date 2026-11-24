@@ -161,6 +161,21 @@ a location holding none or several renders its own subject card,
   the helper was copied into six new pages around them. A convention can be forgotten; a slot
   cannot. Full-page create forms draw their own inline rail through `FormActionBar` with the
   `inline` prop; a `FormActionBar inline` is the one full-page form rail the guard permits.
+- **A list page reads the same across the catalog (#2431).** One header height: the filter bar
+  holds a button's height itself, so a list with no New button (templates, secret types) sits level
+  with its siblings. While chips filter, the bar says `n of m`. An empty list shows its empty state
+  alone, with no column header row above it. A create form opens on Label, then the derived Name
+  (`IdentityFields`, which owns both fields and their hints), then the kind-specific fields;
+  `catalog_create_order.test.tsx` fails a catalog page that opens on anything else.
+- **A read-only row draws a note, never dead buttons.** The footer is `PanelFooter`: destructive at
+  the left, the primary at the right. A locked official row replaces both with one note, "Official,
+  read-only"; a kind whose API has no write route (secret types, templates) draws no write button
+  at all and says why in one line. `catalog_readonly.test.tsx` reads "has a write route" from the
+  generated route table (`web/src/api/paths.gen.ts`) and fails a disabled button on a kind without one. A
+  lock for a missing permission still greys its button, with the permission it needs on the tooltip,
+  because that button works for someone else. Where the app rail plus the catalog subrail would leave
+  a list under about 300 px (below 1100 px wide) the subrail folds behind one button that names the
+  section you are in.
 - **Client preferences in localStorage, for now.** Column order/visibility
   persists per browser; the eventual home is a per-user preferences endpoint (a
   read/write swap), not the cascade.
@@ -246,8 +261,11 @@ console's confirm for a decision that needs reading first (a centred `ModalDialo
 the one `PanelFooter`, the focus on Cancel when it opens): the confirm repeats both keys and teaches
 **Why a key changes** as three chips, each an `InfoTip` trigger, the man in the middle on the
 warning hue and the two routine causes on the neutral chip. Both are generic over the class, so a
-tls certificate's pinned key renders the same. A delete keeps the browser's own `confirm()`; a
-confirm whose body has to teach cannot be a native prompt.
+tls certificate's pinned key renders the same. Every other destructive confirm reaches the same
+dialog through `confirmDelete` / `confirmAction` (`web/src/lib/confirm.ts`), one line at the site:
+the title names the thing, the body says what goes with it, the button carries the verb. Handed the
+act as `run`, the dialog runs it and, on a refused delete, lists the blockers the 409 names, each
+with its own link and delete. The browser's `confirm()` is barred under `web/src` by a guard test.
 
 ## Primitives (the reuse target)
 
@@ -288,6 +306,7 @@ same keys and focus, and the library underneath is swappable in one directory.
 |---|---|---|
 | A modal surface | `ModalDialog` (+ `DialogHeading`, `DialogClose`) | `Drawer` and the palette are built on it; `alert` for an alertdialog |
 | A decision that needs reading | `ConfirmDialog` | Cancel takes the focus; the body can teach |
+| Any destructive confirm | `confirmDelete` / `confirmAction` (`lib/confirm`) | one line at the site; renders the one `ConfirmDialog`; `run` lists a refused delete's blockers |
 | A floating panel from a button | `Popover` | the column menu, Snooze, Add under |
 | Help on hover or focus | `Tooltip` | `InfoTip` is the (i) built on it; never inside a `<label>` |
 | A short fixed list with drawn options | `Select` | `TreeSelect` is built on it |

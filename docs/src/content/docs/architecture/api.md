@@ -445,7 +445,10 @@ is a 409, a surface it does not serve a 422, and no simulator answering a 503.
 and `endpoint:create`, each in the caller's own scope) adds a simulated component: a component of a
 simulated product at the lowest free address in `127.60.0.0/16`, with the endpoint the collector reaches
 it through placed on the outpost; an outpost with no simulator connected is a 409, a product no profile
-simulates a 422. A whole simulated system is built to a standard: `GET /simulation/standards/{standard}:plan`
+simulates a 422. `GET /outposts/{name}/simulation/components:plan?product=<product>` (gated `simulation:read`)
+previews the same add without creating anything: the address and the endpoints (a driver with its inputs, a
+secret input by name, or a probe with its target) the add would make, planned as the add plans them, with
+the same refusals. It holds no address, so an add in between may take the previewed one. A whole simulated system is built to a standard: `GET /simulation/standards/{standard}:plan`
 (gated `simulation:read`) previews each of the standard's slots staffed with a simulated product that fits
 (or left short, with why), and `POST /outposts/{name}/simulation/systems` (gated `simulation:update`, and also
 needing `system:create`, `system:update`, `system:read`, `component:create`, `endpoint:create` and
@@ -1080,7 +1083,9 @@ An alarm hangs off its component and rides that component's gating:
 - `GET /components/{name}/alarms` lists them newest first (`component:read`), the **active** set by
   default, the whole history with `include_cleared`, and the queue an operator actually works with
   `unacknowledged` (on its own, raised and unacknowledged; with `include_cleared`, also the
-  alarms that came and went unattended).
+  alarms that came and went unattended). `since` and `until` keep the alarms raised during a range
+  (#2425): raised at or before `until` and still raised at `since` (active, or cleared at or after
+  it), so an alarm open across the whole range is kept; `since` after `until` is a 400.
 - `POST /components/{name}/alarms` raises one from `{severity, message?, dedup_key?}` (201,
   `component:update`). `severity` names a [severity level](/architecture/alarms-actions/#severity-a-catalog-of-named-levels) (`GET /severity-levels`, an unknown one a 422), driving the component's own
   health (any active alarm degrades it, one at or above `high` is an outage); `dedup_key` is the alarm's
@@ -1180,8 +1185,9 @@ The reports are one shape over three owners:
   the one word a list's health column paints and none of the explanation.
 - `GET /systems/{name}/alarms` (`system:read`) is every member's alarms in one read, newest first, each
   naming its component: the active ones whatever their age and those cleared in the last 30 days, capped
-  at 500. A system's health history explains its unhealthy stretches with it, one request however many members the
-  system has.
+  at 500. With `since` (and optionally `until`) it is instead every alarm raised during that range, on the
+  same overlap rule as the component's read (#2425). A system's health history explains its unhealthy
+  stretches with it, one request however many members the system has.
 
 All three resolve their owner **within the caller's scope first** (an out-of-scope system, location or component is a
 **non-disclosing 404**), and **no read writes anything**: the health served is computed from the

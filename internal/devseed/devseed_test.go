@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/devseed"
 	"github.com/hyperscaleav/omniglass/internal/scope"
@@ -390,6 +391,14 @@ func TestRunIdempotent(t *testing.T) {
 	if locs != len(fixtures.Locations) {
 		t.Errorf("locations = %d, want %d (seed not idempotent or incomplete)", locs, len(fixtures.Locations))
 	}
+	// The calc rule (#2430) landed once, enabled, writing its own metric.
+	var calcRules int
+	if err := conn.QueryRow(ctx, `select count(*) from calc_rule where not official and enabled`).Scan(&calcRules); err != nil {
+		t.Fatalf("count calc rules: %v", err)
+	}
+	if calcRules != len(fixtures.CalcRules) || calcRules == 0 {
+		t.Errorf("operator calc rules = %d, want %d (the Calc rules page must come up populated, once)", calcRules, len(fixtures.CalcRules))
+	}
 	var comps, systems, alarms int
 	if err := conn.QueryRow(ctx, fleetComponentCount).Scan(&comps); err != nil {
 		t.Fatalf("count components: %v", err)
@@ -403,16 +412,14 @@ func TestRunIdempotent(t *testing.T) {
 	if systems != len(fixtures.Systems) {
 		t.Errorf("systems = %d, want %d (seed not idempotent or incomplete)", systems, len(fixtures.Systems))
 	}
-	// Alarms matter most and were the ones going unchecked: the fixtures
-	// section leans entirely on RaiseAlarm's dedup_key to be idempotent, with
-	// no read-before-write of its own, and devseed may run again
-	// start. An untested dedup would stack one more alarm per restart and drag
-	// the seeded verdicts along with it.
+	// Alarms: the example fleet hand-raises none (#2434). Its faults land as
+	// readings the rules judge, and their alarms wait out each rule's sustain
+	// for the server's sweep, which no test here runs, so the count is the
+	// breadth block's one raised-then-cleared pair (#796), which RaiseAlarm's
+	// dedup_key keeps idempotent: a second run must not add to it.
 	if err := conn.QueryRow(ctx, `select count(*) from alarm`).Scan(&alarms); err != nil {
 		t.Fatalf("count alarms: %v", err)
 	}
-	// The breadth block adds one raised-then-cleared pair (#796) beside the
-	// fixture's standing alarms; a second run must add nothing to either.
 	if alarms != len(fixtures.Alarms)+1 {
 		t.Errorf("alarms = %d, want %d: a second run re-raised instead of finding the standing alarm", alarms, len(fixtures.Alarms)+1)
 	}
@@ -1477,11 +1484,18 @@ func TestSeededFleetShowsEveryVerdict(t *testing.T) {
 		t.Skip("integration test needs Postgres")
 	}
 	ctx, conn2, gw := seededFleet(t)
+	// The fleet's faults (#2434): the outpost reads each impaired device as
+	// its fault leaves it, and the rules raise their alarms once each sustain
+	// has passed, which the sweep settles as the server's tick does.
+	landFaultReadings(t, ctx, conn2, gw)
+	if err := gw.SweepEventRules(ctx, time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
 
 	all := scope.Set{All: true}
 	verdictOf := func(system string) string {
 		t.Helper()
-		rep, err := gw.SystemHealth(ctx, system, storage.HealthRange{}, all)
+		rep, err := gw.SystemHealth(ctx, system, storage.HealthRange{}, all, all)
 		if err != nil {
 			t.Fatalf("system health %s: %v", system, err)
 		}

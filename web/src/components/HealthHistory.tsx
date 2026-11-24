@@ -60,6 +60,17 @@ export default function HealthHistory(props: {
   );
   // Newest first for the reading order: what it is now, then what it was before.
   const rows = createMemo(() => [...list()].reverse());
+  // Each segment's hover: health, from, to, how long it held.
+  const segments = createMemo(() =>
+    list().map((s) => ({
+      ...s,
+      tip:
+        s.to > s.from
+          ? `${s.value}: ${fmtTime(new Date(s.from).toISOString())} to ${s.to >= now - 1000 ? "now" : fmtTime(new Date(s.to).toISOString())} (${durationText(s.to - s.from)})`
+          : undefined,
+    })),
+  );
+  const startLabel = () => (list().length && list()[0].to > list()[0].from ? fmtTime(new Date(list()[0].from).toISOString()) : undefined);
   const healthy = createMemo(() => share(list(), (v) => v === "healthy"));
 
   return (
@@ -75,7 +86,7 @@ export default function HealthHistory(props: {
 
       {/* In compact form the surface beside this strip owns the number (the
           history tab's uptime card), so the trailing hint would say it twice. */}
-      <StateStrip segments={list()} tone={tone} height="h-2.5" title="Health over the recorded window">
+      <StateStrip segments={segments()} startLabel={startLabel()} endLabel={startLabel() ? "now" : undefined} tone={tone} height="h-2.5" title="Health over the recorded window">
         <Show when={!props.compact}>
           <Show when={healthy() !== null} fallback={<span class="text-[11px] text-base-content/40">no data</span>}>
             <span class="w-20 shrink-0 text-right text-[11px] tabular-nums text-base-content/60">{healthy()}% healthy</span>

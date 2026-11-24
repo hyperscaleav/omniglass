@@ -53,8 +53,8 @@ the average line; spark mode is 160 by 36 with no chrome. It is imported by exac
 |---|---|---|---|---|---|---|
 | V01 | `TimeseriesChart spark` in the server panel `Row` (`pages/PlatformHealth.tsx`) | `/platform` | metric | `metricBuckets("components", server, key, 1 h, 60 s)` via `panelSeriesRequest` (`lib/platformhealth.ts`, `lib/series.ts`) | poll 30 s, only while the server's disclosure is open and the key is reported | sparkline row |
 | V02 | `TimeseriesChart` full, the expanded panel row (`pages/PlatformHealth.tsx`) | `/platform` | metric | the same series query as V01 | poll 30 s, shares V01's query | metric chart |
-| V03 | `TimeseriesChart spark` in the data table (`components/SystemDetail.tsx`, `data-testid="data-tab"`) | `/systems/<id>`, its blade | metric | per KPI metric over the page range (`useTimeRange`, `rangeStepSeconds`): `metricBuckets("systems", id, metric, hours, step, instance)` for a preset, `metricBucketsBetween` (`/views:run`) for an absolute range (`lib/series.ts`) | poll 30 s, no poll for an absolute range already past; the metric list polls 5 s | sparkline row |
-| V04 | `TimeseriesChart` full, the expanded data row (`components/SystemDetail.tsx`) | `/systems/<id>`, its blade | metric | the same series query as V03 | as V03, shares its query | metric chart |
+| V03 | `MetricsGrid` card per metric, a fluid `TimeseriesChart` on the shared cursor (`components/MetricsGrid.tsx`, `lib/cursor.tsx`), on the system view | `/systems/<id>`, its blade | metric | `metricBuckets("systems", id, metric, hours, step, instance)` per effective metric over the page range (`lib/metrics_grid.ts`, `lib/time_range.ts`) | poll 30 s; the metric list polls 5 s | metric chart |
+| V04 | the same `MetricsGrid` on the component view (`components/ComponentDetail.tsx`) | `/components/<id>`, its blade | metric | `metricBuckets("components", ...)` per effective metric, as V03 | poll 30 s; the metric list polls 5 s | metric chart |
 
 ## Metric cards and figures
 
@@ -65,7 +65,7 @@ the average line; spark mode is 160 by 36 with no chrome. It is imported by exac
 | V07 | `uptime-kpi` card, uptime over 30 days (`components/SystemDetail.tsx`) | `/systems/<id>`, its blade | derived | `systemHealth` transitions (`lib/health.ts`) | poll 5 s | metric card |
 | V08 | `leaf-vitals` list, the latest value per effective metric with a live dot and per-endpoint spread (`components/ComponentDetail.tsx`) | `/components/<id>`, its blade | metric | `effectiveMetrics` (`lib/component_leaf.ts`) | poll 5 s | metric card (no series; the only metric surface with no chart or sparkline) |
 | V09 | `Count` per catalog row (`pages/CatalogOverview.tsx`) | `/catalog` | derived | each catalog's own list read, on the list page's query key | mount+focus | metric card |
-| V10 | `explore-counts` line and the "need attention" count (`components/OutlineWorkspace.tsx`) | `/explore`, `/locations/<id>`, `/systems/<id>` | derived | `fleetView`, plus `systemHealth` per troubled system (stale 30 s) | mount+focus | metric card |
+| V10 | `explore-counts` line and the "need attention" chip, worded and counted by `lib/attention` over the rows its filter leaves, the same count Home's Need attention card reads (`components/OutlineWorkspace.tsx`) | `/explore`, `/locations/<id>`, `/systems/<id>` | derived | `fleetView`, plus `systemHealth` per troubled system (stale 30 s) | mount+focus | metric card |
 | V11 | `InboxIndicator` unread count on the top bar (`components/InboxIndicator.tsx`) | every page in the shell | event | `useUnreadCount` (`lib/inbox.ts`) | poll 30 s, and at once when an entry is marked read | metric card |
 | V12 | `RuleLive` tallies: firing, open, pending (`pages/Rules.tsx`) | `/event-rules` | derived | `listEventRules` | poll 10 s | metric card |
 | V13 | `CalcLive` tallies: computed, pending, without inputs, failing (`pages/CalcRules.tsx`) | `/calc-rules` | derived | `listCalcRules` | poll 10 s | metric card |
@@ -83,7 +83,7 @@ component set; the surfaces below are where they are mounted.
 | V16 | `HealthBadge` md, outpost rows xs, per-server disclosure with an "N open" badge (`pages/PlatformHealth.tsx`) | `/platform` | derived | `platformView` | poll 5 s | new: health badge |
 | V17 | `HealthBadge` in the system, component and location detail bodies, page and blade alike (`components/SystemDetail.tsx`, `ComponentDetail.tsx`, `LocationDetail.tsx`, ADR-2423) | `/explore`, `/locations/<id>`, `/systems/<id>`, `/components/<id>` | derived | `fleetView`, `systemHealth`, `locationHealth` | mount+focus (health reads refetch off on focus when standalone) | new: health badge |
 | V18 | `SystemSummary` card: health, since-line, why rows, slot text (`components/SystemSummary.tsx`) | `/locations/<id>` | derived | `fleetView`, `systemHealth` (stale 30 s) | mount+focus | new: system summary card |
-| V19 | `HealthGlyph` and `HealthSlots`, the four-slot health counts on each outline row (`components/Outline.tsx`, `components/OutlineWorkspace.tsx`) | `/explore`, `/locations/<id>`, `/systems/<id>` | derived | `fleetView`, the health values the server recorded | mount+focus | new: health slots |
+| V19 | `HealthGlyph` and `HealthSlots`, the health counts on each outline row, packed left in severity order with no blank slots (`components/Outline.tsx`, `components/OutlineWorkspace.tsx`) | `/explore`, `/locations/<id>`, `/systems/<id>` | derived | `fleetView`, the health values the server recorded | mount+focus | new: health slots |
 | V20 | `MemberRows` glyph and alarm text per member (`components/MemberRows.tsx`) | `/systems/<id>` | derived | `systemMembers` | poll 5 s | new: health badge |
 | V21 | `OutpostTable`: liveness pill, `HealthBadge` xs, tinted figure cells, row tone (`pages/PlatformHealth.tsx`) | `/platform` | derived | `platformView` | poll 5 s | new: status table |
 | V22 | `StatusPill` up / down / never, in the list and the outpost blade (`pages/Outposts.tsx`) | `/outposts` | derived | `listOutposts`, `nodeStatus` from `last_heartbeat_at` against the down window | mount+focus (the age is computed client-side) | new: status pill |
@@ -105,6 +105,7 @@ component set; the surfaces below are where they are mounted.
 | V31 | `HealthHistory compact` with `alarm-marker-*` triangles and the expandable `stretch-list` (`components/HealthHistory.tsx`, in `components/SystemDetail.tsx`) | `/systems/<id>`, its blade (Activity tab) | event (recorded health edges) | `systemHealth` transitions | poll 5 s; the clock ticks every 60 s | timeline |
 | V32 | `AvailabilityStrip`, up / down segments with an uptime figure (`components/ReachabilityPanel.tsx`) | `/components/<id>` (Configure tab), blades on the four fleet routes | event (reachability edges) | `getReachability` history | mount+focus | timeline |
 | V33 | `AlarmTimeline`, one alarm's lifecycle with kind chips and `NotificationStatusPill` (`components/AlarmTimeline.tsx`) | `/systems/<id>`, `/components/<id>`, `/event-rules`, blades and the Alarms panel on the four fleet routes | event | `alarmTimeline` (`lib/alarms.ts`) | poll 5 s, focus refetch off, only while expanded | timeline |
+| V33a | `TimelineOverlay`: health spans (a row per member on a system), one span per alarm with its duration, picked property bands and metric lines, clustered event, log and command markers, on the shared cursor (`components/TimelineOverlay.tsx`, `lib/timeline_lanes.ts`, `lib/timeline_reads.ts`) | `/systems/<id>` and `/components/<id>`, their blades (Timeline tab) | event, property, metric | health `since`/`until` with `carried_in`, alarm lists `since`/`until`, `/views:run` events, logs and properties with `from`/`to`, commands `since`/`until`, `metricBucketsBetween` | a preset re-reads every 60 s; an absolute range reads once | timeline |
 
 ## Alarm, event and log lists
 
@@ -131,7 +132,7 @@ component set; the surfaces below are where they are mounted.
 |---|---|---|---|---|---|---|
 | V48 | `PipelineFlow`, the "where work is lost" hop flow with a lane tab group and a per-hop loss figure (`components/PipelineFlow.tsx`) | `/platform` | derived (counts of metric, property, event and log samples per hop) | `view.pipeline` from `platformView` | follows parent (poll 5 s) | new: pipeline flow |
 | V49 | `SystemMap`, the top-down room map with health-coloured markers (`components/SystemMap.tsx`, `lib/system_map.ts`) | `/systems/<id>` | derived | `systemMembers`, `layoutMarkers` | poll 5 s | new: floor map |
-| V50 | The alarm queue: severity-badged alarm rows with component, systems, location, raised-at and ack and snooze state (`pages/Alarms.tsx`) | `/alarms` | event | `fleetAlarms` (`lib/alarms.ts`), paged by `page_token` | poll 5 s (the leaf cadence) | new: alarm queue |
+| V50 | The alarm queue: severity-badged alarm rows with component, systems, location, raised-at, cleared-at and a duration, ack (by whom) and snooze state, with an Open, Cleared and All state read (`pages/Alarms.tsx`) | `/alarms` | event | `fleetAlarms` (`lib/alarms.ts`), the state read, paged by `page_token` | poll 5 s (the leaf cadence); an open alarm's duration ticks each second (`AlarmDuration`) | new: alarm queue |
 | V51 | `DependenciesPanel`: upstream and downstream rows with a kind badge, a health badge and a holding mark (`components/DependenciesPanel.tsx`, `lib/dependencies.ts`) | `/components/<id>` | derived | `listDependencies` (`lib/dependencies.ts`), the fleet view's dot health, `getReachability` | poll 5 s | new: dependency list |
 
 ## Every page
@@ -152,7 +153,7 @@ what each page draws itself.
 | `CommandTypes.tsx` | `/command-types` | none checked: config chips only |
 | `ComponentLeaf.tsx` (the body is `components/ComponentDetail.tsx`, also the component blade) | `/components/<id>` (via `Components.tsx`) | V08, V15, V24, V26, V27, V32, V33, V36, V37, V40, V42, V47, V51 |
 | `ComponentTypes.tsx` | `/component-types` | none checked: config chips only |
-| `Components.tsx` | `/components/<id>` | wrapper: mounts `ComponentLeaf`, or the create form for the create route (`components/create`, no leading slash) |
+| `Components.tsx` | `/components/<id>` | wrapper: mounts `ComponentLeaf`, the add-a-component flow for `components/add`, or the create form for the create route (`components/create`, no leading slash) |
 | `Drivers.tsx` | `/drivers` | none checked: config chips only |
 | `EventTypes.tsx` | `/event-types` | none checked: config chips only |
 | `Explore.tsx` | `/explore` | V10, V19 (blades only otherwise) |
@@ -181,7 +182,6 @@ what each page draws itself.
 | `Rules.tsx` | `/event-rules` | V12, V33, V38 |
 | `SecretTypes.tsx` | `/secret-types` | none checked: config chips only |
 | `Secrets.tsx` | `/secrets` | none checked: config chips only |
-| `SectionStub.tsx` | `/config`, `/dashboards`, `/learn`, `/log-types` | none checked: placeholder page (`/dashboards` is where the canvas lands) |
 | `Settings.tsx` | `/settings` | none checked: effective and lock chips are config |
 | `SeverityLevels.tsx` | `/severity-levels` | none checked: `SeverityBadge` here previews a configured level's look, not an alarm's state |
 | `Simulation.tsx` | `/simulation` | V23, V24 (drawer) |
@@ -225,9 +225,9 @@ epic's vocabulary does not yet name; the count says how much of the console it w
 | metric card | 9 | V05, V06, V07, V08, V09, V10, V11, V12, V13 |
 | event list | 4 | V39, V40, V44, V45 |
 | log list | 3 | V41, V42, V43 |
-| timeline | 3 | V31, V32, V33 |
-| sparkline row | 2 | V01, V03 |
-| metric chart | 2 | V02, V04 |
+| timeline | 4 | V31, V32, V33, V33a |
+| sparkline row | 1 | V01 |
+| metric chart | 3 | V02, V03, V04 |
 | property distribution | 0 | none (`propertyBuckets` exists and is unused) |
 | property timeline | 0 | none (`propertySeries` exists and is unused) |
 | new: health badge | 5 | V14, V15, V16, V17, V20 |

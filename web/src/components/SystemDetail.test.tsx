@@ -26,6 +26,7 @@ import { ME_KEY, type Me } from "../lib/auth";
 import { pendingTriage, requestTriage } from "../lib/handover";
 import { uuidFor } from "../lib/testids";
 import { seedSeverityLevels } from "../lib/testseverity";
+import { answerConfirms } from "../lib/confirm.testkit";
 
 // SystemDetail (#2423): the system page and the system blade render ONE body,
 // so a blade shows every section, tab and action its page shows.
@@ -191,6 +192,37 @@ describe("one body in two hosts", () => {
   });
 });
 
+describe("a system with no components (#2464)", () => {
+  const blank = () => {
+    const qc = seed();
+    qc.setQueryData([...FLEET_VIEW_KEY], { ...view, systems: [{ ...view.systems![0], dots: [] }] });
+    qc.setQueryData([...systemHealthKey(SID)], { ...health, slots: [], alarms: [] });
+    qc.setQueryData([...systemSlotsKey(SID)], []);
+    qc.setQueryData([...SYSTEMS_KEY], [{ id: SID, name: "boardroom", label: "Boardroom", location_id: uuidFor("sd-room"), actions: ["update"] }]);
+    return qc;
+  };
+  it("the page and the blade teach and offer Add component and Start from a standard", async () => {
+    mountPage(undefined, blank());
+    const page = await screen.findByTestId("system-empty");
+    expect(within(page).getByRole("button", { name: "Add component" })).toBeTruthy();
+    expect(within(page).getByRole("button", { name: "Start from a standard" })).toBeTruthy();
+    cleanup();
+    mountBlade(undefined, blank());
+    const blade = await screen.findByRole("dialog");
+    expect(await within(blade).findByTestId("system-empty")).toBeTruthy();
+  });
+  it("Start from a standard lands on Configure", async () => {
+    mountPage(undefined, blank());
+    fireEvent.click(await screen.findByRole("button", { name: "Start from a standard" }));
+    expect(await screen.findByTestId("configure-face")).toBeTruthy();
+  });
+  it("a system with members shows no empty state", async () => {
+    mountPage(undefined, seed());
+    await screen.findByTestId("system-detail");
+    expect(screen.queryByTestId("system-empty")).toBeNull();
+  });
+});
+
 describe("the blade's tab and edit are its own", () => {
   it("switching tabs in a blade leaves the page's address untouched", async () => {
     mountBlade("/web/explore?node=x");
@@ -200,12 +232,12 @@ describe("the blade's tab and edit are its own", () => {
     expect(window.location.search).toBe("?node=x");
   });
 
-  it("a range chosen in a blade is the blade's own: the page's address keeps its range", async () => {
+  it("a blade opens on the page's range, and a range chosen in it is its own: the page's address keeps its range", async () => {
     mountBlade("/web/explore?range=1h");
     const blade = await screen.findByRole("dialog");
     const trigger = await within(blade).findByTestId("time-range-trigger");
-    // The page's ?range= is the page's, not the blade's.
-    expect(trigger.textContent).toContain("Last 24 hours");
+    // The blade opens on the page's ?range=, as a component's blade does.
+    expect(trigger.textContent).toContain("Last 1 hour");
     fireEvent.click(trigger);
     fireEvent.click(await screen.findByTestId("time-range-preset-7d"));
     await waitFor(() => expect(within(blade).getByTestId("time-range-trigger").textContent).toContain("Last 7 days"));
@@ -223,8 +255,29 @@ describe("the blade's tab and edit are its own", () => {
     expect(window.location.search).toBe("?edit=location");
   });
 
+  // A sole system's location has no page of its own (its address lands on
+  // the system), so its section here carries the location's own Delete, on
+  // location:delete (#2463): without it a place holding one system could not
+  // be deleted from the console at all.
+  it("a sole system's location section carries the location's own Delete", async () => {
+    const qc = seed();
+    qc.setQueryData([...LOCATIONS_KEY], [{ id: uuidFor("sd-room"), name: "boardroom-a", label: "Boardroom A", location_type: "room", actions: ["update", "delete"] }]);
+    const asked = answerConfirms(false);
+    mountPage(`/web/systems/${SID}?tab=configure`, qc);
+    const face = await screen.findByTestId("configure-face-location");
+    fireEvent.click(await within(face).findByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(asked).toHaveBeenCalledWith(expect.stringContaining('Delete location "boardroom-a"?')));
+  });
+
+  it("the location section offers no Delete without location:delete", async () => {
+    mountPage(`/web/systems/${SID}?tab=configure`);
+    const face = await screen.findByTestId("configure-face-location");
+    await within(face).findByRole("button", { name: "Edit" });
+    expect(within(face).queryByRole("button", { name: "Delete" })).toBeNull();
+  });
+
   it("closing the blade with unsaved drafts asks first", async () => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const asked = answerConfirms(false);
     const r = mountBlade();
     const blade = await screen.findByRole("dialog");
     fireEvent.click(await within(blade).findByRole("tab", { name: "Configure" }));
@@ -232,12 +285,12 @@ describe("the blade's tab and edit are its own", () => {
     fireEvent.click(await within(face).findByRole("button", { name: "Edit" }));
     fireEvent.input(await within(face).findByDisplayValue("boardroom"), { target: { value: "boardroom-2" } });
     fireEvent.click(within(blade).getByRole("button", { name: "Close" }));
-    expect(confirm).toHaveBeenCalled();
+    await waitFor(() => expect(asked).toHaveBeenCalled());
     expect(r.controller().stack().length).toBe(1);
   });
 
   it("deletes from the blade's Configure and closes the stack", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    answerConfirms(true);
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(null, { status: 204 }));
     const r = mountBlade();
     const blade = await screen.findByRole("dialog");

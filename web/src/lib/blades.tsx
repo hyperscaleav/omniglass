@@ -37,32 +37,45 @@ export type BladeController = {
   // close or fold-back that would drop that blade asks it first, so a detail
   // body's unsaved Configure drafts are never discarded silently. Returns the
   // unregister function (call it on cleanup).
-  guard: (ref: BladeRef, g: { confirmLeave: () => boolean }) => () => void;
+  guard: (ref: BladeRef, g: { confirmLeave: () => true | Promise<boolean> }) => () => void;
 };
 
 const key = (r: BladeRef) => `${r.kind}:${r.id}`;
 
 export function createBladeController(): BladeController {
   const [stack, setStack] = createSignal<BladeRef[]>([]);
-  const guards = new Map<string, { confirmLeave: () => boolean }>();
-  // May these blades be dropped? Each one's guard is asked, top first.
-  const mayDrop = (dropped: BladeRef[]) => [...dropped].reverse().every((r) => guards.get(key(r))?.confirmLeave() ?? true);
+  const guards = new Map<string, { confirmLeave: () => true | Promise<boolean> }>();
+  // May these blades be dropped? Each one's guard is asked, top first; a clean
+  // guard answers at once, a dirty one in the one confirm dialog (#2463). Only
+  // if every one agrees, and the stack is still the one asked about, does the
+  // drop happen.
+  const whenMayDrop = (dropped: BladeRef[], drop: () => void) => {
+    const asked = stack();
+    const gs = [...dropped].reverse().flatMap((r) => guards.get(key(r)) ?? []);
+    const step = (i: number): void => {
+      if (i >= gs.length) {
+        if (stack() === asked) drop();
+        return;
+      }
+      const a = gs[i].confirmLeave();
+      if (a === true) return step(i + 1);
+      void a.then((ok) => ok && step(i + 1));
+    };
+    step(0);
+  };
   const push = (ref: BladeRef) => {
     const s = stack();
     const i = s.findIndex((r) => key(r) === key(ref));
-    if (i >= 0 && !mayDrop(s.slice(i + 1))) return;
-    setStack(i >= 0 ? s.slice(0, i + 1) : [...s, ref]);
+    if (i < 0) return setStack([...s, ref]);
+    whenMayDrop(s.slice(i + 1), () => setStack(s.slice(0, i + 1)));
   };
   const pop = () => {
     const s = stack();
-    if (s.length && !mayDrop(s.slice(-1))) return;
-    setStack(s.slice(0, -1));
+    if (!s.length) return;
+    whenMayDrop(s.slice(-1), () => setStack(s.slice(0, -1)));
   };
-  const close = () => {
-    if (!mayDrop(stack())) return;
-    setStack([]);
-  };
-  const guard = (ref: BladeRef, g: { confirmLeave: () => boolean }) => {
+  const close = () => whenMayDrop(stack(), () => setStack([]));
+  const guard = (ref: BladeRef, g: { confirmLeave: () => true | Promise<boolean> }) => {
     guards.set(key(ref), g);
     return () => {
       if (guards.get(key(ref)) === g) guards.delete(key(ref));

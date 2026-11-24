@@ -6,8 +6,8 @@ import ConfigureFace from "./ConfigureFace";
 import EventsPanel from "./EventsPanel";
 import LogsPanel from "./LogsPanel";
 import CommandsPanel from "./CommandsPanel";
-import IdentitiesPanel from "./IdentitiesPanel";
 import DependenciesPanel from "./DependenciesPanel";
+import IdentitiesPanel from "./IdentitiesPanel";
 import HealthBadge from "./HealthBadge";
 import Eyebrow from "./Eyebrow";
 import DetailGate from "./DetailGate";
@@ -17,6 +17,7 @@ import { SnoozedBadge } from "./SnoozeButton";
 import AlarmTimeline, { createTimelineToggles } from "./AlarmTimeline";
 import SeverityBadge from "./SeverityBadge";
 import SimulationSection from "./SimulationSection";
+import { SimFaultChipFor } from "./SimFaultChip";
 import ReachLadder from "./ReachLadder";
 import SessionPill from "./SessionPill";
 import SessionNotice from "./SessionNotice";
@@ -24,6 +25,7 @@ import PollTest from "./PollTest";
 import InfoTip from "./InfoTip";
 import { ChevronRight } from "./icons";
 import { CalcRuleLink } from "./RuleLink";
+import AlarmOnThis from "./AlarmOnThis";
 import { useBlades } from "../lib/blades";
 import { createLeaveGuard } from "../lib/leave_guard";
 import { createTabState, type DetailHost } from "../lib/tabstate";
@@ -39,6 +41,11 @@ import { lifecycleRows } from "../lib/lifecycle";
 import { effectiveProperties, effectivePropertiesKey } from "../lib/component_properties";
 import { effectiveMetrics, effectiveMetricsKey } from "../lib/component_metrics";
 import { durationText } from "../lib/timeline";
+import MetricsGrid from "./MetricsGrid";
+import TimelineOverlay from "./TimelineOverlay";
+import TimeRangePicker from "./TimeRangePicker";
+import { CursorProvider } from "../lib/cursor";
+import { DEFAULT_RANGE, useHostTimeRange, type TimeRange } from "../lib/time_range";
 import { getOutpost, outpostKey } from "../lib/outposts";
 import { PRODUCTS_KEY, listProducts } from "../lib/products";
 import { LEAF_OUTPOST_POLL_MS, LEAF_POLL_MS, collectionState, dotHealth, identityRows, instanceName, leafAlarmSince, membershipRows, spreadSummary, vitalRows, vitalValueText } from "../lib/component_leaf";
@@ -101,10 +108,20 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
   const leafTabs = createMemo(() => [
     { key: "overview", label: "Overview" },
     { key: "activity", label: "Activity" },
-    ...(can(me.data, "component", "update") ? [{ key: "configure", label: "Configure" }] : []),
+    { key: "timeline", label: "Timeline" },
+    ...(can(me.data, "component", "update") || can(me.data, "component", "delete") ? [{ key: "configure", label: "Configure" }] : []),
   ]);
   const tabState = createTabState(props.host, leafTabs, { legacy: { events: "activity" } });
   const leafTab = tabState.active;
+  // The time range (#2304): the metrics grid and the timeline read over it. A
+  // blade opens on its page's range and keeps its own.
+  const { range: asked, setRange } = useHostTimeRange(props.host);
+  // An absolute range reads through the views read, which needs view:read: a
+  // shared link opened by a caller without it reads the default instead, and
+  // the host says why rather than drawing empty charts (#2304).
+  const canViews = () => can(me.data, "view", "read");
+  const rangeDenied = () => asked().kind === "absolute" && !!me.data && !canViews();
+  const range = (): TimeRange => (rangeDenied() ? DEFAULT_RANGE : asked());
   // A command asked for by address (an issue's toast opens its row): a page's
   // fact; a blade has no address of its own.
   const openCommand = props.host === "page" ? useCommandParam() : () => undefined;
@@ -265,21 +282,43 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
               <Show when={since()}>
                 {(sc) => <span data-testid="since-line" class="tabular-nums text-base-content/70">since {fmtTime(sc().ts)} · {durationText(sc().ms)}</span>}
               </Show>
+              <SimFaultChipFor componentId={component()?.id ?? id()} name={component()?.name} />
               <span class="text-base-content/30">·</span>
               <span class="font-data text-xs text-base-content/60">{component()?.name}</span>
             </div>
-            <TabRail tabs={leafTabs()} state={tabState} guard={leave} />
+            <TabRail
+              tabs={leafTabs()}
+              state={tabState}
+              guard={leave}
+              // The range governs Overview's metrics grid (#2424) and the Timeline.
+              end={leafTab() === "overview" || leafTab() === "timeline" ? <TimeRangePicker range={range()} onChange={setRange} allowCustom={canViews()} /> : undefined}
+            />
+            <Show when={rangeDenied()}>
+              <p data-testid="range-denied" role="status" class="px-4 pt-2 text-xs text-warning">
+                This link's custom range is read through views, which needs view:read. Showing the last 24 hours instead.
+              </p>
+            </Show>
             <Show when={leafTab() === "configure"}>
               {/* The host keys the body on the id, so another component is
                   another face, never this one's drafts (#854). */}
               <ConfigureFace kind="component" id={id()} guard={leave} host={props.host} destructive={destructive} />
+            </Show>
+            {/* One axis of what happened (#2425), above the metrics on the same cursor. */}
+            <Show when={leafTab() === "timeline"}>
+              <CursorProvider>
+                <div data-testid="timeline-tab" class="flex min-w-0 flex-col gap-5 p-4">
+                  {/* Keyed on the id: another component is another timeline, its picks and its open detail left behind. */}
+                  <Show when={id()} keyed>{(oid) => <TimelineOverlay kind="components" id={oid} range={range()} />}</Show>
+                  <MetricsGrid kind="components" id={id()} range={range()} />
+                </div>
+              </CursorProvider>
             </Show>
             <Show when={leafTab() === "activity"}>
               <div data-testid="activity-tab" class="flex flex-col gap-5 p-4">
                 {/* What it was told and where each command stands (#1155),
                     above what it has been saying. */}
                 <Show when={can(me.data, "command", "read")}>
-                  <CommandsPanel component={id()} name={component()?.name ?? id()} componentId={component()?.id} open={openCommand()} />
+                  <CommandsPanel component={id()} name={component()?.name ?? id()} componentId={component()?.id} open={openCommand()} productDriver={product()?.driver} onAddEndpoint={can(me.data, "endpoint", "create") ? () => blades.push({ kind: "endpoint-create", id: component()?.id ?? id() }) : undefined} />
                 </Show>
                 <EventsPanel name={id()} />
                 {/* The component's own words beside its occurrences (#1145):
@@ -310,7 +349,7 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
                             </span>
                             <span data-testid="alarm-controls" class="ml-auto flex shrink-0 items-center gap-1">
                               <SnoozedBadge alarm={a} />
-                              <AlarmActions componentId={component()?.id ?? id()} alarm={a} surface={snoozeSurface} show={{ ack: true, snooze: true, troubleshoot: true, timeline: timelines }} />
+                              <AlarmActions componentId={component()?.id ?? id()} alarm={a} surface={snoozeSurface} show={{ ack: true, snooze: true, troubleshoot: true, command: true, timeline: timelines }} />
                             </span>
                           </div>
                           <Show when={timelines.isOpen(a.id)}>
@@ -431,6 +470,7 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
                               <Show when={row().sourceRuleId}>
                                 <CalcRuleLink name={row().sourceRule!} id={row().sourceRuleId!} />
                               </Show>
+                              <AlarmOnThis reads={key} componentId={component()?.id ?? id()} label={row().label} />
                             </dd>
                             {/* Several endpoints collect it (#1020): the row
                                 shows the newest, says which and of how many,
@@ -488,6 +528,7 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
             </Show>
             {/* Seam: each endpoint row below is what #2436's shared
                 endpoint body takes over. */}
+            <MetricsGrid kind="components" id={id()} range={range()} />
             <section data-testid="leaf-collection" class="rounded-box border border-base-300 bg-base-100 p-3.5 text-sm">
               <Eyebrow label="Collection" hint="How this component is read: each endpoint, the outpost collecting it, and the ladder it climbs bottom up (a ping, informational only; the transport answering, the gate; then the login). A held session's state sits beside it. A stale sample under a healthy outpost points at the component or the path, not at collection." />
               <Show when={reach.data && (reach.data.endpoints ?? []).length > 0} fallback={<p class="text-base-content/60">No endpoint declared yet, so nothing collects from this component.</p>}>

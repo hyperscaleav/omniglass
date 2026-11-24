@@ -7,6 +7,7 @@ import Drawer from "../components/Drawer";
 import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
 import KVStacked from "../components/KVStacked";
+import CatalogRef, { KeyRef } from "../components/CatalogRef";
 import Eyebrow from "../components/Eyebrow";
 import InfoTip from "../components/InfoTip";
 import ExpressionField from "../components/ExpressionField";
@@ -56,6 +57,7 @@ import {
   validateCalcDraft,
   withInputKey,
 } from "../lib/calc_rules";
+import { confirmDelete } from "../lib/confirm";
 
 // Calc rules (Catalog > Actions > Calc rules, #999, #1018; epic #525): the
 // calc rule catalog, a sibling of Rules and Severity in the catalog's Actions
@@ -289,7 +291,7 @@ function SelectorFacts(p: { rule: CalcRule }): JSX.Element {
   return (
     <Show when={types().length + ids().length > 0} fallback={<span class="text-sm text-base-content/60">{sys() ? "Every system" : "Every component"}</span>}>
       <div class="flex flex-wrap gap-1.5">
-        <For each={types()}>{(t) => <span class="badge badge-ghost badge-sm font-data" title={sys() ? "System type" : "Component type"}>{t}</span>}</For>
+        <For each={types()}>{(t) => <span class="badge badge-ghost badge-sm" title={sys() ? "System type" : "Component type"}><CatalogRef kind={sys() ? "system_type" : "component_type"} name={t} /></span>}</For>
         <For each={ids()}>
           {(id) => <A href={`/${sys() ? "systems" : "components"}/${id}`} class="badge badge-outline badge-sm hover:underline">{nameOf(id)}</A>}
         </For>
@@ -418,7 +420,7 @@ function CalcBladeBody(p: { name: string }): JSX.Element {
   }
 
   async function remove(r: CalcRule) {
-    if (!confirm(`Delete calc rule "${r.name}"? The values it wrote stay on their owners, as history naming it.`)) return;
+    if (!(await confirmDelete({ kind: "calc rule", name: r.name, consequence: "The values it wrote stay on their owners, as history naming it." }))) return;
     setErr(null);
     try {
       await deleteCalcRule(r.name);
@@ -493,7 +495,7 @@ function CalcBladeBody(p: { name: string }): JSX.Element {
               }
             />
             <KVStacked label="Version" value={<span class="tabular-nums">{r().version}</span>} />
-            <KVStacked label="Writes" value={<span class="inline-flex items-center gap-1.5"><span class="font-data">{r().output_key}</span><span class="text-[11px] text-base-content/40">{r().output_lane}</span><InfoTip label="output" text={CALC_HINTS.output} /></span>} />
+            <KVStacked label="Writes" value={<span class="inline-flex items-center gap-1.5"><CatalogRef kind={r().output_lane === "property" ? "property" : "metric"} name={r().output_key} /><span class="text-[11px] text-base-content/40">{r().output_lane}</span><InfoTip label="output" text={CALC_HINTS.output} /></span>} />
           </div>
           <Show when={r().description}>
             <KVStacked label="Description" value={<span class="text-base-content/80">{r().description}</span>} />
@@ -508,7 +510,7 @@ function CalcBladeBody(p: { name: string }): JSX.Element {
                 {(i) => (
                   <>
                     <code class="font-data text-[12px] text-base-content/60">{i.alias}</code>
-                    <span class="font-data text-[12px]">{i.key}</span>
+                    <span class="text-[12px]"><KeyRef name={i.key} /></span>
                   </>
                 )}
               </For>
@@ -816,6 +818,9 @@ export function CalcRuleForm(p: { mode: "create" | "edit"; rule?: CalcRule; onSa
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
+      <FieldRow bind="label">
+        <input class="input input-bordered w-full" value={d.label} placeholder="Busy" onInput={(e) => setD("label", e.currentTarget.value)} />
+      </FieldRow>
       <FieldRow bind="name" info={CALC_HINTS.name}>
         <input
           class="input input-bordered w-full font-data"
@@ -827,9 +832,6 @@ export function CalcRuleForm(p: { mode: "create" | "edit"; rule?: CalcRule; onSa
           onBlur={() => setNameTouched(true)}
         />
         <Show when={nameErr()}>{(m) => <p class="text-[11px] text-error">{m()}</p>}</Show>
-      </FieldRow>
-      <FieldRow bind="label">
-        <input class="input input-bordered w-full" value={d.label} placeholder="Busy" onInput={(e) => setD("label", e.currentTarget.value)} />
       </FieldRow>
 
       <FieldRow label="Derives on" info={CALC_HINTS.owner}>

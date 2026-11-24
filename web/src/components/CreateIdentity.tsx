@@ -176,6 +176,7 @@ export default function CreateIdentity(props: CreateIdentityProps): JSX.Element 
 
         <FieldRow
           bind="label"
+          info={displayState() === "generated" && labelAvailable() ? `Label rule: ${props.draft()!.rule}` : undefined}
           actions={<PenToggle pen={props.displayPen} what="label" />}
           hint={
             displayState() === "overridden"
@@ -183,7 +184,7 @@ export default function CreateIdentity(props: CreateIdentityProps): JSX.Element 
               : props.pending()
                 ? "Working out what the rule renders…"
                 : labelAvailable()
-                  ? `Rendered from ${props.draft()!.rule}`
+                  ? "Rendered by the platform from a label rule. Hover the (i) for the rule."
                   : nameText().trim() === ""
                     ? "No label rule applies; the name you type above is what an operator reads."
                     : "No label rule applies, so the name is what an operator reads."

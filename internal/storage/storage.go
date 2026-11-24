@@ -378,6 +378,10 @@ type Gateway interface {
 	ResetComponentName(ctx context.Context, actorID, name string, read, action scope.Set) (*Component, error)
 	ComponentNameTaken(ctx context.Context, name string, parentRef, locationRef *string) (bool, error)
 	DeleteComponent(ctx context.Context, actorID, name string, read, action scope.Set) error
+	// DeleteBlockersOf names what stands in the way of a refused delete of a
+	// component, system or location (#2463): the rows the caller may read on
+	// each blocker's own kind, and a count of the rest. Read-only.
+	DeleteBlockersOf(ctx context.Context, kind, ref string, readOf func(kind string) scope.Set) (*DeleteBlockers, error)
 
 	// The component_make catalog: a flat manufacturer catalog (Cisco,
 	// Crestron, ...), same shape and official-read-only guard as the type
@@ -461,6 +465,9 @@ type Gateway interface {
 
 	UpsertProduct(ctx context.Context, m Product) error
 	ListProducts(ctx context.Context) ([]Product, error)
+	// ListProductsDeclaring is ListProducts narrowed to the products whose contract
+	// declares the named metric (lane "metric") or property (lane "property").
+	ListProductsDeclaring(ctx context.Context, lane, name string) ([]Product, error)
 	GetProduct(ctx context.Context, id string) (*Product, error)
 	CreateProduct(ctx context.Context, actorID string, m Product) (*Product, error)
 	UpdateProduct(ctx context.Context, actorID, id string, patch ProductPatch) (*Product, error)
@@ -718,8 +725,9 @@ type Gateway interface {
 	// newest first, each row naming its owner (#793).
 	ListSystemEvents(ctx context.Context, systemID string, window time.Duration, limit int) ([]Event, error)
 	// ListSystemAlarms is the members' alarms in one read (#940): active ones
-	// whatever their age and those cleared inside window, newest first, capped.
-	ListSystemAlarms(ctx context.Context, systemID string, window time.Duration, limit int) ([]Alarm, error)
+	// whatever their age and those cleared inside the window, or those raised
+	// during an explicit range (#2425), newest first, capped.
+	ListSystemAlarms(ctx context.Context, systemID string, rng AlarmRange, limit int) ([]Alarm, error)
 	// ListFleetAlarms is the active alarms across every component in read, the
 	// Gateway injecting the scope (#2025): worst severity first, then newest,
 	// capped at limit. Unacknowledged narrows it to the queue nobody has worked;
@@ -808,6 +816,10 @@ type Gateway interface {
 	EnsureRole(ctx context.Context, actorID string, r Role) error
 	SetMachineToken(ctx context.Context, actorID, name string, hash []byte, prefix string) (bool, error)
 	OutpostSimDevices(ctx context.Context, name string, read scope.Set) ([]SimDevice, error)
+	// ComponentPlaces reads each component's primary system and place names, keyed
+	// by id (#1724): the Platform health simulation table's tiebreak between
+	// devices that share a name.
+	ComponentPlaces(ctx context.Context, ids []string, systemRead, locationRead scope.Set) (map[string]ComponentPlace, error)
 	// OutpostSimWebhooks reads the webhook subscription of each simulated
 	// component on the outpost (ADR-1370), keyed by component id: only for the
 	// simulator's own device list, never an operator's read.
@@ -1128,7 +1140,9 @@ type Gateway interface {
 	ListAlarms(ctx context.Context, componentName string, filter AlarmFilter) ([]Alarm, error)
 	// The health reads: the current verdict, why it is what it is, and the
 	// recorded transitions inside rng (the zero HealthRange is the whole history).
-	SystemHealth(ctx context.Context, systemName string, rng HealthRange, read scope.Set) (*HealthReport, error)
+	// read scopes the system; compRead scopes its member list, so a member the
+	// caller may not read is never named (#2459, the fleet dots' rule).
+	SystemHealth(ctx context.Context, systemName string, rng HealthRange, read, compRead scope.Set) (*HealthReport, error)
 	// SystemHealths is the BULK health read: every system in the read scope with
 	// its current verdict, in one statement. The read a LIST paints its health
 	// column from, where SystemHealth is the read one system's panel opens (#653).

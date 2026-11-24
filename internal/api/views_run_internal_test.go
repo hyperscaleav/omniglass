@@ -1,6 +1,9 @@
 package api
 
 import (
+	"fmt"
+	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -166,5 +169,27 @@ func TestViewTailRowsFoldsEachBinding(t *testing.T) {
 	}
 	if p := out[1].Property; len(p) != 1 || p[0].Value != "off" {
 		t.Fatalf("a binding resumed after the first commit got: %+v", p)
+	}
+}
+
+// TestViewLimitTagsMatchTheirConstants holds the struct-tag limits (which a
+// tag cannot derive) to the constants they restate (#2258).
+func TestViewLimitTagsMatchTheirConstants(t *testing.T) {
+	t.Parallel()
+	tag := func(typ any, field, key string) string {
+		f, ok := reflect.TypeOf(typ).FieldByName(field)
+		if !ok {
+			t.Fatalf("no field %s", field)
+		}
+		return f.Tag.Get(key)
+	}
+	if got, want := tag(watchViewsInput{}, "DurationSeconds", "maximum"), strconv.Itoa(int(viewWatchLifetime.Seconds())); got != want {
+		t.Errorf("duration_seconds maximum %s, viewWatchLifetime is %s seconds", got, want)
+	}
+	if doc, want := tag(watchViewsInput{}, "DurationSeconds", "doc"), fmt.Sprintf("%d second lifetime", int(viewWatchLifetime.Seconds())); !strings.Contains(doc, want) {
+		t.Errorf("duration_seconds doc does not say %q", want)
+	}
+	if got, want := tag(viewBindingBody{}, "WindowSeconds", "maximum"), strconv.Itoa(int(viewMaxRange.Seconds())); got != want {
+		t.Errorf("window_seconds maximum %s, viewMaxRange is %s seconds", got, want)
 	}
 }

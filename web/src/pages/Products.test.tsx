@@ -88,7 +88,7 @@ function mount(me: Me = admin, lateCatalogs = false) {
 describe("Products page", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("lists a seeded product, an official row greys edit/delete, and create opens for an admin", async () => {
+  it("lists a seeded product, an official row shows the read-only note, and create opens for an admin", async () => {
     mount();
     expect(await screen.findByText("Crestron TSW-1070")).toBeInTheDocument();
 
@@ -99,11 +99,9 @@ describe("Products page", () => {
       if (!el) throw new Error("no blade yet");
       return el as HTMLElement;
     });
-    const deleteBtn = within(blade).getByRole("button", { name: /delete/i }) as HTMLButtonElement;
-    const editBtn = within(blade).getByLabelText("Edit") as HTMLButtonElement;
-    expect(deleteBtn.disabled).toBe(true);
-    expect(editBtn.disabled).toBe(true);
-    expect(editBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe("Official: ships with Omniglass and updates with it.");
+    expect(within(blade).getByTestId("footer-note").textContent).toBe("Official, read-only");
+    expect(within(blade).queryByLabelText("Edit")).toBeNull();
+    expect(within(blade).queryByText("Delete")).toBeNull();
 
     // create is available to an admin. The label match is anchored because the
     // Name field's hint mentions the label too.
@@ -467,7 +465,7 @@ describe("Products create identity", () => {
     fireEvent.input(display, { target: { value: "Acme Panel Pro Mk2" } });
 
     await waitFor(() => expect(display.value).toBe("Acme Panel Pro Mk2"));
-    expect(screen.getByText(/Globally unique address/)).toBeTruthy();
+    expect(screen.getByText(/The address the API and CLI use/)).toBeTruthy();
     expect(screen.queryByText(/Derived from the label/)).toBeNull();
   });
 });

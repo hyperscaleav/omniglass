@@ -1,0 +1,17 @@
+# See what needs attention (#2438): Home says how many systems and components need
+# attention, and Explore's chip says the same words and lists exactly that many rows.
+title: See what needs attention
+description: Read Home's Need attention card, open it, and find Explore's chip saying the same words, with exactly that many rows beneath it.
+steps:
+  - goto: /
+    caption: Home's Need attention card counts the systems and components that are in outage, degraded or incomplete.
+  - wait: { selector: '[data-testid="home-attention"]:has-text("need attention")' }
+    caption: It names what it counts, in words.
+  - click: '[data-testid="home-attention"]'
+    caption: Open it.
+  - wait: { selector: '[data-testid="explore-counts"] button:has-text("need attention")' }
+    caption: Explore opens with the same figures on its chip, and the chip already pressed.
+  - wait: { role: list, name: Matches }
+    caption: Pressed, the chip leaves one row for each thing it counted, each with the path above it.
+    hold: 1500
+    poster: true
