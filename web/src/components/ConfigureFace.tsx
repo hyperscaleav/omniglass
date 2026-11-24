@@ -41,13 +41,12 @@ function Actions(props: { slot: BladeEdit; onEdit: () => void }) {
             </Show>
             <Show when={props.slot.destructive()}>
               {(dst) => (
-                <Popover
-                  class="btn btn-quiet btn-sm btn-square"
+                <Popover class="btn btn-quiet btn-sm btn-square"
                   aria-label="More actions"
                   title="More actions"
                   open={open()}
                   onOpenChange={setOpen}
-                  contentClass="menu z-50 w-44 rounded-box border border-base-300 bg-base-100 p-1.5 shadow-2xl focus:outline-none"
+                  contentClass="menu z-[1000] w-44 rounded-box border border-base-300 bg-base-100 p-1.5 shadow-2xl focus:outline-none"
                   content={
                     <button type="button" class="flex items-center gap-2.5 rounded-btn px-2 py-1.5 text-left text-sm text-error hover:bg-base-200" onClick={() => { setOpen(false); dst().onClick(); }}>
                       <Trash size={15} />{dst().label}
