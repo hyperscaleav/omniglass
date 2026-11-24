@@ -10,7 +10,7 @@ import WebhookEndpointRow from "./WebhookEndpointRow";
 import EndpointDetail from "./EndpointDetail";
 import { AvailabilityStrip, PILL } from "./EndpointGate";
 import { CLOCK_TICK_MS, createClock } from "../lib/clock";
-import { endpointNotice } from "../lib/session";
+import { endpointNotice, silentDatagram, NO_ANSWER_CAUSES } from "../lib/session";
 import { entityLabel } from "../lib/entities";
 import { ENDPOINTS_KEY, listEndpoints } from "../lib/endpoints";
 import { REACHABILITY_KEY, getReachability, endpointWord, pendingNotice, type ReachEndpoint } from "../lib/reachability";
@@ -41,7 +41,7 @@ function EndpointRow(p: { iface: ReachEndpoint; component: string; manageId?: st
   const [open, setOpen] = createSignal(false);
   const now = createClock(CLOCK_TICK_MS);
   const word = createMemo(() => endpointWord(p.iface, now()));
-  const pill = createMemo(() => PILL[word()]);
+  const pill = createMemo(() => (word() === "down" && silentDatagram(p.iface) ? { cls: "badge-warning", label: "no answer" } : PILL[word()]));
   const canManage = () => !!(p.manageId && p.onManage);
   return (
     <div class="overflow-hidden">
@@ -86,7 +86,7 @@ function EndpointRow(p: { iface: ReachEndpoint; component: string; manageId?: st
               a probe endpoint no session). */}
           <div class="w-72"><ReachLadder iface={p.iface} /></div>
           <div class="w-36"><SessionPill iface={p.iface} now={now()} /></div>
-          <span class={`badge badge-soft badge-sm shrink-0 ${pill().cls}`}>{pill().label}</span>
+          <span class={`badge badge-soft badge-sm shrink-0 ${pill().cls}`} title={pill().label === "no answer" ? NO_ANSWER_CAUSES : undefined}>{pill().label}</span>
         </div>
         <Show when={canManage()}>
           <button

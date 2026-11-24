@@ -13,7 +13,7 @@ import type { Outpost } from "./outposts";
 import { outpostStatus } from "./outposts";
 import type { ReachEndpoint } from "./reachability";
 import { STALENESS_WINDOW_MS, endpointWord, lastSeenAt } from "./reachability";
-import { pollsHeld } from "./session";
+import { pollsHeld, silentDatagram } from "./session";
 import { entityLabel } from "./entities";
 import { isLifecycleDate, isLifecycleMetric } from "./lifecycle";
 
@@ -40,7 +40,7 @@ export type CollectionState = {
   // (#1110, lib/session's pollsHeld).
   // listening: a push endpoint (#1024), which the server hosts and a sender
   // posts to; silence is never read as down, so it has no other state.
-  kind: "collecting" | "component-or-path" | "outpost-offline" | "no-outpost" | "down" | "rejected" | "session-down" | "unknown" | "listening";
+  kind: "collecting" | "component-or-path" | "outpost-offline" | "no-outpost" | "down" | "no-answer" | "rejected" | "session-down" | "unknown" | "listening";
   outpost?: string;
 };
 
@@ -61,6 +61,7 @@ export function collectionState(iface: ReachEndpoint, outpost: Outpost | undefin
   if (now - new Date(last).getTime() > STALENESS_WINDOW_MS) return { kind: missing ? "no-outpost" : outpostDown ? "outpost-offline" : "component-or-path", outpost: iface.outpost };
   if (iface.session?.state === "rejected" || pollsHeld(iface)) return { kind: "rejected", outpost: iface.outpost };
   if (iface.session?.state === "down") return { kind: "session-down", outpost: iface.outpost };
+  if (endpointWord(iface, now) === "down" && silentDatagram(iface)) return { kind: "no-answer", outpost: iface.outpost };
   if (endpointWord(iface, now) === "down") return { kind: "down", outpost: iface.outpost };
   return { kind: "collecting", outpost: iface.outpost };
 }
