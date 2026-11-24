@@ -466,9 +466,11 @@ where b.series_id = $1 order by b.span_start, b.span;
   A day folds only once its own close and the trend horizon (24 hours) have passed, 48 hours after
   it starts, and is folded only while intact, so a metric window (or a type's `retention_days`) of N
   days leaves the fold N - 2 days wide: **the shortest window that folds is 3 days**, and a window of 1
-  or 2 days folds nothing, so the install's metric window (`retention.metric_days`) under 3 days is
-  refused where it loads (the settings file, the environment or a console write), naming the lane, its
-  window and the 3-day minimum. A series-day with at least `BlockDayMin` samples that the fold passes after
+  or 2 days folds nothing, so a new write of the install's metric window (`retention.metric_days`) under 3 days is
+  refused (the settings file, the environment or a console write), naming the lane, its
+  window and the 3-day minimum. The check governs new writes only: a value of 1 or 2 already
+  stored stays, and so does a metric type's own `retention_days` under 3, which is not checked;
+  both fold nothing and surface as the skipped-days warning below. A series-day with at least `BlockDayMin` samples that the fold passes after
   it left its window is counted on `BlockCompaction.Skipped` and logged at warn (`metric series-days
   passed without folding into blocks`), never silently marked done
   ([#2144](https://github.com/hyperscaleav/omniglass/issues/2144)).

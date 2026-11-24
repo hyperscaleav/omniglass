@@ -58,7 +58,7 @@ func retentionNotes(rep retentionReport, err error) []housekeepingNote {
 			slog.Time("week_through", b.WeekThrough), slog.Int64("blocks", b.Blocks)}})
 	}
 	if b := rep.Blocks; b.Skipped > 0 {
-		notes = append(notes, housekeepingNote{"warn", "metric series-days passed without folding into blocks: the day left its window first", []slog.Attr{
+		notes = append(notes, housekeepingNote{"warning", "metric series-days passed without folding into blocks: the day left its window first", []slog.Attr{
 			slog.Int64("skipped", b.Skipped), slog.Time("through", b.Through)}})
 	}
 	if len(rep.Created) > 0 || len(rep.Dropped) > 0 {
