@@ -129,11 +129,12 @@ export default function Alarms() {
     },
     {
       key: "location", label: "Location", cell: (a) => (
-        <Tooltip as="span" tabIndex={0} class="font-data text-xs text-base-content/70" content={a.location_path}>
-          <Show when={a.location_id} fallback={a.location}>
-            {(id) => <A href={`/locations/${id()}`} class="hover:underline" onClick={(e) => e.stopPropagation()}>{a.location}</A>}
-          </Show>
-        </Tooltip>
+        <Show
+          when={a.location_id}
+          fallback={<Tooltip as="span" tabIndex={0} class="font-data text-xs text-base-content/70" content={a.location_path}>{a.location}</Tooltip>}
+        >
+          {(id) => <Tooltip as={A} href={`/locations/${id()}`} class="font-data text-xs text-base-content/70 hover:underline" content={a.location_path} onClick={(e: MouseEvent) => e.stopPropagation()}>{a.location}</Tooltip>}
+        </Show>
       ),
     },
     {
