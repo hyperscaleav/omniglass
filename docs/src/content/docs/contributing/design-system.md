@@ -184,6 +184,14 @@ a location holding none or several renders its own subject card,
   the helper was copied into six new pages around them. A convention can be forgotten; a slot
   cannot. Full-page create forms draw their own inline rail through `FormActionBar` with the
   `inline` prop; a `FormActionBar inline` is the one full-page form rail the guard permits.
+- **An entity's actions live at the top right of its tab rail (#2439).** On a detail body (component,
+  system, location, on the page and in the blade) Configure draws its actions at the right end of the
+  `TabRail`, inline with the tabs and not in a row of their own: a small primary `Edit` and a `⋯` menu
+  (the `ui/Popover` wrapper) holding `Delete` as a destructive item; while editing, `Cancel` and
+  `Save` side by side in the same place, Save primary. Delete still asks through the confirmation
+  dialog, and a tab switch still asks through the leave guard. The host hands the rail's end element to
+  `ConfigureFace` (`TabRail`'s `endRef`); a face with no rail to draw on (a sole system's location
+  section) keeps a short row of the same actions at its head.
 - **A list page reads the same across the catalog (#2431).** One header height: the filter bar
   holds a button's height itself, so a list with no New button (templates, secret types) sits level
   with its siblings. While chips filter, the bar says `n of m`. An empty list shows its empty state

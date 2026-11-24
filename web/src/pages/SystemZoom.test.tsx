@@ -1022,10 +1022,10 @@ describe("the configure tab (#800)", () => {
     try {
       mount(`/web/systems/${uuidFor("szp-sys")}?tab=configure`);
       const face = await screen.findByTestId("configure-face");
-      fireEvent.click(within(face).getByRole("button", { name: "Edit" }));
+      fireEvent.click(within(screen.getByTestId("tab-rail")).getByRole("button", { name: "Edit" }));
       const name = await within(face).findByDisplayValue("boardroom");
       fireEvent.input(name, { target: { value: "exec-boardroom" } });
-      fireEvent.click(within(face).getByRole("button", { name: /save/i }));
+      fireEvent.click(within(screen.getByTestId("tab-rail")).getByRole("button", { name: /save/i }));
       await waitFor(() => {
         expect(within(face).queryByRole("alert")?.textContent ?? "", "save error surfaced").toBe("");
         const patch = calls.find((c) => c.method === "PATCH" && c.url.includes(`/systems/${uuidFor("szp-sys")}`));
@@ -1067,8 +1067,8 @@ describe("the location configures beside its system (#872)", () => {
   it("?edit=location begins editing the location's form only", async () => {
     mount(`/web/systems/${uuidFor("szp-sys")}?tab=configure&edit=location`);
     const location = await screen.findByTestId("configure-face-location");
-    expect(await within(location).findByRole("button", { name: /save changes/i })).toBeTruthy();
-    expect(within(screen.getByTestId("configure-face")).queryByRole("button", { name: /save changes/i })).toBeNull();
+    expect(await within(location).findByRole("button", { name: /save/i })).toBeTruthy();
+    expect(within(screen.getByTestId("configure-face")).queryByRole("button", { name: /save/i })).toBeNull();
   });
 
   it("gives an unplaced system no Location section", async () => {
@@ -1089,7 +1089,7 @@ describe("leaving Configure with unsaved drafts", () => {
   async function dirtyConfigure() {
     mount(`/web/systems/${uuidFor("szp-sys")}?tab=configure`);
     const face = await screen.findByTestId("configure-face");
-    fireEvent.click(within(face).getByRole("button", { name: "Edit" }));
+    fireEvent.click(within(screen.getByTestId("tab-rail")).getByRole("button", { name: "Edit" }));
     const name = await within(face).findByDisplayValue("boardroom");
     return { face, name };
   }
@@ -1130,7 +1130,7 @@ describe("?edit=1 lands on configure (#800)", () => {
     mount(`/web/systems/${uuidFor("szp-sys")}?edit=1`);
     const face = await screen.findByTestId("configure-face");
     expect(await within(face).findByDisplayValue("boardroom")).toBeTruthy();
-    expect(within(face).getByRole("button", { name: /save/i })).toBeTruthy();
+    expect(within(screen.getByTestId("tab-rail")).getByRole("button", { name: /save/i })).toBeTruthy();
   });
 });
 

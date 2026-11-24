@@ -18,6 +18,7 @@ import { TAGS_KEY } from "../lib/tags";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 import { seedSeverityLevels } from "../lib/testseverity";
+import { clickDelete } from "./configure.testkit";
 import { answerConfirms } from "../lib/confirm.testkit";
 
 // LocationDetail (#2423): the location page and the location blade render ONE
@@ -216,7 +217,7 @@ describe("the blade's tab, filter and edit are its own", () => {
     fireEvent.click(await within(blade).findByRole("tab", { name: "Configure" }));
     const form = await within(blade).findByTestId("entity-form");
     expect(within(form).getByText("Parent")).toBeTruthy();
-    fireEvent.click(within(blade).getByRole("button", { name: "Delete" }));
+    await clickDelete(blade);
     await waitFor(() => expect(r.controller().stack()).toEqual([]));
   });
 });

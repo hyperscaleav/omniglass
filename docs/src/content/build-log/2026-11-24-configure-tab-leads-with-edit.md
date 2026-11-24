@@ -15,3 +15,8 @@ Not done here: collapsing every section behind a one-line summary, and a "since"
 component (it has no transitions read to draw one from). Tests: `ComponentDetail.test.tsx`
 (Edit precedes the form on page and blade), `PropertiesPanel.test.tsx` (empty line),
 `ResolutionPanel.test.tsx` (platform toggle).
+
+The actions then moved onto the tab rail itself (#2439 review): a small Edit and a `⋯` menu holding
+Delete at the rail's right end, Cancel and Save in the same place while editing, so the tab has no
+separate action row. Tests: `ComponentDetail.test.tsx` (Edit and menu inside the rail, Delete
+confirms, edit swaps to Cancel and Save).
