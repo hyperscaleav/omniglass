@@ -246,8 +246,9 @@ rung a refusal holds wears the refusal glyph and the rungs above it read untried
 below keep their readings: an endpoint whose login was refused still shows its ping and its
 transport answering. Over a datagram transport (udp, snmp) a silent **responsive** rung reads **no answer**,
 not down: silence proves nothing there. The host may be off, the agent or service stopped, the v2c
-community wrong (an agent drops a wrong community without a word), or the port filtered; a closed
-port is different and says so (the affirmative **refused**, an ICMP port-unreachable). The rung's
+community wrong (an agent drops a wrong community without a word), or the port filtered or closed.
+The outpost records an ICMP port-unreachable as the reason **refused**, but the reading the console
+reads carries only up or down, so the console cannot yet tell a closed port from silence. The rung's
 hint, the collection badge on the component and the row's pill all name those causes. The reachability reading and
 the unreachable streak are unchanged, so a run of silence still alarms; only what it says changed. A tcp connect that times out
 still reads down. A down endpoint also shows a plain-language **why** line. Every value is a
@@ -318,10 +319,11 @@ an https endpoint does, and **Trust this key** works the same way
 A **udp** endpoint has no port to open, so its breakdown lists its **request** rung beside the ping:
 the driver's named request, answered (with its round trip) or not, which is the layer its reachability
 follows. A component
-that answers ping but not the request reads down, and its why line says the request goes
+that answers ping but not the request reads **no answer** (the reachability verdict is still down,
+as the ladder paragraph above says), and its why line says the request goes
 unanswered (the service is down, the port is closed, or the datagrams are lost); one that blocks
 ping but answers reads up. A lost datagram is re-sent within the endpoint's timeout, so a little
-loss never reads down. The endpoint binds its own port on the outpost (its driver's `listen-port`
+loss never reads no answer. The endpoint binds its own port on the outpost (its driver's `listen-port`
 input, else one the outpost picks), which the component's pushes arrive on; edit it on the endpoint's
 detail like its host or port ([udp](/architecture/collection/#udp)).
 

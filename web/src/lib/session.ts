@@ -95,14 +95,15 @@ export type RungRole = "informational" | "gate" | "login";
 export type Rung = { key: RungKey; status: RungStatus; role: RungRole; datagram?: boolean };
 
 // DATAGRAM_TRANSPORTS answer or stay silent: no handshake says "closed", so a
-// timed-out rung is "no answer", not "down". An ICMP port-unreachable is the
-// affirmative refusal and is not silence.
+// timed-out rung is "no answer", not "down". The outpost records an ICMP
+// port-unreachable as the reason refused, but the read carries no reason yet, so
+// the console cannot separate it from silence.
 const DATAGRAM_TRANSPORTS = new Set(["udp", "snmp"]);
 export const isDatagram = (transport: string): boolean => DATAGRAM_TRANSPORTS.has(transport);
 
 // NO_ANSWER_CAUSES is what silence over a datagram transport can mean.
 export const NO_ANSWER_CAUSES =
-  "Silence proves nothing here: the host is off, the agent or service is stopped, the v2c community is wrong (an agent drops it silently), or the port is filtered. A closed port is the affirmative refused (ICMP port-unreachable).";
+  "Silence proves nothing here: the host is off, the agent or service is stopped, the v2c community is wrong (an agent drops it silently), or the port is filtered or closed (the reading carries only up or down, so a closed port cannot yet be told from silence).";
 
 // silentDatagram reports a datagram endpoint whose transport rung got no answer.
 export function silentDatagram(iface: ReachEndpoint): boolean {
