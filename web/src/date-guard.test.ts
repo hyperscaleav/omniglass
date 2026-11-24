@@ -22,16 +22,10 @@ function sources(dir: string): string[] {
   });
 }
 
-// Number-only exemption: the simulation surfaces group hit counts with a bare
-// toLocaleString and were rebuilt in #2510 while this guard landed, so moving them
-// to fmtCount waits on that merge (#2536). A date or time call is forbidden there too.
-const NUMBER_ONLY = ["components/SimComponentDrawer.tsx", "components/SimulationSection.tsx", "pages/Simulation.tsx", "lib/simulation.ts"];
-
 const CALL = /\.toLocale(?:Date|Time)?String\s*\(/g;
 
 export function localeCalls(file: string, text: string): string[] {
-  const numberOnly = NUMBER_ONLY.includes(file.split(sep).join("/"));
-  return [...text.matchAll(CALL)].filter((m) => !(numberOnly && m[0].startsWith(".toLocaleString"))).map((m) => `${file}:${text.slice(0, m.index).split("\n").length}: formats a date or number itself; use lib/format.ts`);
+  return [...text.matchAll(CALL)].map((m) => `${file}:${text.slice(0, m.index).split("\n").length}: formats a date or number itself; use lib/format.ts`);
 }
 
 describe("locale formatting", () => {
@@ -41,8 +35,7 @@ describe("locale formatting", () => {
     expect(localeCalls("x", `d.toLocaleTimeString([], {})`)).toHaveLength(1);
     expect(localeCalls("x", `// never call toLocaleString here`)).toHaveLength(0);
     expect(localeCalls("x", `fmtTime(iso)`)).toHaveLength(0);
-    expect(localeCalls("pages/Simulation.tsx", `n.toLocaleString()`)).toHaveLength(0);
-    expect(localeCalls("pages/Simulation.tsx", `d.toLocaleTimeString()`)).toHaveLength(1);
+    expect(localeCalls("pages/Simulation.tsx", `n.toLocaleString()`)).toHaveLength(1);
   });
 
   it("is used only by lib/format.ts", () => {

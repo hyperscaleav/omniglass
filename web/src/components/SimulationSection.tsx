@@ -7,7 +7,7 @@ import SimComponentDrawer from "./SimComponentDrawer";
 import SimStatusBadge from "./SimStatusBadge";
 import { FlaskConical } from "./icons";
 import { can, useMe } from "../lib/auth";
-import { rel } from "../lib/format";
+import { fmtCount, rel } from "../lib/format";
 import { componentSimKey, getComponentSim, componentSimPollMs } from "../lib/simulation";
 
 // SimulationSection: a component's own page says when the component is a
@@ -50,7 +50,7 @@ export default function SimulationSection(props: { componentId: string }): JSX.E
             </dd>
             <dt class="text-base-content/50">Hits</dt>
             <dd class="font-data text-xs tnum">
-              {(s().activity?.hits ?? 0).toLocaleString()}
+              {fmtCount(s().activity?.hits ?? 0)}
               <Show when={s().activity?.last_hit_at}>
                 <span class="ml-2 text-base-content/50">last {rel(s().activity!.last_hit_at!)}{s().activity?.last_protocol ? ` via ${s().activity!.last_protocol}` : ""}</span>
               </Show>

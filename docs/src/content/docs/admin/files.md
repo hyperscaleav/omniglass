@@ -16,9 +16,8 @@ screenshots:
     #
     # The Added mask names the CELL (`xpath=ancestor::td[1]`), not the text
     # inside it, so the painted box is the 170px the column descriptor pins
-    # rather than the width of the value: `fmtTime` does not zero-pad the day,
-    # so the text is a character narrower on the 9th than on the 15th, and a
-    # mask sized to the text moves with it (#773).
+    # rather than the width of the value: a relative age ("4m ago") changes
+    # width as it counts, so a mask sized to the text moves with the clock (#773).
     #
     # The id mask stays on the text. A uuid is a fixed 36 characters in a
     # monospace face, so its box does not move, and its enclosing cell is the

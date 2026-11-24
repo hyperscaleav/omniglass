@@ -21,7 +21,7 @@ import SimStatusBadge from "../components/SimStatusBadge";
 import { activeFaults } from "../lib/simfaults";
 import { useFormActions } from "../lib/formactions";
 import { can, useMe } from "../lib/auth";
-import { describeError, rel } from "../lib/format";
+import { describeError, fmtCount, rel } from "../lib/format";
 import { entityLabel } from "../lib/entities";
 import { parseChips, type Chip, type FilterKey } from "../lib/predicate";
 import { COMPONENTS_KEY, listComponents, type Component as FleetComponent } from "../lib/components";
@@ -297,7 +297,7 @@ function OutpostCard(props: { outpost: SimOutpost }) {
         <span class="text-xs text-base-content/50">last seen <span class="tnum">{rel(n().last_seen)}</span></span>
       </div>
       <div class="grid grid-cols-2 gap-x-6 gap-y-3 px-4 py-3 sm:grid-cols-3 lg:grid-cols-6">
-        <KVStacked label="Hits" value={<span class="font-data tnum font-semibold" data-testid="outpost-hits">{totalHits(n()).toLocaleString()}</span>} />
+        <KVStacked label="Hits" value={<span class="font-data tnum font-semibold" data-testid="outpost-hits">{fmtCount(totalHits(n()))}</span>} />
         <KVStacked label="Components" value={<span class="font-data tnum">{(n().components ?? []).length}</span>} />
         <Fact label="Low ports" hint="Whether the simulator may bind ports below 1024. When it may not, every port is lifted by the offset, and the seeded endpoints aim at the lifted ports.">
           {yesNo(n().capabilities.low_ports)}
@@ -498,7 +498,7 @@ function SimRow(props: { id: string; row: SimRowData; component?: FleetComponent
           <span class="ml-auto flex-none"><SimFaultMenu componentId={props.id} sim={d()} name={props.component?.name ?? d().component} /></span>
         </span>
       </td>
-      <td class="text-right font-data tnum text-sm font-semibold" data-testid="row-hits">{d().hits.toLocaleString()}</td>
+      <td class="text-right font-data tnum text-sm font-semibold" data-testid="row-hits">{fmtCount(d().hits)}</td>
       <td class="text-xs">
         <Show when={d().last_hit_at} fallback={<span class="text-base-content/40">none yet</span>}>
           <span class="tnum text-base-content/70">{rel(d().last_hit_at!)}</span>

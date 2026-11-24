@@ -15,7 +15,7 @@ import { ArrowUpRight, ChevronRight, RotateCcw, Save, Zap } from "./icons";
 import { activeFaults, applyFaultSteps, stateFields, type HeldFault } from "../lib/simfaults";
 import { useFormActions } from "../lib/formactions";
 import { can, useMe } from "../lib/auth";
-import { describeError, rel } from "../lib/format";
+import { describeError, fmtCount, rel } from "../lib/format";
 import { entityLabel } from "../lib/entities";
 import { COMPONENTS_KEY, deleteComponent, listComponents, updateComponent } from "../lib/components";
 import {
@@ -379,7 +379,7 @@ function EventsSection(props: { sim: ComponentSim }) {
       <Show when={a()}>
         {(d) => (
           <div class={KV_GRID}>
-            <KVStacked label="Hits" value={<span class="font-data tnum">{d().hits.toLocaleString()}</span>} />
+            <KVStacked label="Hits" value={<span class="font-data tnum">{fmtCount(d().hits)}</span>} />
             <KVStacked label="Last hit" value={<Show when={d().last_hit_at} fallback={<span class="text-base-content/40">none yet</span>}><span class="tnum">{rel(d().last_hit_at!)}</span> <span class="font-data text-xs text-base-content/60">{d().last_protocol}</span></Show>} />
           </div>
         )}
@@ -440,7 +440,7 @@ function StatusSection(props: {
             </Show>
           }
         />
-        <KVStacked label="Hits" value={<span class="font-data tnum">{(activity()?.hits ?? 0).toLocaleString()}</span>} />
+        <KVStacked label="Hits" value={<span class="font-data tnum">{fmtCount(activity()?.hits ?? 0)}</span>} />
         <KVStacked
           label="Last hit"
           value={
@@ -462,7 +462,7 @@ function StatusSection(props: {
               {(p) => (
                 <span class="badge badge-sm badge-ghost gap-1.5">
                   <span class="font-data">{p.protocol}</span>
-                  <span class="font-data tnum text-base-content/60">{p.hits.toLocaleString()}</span>
+                  <span class="font-data tnum text-base-content/60">{fmtCount(p.hits)}</span>
                 </span>
               )}
             </For>
