@@ -129,9 +129,85 @@ describe("the omnibot panel", () => {
     await screen.findByText("Four.");
     const thinking = screen.getByTestId("omnibot-thinking") as HTMLDetailsElement;
     expect(thinking.open).toBe(false);
-    expect(within(thinking).getByText("Thinking")).toBeTruthy();
+    expect(within(thinking).getByText("Thought")).toBeTruthy();
     expect(thinking.textContent).toContain("User asks 2+2.");
     expect(screen.getByText("Four.").closest("details")).toBeNull();
+  });
+
+  it("folds reasoning and tool calls into one collapsed block, in order, answer below (#2422)", async () => {
+    const ev = (o: object) => `data: ${JSON.stringify(o)}\n\n`;
+    runReply = () =>
+      sse(
+        ev({ type: "RUN_STARTED", threadId: "conv-1", runId: "r" }) +
+          ev({ type: "REASONING_MESSAGE_START", messageId: "m1", role: "reasoning" }) +
+          ev({ type: "REASONING_MESSAGE_CONTENT", messageId: "m1", delta: "First look." }) +
+          ev({ type: "TOOL_CALL_START", toolCallId: "c1", toolCallName: "list-components" }) +
+          ev({ type: "TOOL_CALL_ARGS", toolCallId: "c1", delta: '{"limit":5}' }) +
+          ev({ type: "TOOL_CALL_RESULT", toolCallId: "c1", messageId: "t1", content: '{"components":[]}', role: "tool" }) +
+          ev({ type: "TOOL_CALL_START", toolCallId: "c2", toolCallName: "get-component" }) +
+          ev({ type: "TOOL_CALL_RESULT", toolCallId: "c2", messageId: "t2", content: "not found", role: "tool" }) +
+          ev({ type: "TEXT_MESSAGE_START", messageId: "m2", role: "assistant" }) +
+          ev({ type: "TEXT_MESSAGE_CONTENT", messageId: "m2", delta: "Done." }) +
+          ev({ type: "RUN_FINISHED", threadId: "conv-1", runId: "r", outcome: { type: "success" } }),
+      );
+    open();
+    send("look");
+    await screen.findByText("Done.");
+    const blocks = screen.getAllByTestId("omnibot-thinking") as HTMLDetailsElement[];
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].open).toBe(false);
+    expect(screen.getByTestId("omnibot-thinking-summary").textContent).toBe("Thought · 2 tool calls · 1 failed");
+    expect(screen.getByTestId("omnibot-thinking-error")).toBeTruthy();
+    const text = blocks[0].textContent ?? "";
+    expect(text.indexOf("First look.")).toBeLessThan(text.indexOf("list-components"));
+    expect(text.indexOf("list-components")).toBeLessThan(text.indexOf("get-component"));
+    const rows = within(blocks[0]).getAllByTestId("omnibot-step") as HTMLDetailsElement[];
+    expect(rows.every((r) => !r.open)).toBe(true);
+    expect(rows[0].textContent).toContain("limit=5");
+    expect(rows[1].dataset.state).toBe("error");
+    expect(screen.getByText("Done.").closest("details")).toBeNull();
+  });
+
+  it("keeps an opened thought block and call row open while the run streams on (#2457)", async () => {
+    const ev = (o: object) => `data: ${JSON.stringify(o)}\n\n`;
+    const enc = new TextEncoder();
+    let push!: (t: string) => void;
+    let end!: () => void;
+    runReply = () =>
+      new Response(
+        new ReadableStream({
+          start(c) {
+            push = (t) => c.enqueue(enc.encode(t));
+            end = () => c.close();
+          },
+        }),
+        { headers: { "Content-Type": "text/event-stream" } },
+      );
+    open();
+    send("look");
+    await waitFor(() => expect(push).toBeTypeOf("function"));
+    push(
+      ev({ type: "RUN_STARTED", threadId: "conv-1", runId: "r" }) +
+        ev({ type: "REASONING_MESSAGE_START", messageId: "m1", role: "reasoning" }) +
+        ev({ type: "REASONING_MESSAGE_CONTENT", messageId: "m1", delta: "First look." }) +
+        ev({ type: "TOOL_CALL_START", toolCallId: "c1", toolCallName: "list-components" }),
+    );
+    const block = (await screen.findByTestId("omnibot-thinking")) as HTMLDetailsElement;
+    block.open = true;
+    const row = (await within(block).findByTestId("omnibot-step")) as HTMLDetailsElement;
+    row.open = true;
+    push(
+      ev({ type: "TOOL_CALL_ARGS", toolCallId: "c1", delta: '{"limit":5}' }) +
+        ev({ type: "TOOL_CALL_RESULT", toolCallId: "c1", messageId: "t1", content: '{"components":[]}', role: "tool" }) +
+        ev({ type: "REASONING_MESSAGE_START", messageId: "m2", role: "reasoning" }),
+    );
+    await waitFor(() => expect(within(block).getByTestId("omnibot-step").textContent).toContain("limit=5"));
+    expect(screen.getByTestId("omnibot-thinking")).toBe(block);
+    expect(block.open).toBe(true);
+    expect(within(block).getByTestId("omnibot-step")).toBe(row);
+    expect(row.open).toBe(true);
+    push(ev({ type: "RUN_FINISHED", threadId: "conv-1", runId: "r", outcome: { type: "success" } }));
+    end();
   });
 
   it("runs on a plain-http origin, where the browser has no crypto.randomUUID", async () => {

@@ -1263,6 +1263,8 @@ describe("the system view refreshes (#940)", () => {
     // Before the poll: healthy, nothing in Why, the mic's light quiet.
     expect(screen.getByTestId("system-header").textContent).toContain("healthy");
     expect(screen.queryByTestId("alarm-strip")).toBeNull();
+    // The Why slot is held while it is quiet, so the strip landing moves nothing (#2006).
+    expect(screen.getByTestId("alarm-strip-clear").textContent).toContain("No active alarms");
     const micLight = () => within(screen.getByTestId(`member-${uuidFor("szp-c-mic")}`)).getByRole("img").getAttribute("aria-label");
     expect(micLight()).toBe("healthy");
 
@@ -1270,6 +1272,7 @@ describe("the system view refreshes (#940)", () => {
 
     expect(screen.getByTestId("system-header").textContent).toContain("degraded");
     expect(screen.getByTestId("alarm-strip").textContent).toContain("Reachability lost");
+    expect(screen.queryByTestId("alarm-strip-clear")).toBeNull();
     expect(micLight()).toBe("outage");
     const count = (p: string) => gets.filter((g) => g.endsWith(p)).length;
     // Each of the system's own reads polled, as one request, not one per

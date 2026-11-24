@@ -90,7 +90,24 @@ export type RungStatus = "pass" | "fail" | "held" | "untried" | "unknown";
 // informational: observed, never gates (the ping). gate: the rung everything
 // above waits on (the transport answering). login: the session's auth step.
 export type RungRole = "informational" | "gate" | "login";
-export type Rung = { key: RungKey; status: RungStatus; role: RungRole };
+// datagram marks a transport rung over a datagram transport (udp, snmp), where
+// silence proves nothing about the host (#2296).
+export type Rung = { key: RungKey; status: RungStatus; role: RungRole; datagram?: boolean };
+
+// DATAGRAM_TRANSPORTS answer or stay silent: no handshake says "closed", so a
+// timed-out rung is "no answer", not "down". An ICMP port-unreachable is the
+// affirmative refusal and is not silence.
+const DATAGRAM_TRANSPORTS = new Set(["udp", "snmp"]);
+export const isDatagram = (transport: string): boolean => DATAGRAM_TRANSPORTS.has(transport);
+
+// NO_ANSWER_CAUSES is what silence over a datagram transport can mean.
+export const NO_ANSWER_CAUSES =
+  "Silence proves nothing here: the host is off, the agent or service is stopped, the v2c community is wrong (an agent drops it silently), or the port is filtered. A closed port also lands here until the reading carries its reason (#2567).";
+
+// silentDatagram reports a datagram endpoint whose transport rung got no answer.
+export function silentDatagram(iface: ReachEndpoint): boolean {
+  return isDatagram(iface.transport) && !iface.rejection && iface.responsive?.value === "down";
+}
 
 const RANK: Record<RungKey, number> = { reachable: 0, responsive: 1, authenticated: 2 };
 
@@ -112,7 +129,7 @@ export function ladder(iface: ReachEndpoint): Rung[] {
   const rungs: Rung[] = [reachable];
   if (iface.transport !== "icmp") {
     const transport = iface.responsive ? iface.responsive.value === "up" : port ? layerUp(port) : undefined;
-    rungs.push({ key: "responsive", role: "gate", status: observed(transport) });
+    rungs.push({ key: "responsive", role: "gate", status: observed(transport), ...(isDatagram(iface.transport) ? { datagram: true } : {}) });
     // The login rung exists where a login was tried or a gate holds it:
     // nothing on the read says a driver declares a login it never ran, so a
     // session with no login (a bare line protocol) never grows one.
@@ -196,6 +213,7 @@ const RUNG_NOW: Record<RungKey, Record<RungStatus, string>> = {
 
 export function rungHint(r: Rung): string {
   const what = r.key === "reachable" && r.role === "gate" ? ICMP_WHAT : RUNG_WHAT[r.role];
+  if (r.datagram && r.key === "responsive" && r.status === "fail") return `${what} No answer. ${NO_ANSWER_CAUSES}`;
   return `${what} ${RUNG_NOW[r.key][r.status]}`;
 }
 

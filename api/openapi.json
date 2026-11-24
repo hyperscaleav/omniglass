@@ -7808,12 +7808,33 @@
           "health": {
             "type": "string"
           },
+          "id": {
+            "description": "The system's id",
+            "type": "string"
+          },
+          "label": {
+            "description": "The system's display label",
+            "type": "string"
+          },
+          "location": {
+            "description": "The dotted path of the location the system is placed at; empty when unplaced",
+            "type": "string"
+          },
           "name": {
+            "description": "The system's short name; not unique across rooms, so address the system by path",
+            "type": "string"
+          },
+          "path": {
+            "description": "The system's dotted address, unique: the handle GET /systems/{name} resolves",
             "type": "string"
           }
         },
         "required": [
+          "id",
           "name",
+          "path",
+          "label",
+          "location",
           "health"
         ],
         "type": "object"
