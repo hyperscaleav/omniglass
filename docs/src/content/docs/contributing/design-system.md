@@ -97,7 +97,7 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
   component: relative ("4m ago") with the absolute time and the exact RFC 3339 instant on hover
   and focus (`Time absolute` where a relative age says nothing, such as a before/after pair). A
   recorded field name in the audit change table is humanized (`humanizeField`: "Last orphaned at"),
-  the recorded key kept as the hover title.
+  the recorded key kept in the field's tooltip, shown on hover and on focus.
 - **A filter bar's placeholder is lower case** ("filter by name, type…"), pinned by
   `filter-placeholder-guard.test.ts`.
 - **An empty list that has a create action teaches.** `FlatList`'s `empty` takes a function that

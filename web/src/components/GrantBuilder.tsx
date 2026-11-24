@@ -339,7 +339,7 @@ export default function GrantBuilder(props: {
                         <span class="font-data text-[11px] text-base-content/40">{(s as { value: string }).value}</span>
                       </Show>
                       <Show when={stage() === "role"}>
-                        <Tooltip as="span" tabIndex={0} class="ml-auto text-xs text-base-content/40" content="hover a role to see its permissions">?</Tooltip>
+                        <span aria-hidden="true" class="ml-auto text-xs text-base-content/40">?</span>
                       </Show>
                       <Show when={s.kind === "op"}>
                         <span class="ml-auto pl-2 text-right text-[11px] text-base-content/40">{(s as { hint: string }).hint}</span>
