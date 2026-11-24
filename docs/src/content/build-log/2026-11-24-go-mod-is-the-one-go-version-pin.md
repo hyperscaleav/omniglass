@@ -11,7 +11,7 @@ with `scripts/go-version.sh` (the `toolchain` directive, else `go`) and passes i
 `make image`. `scripts/check-go-pin.sh` is the drift check (a hard-coded golang image, or a docker build
 without `GO_VERSION`); `make preflight` runs it. Tests: `scripts/check_go_pin_test.go`.
 
-Left for a maintainer, since an agent token cannot edit `.github/workflows`: pass `GO_VERSION` (read from
-go.mod, e.g. `scripts/go-version.sh`) in `build-args` of the three `docker/build-push-action` steps in
-`image.yml` and `release.yml`, then run the check with `--workflows` in CI. Until then those image builds
-fail loudly on the empty `GO_VERSION`.
+CI does the same: the arm64 smoke and multi-arch steps in `image.yml` and the release image step in
+`release.yml` pass `GO_VERSION` from `scripts/go-version.sh` in `build-args`, and the arm64 smoke job runs
+`scripts/check-go-pin.sh --workflows`. The `ARG` sits above the first `FROM`, since a `FROM` line only
+sees global build args; the check fails on one declared after it.
