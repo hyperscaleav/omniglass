@@ -10,6 +10,7 @@ export async function tipOf(el: Element | null | undefined): Promise<string> {
   const node = el as HTMLElement;
   fireEvent.keyDown(document.body, { key: "Tab" });
   node.focus();
+  fireEvent.pointerEnter(node, { pointerType: "mouse" });
   fireEvent.pointerMove(node, { pointerType: "mouse" });
   const tip = await screen.findByRole("tooltip");
   const text = tip.textContent ?? "";
