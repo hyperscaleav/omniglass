@@ -1,5 +1,6 @@
-import { For, Show, type JSX } from "solid-js";
+import { For, Show, createSignal, type JSX } from "solid-js";
 import { A } from "@solidjs/router";
+import Button from "./Button";
 import ReachLadder from "./ReachLadder";
 import { entityLabel } from "../lib/entities";
 import { argSummary, stepFailed, type Step } from "../lib/assistant";
@@ -18,6 +19,16 @@ import type { Reachability } from "../lib/reachability";
 export type StepRenderer = (result: unknown) => JSX.Element | null;
 
 type Ref = { id: string; name: string; label?: string };
+type Placed = Ref & { system?: string; location?: string };
+
+// LIST_CAP bounds the rows a list card draws; the rest sit behind "Show all".
+export const LIST_CAP = 10;
+
+// placeOf says where a component is: its location, its primary system, or
+// both, so two rows with the same label are told apart.
+export function placeOf(c: Placed): string {
+  return [c.location, c.system].filter((x) => typeof x === "string" && x !== "").join(" / ");
+}
 
 function isRef(v: unknown): v is Ref {
   const r = v as Ref;
@@ -29,6 +40,32 @@ function ComponentLink(p: { c: Ref }) {
     <A href={`/components/${p.c.id}`} class="link link-hover font-medium">
       {entityLabel(p.c)}
     </A>
+  );
+}
+
+function ComponentRows(p: { list: Placed[] }) {
+  const [all, setAll] = createSignal(false);
+  const shown = () => (all() ? p.list : p.list.slice(0, LIST_CAP));
+  return (
+    <>
+      <ul class="flex flex-col gap-0.5 text-sm">
+        <For each={shown()}>
+          {(c) => (
+            <li class="flex items-baseline gap-2">
+              <ComponentLink c={c} />
+              <Show when={placeOf(c)}>
+                <span data-testid="component-place" class="text-xs text-base-content/60">{placeOf(c)}</span>
+              </Show>
+            </li>
+          )}
+        </For>
+      </ul>
+      <Show when={p.list.length > LIST_CAP}>
+        <Button size="xs" intent="quiet" class="mt-1" onClick={() => setAll(!all())}>
+          {all() ? "Show fewer" : `Show all ${p.list.length}`}
+        </Button>
+      </Show>
+    </>
   );
 }
 
@@ -47,9 +84,7 @@ export const STEP_RENDERERS: Record<string, StepRenderer> = {
     if (!Array.isArray(list) || !list.every(isRef)) return null;
     return (
       <Show when={list.length > 0} fallback={<p class="text-sm text-base-content/60">No components.</p>}>
-        <ul class="flex flex-col gap-0.5 text-sm">
-          <For each={list}>{(c) => <li><ComponentLink c={c} /></li>}</For>
-        </ul>
+        <ComponentRows list={list as Placed[]} />
       </Show>
     );
   },
