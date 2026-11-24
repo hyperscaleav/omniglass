@@ -77,3 +77,37 @@ func TestPullImageStopsWaitingWhenTheContextEnds(t *testing.T) {
 		t.Fatalf("err %v, want the context's", err)
 	}
 }
+
+// A bare 429 inside another pull error (a digest, a size, a port) is not a rate
+// limit: retrying and then naming a registry limit would misreport a real failure.
+func TestRegistryLimitedMatchesTheStatusNotAnyDigits(t *testing.T) {
+	for _, c := range []struct {
+		msg  string
+		want bool
+	}{
+		{"429 Too Many Requests", true},
+		{"toomanyrequests: You have reached your pull rate limit", true},
+		{"unexpected status code 429", true},
+		{"unexpected status: 429", true},
+		{"manifest for postgres@sha256:a4291f3c0de9 not found: manifest unknown", false},
+		{"dial tcp 10.4.29.1:4290: connect: connection refused", false},
+		{"layer 14297 bytes failed verification", false},
+		{"manifest unknown", false},
+	} {
+		if got := registryLimited(errors.New(c.msg)); got != c.want {
+			t.Errorf("registryLimited(%q) = %v, want %v", c.msg, got, c.want)
+		}
+	}
+}
+
+func TestPullImageDoesNotRetryADigestThatContains429(t *testing.T) {
+	fastBackoff(t)
+	calls := 0
+	err := pullImage(context.Background(), "postgres:18", func(context.Context, string) error {
+		calls++
+		return errors.New("manifest for postgres@sha256:a4291f3c0de9 not found: manifest unknown")
+	}, func(string) {})
+	if err == nil || errors.Is(err, ErrRegistryLimit) || calls != 1 {
+		t.Fatalf("err %v after %d calls, want the original error at once and no registry limit", err, calls)
+	}
+}

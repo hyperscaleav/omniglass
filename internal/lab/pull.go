@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -19,14 +20,20 @@ var pullBackoff = []time.Duration{2 * time.Second, 5 * time.Second, 15 * time.Se
 // demo that asked for it.
 var ErrRegistryLimit = errors.New("registry rate limit")
 
+// statusCode429 is the status code written as a status, never bare digits: a
+// digest, a port or a byte count can contain 429 without being a rate limit.
+var statusCode429 = regexp.MustCompile(`\bstatus(?: code)?[: ]+429\b`)
+
 // registryLimited is whether a pull error is the registry's rate limit: HTTP
-// 429, which the daemon relays as "429 Too Many Requests" or "toomanyrequests".
+// 429, which the daemon relays as "429 Too Many Requests" or "toomanyrequests",
+// or as a status code of 429.
 func registryLimited(err error) bool {
 	if err == nil {
 		return false
 	}
 	m := strings.ToLower(err.Error())
-	return strings.Contains(m, "429") || strings.Contains(m, "toomanyrequests") || strings.Contains(m, "too many requests")
+	return strings.Contains(m, "429 too many requests") || strings.Contains(m, "toomanyrequests") ||
+		strings.Contains(m, "too many requests") || statusCode429.MatchString(m)
 }
 
 // pullImage pulls ref, retrying a rate limited pull with backoff. Once the
