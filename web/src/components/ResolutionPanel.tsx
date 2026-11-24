@@ -62,9 +62,17 @@ export default function ResolutionPanel(props: { component: string }): JSX.Eleme
   const systems = createMemo<Member[]>(() => memberships.data ?? []);
   const shared = createMemo(() => systems().length > 1);
   const primary = createMemo(() => systems().find((m) => m.primary)?.system ?? "");
-  const groups = createMemo(() =>
+  const all = createMemo(() =>
     byName(mergeResolved(tags.data ?? [], variables.data ?? [], secrets.data ?? [])),
   );
+  // A platform-band secret reaches every component (the simulator's among
+  // them), so listing it on each one buries what applies to this component.
+  // They sit behind a toggle, closed by default (#2439).
+  const isPlatformSecret = (g: { kind: ValueKind; winner?: { owner_kind: string } }) =>
+    g.kind === "secret" && !["component", "system", "location"].includes(g.winner?.owner_kind ?? "platform");
+  const [showPlatform, setShowPlatform] = createSignal(false);
+  const platformCount = createMemo(() => all().filter(isPlatformSecret).length);
+  const groups = createMemo(() => (showPlatform() ? all() : all().filter((g) => !isPlatformSecret(g))));
   // The selector only governs the tag band, so it is offered only when a tag is
   // actually in play. Showing it above a list of variables would promise a
   // per-system answer the variable cascade does not give.
@@ -106,6 +114,18 @@ export default function ResolutionPanel(props: { component: string }): JSX.Eleme
             </select>
           </div>
         </div>
+      </Show>
+
+      <Show when={platformCount() > 0}>
+        <button
+          type="button"
+          data-testid="platform-values-toggle"
+          class="self-start text-[11px] text-base-content/55 underline decoration-dotted hover:text-base-content"
+          aria-expanded={showPlatform()}
+          onClick={() => setShowPlatform((v) => !v)}
+        >
+          {showPlatform() ? "Hide" : "Show"} platform values ({platformCount()})
+        </button>
       </Show>
 
       <Show

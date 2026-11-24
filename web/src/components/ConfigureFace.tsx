@@ -22,9 +22,11 @@ import type { LeaveGuard } from "../lib/leave_guard";
 
 export type ConfigureKind = EntityKind;
 
-function Footer(props: { slot: BladeEdit; onEdit: () => void }) {
+// The rail leads the face (#2439): Edit (or Cancel and Save) is the first thing
+// on the tab, so it is reachable without scrolling past the sections.
+function Rail(props: { slot: BladeEdit; onEdit: () => void }) {
   return (
-    <div class="flex flex-col gap-2 border-t border-base-300 px-4 pb-4 pt-3">
+    <div data-testid="configure-rail" class="flex flex-col gap-2 border-b border-base-300 px-4 pb-3 pt-3">
       <SaveError slot={props.slot} />
       <div class="flex items-center gap-2">
         {/* The entity's Delete sits left, as on every action bar, and only
@@ -81,8 +83,8 @@ export default function ConfigureFace(props: {
       : useEditParam(slot, { ready: () => slot.editable(), canUpdate, value });
   return (
     <section data-testid={props.testid ?? "configure-face"} class="flex flex-col">
+      <Rail slot={slot} onEdit={() => editUrl.request()} />
       <EntityForm kind={props.kind} id={props.id} slot={slot} host="page" destructive={props.destructive} />
-      <Footer slot={slot} onEdit={() => editUrl.request()} />
     </section>
   );
 }

@@ -3,7 +3,7 @@ import { render, fireEvent, waitFor } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import ResolutionPanel from "./ResolutionPanel";
 import { componentSystemsKey, type Member } from "../lib/members";
-import { effectiveTagsKey, type ResolvedTag } from "../lib/resolution";
+import { effectiveSecretsKey, effectiveTagsKey, type ResolvedSecret, type ResolvedTag } from "../lib/resolution";
 
 // The panel answers "why is this value what it is". A resolved value is the
 // survivor of a cascade, so every candidate comes back and the panel has to show
@@ -28,11 +28,12 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
-function mount(opts: { members?: Member[]; rows?: ResolvedTag[]; name?: string } = {}) {
+function mount(opts: { members?: Member[]; rows?: ResolvedTag[]; name?: string; secrets?: ResolvedSecret[] } = {}) {
   const name = opts.name ?? "shared-bar";
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...componentSystemsKey(name)], opts.members ?? shared);
   qc.setQueryData([...effectiveTagsKey(name, "")], opts.rows ?? tags);
+  if (opts.secrets) qc.setQueryData([...effectiveSecretsKey(name)], opts.secrets);
   return render(() => (
     <QueryClientProvider client={qc}>
       <ResolutionPanel component={name} />
@@ -108,5 +109,19 @@ describe("ResolutionPanel", () => {
   it("says so plainly when nothing reaches the component", () => {
     const { getByText } = mount({ rows: [], members: solo, name: "solo-bar" });
     expect(getByText("No values reach this component.")).toBeTruthy();
+  });
+
+  // Platform-band secrets (the simulator's) reach every component; they sit
+  // behind a toggle so what applies to this one is what is listed (#2439).
+  it("keeps platform secrets behind Show platform values", () => {
+    const secrets = [
+      { name: "sim-snmp", owner_kind: "platform", owner_name: "", band: 0, depth: 0, winner: true },
+      { name: "device-login", owner_kind: "component", owner_name: "solo-bar", band: 3, depth: 0, winner: true },
+    ] as ResolvedSecret[];
+    const { queryByText, getByText, getByTestId } = mount({ members: solo, name: "solo-bar", secrets });
+    expect(queryByText("sim-snmp")).toBeNull();
+    expect(getByText("device-login")).toBeTruthy();
+    fireEvent.click(getByTestId("platform-values-toggle"));
+    expect(getByText("sim-snmp")).toBeTruthy();
   });
 });

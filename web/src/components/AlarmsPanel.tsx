@@ -124,14 +124,8 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
         <span class="shrink-0 text-[10.5px] text-base-content/40">what is wrong here, and what it takes down</span>
       </div>
       <p class="text-[11px] text-base-content/50">
-        An alarm is raised on this component when a rule fires with a severity, and takes its own health down (any active alarm degrades it,
-        one at an outage level is an outage). Any slot it fills stops counting it toward quorum while it stays down, which is
-        how a fault on a box becomes a health on a system.
-      </p>
-      <p class="text-[11px] text-base-content/50">
-        Acknowledging is separate from clearing: it records that a human has seen the alarm and changes nothing else,
-        so the component stays exactly as broken as it was. What is raised is a fact about the fault; who has
-        looked is a fact about a person.
+        An alarm is raised when a rule fires with a severity, and takes this component's health down (an outage level is an outage);
+        a slot it fills stops counting it toward quorum while it stays down. Acknowledging only records that a human has seen it.
       </p>
 
       <Show when={err()}>

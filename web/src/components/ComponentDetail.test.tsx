@@ -228,6 +228,24 @@ describe("one edit model", () => {
     await waitFor(() => expect(r.controller().stack()).toEqual([]));
   });
 
+  // Edit leads the tab (#2439): it sits in the rail ahead of every section, so
+  // it is inside the first viewport however tall the sections below grow.
+  it("Configure's Edit button comes before the form's sections, on the page and in a blade", async () => {
+    mountPage(`/web/components/${CID}?tab=configure`);
+    const face = await screen.findByTestId("configure-face");
+    const edit = await within(face).findByRole("button", { name: "Edit" });
+    const form = within(face).getByTestId("entity-form");
+    expect(edit.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(face).getByTestId("configure-rail").contains(edit)).toBe(true);
+    cleanup();
+    mountBlade();
+    const blade = await screen.findByRole("dialog");
+    fireEvent.click(await within(blade).findByRole("tab", { name: "Configure" }));
+    const bface = await within(blade).findByTestId("configure-face");
+    const bedit = await within(bface).findByRole("button", { name: "Edit" });
+    expect(bedit.compareDocumentPosition(within(bface).getByTestId("entity-form")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("the page's ?edit=1 lands on Configure, already editing", async () => {
     mountPage(`/web/components/${CID}?edit=1`);
     expect(await screen.findByDisplayValue("videobar-1")).toBeTruthy();

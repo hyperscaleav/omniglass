@@ -67,7 +67,7 @@ entity. Switching a tab inside the blade changes only the blade; the page behind
 own address. A blade has no breadcrumb, so where the entity sits is said by a location card
 with the path above it. Opening something from inside a blade (a system a component serves, a
 component on a system's Why) stacks another blade over it. Edit and Delete sit in the
-**Configure** tab's footer, as on the page; Delete asks first and is gated by your permissions
+**Configure** tab's rail, as on the page; Delete asks first and is gated by your permissions
 on that row. **Expand** still opens the page, for its breadcrumb and its shareable address.
 
 The identity pages (Users, User groups, and Roles) use the same blade, and there drilling crosses entities: from a
@@ -94,7 +94,7 @@ notice, not a blank drawer. The notice reads the same either way, so it does not
 
 A blade opens **read-only**, and the header is chrome only (back, full-page, close). A fleet
 blade (a location, a system, a component) is its detail view, so it edits as the page does: on its
-**Configure** tab, whose footer carries **Edit** and, on the left, **Delete** behind a confirm (see
+**Configure** tab, whose rail (the first thing on the tab) carries **Edit** and, on the left, **Delete** behind a confirm (see
 [Configure](/operator/fleet/) and [what is in the way](#delete-and-what-is-in-the-way)). The rest of this section is the identity and catalog blades, whose
 actions live in the blade's own **footer action bar**: **Edit** turns the whole blade live in place,
 its profile, members and grants.
