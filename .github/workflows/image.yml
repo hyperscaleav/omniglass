@@ -43,6 +43,13 @@ jobs:
 
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
+      - name: Check that go.mod is the only Go version pin
+        run: bash scripts/check-go-pin.sh --workflows
+
+      - name: Read the Go version from go.mod
+        id: gover
+        run: echo "version=$(bash scripts/go-version.sh)" >> "$GITHUB_OUTPUT"
+
       - name: Build the arm64 image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -52,6 +59,7 @@ jobs:
           tags: omniglass:arm64-smoke
           build-args: |
             VERSION=${{ github.sha }}
+            GO_VERSION=${{ steps.gover.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -121,6 +129,10 @@ jobs:
             type=ref,event=pr
             type=raw,value=latest,enable={{is_default_branch}}
 
+      - name: Read the Go version from go.mod
+        id: gover
+        run: echo "version=$(bash scripts/go-version.sh)" >> "$GITHUB_OUTPUT"
+
       - name: Build and push
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -131,5 +143,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             VERSION=${{ github.sha }}
+            GO_VERSION=${{ steps.gover.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

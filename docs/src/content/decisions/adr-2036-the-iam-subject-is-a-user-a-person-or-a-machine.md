@@ -6,7 +6,7 @@ summary: "Principal retires for user on every surface, the table included (users
 refs: [2036, 2028, 2075, 2076]
 ---
 
-- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [glossary](/architecture/glossary/),
+- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [glossary](/reference/glossary/),
   [identity and access](/architecture/identity-access/), [storage](/architecture/storage/)
 - **Decision:** (#2036.) The subject a grant is given to is a **user**, on every surface: the
   schema, the Go names, the API (`/users`, `/user-groups`), the permissions (`user:*`,

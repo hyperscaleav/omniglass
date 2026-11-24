@@ -423,8 +423,6 @@ var vocabularyAllowedFiles = map[string]bool{
 	filepath.Join("reference", "cli", "index.md"): true,
 	// Generated from internal/vocab, whose Formerly column names each retired word.
 	filepath.Join("reference", "glossary.md"): true,
-	// The frozen internal reference (#2029), superseded by reference/glossary.md.
-	filepath.Join("architecture", "glossary.md"): true,
 }
 
 // vocabularyAllowed reports whether rel is exempt from the vocabulary lint and

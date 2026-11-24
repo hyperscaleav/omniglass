@@ -5,7 +5,7 @@ status: "Accepted"
 summary: "An event rule's alarm is optional (an informational rule raises none); a rule names the event types it writes (a required fire type, an optional clear type); its in-force state is its own condition row; it writes one event per edge, carrying the alarm the edge moved, and a severity toggled on or off moves alarms with no condition event; a hand clear holds while the condition persists"
 ---
 
-- **Date:** 2026-10-20 | **Status:** Accepted | **Pages:** [alarms and actions](/architecture/alarms-actions/), [events](/architecture/events/), [calculations](/architecture/calculations/), [glossary](/architecture/glossary/)
+- **Date:** 2026-10-20 | **Status:** Accepted | **Pages:** [alarms and actions](/architecture/alarms-actions/), [events](/architecture/events/), [calculations](/architecture/calculations/), [glossary](/reference/glossary/)
 - **Decision:** The event-to-alarm edge of ADR-0050's design is built (epic #938) on ADR-0144's rules,
   on six points:
   1. **The alarm is optional** (ruled 2026-10-19: optional was always the intent; some events are

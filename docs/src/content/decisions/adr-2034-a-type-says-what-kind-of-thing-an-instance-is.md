@@ -6,7 +6,7 @@ summary: "Type keeps one meaning across every *_type registry, the row that says
 refs: [2034, 2028, 2067]
 ---
 
-- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [glossary](/architecture/glossary/),
+- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [glossary](/reference/glossary/),
   [core entities](/architecture/core-entities/)
 - **Decision:** (#2034.) **Type** means one thing: the registry row that says what kind of thing
   an instance is. A component is a `display`, a system is a `class`, a sample is `cpu_load`, an

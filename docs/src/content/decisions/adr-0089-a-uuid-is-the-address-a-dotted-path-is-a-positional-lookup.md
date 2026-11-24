@@ -7,7 +7,7 @@ summary: "A uuid is the address the platform generates; a dotted path (location 
 
 - **Date:** 2026-08-08 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
   [storage](/architecture/storage/), [identity and access](/architecture/identity-access/),
-  [API](/architecture/api/), [glossary](/architecture/glossary/)
+  [API](/architecture/api/), [glossary](/reference/glossary/)
 - **Decision:** An entity has two resolvable references, different guarantees, both legitimate and
   labelled as such. The **uuid is the address**: immutable, surviving rename and move, the only
   reference the platform itself ever generates or persists. The **dotted path is a positional

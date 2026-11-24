@@ -5,7 +5,7 @@ status: "Accepted"
 summary: "Non-retryable errors are defined in drivers (#1049, the architect's ruling): a spec's `session.terminal` lists the replies retrying cannot fix, each a match with a class (`auth`, `host-key`, `certificate`, `protocol`, a code-held set), applied to the login and to every answer, refusal and arm reply; a transport classifies its own protocol refusals into the same classes. The primitive is `collection.TerminalError{Class, Reason}`; anything unclassified stays retryable, and a terminal poll fault waits its interval rather than the failure backoff"
 ---
 
-- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [glossary](/architecture/glossary/), [drivers](/admin/drivers/)
+- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [glossary](/reference/glossary/), [drivers](/admin/drivers/)
 - **Decision:** The architect's ruling, made in session on 2026-10-23 (#1049): non-retryable errors
   are defined in drivers.
   1. A spec's `session.terminal` lists the replies retrying cannot fix, each a `match` (a prefix

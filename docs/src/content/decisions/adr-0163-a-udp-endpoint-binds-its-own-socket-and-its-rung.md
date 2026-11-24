@@ -5,7 +5,7 @@ status: "Accepted"
 summary: "`udp` is the line protocol as datagrams, built and stateless, its transport rung the driver's request answered (#1037). Each endpoint binds its own socket (the `listen-port` input, a fingerprint input, else a kernel pick) that its requests, replies and pushes share; a datagram from another source is counted, logged once per tick and dropped. The socket is unconnected with the error queue on, so a closed port reads `refused`. `request.retries` defaults to 2 for polls and the rung, none for commands; a terminal reply gates the transport rung. The rung is the verdict and lands one `udp-response-time` per answered probe, never `tcp-open` or `session-state`. The simulated face's loss is seeded per datagram"
 ---
 
-- **Date:** 2026-10-24 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [simulation](/architecture/simulation/), [glossary](/architecture/glossary/), [drivers](/admin/drivers/)
+- **Date:** 2026-10-24 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [simulation](/architecture/simulation/), [glossary](/reference/glossary/), [drivers](/admin/drivers/)
 - **Decision:** (#1037, under the architect's approval of epic #1076, decisions 5 and 7a.)
   1. **The line protocol as datagrams, stateless.** `udp` is built in the transport registry,
      not held, its rung `request`. A datagram carries one line; text payloads only, unicast only.

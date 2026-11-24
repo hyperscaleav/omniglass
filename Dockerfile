@@ -18,6 +18,12 @@
 # before it runs the image. BuildKit cache mounts keep the npm and Go caches
 # across builds, so a Go-only change rebuilds in seconds.
 
+# The Go version has no default: go.mod is its only source (#2596). The Makefile and
+# CI read it with scripts/go-version.sh and pass --build-arg GO_VERSION=...; a build
+# that forgets fails at the build stage instead of compiling with a stale toolchain.
+# Declared before the first FROM so the build stage's FROM line can read it.
+ARG GO_VERSION
+
 # ---- stage 1: build the console (Vite -> internal/webui/dist) --------------
 # Arch-independent JS bundle: build on the native host regardless of target.
 FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS web
@@ -33,7 +39,8 @@ RUN npm run build
 
 # ---- stage 2: compile the binary with the console embedded -----------------
 # Runs natively on the host ($BUILDPLATFORM); cross-compiles to the target arch.
-FROM --platform=$BUILDPLATFORM golang:1.26.0-bookworm AS build
+# GO_VERSION is the global ARG declared above stage 1 (#2596).
+FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-bookworm AS build
 WORKDIR /src
 # Module graph first for a cached download layer.
 COPY go.mod go.sum ./
