@@ -12,5 +12,5 @@ earliest component owns it) and records later ones as `Aliases`, so the simulato
 them. The component's simulation read resolves an alias to the owner's device and carries `served_by`;
 its card says so and its drawer opens the owner's. Remove now deletes the component's endpoints first
 (the server refuses to delete a component that owns one), after one confirmation that lists them.
-Not done here: the Add simulated component form's product label and system field (filed against #2461 for a later slice). Tests:
+Not done here: the Add simulated component form's product label and system field. Tests:
 `TestOutpostSimDevices`, `TestComponentAimedAtASimulatedDeviceIsServedByIt`, `Simulation.test.tsx`.
