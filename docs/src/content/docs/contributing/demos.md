@@ -301,7 +301,7 @@ which demos it chose and why. Each job gets its lab's Postgres from Google's Doc
 (`mirror.gcr.io`) and tags it as the lab expects, because the nightly run starts about a hundred of
 these at once and Docker Hub counts anonymous pulls per shared runner address (HTTP 429, #2020). If
 the mirror cannot serve it the lab pulls from Docker Hub as before, retrying a 429 with backoff, and
-a pull still refused fails the job naming a registry rate limit, not a broken demo. One job then
+a pull still refused fails the job naming the rate limit on the pull, not a broken demo. One job then
 combines every demo into one result:
 
 - **The clip in the PR body.** Each recorded demo's clip, its GIF (a terminal demo) or animated
