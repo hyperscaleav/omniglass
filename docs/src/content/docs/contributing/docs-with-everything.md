@@ -32,7 +32,9 @@ The suite covers vocabulary (retired identifiers must not appear in current-tens
 prose, in the docs, the operator strings, and the generated OpenAPI descriptions),
 the decision log's format, routes and permissions (both checked against the generated
 spec, permissions in both directions), make targets, env vars, file paths, and
-table.column references (against the generated schema facts), plus the badge-fence
+table.column references (against the generated schema facts), console control names (a bold or code span after a
+UI verb such as click, select or open must match a string in `web/src`; real labels the scan cannot see go in
+`uiLabelAllowlist` in `internal/docslint/uilabels.go`, each with its reason), plus the badge-fence
 coverage check and the docs-command-and-flag guard in `internal/cli`. The semantic
 drift no lint can see gets the periodic `/docs-audit` pass (#429).
 
