@@ -116,7 +116,6 @@ component set; the surfaces below are where they are mounted.
 | V36 | `leaf-alarms` "Why": `SeverityBadge`, `SnoozedBadge`, the `AlarmActions` group (acknowledge, snooze, troubleshoot, timeline), `AlarmTimeline` (`components/ComponentDetail.tsx`) | `/components/<id>`, its blade | event | `componentAlarmsRead` (`lib/alarms.ts`) | poll 5 s | new: alarm list |
 | V37 | `AlarmsPanel`: grouped by severity, unacknowledged badge, `AlarmTimeline` (`components/AlarmsPanel.tsx`) | `/components/<id>` (Configure tab), component blades | event | `componentAlarms` | mount+focus (focus refetch off) | new: alarm list |
 | V38 | Rule detail "Open alarms" and "Firing" lists with `SeverityBadge` and `AlarmTimeline` (`pages/Rules.tsx`) | `/event-rules` (blade) | event | `getRuleState` | poll 5 s | new: alarm list |
-| V39 | `events-tab` with `RuleLink` and alarm timeline toggles (`components/SystemDetail.tsx`) | `/systems/<id>`, its blade (Activity tab) | event | `systemEvents` | poll 5 s, only while the tab is open | event list |
 | V40 | `OccurrenceList` events: one `OccurrenceRow` per event, key badge, relative time, filter bar (`components/OccurrenceList.tsx`, `components/OccurrenceRow.tsx`) | `/components/<id>` (Activity tab) | event | `getEvents` | mount+focus | event list |
 | V41 | `OccurrenceList` logs and events on a system, each row labeled by the member that wrote it (`components/SystemDetail.tsx`) | `/systems/<id>`, its blade (Activity tab) | log, event | `systemLogs`, `systemEvents` | poll 5 s, only while the tab is open | log list, event list |
 | V42 | `OccurrenceList` logs (`components/OccurrenceList.tsx`) | `/components/<id>` (Activity tab) | log | `getLogs` | mount+focus | log list |
@@ -223,7 +222,7 @@ epic's vocabulary does not yet name; the count says how much of the console it w
 | Widget | Call sites | Entries |
 |---|---|---|
 | metric card | 9 | V05, V06, V07, V08, V09, V10, V11, V12, V13 |
-| event list | 4 | V39, V40, V44, V45 |
+| event list | 4 | V40, V41, V44, V45 |
 | log list | 3 | V41, V42, V43 |
 | timeline | 4 | V31, V32, V33, V33a |
 | sparkline row | 1 | V01 |
