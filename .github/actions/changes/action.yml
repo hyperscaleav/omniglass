@@ -1,0 +1,45 @@
+name: Which jobs does this push need
+description: >-
+  Classify the push into docs, go, web, gen and image outputs with
+  scripts/ci-changes.sh (#2597), which holds the policy and its tests. A pull
+  request's files come from the API; off a pull request every output is true.
+  Needs the repo checked out (sparse: scripts) and pull-requests: read.
+
+inputs:
+  token:
+    description: A token that can read the pull request's files.
+    required: true
+
+outputs:
+  docs:
+    value: ${{ steps.what.outputs.docs }}
+  go:
+    value: ${{ steps.what.outputs.go }}
+  web:
+    value: ${{ steps.what.outputs.web }}
+  gen:
+    value: ${{ steps.what.outputs.gen }}
+  image:
+    value: ${{ steps.what.outputs.image }}
+
+runs:
+  using: composite
+  steps:
+    - name: Decide which jobs this push needs
+      id: what
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        EVENT: ${{ github.event_name }}
+        ACTION: ${{ github.event.action }}
+        DRAFT: ${{ github.event.pull_request.draft }}
+        NUMBER: ${{ github.event.pull_request.number }}
+        REPO: ${{ github.repository }}
+      run: |
+        set -euo pipefail
+        files=""
+        if [ "$EVENT" = pull_request ]; then
+          files=$(gh api "repos/${REPO}/pulls/${NUMBER}/files" --paginate \
+            --jq '.[] | .filename, (.previous_filename // empty)')
+        fi
+        printf '%s\n' "$files" | bash scripts/ci-changes.sh | tee -a "$GITHUB_OUTPUT"

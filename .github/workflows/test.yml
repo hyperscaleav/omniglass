@@ -9,9 +9,22 @@ name: test
 # it on its own), then the NET_ADMIN tier. The required check is the `test` job
 # at the bottom, which rolls them up. The integration and e2e tiers use
 # testcontainers-go, which needs a Docker daemon; ubuntu-latest ships one.
+#
+# Fast iteration (#2597): the `changes` job (scripts/ci-changes.sh) decides what a
+# push needs, so a docs-only PR skips the Go and web jobs, a web-only PR skips
+# the Go ones, a draft runs the unit jobs and no image, and main, the merge
+# queue and a PR marked ready run everything. The `build` job builds the image
+# and the host binary once, with the BuildKit cache, and `e2e` and `smoke-lab`
+# load that build and run with SKIP_BUILD=1; nothing else builds the image. A
+# required check that a change does not need still reports, as a job that runs
+# and passes (e2e, smoke-lab) or as a summary that counts a skip as a pass
+# (test), so nothing waits forever in the merge queue.
 
 on:
   pull_request:
+    # ready_for_review: a draft runs the unit jobs only, so marking it ready
+    # starts the full set.
+    types: [opened, synchronize, reopened, ready_for_review]
   # The merge queue (#2181) runs the required checks on each queue entry: the
   # PR on top of current main. A queue entry has its own ref, so the
   # concurrency group below keeps one run per entry.
@@ -27,11 +40,34 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Each Go shard runs its make target, which runs go test -json under
-  # cmd/gotestreport: the log reads as a plain go test run, and ends with the
-  # shard's 20 slowest tests and every package's wall time. TEST_PARALLEL is the
-  # runner's core count, which is what a bare `go test ./...` ran with.
+  # What this push needs (scripts/ci-changes.sh holds the policy and its tests).
+  # A pull request's files come from the API, so no checkout of the PR's tree
+  # is needed to classify it; off a PR the script runs everything.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      docs: ${{ steps.what.outputs.docs }}
+      go: ${{ steps.what.outputs.go }}
+      web: ${{ steps.what.outputs.web }}
+      gen: ${{ steps.what.outputs.gen }}
+      image: ${{ steps.what.outputs.image }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: scripts
+          persist-credentials: false
+
+      - uses: ./.github/actions/changes
+        id: what
+        with:
+          token: ${{ github.token }}
+
   test-go-storage:
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -46,6 +82,8 @@ jobs:
         run: make test-go-storage TEST_PARALLEL="$(nproc)"
 
   test-go-devseed:
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -59,6 +97,8 @@ jobs:
         run: make test-go-devseed TEST_PARALLEL="$(nproc)"
 
   test-go-rest:
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -87,6 +127,8 @@ jobs:
 
   # The SPA's typecheck and vitest suite. Needs node and nothing else.
   test-web:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -105,6 +147,8 @@ jobs:
   # never on the runner's own network. Needs Docker and nothing else: the Go
   # toolchain is the container's.
   test-netadmin:
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -113,21 +157,85 @@ jobs:
         run: make test-netadmin
 
   # The required check. The ruleset requires a check named `test`; this job is
-  # that name, and it passes only when every part above succeeded. always() so it
-  # reports (and fails) when a shard failed, was cancelled or was skipped,
-  # instead of being skipped itself, which a required check would read as
-  # pending forever. A new shard must be added to needs.
+  # that name, and it passes only when the change lookup and every part a push
+  # needed succeeded. A part skipped because the change did not call for it
+  # counts as a pass; the change lookup itself must have succeeded, or every
+  # part would read as skipped. always() so it reports (and fails) when a shard
+  # failed or was cancelled, instead of being skipped itself, which a required
+  # check would read as pending forever. A new shard must be added to needs.
   test:
     if: always()
-    needs: [test-go-storage, test-go-devseed, test-go-rest, test-web, test-netadmin]
+    needs: [changes, test-go-storage, test-go-devseed, test-go-rest, test-web, test-netadmin]
     runs-on: ubuntu-latest
     steps:
-      - name: Every shard succeeded
+      - name: Every part this push needed succeeded
         env:
           NEEDS: ${{ toJSON(needs) }}
         run: |
           echo "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
-          echo "$NEEDS" | jq -e 'all(.[]; .result == "success")' > /dev/null
+          echo "$NEEDS" | jq -e '.changes.result == "success" and all(.[]; .result == "success" or .result == "skipped")' > /dev/null
+
+  # The image and the host binary, built once per push (#2597) with the BuildKit
+  # GitHub Actions cache, stamped with the build id the Makefile would give a
+  # clean checkout (the short commit), and handed to e2e and smoke-lab as one
+  # artifact. Both tags are in it: `omniglass lab run` runs the image tagged with
+  # its own binary's build id, and the Makefile's SKIP_BUILD path checks
+  # omniglass:dev. Only an image-needing push (go, web or build config, not a
+  # draft) builds.
+  build:
+    needs: changes
+    if: needs.changes.outputs.image == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build id
+        id: id
+        run: echo "id=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Build the image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          load: true
+          tags: |
+            omniglass:dev
+            omniglass:dev-${{ steps.id.outputs.id }}
+          build-args: |
+            VERSION=${{ steps.id.outputs.id }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build the host binary
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          target: hostbin
+          outputs: type=local,dest=bin
+          build-args: |
+            VERSION=${{ steps.id.outputs.id }}
+            HOSTOS=linux
+            HOSTARCH=amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Pack the build
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/omniglass-build"
+          docker save omniglass:dev "omniglass:dev-${{ steps.id.outputs.id }}" \
+            | zstd -T0 -3 -o "${RUNNER_TEMP}/omniglass-build/image.tar.zst"
+          cp bin/omniglass "${RUNNER_TEMP}/omniglass-build/omniglass"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: omniglass-build
+          path: ${{ runner.temp }}/omniglass-build
+          # Already compressed; the artifact is for this run's jobs only.
+          compression-level: 0
+          retention-days: 1
 
   # The browser e2e tier (#761): the console driven as an operator would, against
   # the real binary, on a throwaway lab (web/e2e/run.sh on web/e2e/lib/lab.sh,
@@ -136,21 +244,85 @@ jobs:
   # one smoke per console route from the route manifest
   # (web/e2e/routes.spec.ts), so a PR cannot merge with a route that errors in a
   # real browser. No untrusted input reaches a shell: the job runs fixed make
-  # targets only.
+  # targets only. It loads the shared build rather than building (SKIP_BUILD=1).
+  # It always runs, since `e2e` is a required check: when the push needs no
+  # image it passes at once, and it fails when the build it needed failed.
   e2e:
+    needs: [changes, build]
+    if: always()
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Does this push need e2e?
+        id: gate
+        env:
+          IMAGE: ${{ needs.changes.outputs.image }}
+          CHANGES: ${{ needs.changes.result }}
+          BUILD: ${{ needs.build.result }}
+        run: |
+          if [ "$CHANGES" != success ]; then echo "::error::the change lookup ${CHANGES}"; exit 1; fi
+          if [ "$IMAGE" != true ]; then echo "run=false" >> "$GITHUB_OUTPUT"; echo "No image-needing change (docs-only or a draft): nothing to run."; exit 0; fi
+          if [ "$BUILD" != success ]; then echo "::error::the shared build ${BUILD}"; exit 1; fi
+          echo "run=true" >> "$GITHUB_OUTPUT"
 
-      # make test-e2e builds the lab (make: the image and the binary, with only
-      # Docker); Playwright runs in the pinned container against the repo
-      # mounted from the runner, so it needs the web deps installed here.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.gate.outputs.run == 'true'
+
+      - uses: ./.github/actions/load-build
+        if: steps.gate.outputs.run == 'true'
+
+      # Playwright runs in the pinned container against the repo mounted from the
+      # runner, so it needs the web deps installed here.
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: steps.gate.outputs.run == 'true'
         with:
           node-version: "22"
 
       - name: Install web deps
+        if: steps.gate.outputs.run == 'true'
         run: cd web && npm ci
 
       - name: Browser e2e (CRUD round-trips + route smoke)
-        run: make test-e2e
+        if: steps.gate.outputs.run == 'true'
+        run: make SKIP_BUILD=1 test-e2e
+
+  # The lab smoke (#1194): the user's path end to end, on a runner with only
+  # Docker doing the work. ./bin/omniglass lab run, from the shared build, brings
+  # up Postgres, the server (which migrates and applies the boot seed) and the
+  # outpost with its simulator; the smoke waits for the ready banner, proves the
+  # console and the lab flag answer on the printed URL, stops it with Ctrl-C, and
+  # proves it left nothing behind (scripts/lab-smoke.sh). Required, and so always
+  # run, like e2e. It lived in image.yml; moving it here lets it share the build,
+  # and its check name is unchanged.
+  smoke-lab:
+    needs: [changes, build]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Does this push need the lab smoke?
+        id: gate
+        env:
+          IMAGE: ${{ needs.changes.outputs.image }}
+          CHANGES: ${{ needs.changes.result }}
+          BUILD: ${{ needs.build.result }}
+        run: |
+          if [ "$CHANGES" != success ]; then echo "::error::the change lookup ${CHANGES}"; exit 1; fi
+          if [ "$IMAGE" != true ]; then echo "run=false" >> "$GITHUB_OUTPUT"; echo "No image-needing change (docs-only or a draft): nothing to run."; exit 0; fi
+          if [ "$BUILD" != success ]; then echo "::error::the shared build ${BUILD}"; exit 1; fi
+          echo "run=true" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.gate.outputs.run == 'true'
+
+      - uses: ./.github/actions/load-build
+        if: steps.gate.outputs.run == 'true'
+
+      - name: Bring a lab up, use it, and stop it
+        if: steps.gate.outputs.run == 'true'
+        run: bash scripts/lab-smoke.sh
+
+      - name: Dump the lab's logs on failure
+        if: failure()
+        run: |
+          for c in $(docker ps -aq --filter label=omniglass.lab); do
+            echo "=== $(docker inspect -f '{{.Name}}' "$c") ==="; docker logs --tail 50 "$c" 2>&1 || true
+          done
