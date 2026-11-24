@@ -4352,6 +4352,10 @@ export type HealthAlarmBody = {
   message: string;
   raised_at: string;
   severity: string;
+  /** Who snoozed the alarm, by name; empty while it is not snoozed, or once that user has been purged (the audit log keeps the name) */
+  snoozed_by?: string;
+  /** Until when the alarm (by component and dedup_key) is snoozed: its notifications are written suppressed until then. Null while it is not snoozed. Independent of acknowledged and cleared_at */
+  snoozed_until?: string;
 };
 
 export type HealthMemberBody = {

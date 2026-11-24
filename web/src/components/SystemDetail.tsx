@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal, onCleanup } from "solid-js";
+import { For, Show, createMemo, createSignal, createUniqueId, onCleanup } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import HealthBadge from "./HealthBadge";
@@ -37,6 +37,7 @@ import { useSeverity } from "../lib/severity";
 import AlarmTimeline, { createTimelineToggles } from "./AlarmTimeline";
 import SeverityBadge from "./SeverityBadge";
 import AlarmActions from "./AlarmActions";
+import { SnoozedBadge } from "./SnoozeButton";
 import { uptimeOver } from "../lib/uptime";
 import { stretchReasons, memberAlarmRows, stretchesOf, markerX, type MemberAlarms } from "../lib/system_history";
 import { spans as timelineSpans } from "../lib/timeline";
@@ -133,6 +134,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
   const alarms = createMemo(() => (health.data ? alarmRows(health.data, scale().levels) : []));
   // Each alarm row in the Why strip opens its timeline in place (#950).
   const timelines = createTimelineToggles();
+  const snoozeSurface = createUniqueId();
   // The strip reads red when any alarm on it is at an outage level (the
   // catalog's flag, #917), amber when they only degrade.
   // An alarm on a member outside every slot moves nothing above it (ADR-2459),
@@ -587,10 +589,12 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                                 </span>
                               </Show>
                               <span data-testid="alarm-controls" class="ml-auto flex shrink-0 items-center gap-1">
+                                <SnoozedBadge alarm={{ id: a.id, snoozed_until: a.snoozedUntil ?? undefined, snoozed_by: a.snoozedBy }} />
                                 <AlarmActions
                                   componentId={a.componentId ?? ""}
-                                  alarm={{ id: a.id, message: a.message, component: a.component, raised_at: a.raisedAt, acknowledged: a.acknowledged }}
-                                  show={{ ack: !!a.componentId, troubleshoot: true, command: !!a.componentId, timeline: a.componentId ? timelines : undefined }}
+                                  alarm={{ id: a.id, message: a.message, component: a.component, raised_at: a.raisedAt, acknowledged: a.acknowledged, snoozed_until: a.snoozedUntil ?? undefined, snoozed_by: a.snoozedBy }}
+                                  surface={snoozeSurface}
+                                  show={{ ack: !!a.componentId, snooze: !!a.componentId, troubleshoot: true, command: !!a.componentId, timeline: a.componentId ? timelines : undefined }}
                                 />
                               </span>
                             </div>

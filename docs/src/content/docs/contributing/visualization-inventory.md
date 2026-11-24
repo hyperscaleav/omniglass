@@ -111,7 +111,7 @@ component set; the surfaces below are where they are mounted.
 
 | ID | Component | Pages | Primitive | Source | Live behavior | Widget |
 |---|---|---|---|---|---|---|
-| V34 | `alarm-strip` "Why": `SeverityBadge`, the `AlarmActions` group and `AlarmTimeline` (`components/SystemDetail.tsx`) | `/systems/<id>`, its blade | event | `systemAlarms` | poll 5 s | new: alarm list |
+| V34 | `alarm-strip` "Why": `SeverityBadge`, `SnoozedBadge`, the `AlarmActions` group (acknowledge, snooze, troubleshoot, timeline), `AlarmTimeline` (`components/SystemDetail.tsx`) | `/systems/<id>`, its blade | event | `systemAlarms` | poll 5 s | new: alarm list |
 | V35 | `stretch-list` and "Other alarms" (`components/SystemDetail.tsx`) | `/systems/<id>`, its blade (Activity tab) | event | `systemAlarms`, `systemHealth` | poll 5 s | new: alarm list |
 | V36 | `leaf-alarms` "Why": `SeverityBadge`, `SnoozedBadge`, the `AlarmActions` group (acknowledge, snooze, troubleshoot, timeline), `AlarmTimeline` (`components/ComponentDetail.tsx`) | `/components/<id>`, its blade | event | `componentAlarmsRead` (`lib/alarms.ts`) | poll 5 s | new: alarm list |
 | V37 | `AlarmsPanel`: grouped by severity, unacknowledged badge, `AlarmTimeline` (`components/AlarmsPanel.tsx`) | `/components/<id>` (Configure tab), component blades | event | `componentAlarms` | mount+focus (focus refetch off) | new: alarm list |

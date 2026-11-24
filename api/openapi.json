@@ -7643,6 +7643,15 @@
           },
           "severity": {
             "type": "string"
+          },
+          "snoozed_by": {
+            "description": "Who snoozed the alarm, by name; empty while it is not snoozed, or once that user has been purged (the audit log keeps the name)",
+            "type": "string"
+          },
+          "snoozed_until": {
+            "description": "Until when the alarm (by component and dedup_key) is snoozed: its notifications are written suppressed until then. Null while it is not snoozed. Independent of acknowledged and cleared_at",
+            "format": "date-time",
+            "type": "string"
           }
         },
         "required": [

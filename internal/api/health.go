@@ -83,6 +83,11 @@ type healthAlarmBody struct {
 	AcknowledgedAt *time.Time `json:"acknowledged_at,omitempty" doc:"When a human first recorded seeing this alarm; null while nobody has. Independent of cleared_at"`
 	AcknowledgedBy string     `json:"acknowledged_by,omitempty" doc:"Who acknowledged it, by name; empty while unacknowledged, or once that user has been purged (the audit log keeps the name)"`
 	Acknowledged   bool       `json:"acknowledged" doc:"Whether anybody has recorded seeing this alarm; says nothing about whether it is still raised"`
+	// The snooze, with the same names as the component alarm list (alarmBody),
+	// so a system page offers Snooze or Unsnooze beside the acknowledgement
+	// (#2448). Independent of acknowledged and cleared.
+	SnoozedUntil *time.Time `json:"snoozed_until,omitempty" doc:"Until when the alarm (by component and dedup_key) is snoozed: its notifications are written suppressed until then. Null while it is not snoozed. Independent of acknowledged and cleared_at"`
+	SnoozedBy    string     `json:"snoozed_by,omitempty" doc:"Who snoozed the alarm, by name; empty while it is not snoozed, or once that user has been purged (the audit log keeps the name)"`
 }
 
 type healthSlotBody struct {
@@ -226,6 +231,8 @@ func toHealthAlarmBodies(alarms []storage.Alarm) []healthAlarmBody {
 			AcknowledgedAt: a.AcknowledgedAt,
 			AcknowledgedBy: a.AcknowledgedBy,
 			Acknowledged:   a.Acknowledged(),
+			SnoozedUntil:   a.SnoozedUntil,
+			SnoozedBy:      a.SnoozedBy,
 		})
 	}
 	return out
