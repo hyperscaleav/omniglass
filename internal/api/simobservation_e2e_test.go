@@ -44,7 +44,7 @@ func TestOutpostSimulationObservationAPI(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "obs-loc", LocationType: "campus"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "obs-loc", LocationType: "campus"}, all, all); err != nil {
 		t.Fatal(err)
 	}
 	conn, err := pgx.Connect(ctx, dsn)

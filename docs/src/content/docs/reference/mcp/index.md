@@ -27,11 +27,11 @@ stored credential to a destination, the most sensitive class, whatever else it d
 `tools/list`, each tool's `_meta` carries `omniglass/agent_policy`, its class and the policy the install resolves
 for it: the strictest of the class, the caller's roles and an override on the tool itself.
 
-100 tools.
+104 tools.
 
 | Tool | What it does | Gate | Assume |
 |---|---|---|---|
-| [`list-alarms`](#list-alarms) | List the fleet's active alarms | `component:read` | read-only, idempotent |
+| [`list-alarms`](#list-alarms) | List the fleet's alarms | `component:read` | read-only, idempotent |
 | [`list-audit-log`](#list-audit-log) | List audit-trail events | `audit:read:admin` | read-only, idempotent |
 | [`get-auth-me`](#get-auth-me) | The authenticated user, its permissions, and grants | authn only | read-only, idempotent |
 | [`get-auth-me-agent-policy`](#get-auth-me-agent-policy) | What the install lets an agent do | authn only | read-only, idempotent |
@@ -58,6 +58,7 @@ for it: the strictest of the class, the caller's roles and an override on the to
 | [`delete-component-dependency`](#delete-component-dependency) | Remove a component's dependency on another | `component:update` | destructive, idempotent |
 | [`effective-tags`](#effective-tags) | Effective tags for a component | `component:read` | read-only, idempotent |
 | [`list-component-events`](#list-component-events) | List a component's recent events | `component:read` | read-only, idempotent |
+| [`get-component-health`](#get-component-health) | Read a component's health | `component:read` | read-only, idempotent |
 | [`list-identity-bindings`](#list-identity-bindings) | List the identities a conduit component fans out | `component:read` | read-only, idempotent |
 | [`put-identity-binding`](#put-identity-binding) | Bind an identity a conduit reports to its owner | `component:update` | destructive, idempotent |
 | [`delete-identity-binding`](#delete-identity-binding) | Unbind an identity a conduit reports | `component:update` | destructive, idempotent |
@@ -71,6 +72,7 @@ for it: the strictest of the class, the caller's roles and an override on the to
 | [`list-component-tags`](#list-component-tags) | List tags on a component | `component:read` | read-only, idempotent |
 | [`remove-component-tag`](#remove-component-tag) | Remove a tag value from a component | `component:update` | destructive |
 | [`set-component-tag`](#set-component-tag) | Set a tag value on a component | `component:update` | adds |
+| [`batch-create-components`](#batch-create-components) | Create many components in one write | `component:create` | adds |
 | [`create-component-from-template`](#create-component-from-template) | Start a component from a template | `component:create` | adds |
 | [`list-drivers`](#list-drivers) | List drivers | `driver:read` | read-only, idempotent |
 | [`create-driver`](#create-driver) | Create a driver | `driver:create` | adds |
@@ -99,6 +101,7 @@ for it: the strictest of the class, the caller's roles and an override on the to
 | [`get-location-health`](#get-location-health) | Read a location's health | `location:read` | read-only, idempotent |
 | [`list-location-metrics`](#list-location-metrics) | List a location's effective metrics | `location:read` | read-only, idempotent |
 | [`list-location-properties`](#list-location-properties) | List a location's effective properties | `location:read` | read-only, idempotent |
+| [`batch-create-locations`](#batch-create-locations) | Create many locations in one write | `location:create` | adds |
 | [`create-locations-from-template`](#create-locations-from-template) | Start a subtree of locations from a template | `location:create` | adds |
 | [`preview-notification-type`](#preview-notification-type) | Preview a notification type against an alarm | `notification_type:read` | read-only, idempotent |
 | [`list-notification`](#list-notification) | List notifications | `notification:read` | read-only, idempotent |
@@ -123,6 +126,7 @@ for it: the strictest of the class, the caller's roles and an override on the to
 | [`list-system-metric-series`](#list-system-metric-series) | Read one metric series' samples | `system:read` | read-only, idempotent |
 | [`list-system-properties`](#list-system-properties) | List a system's properties and where each stands | `system:read` | read-only, idempotent |
 | [`list-system-property-series`](#list-system-property-series) | Read one property series' change history | `system:read` | read-only, idempotent |
+| [`batch-create-systems`](#batch-create-systems) | Create many systems in one write | `system:create` | adds |
 | [`create-system-from-template`](#create-system-from-template) | Start a whole system from a template | `system:create` | adds |
 | [`list-tasks`](#list-tasks) | List tasks in scope | `task:read` | read-only, idempotent |
 | [`list-templates`](#list-templates) | List templates | `template:read` | read-only, idempotent |
@@ -134,9 +138,9 @@ for it: the strictest of the class, the caller's roles and an override on the to
 
 ## `list-alarms`
 
-List the fleet's active alarms
+List the fleet's alarms
 
-What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Pass unacknowledged for the queue nobody has looked at, and limit to cap it (default 200, at most 1000). It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.
+What is wrong now across every component the caller may read, in one read: by default the active alarms (state=cleared is the history, each row carrying when it cleared, and state=all both; since and until keep the alarms whose raised-to-cleared interval overlaps that range, so one raised before it and still open in it is kept, and since after until is a 400), worst severity first and newest first within a severity, each naming its component. Each row names its component's location and the systems it belongs to that the caller may read. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.
 
 - Route: `GET /api/v1/alarms`
 - Gate: `component:read`
@@ -145,8 +149,16 @@ What is wrong now across every component the caller may read, in one read: the a
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
+| `acknowledged` | string | no | true keeps the acknowledged alarms, false the unacknowledged ones; absent keeps both |
 | `limit` | integer | no | At most this many, the worst first; 0 or absent means 200 |
+| `location` | string | no | Only alarms whose component sits in this location or any location below it, by name |
+| `page_token` | string | no | The next_page_token of the previous page: resumes the same worst-first order after it, however many alarms there are |
+| `severity` | array | no | Only alarms at these severity levels, by name (see /severity-levels); repeat the parameter for several |
+| `since` | string | no | Only the alarms still raised at or after this RFC 3339 time: active, or cleared at or after it |
+| `snoozed` | string | no | true keeps the snoozed alarms, false the ones not snoozed; absent keeps both |
+| `state` | string | no | Which alarms: active (still raised, the default), cleared (a cleared alarm is history, with when it cleared), or all |
 | `unacknowledged` | boolean | no | Only the alarms nobody has looked at: the queue an operator, or an agent, works |
+| `until` | string | no | Only the alarms raised at or before this RFC 3339 time; must not be earlier than since |
 
 ## `list-audit-log`
 
@@ -288,13 +300,19 @@ Lists the component_type catalog (the taxonomy a product is classified under: mi
 
 List components in scope
 
-Lists the components the caller may read, each filtered to its scope subtree. Gated by component:read.
+Lists the components the caller may read, each filtered to its scope subtree. Optional product, driver and component_type filters narrow to the components a catalog row classifies or a driver serves, and limit caps the page while total counts every match (the catalog drawers' used-by reads). Gated by component:read.
 
 - Route: `GET /api/v1/components`
 - Gate: `component:read`
 - Assume: read-only, idempotent
 - Agent class: read
-- Arguments: none
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `component_type` | string | no | Only components of a product classified under exactly this component type (name or uuid) |
+| `driver` | string | no | Only components of a product this driver serves (name or uuid) |
+| `limit` | integer | no | Cap the page at this many rows; 0 or absent is no cap. total still counts every match. |
+| `product` | string | no | Only components of this product (name or uuid) |
 
 ## `create-component`
 
@@ -353,7 +371,7 @@ Patches a component's label or product. The name is not patchable: renaming is t
 
 List a component's alarms
 
-What is currently wrong with this component, newest first, with the component's own verdict those alarms make. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set, and since/until to keep only the alarms raised during a range (still raised at since or later, raised by until), newest first and capped at 500. since after until is a 400. Gated by component:read; an out-of-scope component is a non-disclosing 404.
 
 - Route: `GET /api/v1/components/{name}/alarms`
 - Gate: `component:read`
@@ -364,7 +382,9 @@ What is currently wrong with this component, newest first, with the component's 
 |---|---|---|---|
 | `include_cleared` | boolean | no | Include cleared alarms, so the list is the history rather than what is wrong now |
 | `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
+| `since` | string | no | Only the alarms still raised at or after this RFC 3339 time: active, or cleared at or after it. With include_cleared, a timeline's read of what was raised during a range |
 | `unacknowledged` | boolean | no | Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the alarms that came and went unattended |
+| `until` | string | no | Only the alarms raised at or before this RFC 3339 time; must not be earlier than since |
 
 ## `acknowledge-component-alarm`
 
@@ -470,7 +490,7 @@ One command, whole: what it was told and the value it set, its recorded status w
 
 Issue a command to a component
 
-Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Answers with the command as it stands (as the command read returns it) and the computed settlement verdict; with wait, once it settles, fails or times out, or wait_timeout passes. Gated by command:issue, whose scope is resolved on the component tier from that permission (not from component:read); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not command is a 403.
+Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Answers with the command as it stands (as the command read returns it) and the computed settlement; with wait, once it settles, fails or times out, or wait_timeout passes. Gated by command:issue, whose scope is resolved on the component tier from that permission (not from component:read); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not command is a 403.
 
 - Route: `POST /api/v1/components/{name}/commands:issue`
 - Gate: `command:issue`
@@ -557,7 +577,7 @@ Resolves the tags that cascade onto a component (platform -> location -> system 
 
 List a component's recent events
 
-Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours, narrowed by an optional event type (key), source and message text (q). Gated by component:read; an out-of-scope component is a non-disclosing 404.
 
 - Route: `GET /api/v1/components/{name}/events`
 - Gate: `component:read`
@@ -566,7 +586,27 @@ Returns the component's recent log occurrences (the log-kind sink), newest first
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
+| `key` | string | no | Only occurrences of this event type, by name |
 | `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
+| `q` | string | no | Only occurrences whose message contains this text, case-insensitively |
+| `source` | string | no | Only occurrences from this transport |
+
+## `get-component-health`
+
+Read a component's health
+
+The component's own current health (healthy, degraded or outage from its active alarms; unknown for a device nothing has observed) beside the recorded edges that got it there, in the shape the system health read returns: slots and systems are empty, transitions are one entry per change inside since..until (default the last 30 days), oldest first. since after until is a 400. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+
+- Route: `GET /api/v1/components/{name}/health`
+- Gate: `component:read`
+- Assume: read-only, idempotent
+- Agent class: read
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
+| `since` | string | no | Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent |
+| `until` | string | no | Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since |
 
 ## `list-identity-bindings`
 
@@ -633,6 +673,7 @@ Returns the component's recent raw log lines (the ingest lane of ADR-0066, disti
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
+| `q` | string | no | Only lines whose message contains this text, case-insensitively |
 | `severity` | string | no | Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out |
 | `source` | string | no | Only lines that arrived on this channel |
 
@@ -783,6 +824,22 @@ Binds a value for a key on a component. The key must exist and apply to this ent
 | `key` | string | yes | The tag key (must exist and apply to this kind) |
 | `name` | string | yes | The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token. |
 | `value` | string | yes | The bound value |
+
+## `batch-create-components`
+
+Create many components in one write
+
+Creates components in one transaction: each request is the body POST /components takes, run as that create runs it, in order, so a component may name as its parent one an earlier request creates, and its system and location by name as the single create does. Every row writes its own audit row carrying the one batch_id the response returns, under from_batch. A refused request refuses the whole batch, mapped as POST /components maps it, with its position in the request (requests[3]) leading the detail; nothing lands. validate_only runs the same transaction and rolls it back, answering 200 with the names the write would mint and no ids. A batch carries at most 1000 requests; more is a 413 naming the limit, so split a bigger import (by building). Gated by component:create; each request is held to that scope, its location resolves within your location:read scope, and a request naming a system also needs system:update over it, as its single create does.
+
+- Route: `POST /api/v1/components:batchCreate`
+- Gate: `component:create`
+- Assume: adds
+- Agent class: write
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `requests` | array | yes | The components to create, each the body POST /components takes, in order: a parent before its children |
+| `validate_only` | boolean | no | Run every request in the transaction and roll it back: the response is what the write would create (names minted, ids empty), or the row that would refuse it, and nothing is written |
 
 ## `create-component-from-template`
 
@@ -940,7 +997,7 @@ Creates an endpoint owned by a component (or a server-hosted one, which needs an
 
 Get an endpoint
 
-Fetches an endpoint by its address (<component>/<endpoint name>) or uuid. An endpoint whose component is out of the caller's read scope is a non-disclosing 404, and a name no endpoint the caller can see answers to is a 404 naming what was looked up (listing each match when more than one does). Gated by endpoint:read.
+Fetches an endpoint by its address (<component>/<endpoint name>) or uuid. An endpoint whose component is out of the caller's read scope is a non-disclosing 404, and a name no endpoint the caller can see answers to is a 404 naming what was looked up, and a name more than one answers to is a 409 listing each match. Gated by endpoint:read.
 
 - Route: `GET /api/v1/endpoints/{endpoint}`
 - Gate: `endpoint:read`
@@ -991,7 +1048,7 @@ Deletes an endpoint, refused while a task still references it. Gated by endpoint
 
 Run an endpoint's poll now
 
-Runs one of an attached endpoint's polls now, on the outpost that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run waits for the endpoint's lane on the outpost, ahead of its scheduled polls and never beside another request to the endpoint; it borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409), a refusal, an unreachable verdict from the endpoint's probe, or a disruptive command (a reboot) the run was queued behind, and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no outpost is a 409. An outpost that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the outpost's operator lanes, is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.
+Runs one of an attached endpoint's polls now, on the outpost that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run waits for the endpoint's lane on the outpost, ahead of its scheduled polls and never beside another request to the endpoint; it borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409), a refusal, an unreachable reading from the endpoint's probe, or a disruptive command (a reboot) the run was queued behind, and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no outpost is a 409. An outpost that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the outpost's operator lanes, is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.
 
 - Route: `POST /api/v1/endpoints/{endpoint}/polls/{poll}:run`
 - Gate: `endpoint:run`
@@ -1145,7 +1202,7 @@ Lists the locations the caller may read, each filtered to its scope subtree. Gat
 
 Create a location
 
-Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. Gated by location:create.
+Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. The parent resolves within the caller's location:read scope before its location:create scope: a parent the caller cannot read is the same 404 as one that does not exist, so the answer never discloses a location outside the caller's read, and a parent the caller can read but not create under is a 403. Gated by location:create.
 
 - Route: `POST /api/v1/locations`
 - Gate: `location:create`
@@ -1196,7 +1253,7 @@ Patches a location's label or location_type. The name is not patchable: renaming
 
 Read a location's health
 
-The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+The location's current health, worst-wins over every system placed anywhere beneath it, with those systems and their health as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges inside since..until (default the last 30 days); since after until is a 400. Gated by location:read; an out-of-scope location is a non-disclosing 404.
 
 - Route: `GET /api/v1/locations/{name}/health`
 - Gate: `location:read`
@@ -1206,6 +1263,8 @@ The location's current verdict, worst-wins over every system placed anywhere ben
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | yes | The location's name, or a dotted address (e.g. boi.17c.415a) |
+| `since` | string | no | Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent |
+| `until` | string | no | Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since |
 
 ## `list-location-metrics`
 
@@ -1236,6 +1295,22 @@ Every property the location's type declares, resolved to the location's own valu
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | yes | The location's name, or a dotted address (e.g. boi.17c.415a) |
+
+## `batch-create-locations`
+
+Create many locations in one write
+
+Creates locations in one transaction: each request is the body POST /locations takes, run as that create runs it, in order, so a location may name as its parent one an earlier request creates. Every row writes its own audit row carrying the one batch_id the response returns, under from_batch. A refused request refuses the whole batch, mapped as POST /locations maps it, with its position in the request (requests[3]) leading the detail; nothing lands. validate_only runs the same transaction and rolls it back, answering 200 with the names the write would mint and no ids. A batch carries at most 1000 requests; more is a 413 naming the limit, so split a bigger import (by building). Gated by location:create, and each request is held to that scope as its single create is.
+
+- Route: `POST /api/v1/locations:batchCreate`
+- Gate: `location:create`
+- Assume: adds
+- Agent class: write
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `requests` | array | yes | The locations to create, each the body POST /locations takes, in order: a parent before its children, which then name it as their parent |
+| `validate_only` | boolean | no | Run every request in the transaction and roll it back: the response is what the write would create (names minted, ids empty), or the row that would refuse it, and nothing is written |
 
 ## `create-locations-from-template`
 
@@ -1339,13 +1414,17 @@ Returns the outpost's own recent operational log lines (the raw ingest lane of A
 
 List products
 
-Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
+Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. declares_metric and declares_property narrow it to the products whose contract declares that key. Gated by product:read.
 
 - Route: `GET /api/v1/products`
 - Gate: `product:read`
 - Assume: read-only, idempotent
 - Agent class: read
-- Arguments: none
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `declares_metric` | string | no | Only products whose contract declares this metric (name or uuid) |
+| `declares_property` | string | no | Only products whose contract declares this property (name or uuid) |
 
 ## `get-product`
 
@@ -1408,13 +1487,17 @@ Writes one standard of your own (official false) from a standard template in the
 
 List systems in scope
 
-Lists the systems the caller may read, each filtered to its scope subtree. Gated by system:read.
+Lists the systems the caller may read, each filtered to its scope subtree. An optional standard filter narrows to the systems built to one standard, and limit caps the page while total counts every match. Gated by system:read.
 
 - Route: `GET /api/v1/systems`
 - Gate: `system:read`
 - Assume: read-only, idempotent
 - Agent class: read
-- Arguments: none
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `limit` | integer | no | Cap the page at this many rows; 0 or absent is no cap. total still counts every match. |
+| `standard` | string | no | Only systems built to this standard (name or uuid) |
 
 ## `get-system`
 
@@ -1453,7 +1536,7 @@ Patches a system's label, standard, or system_type. The name is not patchable: r
 
 List a system's members' alarms
 
-Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its alarms, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. With since (and optionally until) it is instead every alarm raised during that range, active or cleared, the same cap applying. It is what a system's Activity reads to explain its alarms, one request however many members the system has. since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.
 
 - Route: `GET /api/v1/systems/{name}/alarms`
 - Gate: `system:read`
@@ -1463,12 +1546,14 @@ Every member's alarms in one read, newest first, each naming its component: the 
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | yes | The system's name, or a dotted address (e.g. boi.17c.$sys.av) |
+| `since` | string | no | Read the alarms raised during since..until instead of the default (active ones, and those cleared in the last 30 days): active, or cleared at or after since, and raised at or before until |
+| `until` | string | no | The range's end, with since; defaults to now and must not be earlier than since |
 
 ## `list-system-events`
 
 List a system's recent events, members included
 
-Returns the system's own events and its members', newest first, bounded to the last 24 hours, each row labeled by the owner that raised it. A component shared with another system appears in both systems' lists. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+Returns the system's own events and its members', newest first, bounded to the last 24 hours, each row labeled by the owner that raised it, narrowed by an optional event type (key), source and message text (q). A component shared with another system appears in both systems' lists. Gated by system:read; an out-of-scope system is a non-disclosing 404.
 
 - Route: `GET /api/v1/systems/{name}/events`
 - Gate: `system:read`
@@ -1477,13 +1562,16 @@ Returns the system's own events and its members', newest first, bounded to the l
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
+| `key` | string | no | Only occurrences of this event type, by name |
 | `name` | string | yes | The system's name, or a dotted address (e.g. boi.17c.$sys.av) |
+| `q` | string | no | Only occurrences whose message contains this text, case-insensitively |
+| `source` | string | no | Only occurrences from this transport |
 
 ## `get-system-health`
 
 Read a system's health
 
-The system's current verdict and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the verdict. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Members lists every component bound into the system, slotted or not, with its own health, its open alarms and the slot it fills; a member outside every slot is shown and not rolled up, since only slots decide the health (ADR-2459). Reason names the slots behind the health. Transitions are the recorded edges inside since..until (default the last 30 days), one entry per change; since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.
 
 - Route: `GET /api/v1/systems/{name}/health`
 - Gate: `system:read`
@@ -1493,6 +1581,8 @@ The system's current verdict and why: every slot it needs filled, whether it is 
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | yes | The system's name, or a dotted address (e.g. boi.17c.$sys.av) |
+| `since` | string | no | Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent |
+| `until` | string | no | Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since |
 
 ## `list-system-logs`
 
@@ -1508,6 +1598,7 @@ Returns the members' raw log lines merged newest first, bounded to the last 24 h
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | yes | The system's name, or a dotted address (e.g. boi.17c.$sys.av) |
+| `q` | string | no | Only lines whose message contains this text, case-insensitively |
 | `severity` | string | no | Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out |
 | `source` | string | no | Only lines that arrived on this channel |
 
@@ -1515,7 +1606,7 @@ Returns the members' raw log lines merged newest first, bounded to the last 24 h
 
 List the components in a system
 
-The components bound into this system, ordered by name. Membership is what a slot attaches to: every component staffing a slot here is a member, and a member may also carry no slot at all (a power conditioner is in the room without filling a declared slot). Each member carries its own verdict, so a system's view can poll its members' health here rather than reading the whole fleet. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+The components bound into this system, ordered by name. Membership is what a slot attaches to: every component staffing a slot here is a member, and a member may also carry no slot at all (a power conditioner is in the room without filling a declared slot). Each member carries its own health, so a system's view can poll its members' health here rather than reading the whole fleet. Gated by system:read; an out-of-scope system is a non-disclosing 404.
 
 - Route: `GET /api/v1/systems/{name}/members`
 - Gate: `system:read`
@@ -1611,6 +1702,22 @@ The change history behind the effective value for one property series, newest fi
 | `name` | string | yes | The owner's name or uuid |
 | `property` | string | yes | The property_type name of the series |
 | `resolution` | integer | no | The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused |
+
+## `batch-create-systems`
+
+Create many systems in one write
+
+Creates systems in one transaction: each request is the body POST /systems takes, run as that create runs it, in order, so a system may name as its parent one an earlier request creates, and its location by name as the single create does. Every row writes its own audit row carrying the one batch_id the response returns, under from_batch. A refused request refuses the whole batch, mapped as POST /systems maps it, with its position in the request (requests[3]) leading the detail; nothing lands. validate_only runs the same transaction and rolls it back, answering 200 with the names the write would mint and no ids. A batch carries at most 1000 requests; more is a 413 naming the limit, so split a bigger import (by building). Gated by system:create; each request is held to that scope, and its location resolves within your location:read scope, as its single create is.
+
+- Route: `POST /api/v1/systems:batchCreate`
+- Gate: `system:create`
+- Assume: adds
+- Agent class: write
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `requests` | array | yes | The systems to create, each the body POST /systems takes, in order: a parent before its children |
+| `validate_only` | boolean | no | Run every request in the transaction and roll it back: the response is what the write would create (names minted, ids empty), or the row that would refuse it, and nothing is written |
 
 ## `create-system-from-template`
 

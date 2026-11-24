@@ -1,7 +1,8 @@
-import { For, Show, createMemo, createSignal, createUniqueId, type JSX } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, createUniqueId, type JSX } from "solid-js";
 import { OP, opsFor, tokenToChip, chipGlyph, valueless, type FilterKey, type Chip, type OpKey } from "../lib/predicate";
 import { Search, X } from "./icons";
 import Button from "./Button";
+import Tooltip from "./ui/Tooltip";
 
 // FilterBar: the keyboard-driven chip search. A staged pipeline over one input:
 // type a key, pick an operator, pick/enter a value; each commit is a chip. The
@@ -38,12 +39,27 @@ export default function FilterBar<T>(props: {
   bare?: boolean;
   clearable?: boolean;
   trailing?: JSX.Element;
+  // "n of m" while the chips narrow the list: shown beside the trailing rail,
+  // absent when nothing filters (the sub-rail already carries the total).
+  count?: { shown: number; total: number };
+  // Live filtering (#2462): bare text typed with no key prefix narrows the rows
+  // as it is typed, as a draft chip handed to onDraft (null when there is none).
+  // Enter still commits it as a chip. Off, the text only counts on Enter.
+  onDraft?: (draft: Chip | null) => void;
 }) {
   const [text, setText] = createSignal("");
   const [open, setOpen] = createSignal(false);
   const [sel, setSel] = createSignal(-1);
   const listId = createUniqueId();
   let inputRef: HTMLInputElement | undefined;
+
+  // The draft follows the text: bare words only, since "key:" is still being
+  // staged into a chip and a half-typed key would match nothing.
+  createEffect(() => {
+    if (!props.onDraft) return;
+    const t = text();
+    props.onDraft(t.trim() && !t.includes(":") ? tokenToChip(t, props.keys, fallbackKey()) : null);
+  });
 
   const fallbackKey = () => (props.keys.find((k) => k.hint === "substring") ?? props.keys[0])?.key ?? "";
   const keyOf = (k: string) => props.keys.find((s) => s.key === k);
@@ -184,15 +200,15 @@ export default function FilterBar<T>(props: {
       class={props.bare ? "min-w-0 flex-[1_1_340px]" : "card border border-base-300 bg-base-200 px-2.5 py-2"}
       onClick={(e) => e.currentTarget === e.target && inputRef?.focus()}
     >
-      <div class="flex flex-wrap items-center gap-1.5">
+      <div class="flex min-h-8 flex-wrap items-center gap-1.5" data-testid="filter-row">
         <span class="mr-0.5 inline-flex text-base-content/40"><Search size={15} /></span>
         <For each={props.chips}>
           {(c, i) => (
             <span class="inline-flex items-center gap-1 rounded-field border border-base-300 bg-base-100 py-[3px] pl-2.5 pr-1 text-xs">
               <span class="text-base-content/50">{c.key}</span>
-              <button class="font-data font-semibold text-primary" title="cycle operator" onClick={() => cycleOp(i())}>
+              <Tooltip class="font-data font-semibold text-primary" content="cycle operator" onClick={() => cycleOp(i())}>
                 {chipGlyph(c.op)}
-              </button>
+              </Tooltip>
               <Show when={c.values.length}>
                 {/* The label, not the raw value (review finding 4,
                     task-15-review.md #4): a facet whose value is opaque (a
@@ -276,11 +292,18 @@ export default function FilterBar<T>(props: {
         <Show when={props.clearable && props.chips.length > 0}>
           <Button class="flex-none text-xs" onClick={() => props.onChips([])}>Clear</Button>
         </Show>
+        <Show when={props.count && props.chips.length > 0 ? props.count : undefined}>
+          {(c) => (
+            <span data-testid="filter-count" class="ml-auto flex-none font-data tnum text-xs text-base-content/55" aria-live="polite">
+              {c().shown} of {c().total}
+            </span>
+          )}
+        </Show>
         <Show when={props.trailing}>
           {/* Never wider than the row: a trailing rail that can wrap (a row of
               view controls) wraps inside the bar instead of running past the
               card's clipped edge on a narrow window. */}
-          <div class="ml-auto flex max-w-full flex-none items-center gap-1.5">{props.trailing}</div>
+          <div class="flex max-w-full flex-none items-center gap-1.5" classList={{ "ml-auto": !(props.count && props.chips.length > 0) }}>{props.trailing}</div>
         </Show>
       </div>
     </div>

@@ -162,6 +162,13 @@ Write it the way an operator would work:
   in Bay 2 that nothing collects from yet), a `setup` list makes it through the API before the
   title card, with the lab's owner token; one that already exists counts as made, so a replay on a
   lab the walkthrough already ran on works. Keep it to the scene: the flow itself stays on camera.
+- **Stage a moment, not only a thing.** A scene that needs something to have happened (an alarm
+  raised and cleared, as read-what-happened-on-the-timeline needs) puts a state with `put` (a
+  simulated device's impairment), waits with `until: { get, contains, timeout }` until a read
+  holds a text (the alarm list holding `raised_at`), and lets time pass with `pause: <seconds>`
+  (1 to 300), all off camera before the title card. Leave the lab as you found it (unplug, then
+  replug), since the probe replays every walkthrough on one stack. The lab facts list only the
+  creates; a learner trips the same fault on the Simulation page.
 - **Give your setup a component and alarms of its own.** The recorder plays each walkthrough on a lab
   of its own, but [the probe](/contributing/synthetic-user/#the-probe-and-its-digest) replays all of
   them, in alphabetical order, on one shared stack, where that "already exists counts as made" rule
@@ -176,6 +183,15 @@ Write it the way an operator would work:
   window), a `ready` block (`goto` a console path, `wait` for a target, with its own `timeout` up to
   three minutes) is waited for after sign-in and before the title card, so the wait never spends
   the recording's budget. A ready that never comes fails the run naming what it waited for.
+
+- **Name what the lab must run with `lab`.** A walkthrough plays on the dev fleet. One that signs in
+  through an identity provider (sign-in-with-sso) says `lab: [sso]`, and the recorder's lab then
+  runs Dex beside it, with single sign-on configured against it and a demo person, Avery Quinn,
+  whose identity there is linked (the demo values are in `internal/lab/sso.go`). The provider's
+  address is on the lab network, which the recorder's browser joins and yours does not, so only a
+  script's lab runs it, and the [lab guide](/developer/lab/) lists that walkthrough as recorded
+  rather than followed. The probe runs it too, and plays such a walkthrough in a browser context of
+  its own, so the walkthroughs after it still play as the owner.
 
 `make test-web` validates every script in the tree, so a malformed one fails before a browser
 starts.

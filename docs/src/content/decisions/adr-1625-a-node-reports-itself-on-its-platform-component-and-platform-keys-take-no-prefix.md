@@ -6,7 +6,7 @@ summary: "Accepted: the first slice of #1094 builds the platform primitive. The 
 refs: [1625, 1094, 161, 1641, 1634, 1626, 1627, 1628, 1659]
 ---
 
-- **Date:** 2026-11-09 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [metrics and properties](/architecture/properties/), [glossary](/architecture/glossary/), [storage](/architecture/storage/)
+- **Date:** 2026-11-09 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [metrics and properties](/architecture/properties/), [glossary](/reference/glossary/), [storage](/architecture/storage/)
 - **Decision:**
   1. **Platform keys take no prefix.** #1094's ruling, amending
      [ADR-0161](#adr-0161-every-key-has-one-writer-class-held-at-the-storage-gateway) point 6: a

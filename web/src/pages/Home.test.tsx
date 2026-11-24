@@ -49,9 +49,11 @@ function mount(me: Me, platform: PlatformView | null = view, fleetData: FleetVie
   if (fleetData) qc.setQueryData([...FLEET_VIEW_KEY], fleetData);
   if (platform) qc.setQueryData([...PLATFORM_VIEW_KEY], platform);
   let path = () => "";
+  let search = () => "";
   const Probe = () => {
     const loc = useLocation();
     path = () => loc.pathname;
+    search = () => loc.search;
     return <Home />;
   };
   render(() => (
@@ -61,7 +63,7 @@ function mount(me: Me, platform: PlatformView | null = view, fleetData: FleetVie
       </Router>
     </QueryClientProvider>
   ));
-  return { path: () => path() };
+  return { path: () => path(), search: () => search() };
 }
 
 afterEach(() => {
@@ -124,11 +126,12 @@ describe("Home count tiles", () => {
     await waitFor(() => expect(path()).toBe("/outposts"));
   });
 
-  // /alarms is a stub page until the alarm list lands, so the tile is not a link.
-  it("leaves Open alarms a plain figure, not a button", async () => {
-    mount(meWith(["location:read"]));
+  // The alarm queue is live (#2333), so the tile opens it.
+  it("opens the alarm queue from the Open alarms tile", async () => {
+    const { path } = mount(meWith(["location:read"]));
     await waitFor(() => expect(screen.getByTestId("home-open-alarms")).toHaveTextContent("4"));
-    expect(screen.getByTestId("home-open-alarms").tagName).toBe("DIV");
+    fireEvent.click(screen.getByTestId("home-open-alarms"));
+    await waitFor(() => expect(path()).toBe("/alarms"));
   });
 
   it("says why the alarm count is missing when the view carries none", async () => {
@@ -145,5 +148,31 @@ describe("Home count tiles", () => {
     mount(meWith(["location:read"]), view, null);
     await waitFor(() => expect(screen.getByTestId("home-systems")).toHaveTextContent("could not be read"));
     expect(screen.getByTestId("home-open-alarms")).toHaveTextContent("could not be read");
+  });
+});
+
+// #2438: the Need attention card says what Explore's chip says, from the same
+// pure count, and opens Explore with that chip pressed.
+describe("Home Need attention card", () => {
+  const troubled: FleetView = {
+    locations: [],
+    systems: [
+      { id: uuidFor("a"), name: "a", label: "", health: "outage", dots: [{ component: uuidFor("c1"), name: "c1", health: "outage", primary: true, shared: false }, { component: uuidFor("c2"), name: "c2", health: "healthy", primary: true, shared: false }] },
+      { id: uuidFor("b"), name: "b", label: "", health: "degraded", dots: [{ component: uuidFor("c1"), name: "c1", health: "outage", primary: true, shared: true }, { component: uuidFor("c3"), name: "c3", health: "incomplete", primary: true, shared: false }] },
+      { id: uuidFor("c"), name: "c", label: "", health: "healthy", dots: [] },
+    ],
+  } as unknown as FleetView;
+
+  it("names the systems and components that need attention, a shared component once", () => {
+    mount(meWith(["outpost:read"]), view, troubled);
+    const card = screen.getByTestId("home-attention");
+    expect(card).toHaveTextContent("2 systems, 2 components need attention");
+  });
+
+  it("opens Explore with the attention chip pressed", async () => {
+    const { path, search } = mount(meWith(["outpost:read"]), view, troubled);
+    fireEvent.click(screen.getByTestId("home-attention"));
+    await waitFor(() => expect(path()).toBe("/explore"));
+    expect(JSON.parse(new URLSearchParams(search()).get("chips")!)).toEqual([{ key: "health", op: "eq", values: ["outage", "degraded", "incomplete"] }]);
   });
 });

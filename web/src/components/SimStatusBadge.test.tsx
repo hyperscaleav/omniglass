@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { render } from "@solidjs/testing-library";
 import SimStatusBadge from "./SimStatusBadge";
 import type { SimComponent } from "../lib/simulation";
+import { tipOf } from "../test-tip";
 
 // The status chip is HealthBadge's recipe: each state carries its word, its own
 // glyph and its look, running stays grey, starting wears the incomplete look.
@@ -10,13 +11,13 @@ const sim = (status: SimComponent["status"], impairment?: SimComponent["impairme
 const STATES = ["offline", "failed", "starting", "running"] as const;
 
 describe("SimStatusBadge", () => {
-  it("names each state in words, each with its own glyph", () => {
+  it("names each state in words, each with its own glyph", async () => {
     const glyphs = new Set<string>();
     for (const s of STATES) {
       const { getByTestId, unmount } = render(() => <SimStatusBadge sim={sim(s)} />);
       const chip = getByTestId("sim-state");
       expect(chip.textContent).toBe(s);
-      expect(chip.getAttribute("title")).toBeTruthy();
+      expect(await tipOf(chip)).toBeTruthy();
       glyphs.add(chip.querySelector("svg")!.innerHTML);
       unmount();
     }
@@ -37,9 +38,9 @@ describe("SimStatusBadge", () => {
     expect(look("running")).not.toMatch(/badge-(success|warning|error|incomplete|ghost)/);
   });
 
-  it("explains a failed component in its hint", () => {
+  it("explains a failed component in its hint", async () => {
     const { getByTestId } = render(() => <SimStatusBadge sim={sim("failed")} />);
-    expect(getByTestId("sim-state").getAttribute("title")).toMatch(/could not start it.*loopback/);
+    expect(await tipOf(getByTestId("sim-state"))).toMatch(/could not start it.*loopback/);
   });
 
   it("shows no impairment chip when none is set", () => {

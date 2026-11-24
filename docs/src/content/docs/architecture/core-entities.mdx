@@ -449,10 +449,11 @@ user scoped to one system binds nothing it cannot write
 ([ADR-0510](/architecture/decisions/#adr-0510-a-membership-or-a-role-assignment-costs-a-write-on-both-of-its-ends)).
 
 The console edits membership from the component, over the routes above and no others: a component's
-edit face carries a **Memberships** field, the primary system as a picker and the other memberships as
-removable chips. Changing the primary is an add (if the component is not yet in that system) then
-`:setPrimary`; clearing it, or removing a chip, is a remove. Membership is its own verb, so it is
-deliberately not a field on the component's update or move.
+edit face carries three controls, **Also serves...** (add a system), **Primary system** (promote one of
+its memberships with `:setPrimary`) and a removable chip per other membership (a remove). Moving the
+component from one system to another is **Move to...**, which plans the add, `:setPrimary` and
+remove steps. Membership is its own verb, so it is deliberately not a field on the component's update
+or move.
 
 Membership **cascades from both ends**, and does not restrict the component the way
 `system_slot_assignment` does: that restrict is load-bearing (deleting a filler would silently break
@@ -499,7 +500,7 @@ component "panel-1" is a display; slot "table-mic" wants a video-bar
 ```
 
 A refusal on **modeled** grounds, and it runs at assignment (and again when a standard change would carry
-the occupant onto the new standard's slot); afterward an occupant keeps its slot unless its own [health](/architecture/health/) verdict goes to outage (a lesser alarm degrades
+the occupant onto the new standard's slot); afterward an occupant keeps its slot unless its own [health](/architecture/health/) goes to outage (a lesser alarm degrades
 it but does not cost it the slot)
 ([ADR-0049](/architecture/decisions/#adr-0049-the-system-role-capability-gated-staffing-and-the-resolved-capability-set)).
 
@@ -631,8 +632,8 @@ The `parent_id` self-reference is **same-kind nesting**: a chassis with line car
 component over children, and likewise a parent system over room subsystems (the divisible hall:
 the head-end on the parent, a subsystem per room, ADR-0140). The nesting feeds the
 [cascade](/architecture/cascade/) (deeper wins). It does **not** feed the health rollup today: a
-system's verdict rolls up to its location, never through the system tree
-([health](/architecture/health/)); how a parent system's verdict relates to its subsystems' is
+system's health rolls up to its location, never through the system tree
+([health](/architecture/health/)); how a parent system's health relates to its subsystems' is
 decided with the grouping slice ([#879](https://github.com/hyperscaleav/omniglass/issues/879)). The
 **practical starting depth is 3 levels**, **not a hard cap**.
 
@@ -662,7 +663,7 @@ This makes **system- and outpost-level samples first-class** (`health` is a `pro
 beside what a system calc rule derives and what a push reports for the system as a whole; an outpost's
 self-health is owned by the outpost); fleet-wide samples owned by `global` are the designed extension. A
 location owns its declared properties and calculated health and no observed sample: nothing collects or pushes telemetry for a
-location ([ADR-0422](/architecture/decisions/#adr-0422-a-system-owns-its-own-telemetry-and-a-location-owns-no-observed-sample)). The **owner** gives a recorded [health](/architecture/health/) verdict its level:
+location ([ADR-0422](/architecture/decisions/#adr-0422-a-system-owns-its-own-telemetry-and-a-location-owns-no-observed-sample)). The **owner** gives a recorded [health](/architecture/health/) its level:
 component, system, and location each own a transition series under the same `health` property name. The same
 arc owns the `event` rows a sample produces, and is the design for `alarm` (component-local today),
 so a system-owned sample will yield a system-owned alarm. The full pattern and DDL are on
@@ -875,13 +876,13 @@ stale, and only because the operator chose to.
 
 Every reference form the API accepts resolves through one `{ref}` path parameter (`GET
 /components/{ref}`, and every custom method beside it): a uuid, a bare name, or a dotted address,
-tried in that order. A bare name matching more than one row in the caller's scope is a `404` naming
+tried in that order. A bare name matching more than one row in the caller's scope is a `409` naming
 the candidates rather than silently resolving to whichever sorted first. Each candidate is listed as
 its dotted address with its uuid beside it (`campus.room-a.$comp.display-1 (<uuid>)`), a spelling that
 resolves on the same route, and a candidate the caller cannot read is neither listed nor counted
 ([ADR-1134](/architecture/decisions/#adr-1134-an-ambiguous-name-is-a-404-naming-the-reference-on-every-collection)).
-The refusal is a `404` because the reference as typed resolves to no one row, the status a name
-unresolved on every other collection already had (ADR-1133), and since **#627 scopes a name's
+The refusal is a `409` ([ADR-2334](/architecture/decisions/#adr-2334-an-ambiguous-name-is-a-409-listing-the-matches-a-missing-one-stays-a-404),
+reversing ADR-1134's 404): the name is real but names more than one row, while a name that matches nothing stays a `404`. Since **#627 scopes a name's
 uniqueness to its placement, not the whole fleet**: a component and a system both scope to their
 parent when they have one, else their location, else the fleet, a three-bucket split each carries its
 own partial unique index for; a location, which has no `location_id` column of its own, scopes to its

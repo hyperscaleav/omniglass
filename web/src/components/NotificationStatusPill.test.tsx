@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { render } from "@solidjs/testing-library";
 import NotificationStatusPill from "./NotificationStatusPill";
 import { PILL_NEUTRAL } from "../lib/subscriptions";
+import { tipOf } from "../test-tip";
 
 // The one pill a notification's delivery wears (#1413), on the alarm timeline
 // and the Recent notifications blade alike: one word per status, a snoozed row
@@ -27,10 +28,10 @@ describe("NotificationStatusPill", () => {
     expect(classes(pill("suppressed"))).toEqual(new Set(PILL_NEUTRAL.split(" ")));
   });
 
-  it("carries its status and a hint that teaches it", () => {
+  it("carries its status and a hint that teaches it", async () => {
     const p = pill("suppressed");
     expect(p.dataset.status).toBe("suppressed");
-    expect(p.title).toMatch(/snooze/i);
+    expect(await tipOf(p)).toMatch(/snooze/i);
   });
 
   it("sizes down for a dense row", () => {

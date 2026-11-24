@@ -3,9 +3,11 @@ import { render, screen, waitFor, fireEvent, within } from "@solidjs/testing-lib
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Subscriptions from "./Subscriptions";
+import { pageHeader } from "../lib/handover";
 import { ME_KEY, type Me } from "../lib/auth";
 import { SUBSCRIPTIONS_KEY, type RuleMatch, type Subscription } from "../lib/subscriptions";
 import { severityLevelsKey } from "../lib/severity";
+import { answerConfirms } from "../lib/confirm.testkit";
 
 // My alarm subscriptions (#1355). The list is seeded into the query cache;
 // fetch answers the writes, the :test preview and the expression check a test
@@ -110,7 +112,7 @@ describe("Subscriptions", () => {
       if (r.method === "GET" && r.url.endsWith("/auth/me/action-rules")) return json({ action_rules: [outages] });
       return refuse(r);
     });
-    const ask = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+    const ask = answerConfirms(false, true);
     mount({ rules: [outages, everything] });
     const del = await screen.findByRole("button", { name: "Delete everything" });
     fireEvent.click(del);
@@ -238,10 +240,10 @@ describe("Subscriptions", () => {
     expect(await screen.findAllByTestId("sub-row")).toHaveLength(1);
   });
 
-  it("leads back to the profile from its breadcrumb", async () => {
+  it("hands the top bar a trail leading back to the profile", async () => {
     stubFetch(refuse);
     mount({ rules: [] });
-    fireEvent.click(await screen.findByRole("link", { name: "Profile" }));
-    expect(await screen.findByTestId("profile-page")).toBeTruthy();
+    await screen.findByTestId("subs-denied").catch(() => null);
+    expect(pageHeader()?.trail).toEqual([{ key: "profile", label: "Profile", href: "/profile" }]);
   });
 });

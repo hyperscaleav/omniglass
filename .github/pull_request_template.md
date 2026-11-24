@@ -63,6 +63,10 @@ $ make test
 
 demo: 
 
+<!-- A PR that closes a bug or flaky-test issue (label or Bug type) changes a test, or says why not on a line of its own (optional otherwise):
+regression-test: none (reason)
+-->
+
 ## Docs and review
 
 - **Docs:** <!-- what shipped; architecture-of-record consistent, or a divergence note -->

@@ -115,7 +115,7 @@ func validateEnvValue(ns, key string, coerced any, raw string) error {
 		return nil
 	}
 	var fe *FieldError
-	if errors.As(err, &fe) && !quotesValue(fe.Message, raw) {
+	if errors.As(err, &fe) && (fe.Safe || !quotesValue(fe.Message, raw)) {
 		return errors.New(fe.Message)
 	}
 	return errors.New("the value is not one this setting accepts")

@@ -47,7 +47,49 @@ func toComponentBody(c *storage.Component) componentBody {
 type listComponentsOutput struct {
 	Body struct {
 		Components []componentBody `json:"components"`
+		Total      int             `json:"total" doc:"How many components matched the filters, before limit capped the page. With no filter, how many the caller may read."`
 	}
+}
+
+// listComponentsInput is the optional narrowing of the component list (#2430):
+// the catalog "used by" reads. Each filter names a catalog row by name or uuid
+// and they combine as AND; a reference that names nothing matches nothing. The
+// filters run over what the caller may already read, so scope is unchanged.
+type listComponentsInput struct {
+	Product       string `query:"product" doc:"Only components of this product (name or uuid)"`
+	Driver        string `query:"driver" doc:"Only components of a product this driver serves (name or uuid)"`
+	ComponentType string `query:"component_type" doc:"Only components of a product classified under exactly this component type (name or uuid)"`
+	Limit         int    `query:"limit" minimum:"0" doc:"Cap the page at this many rows; 0 or absent is no cap. total still counts every match."`
+}
+
+// productIDsMatching resolves the catalog filters of a fleet list to the set of
+// product ids they admit, over the whole product catalog. ok is false when no
+// filter was given (nothing to narrow by). A filter that names no row admits no
+// product, so the list comes back empty rather than as an error.
+func productIDsMatching(ctx context.Context, gw storage.Gateway, product, driver, componentType string) (set map[string]bool, ok bool, err error) {
+	if product == "" && driver == "" && componentType == "" {
+		return nil, false, nil
+	}
+	prods, err := gw.ListProducts(ctx)
+	if err != nil {
+		return nil, true, err
+	}
+	is := func(ref, name, id string) bool { return ref == "" || ref == name || ref == id }
+	set = map[string]bool{}
+	for i := range prods {
+		p := &prods[i]
+		if !is(product, p.Name, p.ID) {
+			continue
+		}
+		if driver != "" && (p.DriverName == nil || p.DriverID == nil || !is(driver, *p.DriverName, *p.DriverID)) {
+			continue
+		}
+		if !is(componentType, p.ComponentType, p.ComponentTypeID) {
+			continue
+		}
+		set[p.ID] = true
+	}
+	return set, true, nil
 }
 
 type componentOutput struct {
@@ -58,33 +100,37 @@ type componentPathInput struct {
 	Name string `path:"name" doc:"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)"`
 }
 
+// createComponentInputBody is the single create's body, which the batch create
+// (POST /components:batchCreate) takes as each of its requests.
+type createComponentInputBody struct {
+	// Name is optional (#627 Task 14): omit it and the platform mints
+	// "<stem>-<n>" from the classified product's component_type, marking
+	// name_generated. Supplied, it is validated exactly as before.
+	Name     string  `json:"name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the product's type."`
+	Label    string  `json:"label,omitempty" doc:"What an operator reads; the name is the address"`
+	Parent   *string `json:"parent,omitempty" doc:"Parent component name; omit for a root component"`
+	System   *string `json:"system,omitempty" doc:"Primary system name this component belongs to. Naming one writes that system's membership, so it costs the system:update permission and resolves in that scope; omitted, the create costs component:create alone."`
+	Location *string `json:"location,omitempty" doc:"Location name this component is placed at"`
+	// Product is required: every component is an instance of a product (the
+	// classification floor). It stays a pointer rather than a plain
+	// required string so the handler can report a specific, actionable
+	// message (naming the generics) instead of Huma's generic
+	// missing-required-field text.
+	Product *string `json:"product,omitempty" doc:"Product (catalog SKU) this component is an instance of, by name or uuid. Required: use a generic (generic-device, generic-app, generic-service) until a real product is modeled."`
+	// ExpectedName is the create form's precondition (#702, and its
+	// review). It carries the drafted NAME rather than the ordinal,
+	// because the name is what the form showed and what the operator is
+	// owed: it holds the stem, the suppression and the number together, so
+	// a type edit under the open form invalidates the claim where a number
+	// would have passed. It is still a precondition and NOT the name field:
+	// the create leaves name empty, so the row stays name_generated and the
+	// pen never moves. A pointer, so "absent" is the only spelling of no
+	// expectation.
+	ExpectedName *string `json:"expected_name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The name a create form previewed (POST /components:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the type's stem moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422."`
+}
+
 type createComponentInput struct {
-	Body struct {
-		// Name is optional (#627 Task 14): omit it and the platform mints
-		// "<stem>-<n>" from the classified product's component_type, marking
-		// name_generated. Supplied, it is validated exactly as before.
-		Name     string  `json:"name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the product's type."`
-		Label    string  `json:"label,omitempty" doc:"What an operator reads; the name is the address"`
-		Parent   *string `json:"parent,omitempty" doc:"Parent component name; omit for a root component"`
-		System   *string `json:"system,omitempty" doc:"Primary system name this component belongs to. Naming one writes that system's membership, so it costs the system:update permission and resolves in that scope; omitted, the create costs component:create alone."`
-		Location *string `json:"location,omitempty" doc:"Location name this component is placed at"`
-		// Product is required: every component is an instance of a product (the
-		// classification floor). It stays a pointer rather than a plain
-		// required string so the handler can report a specific, actionable
-		// message (naming the generics) instead of Huma's generic
-		// missing-required-field text.
-		Product *string `json:"product,omitempty" doc:"Product (catalog SKU) this component is an instance of, by name or uuid. Required: use a generic (generic-device, generic-app, generic-service) until a real product is modeled."`
-		// ExpectedName is the create form's precondition (#702, and its
-		// review). It carries the drafted NAME rather than the ordinal,
-		// because the name is what the form showed and what the operator is
-		// owed: it holds the stem, the suppression and the number together, so
-		// a type edit under the open form invalidates the claim where a number
-		// would have passed. It is still a precondition and NOT the name field:
-		// the create leaves name empty, so the row stays name_generated and the
-		// pen never moves. A pointer, so "absent" is the only spelling of no
-		// expectation.
-		ExpectedName *string `json:"expected_name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The name a create form previewed (POST /components:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the type's stem moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422."`
-	}
+	Body createComponentInputBody
 }
 
 // updateComponentInput is the PATCH body. It deliberately carries no name: a
@@ -182,11 +228,26 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Method:      http.MethodGet,
 		Path:        "/components",
 		Summary:     "List components in scope",
-		Description: "Lists the components the caller may read, each filtered to its scope subtree. Gated by component:read.",
-	}, "component", "read"), func(ctx context.Context, _ *struct{}) (*listComponentsOutput, error) {
+		Description: "Lists the components the caller may read, each filtered to its scope subtree. Optional product, driver and component_type filters narrow to the components a catalog row classifies or a driver serves, and limit caps the page while total counts every match (the catalog drawers' used-by reads). Gated by component:read.",
+	}, "component", "read"), func(ctx context.Context, in *listComponentsInput) (*listComponentsOutput, error) {
 		comps, err := gw.ListComponents(ctx, a.scopeFor(ctx, "component", "read"))
 		if err != nil {
 			return nil, huma.Error500InternalServerError("list components")
+		}
+		if want, narrowed, err := productIDsMatching(ctx, gw, in.Product, in.Driver, in.ComponentType); err != nil {
+			return nil, huma.Error500InternalServerError("list components")
+		} else if narrowed {
+			kept := comps[:0:0]
+			for i := range comps {
+				if comps[i].ProductID != nil && want[*comps[i].ProductID] {
+					kept = append(kept, comps[i])
+				}
+			}
+			comps = kept
+		}
+		total := len(comps)
+		if in.Limit > 0 && len(comps) > in.Limit {
+			comps = comps[:in.Limit]
 		}
 		ids := make([]string, len(comps))
 		for i := range comps {
@@ -201,6 +262,7 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 			return nil, huma.Error500InternalServerError("list components")
 		}
 		out := &listComponentsOutput{}
+		out.Body.Total = total
 		out.Body.Components = make([]componentBody, 0, len(comps))
 		for i := range comps {
 			b := toComponentBody(&comps[i])
@@ -286,7 +348,7 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Method:      http.MethodPost,
 		Path:        "/components/{name}:move",
 		Summary:     "Move a component",
-		Description: "Relocates and/or re-parents a component: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant (a location-scoped grant reaches a component for read and create only). A separate act from update, and a separately grantable one (component:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. Does not recompute health: a component's own verdict is purely its active alarms, unaffected by where it sits. A taken name at the destination is a 409. Gated by component:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).",
+		Description: "Relocates and/or re-parents a component: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant (a location-scoped grant reaches a component for read and create only). A separate act from update, and a separately grantable one (component:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. Does not recompute health: a component's own health is purely its active alarms, unaffected by where it sits. A taken name at the destination is a 409. Gated by component:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).",
 	}, "component", "move"), func(ctx context.Context, in *moveComponentInput) (*componentOutput, error) {
 		if in.Body.Location == nil && in.Body.Parent == nil {
 			return nil, huma.Error422UnprocessableEntity("move requires at least one of location or parent")
@@ -370,17 +432,17 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		return out, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.gated(withDeleteRefusal(api, huma.Operation{
 		OperationID:   "delete-component",
 		Method:        http.MethodDelete,
 		Path:          "/components/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a component",
-		Description:   "Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.",
-	}, "component", "delete"), func(ctx context.Context, in *componentPathInput) (*struct{}, error) {
+		Description:   "Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.",
+	}), "component", "delete"), func(ctx context.Context, in *componentPathInput) (*struct{}, error) {
 		if err := gw.DeleteComponent(ctx, actorID(ctx), in.Name,
 			a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "component", "delete")); err != nil {
-			return nil, mapComponentErr(err)
+			return nil, a.deleteRefusal(ctx, gw, "component", in.Name, err, mapComponentErr(err))
 		}
 		return nil, nil
 	})

@@ -4,13 +4,19 @@ import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
+import IdentityFields from "../components/IdentityFields";
 import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
 import { createIdentity, entityLabel } from "../lib/entities";
 import { bindSelectValue } from "../lib/selectvalue";
 import { useFormActions } from "../lib/formactions";
+import { lifecycleRows } from "../lib/lifecycle";
+import { classifierProperties, classifierPropertiesKey } from "../lib/classifier_properties";
+import { classifierMetrics, classifierMetricsKey } from "../lib/classifier_metrics";
 import ProductContractEditor from "../components/ProductContractEditor";
+import CatalogRef from "../components/CatalogRef";
+import { CollectedByDriver, ProductUsedBy } from "../components/CatalogUsage";
 import ComponentTypeSelect from "../components/ComponentTypeSelect";
 import { Plus, resolveIcon } from "../components/icons";
 import {
@@ -30,6 +36,7 @@ import { useMe, can } from "../lib/auth";
 import { catalogLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
+import { confirmDelete } from "../lib/confirm";
 
 // Products: the product catalog (the model a component is an instance of, e.g.
 // "Kestrel VRoom"), on the flat FlatList surface. A product is addressed by
@@ -152,7 +159,7 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
   async function removeProduct() {
     const r = row();
     if (!r) return;
-    if (!confirm(`Delete product "${r.name}"?`)) return;
+    if (!(await confirmDelete({ kind: "product", name: r.name }))) return;
     setErr(null);
     try {
       await deleteProduct(r.name);
@@ -220,7 +227,7 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
               <For each={PRODUCT_KINDS}>{(k) => <option value={k}>{k}</option>}</For>
             </select>
           </BladeField>
-          <BladeField label="Type" mono value={() => r().component_type}>
+          <BladeField label="Type" mono value={() => r().component_type} read={<CatalogRef kind="component_type" name={r().component_type} />}>
             <TypeSelect value={componentType()} onChange={setComponentType} />
           </BladeField>
           <BladeField
@@ -229,14 +236,19 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
           >
             <IconOverrideField componentType={componentType()} value={icon()} onChange={setIcon} />
           </BladeField>
-          <BladeField label="Vendor" mono value={() => r().vendor ?? ""}>
+          <BladeField label="Vendor" mono value={() => r().vendor ?? ""} read={r().vendor ? <CatalogRef kind="vendor" name={r().vendor} /> : undefined}>
             <VendorSelect value={vendorId()} onChange={setVendorId} />
           </BladeField>
-          <BladeField label="Driver" mono value={() => r().driver ?? ""}>
+          <BladeField label="Driver" mono value={() => r().driver ?? ""} read={r().driver ? <CatalogRef kind="driver" name={r().driver} /> : undefined}>
             <DriverSelect value={driverId()} onChange={setDriverId} />
           </BladeField>
+          <ProductLifecycle productId={r().name} />
           <ProductContractEditor productId={r().name} official={r().official} />
           <ProductContractEditor productId={r().name} official={r().official} lane="metric" />
+          <Show when={r().driver}>
+            <CollectedByDriver driver={r().driver!} title="Collected by its driver" />
+          </Show>
+          <ProductUsedBy name={r().name} />
         </div>
       )}
     </Show>
@@ -252,7 +264,8 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
 // (ADR-0086); vendor, driver, and icon override are optional.
 export function CreateProductForm(p: { onCreated: (r: Product) => void }): JSX.Element {
   const qc = useQueryClient();
-  const { display, setDisplay, name, setName, nameDerived } = createIdentity();
+  const identity = createIdentity();
+  const { display, name } = identity;
   const [kind, setKind] = createSignal<ProductKind>("device");
   const [componentType, setComponentType] = createSignal("");
   const [icon, setIcon] = createSignal("");
@@ -296,12 +309,7 @@ export function CreateProductForm(p: { onCreated: (r: Product) => void }): JSX.E
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow bind="label">
-        <input class="input input-bordered w-full" value={display()} placeholder="Kestrel VRoom" onInput={(e) => setDisplay(e.currentTarget.value)} />
-      </FieldRow>
-      <FieldRow bind="name" hint={nameDerived() ? "Derived from the label. Edit to set your own." : "Globally unique address, used by the API and CLI."}>
-        <input class="input input-bordered w-full font-data" value={name()} placeholder="kestrel-vroom" onInput={(e) => setName(e.currentTarget.value)} />
-      </FieldRow>
+      <IdentityFields identity={identity} labelPlaceholder="Kestrel VRoom" namePlaceholder="kestrel-vroom" />
       <FieldRow label="Kind" hint="What class of thing the product is.">
         <select class="select select-bordered w-full" value={kind()} onChange={(e) => setKind(e.currentTarget.value as ProductKind)}>
           <For each={PRODUCT_KINDS}>{(k) => <option value={k}>{k}</option>}</For>
@@ -399,3 +407,29 @@ function IconOverrideField(p: { componentType: string; value: string; onChange: 
   );
 }
 
+
+// ProductLifecycle is the product's lifecycle group (#2366): the contract defaults
+// for the six lifecycle fields, formatted, which every component of the product
+// inherits unless it overrides the dates.
+function ProductLifecycle(props: { productId: string }): JSX.Element {
+  const propsQ = useQuery(() => ({ queryKey: classifierPropertiesKey("product", props.productId), queryFn: () => classifierProperties("product", props.productId) }));
+  const metricsQ = useQuery(() => ({ queryKey: classifierMetricsKey("product", props.productId), queryFn: () => classifierMetrics("product", props.productId) }));
+  const rows = createMemo(() => lifecycleRows(propsQ.data ?? [], metricsQ.data ?? []));
+  return (
+    <Show when={rows().length > 0}>
+      <div data-testid="product-lifecycle" class="rounded-box border border-base-300 p-3 text-sm">
+        <div class="mb-1 text-xs font-medium uppercase tracking-wide text-base-content/50">Lifecycle</div>
+        <dl class="grid grid-cols-[8rem_1fr] gap-x-3 gap-y-1">
+          <For each={rows()}>
+            {(row) => (
+              <>
+                <dt class="text-base-content/50">{row.label}</dt>
+                <dd class="font-mono text-xs" data-lifecycle={row.name}>{row.text}</dd>
+              </>
+            )}
+          </For>
+        </dl>
+      </div>
+    </Show>
+  );
+}

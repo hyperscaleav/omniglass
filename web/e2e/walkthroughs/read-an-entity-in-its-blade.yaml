@@ -1,0 +1,38 @@
+# Read an entity in its blade (#2423): a fleet blade is the entity's detail
+# page in a side panel, the same card, tabs and actions, so an operator answers
+# a question about a system or a component without leaving Explore. The video
+# bar in Meeting 405 has an alarm raised off camera, so the system's Why strip
+# has a component to open.
+title: Read an entity in its blade
+description: Open a system from Explore, open one of its components over it, and read the component's whole detail without leaving the outline.
+setup:
+  - post: '/components/hq.west.level-4.meeting-405.$comp.videobar-1/alarms'
+    body: { severity: high, message: Video feed lost, dedup_key: walkthrough-blade-detail }
+steps:
+  - goto: /explore
+    caption: Explore is the outline of every location in the fleet. Meeting 405 is on the fourth floor of the West Building.
+  - click: { role: button, name: Expand Headquarters }
+    caption: Open the campus.
+  - click: { role: button, name: Expand West Building }
+    caption: Then the building.
+  - click: { role: button, name: Expand Level 4 }
+    caption: Then the floor.
+  - click: { role: treeitem, name: Meeting 405 }
+    caption: Meeting 405 holds one system. Its blade is the system's detail page, reflowed into the side panel.
+  - wait: { selector: 'aside[data-blade] [data-testid=alarm-strip] >> text=Video feed lost' }
+    caption: The same card the page shows, with its Why strip, components, map and data, and the same tabs.
+  - click: { role: tab, name: Activity }
+    caption: Activity is here too, the uptime, health history, events and logs. The outline behind keeps its own address.
+  - wait: { selector: 'aside[data-blade] [data-testid=history-tab]' }
+    caption: Switching a tab changes only the blade.
+  - click: { role: tab, name: Overview }
+    caption: Back to Overview, where the alarm names its component.
+  - click: "aside[data-blade] [data-testid=alarm-strip] button:has-text('videobar-1')"
+    caption: Opening the video bar stacks its blade over the system's, rather than leaving the page.
+  - wait: { selector: 'aside[data-blade] [data-testid=leaf-collection]' }
+    caption: The component's whole detail, what it is, the systems it serves, its vitals and how it is collected.
+    poster: true
+  - click: { role: tab, name: Configure }
+    caption: Configure carries the one form and every configuration panel, as on the page; Edit and the actions menu with Delete sit at the right of the tab rail.
+  - wait: { selector: 'aside[data-blade] [data-testid=entity-form]' }
+    caption: Expand still opens the page, for its breadcrumb and a shareable address.

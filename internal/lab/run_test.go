@@ -5,8 +5,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -153,7 +155,7 @@ func (f *fakeEngine) RunContainer(_ context.Context, svc Service, _ string) (str
 	f.ran[svc.Name] = svc.Image
 	st := ContainerState{Running: true, Status: "running", Published: map[int]string{}}
 	switch svc.Name {
-	case "db":
+	case "db", DexService:
 		st.Health = "healthy"
 	case "seed":
 		st = ContainerState{Status: "exited", ExitCode: f.seedExit}
@@ -233,7 +235,7 @@ func testAlive(pid int, start string) bool {
 	return ok && (start == "" || start == got)
 }
 
-func testRunner(eng Engine, out *bytes.Buffer) *Runner {
+func testRunner(eng Engine, out io.Writer) *Runner {
 	return &Runner{
 		Engine: eng, Out: out, Host: "box",
 		Alive:    testAlive,
@@ -273,6 +275,30 @@ func TestRunBringsTheLabUpAndReportsTheConsole(t *testing.T) {
 		if !strings.Contains(out.String(), line) {
 			t.Errorf("status lacks %q:\n%s", line, out.String())
 		}
+	}
+}
+
+// A lab with SSO (#2362) pulls Dex, starts it once the database is up and
+// before the seed configures single sign-on against it, runs it from its own
+// image, and keeps it running with the rest.
+func TestRunStartsTheIdentityProviderBeforeTheSeed(t *testing.T) {
+	srv := fakeServer(t)
+	eng := newFakeEngine(strings.TrimPrefix(srv.URL, "http://"))
+	cfg := testConfig()
+	cfg.Options.SSO, cfg.Options.Ephemeral, cfg.Options.Project = true, true, "walk-1"
+	var out bytes.Buffer
+	if _, err := testRunner(eng, &out).Run(context.Background(), cfg); err != nil {
+		t.Fatalf("%v\n%s", err, out.String())
+	}
+	want := []string{"network walk-1_default", "container db", "container dex", "container seed", "container server", "container outpost"}
+	if strings.Join(eng.created, ",") != strings.Join(want, ",") {
+		t.Fatalf("created %v, want %v", eng.created, want)
+	}
+	if _, pulled := eng.images[DexImage]; !pulled || eng.ran[DexService] != DexImage {
+		t.Fatalf("Dex pulled %v, ran %q, want %s", pulled, eng.ran[DexService], DexImage)
+	}
+	if !slices.Contains(eng.cmds["seed"], "--sso") || !strings.Contains(out.String(), DexIssuer) {
+		t.Fatalf("seed %v, status:\n%s; want the seed told to configure sso and the status naming Dex", eng.cmds["seed"], out.String())
 	}
 }
 
@@ -348,22 +374,13 @@ func TestRunCreatesAPulledImageFromItsID(t *testing.T) {
 func TestRunHoldsUntilStoppedThenTearsDownKeepingTheData(t *testing.T) {
 	srv := fakeServer(t)
 	eng := newFakeEngine(strings.TrimPrefix(srv.URL, "http://"))
-	var out bytes.Buffer
+	var out syncBuffer
 	cfg := testConfig()
 	cfg.Hold = true
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { _, err := testRunner(eng, &out).Run(ctx, cfg); done <- err }()
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		eng.mu.Lock()
-		n := len(eng.containers)
-		eng.mu.Unlock()
-		if n == 3 || time.Now().After(deadline) {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	waitHolding(t, &out)
 	cancel()
 	if err := <-done; err != nil {
 		t.Fatalf("a stopped lab: %v", err)

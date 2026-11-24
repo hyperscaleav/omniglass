@@ -1,4 +1,5 @@
-import { For, type JSX } from "solid-js";
+import { For, Show, type JSX } from "solid-js";
+import Tooltip from "./ui/Tooltip";
 
 // StateStrip is the console's one horizontal state-over-time strip: a rounded bar
 // split into weighted segments, one per contiguous stretch in a single state, with
@@ -20,6 +21,9 @@ export type StripSegment = {
   weight: number;
   // Per-segment hover text, e.g. how long that state lasted and when it began.
   title?: string;
+  // Hover card (the Tooltip wrapper): verdict, from, to, duration. Also
+  // exposed as data-segment so a test can read it without a hover.
+  tip?: string;
 };
 
 export default function StateStrip(props: {
@@ -30,6 +34,9 @@ export default function StateStrip(props: {
   title?: string;
   // Height class; the default matches the interface rows.
   height?: string;
+  // Labels under the bar's left and right ends (where the window starts and ends).
+  startLabel?: string;
+  endLabel?: string;
   // The trailing hint beside the bar (an uptime percentage, a change count).
   children?: JSX.Element;
 }) {
@@ -38,13 +45,30 @@ export default function StateStrip(props: {
     // the trailing hint) divide by the capture's own clock, so the shot
     // pipeline masks the whole row by this class (#780's 40px flap was this
     // strip breathing between two honest captures).
-    <div class="og-statestrip flex items-center gap-2">
-      <div class={`flex ${props.height ?? "h-2"} flex-1 overflow-hidden rounded-full bg-base-300`} title={props.title}>
-        <For each={props.segments}>
-          {(s) => <div class={props.tone(s.value)} style={{ flex: `${Math.max(s.weight, 0.001)} 1 0%` }} title={s.title} />}
-        </For>
+    <div class="og-statestrip flex flex-col gap-0.5">
+      <div class="flex items-center gap-2">
+        <Tooltip as="div" class={`flex ${props.height ?? "h-2"} flex-1 overflow-hidden rounded-full bg-base-300`} content={props.title}>
+          <For each={props.segments}>
+            {(s) => (
+              <Show
+                when={s.tip}
+                fallback={<Tooltip as="div" class={props.tone(s.value)} style={{ flex: `${Math.max(s.weight, 0.001)} 1 0%` }} content={s.title} />}
+              >
+                <Tooltip as="div" content={s.tip} class={props.tone(s.value)} style={{ flex: `${Math.max(s.weight, 0.001)} 1 0%` }} data-segment={s.tip}>
+                  {null}
+                </Tooltip>
+              </Show>
+            )}
+          </For>
+        </Tooltip>
+        {props.children}
       </div>
-      {props.children}
+      <Show when={props.startLabel || props.endLabel}>
+        <div class="flex justify-between text-[10px] text-base-content/45">
+          <span data-testid="strip-start">{props.startLabel}</span>
+          <span data-testid="strip-end">{props.endLabel}</span>
+        </div>
+      </Show>
     </div>
   );
 }

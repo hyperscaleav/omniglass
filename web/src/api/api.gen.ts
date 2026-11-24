@@ -505,6 +505,12 @@ export type AlarmBody = {
   /** What the alarm is about: one open alarm per (component, dedup_key) */
   dedup_key: string;
   id: string;
+  /** The name of the location the alarm's component sits in (its plane root's location); absent when the component is unplaced, and on every read but the fleet queue */
+  location?: string;
+  /** That location's uuid, the stable form of location; only on the fleet queue */
+  location_id?: string;
+  /** That location's dotted ancestor path, root first (for example boi.17c) */
+  location_path?: string;
   message: string;
   raised_at: string;
   /** The event rule that raised the alarm, by name; absent when an operator raised it */
@@ -517,6 +523,16 @@ export type AlarmBody = {
   snoozed_by?: string;
   /** Until when the alarm (by component and dedup_key) is snoozed: its notifications are written suppressed until then. Null while it is not snoozed. Independent of acknowledged and cleared_at */
   snoozed_until?: string;
+  /**
+     * Those systems' uuids, in the same order as systems; only on the fleet queue
+     * @nullable
+     */
+  system_ids?: string[] | null;
+  /**
+     * The names of the systems the alarm's component is a member of; only on the fleet queue
+     * @nullable
+     */
+  systems?: string[] | null;
 };
 
 export type AlarmFactBody = {
@@ -693,6 +709,28 @@ export type AssistantConversationOutputBody = {
 };
 
 /**
+ * live: a model answers any question; replay: the server plays a recording, which answers only its prompts; none: omnibot cannot run here
+ */
+export type AssistantOmnibotFactsMode = typeof AssistantOmnibotFactsMode[keyof typeof AssistantOmnibotFactsMode];
+
+
+export const AssistantOmnibotFactsMode = {
+  live: 'live',
+  replay: 'replay',
+  none: 'none',
+} as const;
+
+export type AssistantOmnibotFacts = {
+  /** live: a model answers any question; replay: the server plays a recording, which answers only its prompts; none: omnibot cannot run here */
+  mode: AssistantOmnibotFactsMode;
+  /**
+     * The questions a recording answers, in recorded order; empty unless mode is replay
+     * @nullable
+     */
+  prompts: string[] | null;
+};
+
+/**
  * The model omnibot runs on: openai (any OpenAI-compatible chat completions server, OpenRouter by default) or none, which leaves the server's recording, if any
  */
 export type AssistantSettingsProvider = typeof AssistantSettingsProvider[keyof typeof AssistantSettingsProvider];
@@ -758,6 +796,8 @@ export type AuthStatusOutputBody = {
   bootstrapped: boolean;
   /** Whether this server is a lab started by omniglass lab run: disposable data and a well-known login, never a real deployment */
   lab: boolean;
+  /** The identity providers a person may sign in through, by the name /auth/oidc/start/{provider} takes; empty when single sign-on is not configured */
+  sso_providers: string[];
 };
 
 /**
@@ -804,6 +844,332 @@ export type AvatarOutputBody = {
   readonly $schema?: string;
   /** The profile picture as a base64-encoded 256x256 JPEG */
   image_base64: string;
+};
+
+export type CreateComponentInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The name a create form previewed (POST /components:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the type's stem moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422.
+     * @minLength 1
+     * @maxLength 100
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  expected_name?: string;
+  /** What an operator reads; the name is the address */
+  label?: string;
+  /** Location name this component is placed at */
+  location?: string;
+  /**
+     * Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the product's type.
+     * @minLength 1
+     * @maxLength 100
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  name?: string;
+  /** Parent component name; omit for a root component */
+  parent?: string;
+  /** Product (catalog SKU) this component is an instance of, by name or uuid. Required: use a generic (generic-device, generic-app, generic-service) until a real product is modeled. */
+  product?: string;
+  /** Primary system name this component belongs to. Naming one writes that system's membership, so it costs the system:update permission and resolves in that scope; omitted, the create costs component:create alone. */
+  system?: string;
+};
+
+export type BatchCreateComponentsInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The components to create, each the body POST /components takes, in order: a parent before its children
+     * @minItems 1
+     * @nullable
+     */
+  requests: CreateComponentInputBody[] | null;
+  /** Run every request in the transaction and roll it back: the response is what the write would create (names minted, ids empty), or the row that would refuse it, and nothing is written */
+  validate_only?: boolean;
+};
+
+export type RenderBody = {
+  /** The dash render's segments concatenated with no separator, with the final stem-ordinal segment compacted to <abbrev><ordinal> when the owning type registers one (e.g. boi17c216bdsp1). On a LIST row the substitution is skipped (segments concatenated as-is) to avoid a per-row abbrev resolution; a GET always compacts it. Display only either way; not accepted by the resolver. */
+  bare: string;
+  /** The path's non-accessor segments joined with '-' (e.g. boi-17c-216b-display-1). Display only; not accepted by the resolver. */
+  dash: string;
+};
+
+/**
+ * The resolved effective tags (key -> winning value) that cascade onto this component; for the Tags column. Provenance is in the effective-tags detail view.
+ */
+export type ComponentBodyEffectiveTags = {[key: string]: string};
+
+/**
+ * One managed device or service, an instance of a product, placed at a location and usually a member of a system.
+ */
+export type ComponentBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces.
+     * @nullable
+     */
+  actions?: string[] | null;
+  /** The resolved effective tags (key -> winning value) that cascade onto this component; for the Tags column. Provenance is in the effective-tags detail view. */
+  effective_tags?: ComponentBodyEffectiveTags;
+  id: string;
+  label?: string;
+  /** Whether the platform rendered this label from a label rule rather than an operator typing it. Read-only: write label to claim it, write an empty label to hand it back. */
+  label_generated: boolean;
+  /** The location's name, for display */
+  location?: string;
+  /** The location's id, the canonical handle */
+  location_id?: string;
+  name: string;
+  /** Whether the platform picked this name (a server-side generator) rather than an operator typing it. */
+  name_generated: boolean;
+  /** The parent component's name, for display; absent for a root component */
+  parent?: string;
+  /** The parent component's id, the canonical handle */
+  parent_id?: string;
+  /** The dotted address (e.g. boi.17c.415a.$comp.display-1): derived from the component's own placement, never from a system it belongs to. Set on a GET or LIST response; empty on a create/update/move/rename/resetName response (refetch the row to see it). */
+  path?: string;
+  /**
+     * path split on '.', accessors included, so the round trip through the resolver stays lossless.
+     * @nullable
+     */
+  path_segments?: string[] | null;
+  /** The product's name, for display; the form a body round-trips. */
+  product?: string;
+  /** The product (catalog SKU) this component is an instance of, if any; the stable handle that survives a rename. */
+  product_id?: string;
+  /** Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy. */
+  renders?: RenderBody;
+  /** Name of the component's primary system, its default when no system is named. A component may belong to several; read /components/{name}/memberships for all of them. */
+  system?: string;
+  /** How many systems this component belongs to; more than one means it is shared. */
+  system_count: number;
+  /** The primary system's id, the canonical handle */
+  system_id?: string;
+};
+
+export type BatchCreateComponentsOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** The batch id every audit row of this call carries as from_batch; omitted on a dry run */
+  batch_id?: string;
+  /**
+     * The components created, each as POST /components answers it, in request order
+     * @nullable
+     */
+  components: ComponentBody[] | null;
+  /** Whether this was a dry run that wrote nothing */
+  validate_only: boolean;
+};
+
+export type CreateLocationInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The name a create form previewed (POST /locations:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the location_type's name rule moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422.
+     * @minLength 1
+     * @maxLength 100
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  expected_name?: string;
+  /** What an operator reads; the name is the address */
+  label?: string;
+  /**
+     * The location_type, by name or uuid (campus, building, ...)
+     * @minLength 1
+     */
+  location_type: string;
+  /**
+     * Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the location_type's name rule.
+     * @minLength 1
+     * @maxLength 100
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  name?: string;
+  /** Parent location name; omit for a root location */
+  parent?: string;
+};
+
+export type BatchCreateLocationsInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The locations to create, each the body POST /locations takes, in order: a parent before its children, which then name it as their parent
+     * @minItems 1
+     * @nullable
+     */
+  requests: CreateLocationInputBody[] | null;
+  /** Run every request in the transaction and roll it back: the response is what the write would create (names minted, ids empty), or the row that would refuse it, and nothing is written */
+  validate_only?: boolean;
+};
+
+/**
+ * The resolved effective tags (key -> winning value) that cascade onto this location (platform and its location tree); for the Tags column.
+ */
+export type LocationBodyEffectiveTags = {[key: string]: string};
+
+/**
+ * A place the fleet occupies, from a campus down to a room, nested under the location it sits in.
+ */
+export type LocationBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces.
+     * @nullable
+     */
+  actions?: string[] | null;
+  /** The resolved effective tags (key -> winning value) that cascade onto this location (platform and its location tree); for the Tags column. */
+  effective_tags?: LocationBodyEffectiveTags;
+  id: string;
+  label?: string;
+  /** Whether the platform rendered this label from a label rule rather than an operator typing it. Read-only: write label to claim it, write an empty label to hand it back. */
+  label_generated: boolean;
+  /** The location_type name */
+  location_type: string;
+  /** The location_type's uuid, the stable form of location_type */
+  location_type_id: string;
+  name: string;
+  /** Whether the platform picked this name (from the location_type's name rule) rather than an operator typing it. */
+  name_generated: boolean;
+  /** The parent location's name, for display; absent for a site root */
+  parent?: string;
+  /** The parent location's id, the canonical handle */
+  parent_id?: string;
+  /** The dotted address (e.g. boi.17c.415a); no accessor, since a location's own address IS its location-tree ancestor chain. Set on a GET or LIST response; empty on a create/update/move/rename response (refetch the row to see it). */
+  path?: string;
+  /**
+     * path split on '.'.
+     * @nullable
+     */
+  path_segments?: string[] | null;
+  /** Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy. */
+  renders?: RenderBody;
+};
+
+export type BatchCreateLocationsOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** The batch id every audit row of this call carries as from_batch; omitted on a dry run */
+  batch_id?: string;
+  /**
+     * The locations created, each as POST /locations answers it, in request order
+     * @nullable
+     */
+  locations: LocationBody[] | null;
+  /** Whether this was a dry run that wrote nothing */
+  validate_only: boolean;
+};
+
+export type CreateSystemInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The name a create form previewed (POST /systems:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the system_type's stem moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422.
+     * @minLength 1
+     * @maxLength 100
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  expected_name?: string;
+  /** What an operator reads; the name is the address */
+  label?: string;
+  /** Location name this system is placed at */
+  location?: string;
+  /**
+     * Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the system_type's stem.
+     * @minLength 1
+     * @maxLength 100
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  name?: string;
+  /** Parent system name; omit for a root system */
+  parent?: string;
+  /** The standard it conforms to, by handle or uuid; omit for a one-off system */
+  standard_id?: string;
+  /** The system_type it is classified as (what it is for), by name or uuid; omit to leave it unclassified */
+  system_type_id?: string;
+};
+
+export type BatchCreateSystemsInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The systems to create, each the body POST /systems takes, in order: a parent before its children
+     * @minItems 1
+     * @nullable
+     */
+  requests: CreateSystemInputBody[] | null;
+  /** Run every request in the transaction and roll it back: the response is what the write would create (names minted, ids empty), or the row that would refuse it, and nothing is written */
+  validate_only?: boolean;
+};
+
+/**
+ * The resolved effective tags (key -> winning value) that cascade onto this system (platform, its location, its system tree); for the Tags column.
+ */
+export type SystemBodyEffectiveTags = {[key: string]: string};
+
+/**
+ * The unit Omniglass monitors, a set of components in one location that works as one, with one health of its own.
+ */
+export type SystemBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces.
+     * @nullable
+     */
+  actions?: string[] | null;
+  /** The resolved effective tags (key -> winning value) that cascade onto this system (platform, its location, its system tree); for the Tags column. */
+  effective_tags?: SystemBodyEffectiveTags;
+  id: string;
+  label?: string;
+  /** Whether the platform rendered this label from a label rule rather than an operator typing it. Read-only: write label to claim it, write an empty label to hand it back. */
+  label_generated: boolean;
+  /** The location's name, for display */
+  location?: string;
+  /** The location's id, the canonical handle */
+  location_id?: string;
+  /** How many components are bound into this system */
+  member_count: number;
+  name: string;
+  /** Whether the platform picked this name (from the system_type's stem) rather than an operator typing it. */
+  name_generated: boolean;
+  /** The parent system's name, for display; absent for a root system */
+  parent?: string;
+  /** The parent system's id, the canonical handle */
+  parent_id?: string;
+  /** The dotted address (e.g. boi.17c.$sys.av). Set on a GET or LIST response; empty on a create/update/move/rename response (refetch the row to see it). */
+  path?: string;
+  /**
+     * path split on '.', accessors included, so the round trip through the resolver stays lossless.
+     * @nullable
+     */
+  path_segments?: string[] | null;
+  /** Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy. */
+  renders?: RenderBody;
+  /** The standard's handle, for display; omitted for a one-off system */
+  standard?: string;
+  /** The standard's uuid; the stable form of standard */
+  standard_id?: string;
+  /** The system_type's name, for display: what this system is for (board, class, video-wall). Omitted for an unclassified system. Distinct from standard, which is the contract it is built to. */
+  system_type?: string;
+  /** The system_type's uuid; the stable form of system_type */
+  system_type_id?: string;
+};
+
+export type BatchCreateSystemsOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** The batch id every audit row of this call carries as from_batch; omitted on a dry run */
+  batch_id?: string;
+  /**
+     * The systems created, each as POST /systems answers it, in request order
+     * @nullable
+     */
+  systems: SystemBody[] | null;
+  /** Whether this was a dry run that wrote nothing */
+  validate_only: boolean;
 };
 
 export type CalcErrorBody = {
@@ -1281,7 +1647,7 @@ export const CommandBodySettledBy = {
 } as const;
 
 /**
- * On an issue's answer only: the computed settlement verdict at that moment (none/pending/settled/failed)
+ * On an issue's answer only: the computed settlement at that moment (none/pending/settled/failed)
  */
 export type CommandBodySettlement = typeof CommandBodySettlement[keyof typeof CommandBodySettlement];
 
@@ -1390,7 +1756,7 @@ export type CommandBody = {
   settled_by?: CommandBodySettledBy;
   /** The event its terminal status put there: command-settled, command-failed or command-timed-out */
   settled_event_id?: number;
-  /** On an issue's answer only: the computed settlement verdict at that moment (none/pending/settled/failed) */
+  /** On an issue's answer only: the computed settlement at that moment (none/pending/settled/failed) */
   settlement?: CommandBodySettlement;
   /** The recorded status: issued until a terminal settled, failed, or timed-out */
   status: CommandBodyStatus;
@@ -1409,7 +1775,7 @@ export type CommandTypeBody = {
   description?: string;
   /** The command takes its device down (reboot): its delivery closes the gates of the hold set on the delivering outpost until each reads up again. The hold set is the target and what it hosts (host dependencies, followed down), less any out-of-band endpoint of the target */
   disruptive: boolean;
-  /** A disruptive type's backstop: an endpoint with no up verdict this long after delivery reopens anyway, counted as hold-expiry-count. Not the settle window. 0 on a type that is not disruptive */
+  /** A disruptive type's backstop: an endpoint with no up reading this long after delivery reopens anyway, counted as hold-expiry-count. Not the settle window. 0 on a type that is not disruptive */
   hold_seconds: number;
   /** The command type's uuid, the stable form of name */
   id: string;
@@ -1428,67 +1794,6 @@ export type CommandTypeBody = {
   target_metric_type?: string;
   /** The property this command sets (one arm of the exclusive target arc; empty for fire-and-forget or a metric target) */
   target_property_type?: string;
-};
-
-/**
- * The resolved effective tags (key -> winning value) that cascade onto this component; for the Tags column. Provenance is in the effective-tags detail view.
- */
-export type ComponentBodyEffectiveTags = {[key: string]: string};
-
-export type RenderBody = {
-  /** The dash render's segments concatenated with no separator, with the final stem-ordinal segment compacted to <abbrev><ordinal> when the owning type registers one (e.g. boi17c216bdsp1). On a LIST row the substitution is skipped (segments concatenated as-is) to avoid a per-row abbrev resolution; a GET always compacts it. Display only either way; not accepted by the resolver. */
-  bare: string;
-  /** The path's non-accessor segments joined with '-' (e.g. boi-17c-216b-display-1). Display only; not accepted by the resolver. */
-  dash: string;
-};
-
-/**
- * One managed device or service, an instance of a product, placed at a location and usually a member of a system.
- */
-export type ComponentBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  /**
-     * The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces.
-     * @nullable
-     */
-  actions?: string[] | null;
-  /** The resolved effective tags (key -> winning value) that cascade onto this component; for the Tags column. Provenance is in the effective-tags detail view. */
-  effective_tags?: ComponentBodyEffectiveTags;
-  id: string;
-  label?: string;
-  /** Whether the platform rendered this label from a label rule rather than an operator typing it. Read-only: write label to claim it, write an empty label to hand it back. */
-  label_generated: boolean;
-  /** The location's name, for display */
-  location?: string;
-  /** The location's id, the canonical handle */
-  location_id?: string;
-  name: string;
-  /** Whether the platform picked this name (a server-side generator) rather than an operator typing it. */
-  name_generated: boolean;
-  /** The parent component's name, for display; absent for a root component */
-  parent?: string;
-  /** The parent component's id, the canonical handle */
-  parent_id?: string;
-  /** The dotted address (e.g. boi.17c.415a.$comp.display-1): derived from the component's own placement, never from a system it belongs to. Set on a GET or LIST response; empty on a create/update/move/rename/resetName response (refetch the row to see it). */
-  path?: string;
-  /**
-     * path split on '.', accessors included, so the round trip through the resolver stays lossless.
-     * @nullable
-     */
-  path_segments?: string[] | null;
-  /** The product's name, for display; the form a body round-trips. */
-  product?: string;
-  /** The product (catalog SKU) this component is an instance of, if any; the stable handle that survives a rename. */
-  product_id?: string;
-  /** Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy. */
-  renders?: RenderBody;
-  /** Name of the component's primary system, its default when no system is named. A component may belong to several; read /components/{name}/memberships for all of them. */
-  system?: string;
-  /** How many systems this component belongs to; more than one means it is shared. */
-  system_count: number;
-  /** The primary system's id, the canonical handle */
-  system_id?: string;
 };
 
 /**
@@ -1644,6 +1949,17 @@ export type ComponentPropertyBody = {
   value_id: string;
 };
 
+export type SimFaultBody = {
+  /** What the profile defaults it to. */
+  default: string;
+  /** The state path, as the profile names it. */
+  path: string;
+  /** When the server first heard the device hold this value. */
+  since: string;
+  /** What it holds now. */
+  value: string;
+};
+
 export type ImpairmentFields = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -1695,6 +2011,11 @@ export type SimDeviceBody = {
   /** The component's name. */
   component: string;
   component_id: string;
+  /**
+     * The device's settable state paths the simulator reports held off their profile defaults (a display powered off), each with when the server first heard it. In memory, per server process, like the hits.
+     * @nullable
+     */
+  faults?: SimFaultBody[] | null;
   /** Connections and requests the simulated device has answered since the server started. */
   hits: number;
   hits_by_protocol: SimDeviceBodyHitsByProtocol;
@@ -1702,6 +2023,8 @@ export type SimDeviceBody = {
   impaired: boolean;
   /** What an operator has broken on the device; absent when healthy. */
   impairment?: ImpairmentFields;
+  /** When the impairment was last set; absent when healthy. */
+  impairment_since?: string;
   last_hit_at?: string;
   last_protocol?: string;
   /** The component's product; its name selects the simulator profile. */
@@ -1710,6 +2033,19 @@ export type SimDeviceBody = {
   serving: boolean;
   /** What the simulator is doing with the component, most urgent first: offline (its simulator stopped reporting), starting (added since the simulator's last pull, or handed over moments ago), failed (handed to the simulator but not started), running. */
   status: SimDeviceBodyStatus;
+};
+
+export type SimBehaviorBody = {
+  /** Whether it posts a webhook each time. */
+  emits?: boolean;
+  /** How often it runs, as a duration: 5s, 1m. */
+  interval: string;
+  name: string;
+  /**
+     * The state paths it changes each time.
+     * @nullable
+     */
+  writes?: string[] | null;
 };
 
 export type SimImpairmentStatus = {
@@ -1734,12 +2070,31 @@ export type SimOIDBody = {
   path: string;
 };
 
+export type SimSetBody = {
+  /** What the profile defaults the path to, when it does. */
+  default?: string;
+  /** The request body field its value comes from. */
+  field: string;
+  /** The state path the route writes. */
+  path: string;
+  /**
+     * The values the route accepts.
+     * @nullable
+     */
+  values: string[] | null;
+};
+
 export type SimRouteBody = {
   example?: string;
   method: string;
   path: string;
   /** A route the product's own web UI calls but does not advertise. */
   private?: boolean;
+  /**
+     * The state paths the route sets from a field of its body, each to a fixed list of values: what the console offers as quick sets.
+     * @nullable
+     */
+  sets?: SimSetBody[] | null;
   summary?: string;
 };
 
@@ -1770,12 +2125,21 @@ export type ComponentSimOutputBody = {
   /** What the simulator reports for the component: serving, hits, and its impairment. */
   activity?: SimDeviceBody;
   address?: string;
+  /**
+     * What the profile changes on the device by itself over time.
+     * @nullable
+     */
+  behaviors?: SimBehaviorBody[] | null;
   /** The outpost's simulator pulled recently. */
   connected: boolean;
   impairments: SimImpairmentStatus;
   outpost?: string;
   product?: string;
   profile?: string;
+  /** The simulated component that answers for this one, when this component's endpoint is aimed at that component's address: it is served by that simulation and is not a simulation of its own (everything else here is that device's). */
+  served_by?: string;
+  /** The uuid of served_by, the address the console opens it by (names repeat across locations). */
+  served_by_id?: string;
   /** The component has an endpoint on an outpost and a product a profile simulates. */
   simulated: boolean;
   summary?: string;
@@ -1935,7 +2299,7 @@ export type CreateCommandTypeInputBody = {
   /** The command takes its device down (reboot): its delivery closes the gates of the hold set (the target and what it hosts) on the delivering outpost until each reads up again */
   disruptive?: boolean;
   /**
-     * A disruptive type's backstop in seconds, greater than quiet_seconds: an endpoint with no up verdict by then reopens anyway, counted. Not the settle window. Only on a disruptive type
+     * A disruptive type's backstop in seconds, greater than quiet_seconds: an endpoint with no up reading by then reopens anyway, counted. Not the settle window. Only on a disruptive type
      * @minimum 0
      */
   hold_seconds?: number;
@@ -2036,35 +2400,6 @@ export type CreateComponentFromTemplateOutputBody = {
   product: string;
   /** The template it came from; recorded in the audit detail only */
   template: string;
-};
-
-export type CreateComponentInputBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  /**
-     * The name a create form previewed (POST /components:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the type's stem moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422.
-     * @minLength 1
-     * @maxLength 100
-     * @pattern ^[a-z0-9][a-z0-9-]*$
-     */
-  expected_name?: string;
-  /** What an operator reads; the name is the address */
-  label?: string;
-  /** Location name this component is placed at */
-  location?: string;
-  /**
-     * Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the product's type.
-     * @minLength 1
-     * @maxLength 100
-     * @pattern ^[a-z0-9][a-z0-9-]*$
-     */
-  name?: string;
-  /** Parent component name; omit for a root component */
-  parent?: string;
-  /** Product (catalog SKU) this component is an instance of, by name or uuid. Required: use a generic (generic-device, generic-app, generic-service) until a real product is modeled. */
-  product?: string;
-  /** Primary system name this component belongs to. Naming one writes that system's membership, so it costs the system:update permission and resolves in that scope; omitted, the create costs component:create alone. */
-  system?: string;
 };
 
 export type CreateComponentTypeInputBody = {
@@ -2374,32 +2709,15 @@ export type CreateGroupInputBody = {
   name: string;
 };
 
-export type CreateLocationInputBody = {
+export type CreateIdentityLinkInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   /**
-     * The name a create form previewed (POST /locations:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the location_type's name rule moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422.
-     * @minLength 1
-     * @maxLength 100
-     * @pattern ^[a-z0-9][a-z0-9-]*$
+     * The identity at the provider as iss|sub: the issuer exactly as its id_tokens carry it, a bar, and the subject verbatim (the provider's admin console shows it, and an unlinked sign-in names it)
+     * @minLength 3
+     * @maxLength 2048
      */
-  expected_name?: string;
-  /** What an operator reads; the name is the address */
-  label?: string;
-  /**
-     * The location_type, by name or uuid (campus, building, ...)
-     * @minLength 1
-     */
-  location_type: string;
-  /**
-     * Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the location_type's name rule.
-     * @minLength 1
-     * @maxLength 100
-     * @pattern ^[a-z0-9][a-z0-9-]*$
-     */
-  name?: string;
-  /** Parent location name; omit for a root location */
-  parent?: string;
+  identifier: string;
 };
 
 export type NameRuleBody = {
@@ -2852,11 +3170,25 @@ export type CreateSecretInputBody = {
   secret_type: string;
 };
 
+/**
+ * What an open alarm at this level does to its component; omitted, derived from rank (below 20 none, below 40 degraded, else outage)
+ */
+export type CreateSeverityLevelInputBodyHealthEffect = typeof CreateSeverityLevelInputBodyHealthEffect[keyof typeof CreateSeverityLevelInputBodyHealthEffect];
+
+
+export const CreateSeverityLevelInputBodyHealthEffect = {
+  none: 'none',
+  degraded: 'degraded',
+  outage: 'outage',
+} as const;
+
 export type CreateSeverityLevelInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   /** One of gray, blue, green, yellow, orange, red, darkred */
   color: string;
+  /** What an open alarm at this level does to its component; omitted, derived from rank (below 20 none, below 40 degraded, else outage) */
+  health_effect?: CreateSeverityLevelInputBodyHealthEffect;
   /** A human label */
   label?: string;
   /**
@@ -2971,35 +3303,6 @@ export type CreateSystemFromTemplateOutputBody = {
      * @nullable
      */
   to_attach: string[] | null;
-};
-
-export type CreateSystemInputBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  /**
-     * The name a create form previewed (POST /systems:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the system_type's stem moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422.
-     * @minLength 1
-     * @maxLength 100
-     * @pattern ^[a-z0-9][a-z0-9-]*$
-     */
-  expected_name?: string;
-  /** What an operator reads; the name is the address */
-  label?: string;
-  /** Location name this system is placed at */
-  location?: string;
-  /**
-     * Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the system_type's stem.
-     * @minLength 1
-     * @maxLength 100
-     * @pattern ^[a-z0-9][a-z0-9-]*$
-     */
-  name?: string;
-  /** Parent system name; omit for a root system */
-  parent?: string;
-  /** The standard it conforms to, by handle or uuid; omit for a one-off system */
-  standard_id?: string;
-  /** The system_type it is classified as (what it is for), by name or uuid; omit to leave it unclassified */
-  system_type_id?: string;
 };
 
 export type CreateSystemTypeInputBody = {
@@ -3215,6 +3518,66 @@ export type DatabaseSettings = {
      * @maximum 600000
      */
   slow_query_ms: number;
+};
+
+/**
+ * The blocking row's own resource, so a client can link it and offer that kind's own remove.
+ */
+export type DeleteBlockerKind = typeof DeleteBlockerKind[keyof typeof DeleteBlockerKind];
+
+
+export const DeleteBlockerKind = {
+  component: 'component',
+  endpoint: 'endpoint',
+  system: 'system',
+  location: 'location',
+} as const;
+
+export type DeleteBlocker = {
+  /** The blocking row's uuid. */
+  id: string;
+  /** The blocking row's own resource, so a client can link it and offer that kind's own remove. */
+  kind: DeleteBlockerKind;
+  /** What an operator reads for the blocking row: its label, or its name when it has none. */
+  label: string;
+  /** The blocking row's name, its operator-facing address (an endpoint's is unique within its component). */
+  name: string;
+};
+
+export type ErrorDetail = {
+  /** Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
+  location?: string;
+  /** Error message text */
+  message?: string;
+  /** The value at the given location */
+  value?: unknown;
+};
+
+export type DeleteRefusal = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The rows in the way that the caller may read, each to be removed or moved before the delete can succeed.
+     * @nullable
+     */
+  blockers?: DeleteBlocker[] | null;
+  /** How many more rows are in the way that are not listed: outside the caller's read scope, or past the listing cap. */
+  blockers_hidden?: number;
+  /** A human-readable explanation specific to this occurrence of the problem. */
+  detail?: string;
+  /**
+     * Optional list of individual error details
+     * @nullable
+     */
+  errors?: ErrorDetail[] | null;
+  /** A URI reference that identifies the specific occurrence of the problem. */
+  instance?: string;
+  /** HTTP status code */
+  status?: number;
+  /** A short, human-readable summary of the problem type. This value should not change between occurrences of the error. */
+  title?: string;
+  /** A URI reference to human-readable documentation for the error. */
+  type?: string;
 };
 
 export type DownloadFileOutputBody = {
@@ -3529,6 +3892,9 @@ export type SimObservation = {
   outpost: string;
   /** @nullable */
   protocols: SimProtocolObservation[] | null;
+  /** @nullable */
+  served_ids?: string[] | null;
+  served_truncated?: boolean;
   started: string;
 };
 
@@ -3589,15 +3955,6 @@ export type EntityTagsOutputBody = {
   readonly $schema?: string;
   /** @nullable */
   tags: TagBindingBody[] | null;
-};
-
-export type ErrorDetail = {
-  /** Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
-  location?: string;
-  /** Error message text */
-  message?: string;
-  /** The value at the given location */
-  value?: unknown;
 };
 
 export type ErrorModel = {
@@ -3970,7 +4327,7 @@ export type FireSimInputBody = {
 export type FleetDotBody = {
   /** The component's uuid: what a renderer navigates to when a dot is clicked */
   component: string;
-  /** healthy, incomplete, degraded, or outage: the component's own verdict, which is the only thing that colours the dot */
+  /** healthy, incomplete, degraded, or outage: the component's own health, which is the only thing that colours the dot */
   health: string;
   /** The component's name, for the dot's hover title */
   name: string;
@@ -3995,10 +4352,31 @@ export type HealthAlarmBody = {
   message: string;
   raised_at: string;
   severity: string;
+  /** Who snoozed the alarm, by name; empty while it is not snoozed, or once that user has been purged (the audit log keeps the name) */
+  snoozed_by?: string;
+  /** Until when the alarm (by component and dedup_key) is snoozed: its notifications are written suppressed until then. Null while it is not snoozed. Independent of acknowledged and cleared_at */
+  snoozed_until?: string;
+};
+
+export type HealthMemberBody = {
+  /**
+     * The member's open alarms, newest first
+     * @nullable
+     */
+  alarms: HealthAlarmBody[] | null;
+  /** The component's own health: healthy, degraded or outage from its open alarms, or unknown when nothing has ever observed it */
+  health: string;
+  /** The component's uuid */
+  id: string;
+  name: string;
+  /** True when the member fills no slot in this system. Its open alarms are listed here and move nothing above the component: only a slot decides the system's health (ADR-2459) */
+  outside_slot: boolean;
+  /** The name of the slot the member fills in this system (as slots[].name); absent when outside_slot */
+  slot?: string;
 };
 
 export type HealthSlotBody = {
-  /** True for an unconditional slot, or a slot whose alternate is the one currently answering its choice. False means this slot's own impaired/short/spare figures did not contribute to the system's verdict */
+  /** True for an unconditional slot, or a slot whose alternate is the one currently answering its choice. False means this slot's own impaired/short/spare figures did not contribute to the system's health */
   active: boolean;
   /**
      * The active alarms on those down components
@@ -4012,7 +4390,7 @@ export type HealthSlotBody = {
   /** The choice this slot belongs to; absent when the slot is unconditional */
   choice?: string;
   /**
-     * The assigned components whose own verdict is outage; empty when the slot is merely short-staffed or only degraded
+     * The assigned components whose own health is outage; empty when the slot is merely short-staffed or only degraded
      * @nullable
      */
   down: string[] | null;
@@ -4023,9 +4401,9 @@ export type HealthSlotBody = {
   label: string;
   name: string;
   quorum: number;
-  /** How many assigned components currently occupy the slot (their own verdict is not outage; a degraded component still occupies) */
+  /** How many assigned components currently occupy the slot (their own health is not outage; a degraded component still occupies) */
   satisfying: number;
-  /** How many more occupants the slot needs to reach quorum, counting only those currently occupying (own verdict not outage); zero once it does. Diverges from the slots read's understaffed when an assigned component is down */
+  /** How many more occupants the slot needs to reach quorum, counting only those currently occupying (own health not outage); zero once it does. Diverges from the slots read's understaffed when an assigned component is down */
   short: number;
   /** How many occupants the slot has beyond quorum; zero at or below quorum */
   spare: number;
@@ -4033,7 +4411,16 @@ export type HealthSlotBody = {
 
 export type HealthSystemBody = {
   health: string;
+  /** The system's id */
+  id: string;
+  /** The system's display label */
+  label: string;
+  /** The dotted path of the location the system is placed at; empty when unplaced */
+  location: string;
+  /** The system's short name; not unique across rooms, so address the system by path */
   name: string;
+  /** The system's dotted address, unique: the handle GET /systems/{name} resolves */
+  path: string;
 };
 
 export type HealthTransitionBody = {
@@ -4044,17 +4431,28 @@ export type HealthTransitionBody = {
 export type FleetHealthOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
+  /** The health in force when the range opened: the last recorded edge before its start. Present when the caller bounded the start (an explicit since, or the one derived from until); absent on the default window, or when nothing was recorded before it. A timeline draws the stretch before the first transition from it */
+  carried_in?: string;
+  /** When this owner's health was first recorded; absent if never. How long it has been watched, whatever the range */
+  first_recorded_at?: string;
   /** healthy, incomplete, degraded, or outage: the rollup of the slots or systems served beside it. incomplete is a commissioning gap, a slot short because the hardware was never installed rather than because installed hardware is failing, and it ranks between healthy and degraded */
   health: string;
+  /**
+     * Every member of a system with its own health, its open alarms, and whether it fills a slot; empty for a location
+     * @nullable
+     */
+  members: HealthMemberBody[] | null;
   owner: string;
   owner_kind: string;
+  /** A system's health in words: the slots behind it, worst first (for example: slot display is impaired (0 of 1 occupying)), or that no slot is impaired. It never names a member outside a slot. Absent for a location */
+  reason?: string;
   /**
      * The contributing slots; empty for a location
      * @nullable
      */
   slots: HealthSlotBody[] | null;
   /**
-     * The systems beneath a location with their verdicts; empty for a system
+     * The systems beneath a location with their health; empty for a system
      * @nullable
      */
   systems: HealthSystemBody[] | null;
@@ -4066,7 +4464,7 @@ export type FleetHealthOutputBody = {
 };
 
 export type FleetLocationBody = {
-  /** The location's recorded verdict, worst-wins over the systems beneath it */
+  /** The location's recorded health, worst-wins over the systems beneath it */
   health: string;
   /** The location's uuid, the address a renderer navigates by */
   id: string;
@@ -4086,7 +4484,7 @@ export type FleetSystemBody = {
      * @nullable
      */
   dots: FleetDotBody[] | null;
-  /** The system's recorded verdict, the same one its health read serves */
+  /** The system's recorded health, the same one its health read serves */
   health: string;
   /** The system's uuid, the address a renderer navigates by */
   id: string;
@@ -4210,6 +4608,34 @@ export type IdentityBindingBody = {
   value: string;
 };
 
+export type IdentityLinkBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  created_at: string;
+  /** The link's id, which unlinking names */
+  id: string;
+  /** The identity at the provider: its issuer and subject, iss|sub, exactly as its id_tokens carry them */
+  identifier: string;
+  /** The identifier's issuer half */
+  issuer: string;
+  /** When the person last signed in through it */
+  last_used_at?: string;
+  /** The username of whoever made the link: the person themselves or an administrator; absent once that user is purged */
+  linked_by?: string;
+  /** When the provider last accepted the link's refresh token, at sign-in or at a re-check */
+  refresh_accepted_at?: string;
+  /** True when the person made the link themselves */
+  self: boolean;
+  /** The identifier's subject half */
+  subject: string;
+};
+
+export type IdentityLinksOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  links: IdentityLinkBody[];
+};
+
 /**
  * view_as is read-only; act_as is full, with mutations attributed to both the real actor and the impersonated user
  */
@@ -4314,7 +4740,7 @@ export type ListAlarmsOutputBody = {
   /** @nullable */
   alarms: AlarmBody[] | null;
   component: string;
-  /** The component's own verdict, the one its active alarms make (healthy, degraded, or outage), whatever the filter: a component's view reads it here rather than off the whole fleet view. unknown when nothing has ever observed the component (no alarm raised, no endpoint delivered): there is nothing to call healthy on */
+  /** The component's own health, the one its active alarms make (healthy, degraded, or outage), whatever the filter: a component's view reads it here rather than off the whole fleet view. unknown when nothing has ever observed the component (no alarm raised, no endpoint delivered): there is nothing to call healthy on */
   health: string;
 };
 
@@ -4323,6 +4749,8 @@ export type ListAssistantConversationsOutputBody = {
   readonly $schema?: string;
   /** @nullable */
   conversations: AssistantConversation[] | null;
+  /** What omnibot is answering from, so a client can say so before the first question */
+  omnibot: AssistantOmnibotFacts;
 };
 
 export type ListCalcRulesOutputBody = {
@@ -4376,7 +4804,7 @@ export type ListComponentDependenciesOutputBody = {
 export type SystemMemberBody = {
   /** Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
   component: string;
-  /** The component's own recorded verdict (healthy, degraded, or outage), the one its active alarms make; never the system's */
+  /** The component's own recorded health (healthy, degraded, or outage), the one its active alarms make; never the system's */
   component_health: string;
   /** The component's uuid */
   component_id: string;
@@ -4410,6 +4838,8 @@ export type ListComponentsOutputBody = {
   readonly $schema?: string;
   /** @nullable */
   components: ComponentBody[] | null;
+  /** How many components matched the filters, before limit capped the page. With no filter, how many the caller may read. */
+  total: number;
 };
 
 export type ListDriversOutputBody = {
@@ -4452,6 +4882,8 @@ export type ListFleetAlarmsOutputBody = {
   readonly $schema?: string;
   /** @nullable */
   alarms: AlarmBody[] | null;
+  /** Pass as page_token for the next page; absent on the last page */
+  next_page_token?: string;
 };
 
 export type ListGroupGrantsOutputBody = {
@@ -4657,50 +5089,6 @@ export type ListLocationTypesOutputBody = {
   readonly $schema?: string;
   /** @nullable */
   location_types: LocationTypeBody[] | null;
-};
-
-/**
- * The resolved effective tags (key -> winning value) that cascade onto this location (platform and its location tree); for the Tags column.
- */
-export type LocationBodyEffectiveTags = {[key: string]: string};
-
-/**
- * A place the fleet occupies, from a campus down to a room, nested under the location it sits in.
- */
-export type LocationBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  /**
-     * The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces.
-     * @nullable
-     */
-  actions?: string[] | null;
-  /** The resolved effective tags (key -> winning value) that cascade onto this location (platform and its location tree); for the Tags column. */
-  effective_tags?: LocationBodyEffectiveTags;
-  id: string;
-  label?: string;
-  /** Whether the platform rendered this label from a label rule rather than an operator typing it. Read-only: write label to claim it, write an empty label to hand it back. */
-  label_generated: boolean;
-  /** The location_type name */
-  location_type: string;
-  /** The location_type's uuid, the stable form of location_type */
-  location_type_id: string;
-  name: string;
-  /** Whether the platform picked this name (from the location_type's name rule) rather than an operator typing it. */
-  name_generated: boolean;
-  /** The parent location's name, for display; absent for a site root */
-  parent?: string;
-  /** The parent location's id, the canonical handle */
-  parent_id?: string;
-  /** The dotted address (e.g. boi.17c.415a); no accessor, since a location's own address IS its location-tree ancestor chain. Set on a GET or LIST response; empty on a create/update/move/rename response (refetch the row to see it). */
-  path?: string;
-  /**
-     * path split on '.'.
-     * @nullable
-     */
-  path_segments?: string[] | null;
-  /** Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy. */
-  renders?: RenderBody;
 };
 
 export type ListLocationsOutputBody = {
@@ -5248,6 +5636,18 @@ export const SeverityLevelBodyColor = {
 } as const;
 
 /**
+ * What an open alarm at this level does to its own component: none (it does not affect health), degraded, or outage (the component stops filling its slots). Declared on the level, never implied by rank
+ */
+export type SeverityLevelBodyHealthEffect = typeof SeverityLevelBodyHealthEffect[keyof typeof SeverityLevelBodyHealthEffect];
+
+
+export const SeverityLevelBodyHealthEffect = {
+  none: 'none',
+  degraded: 'degraded',
+  outage: 'outage',
+} as const;
+
+/**
  * How bad an alarm is, ranked, with its color and whether it takes its component out.
  */
 export type SeverityLevelBody = {
@@ -5255,6 +5655,8 @@ export type SeverityLevelBody = {
   readonly $schema?: string;
   /** The hue the console renders the level in */
   color: SeverityLevelBodyColor;
+  /** What an open alarm at this level does to its own component: none (it does not affect health), degraded, or outage (the component stops filling its slots). Declared on the level, never implied by rank */
+  health_effect: SeverityLevelBodyHealthEffect;
   /** The level's uuid, the stable form of name */
   id: string;
   label?: string;
@@ -5262,7 +5664,10 @@ export type SeverityLevelBody = {
   name: string;
   /** Shipped with the platform and read-only */
   official: boolean;
-  /** Whether an active alarm at this level puts its component in outage (at or above the high level's rank); below it, an alarm degrades */
+  /**
+     * Deprecated alias of health_effect == outage, kept so released clients do not break; read health_effect
+     * @deprecated
+     */
   outage: boolean;
   /** Compares levels: higher is more severe */
   rank: number;
@@ -5444,65 +5849,13 @@ export type ListSystemTypesOutputBody = {
   system_types: SystemTypeBody[] | null;
 };
 
-/**
- * The resolved effective tags (key -> winning value) that cascade onto this system (platform, its location, its system tree); for the Tags column.
- */
-export type SystemBodyEffectiveTags = {[key: string]: string};
-
-/**
- * The unit Omniglass monitors, a set of components in one location that works as one, with one health of its own.
- */
-export type SystemBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  /**
-     * The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces.
-     * @nullable
-     */
-  actions?: string[] | null;
-  /** The resolved effective tags (key -> winning value) that cascade onto this system (platform, its location, its system tree); for the Tags column. */
-  effective_tags?: SystemBodyEffectiveTags;
-  id: string;
-  label?: string;
-  /** Whether the platform rendered this label from a label rule rather than an operator typing it. Read-only: write label to claim it, write an empty label to hand it back. */
-  label_generated: boolean;
-  /** The location's name, for display */
-  location?: string;
-  /** The location's id, the canonical handle */
-  location_id?: string;
-  /** How many components are bound into this system */
-  member_count: number;
-  name: string;
-  /** Whether the platform picked this name (from the system_type's stem) rather than an operator typing it. */
-  name_generated: boolean;
-  /** The parent system's name, for display; absent for a root system */
-  parent?: string;
-  /** The parent system's id, the canonical handle */
-  parent_id?: string;
-  /** The dotted address (e.g. boi.17c.$sys.av). Set on a GET or LIST response; empty on a create/update/move/rename response (refetch the row to see it). */
-  path?: string;
-  /**
-     * path split on '.', accessors included, so the round trip through the resolver stays lossless.
-     * @nullable
-     */
-  path_segments?: string[] | null;
-  /** Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy. */
-  renders?: RenderBody;
-  /** The standard's handle, for display; omitted for a one-off system */
-  standard?: string;
-  /** The standard's uuid; the stable form of standard */
-  standard_id?: string;
-  /** The system_type's name, for display: what this system is for (board, class, video-wall). Omitted for an unclassified system. Distinct from standard, which is the contract it is built to. */
-  system_type?: string;
-  /** The system_type's uuid; the stable form of system_type */
-  system_type_id?: string;
-};
-
 export type ListSystemsOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   /** @nullable */
   systems: SystemBody[] | null;
+  /** How many systems matched the filter, before limit capped the page. With no filter, how many the caller may read. */
+  total: number;
 };
 
 /**
@@ -6217,6 +6570,38 @@ export type OwnerStruct = {
   ref: string;
 };
 
+/**
+ * The driver's inputs the attach would send; a secret input holds the secret's NAME, never its value.
+ */
+export type SimPlannedEndpointBodyInputs = {[key: string]: string};
+
+export type SimPlannedEndpointBody = {
+  /** The driver the endpoint would attach; empty for a reachability probe. */
+  driver?: string;
+  /** The driver's inputs the attach would send; a secret input holds the secret's NAME, never its value. */
+  inputs?: SimPlannedEndpointBodyInputs;
+  /** The host:port a reachability probe would reach; empty for a driver attach. */
+  target?: string;
+  /** The transport a reachability probe would speak; empty for a driver attach. */
+  transport?: string;
+};
+
+export type PlanSimComponentOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** The loopback address the simulated component would answer on. */
+  address: string;
+  /**
+     * The endpoints an add would create for the collector to reach it.
+     * @nullable
+     */
+  endpoints: SimPlannedEndpointBody[] | null;
+  /** The outpost whose simulator would serve the component. */
+  outpost: string;
+  /** The simulated product planned. */
+  product: string;
+};
+
 export type PlatformAlarmBody = {
   /** The key the raising rule samples, which names the panel the alarm flags; absent for a hand-raised alarm */
   key?: string;
@@ -6287,7 +6672,7 @@ export type PlatformOutpostBody = {
   enrolled: boolean;
   /** The current figure per key, by key name: a gauge's latest sample, a window count only while its window is the newest. A key the outpost has never reported, or whose last window has passed, is absent, never zero; the whole map is absent without a fleet-wide component read */
   figures?: PlatformOutpostBodyFigures;
-  /** The outpost's platform component verdict, which tones the row; absent without a fleet-wide component read */
+  /** The outpost's platform component health, which tones the row; absent without a fleet-wide component read */
   health?: string;
   label: string;
   /** The outpost's last heartbeat; absent when it has never sent one */
@@ -6505,7 +6890,7 @@ export type PlatformServerBody = {
      * @nullable
      */
   groups: PlatformPanelBody[] | null;
-  /** The server component's recorded verdict */
+  /** The server component's recorded health */
   health: string;
   /** The server's platform component name */
   name: string;
@@ -6526,8 +6911,15 @@ export type PlatformSimulationDevice = {
   component_id: string;
   /** Whether the simulator impairs the device at the window's end. */
   impaired: boolean;
+  /**
+     * The locations from the root down to the device's location, so devices that share a name read apart; empty when it has no location.
+     * @nullable
+     */
+  location_path: string[] | null;
   /** Requests the device saw over the window, by protocol. */
   received: PlatformSimulationDeviceReceived;
+  /** The name of the device's primary system; empty when it has none. */
+  system: string;
   /** Whether it is a poll target due over the window that the simulator never saw. */
   unhit: boolean;
 };
@@ -6674,9 +7066,9 @@ export type PlatformSimulationViewOutputBody = {
 };
 
 export type PlatformSystemBody = {
-  /** The platform system's recorded verdict, the same one its health read serves */
+  /** The platform system's recorded health, the same one its health read serves */
   health: string;
-  /** The platform system's uuid: the page's verdict links to its system detail, where the verdict is explained */
+  /** The platform system's uuid: the page's health links to its system detail, where the health is explained */
   id: string;
   name: string;
 };
@@ -6684,7 +7076,7 @@ export type PlatformSystemBody = {
 export type PlatformViewOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
-  /** True when the caller's component read reached the platform components. False means the figures, verdicts and servers are left out because the caller may not read them, not because nothing was reported */
+  /** True when the caller's component read reached the platform components. False means the figures, health and servers are left out because the caller may not read them, not because nothing was reported */
   figures_read: boolean;
   /**
      * The outpost table's column groups, in order: the page renders these and has no key list of its own
@@ -6712,7 +7104,7 @@ export type PlatformViewOutputBody = {
      * @nullable
      */
   servers: PlatformServerBody[] | null;
-  /** The platform system and its verdict; absent without a fleet-wide system read */
+  /** The platform system and its health; absent without a fleet-wide system read */
   system?: PlatformSystemBody;
 };
 
@@ -7153,14 +7545,14 @@ export type RaiseAlarmInputBody = {
   /** What is wrong, for the operator reading it later */
   message?: string;
   /**
-     * How bad it is: a severity level by name (see /severity-levels); a level at or above high puts the component itself in outage
+     * How bad it is: a severity level by name (see /severity-levels); the level declares what the alarm does to the component (none, degraded or outage)
      * @minLength 1
      */
   severity: string;
 };
 
 /**
- * Why reachability is null, present only while it is: no-outpost, the endpoint has no outpost assigned so nothing probes it (create and enroll an outpost, run it, then assign the endpoint to it); awaiting-probe, an outpost is assigned and its first probe has not landed. Absent once a verdict exists, and on a push endpoint, which has no verdict to wait for. Derived at read time, not stored
+ * Why reachability is null, present only while it is: no-outpost, the endpoint has no outpost assigned so nothing probes it (create and enroll an outpost, run it, then assign the endpoint to it); awaiting-probe, an outpost is assigned and its first probe has not landed. Absent once a reachability exists, and on a push endpoint, which has no reachability to wait for. Derived at read time, not stored
  */
 export type ReachEndpointBodyPending = typeof ReachEndpointBodyPending[keyof typeof ReachEndpointBodyPending];
 
@@ -7171,18 +7563,18 @@ export const ReachEndpointBodyPending = {
 } as const;
 
 export type ReachReadingBody = {
-  /** When the verdict last changed: one is stored only on a transition, so an endpoint's freshness is last_seen, not this */
+  /** When the reachability last changed: one is stored only on a transition, so an endpoint's freshness is last_seen, not this */
   ts: string;
-  /** The latest stored verdict value (up/down) */
+  /** The latest stored reachability value (up/down) */
   value: string;
 };
 
 export type ReachGateReasonBody = {
   /** An upstream reason only: the name of the component source names, when the caller may read it; absent otherwise, and for every other kind */
   component?: string;
-  /** The reason's kind: disrupted, a disruptive command (a reboot) delivered to the endpoint's component, which lifts on the endpoint's first up verdict after the command type's quiet period or at its hold backstop; unreachable, two consecutive down verdicts from the endpoint's reachability probe, which lifts on its next up verdict; upstream, a component the endpoint's component is reached through (a path dependency, #1652) has a closed gate on this outpost, which holds the endpoint's probes as well as its polls until the upstream opens, then lifts on the endpoint's own next up verdict (at once when it has no probe) */
+  /** The reason's kind: disrupted, a disruptive command (a reboot) delivered to the endpoint's component, which lifts on the endpoint's first up reading after the command type's quiet period or at its hold backstop; unreachable, two consecutive down readings from the endpoint's reachability probe, which lifts on its next up reading; upstream, a component the endpoint's component is reached through (a path dependency, #1652) has a closed gate on this outpost, which holds the endpoint's probes as well as its polls until the upstream opens, then lifts on the endpoint's own next up reading (at once when it has no probe) */
   kind: string;
-  /** When the reason began: for disrupted, the command's delivery; for unreachable, the first of the down verdicts that closed the gate; for upstream, when the upstream's gate closed this endpoint's */
+  /** When the reason began: for disrupted, the command's delivery; for unreachable, the first of the down readings that closed the gate; for upstream, when the upstream's gate closed this endpoint's */
   since: string;
   /** What added the reason: for disrupted, the command (command-<id>); for unreachable, the reachability probe's task id; for upstream, the uuid of the component it is held by: the root of the chain (a gateway behind a gateway names the one whose own gate is closed), or the direct upstream once that one opens and waits on its own probe */
   source: string;
@@ -7282,7 +7674,7 @@ export type ReachEndpointBody = {
      */
   gate_reasons?: ReachGateReasonBody[] | null;
   /**
-     * The recent verdict transitions, oldest first, for the availability strip
+     * The recent reachability transitions, oldest first, for the availability strip
      * @nullable
      */
   history: ReachHistoryBody[] | null;
@@ -7293,13 +7685,13 @@ export type ReachEndpointBody = {
   /** When the endpoint last delivered a batch, by the server's clock and to within a few seconds, whatever it carried (any lane, any series, an unchanged value); absent until one lands */
   last_seen?: string;
   /**
-     * The per-layer probe signals that compose the verdict
+     * The per-layer probe signals that compose the reachability
      * @nullable
      */
   layers: ReachLayerBody[] | null;
   /** The outpost that probes this endpoint */
   outpost?: string;
-  /** Why reachability is null, present only while it is: no-outpost, the endpoint has no outpost assigned so nothing probes it (create and enroll an outpost, run it, then assign the endpoint to it); awaiting-probe, an outpost is assigned and its first probe has not landed. Absent once a verdict exists, and on a push endpoint, which has no verdict to wait for. Derived at read time, not stored */
+  /** Why reachability is null, present only while it is: no-outpost, the endpoint has no outpost assigned so nothing probes it (create and enroll an outpost, run it, then assign the endpoint to it); awaiting-probe, an outpost is assigned and its first probe has not landed. Absent once a reachability exists, and on a push endpoint, which has no reachability to wait for. Derived at read time, not stored */
   pending?: ReachEndpointBodyPending;
   /** The latest reachability reading (up or down), or null if none yet (pending says why) */
   reachability: ReachReadingBody;
@@ -7313,7 +7705,7 @@ export type ReachEndpointBody = {
   tls?: ReachTLSBody;
   /** The transport (icmp, tcp, ...) */
   transport: string;
-  /** A webhook endpoint's block (#1024): a push endpoint has no ladder and reads last_seen (last heard) in place of a verdict, never down for silence; its scheme, whether it is signed, its token's secret and what its scheme refused. Absent on every dialed transport */
+  /** A webhook endpoint's block (#1024): a push endpoint has no ladder and reads last_seen (last heard) in place of a reachability, never down for silence; its scheme, whether it is signed, its token's secret and what its scheme refused. Absent on every dialed transport */
   webhook?: EndpointWebhookBody;
 };
 
@@ -7487,7 +7879,7 @@ export type RetentionSettings = {
      */
   log_warning_days: number;
   /**
-     * Days a metric sample is kept, unless its type keeps its own (a metric type's retention_days); a sample on the lane's window leaves with its UTC day, up to a day later
+     * Days a metric sample is kept, unless its type keeps its own (a metric type's retention_days); a sample on the lane's window leaves with its UTC day, up to a day later; at least 3, the shortest window that folds into blocks
      * @minimum 1
      * @maximum 36500
      */
@@ -7999,6 +8391,83 @@ export type RunViewsOutputBody = {
   results: ViewResultBody[] | null;
 };
 
+export type SSOSettings = {
+  /** A platform oauth2-client secret, by name: its client_id field is the client id Omniglass is registered as, its client_secret field authenticates the token exchange. Setting it from the console or API takes secret:bind on it; the settings file and environment are trusted as deployment config */
+  client_secret: string;
+  /** The id_token claim carrying the person's groups at the provider (read by group mapping, #2363) */
+  groups_claim: string;
+  /** The identity provider's issuer URL exactly as its id_tokens carry it (https://login.example.com/realms/corp). Empty turns single sign-on off. An on-premises provider is reached only when the notification settings' egress_allow names it. Moving it from the console or API while client_secret is bound takes secret:bind on that secret; the settings file and environment are trusted as deployment config */
+  issuer: string;
+  /**
+     * Minutes a link may go without a refresh the provider accepted (an outage) before its sessions and tokens are refused until one is; also the length of a session through a provider that issues no refresh token
+     * @minimum 1
+     * @maximum 10080
+     */
+  recheck_grace_minutes: number;
+  /**
+     * Minutes between re-checks: each link with a live session or token through it redeems its refresh token at the provider, and a refusal revokes them
+     * @minimum 1
+     * @maximum 1440
+     */
+  recheck_minutes: number;
+  /** The scopes a sign-in asks for, space-separated. offline_access asks for the refresh token the re-check redeems; a provider that issues none gives sessions of recheck_grace_minutes and no API tokens */
+  scopes: string;
+};
+
+/**
+ * Which catalog the entry belongs to; the console opens its drawer on that catalog's page
+ */
+export type SearchCatalogBodyKind = typeof SearchCatalogBodyKind[keyof typeof SearchCatalogBodyKind];
+
+
+export const SearchCatalogBodyKind = {
+  product: 'product',
+  driver: 'driver',
+  calc_rule: 'calc_rule',
+  event_rule: 'event_rule',
+  metric: 'metric',
+} as const;
+
+export type SearchCatalogBody = {
+  /** A short qualifier: a product's vendor, a driver's version, a metric's unit */
+  detail?: string;
+  /** Which catalog the entry belongs to; the console opens its drawer on that catalog's page */
+  kind: SearchCatalogBodyKind;
+  /** The entry's display label */
+  label?: string;
+  /** The entry's name, its address in the catalog */
+  name: string;
+};
+
+export type SearchEntityBody = {
+  /** The entity's uuid, the address its page opens at */
+  id: string;
+  /** The entity's display label, when it has one */
+  label?: string;
+  /** The locations it sits under, outermost first, joined with ' / '. Empty for a component that has no location of its own and is in a system; its system field says where it is */
+  location_path?: string;
+  /** The entity's name; many components share one, the location_path tells them apart */
+  name: string;
+  /** A component's primary system, when it has one */
+  system?: string;
+};
+
+export type SearchOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * Catalog hits across products, drivers, calc rules, event rules and metrics, best match first, at most limit of each kind
+     * @nullable
+     */
+  catalog: SearchCatalogBody[] | null;
+  /** @nullable */
+  components: SearchEntityBody[] | null;
+  /** @nullable */
+  locations: SearchEntityBody[] | null;
+  /** @nullable */
+  systems: SearchEntityBody[] | null;
+};
+
 export type SetAvatarInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -8043,6 +8512,18 @@ export type SetLocationTypePropertyInputBody = {
   default_value?: unknown;
   /** Whether every location of this type must set the property; defaults to false */
   required?: boolean;
+};
+
+export type SetMetricTypeRetentionBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The type's own retention window in whole days, 3 to 36,500; null clears it, so the type is kept for its lane's window (retention.metric_days). Required: an empty body is refused
+     * @minimum 3
+     * @maximum 36500
+     * @nullable
+     */
+  days: number | null;
 };
 
 export type SetProductMetricInputBody = {
@@ -8131,6 +8612,7 @@ export type Settings = {
   label: LabelSettings;
   notification: NotificationSettings;
   retention: RetentionSettings;
+  sso: SSOSettings;
   ui: UISettings;
 };
 
@@ -8314,6 +8796,22 @@ export type SnoozeAlarmInputBody = {
   readonly $schema?: string;
   /** How long from now the alarm stays snoozed, from 1m to 7d: a duration such as 15m, 1h, 4h or 24h, or whole days such as 7d. Snoozing a snoozed alarm replaces its deadline, shorter or longer */
   duration: string;
+};
+
+export type StartSelfLinkInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** Your current password: a link outlives the session that makes it, so it is confirmed as a password change is */
+  current_password: string;
+  /** The identity provider to link, by name */
+  provider?: string;
+};
+
+export type StartSelfLinkOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** The provider's sign-in page to send the browser to; signing in there links that identity to you and returns to your profile */
+  url: string;
 };
 
 export type SwapSlotPositionsInputBody = {
@@ -8550,6 +9048,13 @@ export type UnboundIdentitiesOutputBody = {
      * @nullable
      */
   identities: UnboundIdentityBody[] | null;
+};
+
+export type UnlinkSelfInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** Your current password, as linking asks */
+  current_password: string;
 };
 
 export type UpdateActionRuleInputBody = {
@@ -8953,11 +9458,25 @@ export type UpdateSecretInputBody = {
   label?: string;
 };
 
+/**
+ * What an open alarm at this level does to its component; changing it recomputes every component with an open alarm at the level
+ */
+export type UpdateSeverityLevelInputBodyHealthEffect = typeof UpdateSeverityLevelInputBodyHealthEffect[keyof typeof UpdateSeverityLevelInputBodyHealthEffect];
+
+
+export const UpdateSeverityLevelInputBodyHealthEffect = {
+  none: 'none',
+  degraded: 'degraded',
+  outage: 'outage',
+} as const;
+
 export type UpdateSeverityLevelInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   /** One of gray, blue, green, yellow, orange, red, darkred */
   color?: string;
+  /** What an open alarm at this level does to its component; changing it recomputes every component with an open alarm at the level */
+  health_effect?: UpdateSeverityLevelInputBodyHealthEffect;
   /** A human label */
   label?: string;
   /** A new name; every alarm at this level follows */
@@ -9244,6 +9763,12 @@ export type ViewRowsEvent = {
 };
 
 export type ListAlarmsParams = {
+  /** Which alarms: active (still raised, the default), cleared (a cleared alarm is history, with when it cleared), or all */
+  state?: ListAlarmsState;
+  /** Only the alarms still raised at or after this RFC 3339 time: active, or cleared at or after it */
+  since?: string;
+  /** Only the alarms raised at or before this RFC 3339 time; must not be earlier than since */
+  until?: string;
   /** Only the alarms nobody has looked at: the queue an operator, or an agent, works */
   unacknowledged?: boolean;
   /**
@@ -9252,7 +9777,45 @@ export type ListAlarmsParams = {
    * @maximum 1000
    */
   limit?: number;
+  /**
+   * Only alarms at these severity levels, by name (see /severity-levels); repeat the parameter for several
+   * @nullable
+   */
+  severity?: string[] | null;
+  /** Only alarms whose component sits in this location or any location below it, by name */
+  location?: string;
+  /** true keeps the acknowledged alarms, false the unacknowledged ones; absent keeps both */
+  acknowledged?: ListAlarmsAcknowledged;
+  /** true keeps the snoozed alarms, false the ones not snoozed; absent keeps both */
+  snoozed?: ListAlarmsSnoozed;
+  /** The next_page_token of the previous page: resumes the same worst-first order after it, however many alarms there are */
+  page_token?: string;
 };
+
+export type ListAlarmsState = typeof ListAlarmsState[keyof typeof ListAlarmsState];
+
+
+export const ListAlarmsState = {
+  active: 'active',
+  cleared: 'cleared',
+  all: 'all',
+} as const;
+
+export type ListAlarmsAcknowledged = typeof ListAlarmsAcknowledged[keyof typeof ListAlarmsAcknowledged];
+
+
+export const ListAlarmsAcknowledged = {
+  true: 'true',
+  false: 'false',
+} as const;
+
+export type ListAlarmsSnoozed = typeof ListAlarmsSnoozed[keyof typeof ListAlarmsSnoozed];
+
+
+export const ListAlarmsSnoozed = {
+  true: 'true',
+  false: 'false',
+} as const;
 
 export type ListAuditLogParams = {
   /** Max rows to return, newest first (default 100, capped at 500) */
@@ -9300,11 +9863,29 @@ export type GetCalcRuleStateParams = {
   limit?: number;
 };
 
+export type ListComponentsParams = {
+  /** Only components of this product (name or uuid) */
+  product?: string;
+  /** Only components of a product this driver serves (name or uuid) */
+  driver?: string;
+  /** Only components of a product classified under exactly this component type (name or uuid) */
+  component_type?: string;
+  /**
+   * Cap the page at this many rows; 0 or absent is no cap. total still counts every match.
+   * @minimum 0
+   */
+  limit?: number;
+};
+
 export type ListComponentAlarmsParams = {
   /** Include cleared alarms, so the list is the history rather than what is wrong now */
   include_cleared?: boolean;
   /** Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the alarms that came and went unattended */
   unacknowledged?: boolean;
+  /** Only the alarms still raised at or after this RFC 3339 time: active, or cleared at or after it. With include_cleared, a timeline's read of what was raised during a range */
+  since?: string;
+  /** Only the alarms raised at or before this RFC 3339 time; must not be earlier than since */
+  until?: string;
 };
 
 export type ListComponentCommandsParams = {
@@ -9348,6 +9929,31 @@ export type EffectiveTagsParams = {
   system?: string;
 };
 
+export type ListComponentEventsParams = {
+  /**
+   * Only occurrences of this event type, by name
+   * @maxLength 100
+   */
+  key?: string;
+  /**
+   * Only occurrences from this transport
+   * @maxLength 100
+   */
+  source?: string;
+  /**
+   * Only occurrences whose message contains this text, case-insensitively
+   * @maxLength 200
+   */
+  q?: string;
+};
+
+export type GetComponentHealthParams = {
+  /** Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent */
+  since?: string;
+  /** Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since */
+  until?: string;
+};
+
 export type ListComponentLogsParams = {
   /** Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out */
   severity?: ListComponentLogsSeverity;
@@ -9356,6 +9962,11 @@ export type ListComponentLogsParams = {
    * @maxLength 100
    */
   source?: string;
+  /**
+   * Only lines whose message contains this text, case-insensitively
+   * @maxLength 200
+   */
+  q?: string;
 };
 
 export type ListComponentLogsSeverity = typeof ListComponentLogsSeverity[keyof typeof ListComponentLogsSeverity];
@@ -9427,6 +10038,13 @@ export type RunEndpointPollParams = {
   timeout_seconds?: number;
 };
 
+export type GetLocationHealthParams = {
+  /** Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent */
+  since?: string;
+  /** Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since */
+  until?: string;
+};
+
 export type ListNotificationParams = {
   /** Only the notifications about this alarm (its uuid) */
   alarm?: string;
@@ -9453,10 +10071,82 @@ export const ListNotificationStatus = {
   '': '',
 } as const;
 
+export type PlanOutpostSimulationComponentParams = {
+  /**
+   * A product a simulator profile simulates
+   * @minLength 1
+   */
+  product: string;
+};
+
+export type ListProductsParams = {
+  /** Only products whose contract declares this metric (name or uuid) */
+  declares_metric?: string;
+  /** Only products whose contract declares this property (name or uuid) */
+  declares_property?: string;
+};
+
+export type SearchParams = {
+  /**
+   * The text to find, matched case-insensitively anywhere in a name or label
+   * @minLength 1
+   * @maxLength 200
+   */
+  q?: string;
+  /**
+   * The most hits returned for each kind
+   * @minimum 1
+   * @maximum 20
+   */
+  limit?: number;
+};
+
 /**
  * an RFC 7386 JSON Merge Patch for the namespace; null on a key restores it
  */
 export type PatchSettingsNamespaceBody = {[key: string]: unknown};
+
+export type ListSystemsParams = {
+  /** Only systems built to this standard (name or uuid) */
+  standard?: string;
+  /**
+   * Cap the page at this many rows; 0 or absent is no cap. total still counts every match.
+   * @minimum 0
+   */
+  limit?: number;
+};
+
+export type ListSystemAlarmsParams = {
+  /** Read the alarms raised during since..until instead of the default (active ones, and those cleared in the last 30 days): active, or cleared at or after since, and raised at or before until */
+  since?: string;
+  /** The range's end, with since; defaults to now and must not be earlier than since */
+  until?: string;
+};
+
+export type ListSystemEventsParams = {
+  /**
+   * Only occurrences of this event type, by name
+   * @maxLength 100
+   */
+  key?: string;
+  /**
+   * Only occurrences from this transport
+   * @maxLength 100
+   */
+  source?: string;
+  /**
+   * Only occurrences whose message contains this text, case-insensitively
+   * @maxLength 200
+   */
+  q?: string;
+};
+
+export type GetSystemHealthParams = {
+  /** Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent */
+  since?: string;
+  /** Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since */
+  until?: string;
+};
 
 export type ListSystemLogsParams = {
   /** Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out */
@@ -9466,6 +10156,11 @@ export type ListSystemLogsParams = {
    * @maxLength 100
    */
   source?: string;
+  /**
+   * Only lines whose message contains this text, case-insensitively
+   * @maxLength 200
+   */
+  q?: string;
 };
 
 export type ListSystemLogsSeverity = typeof ListSystemLogsSeverity[keyof typeof ListSystemLogsSeverity];
@@ -9963,8 +10658,8 @@ export const getListAlarmsUrl = (params?: ListAlarmsParams,) => {
 }
 
 /**
- * What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Pass unacknowledged for the queue nobody has looked at, and limit to cap it (default 200, at most 1000). It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.
- * @summary List the fleet's active alarms
+ * What is wrong now across every component the caller may read, in one read: by default the active alarms (state=cleared is the history, each row carrying when it cleared, and state=all both; since and until keep the alarms whose raised-to-cleared interval overlaps that range, so one raised before it and still open in it is kept, and since after until is a 400), worst severity first and newest first within a severity, each naming its component. Each row names its component's location and the systems it belongs to that the caller may read. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.
+ * @summary List the fleet's alarms
  */
 export const listAlarms = async (params?: ListAlarmsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listAlarmsResponse> => {
 
@@ -10007,7 +10702,7 @@ export const getListAssistantConversationsUrl = () => {
 }
 
 /**
- * Your own stored conversations, most recently moved first, without their messages. Owner-only. Gated by assistant:use.
+ * Your own stored conversations, most recently moved first, without their messages, and omnibot's mode: live, replay (the server plays a recording, with the prompts it answers) or none. Owner-only. Gated by assistant:use.
  * @summary List your omnibot conversations
  */
 export const listAssistantConversations = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listAssistantConversationsResponse> => {
@@ -10228,7 +10923,7 @@ export const getRunAssistantConversationUrl = (name: string,) => {
 }
 
 /**
- * Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {"stopped": "step_limit", "steps": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. The run talks to the model the assistant settings configure, read as it starts; with none, the server's recording, if it has one. A server with no model, or a configured model whose key no longer resolves, is a 503. Gated by assistant:use.
+ * Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {"stopped": "step_limit", "steps": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. The run talks to the model the assistant settings configure, read as it starts; with none, the server's recording, if it has one. A recording answers only the prompts it was recorded for: any other question is a 422 (type urn:omniglass:omnibot-replay-unmatched) that touches nothing; the list route names the prompts. A server with no model, or a configured model whose key no longer resolves, is a 503. Gated by assistant:use.
  * @summary Run omnibot on one of your conversations
  */
 export const runAssistantConversation = async (name: string,
@@ -10880,6 +11575,169 @@ export const getAuthMeAvatar = async ( options?: Parameters<typeof ogFetch>[1]):
     method: 'GET'
 
 
+  }
+);}
+
+
+
+export type listAuthMeIdentityLinksResponse200 = {
+  data: IdentityLinksOutputBody
+  status: 200
+}
+
+export type listAuthMeIdentityLinksResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type listAuthMeIdentityLinksResponseSuccess = (listAuthMeIdentityLinksResponse200) & {
+  headers: Headers;
+};
+export type listAuthMeIdentityLinksResponseError = (listAuthMeIdentityLinksResponseDefault) & {
+  headers: Headers;
+};
+
+export type listAuthMeIdentityLinksResponse = (listAuthMeIdentityLinksResponseSuccess | listAuthMeIdentityLinksResponseError)
+
+export const getListAuthMeIdentityLinksUrl = () => {
+
+
+
+
+  return `/auth/me/identity-links`
+}
+
+/**
+ * Lists the identities at the identity provider you sign in through. Requires authentication; self-scoped (never another person's).
+ * @summary List your own identity links
+ */
+export const listAuthMeIdentityLinks = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listAuthMeIdentityLinksResponse> => {
+
+  return ogFetch<listAuthMeIdentityLinksResponse>(getListAuthMeIdentityLinksUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type unlinkAuthMeIdentityLinkResponse204 = {
+  data: void
+  status: 204
+}
+
+export type unlinkAuthMeIdentityLinkResponse403 = {
+  data: ErrorModel
+  status: 403
+}
+
+export type unlinkAuthMeIdentityLinkResponse404 = {
+  data: ErrorModel
+  status: 404
+}
+
+export type unlinkAuthMeIdentityLinkResponse422 = {
+  data: ErrorModel
+  status: 422
+}
+
+export type unlinkAuthMeIdentityLinkResponse500 = {
+  data: ErrorModel
+  status: 500
+}
+
+export type unlinkAuthMeIdentityLinkResponseSuccess = (unlinkAuthMeIdentityLinkResponse204) & {
+  headers: Headers;
+};
+export type unlinkAuthMeIdentityLinkResponseError = (unlinkAuthMeIdentityLinkResponse403 | unlinkAuthMeIdentityLinkResponse404 | unlinkAuthMeIdentityLinkResponse422 | unlinkAuthMeIdentityLinkResponse500) & {
+  headers: Headers;
+};
+
+export type unlinkAuthMeIdentityLinkResponse = (unlinkAuthMeIdentityLinkResponseSuccess | unlinkAuthMeIdentityLinkResponseError)
+
+export const getUnlinkAuthMeIdentityLinkUrl = (link: string,) => {
+
+
+
+
+  return `/auth/me/identity-links/${link}:unlink`
+}
+
+/**
+ * Confirms your current password and removes one of your identity links; every session and token through it ends with it. Requires authentication; self-scoped (a link that is not yours is a 404). Refused to an agent token. Audited.
+ * @summary Unlink one of your own identity links
+ */
+export const unlinkAuthMeIdentityLink = async (link: string,
+    unlinkSelfInputBody: NonReadonly<UnlinkSelfInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<unlinkAuthMeIdentityLinkResponse> => {
+
+  return ogFetch<unlinkAuthMeIdentityLinkResponse>(getUnlinkAuthMeIdentityLinkUrl(link),
+  {
+    ...options,
+    method: 'POST',
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
+    body: JSON.stringify(unlinkSelfInputBody)
+  }
+);}
+
+
+
+export type startAuthMeIdentityLinkResponse200 = {
+  data: StartSelfLinkOutputBody
+  status: 200
+}
+
+export type startAuthMeIdentityLinkResponse403 = {
+  data: ErrorModel
+  status: 403
+}
+
+export type startAuthMeIdentityLinkResponse409 = {
+  data: ErrorModel
+  status: 409
+}
+
+export type startAuthMeIdentityLinkResponse422 = {
+  data: ErrorModel
+  status: 422
+}
+
+export type startAuthMeIdentityLinkResponse500 = {
+  data: ErrorModel
+  status: 500
+}
+
+export type startAuthMeIdentityLinkResponseSuccess = (startAuthMeIdentityLinkResponse200) & {
+  headers: Headers;
+};
+export type startAuthMeIdentityLinkResponseError = (startAuthMeIdentityLinkResponse403 | startAuthMeIdentityLinkResponse409 | startAuthMeIdentityLinkResponse422 | startAuthMeIdentityLinkResponse500) & {
+  headers: Headers;
+};
+
+export type startAuthMeIdentityLinkResponse = (startAuthMeIdentityLinkResponseSuccess | startAuthMeIdentityLinkResponseError)
+
+export const getStartAuthMeIdentityLinkUrl = () => {
+
+
+
+
+  return `/auth/me/identity-links:start`
+}
+
+/**
+ * Confirms your current password and starts a sign-in at the identity provider bound to this session: send the browser to the returned url, and signing in there links that identity to you (an owner's only way to gain single sign-on). Requires authentication; self-scoped (it only ever links to you). Needs a session; refused to an agent token. A wrong password is a 403; single sign-on not configured is a 409.
+ * @summary Start linking your own identity at the provider
+ */
+export const startAuthMeIdentityLink = async (startSelfLinkInputBody: NonReadonly<StartSelfLinkInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<startAuthMeIdentityLinkResponse> => {
+
+  return ogFetch<startAuthMeIdentityLinkResponse>(getStartAuthMeIdentityLinkUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
+    body: JSON.stringify(startSelfLinkInputBody)
   }
 );}
 
@@ -12383,21 +13241,28 @@ export type listComponentsResponseError = (listComponentsResponseDefault) & {
 
 export type listComponentsResponse = (listComponentsResponseSuccess | listComponentsResponseError)
 
-export const getListComponentsUrl = () => {
+export const getListComponentsUrl = (params?: ListComponentsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/components`
+  return stringifiedParams.length > 0 ? `/components?${stringifiedParams}` : `/components`
 }
 
 /**
- * Lists the components the caller may read, each filtered to its scope subtree. Gated by component:read.
+ * Lists the components the caller may read, each filtered to its scope subtree. Optional product, driver and component_type filters narrow to the components a catalog row classifies or a driver serves, and limit caps the page while total counts every match (the catalog drawers' used-by reads). Gated by component:read.
  * @summary List components in scope
  */
-export const listComponents = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listComponentsResponse> => {
+export const listComponents = async (params?: ListComponentsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listComponentsResponse> => {
 
-  return ogFetch<listComponentsResponse>(getListComponentsUrl(),
+  return ogFetch<listComponentsResponse>(getListComponentsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -12457,15 +13322,20 @@ export type deleteComponentResponse204 = {
   status: 204
 }
 
+export type deleteComponentResponse409 = {
+  data: DeleteRefusal
+  status: 409
+}
+
 export type deleteComponentResponseDefault = {
   data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
+  status: Exclude<HTTPStatusCodes, 204 | 409>
 }
 
 export type deleteComponentResponseSuccess = (deleteComponentResponse204) & {
   headers: Headers;
 };
-export type deleteComponentResponseError = (deleteComponentResponseDefault) & {
+export type deleteComponentResponseError = (deleteComponentResponse409 | deleteComponentResponseDefault) & {
   headers: Headers;
 };
 
@@ -12480,7 +13350,7 @@ export const getDeleteComponentUrl = (name: string,) => {
 }
 
 /**
- * Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
+ * Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
  * @summary Delete a component
  */
 export const deleteComponent = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteComponentResponse> => {
@@ -12621,7 +13491,7 @@ export const getListComponentAlarmsUrl = (name: string,
 }
 
 /**
- * What is currently wrong with this component, newest first, with the component's own verdict those alarms make. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+ * What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set, and since/until to keep only the alarms raised during a range (still raised at since or later, raised by until), newest first and capped at 500. since after until is a 400. Gated by component:read; an out-of-scope component is a non-disclosing 404.
  * @summary List a component's alarms
  */
 export const listComponentAlarms = async (name: string,
@@ -12666,7 +13536,7 @@ export const getRaiseComponentAlarmUrl = (name: string,) => {
 }
 
 /**
- * Raises an alarm on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (an alarm at or above the high level), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser alarm degrades the component but leaves it occupying its slots. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+ * Raises an alarm on this component, then recomputes health in the same transaction: the component's own health moves, and if it is now outage (an alarm at a level that declares outage), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location health with it; an alarm at a degraded level degrades the component but leaves it occupying its slots, and one at a level declaring none leaves it healthy and still listed. Gated by component:update; read and update scopes drive the 404 versus 403 split.
  * @summary Raise an alarm on a component
  */
 export const raiseComponentAlarm = async (name: string,
@@ -13049,7 +13919,7 @@ export const getIssueComponentCommandUrl = (name: string,
 }
 
 /**
- * Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Answers with the command as it stands (as the command read returns it) and the computed settlement verdict; with wait, once it settles, fails or times out, or wait_timeout passes. Gated by command:issue, whose scope is resolved on the component tier from that permission (not from component:read); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not command is a 403.
+ * Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Answers with the command as it stands (as the command read returns it) and the computed settlement; with wait, once it settles, fails or times out, or wait_timeout passes. Gated by command:issue, whose scope is resolved on the component tier from that permission (not from component:read); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not command is a 403.
  * @summary Issue a command to a component
  */
 export const issueComponentCommand = async (name: string,
@@ -13364,21 +14234,83 @@ export type listComponentEventsResponseError = (listComponentEventsResponseDefau
 
 export type listComponentEventsResponse = (listComponentEventsResponseSuccess | listComponentEventsResponseError)
 
-export const getListComponentEventsUrl = (name: string,) => {
+export const getListComponentEventsUrl = (name: string,
+    params?: ListComponentEventsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/components/${name}/events`
+  return stringifiedParams.length > 0 ? `/components/${name}/events?${stringifiedParams}` : `/components/${name}/events`
 }
 
 /**
- * Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+ * Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours, narrowed by an optional event type (key), source and message text (q). Gated by component:read; an out-of-scope component is a non-disclosing 404.
  * @summary List a component's recent events
  */
-export const listComponentEvents = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listComponentEventsResponse> => {
+export const listComponentEvents = async (name: string,
+    params?: ListComponentEventsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listComponentEventsResponse> => {
 
-  return ogFetch<listComponentEventsResponse>(getListComponentEventsUrl(name),
+  return ogFetch<listComponentEventsResponse>(getListComponentEventsUrl(name,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type getComponentHealthResponse200 = {
+  data: FleetHealthOutputBody
+  status: 200
+}
+
+export type getComponentHealthResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type getComponentHealthResponseSuccess = (getComponentHealthResponse200) & {
+  headers: Headers;
+};
+export type getComponentHealthResponseError = (getComponentHealthResponseDefault) & {
+  headers: Headers;
+};
+
+export type getComponentHealthResponse = (getComponentHealthResponseSuccess | getComponentHealthResponseError)
+
+export const getGetComponentHealthUrl = (name: string,
+    params?: GetComponentHealthParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/components/${name}/health?${stringifiedParams}` : `/components/${name}/health`
+}
+
+/**
+ * The component's own current health (healthy, degraded or outage from its active alarms; unknown for a device nothing has observed) beside the recorded edges that got it there, in the shape the system health read returns: slots and systems are empty, transitions are one entry per change inside since..until (default the last 30 days), oldest first. since after until is a 400. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+ * @summary Read a component's health
+ */
+export const getComponentHealth = async (name: string,
+    params?: GetComponentHealthParams, options?: Parameters<typeof ogFetch>[1]): Promise<getComponentHealthResponse> => {
+
+  return ogFetch<getComponentHealthResponse>(getGetComponentHealthUrl(name,params),
   {
     ...options,
     method: 'GET'
@@ -13934,7 +14866,7 @@ export const getSetComponentPropertyUrl = (name: string,
 }
 
 /**
- * Declares a value for the property on this component, overriding the product contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by component:update; read and update scopes drive the 404 versus 403 split.
+ * Declares a value for the property on this component, overriding the product contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise), and the value must satisfy the property type's data type and validation (422 otherwise). Gated by component:update; read and update scopes drive the 404 versus 403 split.
  * @summary Set a property on a component
  */
 export const setComponentProperty = async (name: string,
@@ -14256,7 +15188,7 @@ export const getMoveComponentUrl = (name: string,) => {
 }
 
 /**
- * Relocates and/or re-parents a component: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant (a location-scoped grant reaches a component for read and create only). A separate act from update, and a separately grantable one (component:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. Does not recompute health: a component's own verdict is purely its active alarms, unaffected by where it sits. A taken name at the destination is a 409. Gated by component:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).
+ * Relocates and/or re-parents a component: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant (a location-scoped grant reaches a component for read and create only). A separate act from update, and a separately grantable one (component:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. Does not recompute health: a component's own health is purely its active alarms, unaffected by where it sits. A taken name at the destination is a 409. Gated by component:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).
  * @summary Move a component
  */
 export const moveComponent = async (name: string,
@@ -14447,6 +15379,55 @@ export const setComponentTag = async (name: string,
     method: 'POST',
     headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(entitySetTagInputBody)
+  }
+);}
+
+
+
+export type batchCreateComponentsResponse200 = {
+  data: BatchCreateComponentsOutputBody
+  status: 200
+}
+
+export type batchCreateComponentsResponse201 = {
+  data: BatchCreateComponentsOutputBody
+  status: 201
+}
+
+export type batchCreateComponentsResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200 | 201>
+}
+
+export type batchCreateComponentsResponseSuccess = (batchCreateComponentsResponse200 | batchCreateComponentsResponse201) & {
+  headers: Headers;
+};
+export type batchCreateComponentsResponseError = (batchCreateComponentsResponseDefault) & {
+  headers: Headers;
+};
+
+export type batchCreateComponentsResponse = (batchCreateComponentsResponseSuccess | batchCreateComponentsResponseError)
+
+export const getBatchCreateComponentsUrl = () => {
+
+
+
+
+  return `/components:batchCreate`
+}
+
+/**
+ * Creates components in one transaction: each request is the body POST /components takes, run as that create runs it, in order, so a component may name as its parent one an earlier request creates, and its system and location by name as the single create does. Every row writes its own audit row carrying the one batch_id the response returns, under from_batch. A refused request refuses the whole batch, mapped as POST /components maps it, with its position in the request (requests[3]) leading the detail; nothing lands. validate_only runs the same transaction and rolls it back, answering 200 with the names the write would mint and no ids. A batch carries at most 1000 requests; more is a 413 naming the limit, so split a bigger import (by building). Gated by component:create; each request is held to that scope, its location resolves within your location:read scope, and a request naming a system also needs system:update over it, as its single create does.
+ * @summary Create many components in one write
+ */
+export const batchCreateComponents = async (batchCreateComponentsInputBody: NonReadonly<BatchCreateComponentsInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<batchCreateComponentsResponse> => {
+
+  return ogFetch<batchCreateComponentsResponse>(getBatchCreateComponentsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
+    body: JSON.stringify(batchCreateComponentsInputBody)
   }
 );}
 
@@ -15186,7 +16167,7 @@ export const getGetEndpointUrl = (endpoint: string,) => {
 }
 
 /**
- * Fetches an endpoint by its address (<component>/<endpoint name>) or uuid. An endpoint whose component is out of the caller's read scope is a non-disclosing 404, and a name no endpoint the caller can see answers to is a 404 naming what was looked up (listing each match when more than one does). Gated by endpoint:read.
+ * Fetches an endpoint by its address (<component>/<endpoint name>) or uuid. An endpoint whose component is out of the caller's read scope is a non-disclosing 404, and a name no endpoint the caller can see answers to is a 404 naming what was looked up, and a name more than one answers to is a 409 listing each match. Gated by endpoint:read.
  * @summary Get an endpoint
  */
 export const getEndpoint = async (endpoint: string, options?: Parameters<typeof ogFetch>[1]): Promise<getEndpointResponse> => {
@@ -15284,7 +16265,7 @@ export const getRunEndpointPollUrl = (endpoint: string,
 }
 
 /**
- * Runs one of an attached endpoint's polls now, on the outpost that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run waits for the endpoint's lane on the outpost, ahead of its scheduled polls and never beside another request to the endpoint; it borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409), a refusal, an unreachable verdict from the endpoint's probe, or a disruptive command (a reboot) the run was queued behind, and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no outpost is a 409. An outpost that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the outpost's operator lanes, is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.
+ * Runs one of an attached endpoint's polls now, on the outpost that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run waits for the endpoint's lane on the outpost, ahead of its scheduled polls and never beside another request to the endpoint; it borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409), a refusal, an unreachable reading from the endpoint's probe, or a disruptive command (a reboot) the run was queued behind, and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no outpost is a 409. An outpost that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the outpost's operator lanes, is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.
  * @summary Run an endpoint's poll now
  */
 export const runEndpointPoll = async (endpoint: string,
@@ -16707,7 +17688,7 @@ export const getSetLocationTypePropertyUrl = (id: string,
 }
 
 /**
- * Declares a catalog property on a location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). A shipped (official) type's contract is writable too: a contract line is a row in its own table and nothing seeds one, so every line is an operator's. An unknown type is a 404 and a property the catalog does not know is a 422. Gated by location_type:update.
+ * Declares a catalog property on a location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). A shipped (official) type's contract is writable too: a contract line is a row in its own table and nothing seeds one, so every line is an operator's. An unknown type is a 404 and a property the catalog does not know is a 422, as is a default its property type refuses. Gated by location_type:update.
  * @summary Declare a property on a location type
  */
 export const setLocationTypeProperty = async (id: string,
@@ -16886,7 +17867,7 @@ export const getCreateLocationUrl = () => {
 }
 
 /**
- * Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. Gated by location:create.
+ * Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. The parent resolves within the caller's location:read scope before its location:create scope: a parent the caller cannot read is the same 404 as one that does not exist, so the answer never discloses a location outside the caller's read, and a parent the caller can read but not create under is a 403. Gated by location:create.
  * @summary Create a location
  */
 export const createLocation = async (createLocationInputBody: NonReadonly<CreateLocationInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createLocationResponse> => {
@@ -16907,15 +17888,20 @@ export type deleteLocationResponse204 = {
   status: 204
 }
 
+export type deleteLocationResponse409 = {
+  data: DeleteRefusal
+  status: 409
+}
+
 export type deleteLocationResponseDefault = {
   data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
+  status: Exclude<HTTPStatusCodes, 204 | 409>
 }
 
 export type deleteLocationResponseSuccess = (deleteLocationResponse204) & {
   headers: Headers;
 };
-export type deleteLocationResponseError = (deleteLocationResponseDefault) & {
+export type deleteLocationResponseError = (deleteLocationResponse409 | deleteLocationResponseDefault) & {
   headers: Headers;
 };
 
@@ -16930,7 +17916,7 @@ export const getDeleteLocationUrl = (name: string,) => {
 }
 
 /**
- * Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
+ * Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
  * @summary Delete a location
  */
 export const deleteLocation = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteLocationResponse> => {
@@ -17054,21 +18040,30 @@ export type getLocationHealthResponseError = (getLocationHealthResponseDefault) 
 
 export type getLocationHealthResponse = (getLocationHealthResponseSuccess | getLocationHealthResponseError)
 
-export const getGetLocationHealthUrl = (name: string,) => {
+export const getGetLocationHealthUrl = (name: string,
+    params?: GetLocationHealthParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/locations/${name}/health`
+  return stringifiedParams.length > 0 ? `/locations/${name}/health?${stringifiedParams}` : `/locations/${name}/health`
 }
 
 /**
- * The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+ * The location's current health, worst-wins over every system placed anywhere beneath it, with those systems and their health as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges inside since..until (default the last 30 days); since after until is a 400. Gated by location:read; an out-of-scope location is a non-disclosing 404.
  * @summary Read a location's health
  */
-export const getLocationHealth = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getLocationHealthResponse> => {
+export const getLocationHealth = async (name: string,
+    params?: GetLocationHealthParams, options?: Parameters<typeof ogFetch>[1]): Promise<getLocationHealthResponse> => {
 
-  return ogFetch<getLocationHealthResponse>(getGetLocationHealthUrl(name),
+  return ogFetch<getLocationHealthResponse>(getGetLocationHealthUrl(name,params),
   {
     ...options,
     method: 'GET'
@@ -17242,7 +18237,7 @@ export const getSetLocationPropertyUrl = (name: string,
 }
 
 /**
- * Declares a value for the property on this location, overriding the location type contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by location:update; read and update scopes drive the 404 versus 403 split.
+ * Declares a value for the property on this location, overriding the location type contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise), and the value must satisfy the property type's data type and validation (422 otherwise). Gated by location:update; read and update scopes drive the 404 versus 403 split.
  * @summary Set a property on a location
  */
 export const setLocationProperty = async (name: string,
@@ -17523,6 +18518,55 @@ export const setLocationTag = async (name: string,
     method: 'POST',
     headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(entitySetTagInputBody)
+  }
+);}
+
+
+
+export type batchCreateLocationsResponse200 = {
+  data: BatchCreateLocationsOutputBody
+  status: 200
+}
+
+export type batchCreateLocationsResponse201 = {
+  data: BatchCreateLocationsOutputBody
+  status: 201
+}
+
+export type batchCreateLocationsResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200 | 201>
+}
+
+export type batchCreateLocationsResponseSuccess = (batchCreateLocationsResponse200 | batchCreateLocationsResponse201) & {
+  headers: Headers;
+};
+export type batchCreateLocationsResponseError = (batchCreateLocationsResponseDefault) & {
+  headers: Headers;
+};
+
+export type batchCreateLocationsResponse = (batchCreateLocationsResponseSuccess | batchCreateLocationsResponseError)
+
+export const getBatchCreateLocationsUrl = () => {
+
+
+
+
+  return `/locations:batchCreate`
+}
+
+/**
+ * Creates locations in one transaction: each request is the body POST /locations takes, run as that create runs it, in order, so a location may name as its parent one an earlier request creates. Every row writes its own audit row carrying the one batch_id the response returns, under from_batch. A refused request refuses the whole batch, mapped as POST /locations maps it, with its position in the request (requests[3]) leading the detail; nothing lands. validate_only runs the same transaction and rolls it back, answering 200 with the names the write would mint and no ids. A batch carries at most 1000 requests; more is a 413 naming the limit, so split a bigger import (by building). Gated by location:create, and each request is held to that scope as its single create is.
+ * @summary Create many locations in one write
+ */
+export const batchCreateLocations = async (batchCreateLocationsInputBody: NonReadonly<BatchCreateLocationsInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<batchCreateLocationsResponse> => {
+
+  return ogFetch<batchCreateLocationsResponse>(getBatchCreateLocationsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
+    body: JSON.stringify(batchCreateLocationsInputBody)
   }
 );}
 
@@ -17997,18 +19041,18 @@ export const getSetMetricTypeRetentionUrl = (name: string,) => {
 }
 
 /**
- * Sets how many days this type's samples are kept, overriding the metric lane's window (retention.metric_days), or with null returns it to the lane's. Works on an official type: a shipped type's definition is read-only, but how long an install keeps its samples is the install's, and the boot seed never resets it. A command's intended values are never removed; a series with no sample inside the window reads as no reading within retention (ADR-1275). 1 to 36,500 days. Audited as set_retention. Gated by metric_type:update and platform:update.
+ * Sets how many days this type's samples are kept, overriding the metric lane's window (retention.metric_days), or with null returns it to the lane's. Works on an official type: a shipped type's definition is read-only, but how long an install keeps its samples is the install's, and the boot seed never resets it. A command's intended values are never removed; a series with no sample inside the window reads as no reading within retention (ADR-1275). 3 to 36,500 days (a metric day folds into blocks 48 hours after it starts, so a shorter window folds nothing). Audited as set_retention. Gated by metric_type:update and platform:update.
  * @summary Set a metric type's retention window
  */
 export const setMetricTypeRetention = async (name: string,
-    setTypeRetentionBody: NonReadonly<SetTypeRetentionBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setMetricTypeRetentionResponse> => {
+    setMetricTypeRetentionBody: NonReadonly<SetMetricTypeRetentionBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setMetricTypeRetentionResponse> => {
 
   return ogFetch<setMetricTypeRetentionResponse>(getSetMetricTypeRetentionUrl(name),
   {
     ...options,
     method: 'POST',
     headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
-    body: JSON.stringify(setTypeRetentionBody)
+    body: JSON.stringify(setMetricTypeRetentionBody)
   }
 );}
 
@@ -19127,6 +20171,59 @@ export const addOutpostSimulationComponent = async (name: string,
 
 
 
+export type planOutpostSimulationComponentResponse200 = {
+  data: PlanSimComponentOutputBody
+  status: 200
+}
+
+export type planOutpostSimulationComponentResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type planOutpostSimulationComponentResponseSuccess = (planOutpostSimulationComponentResponse200) & {
+  headers: Headers;
+};
+export type planOutpostSimulationComponentResponseError = (planOutpostSimulationComponentResponseDefault) & {
+  headers: Headers;
+};
+
+export type planOutpostSimulationComponentResponse = (planOutpostSimulationComponentResponseSuccess | planOutpostSimulationComponentResponseError)
+
+export const getPlanOutpostSimulationComponentUrl = (name: string,
+    params: PlanOutpostSimulationComponentParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/outposts/${name}/simulation/components:plan?${stringifiedParams}` : `/outposts/${name}/simulation/components:plan`
+}
+
+/**
+ * Previews what adding a simulated component of a product would create (see add-outpost-simulation-component): the lowest free address in the simulated block (127.60.0.0/16) and the endpoints the collector would reach it through, a driver attach with its inputs (a secret input names the platform secret, never its value) or a reachability probe with its target, planned exactly as the add plans them. Creates nothing and reserves nothing: the address is not held, so an add or another plan in between may take it, and an add made after this plan then lands on the next free address instead. Gated by simulation:read, and needs outpost:read on the outpost. An outpost that does not exist is a 404, one with no simulator connected a 409, a product no profile simulates a 422, and a full block or a profile with no surface the collector can reach a 409.
+ * @summary Plan a simulated component
+ */
+export const planOutpostSimulationComponent = async (name: string,
+    params: PlanOutpostSimulationComponentParams, options?: Parameters<typeof ogFetch>[1]): Promise<planOutpostSimulationComponentResponse> => {
+
+  return ogFetch<planOutpostSimulationComponentResponse>(getPlanOutpostSimulationComponentUrl(name,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
 export type getOutpostSimulationObservationResponse200 = {
   data: EndpointObservation
   status: 200
@@ -19467,21 +20564,28 @@ export type listProductsResponseError = (listProductsResponseDefault) & {
 
 export type listProductsResponse = (listProductsResponseSuccess | listProductsResponseError)
 
-export const getListProductsUrl = () => {
+export const getListProductsUrl = (params?: ListProductsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/products`
+  return stringifiedParams.length > 0 ? `/products?${stringifiedParams}` : `/products`
 }
 
 /**
- * Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
+ * Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. declares_metric and declares_property narrow it to the products whose contract declares that key. Gated by product:read.
  * @summary List products
  */
-export const listProducts = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listProductsResponse> => {
+export const listProducts = async (params?: ListProductsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listProductsResponse> => {
 
-  return ogFetch<listProductsResponse>(getListProductsUrl(),
+  return ogFetch<listProductsResponse>(getListProductsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -19925,7 +21029,7 @@ export const getSetProductPropertyUrl = (id: string,
 }
 
 /**
- * Declares a catalog property on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422); an unknown product is a 404 and a property the catalog does not know is a 422. Gated by product:update.
+ * Declares a catalog property on a custom product, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official products are read-only (422); an unknown product is a 404 and a property the catalog does not know is a 422, as is a default its property type refuses. Gated by product:update.
  * @summary Declare a property on a product
  */
 export const setProductProperty = async (id: string,
@@ -20288,6 +21392,57 @@ export const getListRolesUrl = () => {
 export const listRoles = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listRolesResponse> => {
 
   return ogFetch<listRolesResponse>(getListRolesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type searchResponse200 = {
+  data: SearchOutputBody
+  status: 200
+}
+
+export type searchResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type searchResponseSuccess = (searchResponse200) & {
+  headers: Headers;
+};
+export type searchResponseError = (searchResponseDefault) & {
+  headers: Headers;
+};
+
+export type searchResponse = (searchResponseSuccess | searchResponseError)
+
+export const getSearchUrl = (params?: SearchParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/search?${stringifiedParams}` : `/search`
+}
+
+/**
+ * The read behind the command palette. Returns up to limit hits of each kind whose name or label holds q, case-insensitively, best match first (exact, then prefix, then the rest by name). Locations, systems and components are searched inside the caller's own read scope for each kind, so nothing outside it appears; a caller with no scope for a kind gets an empty group, not an error. Each fleet hit carries its location_path, so many components with one name are told apart. Catalog hits cover products (product:read), drivers (driver:read), calc rules and event rules (rule:read) and metrics (metric_type:read), each only for a caller who holds that permission. Gated by location:read, the floor of every fleet reader; the component group also needs component:read.
+ * @summary Find locations, systems, components and catalog entries by name
+ */
+export const search = async (params?: SearchParams, options?: Parameters<typeof ogFetch>[1]): Promise<searchResponse> => {
+
+  return ogFetch<searchResponse>(getSearchUrl(params),
   {
     ...options,
     method: 'GET'
@@ -20856,7 +22011,7 @@ export const getListSeverityLevelUrl = () => {
 }
 
 /**
- * Lists the severity levels, least to most severe, each with whether an active alarm at it puts a component in outage. Gated by severity_level:read.
+ * Lists the severity levels, least to most severe, each with its declared health effect (none, degraded or outage) on a component with an open alarm at it; outage remains as a deprecated alias of health_effect outage. Gated by severity_level:read.
  * @summary List severity levels
  */
 export const listSeverityLevel = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listSeverityLevelResponse> => {
@@ -21032,7 +22187,7 @@ export const getUpdateSeverityLevelUrl = (name: string,) => {
 }
 
 /**
- * Patches an operator level's name, label, color or rank (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update, with an all-scope grant.
+ * Patches an operator level's name, label, color, rank or health effect (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update, with an all-scope grant.
  * @summary Update a severity level
  */
 export const updateSeverityLevel = async (name: string,
@@ -21658,7 +22813,7 @@ export const getSetStandardPropertyUrl = (id: string,
 }
 
 /**
- * Declares a catalog property on a custom standard, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official standards are read-only (422); an unknown standard is a 404 and a property the catalog does not know is a 422. Gated by standard:update.
+ * Declares a catalog property on a custom standard, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official standards are read-only (422); an unknown standard is a 404 and a property the catalog does not know is a 422, as is a default its property type refuses. Gated by standard:update.
  * @summary Declare a property on a standard
  */
 export const setStandardProperty = async (id: string,
@@ -22098,21 +23253,28 @@ export type listSystemsResponseError = (listSystemsResponseDefault) & {
 
 export type listSystemsResponse = (listSystemsResponseSuccess | listSystemsResponseError)
 
-export const getListSystemsUrl = () => {
+export const getListSystemsUrl = (params?: ListSystemsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/systems`
+  return stringifiedParams.length > 0 ? `/systems?${stringifiedParams}` : `/systems`
 }
 
 /**
- * Lists the systems the caller may read, each filtered to its scope subtree. Gated by system:read.
+ * Lists the systems the caller may read, each filtered to its scope subtree. An optional standard filter narrows to the systems built to one standard, and limit caps the page while total counts every match. Gated by system:read.
  * @summary List systems in scope
  */
-export const listSystems = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listSystemsResponse> => {
+export const listSystems = async (params?: ListSystemsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listSystemsResponse> => {
 
-  return ogFetch<listSystemsResponse>(getListSystemsUrl(),
+  return ogFetch<listSystemsResponse>(getListSystemsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -22172,15 +23334,20 @@ export type deleteSystemResponse204 = {
   status: 204
 }
 
+export type deleteSystemResponse409 = {
+  data: DeleteRefusal
+  status: 409
+}
+
 export type deleteSystemResponseDefault = {
   data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
+  status: Exclude<HTTPStatusCodes, 204 | 409>
 }
 
 export type deleteSystemResponseSuccess = (deleteSystemResponse204) & {
   headers: Headers;
 };
-export type deleteSystemResponseError = (deleteSystemResponseDefault) & {
+export type deleteSystemResponseError = (deleteSystemResponse409 | deleteSystemResponseDefault) & {
   headers: Headers;
 };
 
@@ -22195,7 +23362,7 @@ export const getDeleteSystemUrl = (name: string,) => {
 }
 
 /**
- * Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
+ * Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
  * @summary Delete a system
  */
 export const deleteSystem = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteSystemResponse> => {
@@ -22319,21 +23486,30 @@ export type listSystemAlarmsResponseError = (listSystemAlarmsResponseDefault) & 
 
 export type listSystemAlarmsResponse = (listSystemAlarmsResponseSuccess | listSystemAlarmsResponseError)
 
-export const getListSystemAlarmsUrl = (name: string,) => {
+export const getListSystemAlarmsUrl = (name: string,
+    params?: ListSystemAlarmsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/systems/${name}/alarms`
+  return stringifiedParams.length > 0 ? `/systems/${name}/alarms?${stringifiedParams}` : `/systems/${name}/alarms`
 }
 
 /**
- * Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its alarms, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+ * Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. With since (and optionally until) it is instead every alarm raised during that range, active or cleared, the same cap applying. It is what a system's Activity reads to explain its alarms, one request however many members the system has. since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.
  * @summary List a system's members' alarms
  */
-export const listSystemAlarms = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listSystemAlarmsResponse> => {
+export const listSystemAlarms = async (name: string,
+    params?: ListSystemAlarmsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listSystemAlarmsResponse> => {
 
-  return ogFetch<listSystemAlarmsResponse>(getListSystemAlarmsUrl(name),
+  return ogFetch<listSystemAlarmsResponse>(getListSystemAlarmsUrl(name,params),
   {
     ...options,
     method: 'GET'
@@ -22363,21 +23539,30 @@ export type listSystemEventsResponseError = (listSystemEventsResponseDefault) & 
 
 export type listSystemEventsResponse = (listSystemEventsResponseSuccess | listSystemEventsResponseError)
 
-export const getListSystemEventsUrl = (name: string,) => {
+export const getListSystemEventsUrl = (name: string,
+    params?: ListSystemEventsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/systems/${name}/events`
+  return stringifiedParams.length > 0 ? `/systems/${name}/events?${stringifiedParams}` : `/systems/${name}/events`
 }
 
 /**
- * Returns the system's own events and its members', newest first, bounded to the last 24 hours, each row labeled by the owner that raised it. A component shared with another system appears in both systems' lists. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+ * Returns the system's own events and its members', newest first, bounded to the last 24 hours, each row labeled by the owner that raised it, narrowed by an optional event type (key), source and message text (q). A component shared with another system appears in both systems' lists. Gated by system:read; an out-of-scope system is a non-disclosing 404.
  * @summary List a system's recent events, members included
  */
-export const listSystemEvents = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listSystemEventsResponse> => {
+export const listSystemEvents = async (name: string,
+    params?: ListSystemEventsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listSystemEventsResponse> => {
 
-  return ogFetch<listSystemEventsResponse>(getListSystemEventsUrl(name),
+  return ogFetch<listSystemEventsResponse>(getListSystemEventsUrl(name,params),
   {
     ...options,
     method: 'GET'
@@ -22407,21 +23592,30 @@ export type getSystemHealthResponseError = (getSystemHealthResponseDefault) & {
 
 export type getSystemHealthResponse = (getSystemHealthResponseSuccess | getSystemHealthResponseError)
 
-export const getGetSystemHealthUrl = (name: string,) => {
+export const getGetSystemHealthUrl = (name: string,
+    params?: GetSystemHealthParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/systems/${name}/health`
+  return stringifiedParams.length > 0 ? `/systems/${name}/health?${stringifiedParams}` : `/systems/${name}/health`
 }
 
 /**
- * The system's current verdict and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the verdict. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+ * The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Members lists every component bound into the system, slotted or not, with its own health, its open alarms and the slot it fills; a member outside every slot is shown and not rolled up, since only slots decide the health (ADR-2459). Reason names the slots behind the health. Transitions are the recorded edges inside since..until (default the last 30 days), one entry per change; since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.
  * @summary Read a system's health
  */
-export const getSystemHealth = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getSystemHealthResponse> => {
+export const getSystemHealth = async (name: string,
+    params?: GetSystemHealthParams, options?: Parameters<typeof ogFetch>[1]): Promise<getSystemHealthResponse> => {
 
-  return ogFetch<getSystemHealthResponse>(getGetSystemHealthUrl(name),
+  return ogFetch<getSystemHealthResponse>(getGetSystemHealthUrl(name,params),
   {
     ...options,
     method: 'GET'
@@ -22513,7 +23707,7 @@ export const getListSystemMembersUrl = (name: string,) => {
 }
 
 /**
- * The components bound into this system, ordered by name. Membership is what a slot attaches to: every component staffing a slot here is a member, and a member may also carry no slot at all (a power conditioner is in the room without filling a declared slot). Each member carries its own verdict, so a system's view can poll its members' health here rather than reading the whole fleet. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+ * The components bound into this system, ordered by name. Membership is what a slot attaches to: every component staffing a slot here is a member, and a member may also carry no slot at all (a power conditioner is in the room without filling a declared slot). Each member carries its own health, so a system's view can poll its members' health here rather than reading the whole fleet. Gated by system:read; an out-of-scope system is a non-disclosing 404.
  * @summary List the components in a system
  */
 export const listSystemMembers = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listSystemMembersResponse> => {
@@ -22885,7 +24079,7 @@ export const getSetSystemPropertyUrl = (name: string,
 }
 
 /**
- * Declares a value for the property on this system, overriding the standard contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by system:update; read and update scopes drive the 404 versus 403 split.
+ * Declares a value for the property on this system, overriding the standard contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise), and the value must satisfy the property type's data type and validation (422 otherwise). Gated by system:update; read and update scopes drive the 404 versus 403 split.
  * @summary Set a property on a system
  */
 export const setSystemProperty = async (name: string,
@@ -23501,6 +24695,55 @@ export const setSystemTag = async (name: string,
     method: 'POST',
     headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(entitySetTagInputBody)
+  }
+);}
+
+
+
+export type batchCreateSystemsResponse200 = {
+  data: BatchCreateSystemsOutputBody
+  status: 200
+}
+
+export type batchCreateSystemsResponse201 = {
+  data: BatchCreateSystemsOutputBody
+  status: 201
+}
+
+export type batchCreateSystemsResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200 | 201>
+}
+
+export type batchCreateSystemsResponseSuccess = (batchCreateSystemsResponse200 | batchCreateSystemsResponse201) & {
+  headers: Headers;
+};
+export type batchCreateSystemsResponseError = (batchCreateSystemsResponseDefault) & {
+  headers: Headers;
+};
+
+export type batchCreateSystemsResponse = (batchCreateSystemsResponseSuccess | batchCreateSystemsResponseError)
+
+export const getBatchCreateSystemsUrl = () => {
+
+
+
+
+  return `/systems:batchCreate`
+}
+
+/**
+ * Creates systems in one transaction: each request is the body POST /systems takes, run as that create runs it, in order, so a system may name as its parent one an earlier request creates, and its location by name as the single create does. Every row writes its own audit row carrying the one batch_id the response returns, under from_batch. A refused request refuses the whole batch, mapped as POST /systems maps it, with its position in the request (requests[3]) leading the detail; nothing lands. validate_only runs the same transaction and rolls it back, answering 200 with the names the write would mint and no ids. A batch carries at most 1000 requests; more is a 413 naming the limit, so split a bigger import (by building). Gated by system:create; each request is held to that scope, and its location resolves within your location:read scope, as its single create is.
+ * @summary Create many systems in one write
+ */
+export const batchCreateSystems = async (batchCreateSystemsInputBody: NonReadonly<BatchCreateSystemsInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<batchCreateSystemsResponse> => {
+
+  return ogFetch<batchCreateSystemsResponse>(getBatchCreateSystemsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
+    body: JSON.stringify(batchCreateSystemsInputBody)
   }
 );}
 
@@ -24196,7 +25439,7 @@ export const getPushTelemetryUrl = () => {
 }
 
 /**
- * Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Every key has one writer class, and a push writes only a collected key: a built-in key an outpost writes (a reachability verdict or rung, a probe metric or timing, a held session's state, collection-failed, an endpoint's collection telemetry) is an outpost's own observation and a platform key (health, the webhook receiver's counts) is the platform's, each rejected by name on every lane; a key a calc rule outputs is rejected naming the rule. The owner is a component or a system; a system batch carries no log lines (a log line is component-owned), refused with a 422. An observation's instance is the endpoint it came through: one naming no endpoint on the owner refuses the batch with a 422 naming it and listing the owner's endpoints, and a system has none, so a system's observations name no instance. Gated by telemetry:push, whose scope must cover the declared owner on its own tier (one check per batch): the push scope alone is enough to see the owner (no component:read or system:read is needed), an owner outside both the push scope and the caller's read of that kind is a non-disclosing 404, and one the caller can read but may not push to is a 403.
+ * Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Every key has one writer class, and a push writes only a collected key: a built-in key an outpost writes (a reachability or rung, a probe metric or timing, a held session's state, collection-failed, an endpoint's collection telemetry) is an outpost's own observation and a platform key (health, the webhook receiver's counts) is the platform's, each rejected by name on every lane; a key a calc rule outputs is rejected naming the rule. The owner is a component or a system; a system batch carries no log lines (a log line is component-owned), refused with a 422. An observation's instance is the endpoint it came through: one naming no endpoint on the owner refuses the batch with a 422 naming it and listing the owner's endpoints, and a system has none, so a system's observations name no instance. Gated by telemetry:push, whose scope must cover the declared owner on its own tier (one check per batch): the push scope alone is enough to see the owner (no component:read or system:read is needed), an owner outside both the push scope and the caller's read of that kind is a non-disclosing 404, and one the caller can read but may not push to is a 403.
  * @summary Push telemetry for an owner
  */
 export const pushTelemetry = async (pushInputBody: NonReadonly<PushInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<pushTelemetryResponse> => {
@@ -25240,6 +26483,171 @@ export const revokeGrant = async (id: string,
     grantId: string, options?: Parameters<typeof ogFetch>[1]): Promise<revokeGrantResponse> => {
 
   return ogFetch<revokeGrantResponse>(getRevokeGrantUrl(id,grantId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+export type listUserIdentityLinksResponse200 = {
+  data: IdentityLinksOutputBody
+  status: 200
+}
+
+export type listUserIdentityLinksResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type listUserIdentityLinksResponseSuccess = (listUserIdentityLinksResponse200) & {
+  headers: Headers;
+};
+export type listUserIdentityLinksResponseError = (listUserIdentityLinksResponseDefault) & {
+  headers: Headers;
+};
+
+export type listUserIdentityLinksResponse = (listUserIdentityLinksResponseSuccess | listUserIdentityLinksResponseError)
+
+export const getListUserIdentityLinksUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}/identity-links`
+}
+
+/**
+ * Lists the identities at the identity provider a person signs in through (single sign-on), each iss|sub with who made it and when it was last used. Gated by user:read:admin (all-scope), as the user directory is.
+ * @summary List a person's identity links
+ */
+export const listUserIdentityLinks = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<listUserIdentityLinksResponse> => {
+
+  return ogFetch<listUserIdentityLinksResponse>(getListUserIdentityLinksUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type createUserIdentityLinkResponse201 = {
+  data: IdentityLinkBody
+  status: 201
+}
+
+export type createUserIdentityLinkResponse403 = {
+  data: ErrorModel
+  status: 403
+}
+
+export type createUserIdentityLinkResponse409 = {
+  data: ErrorModel
+  status: 409
+}
+
+export type createUserIdentityLinkResponse422 = {
+  data: ErrorModel
+  status: 422
+}
+
+export type createUserIdentityLinkResponse500 = {
+  data: ErrorModel
+  status: 500
+}
+
+export type createUserIdentityLinkResponseSuccess = (createUserIdentityLinkResponse201) & {
+  headers: Headers;
+};
+export type createUserIdentityLinkResponseError = (createUserIdentityLinkResponse403 | createUserIdentityLinkResponse409 | createUserIdentityLinkResponse422 | createUserIdentityLinkResponse500) & {
+  headers: Headers;
+};
+
+export type createUserIdentityLinkResponse = (createUserIdentityLinkResponseSuccess | createUserIdentityLinkResponseError)
+
+export const getCreateUserIdentityLinkUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}/identity-links`
+}
+
+/**
+ * Links another person to an identity at the identity provider (iss|sub), so they sign in through single sign-on as that person. Email never links. Gated by user:link-identity (all-scope) and the takeover guard a password reset takes: refused on yourself (link from your profile), on an owner (an owner links their own identity), or on a person whose capabilities exceed yours. An identity already linked to anyone is a 409. Audited, the link recording who made it; granting the person owner later deletes it.
+ * @summary Link a person to an identity at the provider
+ */
+export const createUserIdentityLink = async (id: string,
+    createIdentityLinkInputBody: NonReadonly<CreateIdentityLinkInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createUserIdentityLinkResponse> => {
+
+  return ogFetch<createUserIdentityLinkResponse>(getCreateUserIdentityLinkUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
+    body: JSON.stringify(createIdentityLinkInputBody)
+  }
+);}
+
+
+
+export type deleteUserIdentityLinkResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deleteUserIdentityLinkResponse403 = {
+  data: ErrorModel
+  status: 403
+}
+
+export type deleteUserIdentityLinkResponse404 = {
+  data: ErrorModel
+  status: 404
+}
+
+export type deleteUserIdentityLinkResponse422 = {
+  data: ErrorModel
+  status: 422
+}
+
+export type deleteUserIdentityLinkResponse500 = {
+  data: ErrorModel
+  status: 500
+}
+
+export type deleteUserIdentityLinkResponseSuccess = (deleteUserIdentityLinkResponse204) & {
+  headers: Headers;
+};
+export type deleteUserIdentityLinkResponseError = (deleteUserIdentityLinkResponse403 | deleteUserIdentityLinkResponse404 | deleteUserIdentityLinkResponse422 | deleteUserIdentityLinkResponse500) & {
+  headers: Headers;
+};
+
+export type deleteUserIdentityLinkResponse = (deleteUserIdentityLinkResponseSuccess | deleteUserIdentityLinkResponseError)
+
+export const getDeleteUserIdentityLinkUrl = (id: string,
+    link: string,) => {
+
+
+
+
+  return `/users/${id}/identity-links/${link}`
+}
+
+/**
+ * Removes one of another person's identity links; every session and token they signed in through it ends with it. Gated by user:link-identity (all-scope) and the same takeover guard as linking. Audited.
+ * @summary Unlink a person from an identity at the provider
+ */
+export const deleteUserIdentityLink = async (id: string,
+    link: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteUserIdentityLinkResponse> => {
+
+  return ogFetch<deleteUserIdentityLinkResponse>(getDeleteUserIdentityLinkUrl(id,link),
   {
     ...options,
     method: 'DELETE'
@@ -26315,7 +27723,7 @@ export const getGetFleetViewUrl = () => {
 }
 
 /**
- * Returns every in-scope location (flat, with parent and verdict), every in-scope system (with location and verdict), and one dot per component in each system. A dot carries the component id, its verdict, and the primary/shared flags, not a full component row. The open_alarms count is the alarms open on the components the caller may read. Each tier is scoped on its own read permission: a caller who can read locations but not components gets locations with empty systems, and a caller with no scope gets an empty result, not an error. Gated by location:read.
+ * Returns every in-scope location (flat, with parent and health), every in-scope system (with location and health), and one dot per component in each system. A dot carries the component id, its health, and the primary/shared flags, not a full component row. The open_alarms count is the alarms open on the components the caller may read. Each tier is scoped on its own read permission: a caller who can read locations but not components gets locations with empty systems, and a caller with no scope gets an empty result, not an error. Gated by location:read.
  * @summary Read the whole in-scope fleet in one call
  */
 export const getFleetView = async ( options?: Parameters<typeof ogFetch>[1]): Promise<getFleetViewResponse> => {
@@ -26359,7 +27767,7 @@ export const getGetPlatformViewUrl = () => {
 }
 
 /**
- * Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build, start time and panels (Requests, Ingest, Queues and Retention: each key's catalog facts and its latest sample per instance, a ranked key cut to the ten highest of its newest window in the database, and the open alarms on the server component with the key each one's rule samples), the outpost table's column groups with each key's catalog facts, and one row per outpost with its last heartbeat, its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest) and its loss over its own hops, and the pipeline: each hop an item crosses, in order, with its in, out and loss per kind and per component, newest window and last hour, and the end to end. The rows need a fleet-wide outpost:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers (with their panels) need a fleet-wide component:read and the system a fleet-wide system:read; short of that each (the pipeline and the outpost loss with them) is left out, never zeroed. Gated by outpost:read.
+ * Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its health, each server's running build, start time and panels (Requests, Ingest, Queues and Retention: each key's catalog facts and its latest sample per instance, a ranked key cut to the ten highest of its newest window in the database, and the open alarms on the server component with the key each one's rule samples), the outpost table's column groups with each key's catalog facts, and one row per outpost with its last heartbeat, its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest) and its loss over its own hops, and the pipeline: each hop an item crosses, in order, with its in, out and loss per kind and per component, newest window and last hour, and the end to end. The rows need a fleet-wide outpost:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, health and servers (with their panels) need a fleet-wide component:read and the system a fleet-wide system:read; short of that each (the pipeline and the outpost loss with them) is left out, never zeroed. Gated by outpost:read.
  * @summary Read Omniglass's own health in one call
  */
 export const getPlatformView = async ( options?: Parameters<typeof ogFetch>[1]): Promise<getPlatformViewResponse> => {

@@ -3,6 +3,7 @@ import { A } from "@solidjs/router";
 import { Bell } from "./icons";
 import { can, useMe } from "../lib/auth";
 import { badgeText, useUnreadCount } from "../lib/inbox";
+import Tooltip from "./ui/Tooltip";
 
 // InboxIndicator is the shell's door to the console inbox (#1355): a bell in
 // the top bar with the unread count on it, linking to /inbox. The count polls
@@ -17,11 +18,11 @@ export default function InboxIndicator() {
   const name = () => (text() ? `Inbox, ${count.data} unread` : "Inbox");
   return (
     <Show when={can(me.data, "notification", "read")}>
-      <A
+      <Tooltip as={A}
         href="/inbox"
         class="relative inline-flex h-8 w-8 flex-none items-center justify-center rounded-field text-base-content/60 transition-colors hover:bg-base-200 hover:text-base-content focus-visible:outline-2 focus-visible:outline-primary"
         activeClass="bg-base-200 text-base-content"
-        title={name()}
+        content={name()}
         aria-label={name()}
         data-testid="inbox-indicator"
       >
@@ -35,7 +36,7 @@ export default function InboxIndicator() {
             {text()}
           </span>
         </Show>
-      </A>
+      </Tooltip>
     </Show>
   );
 }

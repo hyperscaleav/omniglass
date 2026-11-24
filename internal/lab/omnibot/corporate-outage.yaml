@@ -9,6 +9,7 @@
 # Each turn records how long the model thought before it (think) and what it
 # thought (reasoning, shown as the console's Thinking), paced like a live
 # model, so a capture of the console reads as real inference, not a playback.
+prompt: Why is the 86-inch meeting room degraded?
 turns:
   - think: 1.6s
     reasoning: >-
@@ -41,7 +42,7 @@ conversations:
   # The triage-alarm skill's run on the display's alarm: read the component,
   # its alarms and its reachability, then assess, changing nothing.
   - match: "# Triage an alarm"
-    turns:
+    turns: &triage
       - tool_calls:
           - name: get-component
             arguments: {name: hq.hq-annex.hq-annex-1.hq-annex-1-05.$comp.display-1}
@@ -55,3 +56,5 @@ conversations:
           the same moment, so the device is dark, not misconfigured. Its room is
           degraded with the main-display slot short. Next step: check the display's
           power and its switch port. I will ask before running anything.
+  - prompt: What is wrong with the main display?
+    turns: *triage

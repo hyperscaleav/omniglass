@@ -18,29 +18,32 @@ import (
 // operation MUST reject a no-permission user. Keep this list short and
 // justified; a new entry is a security decision.
 var ungated = map[string]bool{
-	"POST /outposts:claim":                    true, // public by necessity: the outpost is not yet a user; the enrollment token is the authentication, exchanged for its NATS credential
-	"POST /webhooks/{token}":                  true, // public by necessity (ADR-1024): the sender is not a user; the endpoint's declared scheme is the authentication, and the write is bound to the token's one endpoint
-	"GET /webhooks/{token}":                   true, // public by necessity (ADR-1024): a sender verifying its URL before it posts; an unknown token is the receiver's identical 404
-	"HEAD /webhooks/{token}":                  true, // public by necessity (ADR-1024): the same verification, headers only
-	"GET /healthz":                            true, // public, no auth
-	"GET /auth/status":                        true, // public: drives the login screen's bootstrap hint
-	"GET /auth/me":                            true, // authn-only: returns the caller's own user
-	"GET /auth/me/agent-policy":               true, // authn-only: the install's agent policy and whether it governs the caller; refusing it would hide why an agent is refused
-	"GET /auth/me/avatar":                     true, // authn-only, self-scoped: reads only the caller's own profile picture
-	"PATCH /auth/me":                          true, // authn-only, self-scoped: edits only the caller's own profile
-	"POST /auth/login":                        true, // public by necessity: it establishes a session
-	"POST /auth/logout":                       true, // public: clearing a session must always succeed
-	"POST /auth/me:changePassword":            true, // authn-only, self-scoped: changes only the caller's own password
-	"POST /auth/me:setAvatar":                 true, // authn-only, self-scoped: sets only the caller's own profile picture
-	"POST /auth/me:removeAvatar":              true, // authn-only, self-scoped: clears only the caller's own profile picture
-	"GET /auth/me/sessions":                   true, // authn-only, self-scoped: lists only the caller's own sessions
-	"POST /auth/me/sessions/{id}:revoke":      true, // authn-only, self-scoped: revokes only the caller's own (a foreign id is a 404)
-	"POST /auth/me/sessions:revokeAll":        true, // authn-only, self-scoped: bulk-revokes only the caller's own, keeping the current one
-	"GET /auth/oauth-clients/{id}":            true, // authn-only, self-scoped: a client's public registration and the roles the caller holds
-	"POST /auth/oauth-clients/{id}:authorize": true, // authn-only, self-scoped: issues a code for the caller only, each role one the caller covers
-	"POST /auth/me/tokens":                    true, // authn-only, self-scoped: mints a token only for the caller
-	"POST /auth/me:stopImpersonation":         true, // authn-only, self-scoped: ends only the caller's own impersonation session (identified by the request token)
-	"GET /settings/me":                        true, // authn-only: the caller's own client-visible effective settings (feeds the SPA at boot)
+	"POST /outposts:claim":                       true, // public by necessity: the outpost is not yet a user; the enrollment token is the authentication, exchanged for its NATS credential
+	"POST /webhooks/{token}":                     true, // public by necessity (ADR-1024): the sender is not a user; the endpoint's declared scheme is the authentication, and the write is bound to the token's one endpoint
+	"GET /webhooks/{token}":                      true, // public by necessity (ADR-1024): a sender verifying its URL before it posts; an unknown token is the receiver's identical 404
+	"HEAD /webhooks/{token}":                     true, // public by necessity (ADR-1024): the same verification, headers only
+	"GET /healthz":                               true, // public, no auth
+	"GET /auth/status":                           true, // public: drives the login screen's bootstrap hint
+	"GET /auth/me":                               true, // authn-only: returns the caller's own user
+	"GET /auth/me/agent-policy":                  true, // authn-only: the install's agent policy and whether it governs the caller; refusing it would hide why an agent is refused
+	"GET /auth/me/avatar":                        true, // authn-only, self-scoped: reads only the caller's own profile picture
+	"PATCH /auth/me":                             true, // authn-only, self-scoped: edits only the caller's own profile
+	"POST /auth/login":                           true, // public by necessity: it establishes a session
+	"POST /auth/logout":                          true, // public: clearing a session must always succeed
+	"POST /auth/me:changePassword":               true, // authn-only, self-scoped: changes only the caller's own password
+	"POST /auth/me:setAvatar":                    true, // authn-only, self-scoped: sets only the caller's own profile picture
+	"POST /auth/me:removeAvatar":                 true, // authn-only, self-scoped: clears only the caller's own profile picture
+	"GET /auth/me/identity-links":                true, // authn-only, self-scoped: lists only the caller's own identity links
+	"POST /auth/me/identity-links:start":         true, // authn-only, self-scoped: confirms the caller's password and links only to the caller, bound to their session
+	"POST /auth/me/identity-links/{link}:unlink": true, // authn-only, self-scoped: confirms the caller's password; a foreign link id is a 404
+	"GET /auth/me/sessions":                      true, // authn-only, self-scoped: lists only the caller's own sessions
+	"POST /auth/me/sessions/{id}:revoke":         true, // authn-only, self-scoped: revokes only the caller's own (a foreign id is a 404)
+	"POST /auth/me/sessions:revokeAll":           true, // authn-only, self-scoped: bulk-revokes only the caller's own, keeping the current one
+	"GET /auth/oauth-clients/{id}":               true, // authn-only, self-scoped: a client's public registration and the roles the caller holds
+	"POST /auth/oauth-clients/{id}:authorize":    true, // authn-only, self-scoped: issues a code for the caller only, each role one the caller covers
+	"POST /auth/me/tokens":                       true, // authn-only, self-scoped: mints a token only for the caller
+	"POST /auth/me:stopImpersonation":            true, // authn-only, self-scoped: ends only the caller's own impersonation session (identified by the request token)
+	"GET /settings/me":                           true, // authn-only: the caller's own client-visible effective settings (feeds the SPA at boot)
 }
 
 // TestEveryRouteIsGated is the no-unguarded-route guard. It enumerates every

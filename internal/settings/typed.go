@@ -20,6 +20,11 @@ func Typed(d Doc) (Settings, error) {
 	if err := json.Unmarshal(b, &s); err != nil {
 		return s, fmt.Errorf("settings: unmarshal into Settings: %w", err)
 	}
+	// A metric window already stored under the minimum (written before it, or
+	// by a file or environment value) folds nothing: it reads as the minimum.
+	if s.Retention.MetricDays > 0 && s.Retention.MetricDays < MetricMinDays {
+		s.Retention.MetricDays = MetricMinDays
+	}
 	return s, nil
 }
 

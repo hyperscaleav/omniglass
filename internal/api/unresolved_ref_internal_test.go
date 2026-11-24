@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/danielgtaylor/huma/v2"
+
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
@@ -35,5 +37,23 @@ func TestUnresolvedRefMessage(t *testing.T) {
 	if !strings.Contains(got, "36 you can see answer to it") || !strings.Contains(got, "hq.room-10.$comp.panel-1/tcp (and 26 more)") ||
 		strings.Contains(got, "hq.room-11.") {
 		t.Errorf("36 candidates = %q, want ten listed and the rest counted", got)
+	}
+}
+
+// TestAmbiguousRefErrorWithoutCandidates pins that an ambiguous name with no
+// candidates (the no-caller-scope path) is a plain 409 message with no
+// path.name detail, so a client never reads "matches 0 rows" (#2334).
+func TestAmbiguousRefErrorWithoutCandidates(t *testing.T) {
+	t.Parallel()
+	err := ambiguousRefError(ambiguousAsUnresolved(&storage.ErrAmbiguousName{Kind: "component", Ref: "dup-1"}))
+	se, ok := err.(huma.StatusError)
+	if !ok || se.GetStatus() != 409 {
+		t.Fatalf("err = %#v, want a 409 status error", err)
+	}
+	if em, ok := err.(*huma.ErrorModel); ok && len(em.Errors) != 0 {
+		t.Fatalf("errors = %+v, want no path.name detail without candidates", em.Errors)
+	}
+	if !strings.Contains(err.Error(), "dup-1") {
+		t.Fatalf("message = %q, want it to name the reference", err.Error())
 	}
 }

@@ -2,6 +2,7 @@ import { Show, type Component } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import { CircleCheck, CircleDashed, OctagonX, Plug, Sliders, WifiOff } from "./icons";
 import { simStatus, type SimComponent, type SimState } from "../lib/simulation";
+import Tooltip from "./ui/Tooltip";
 
 // SimStatusBadge is a simulated component's status, on HealthBadge's recipe:
 // every state wears its own glyph AND its word AND a hue, running wears the
@@ -47,6 +48,10 @@ const NOT_APPLIED_HINT = "The impairment is set, but the simulator did not apply
 export default function SimStatusBadge(props: {
   sim: Pick<SimComponent, "status" | "impairment" | "impaired">;
   size?: "xs" | "sm" | "md";
+  // Whether the impairment chip rides beside the state. The Simulation row
+  // turns it off: its fault chip (with age and a clear) says the same (#2462),
+  // and the "not applied" note stays.
+  chip?: boolean;
 }) {
   const status = () => simStatus(props.sim);
   const look = () => LOOK[status().state];
@@ -55,27 +60,27 @@ export default function SimStatusBadge(props: {
   return (
     <span class="flex min-w-0 max-w-full flex-col items-start gap-0.5" data-testid="sim-status-badge" data-state={status().state}>
       <span class="flex min-w-0 max-w-full flex-wrap items-center gap-1">
-        <span class={`badge badge-soft ${look().badge} ${size()} shrink-0 gap-1 whitespace-nowrap`} title={look().hint} data-testid="sim-state">
+        <Tooltip as="span" tabIndex={0} class={`badge badge-soft ${look().badge} ${size()} shrink-0 gap-1 whitespace-nowrap`} content={look().hint} data-testid="sim-state">
           <Dynamic component={look().icon} size={glyph()} />
           {status().state}
-        </span>
-        <Show when={status().impairment}>
+        </Tooltip>
+        <Show when={props.chip !== false ? status().impairment : undefined}>
           {(i) => (
-            <span
+            <Tooltip as="span" tabIndex={0}
               class={`badge badge-soft badge-warning ${size()} min-w-0 gap-1 whitespace-nowrap`}
-              title={i().unplugged ? UNPLUGGED_HINT : `${SHAPED_HINT} Set: ${i().summary}.`}
+              content={i().unplugged ? UNPLUGGED_HINT : `${SHAPED_HINT} Set: ${i().summary}.`}
               data-testid="sim-impairment-chip"
             >
               <Dynamic component={i().unplugged ? Plug : Sliders} size={glyph()} />
               <span class={`truncate ${i().unplugged ? "" : "font-data"}`}>{i().summary}</span>
-            </span>
+            </Tooltip>
           )}
         </Show>
       </span>
       <Show when={status().impairment && !status().impairment!.applied}>
-        <span class="text-[11px] leading-tight text-base-content/50" title={NOT_APPLIED_HINT} data-testid="sim-not-applied">
+        <Tooltip as="span" tabIndex={0} class="text-[11px] leading-tight text-base-content/50" content={NOT_APPLIED_HINT} data-testid="sim-not-applied">
           impairment not applied
-        </span>
+        </Tooltip>
       </Show>
     </span>
   );

@@ -7,7 +7,7 @@ refs: [2029, 2028, 872, 562]
 ---
 
 - **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [glossary](/reference/glossary/),
-  [architecture glossary](/architecture/glossary/), [docs with everything](/contributing/docs-with-everything/)
+  [architecture glossary](/reference/glossary/), [docs with everything](/contributing/docs-with-everything/)
 - **Decision:** (#2029.) The product vocabulary is a Go-owned table, `internal/vocab/terms.yaml`,
   embedded in the `vocab` package and validated on load (one claim per word, collection, schema,
   nav path and verdict; a definition is one sentence; a retired word carries its pattern and the

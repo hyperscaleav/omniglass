@@ -1,11 +1,14 @@
 import { Show, type JSX } from "solid-js";
 import { A } from "@solidjs/router";
 import { calcRuleHref } from "../lib/calc_rules";
+import { drawerHref } from "../lib/drawer_address";
 import InfoTip from "./InfoTip";
+import { writerLabel } from "../lib/catalog_usage";
+import Tooltip from "./ui/Tooltip";
 
 // ruleHref is where a rule opens: the Rules page, its blade open (#951). The
 // ref is the rule's name or its uuid; the Rules page resolves either.
-export const ruleHref = (ref: string) => `/event-rules?rule=${encodeURIComponent(ref)}`;
+export const ruleHref = (ref: string) => drawerHref("event_rule", ref);
 
 // RuleLink names the event rule an occurrence belongs to ("by rule
 // reachability-lost"), so an event a rule derived on Activity leads back to
@@ -21,9 +24,9 @@ export default function RuleLink(props: { name: string; id?: string }): JSX.Elem
       <Show
         when={props.id}
         fallback={
-          <span class="text-base-content/55" title="This rule has since been deleted; this is the name it had when it wrote the event">
+          <Tooltip as="span" tabIndex={0} class="text-base-content/55" content="This rule has since been deleted; this is the name it had when it wrote the event">
             <span class="font-data">{props.name}</span> (deleted)
-          </span>
+          </Tooltip>
         }
       >
         <A href={ruleHref(props.id!)} class="font-data text-base-content/70 hover:underline">{props.name}</A>
@@ -70,9 +73,52 @@ export function CalcWriterCell(props: { writer?: CalcWriter | null }): JSX.Eleme
   return (
     <Show when={props.writer}>
       {(w) => (
-        <A href={calcRuleHref(w().rule_id)} class="truncate font-data text-[12px] hover:underline" title={`Written by calc rule ${w().rule}`}>
+        <Tooltip as={A} href={calcRuleHref(w().rule_id)} class="truncate font-data text-[12px] hover:underline" content={`Written by calc rule ${w().rule}`}>
           {w().rule}
-        </A>
+        </Tooltip>
+      )}
+    </Show>
+  );
+}
+
+// WriterCell is the "Written by" column of the metrics and properties lists (#2430):
+// the calc rule, linked, when one writes the key, else the class of writer the API
+// reports (driver, outpost probe, platform), so the column says something on every
+// row rather than being empty on all but a calc rule's output.
+export function WriterCell(props: { row: { written_by?: CalcWriter | null; writer_class?: string } }): JSX.Element {
+  const w = () => writerLabel(props.row);
+  return (
+    <Show when={w()}>
+      {(x) => (
+        <Show
+          when={x().kind === "rule" ? (x() as Extract<ReturnType<typeof writerLabel>, { kind: "rule" }>) : undefined}
+          fallback={<Tooltip as="span" class="truncate text-[12px] text-base-content/60" content={(x() as { title: string }).title}>{(x() as { text: string }).text}</Tooltip>}
+        >
+          {(rule) => <CalcWriterCell writer={{ rule: rule().rule, rule_id: rule().rule_id }} />}
+        </Show>
+      )}
+    </Show>
+  );
+}
+
+// WriterLine is the drawer's form: "Written by calc rule x" (CalcWriterLine) when a
+// rule writes the key, else "Written by driver" and its class's explanation.
+export function WriterLine(props: { row: { written_by?: CalcWriter | null; writer_class?: string } }): JSX.Element {
+  const w = () => writerLabel(props.row);
+  return (
+    <Show when={w()}>
+      {(x) => (
+        <Show
+          when={x().kind === "rule" ? (x() as Extract<ReturnType<typeof writerLabel>, { kind: "rule" }>) : undefined}
+          fallback={
+            <span class="inline-flex items-center gap-1.5 text-sm" data-testid="written-by">
+              <span>Written by <span class="font-medium">{(x() as { text: string }).text}</span></span>
+              <InfoTip label="the writer" text={(x() as { title: string }).title} />
+            </span>
+          }
+        >
+          {(rule) => <CalcWriterLine writer={{ rule: rule().rule, rule_id: rule().rule_id }} />}
+        </Show>
       )}
     </Show>
   );

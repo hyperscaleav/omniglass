@@ -39,10 +39,10 @@ import Vendors from "./pages/Vendors";
 import Drivers from "./pages/Drivers";
 import Products from "./pages/Products";
 import Files from "./pages/Files";
+import Alarms from "./pages/Alarms";
 import Audit from "./pages/Audit";
 import Settings from "./pages/Settings";
 import OAuthConsent from "./pages/OAuthConsent";
-import SectionStub from "./pages/SectionStub";
 import NotFound from "./pages/NotFound";
 
 // The page catalog the route manifest resolves against: routes.tsx and the
@@ -92,8 +92,8 @@ export const PAGES: Record<string, Component> = {
   Drivers,
   Products,
   Files,
+  Alarms,
   Audit,
   Settings,
-  SectionStub,
   NotFound,
 };

@@ -23,6 +23,9 @@ it and the [driver](/admin/drivers/) that speaks to it, classified by a **kind**
 product also carries an `id`, a uuid minted by the database, the internal address the handle resolves
 to ([ADR-0062](/architecture/decisions/)); the handle is what you type and read.
 
+A product's drawer links its vendor, driver and type, lists the components that are the product, and shows what
+its driver collects, apart from the contract the product declares: see [Follow the catalog](/admin/catalog-links/).
+
 A product is also what a **component** points at: `component.product_id` names the product a component
 **is**, required, so every component always resolves a shape (its vendor, driver, and classification)
 and, through its product, a device-class **[component type](/architecture/core-entities/#catalog-reference-data-component_type)**. The
@@ -47,7 +50,7 @@ model.
   component fills a slot only when its product's type falls within a type the slot accepts (self or
   a descendant), and, if the slot pins specific products, only when its product is one of them. That
   guard runs once, at assignment; afterward the occupant keeps its slot unless its own health
-  verdict goes to outage (a lesser alarm degrades it but does not cost it the slot); see
+  goes to outage (a lesser alarm degrades it but does not cost it the slot); see
   [Work with an entity](/operator/entities/#slots-on-a-system).
 - **Icon** is an optional override on the type's icon: unset, a product's glyph is whatever its type
   resolves to (walking up the type's own tree if the type itself leaves its icon blank); set, the
@@ -72,8 +75,7 @@ model.
   that uses it. **Delete** (with `product:delete`) removes the row, behind a confirm. A
   verb you lack greys just that button, its hover reason naming the permission
   (`Requires product:update`, `Requires product:delete`); the pair never disappears.
-- An **official** row is always read-only: the blade keeps the Edit and Delete pair in place,
-  greyed, with the reason on hover: "Official: ships with Omniglass and updates with it."
+- An **official** row is always read-only: the blade footer shows one note, "Official, read-only", with the reason on hover: "Official: ships with Omniglass and updates with it."
   Omniglass ships a starter set of official products, upserted idempotently at boot so the shared
   set cannot drift install to install; add a custom product for anything else. Like the
   [vendors](#vendors) they come from, the SKUs are **fictional**, each shaped like
@@ -152,8 +154,7 @@ model, and [Drivers](/admin/drivers/) for the other leaf catalog beside it.
   every product that names it. **Delete** (with `vendor:delete`) removes the row, behind a confirm. A
   verb you lack greys just that button, its hover reason naming the permission
   (`Requires vendor:update`, `Requires vendor:delete`); the pair never disappears.
-- An **official** row is always read-only: the blade keeps the Edit and Delete pair in place,
-  greyed, with the reason on hover: "Official: ships with Omniglass and updates with it."
+- An **official** row is always read-only: the blade footer shows one note, "Official, read-only", with the reason on hover: "Official: ships with Omniglass and updates with it."
   Omniglass ships a starter set of official vendors, upserted idempotently at boot so the shared
   set cannot drift install to install; add a custom vendor for anything else. The set is
   **fictional** by design (the [omniglass-lab](https://github.com/hyperscaleav/omniglass-lab) brand
@@ -177,3 +178,11 @@ model, and [Drivers](/admin/drivers/) for the other leaf catalog beside it.
 Minting a vendor is admin-gated; the picker that consumes it lives on the
 product create and edit forms. The same operations are `omniglass vendor
 list/get/create/update/delete` from the CLI (see the [CLI reference](/reference/cli/)).
+
+## Lifecycle on a product
+
+A product's contract carries the six official lifecycle fields as defaults (see
+[Lifecycle fields](/admin/properties/#lifecycle-fields)): `install-date`, `warranty-end`,
+`end-of-support` and `end-of-life` as properties, `replacement-cost` and `expected-life-years` as
+metrics. What you set shows in the product's **Lifecycle** group and is each component's effective
+value until that component overrides a date.

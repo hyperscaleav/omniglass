@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -80,6 +81,34 @@ func fakeServerWithTokens(t *testing.T, mints *atomic.Int32) *httptest.Server {
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	return srv
+}
+
+// syncBuffer is a buffer a running lab's output and the test share.
+type syncBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (s *syncBuffer) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.Write(p)
+}
+
+func (s *syncBuffer) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.String()
+}
+
+// waitHolding waits until the run reports its lab ready and holding: the
+// banner's last line is out, so a cancel after it stops a ready lab rather
+// than interrupting a start. The container count is only a proxy for this.
+func waitHolding(t *testing.T, out *syncBuffer) {
+	t.Helper()
+	eventually(t, "the lab to be ready and holding", func() bool {
+		return strings.Contains(out.String(), "docker compose -p ")
+	})
 }
 
 // eventually polls until cond holds or the test's patience runs out.
@@ -161,9 +190,9 @@ func TestEphemeralTearDownRemovesTheVolumes(t *testing.T) {
 	cfg.Project, cfg.Ephemeral, cfg.Hold = "ogwalk-1-ab", true, true
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	var out bytes.Buffer
+	var out syncBuffer
 	go func() { _, err := testRunner(eng, &out).Run(ctx, cfg); done <- err }()
-	eventually(t, "the lab", func() bool { eng.mu.Lock(); defer eng.mu.Unlock(); return len(eng.containers) == 3 })
+	waitHolding(t, &out)
 	cancel()
 	if err := <-done; err != nil {
 		t.Fatalf("%v\n%s", err, out.String())
@@ -179,7 +208,7 @@ func TestHoldEndsWhenTheProcessItHoldsForIsGone(t *testing.T) {
 	srv := fakeServer(t)
 	eng := newFakeEngine(strings.TrimPrefix(srv.URL, "http://"))
 	var gone atomic.Bool
-	var out bytes.Buffer
+	var out syncBuffer
 	r := testRunner(eng, &out)
 	r.Alive = func(pid int, start string) bool { return testAlive(pid, start) && (pid != 77 || !gone.Load()) }
 	cfg := testConfig()
@@ -187,7 +216,7 @@ func TestHoldEndsWhenTheProcessItHoldsForIsGone(t *testing.T) {
 	cfg.Project, cfg.Ephemeral = "ogwalk-1-ab", true
 	done := make(chan error, 1)
 	go func() { _, err := r.Run(context.Background(), cfg); done <- err }()
-	eventually(t, "the lab", func() bool { eng.mu.Lock(); defer eng.mu.Unlock(); return len(eng.containers) == 3 })
+	waitHolding(t, &out)
 	gone.Store(true)
 	select {
 	case err := <-done:

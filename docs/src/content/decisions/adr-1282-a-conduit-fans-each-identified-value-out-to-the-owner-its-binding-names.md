@@ -6,7 +6,7 @@ summary: "A component that speaks for many owners (the conduit) collects once, a
 refs: [1282, 456, 1024, 510, 422, 161]
 ---
 
-- **Date:** 2026-10-29 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [metrics and properties](/architecture/properties/), [identity and access](/architecture/identity-access/), [glossary](/architecture/glossary/), [drivers](/admin/drivers/)
+- **Date:** 2026-10-29 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [metrics and properties](/architecture/properties/), [identity and access](/architecture/identity-access/), [glossary](/reference/glossary/), [drivers](/admin/drivers/)
 - **Decision:** (#1282, the architect's approval of 2026-10-29, every open decision as recommended.)
   1. **The conduit and its identities.** A driver function may declare an `identity` (a match key,
      which is a registered `property_type`, and the extract that reads its value) and `records` (a

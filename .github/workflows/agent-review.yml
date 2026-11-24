@@ -41,8 +41,12 @@ name: agent-review
 # shadow mode: it records the findings and the cost and posts nothing.
 #
 # A push to a PR that conflicts with its base, or whose other checks already
-# failed, gets no new review: plan waits for the other checks (15 minutes at
-# most), and the check stays red, saying why, until a push turns the PR green.
+# failed, gets no new review: plan waits for the other checks, and for the test
+# checks to exist and finish, on that same head commit (#2597), and the check
+# stays red, saying why, until a push turns the PR green. If they have not
+# finished in 40 minutes there is no review either: a review on a head whose
+# tests never reported would be the review the gate exists to prevent. Re-run
+# the plan job, or add the review:deep label, once they have.
 #
 # Never pull_request_target: fork PRs get no secrets and are not reviewed, so
 # code from outside the project never runs next to a token. Off until the repo
@@ -108,8 +112,8 @@ jobs:
   plan:
     if: vars.AGENT_CI_ENABLED == 'true'
     runs-on: ubuntu-latest
-    # Up to 15 of these wait for the PR's other checks.
-    timeout-minutes: 30
+    # Up to 40 of these wait for the PR's other checks.
+    timeout-minutes: 50
     permissions:
       contents: read
       # Only for the wait on the PR's other checks and its mergeable state.
@@ -139,7 +143,7 @@ jobs:
     steps:
       - name: Mint the agent App token
         id: app
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ vars.AGENT_APP_CLIENT_ID }}
           private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
@@ -244,8 +248,10 @@ jobs:
           sparse-checkout: scripts
 
       # A push to a PR that conflicts with its base or whose other checks
-      # already failed gets no new review (#2250): wait for the other checks,
-      # 15 minutes at most, then review, or hold. review:deep is not held.
+      # already failed gets no new review (#2250): wait for the other checks and
+      # for the test checks to finish on this head (#2597), 40 minutes at most,
+      # then review, or hold (a red check, a conflict, or tests that never
+      # finished). review:deep is not held.
       - name: Wait for the other checks
         id: gate
         if: steps.what.outputs.mode == 'review' && github.event.action != 'labeled'
@@ -253,8 +259,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           NUMBER: ${{ steps.what.outputs.number }}
           HEAD_SHA: ${{ steps.what.outputs.head_sha }}
-          # This workflow's own checks, and agent-fix's.
-          IGNORE: '^(plan|agent-review|oneshot|fix|lens \(.*\))$'
+          # This workflow's own checks, and agent-fix's; and docs-shots freshness,
+          # which the reviewer does not wait on while main recaptures the docs
+          # shots after merges (#2561), so a PR need not re-render them.
+          IGNORE: '^(plan|agent-review|oneshot|fix|lens \(.*\)|freshness)$'
+          # The checks that must exist, and finish, before a review starts:
+          # each one reports on every push (a skip passes), so none is waited
+          # on forever.
+          REQUIRE: '["test","e2e","smoke-lab","gen-drift"]'
         run: |
           set -euo pipefail
           script=$GITHUB_WORKSPACE/trusted/scripts/agent-review.sh
@@ -263,13 +275,13 @@ jobs:
             echo "::warning::the default branch's agent-review.sh has no gate; reviewing without waiting"
             exit 0
           fi
-          deadline=$((SECONDS + 15 * 60))
+          deadline=$((SECONDS + 40 * 60))
           while :; do
             mergeable=$(gh pr view "$NUMBER" --repo "$REPO" --json mergeable --jq .mergeable)
             checks=$(gh api "repos/${REPO}/commits/${HEAD_SHA}/check-runs?per_page=100" --paginate \
               --jq '.check_runs[] | {name, status, conclusion}' | jq -s -c .)
-            said=$(jq -cn --arg m "$mergeable" --arg ig "$IGNORE" --argjson c "$checks" \
-              '{mergeable: $m, ignore: $ig, checks: $c}' | bash "$script" gate)
+            said=$(jq -cn --arg m "$mergeable" --arg ig "$IGNORE" --argjson rq "$REQUIRE" --argjson c "$checks" \
+              '{mergeable: $m, ignore: $ig, require: $rq, checks: $c}' | bash "$script" gate)
             case "$said" in
               review) echo "the other checks are green; reviewing"; break ;;
               hold:*)
@@ -278,7 +290,8 @@ jobs:
                 break ;;
             esac
             if [ "$SECONDS" -ge "$deadline" ]; then
-              echo "::notice::other checks still run after 15 minutes; reviewing anyway"
+              echo "no new review: the test checks had not finished after 40 minutes"
+              { echo "mode=hold"; echo "why=the test checks had not finished after 40 minutes"; } >> "$GITHUB_OUTPUT"
               break
             fi
             sleep 30
@@ -289,7 +302,7 @@ jobs:
       - name: Mint the reviewer App token
         id: reviewer
         if: steps.what.outputs.mode == 'review' && vars.REVIEWER_APP_CLIENT_ID != ''
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ vars.REVIEWER_APP_CLIENT_ID }}
           private-key: ${{ secrets.REVIEWER_APP_PRIVATE_KEY }}
@@ -428,7 +441,7 @@ jobs:
     steps:
       - name: Mint the agent App token
         id: app
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ vars.AGENT_APP_CLIENT_ID }}
           private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
@@ -443,7 +456,7 @@ jobs:
           fetch-depth: 0
 
       # A lens may build and test the PR's Go code to settle a finding.
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache: true
@@ -611,7 +624,7 @@ jobs:
       - name: Mint the agent App token
         id: app
         if: steps.review.outputs.to_verify != '[]'
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ vars.AGENT_APP_CLIENT_ID }}
           private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
@@ -620,7 +633,7 @@ jobs:
           permission-contents: read
           permission-pull-requests: read
 
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         if: steps.review.outputs.to_verify != '[]'
         with:
           go-version-file: go.mod
@@ -727,7 +740,7 @@ jobs:
       - name: Mint the agent App token
         id: app
         if: needs.plan.outputs.mode != 'skip'
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ vars.AGENT_APP_CLIENT_ID }}
           private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
@@ -744,7 +757,7 @@ jobs:
       - name: Mint the reviewer App token
         id: reviewer
         if: needs.plan.outputs.mode != 'skip' && vars.REVIEWER_APP_CLIENT_ID != ''
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ vars.REVIEWER_APP_CLIENT_ID }}
           private-key: ${{ secrets.REVIEWER_APP_PRIVATE_KEY }}

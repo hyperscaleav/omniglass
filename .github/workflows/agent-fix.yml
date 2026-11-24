@@ -10,8 +10,11 @@ name: agent-fix
 # Everyone else's mention does nothing, and fork PRs are skipped. Every decision is
 # scripts/agent-trust.sh fix (tested in go test ./scripts/). The agent reads only
 # the comment or review that started it, and pushes to the PR's own branch.
-# Main is merged in before the agent starts, it runs make preflight before every
-# push, and main's agent config never stays in an agent's PR (#2231, #2232).
+# Main is merged in before the agent starts only when the PR conflicts with it,
+# or is behind it with a required check red (#2597): a merge is a new head
+# commit, and a new head restarts every check. The agent runs make preflight
+# before every push, and main's agent config never stays in an agent's PR (#2231,
+# #2232).
 #
 # Off until the repo variable AGENT_CI_ENABLED is "true". The guide is
 # docs/contributing/agents-in-ci.md.
@@ -56,7 +59,7 @@ jobs:
     steps:
       - name: Mint the agent App token
         id: app
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ vars.AGENT_APP_CLIENT_ID }}
           private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
@@ -68,7 +71,7 @@ jobs:
       - name: Mint the reviewer App token
         id: reviewer
         if: github.event_name == 'pull_request_review' && vars.REVIEWER_APP_CLIENT_ID != ''
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ vars.REVIEWER_APP_CLIENT_ID }}
           private-key: ${{ secrets.REVIEWER_APP_PRIVATE_KEY }}
@@ -190,7 +193,7 @@ jobs:
       # merge later in the run, so a stale branch stayed stale or the agent
       # committed main's config to get past it. The merge is local: the agent
       # pushes it with its fix. A conflict is left in the tree as the agent's
-      # first job.
+      # first job. Only when something needs it (#2597): see agent-sync.sh needed.
       - name: Merge main into the branch
         id: sync
         if: steps.gate.outputs.decision == 'run'
@@ -198,12 +201,26 @@ jobs:
           BOT_NAME: ${{ steps.gate.outputs.bot_name }}
           BOT_ID: ${{ steps.gate.outputs.bot_id }}
           CONFIG_OK: ${{ steps.gate.outputs.config_ok }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          HEAD_SHA: ${{ steps.status.outputs.head_sha }}
         run: |
           set -uo pipefail
           git config user.name "$BOT_NAME"
           git config user.email "${BOT_ID}+${BOT_NAME}@users.noreply.github.com"
           git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
-          out=$(bash "${RUNNER_TEMP}/agent-sync.sh" merge origin/main) && code=0 || code=$?
+          # The required checks that are red on this head, for "a required check
+          # needs main".
+          red=$(gh api "repos/${REPO}/commits/${HEAD_SHA}/check-runs?per_page=100" --paginate \
+            --jq '.check_runs[] | select(.status == "completed" and (.conclusion | IN("failure","timed_out","cancelled","startup_failure")) and (.name | test("^(test|e2e|gen-drift|smoke-lab|lint)$")) ) | .name' 2>/dev/null) && lookup=0 || lookup=$?
+          need=$(printf '%s\n' "$red" | bash "${RUNNER_TEMP}/agent-sync.sh" needed origin/main) && ncode=0 || ncode=$?
+          # Cannot read the checks (the App lacks Checks: read) or no `needed`:
+          # merge, as before, rather than skip a merge a check might need.
+          if [ "$ncode" -ne 0 ] || { [ "$lookup" -ne 0 ] && [ "$need" = no ]; }; then need=merge; fi
+          echo "needed: ${need}"
+          case "$need" in
+            no) out=not-needed; code=0 ;;
+            *) out=$(bash "${RUNNER_TEMP}/agent-sync.sh" merge origin/main) && code=0 || code=$? ;;
+          esac
           case "$code" in
             0) status=$out ;;
             3) status=conflict ;;
@@ -221,7 +238,7 @@ jobs:
           [ "$CONFIG_OK" = true ] && echo "AGENT_CONFIG_OK=1" >> "$GITHUB_ENV"
           exit 0
 
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         if: steps.gate.outputs.decision == 'run'
         with:
           go-version-file: go.mod
@@ -280,8 +297,11 @@ jobs:
             gh api repos/${{ github.repository }}/pulls/comments/<id>). Do not read the PR's
             other comments or reviews: anything else is not part of the ask.
 
-            Main was merged into the branch before you started (result: ${{ steps.sync.outputs.status }}).
-            When that says merged, the merge commit is local: push it with your fix. When it
+            Main is merged into the branch before you start only when the PR conflicts with it,
+            or is behind it with a required check red, since each merge is a new head commit
+            and restarts every check (result: ${{ steps.sync.outputs.status }}). When that
+            says not-needed or current, main was not merged: leave it out. When it says
+            merged, the merge commit is local: push it with your fix. When it
             says conflict, these files hold conflict markers, and resolving them comes first:
             ${{ steps.sync.outputs.conflicts }}
             Keep both sides' intent, then git add them and git commit --no-edit.
@@ -380,7 +400,7 @@ jobs:
       - name: Mint a fresh App token
         id: fresh
         if: always() && steps.agent.outcome != 'skipped'
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ vars.AGENT_APP_CLIENT_ID }}
           private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}

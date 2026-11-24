@@ -57,9 +57,13 @@ Omniglass and takes your own entries beside it; each page says which of its rows
 - **[Tags](/admin/tags/)**: the governed tag keys, what each applies to, and whether it cascades.
 - **[Products and vendors](/admin/products/)**: the SKUs a component is, their component type, and
   the organizations behind them.
+- **[Drivers](/admin/drivers/)**: the catalog of how a device is talked to, attaching one to an
+  endpoint, and checking a spec.
 - **[Properties](/admin/properties/)**, **[metrics](/admin/metrics/)**, **[events](/admin/events/)**
   and **[commands](/admin/commands/)**: the canonical names a driver maps a device onto, one catalog
   per lane.
+- **[Follow the catalog](/admin/catalog-links/)**: every reference in a catalog drawer is a link, and each
+  drawer lists what uses the row.
 - **[Standards](/admin/standards/)**: the contract a system is built to, and the slots a conforming
   system fills.
 
@@ -70,6 +74,3 @@ Automation is what happens when a value crosses a line:
 - **[Calc rules](/admin/calc-rules/)**: values derived from other values, for rules to judge.
 - **[Notifications](/admin/notifications/)**: the targets, action rules and messages that tell
   somebody about an alarm.
-
-- **[Drivers](/admin/drivers/)**: the catalog of how a device is talked to, attaching one to an
-  endpoint, and checking a spec.

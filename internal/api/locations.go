@@ -178,21 +178,25 @@ type locationPathInput struct {
 	Name string `path:"name" doc:"The location's name, or a dotted address (e.g. boi.17c.415a)"`
 }
 
+// createLocationInputBody is the single create's body, which the batch create
+// (POST /locations:batchCreate) takes as each of its requests.
+type createLocationInputBody struct {
+	// Name is optional (#687), exactly as a component's and a system's are:
+	// omit it and the platform mints one from the location_type's name
+	// rule, and marks name_generated. Supplied, it is validated exactly as
+	// before. Omitting it for a type carrying no rule is a 422: only some
+	// kinds of location have a name the platform can know.
+	Name         string  `json:"name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the location_type's name rule."`
+	Label        string  `json:"label,omitempty" doc:"What an operator reads; the name is the address"`
+	LocationType string  `json:"location_type" minLength:"1" doc:"The location_type, by name or uuid (campus, building, ...)"`
+	Parent       *string `json:"parent,omitempty" doc:"Parent location name; omit for a root location"`
+	// The create form's ordinal precondition (#702); see
+	// createComponentInput for why it is a number and never a name.
+	ExpectedName *string `json:"expected_name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The name a create form previewed (POST /locations:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the location_type's name rule moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422."`
+}
+
 type createLocationInput struct {
-	Body struct {
-		// Name is optional (#687), exactly as a component's and a system's are:
-		// omit it and the platform mints one from the location_type's name
-		// rule, and marks name_generated. Supplied, it is validated exactly as
-		// before. Omitting it for a type carrying no rule is a 422: only some
-		// kinds of location have a name the platform can know.
-		Name         string  `json:"name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the location_type's name rule."`
-		Label        string  `json:"label,omitempty" doc:"What an operator reads; the name is the address"`
-		LocationType string  `json:"location_type" minLength:"1" doc:"The location_type, by name or uuid (campus, building, ...)"`
-		Parent       *string `json:"parent,omitempty" doc:"Parent location name; omit for a root location"`
-		// The create form's ordinal precondition (#702); see
-		// createComponentInput for why it is a number and never a name.
-		ExpectedName *string `json:"expected_name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The name a create form previewed (POST /locations:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the location_type's name rule moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422."`
-	}
+	Body createLocationInputBody
 }
 
 // updateLocationInput is the PATCH body. It deliberately carries no name: a rename
@@ -388,7 +392,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Path:          "/locations",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a location",
-		Description:   "Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. Gated by location:create.",
+		Description:   "Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. The parent resolves within the caller's location:read scope before its location:create scope: a parent the caller cannot read is the same 404 as one that does not exist, so the answer never discloses a location outside the caller's read, and a parent the caller can read but not create under is a 403. Gated by location:create.",
 	}, "location", "create"), func(ctx context.Context, in *createLocationInput) (*locationOutput, error) {
 		l, err := gw.CreateLocation(ctx, actorID(ctx), storage.LocationSpec{
 			Name:         in.Body.Name,
@@ -396,7 +400,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 			LocationType: in.Body.LocationType,
 			ParentName:   in.Body.Parent,
 			ExpectedName: in.Body.ExpectedName,
-		}, a.scopeFor(ctx, "location", "create"))
+		}, a.scopeFor(ctx, "location", "read"), a.scopeFor(ctx, "location", "create"))
 		if err != nil {
 			return nil, mapLocationErr(err)
 		}
@@ -507,17 +511,17 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		return out, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.gated(withDeleteRefusal(api, huma.Operation{
 		OperationID:   "delete-location",
 		Method:        http.MethodDelete,
 		Path:          "/locations/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a location",
-		Description:   "Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.",
-	}, "location", "delete"), func(ctx context.Context, in *locationPathInput) (*struct{}, error) {
+		Description:   "Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.",
+	}), "location", "delete"), func(ctx context.Context, in *locationPathInput) (*struct{}, error) {
 		if err := gw.DeleteLocation(ctx, actorID(ctx), in.Name,
 			a.scopeFor(ctx, "location", "read"), a.scopeFor(ctx, "location", "delete")); err != nil {
-			return nil, mapLocationErr(err)
+			return nil, a.deleteRefusal(ctx, gw, "location", in.Name, err, mapLocationErr(err))
 		}
 		return nil, nil
 	})
@@ -572,7 +576,9 @@ func mapLocationErr(err error) error {
 	case errors.Is(err, storage.ErrInvalidEntityName):
 		return huma.Error422UnprocessableEntity("invalid name")
 	case errors.Is(err, storage.ErrParentNotFound):
-		return huma.Error422UnprocessableEntity("parent location not found")
+		// 404, not 422 (#1343): a create resolves its parent under read, so an
+		// unreadable parent and an absent one are this one answer.
+		return huma.Error404NotFound("parent location not found")
 	case errors.Is(err, storage.ErrUnknownType):
 		return huma.Error422UnprocessableEntity("unknown location_type")
 	case errors.Is(err, storage.ErrLocationCycle):

@@ -37,6 +37,31 @@ type eventBody struct {
 	AlarmID         string          `json:"alarm_id,omitempty" doc:"The alarm a rule's fire event opened or its clear event resolved; absent for most events"`
 }
 
+// The event reads take a narrowing (#2437), applied by the read itself so the
+// capped window holds only what matches. Spelled out per route rather than
+// embedded: Huma does not flatten an embedded input struct's parameters.
+type componentEventsInput struct {
+	Name   string `path:"name" doc:"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)"`
+	Key    string `query:"key" maxLength:"100" doc:"Only occurrences of this event type, by name"`
+	Source string `query:"source" maxLength:"100" doc:"Only occurrences from this transport"`
+	Q      string `query:"q" maxLength:"200" doc:"Only occurrences whose message contains this text, case-insensitively"`
+}
+
+func (in *componentEventsInput) filter() storage.EventFilter {
+	return storage.EventFilter{Key: in.Key, Source: in.Source, Text: in.Q}
+}
+
+type systemEventsInput struct {
+	Name   string `path:"name" doc:"The system's name, or a dotted address (e.g. boi.17c.$sys.av)"`
+	Key    string `query:"key" maxLength:"100" doc:"Only occurrences of this event type, by name"`
+	Source string `query:"source" maxLength:"100" doc:"Only occurrences from this transport"`
+	Q      string `query:"q" maxLength:"200" doc:"Only occurrences whose message contains this text, case-insensitively"`
+}
+
+func (in *systemEventsInput) filter() storage.EventFilter {
+	return storage.EventFilter{Key: in.Key, Source: in.Source, Text: in.Q}
+}
+
 type eventsOutput struct {
 	Body struct {
 		Component string      `json:"component"`
@@ -53,13 +78,13 @@ func registerEventRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/events",
 		Summary:     "List a component's recent events",
-		Description: "Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
-	}, "component", "read"), func(ctx context.Context, in *componentPathInput) (*eventsOutput, error) {
+		Description: "Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours, narrowed by an optional event type (key), source and message text (q). Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+	}, "component", "read"), func(ctx context.Context, in *componentEventsInput) (*eventsOutput, error) {
 		comp, err := gw.GetComponent(ctx, in.Name, a.scopeFor(ctx, "component", "read"))
 		if err != nil {
 			return nil, mapComponentErr(err)
 		}
-		rows, err := gw.ListComponentEvents(ctx, comp.ID, eventHistoryWindow, eventReadLimit)
+		rows, err := gw.ListComponentEvents(ctx, comp.ID, eventHistoryWindow, eventReadLimit, in.filter())
 		if err != nil {
 			return nil, huma.Error500InternalServerError("read events")
 		}
@@ -120,13 +145,13 @@ func registerSystemEventRoutes(api huma.API, a *authenticator, gw storage.Gatewa
 		Method:      http.MethodGet,
 		Path:        "/systems/{name}/events",
 		Summary:     "List a system's recent events, members included",
-		Description: "Returns the system's own events and its members', newest first, bounded to the last 24 hours, each row labeled by the owner that raised it. A component shared with another system appears in both systems' lists. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
-	}, "system", "read"), func(ctx context.Context, in *systemPathInput) (*systemEventsOutput, error) {
+		Description: "Returns the system's own events and its members', newest first, bounded to the last 24 hours, each row labeled by the owner that raised it, narrowed by an optional event type (key), source and message text (q). A component shared with another system appears in both systems' lists. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+	}, "system", "read"), func(ctx context.Context, in *systemEventsInput) (*systemEventsOutput, error) {
 		sys, err := gw.GetSystem(ctx, in.Name, a.scopeFor(ctx, "system", "read"))
 		if err != nil {
 			return nil, mapSystemErr(err)
 		}
-		rows, err := gw.ListSystemEvents(ctx, sys.ID, eventHistoryWindow, eventReadLimit)
+		rows, err := gw.ListSystemEvents(ctx, sys.ID, eventHistoryWindow, eventReadLimit, in.filter())
 		if err != nil {
 			return nil, huma.Error500InternalServerError("read system events")
 		}

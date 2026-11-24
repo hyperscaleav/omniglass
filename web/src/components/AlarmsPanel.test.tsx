@@ -8,6 +8,7 @@ import { MAJOR_LEVEL, SEEDED_LEVELS, seedSeverityLevels } from "../lib/testsever
 import type { SeverityLevel } from "../lib/severity";
 import { ME_KEY, type Me } from "../lib/auth";
 import { pendingTriage, requestTriage } from "../lib/handover";
+import { tipOf } from "../test-tip";
 
 // The alarms panel is where fleet health starts: an alarm on this component
 // that impairs its own health wholesale (#626). Rows are seeded into the query
@@ -139,11 +140,11 @@ describe("AlarmsPanel", () => {
       }
       return json({ component: "disp-1", alarms });
     });
-    const { getByRole } = mount();
+    const { getByRole, getAllByText } = mount();
     fireEvent.click(getByRole("button", { name: "Timeline of HDMI board failed" }));
     const list = await waitFor(() => getByRole("list", { name: "Timeline of HDMI board failed" }));
     expect(within(list).getAllByRole("listitem")).toHaveLength(1);
-    fireEvent.click(getByRole("button", { name: "Acknowledge alarm a-2" }));
+    fireEvent.click(within(alarmRow(getAllByText("HDMI board failed")[0])).getByRole("button", { name: "Acknowledge" }));
     await waitFor(() => expect(within(getByRole("list", { name: "Timeline of HDMI board failed" })).getAllByRole("listitem")).toHaveLength(2));
   });
 
@@ -182,6 +183,14 @@ describe("AlarmsPanel", () => {
     const { getAllByText } = mount();
     const messages = getAllByText(/HDMI board failed|Lamp hours exceeded/).map((e) => e.textContent);
     expect(messages).toEqual(["HDMI board failed", "Lamp hours exceeded"]);
+  });
+
+  // How long it lasted (#2426), the same reading the alarms page gives.
+  it("says how long a cleared alarm was raised", () => {
+    const { getByRole } = mount();
+    const group = getByRole("group", { name: /recently cleared/i });
+    expect(within(group).getByTestId("alarm-duration")).toHaveTextContent("1d");
+    expect(within(group).getByText(/lasted/)).toBeTruthy();
   });
 
   // Clearing keeps the row: what was wrong, and when, outlives the fix.
@@ -276,9 +285,10 @@ describe("AlarmsPanel", () => {
   // The queue an operator actually works, at a glance: raised, and unseen. The
   // acknowledged-but-still-raised alarm is deliberately not in it, which is the
   // whole point of the two facts being independent.
-  it("counts only the raised alarms nobody has looked at", () => {
-    const { getByTitle } = mount();
-    expect(getByTitle(/nobody has recorded seeing it yet/i).textContent).toBe("1 unacknowledged");
+  it("counts only the raised alarms nobody has looked at", async () => {
+    const { getByText } = mount();
+    const chip = getByText("1 unacknowledged");
+    expect(await tipOf(chip)).toMatch(/nobody has recorded seeing it yet/i);
   });
 
   it("shows no unacknowledged counter once every raised alarm has been seen", () => {
@@ -295,8 +305,8 @@ describe("AlarmsPanel", () => {
       return json({ component: "disp-1", alarms });
     });
 
-    const { getByLabelText } = mount();
-    fireEvent.click(getByLabelText("Acknowledge alarm a-2"));
+    const { getByText } = mount();
+    fireEvent.click(within(alarmRow(getByText("HDMI board failed"))).getByRole("button", { name: "Acknowledge" }));
 
     await waitFor(() => expect(post).toBeTruthy());
     expect(post!.url).toContain("/components/disp-1/alarms/a-2:acknowledge");
@@ -307,12 +317,12 @@ describe("AlarmsPanel", () => {
   // exists to guard the component's own data (ADR-0109).
   it("offers the acknowledgement outside edit mode, and only to a caller that holds it", () => {
     const viewing = mount({ canUpdate: false });
-    expect(viewing.getByLabelText("Acknowledge alarm a-2")).toBeTruthy();
+    expect(viewing.getByRole("button", { name: "Acknowledge" })).toBeTruthy();
     expect(viewing.queryByLabelText("Clear alarm a-2")).toBeNull();
     viewing.unmount();
 
     const uncapable = mount({ canAcknowledge: false });
-    expect(uncapable.queryByLabelText("Acknowledge alarm a-2")).toBeNull();
+    expect(uncapable.queryByRole("button", { name: "Acknowledge" })).toBeNull();
     // The indicator is a READ, so it stays: a caller who cannot acknowledge can
     // still see that nobody has.
     expect(uncapable.getByText("unacknowledged")).toBeTruthy();
@@ -333,7 +343,7 @@ describe("AlarmsPanel", () => {
     const options = [...(getByLabelText("Alarm severity") as HTMLSelectElement).options];
     expect(options.map((o) => o.value)).toEqual(["info", "warning", "average", "high", "disaster"]);
     expect(options.map((o) => o.textContent)).toEqual([
-      "Info (degrades it, still working)",
+      "Info (does not affect health)",
       "Warning (degrades it, still working)",
       "Average (degrades it, still working)",
       "High (takes this component out)",
@@ -408,5 +418,18 @@ describe("AlarmsPanel", () => {
     const active = alarmRow(getByText("HDMI board failed")).querySelector("[data-alarm-actions]") as HTMLElement;
     expect(within(active).getByRole("button", { name: /^Acknowledge/ })).toBeTruthy();
     expect(within(active).getByRole("button", { name: /with omnibot$/ })).toBeTruthy();
+  });
+
+  // A failed Acknowledge or Snooze floats its one line under the group: no
+  // ancestor up to the panel may clip it (overflow-hidden on the list swallowed
+  // the line under the last row).
+  it("leaves a failed action's line unclipped by the alarm list", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => json({ title: "Bad", detail: "boom" }, 500));
+    const { getAllByRole, findByRole, container } = mount();
+    fireEvent.click(getAllByRole("button", { name: "Acknowledge" })[0]);
+    const alert = await findByRole("alert");
+    for (let n: HTMLElement | null = alert; n && n !== container; n = n.parentElement) {
+      expect(n.className).not.toContain("overflow-hidden");
+    }
   });
 });

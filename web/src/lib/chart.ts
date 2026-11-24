@@ -9,7 +9,9 @@ export type ChartSample = { ts: string; value: number };
 export type ChartBucket = { ts: string; count: number; min: number | null; max: number | null; avg: number | null; last: number | null };
 // A bucket's point carries its band, so the crosshair reads the spike and not
 // only the average.
-export type ChartPoint = { x: number; y: number; ts: string; value: number; min?: number; max?: number; count?: number };
+// `t` is the instant the point is drawn at, in epoch ms: a raw sample's own
+// time, a bucket's middle. The shared cursor (#2424) matches on it.
+export type ChartPoint = { x: number; y: number; t: number; ts: string; value: number; min?: number; max?: number; count?: number };
 
 export type ChartOpts = {
   width: number;
@@ -85,7 +87,7 @@ export function chartLayout(samples: ChartSample[], o: ChartOpts): ChartLayout {
   const x = (t: number) => o.padLeft + Math.min(Math.max(1 - (o.now - t) / o.windowMs, 0), 1) * plotW;
   const y = (v: number) => o.padY + (1 - (v - lo) / (hi - lo)) * plotH;
 
-  const points: ChartPoint[] = rows.map((r) => ({ x: x(r.t), y: y(r.value), ts: r.ts, value: r.value }));
+  const points: ChartPoint[] = rows.map((r) => ({ x: x(r.t), y: y(r.value), t: r.t, ts: r.ts, value: r.value }));
   const start = carried === undefined ? undefined : { x: o.padLeft, y: y(carried) };
   const linePath = o.mode === "step" ? stepPath(points, x(o.now), start) : points.map((p, i) => `${i === 0 ? "M" : "L"}${f2(p.x)},${f2(p.y)}`).join(" ");
   const base = (o.height - o.padY).toFixed(2);
@@ -168,7 +170,7 @@ export function bucketLayout(buckets: ChartBucket[], o: BucketOpts): ChartLayout
     const yTop = y(b.max);
     const yBot = Math.max(y(b.min), yTop + 1);
     bandPath += `${bandPath ? " " : ""}M${f2(x0)},${f2(yTop)} H${f2(x1)} V${f2(yBot)} H${f2(x0)} Z`;
-    const p: ChartPoint = { x: x(b.t + o.resolutionMs / 2), y: y(b.avg), ts: b.ts, value: b.avg, min: b.min, max: b.max, count: b.count };
+    const p: ChartPoint = { x: x(b.t + o.resolutionMs / 2), y: y(b.avg), t: b.t + o.resolutionMs / 2, ts: b.ts, value: b.avg, min: b.min, max: b.max, count: b.count };
     linePath += `${linePath ? " L" : "M"}${f2(p.x)},${f2(p.y)}`;
     points.push(p);
   }
@@ -196,18 +198,35 @@ export function bucketLayout(buckets: ChartBucket[], o: BucketOpts): ChartLayout
   };
 }
 
-// nearestPoint resolves a plot-space x to the closest SAMPLE, never an
-// interpolation: the crosshair reads what was measured, and between two
-// samples it snaps to the nearer one.
-export function nearestPoint(l: ChartLayout, x: number): ChartPoint | null {
-  let best: ChartPoint | null = null;
+// The x axis both ways (#2424), over the plot between the pads: the window's
+// start at the left edge, now at the right. Both clamp to the plot, so a
+// pointer in the gutter reads as the nearest edge.
+export type TimeFrame = { width: number; padLeft: number; padRight: number; now: number; windowMs: number };
+
+export function timeAtX(x: number, f: TimeFrame): number {
+  const plotW = f.width - f.padLeft - f.padRight;
+  const frac = Math.min(Math.max((x - f.padLeft) / plotW, 0), 1);
+  return f.now - (1 - frac) * f.windowMs;
+}
+
+export function xAtTime(t: number, f: TimeFrame): number {
+  const plotW = f.width - f.padLeft - f.padRight;
+  return f.padLeft + Math.min(Math.max(1 - (f.now - t) / f.windowMs, 0), 1) * plotW;
+}
+
+// nearestByTime is the shared cursor's lookup (#2424): the point drawn
+// nearest an instant, the earlier on a tie, never an interpolation. Past
+// maxDistanceMs there is none, so a chart whose series has a gap at the
+// cursor says so rather than reading a sample from elsewhere.
+export function nearestByTime<P extends { t: number }>(points: readonly P[], t: number, maxDistanceMs = Infinity): P | null {
+  let best: P | null = null;
   let bestDist = Infinity;
-  for (const p of l.points) {
-    const d = Math.abs(p.x - x);
+  for (const p of points) {
+    const d = Math.abs(p.t - t);
     if (d < bestDist) {
       bestDist = d;
       best = p;
     }
   }
-  return best;
+  return best !== null && bestDist <= maxDistanceMs ? best : null;
 }

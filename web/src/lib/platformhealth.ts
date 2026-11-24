@@ -222,14 +222,6 @@ export function simStateNote(n: Pick<PlatformSimOutpost, "state">): string | nul
   return null;
 }
 
-export const NOT_WIRED = "not wired yet";
-
-// wiredText is a figure the outpost does not report yet (its dispatch queue depth
-// and busy workers): no number until it does.
-export function wiredText(v: number | null | undefined): string {
-  return v == null ? NOT_WIRED : String(v);
-}
-
 // deviceReceived is a device's requests over the window across protocols.
 export function deviceReceived(d: Pick<PlatformSimDevice, "received">): number {
   return Object.values(d.received ?? {}).reduce((a, b) => a + b, 0);

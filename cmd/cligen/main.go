@@ -90,11 +90,35 @@ type param struct {
 }
 
 type paramSchema struct {
-	Type string `json:"type"`
+	Type schemaType `json:"type"`
 	// Examples carries a path parameter's `example:` tag (Huma writes it into
 	// the parameter's schema), which the command's Example line shows in place
 	// of a placeholder (#1133), so the CLI's help teaches a name, not <id>.
 	Examples []any `json:"examples"`
+}
+
+// schemaType is a JSON Schema "type": a string, or a list of them when the
+// schema is nullable (Huma writes ["array","null"] for a slice query parameter).
+// It reads as the first type that is not "null".
+type schemaType string
+
+func (t *schemaType) UnmarshalJSON(b []byte) error {
+	var one string
+	if err := json.Unmarshal(b, &one); err == nil {
+		*t = schemaType(one)
+		return nil
+	}
+	var many []string
+	if err := json.Unmarshal(b, &many); err != nil {
+		return err
+	}
+	for _, m := range many {
+		if m != "null" {
+			*t = schemaType(m)
+			return nil
+		}
+	}
+	return nil
 }
 
 type requestBody struct {
@@ -271,6 +295,7 @@ type queryField struct {
 	Zero     string // Go source for the flag default: "", false, 0
 	Desc     string
 	Required bool
+	Array    bool // a repeatable flag: each value is its own query-string pair
 }
 
 // nameOverride names an operation the route cannot. With the parent-qualified
@@ -312,15 +337,16 @@ var nameOverride = map[string]([]string){
 	"set-component-impairment": {"component", "impairment", "set"},
 	// The simulated fleet: one group for the fleet, its catalog and adding a
 	// device; a component's own simulation beside its impairment.
-	"get-simulation":                   {"simulation", "get"},
-	"list-simulation-profiles":         {"simulation", "profiles"},
-	"add-outpost-simulation-component": {"simulation", "add-component"},
-	"plan-simulation-system":           {"simulation", "plan-system"},
-	"add-outpost-simulation-system":    {"simulation", "add-system"},
-	"get-component-simulation":         {"component", "simulation", "get"},
-	"fire-component-simulation":        {"component", "simulation", "fire"},
-	"login":                            {"auth", "login"},
-	"logout":                           {"auth", "logout"},
+	"get-simulation":                    {"simulation", "get"},
+	"list-simulation-profiles":          {"simulation", "profiles"},
+	"add-outpost-simulation-component":  {"simulation", "add-component"},
+	"plan-outpost-simulation-component": {"simulation", "plan-component"},
+	"plan-simulation-system":            {"simulation", "plan-system"},
+	"add-outpost-simulation-system":     {"simulation", "add-system"},
+	"get-component-simulation":          {"component", "simulation", "get"},
+	"fire-component-simulation":         {"component", "simulation", "fire"},
+	"login":                             {"auth", "login"},
+	"logout":                            {"auth", "logout"},
 }
 
 func buildCommands(doc spec, base string) []command {
@@ -388,7 +414,7 @@ func buildCommand(doc spec, base, path, method string, op operation) command {
 // repeatedNameHelp is the line a tree-entity argument's help carries: a name is
 // not unique, so a repeated one is refused and the operator is told how to say
 // which row they mean (#1134).
-const repeatedNameHelp = "a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead"
+const repeatedNameHelp = "a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead"
 
 // withArgHelp appends an Arguments section to a command's long help: each path
 // argument that the API addresses by a dotted address (its OpenAPI description
@@ -441,7 +467,10 @@ func queryFields(op operation) []queryField {
 			continue
 		}
 		goType, flagFunc, zero := "string", "StringVar", `""`
+		array := false
 		switch p.Schema.Type {
+		case "array":
+			goType, flagFunc, zero, array = "[]string", "StringSliceVar", "nil", true
 		case "boolean":
 			goType, flagFunc, zero = "bool", "BoolVar", "false"
 		case "integer":
@@ -456,6 +485,7 @@ func queryFields(op operation) []queryField {
 			Zero:     zero,
 			Desc:     p.Description,
 			Required: p.Required,
+			Array:    array,
 		})
 	}
 	return out
@@ -739,11 +769,36 @@ func tree(cmds []command) ([]*node, error) {
 	sortRec = func(ns []*node) {
 		sort.Slice(ns, func(i, j int) bool { return ns[i].Name < ns[j].Name })
 		for _, n := range ns {
+			n.noteShadowedArg()
 			sortRec(n.Kids)
 		}
 	}
 	sortRec(roots)
 	return roots, nil
+}
+
+// noteShadowedArg documents the one way to reach a command's path argument when
+// a child's word equals it. A command with a path argument and children shares
+// one position between the argument and the children's words, and cobra matches
+// a subcommand name first, so `simulation observation` runs the child group, not
+// the read of a node named `observation` (#1667). The `--` separator ends
+// subcommand matching, so `simulation -- observation` reaches the argument.
+func (n *node) noteShadowedArg() {
+	if n.Cmd == nil || len(n.Cmd.Args) == 0 || len(n.Kids) == 0 {
+		return
+	}
+	words := make([]string, len(n.Kids))
+	for i, k := range n.Kids {
+		words[i] = k.Name
+	}
+	sort.Strings(words)
+	note := fmt.Sprintf("A value equal to a subcommand name (%s) runs that subcommand; put -- before it to pass it as <%s>, e.g. `%s -- %s`.",
+		strings.Join(words, ", "), n.Cmd.Args[0], strings.Join(n.Cmd.Words, " "), words[0])
+	if n.Cmd.Long == "" {
+		n.Cmd.Long = note
+	} else {
+		n.Cmd.Long += "\n\n" + note
+	}
 }
 
 // collision is the error for two operations that derive one command path: each
@@ -915,7 +970,13 @@ func generatedCommands() []*cobra.Command {
 				q := url.Values{}
 				{{- range $qp := .Query}}
 				if cmd.Flags().Changed({{quote $qp.Flag}}) {
+					{{- if $qp.Array}}
+					for _, v := range {{$qp.Var}} {
+						q.Add({{quote $qp.Name}}, v)
+					}
+					{{- else}}
 					q.Set({{quote $qp.Name}}, fmt.Sprintf("%v", {{$qp.Var}}))
+					{{- end}}
 				}
 				{{- end}}
 				if enc := q.Encode(); enc != "" {

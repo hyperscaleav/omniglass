@@ -61,7 +61,7 @@ describe("Metrics page", () => {
     mount();
     const row = screen.getByText("boot-count").closest("tr")!;
     const link = within(row).getByRole("link", { name: "boot-count-calc" });
-    expect(link.getAttribute("href")).toContain("/calc-rules?rule=11111111-1111-7111-8111-111111111111");
+    expect(link.getAttribute("href")).toContain("/calc-rules?open=11111111-1111-7111-8111-111111111111");
     fireEvent.click(screen.getByText("boot-count"));
     const blade = await waitFor(() => {
       const el = document.querySelectorAll("aside[data-blade]")[0];
@@ -99,11 +99,9 @@ describe("Metrics page", () => {
     expect(within(blade).getByText("1")).toBeInTheDocument();
     // Official row: the Edit / Delete pair stays in the footer, greyed, with the
     // lock reason on each button's tooltip wrapper.
-    const editBtn = within(blade).getByLabelText("Edit") as HTMLButtonElement;
-    const deleteBtn = within(blade).getByRole("button", { name: /delete/i }) as HTMLButtonElement;
-    expect(editBtn.disabled).toBe(true);
-    expect(deleteBtn.disabled).toBe(true);
-    expect(editBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe("Official: ships with Omniglass and updates with it.");
+    expect(within(blade).getByTestId("footer-note").textContent).toBe("Official, read-only");
+    expect(within(blade).queryByLabelText("Edit")).toBeNull();
+    expect(within(blade).queryByText("Delete")).toBeNull();
   });
 
   it("lets a role-scoped metric_type user edit a custom row", async () => {

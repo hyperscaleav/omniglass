@@ -55,7 +55,7 @@ func TestHistoryWindowsAreBoundedByTheDatabaseClock(t *testing.T) {
 		run  func() error
 	}{
 		{"a system's health transitions", func() error {
-			_, err := gw.SystemHealth(ctx, sys.ID, 30*24*time.Hour, all)
+			_, err := gw.SystemHealth(ctx, sys.ID, storage.HealthRange{Window: 30 * 24 * time.Hour}, all, all)
 			return err
 		}},
 		{"a component's property transitions", func() error {
@@ -63,7 +63,7 @@ func TestHistoryWindowsAreBoundedByTheDatabaseClock(t *testing.T) {
 			return err
 		}},
 		{"a component's events", func() error {
-			_, err := gw.ListComponentEvents(ctx, comp.ID, 24*time.Hour, 50)
+			_, err := gw.ListComponentEvents(ctx, comp.ID, 24*time.Hour, 50, storage.EventFilter{})
 			return err
 		}},
 		{"a component's logs", func() error {
@@ -123,7 +123,7 @@ func TestAZeroWindowBindsNoBoundary(t *testing.T) {
 	}
 
 	counter.Reset()
-	if _, err := gw.ListComponentEvents(ctx, comp.ID, 0, 50); err != nil {
+	if _, err := gw.ListComponentEvents(ctx, comp.ID, 0, 50, storage.EventFilter{}); err != nil {
 		t.Fatalf("unwindowed events read: %v", err)
 	}
 	for _, call := range counter.Calls() {

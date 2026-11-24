@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import SnoozeButton, { SnoozedBadge, SNOOZE_TIP } from "./SnoozeButton";
 import { ME_KEY, type Me } from "../lib/auth";
 import { snoozedUntilWords, timelineWhat } from "../lib/alarms";
+import { tipOf } from "../test-tip";
 
 // The snooze control (#1318): a menu of durations on an unsnoozed alarm, an
 // Unsnooze on a snoozed one, nothing for a caller without alarm:snooze, and a
@@ -22,8 +23,8 @@ function mount(me: Me, alarm: { id: string; snoozed_until?: string; snoozed_by?:
   qc.setQueryData([...ME_KEY], me);
   return render(() => (
     <QueryClientProvider client={qc}>
-      <SnoozeButton component="disp-1" alarm={alarm} surface="a" />
-      <SnoozeButton component="disp-1" alarm={alarm} surface="b" />
+      <SnoozeButton componentId="disp-1" alarm={alarm} surface="a" />
+      <SnoozeButton componentId="disp-1" alarm={alarm} surface="b" />
       <SnoozedBadge alarm={alarm} />
     </QueryClientProvider>
   ));
@@ -41,7 +42,7 @@ describe("SnoozeButton", () => {
     });
     const { getAllByRole } = mount(operator, { id: "a-1" });
     const trigger = getAllByRole("button", { name: /Snooze/ })[0];
-    expect(trigger.getAttribute("title")).toBe(SNOOZE_TIP);
+    expect(await tipOf(trigger)).toBe(SNOOZE_TIP);
     expect(SNOOZE_TIP).toMatch(/acknowledging/);
     expect(SNOOZE_TIP).toMatch(/opting out/);
     expect(SNOOZE_TIP).toMatch(/pausing a rule/);
@@ -63,7 +64,7 @@ describe("SnoozeButton", () => {
     });
     const until = new Date(Date.now() + 3_600_000).toISOString();
     const { getAllByRole, getByText } = mount(operator, { id: "a-1", snoozed_until: until, snoozed_by: "jordan" });
-    expect(getByText(snoozedUntilWords(until)).getAttribute("title")).toMatch(/snoozed by jordan/);
+    expect(await tipOf(getByText(snoozedUntilWords(until)))).toMatch(/snoozed by jordan/);
     fireEvent.click(getAllByRole("button", { name: "Unsnooze" })[0]);
     await waitFor(() => expect(urls.some((u) => u.includes("/components/disp-1/alarms/a-1:unsnooze"))).toBe(true));
   });
@@ -100,6 +101,38 @@ describe("SnoozeButton errors", () => {
     const until = new Date(Date.now() + 3_600_000).toISOString();
     const { getAllByRole, findByRole } = mount(operator, { id: "a-2", snoozed_until: until });
     fireEvent.click(getAllByRole("button", { name: "Unsnooze" })[0]);
-    expect((await findByRole("alert")).textContent).toMatch(/forbidden/i);
+    const alert = await findByRole("alert");
+    // One short line with Retry; the server's detail rides in the tooltip, never the row (#2441).
+    expect(alert.textContent).toMatch(/could not end the snooze/i);
+    expect(await tipOf(alert)).toMatch(/forbidden/i);
+  });
+
+  // The failure line outlives a list poll (it is held outside the row), so the
+  // write Retry replays must too: a row rebuilt by a poll still retries.
+  it("retries a failed write after the row is rebuilt, as a poll rebuilds it", async () => {
+    const calls: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      calls.push((input as Request).url);
+      return json({ title: "Bad", status: 500, detail: "boom" }, 500);
+    });
+    const until = new Date(Date.now() + 3_600_000).toISOString();
+    const alarm = { id: "a-retry", snoozed_until: until };
+    const first = mount(operator, alarm);
+    fireEvent.click(first.getAllByRole("button", { name: "Unsnooze" })[0]);
+    await first.findAllByRole("alert");
+    first.unmount();
+    const second = mount(operator, alarm);
+    const before = calls.length;
+    fireEvent.click((await second.findAllByRole("button", { name: "Retry" }))[0]);
+    await waitFor(() => expect(calls.length).toBeGreaterThan(before));
+  });
+});
+
+describe("SnoozedBadge (#2426)", () => {
+  it("keeps its words on one line inside the pill, however long the deadline reads", () => {
+    const { getByText } = render(() => <SnoozedBadge alarm={{ id: "a-1", snoozed_until: "2026-11-24T14:30:00Z" }} />);
+    const pill = getByText(/snoozed until/);
+    expect(pill.className).toContain("whitespace-nowrap");
+    expect(pill.className).toContain("h-auto");
   });
 });

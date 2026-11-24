@@ -1,12 +1,13 @@
 ---
 title: "An ambiguous name is a 404 naming the reference, on every collection"
 date: 2026-11-13
-status: "Accepted"
+status: "Superseded in part by [ADR-2334](#adr-2334-an-ambiguous-name-is-a-409-listing-the-matches-a-missing-one-stays-a-404)"
 summary: "A name that more than one visible row answers to now gets the same refusal on every collection (#1134): a 404 naming what was looked up and listing each candidate in a spelling that resolves on the same route. A component, system or location, which answered 409, moves to that shape: each candidate is its dotted address with its uuid beside it. A candidate the caller cannot read is neither listed nor counted, and scope still decides before ambiguity does"
 refs: [1134, 1133]
 ---
 
-- **Date:** 2026-11-13 | **Status:** Accepted | **Pages:** [api](/architecture/api/),
+- **Date:** 2026-11-13 | **Status:** Superseded in part by
+  [ADR-2334](#adr-2334-an-ambiguous-name-is-a-409-listing-the-matches-a-missing-one-stays-a-404): an ambiguous name is a 409, not a 404. Its candidate spelling and redaction stand. | **Pages:** [api](/architecture/api/),
   [core entities](/architecture/core-entities/), [CLI](/developer/cli/)
 - **Decision:** (#1134, the follow-up ADR-1133 named.)
   1. **One status for a repeated name.** The tree entities (component, system, location) answered an

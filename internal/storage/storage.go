@@ -273,7 +273,7 @@ type Gateway interface {
 	// drives the non-disclosing 404 versus the 403.
 	ListLocations(ctx context.Context, read scope.Set) ([]Location, error)
 	GetLocation(ctx context.Context, name string, read scope.Set) (*Location, error)
-	CreateLocation(ctx context.Context, actorID string, spec LocationSpec, create scope.Set) (*Location, error)
+	CreateLocation(ctx context.Context, actorID string, spec LocationSpec, read, create scope.Set) (*Location, error)
 	UpdateLocation(ctx context.Context, actorID, name string, patch LocationPatch, read, action scope.Set) (*Location, error)
 	// RenameLocation moves the location's name, scoped exactly as the update is.
 	// Its own function, not a patch field, because a rename breaks the references
@@ -378,6 +378,10 @@ type Gateway interface {
 	ResetComponentName(ctx context.Context, actorID, name string, read, action scope.Set) (*Component, error)
 	ComponentNameTaken(ctx context.Context, name string, parentRef, locationRef *string) (bool, error)
 	DeleteComponent(ctx context.Context, actorID, name string, read, action scope.Set) error
+	// DeleteBlockersOf names what stands in the way of a refused delete of a
+	// component, system or location (#2463): the rows the caller may read on
+	// each blocker's own kind, and a count of the rest. Read-only.
+	DeleteBlockersOf(ctx context.Context, kind, ref string, readOf func(kind string) scope.Set) (*DeleteBlockers, error)
 
 	// The component_make catalog: a flat manufacturer catalog (Cisco,
 	// Crestron, ...), same shape and official-read-only guard as the type
@@ -461,6 +465,9 @@ type Gateway interface {
 
 	UpsertProduct(ctx context.Context, m Product) error
 	ListProducts(ctx context.Context) ([]Product, error)
+	// ListProductsDeclaring is ListProducts narrowed to the products whose contract
+	// declares the named metric (lane "metric") or property (lane "property").
+	ListProductsDeclaring(ctx context.Context, lane, name string) ([]Product, error)
 	GetProduct(ctx context.Context, id string) (*Product, error)
 	CreateProduct(ctx context.Context, actorID string, m Product) (*Product, error)
 	UpdateProduct(ctx context.Context, actorID, id string, patch ProductPatch) (*Product, error)
@@ -713,18 +720,24 @@ type Gateway interface {
 	// occurrences. reject-not-project and owner-confinement are applied by the caller
 	// before the write. ListComponentEvents backs the component event log panel.
 	InsertEvents(ctx context.Context, w KeyWriter, evs []EventWrite) error
-	ListComponentEvents(ctx context.Context, componentName string, window time.Duration, limit int) ([]Event, error)
+	ListComponentEvents(ctx context.Context, componentName string, window time.Duration, limit int, filter EventFilter) ([]Event, error)
 	// ListSystemEvents merges the system's own events with its members',
 	// newest first, each row naming its owner (#793).
-	ListSystemEvents(ctx context.Context, systemID string, window time.Duration, limit int) ([]Event, error)
+	ListSystemEvents(ctx context.Context, systemID string, window time.Duration, limit int, filter EventFilter) ([]Event, error)
 	// ListSystemAlarms is the members' alarms in one read (#940): active ones
-	// whatever their age and those cleared inside window, newest first, capped.
-	ListSystemAlarms(ctx context.Context, systemID string, window time.Duration, limit int) ([]Alarm, error)
+	// whatever their age and those cleared inside the window, or those raised
+	// during an explicit range (#2425), newest first, capped.
+	ListSystemAlarms(ctx context.Context, systemID string, rng AlarmRange, limit int) ([]Alarm, error)
 	// ListFleetAlarms is the active alarms across every component in read, the
 	// Gateway injecting the scope (#2025): worst severity first, then newest,
 	// capped at limit. Unacknowledged narrows it to the queue nobody has worked;
 	// IncludeCleared is ignored, since the fleet read is what is wrong now.
-	ListFleetAlarms(ctx context.Context, read scope.Set, filter AlarmFilter, limit int) ([]Alarm, error)
+	// The queue's filters (Severities, Location, Acknowledged, Snoozed) narrow
+	// it further and PageToken resumes after a prior page; the returned token
+	// is empty on the last page (#2333). A row's Systems are only those inside
+	// systemRead, so reading a component never names a system the caller may
+	// not read.
+	ListFleetAlarms(ctx context.Context, read, systemRead scope.Set, filter AlarmFilter, limit int) ([]Alarm, string, error)
 	// ListMetricSeries returns one metric series' raw samples newest first,
 	// windowed and capped: the rows behind the effective read (#794).
 	ListMetricSeries(ctx context.Context, ownerKind, ownerRef, key string, window time.Duration, limit int) ([]MetricSample, error)
@@ -803,6 +816,10 @@ type Gateway interface {
 	EnsureRole(ctx context.Context, actorID string, r Role) error
 	SetMachineToken(ctx context.Context, actorID, name string, hash []byte, prefix string) (bool, error)
 	OutpostSimDevices(ctx context.Context, name string, read scope.Set) ([]SimDevice, error)
+	// ComponentPlaces reads each component's primary system and place names, keyed
+	// by id (#1724): the Platform health simulation table's tiebreak between
+	// devices that share a name.
+	ComponentPlaces(ctx context.Context, ids []string, systemRead, locationRead scope.Set) (map[string]ComponentPlace, error)
 	// OutpostSimWebhooks reads the webhook subscription of each simulated
 	// component on the outpost (ADR-1370), keyed by component id: only for the
 	// simulator's own device list, never an operator's read.
@@ -829,6 +846,13 @@ type Gateway interface {
 	// in one transaction, each piece the ordinary create in the caller's
 	// scope with its own audit row (#827).
 	CreatePlan(ctx context.Context, actorID string, plan Plan, sc PlanScopes) (*Planned, error)
+	// BatchCreateLocations, BatchCreateSystems and BatchCreateComponents run
+	// the single create for each row, in order, in one transaction (#2368): a
+	// refused row refuses the batch as a BatchError naming it, and
+	// validateOnly rolls the transaction back.
+	BatchCreateLocations(ctx context.Context, actorID string, specs []LocationSpec, read, create scope.Set, validateOnly bool) ([]*Location, error)
+	BatchCreateSystems(ctx context.Context, actorID string, specs []SystemSpec, create, locationRead scope.Set, validateOnly bool) ([]*System, error)
+	BatchCreateComponents(ctx context.Context, actorID string, specs []ComponentSpec, create, locationRead, systemRead, systemUpdate scope.Set, validateOnly bool) ([]*Component, error)
 	// ResolveTaskOwner binds a task's owner component and confines the outpost to its
 	// own tasks, for the telemetry ingest consumer.
 	ResolveTaskOwner(ctx context.Context, taskID, outpostName string) (TaskOwner, bool, error)
@@ -995,6 +1019,7 @@ type Gateway interface {
 	// OutpostCheckins reads every claimed outpost's platform component and the time
 	// it last spoke, the check-in age's input (#1625).
 	OutpostCheckins(ctx context.Context) ([]OutpostCheckin, error)
+	PlatformMetricInstancesAt(ctx context.Context, componentID, key string, value float64) ([]string, error)
 	// StampRuleSweep records a completed event rule sweep on the server's
 	// platform component, MarkServerSeen that the server is alive,
 	// ReleaseRuleSweep clears both on a clean stop, and ServerSweepAges reads
@@ -1114,13 +1139,20 @@ type Gateway interface {
 	AlarmTimeline(ctx context.Context, componentID, alarmID string, view RecipientView) ([]AlarmTimelineEntry, error)
 	ListAlarms(ctx context.Context, componentName string, filter AlarmFilter) ([]Alarm, error)
 	// The health reads: the current verdict, why it is what it is, and the
-	// recorded transitions at or after since (a zero since is the whole history).
-	SystemHealth(ctx context.Context, systemName string, window time.Duration, read scope.Set) (*HealthReport, error)
+	// recorded transitions inside rng (the zero HealthRange is the whole history).
+	// read scopes the system; compRead scopes its member list, so a member the
+	// caller may not read is never named (#2459, the fleet dots' rule).
+	SystemHealth(ctx context.Context, systemName string, rng HealthRange, read, compRead scope.Set) (*HealthReport, error)
 	// SystemHealths is the BULK health read: every system in the read scope with
 	// its current verdict, in one statement. The read a LIST paints its health
 	// column from, where SystemHealth is the read one system's panel opens (#653).
 	SystemHealths(ctx context.Context, read scope.Set) ([]SystemHealthEntry, error)
-	LocationHealth(ctx context.Context, locationName string, window time.Duration, read scope.Set) (*HealthReport, error)
+	LocationHealth(ctx context.Context, locationName string, rng HealthRange, read scope.Set) (*HealthReport, error)
+	// ComponentHealthReport is a component's own current verdict beside its
+	// recorded transitions inside rng, in the report shape a system's read
+	// serves (no slots, no systems: a component's health is its own alarms).
+	// A component outside read is ErrComponentNotFound.
+	ComponentHealthReport(ctx context.Context, componentName string, rng HealthRange, read scope.Set) (*HealthReport, error)
 
 	// FleetProjection is the read behind the fleet canvas: the whole in-scope
 	// place tree, the systems on it, and one dot per component in each system.
@@ -1130,6 +1162,13 @@ type Gateway interface {
 	// three different permissions: a user who may read the place tree but
 	// not its components sees the shape of their fleet with no contents.
 	FleetProjection(ctx context.Context, locRead, sysRead, compRead scope.Set) (*FleetView, error)
+
+	// SearchFleet is the read behind the command palette's name search (#2444):
+	// the locations, systems and components whose name or label holds text, at
+	// most limit of each kind (capped at SearchMaxLimit), each kind through its
+	// own read scope so nothing outside the caller's reach is found. Blank text
+	// finds nothing.
+	SearchFleet(ctx context.Context, text string, limit int, locRead, sysRead, compRead scope.Set) (*FleetSearchResult, error)
 
 	// PlatformView is the read behind the Platform health page (#1644): the
 	// platform system's verdict, each server's identity, and one row per outpost
@@ -1239,6 +1278,22 @@ type Gateway interface {
 	// MergePatchAssistantSettings patches the assistant namespace, judging
 	// the model key's binding on the result (the bind right).
 	MergePatchAssistantSettings(ctx context.Context, actorID string, patch map[string]any, use SecretUse) (*SettingBinding, error)
+	// Single sign-on (#2362, ADR-2361): the provider (its client secret
+	// unsealed; never returned by a route), the settings patch judging the
+	// secret's binding, a sign-in's state, the identity links, the sign-in
+	// through one, and the re-check sweep's reads and writes.
+	SSOProvider(ctx context.Context, name string) (*SSOProvider, error)
+	SSOProviders(ctx context.Context) ([]string, error)
+	MergePatchSSOSettings(ctx context.Context, actorID string, patch map[string]any, use SecretUse) (*SettingBinding, error)
+	CreateOIDCState(ctx context.Context, s OIDCState) error
+	ConsumeOIDCState(ctx context.Context, stateHash []byte) (*OIDCState, error)
+	LinkIdentity(ctx context.Context, actorID, userID, identifier string) (*IdentityLink, error)
+	UnlinkIdentity(ctx context.Context, actorID, userID, linkID string) error
+	ListIdentityLinks(ctx context.Context, userID string) ([]IdentityLink, error)
+	SignInByIdentity(ctx context.Context, in SSOSignIn) (*User, time.Time, error)
+	LinksToRecheck(ctx context.Context, issuer string) ([]LinkRecheck, error)
+	AcceptLinkRefresh(ctx context.Context, linkID, rotated string, grace time.Duration) error
+	RevokeLink(ctx context.Context, linkID, reason string) (int, error)
 	// The action rule (#618): reads catalog-shaped, writes all-scope.
 	ListActionRules(ctx context.Context) ([]ActionRule, error)
 	// UpsertNotificationTarget and UpsertActionRule install the shipped

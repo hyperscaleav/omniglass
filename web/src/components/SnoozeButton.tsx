@@ -1,12 +1,14 @@
 import { For, Show, createSignal, type JSX } from "solid-js";
-import { Popover } from "@kobalte/core/popover";
+import Popover from "./ui/Popover";
 import { useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
+import ActionFailure from "./ActionFailure";
 import { Moon } from "./icons";
-import { ALARM_TIMELINE_PREFIX, COMPONENT_ALARMS_PREFIX, SNOOZE_PRESETS, snoozeAlarm, snoozedUntilWords, unsnoozeAlarm } from "../lib/alarms";
+import { ALARM_TIMELINE_PREFIX, COMPONENT_ALARMS_PREFIX, FLEET_ALARMS_PREFIX, SNOOZE_PRESETS, snoozeAlarm, snoozedUntilWords, unsnoozeAlarm } from "../lib/alarms";
 import { FLEET_VIEW_KEY } from "../lib/fleet";
 import { can, useMe } from "../lib/auth";
 import { describeError, fmtTime } from "../lib/format";
+import Tooltip from "./ui/Tooltip";
 
 type Snoozable = { id: string; message?: string; snoozed_until?: string; snoozed_by?: string };
 
@@ -26,6 +28,9 @@ const acting = (verb: string, alarm: Snoozable) => (alarm.message ? `${verb} ${a
 // dismiss each other.
 const [openMenu, setOpenMenu] = createSignal<string | null>(null);
 const [errors, setErrors] = createSignal<Record<string, string>>({});
+// The write Retry replays, held beside its error and keyed the same way, so a
+// row a poll rebuilds still retries what failed.
+const retries = new Map<string, () => Promise<unknown>>();
 const setError = (key: string, msg: string | null) =>
   setErrors((prev) => {
     const next = { ...prev };
@@ -48,12 +53,12 @@ export function SnoozedBadge(props: { alarm: Snoozable }): JSX.Element {
   return (
     <Show when={props.alarm.snoozed_until}>
       {(until) => (
-        <span
-          class="badge badge-snoozed badge-xs shrink-0"
-          title={`Its notifications are recorded, not sent, until ${fmtTime(until())}${props.alarm.snoozed_by ? `, snoozed by ${props.alarm.snoozed_by}` : ""}`}
+        <Tooltip as="span" tabIndex={0}
+          class="badge badge-snoozed badge-xs h-auto min-h-4 shrink-0 whitespace-nowrap"
+          content={`Its notifications are recorded, not sent, until ${fmtTime(until())}${props.alarm.snoozed_by ? `, snoozed by ${props.alarm.snoozed_by}` : ""}`}
         >
           {snoozedUntilWords(until())}
-        </span>
+        </Tooltip>
       )}
     </Show>
   );
@@ -66,29 +71,33 @@ export function SnoozedBadge(props: { alarm: Snoozable }): JSX.Element {
 // alarm:snooze, never on the component's update (ADR-1318), and renders
 // nothing for a caller who may not. Unsnoozed, it opens a menu of durations;
 // snoozed, it ends the snooze early.
-export default function SnoozeButton(props: { component: string; alarm: Snoozable; surface: string }): JSX.Element {
+export default function SnoozeButton(props: { componentId: string; alarm: Snoozable; surface: string }): JSX.Element {
   const me = useMe();
-  return <SnoozeControl component={props.component} alarm={props.alarm} surface={props.surface} allowed={can(me.data, "alarm", "snooze")} />;
+  return <SnoozeControl componentId={props.componentId} alarm={props.alarm} surface={props.surface} allowed={can(me.data, "alarm", "snooze")} />;
 }
 
 // SnoozeControl is the control itself, for a surface that already knows the
 // caller's permissions (the alarms panel takes them as props, as it does
-// canAcknowledge).
-export function SnoozeControl(props: { component: string; alarm: Snoozable; surface: string; allowed: boolean }): JSX.Element {
+// canAcknowledge). Its failure floats under the AlarmActions group, one short
+// line with Retry (ActionFailure), never in the row's flow.
+export function SnoozeControl(props: { componentId: string; alarm: Snoozable; surface: string; allowed: boolean }): JSX.Element {
   const qc = useQueryClient();
   const [busy, setBusy] = createSignal(false);
   const key = () => `${props.surface}:${props.alarm.id}`;
   const err = () => errors()[key()] ?? null;
   const run = async (write: () => Promise<unknown>) => {
+    retries.set(key(), write);
     setBusy(true);
     setError(key(), null);
     setOpenMenu(null);
     try {
       await write();
+      retries.delete(key());
       await Promise.all([
         qc.invalidateQueries({ queryKey: [...COMPONENT_ALARMS_PREFIX] }),
         qc.invalidateQueries({ queryKey: ["system-alarms"] }),
         qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] }),
+        qc.invalidateQueries({ queryKey: [...FLEET_ALARMS_PREFIX] }),
         qc.invalidateQueries({ queryKey: [...ALARM_TIMELINE_PREFIX] }),
       ]);
     } catch (e) {
@@ -102,41 +111,48 @@ export function SnoozeControl(props: { component: string; alarm: Snoozable; surf
       <Show
         when={!props.alarm.snoozed_until}
         fallback={
-          <Button size="xs" intent="quiet" loading={busy()} label={acting("Unsnooze", props.alarm)} title={err() ?? "End the snooze now. If the alarm is still raised, people are told again."}
-            onClick={() => void run(() => unsnoozeAlarm(props.component, props.alarm.id))}>
+          <Button size="xs" intent="quiet" loading={busy()} label={acting("Unsnooze", props.alarm)} title={"End the snooze now. If the alarm is still raised, people are told again."}
+            onClick={() => void run(() => unsnoozeAlarm(props.componentId, props.alarm.id))}>
             Unsnooze
           </Button>
         }
       >
-        <Popover placement="bottom-end" gutter={4} open={openMenu() === key()} onOpenChange={(o) => {
+        <Popover class="btn btn-quiet btn-xs gap-1.5"
+          placement="bottom-end"
+          open={openMenu() === key()}
+          onOpenChange={(o) => {
             if (o) setOpenMenu(key());
             else if (openMenu() === key()) setOpenMenu(null);
-          }}>
-          <Popover.Trigger class="btn btn-quiet btn-xs gap-1.5" aria-label={acting("Snooze", props.alarm)} title={err() ?? SNOOZE_TIP} disabled={busy()}>
-            <Moon size={14} />
-            Snooze
-          </Popover.Trigger>
-          <Popover.Portal>
-            <Popover.Content class="menu z-50 w-44 rounded-box border border-base-300 bg-base-100 p-1.5 shadow-2xl focus:outline-none" aria-label="Snooze for">
+          }}
+          aria-label={acting("Snooze", props.alarm)}
+          title={SNOOZE_TIP}
+          disabled={busy()}
+          contentClass="menu z-50 w-44 rounded-box border border-base-300 bg-base-100 p-1.5 shadow-2xl focus:outline-none"
+          contentLabel="Snooze for"
+          content={
+            <>
               <p class="menu-title px-2 pb-1 text-[10.5px]">Silence this alarm for</p>
               <ul class="flex flex-col">
                 <For each={SNOOZE_PRESETS}>
                   {(p) => (
                     <li>
                       <button type="button" class="px-2 py-1.5 text-left text-[12px]"
-                        onClick={() => void run(() => snoozeAlarm(props.component, props.alarm.id, p.duration))}>
+                        onClick={() => void run(() => snoozeAlarm(props.componentId, props.alarm.id, p.duration))}>
                         {p.label}
                       </button>
                     </li>
                   )}
                 </For>
               </ul>
-            </Popover.Content>
-          </Popover.Portal>
+            </>
+          }
+        >
+          <Moon size={14} />
+          Snooze
         </Popover>
       </Show>
       <Show when={err()}>
-        <span role="alert" class="text-[11px] text-error">{err()}</span>
+        {(e) => <ActionFailure what={props.alarm.snoozed_until ? "end the snooze" : "snooze"} detail={e()} onRetry={() => { const w = retries.get(key()); if (w) void run(w); }} />}
       </Show>
     </Show>
   );

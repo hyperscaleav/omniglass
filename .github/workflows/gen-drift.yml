@@ -11,8 +11,13 @@ name: gen-drift
 # incidental lockfile refresh from `npm install` can never false-positive the
 # gate.
 
+# Selective (#2597): the generated artifacts span Go, web and the generated docs
+# pages, so a push that touches none of them reports a pass without running.
+# The job always runs, since gen-drift is a required check.
+
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   # The merge queue (#2181) runs the required checks on each queue entry: the
   # PR on top of current main. A queue entry has its own ref, so the
   # concurrency group below keeps one run per entry.
@@ -35,21 +40,57 @@ env:
   PROTOC_GEN_GO_VERSION: "v1.36.11"
 
 jobs:
-  gen-drift:
+  changes:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      gen: ${{ steps.what.outputs.gen }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: |
+            scripts
+            .github/actions
+          persist-credentials: false
 
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: ./.github/actions/changes
+        id: what
+        with:
+          token: ${{ github.token }}
+
+  gen-drift:
+    needs: changes
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Does this push need the drift check?
+        id: gate
+        env:
+          GEN: ${{ needs.changes.outputs.gen }}
+          CHANGES: ${{ needs.changes.result }}
+        run: |
+          if [ "$CHANGES" != success ]; then echo "::error::the change lookup ${CHANGES}"; exit 1; fi
+          if [ "$GEN" != true ]; then echo "run=false" >> "$GITHUB_OUTPUT"; echo "No generated artifact can have changed: nothing to run."; exit 0; fi
+          echo "run=true" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.gate.outputs.run == 'true'
+
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        if: steps.gate.outputs.run == 'true'
         with:
           go-version-file: go.mod
           cache: true
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: steps.gate.outputs.run == 'true'
         with:
           node-version: "22"
 
       - name: Install pinned protoc and protoc-gen-go
+        if: steps.gate.outputs.run == 'true'
         run: |
           curl -fsSL -o /tmp/protoc.zip \
             "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip"
@@ -59,9 +100,11 @@ jobs:
       # erdgen applies the embedded migrations to a throwaway testcontainer
       # Postgres and introspects it; ubuntu-latest ships the Docker daemon.
       - name: Regenerate everything
+        if: steps.gate.outputs.run == 'true'
         run: make gen
 
       - name: Fail on drift in the generated artifacts
+        if: steps.gate.outputs.run == 'true'
         run: |
           git diff --exit-code -- \
             api/openapi.json \

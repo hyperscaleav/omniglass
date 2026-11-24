@@ -377,8 +377,8 @@ func TestAnAmbiguousPlacementNamesOnlyTheCandidatesTheCallerCanRead(t *testing.T
 
 	create := map[string]any{"name": "panel-1", "product": f.product.Name, "parent": f.rackID, "location": "1"}
 	status, body := f.c.send(f.narrow, http.MethodPost, "/components", create)
-	if status != http.StatusNotFound {
-		t.Fatalf("create against an in-scope-ambiguous location = %d, want 404\nbody: %s", status, body)
+	if status != http.StatusConflict {
+		t.Fatalf("create against an in-scope-ambiguous location = %d, want 409\nbody: %s", status, body)
 	}
 	for _, id := range []string{eastOne, westOne} {
 		if !strings.Contains(string(body), id) {
@@ -407,8 +407,8 @@ func TestAnAmbiguousPlacementNamesOnlyTheCandidatesTheCallerCanRead(t *testing.T
 	// The owner, whose scope holds all three, is refused with all three named:
 	// the two-row list above is this caller's scope, not the fleet's shape.
 	status, body = f.c.send(f.owner, http.MethodPost, "/components", create)
-	if status != http.StatusNotFound {
-		t.Fatalf("owner create against the ambiguous location = %d, want 404\nbody: %s", status, body)
+	if status != http.StatusConflict {
+		t.Fatalf("owner create against the ambiguous location = %d, want 409\nbody: %s", status, body)
 	}
 	for _, id := range []string{eastOne, westOne, hiddenOne} {
 		if !strings.Contains(string(body), id) {

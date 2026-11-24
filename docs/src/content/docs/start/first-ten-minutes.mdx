@@ -48,8 +48,8 @@ Starting your omniglass lab. The first run takes a few minutes; later ones, unde
   seed       the dev fleet, seeded on this lab's first run
   server     answering at http://127.0.0.1:8080/web
   sign in    the login dev / dev works
-  outpost       edge-hq with its simulator: 124 of 124 simulated components running
-  collecting 128 of 128 simulated endpoints up, and 3 broken on purpose for you to find
+  outpost       edge-hq with its simulator: 201 of 201 simulated components running
+  collecting 210 of 210 simulated endpoints up, and 5 broken on purpose for you to find
 
 Your omniglass lab is ready (it took 14s).
 
@@ -70,8 +70,10 @@ Ready means four things, each checked before the lab says so: the console answer
 address, the printed login signs in, the simulator reports every simulated component `running`, and
 every simulated endpoint reads up except the ones the seed breaks on purpose. Two kinds of endpoint
 are left out of that count: an endpoint that receives pushes (a webhook carries no reachability
-verdict to wait for), and the planted faults below, which the seed marks itself rather than a list
-kept here. The lab is one compose project, so `docker compose ls`, `docker compose -p omniglass-lab
+health to wait for), and the ones broken on purpose: the planted faults below, which the seed marks
+itself rather than a list kept here, and every endpoint of a device impaired in the simulator (the
+two faults the lab starts with, or one you break yourself), which counts as broken on purpose for as
+long as its impairment holds. The lab is one compose project, so `docker compose ls`, `docker compose -p omniglass-lab
 ps` and `docker compose -p omniglass-lab logs server` all see it, and Docker Desktop groups it.
 
 ## Sign in
@@ -128,12 +130,20 @@ Start with one that matches what you came to learn:
 ## Faults planted for you to find
 
 The seed breaks a few things on purpose, so there is something real to diagnose the moment the lab
-is up: the readiness line counts them as "broken on purpose". Each is marked as a planted fault in
+is up: the readiness line counts them, with the two impaired devices below, as "broken on purpose". Each is marked as a planted fault in
 the dev fleet's own fixtures, with a sentence saying what went wrong, and the lab reads them from
 there, so the count never drifts from the seed. They are the kind of thing that happens in the field:
 a credential rotated under an endpoint, a component reimaged so its key no longer matches the pin, an
 agent that refuses what the endpoint presents. The walkthroughs that fix a rejected session, trust a
 changed host key and fix a refused probe each start from one; try finding them on your own first.
+
+Two devices are broken in the simulator itself, so the fleet's first alarms are true ones: DSP 1 in
+the auditorium is unplugged, and Display 1 in bay 1 answers slowly. A rule raised each alarm, the
+device's own page agrees with it, and repairing the device on the Simulation page clears it
+([two faults the lab starts with](/operator/simulation/#two-faults-the-lab-starts-with)). You and
+`operator` are subscribed to the fleet's alarms in the console inbox, so the bell in the top bar
+lights as they raise and your **Inbox** lists each raise and clear (edit or remove the subscription
+under **Profile, Subscriptions**).
 
 Breaking a component yourself works too, from its page or the CLI
 ([break it on purpose](/operator/simulation/#break-it-on-purpose)):

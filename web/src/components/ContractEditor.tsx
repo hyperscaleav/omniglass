@@ -20,9 +20,11 @@ import {
   setClassifierMetric,
 } from "../lib/classifier_metrics";
 import { displayValue, parseInput, type ValueType } from "../lib/variables";
+import { isLifecycleDate } from "../lib/lifecycle";
 import { useMe, can } from "../lib/auth";
 import { BladeEditContext } from "../lib/blades";
 import { describeError } from "../lib/format";
+import { confirmAction } from "../lib/confirm";
 
 // ContractEditor is the classifier detail-blade panel for curating a declared
 // contract: which catalog signals every owner of the classifier exposes, and
@@ -262,13 +264,13 @@ export default function ContractEditor(props: {
   // buildBody coerces the typed default out of the text draft: blank means no
   // default (the field is omitted), and a value that will not parse is reported
   // instead of being sent malformed.
-  function buildBody(dataType: ValueType, text: string, required: boolean): SetClassifierProperty | null {
+  function buildBody(dataType: ValueType, text: string, required: boolean, typeName?: string): SetClassifierProperty | null {
     const trimmed = text.trim();
     if (trimmed === "") return { required };
     try {
-      return { required, default_value: parseInput(dataType, trimmed) };
+      return { required, default_value: parseInput(dataType, trimmed, typeName) };
     } catch {
-      setErr(`"${trimmed}" is not a valid ${dataType} value.`);
+      setErr(typeName && isLifecycleDate(typeName) ? `"${trimmed}" is not a date (YYYY-MM-DD).` : `"${trimmed}" is not a valid ${dataType} value.`);
       return null;
     }
   }
@@ -289,7 +291,7 @@ export default function ContractEditor(props: {
 
   async function saveEdit(r: ContractRow) {
     setErr(null);
-    const body = buildBody(dataTypeOf(r.meta), draftDefault(), draftRequired());
+    const body = buildBody(dataTypeOf(r.meta), draftDefault(), draftRequired(), r.name);
     if (!body) return;
     await write(r.name, body, () => setEditing(null));
   }
@@ -298,13 +300,13 @@ export default function ContractEditor(props: {
     const name = addName();
     if (!name) return;
     setErr(null);
-    const body = buildBody(dataTypeOf(byName().get(name)), addDefault(), addRequired());
+    const body = buildBody(dataTypeOf(byName().get(name)), addDefault(), addRequired(), name);
     if (!body) return;
     await write(name, body, resetAdd);
   }
 
   async function withdraw(name: string) {
-    if (!confirm(copy().confirm(name))) return;
+    if (!(await confirmAction({ title: copy().confirm(name), confirmLabel: "Withdraw", tone: "danger" }))) return;
     setBusy(true);
     setErr(null);
     try {
@@ -402,7 +404,7 @@ export default function ContractEditor(props: {
                   <div class="flex items-center gap-2">
                     <input
                       class="input input-bordered input-sm min-w-0 flex-1 font-data"
-                      placeholder={`default (${dataTypeOf(r.meta)}), blank for none`}
+                      placeholder={isLifecycleDate(r.name) ? "default (YYYY-MM-DD), blank for none" : `default (${dataTypeOf(r.meta)}), blank for none`}
                       aria-label={`Default for ${r.name}`}
                       value={draftDefault()}
                       onInput={(e) => setDraftDefault(e.currentTarget.value)}

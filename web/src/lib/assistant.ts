@@ -37,8 +37,10 @@ export type Ask = {
 
 // idle: nothing asked yet; working: a run streams; pending: a call waits on
 // the person; done: answered; stopped: the step limit ended it unanswered;
-// refused: this person may not run omnibot here; error: it failed.
-export type RunStatus = "idle" | "working" | "pending" | "done" | "stopped" | "refused" | "error";
+// refused: this person may not run omnibot here; unmatched: the server's
+// recording has no answer to the question, so nothing ran (#2443); error: it
+// failed.
+export type RunStatus = "idle" | "working" | "pending" | "done" | "stopped" | "refused" | "unmatched" | "error";
 
 export type RunState = {
   items: Item[];
@@ -73,11 +75,79 @@ export function fail(s: RunState, message: string, refused = false): RunState {
   return { ...s, status: refused ? "refused" : "error", error: message, interrupt: undefined };
 }
 
+// unmatched ends the run on a question the server's recording has no answer
+// to: nothing ran, so the question stays and the reason shows.
+export function unmatched(s: RunState, message: string): RunState {
+  return { ...s, status: "unmatched", error: message, interrupt: undefined };
+}
+
 // closed settles a run whose stream has closed: a run still working never
 // finished (a dropped connection, a server gone mid-run), so it ends in an
 // error rather than leaving the panel busy for good.
 export function closed(s: RunState): RunState {
   return s.status === "working" ? fail(s, "The run ended before it finished. Ask again to carry on.") : s;
+}
+
+// A thought is the run of reasoning and tool calls between the person's
+// prompt and omnibot's answer (#2422): the panel shows it as one collapsed
+// block, in order, and the answer apart below it.
+export type Reasoning = Extract<Item, { kind: "reasoning" }>;
+export type Thought = { kind: "thought"; id: string; parts: (Reasoning | Step)[] };
+export type Block = Exclude<Item, Reasoning | Step> | Thought;
+
+// groupThoughts folds each consecutive run of reasoning and steps into one
+// thought, keyed by its first part. Pure, so a conversation replayed from
+// events groups the way a live one does.
+export function groupThoughts(items: Item[]): Block[] {
+  const out: Block[] = [];
+  for (const i of items) {
+    if (i.kind !== "reasoning" && i.kind !== "step") {
+      out.push(i);
+      continue;
+    }
+    const last = out[out.length - 1];
+    if (last?.kind === "thought") last.parts.push(i);
+    else out.push({ kind: "thought", id: i.id, parts: [i] });
+  }
+  return out;
+}
+
+// A call failed when the person declined it or its result is not a tool's
+// JSON (an error reaches the model as plain text), or is an object that
+// carries an error.
+export function stepFailed(s: Step): boolean {
+  if (s.decision === "declined") return true;
+  if (s.result === undefined) return false;
+  try {
+    const v = JSON.parse(s.result);
+    return !!v && typeof v === "object" && !Array.isArray(v) && "error" in v;
+  } catch {
+    return true;
+  }
+}
+
+// argSummary is a call's arguments on one short line: key=value pairs.
+export function argSummary(args: Record<string, unknown>, max = 60): string {
+  const line = Object.entries(args)
+    .map(([k, v]) => `${k}=${typeof v === "string" ? v : JSON.stringify(v)}`)
+    .join(", ");
+  return line.length > max ? `${line.slice(0, max - 1)}…` : line;
+}
+
+// thoughtSummary is the collapsed block's one line. While the run is live it
+// says what is happening now; settled, it counts the calls and flags failures.
+export function thoughtSummary(t: Thought, live: boolean, waitingId?: string): string {
+  const steps = t.parts.filter((p): p is Step => p.kind === "step");
+  const failed = steps.filter(stepFailed).length;
+  if (live) {
+    const waiting = steps.find((s) => s.id === waitingId);
+    if (waiting) return `Waiting for you on ${waiting.tool}`;
+    const running = [...steps].reverse().find((s) => s.result === undefined && s.decision !== "declined");
+    return running ? `Running ${running.tool}…` : "Thinking…";
+  }
+  const calls = steps.length ? ` · ${steps.length} tool call${steps.length === 1 ? "" : "s"}` : "";
+  const bad = failed ? ` · ${failed} failed` : "";
+  return `Thought${calls}${bad}`;
 }
 
 function objectOf(v: unknown): Record<string, unknown> {
@@ -176,6 +246,12 @@ export async function* readEvents(stream: ReadableStream<Uint8Array>): AsyncGene
 // impersonation session.
 export class RunRefused extends Error {}
 
+// RunUnmatched is a question the server's recording has no script for (a
+// 422 the server types): the server decides, where the recording is.
+export class RunUnmatched extends Error {}
+
+const unmatchedType = "urn:omniglass:omnibot-replay-unmatched";
+
 // A run is a prompt, an embedded skill the server renders as the prompt (its
 // text is the server's, not the console's), or the answer to an ask.
 export type RunInput =
@@ -221,6 +297,7 @@ export async function runOmnibot(name: string, input: RunInput, onEvent: (ev: Ag
       // Not JSON: the reason is the body's text.
     }
     const message = typeof err === "string" && err ? err : describeError(err);
+    if (response.status === 422 && (err as { type?: unknown } | null)?.type === unmatchedType) throw new RunUnmatched(message);
     throw response.status === 403 ? new RunRefused(message) : new Error(message);
   }
   for await (const ev of readEvents(response.body)) onEvent(ev);
@@ -232,4 +309,25 @@ export async function startConversation(): Promise<string> {
   const { data, error } = await api.POST("/assistant/conversations", { body: {} });
   if (error) throw new Error(describeError(error));
   return data.name;
+}
+
+// What omnibot answers from (#2443): live, a model that takes any question;
+// replay, a recording that answers only its prompts; none, nothing. Only the
+// mode and the recorded prompts are told, never the model's configuration.
+export type OmnibotFacts = { mode: "live" | "replay" | "none"; prompts: string[] };
+
+const liveFacts: OmnibotFacts = { mode: "live", prompts: [] };
+
+// omnibotFacts reads them from the conversations list. A read that fails, or
+// a server that does not say, is treated as live: the panel then adds nothing
+// and restricts nothing, and a run says for itself what is wrong.
+export async function omnibotFacts(): Promise<OmnibotFacts> {
+  try {
+    const { data, error } = await api.GET("/assistant/conversations");
+    if (error || !data?.omnibot) return liveFacts;
+    return { mode: data.omnibot.mode, prompts: data.omnibot.prompts ?? [] };
+  } catch {
+    // A dropped connection reads like any other failed read: live.
+    return liveFacts;
+  }
 }

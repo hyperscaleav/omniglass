@@ -1,6 +1,8 @@
 import { api } from "../api/client";
 import type { AlarmBody, AlarmTimelineEntryBody } from "../api/api.gen";
 import { compareSeverity, type SeverityLevel } from "./severity";
+import { fmtClock, fmtDay } from "./format";
+import { durationText } from "./timeline";
 
 // The alarms data layer: thin typed wrappers over the generated client, plus the
 // pure ordering and splitting the panel renders.
@@ -123,9 +125,21 @@ export async function unsnoozeAlarm(name: string, id: string): Promise<Alarm> {
 // time alone when it ends today, the day and time when it ends later.
 export function snoozedUntilWords(until: string, now: number = Date.now()): string {
   const d = new Date(until);
-  const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const time = fmtClock(until);
   if (d.toDateString() === new Date(now).toDateString()) return `snoozed until ${time}`;
-  return `snoozed until ${d.toLocaleDateString([], { month: "short", day: "numeric" })} ${time}`;
+  return `snoozed until ${fmtDay(until, { local: true })} ${time}`;
+}
+
+// alarmDuration is how long an alarm was (or has been) raised: raised to
+// cleared for a cleared one, raised to now for an open one. The one reading of
+// "how long" every alarm surface shows, worded by durationText.
+export function alarmDuration(a: { raised_at: string; cleared_at?: string | null }, now: number = Date.now()): number {
+  const end = a.cleared_at ? new Date(a.cleared_at).getTime() : now;
+  return Math.max(end - new Date(a.raised_at).getTime(), 0);
+}
+
+export function alarmDurationText(a: { raised_at: string; cleared_at?: string | null }, now: number = Date.now()): string {
+  return durationText(alarmDuration(a, now));
 }
 
 export function unacknowledgedCount(list: Alarm[]): number {
@@ -216,4 +230,52 @@ export function timelineWho(e: Pick<AlarmTimelineEntry, "actor" | "rule">): stri
 export async function retryNotification(id: string): Promise<void> {
   const { error } = await api.POST("/notifications/{id}:retry", { params: { path: { id } } });
   if (error) throw error;
+}
+
+// The fleet queue (#2333): every active alarm the caller may read, one row each,
+// worst first. One key prefix for every filter and page count, so an
+// acknowledge or a snooze refreshes whichever queue is open.
+export const FLEET_ALARMS_PREFIX = ["fleet-alarms"] as const;
+export const fleetAlarmsKey = (query: FleetAlarmsQuery, pages: number) => [...FLEET_ALARMS_PREFIX, query, pages] as const;
+
+// The queue polls at the leaf cadence: there is no alarm stream to follow, and
+// the ingest tail does not carry rule-derived transitions.
+export const FLEET_ALARMS_PAGE = 100;
+
+export type FleetAlarmsQuery = {
+  state?: "cleared" | "all";
+  severity?: string[];
+  location?: string;
+  acknowledged?: boolean;
+  snoozed?: boolean;
+};
+
+export type FleetAlarms = { alarms: Alarm[]; more: boolean };
+
+// fleetAlarms reads the first `pages` pages of the queue in order, following
+// next_page_token, so a poll refreshes everything the operator has opened and
+// "load more" only raises `pages`.
+export async function fleetAlarms(query: FleetAlarmsQuery, pages = 1): Promise<FleetAlarms> {
+  const alarms: Alarm[] = [];
+  let token: string | undefined;
+  for (let i = 0; i < pages; i++) {
+    const { data, error } = await api.GET("/alarms", {
+      params: {
+        query: {
+          limit: FLEET_ALARMS_PAGE,
+          state: query.state,
+          severity: query.severity?.length ? query.severity : undefined,
+          location: query.location || undefined,
+          acknowledged: query.acknowledged === undefined ? undefined : query.acknowledged ? "true" : "false",
+          snoozed: query.snoozed === undefined ? undefined : query.snoozed ? "true" : "false",
+          page_token: token,
+        },
+      },
+    });
+    if (error) throw error;
+    alarms.push(...((data?.alarms ?? []) as Alarm[]));
+    token = data?.next_page_token;
+    if (!token) return { alarms, more: false };
+  }
+  return { alarms, more: true };
 }

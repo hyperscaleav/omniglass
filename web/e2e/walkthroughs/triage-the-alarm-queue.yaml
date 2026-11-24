@@ -1,0 +1,38 @@
+# Triage the alarm queue (#2333): an operator opens the fleet's alarm queue,
+# narrows it to the worst severities, acknowledges one alarm, snoozes another
+# and hands a third to omnibot, all from the rows. The scene is a display of its
+# own (the probe replays every walkthrough on one stack, so the alarms carry
+# messages no other walkthrough's do, and each step names its row by them). The
+# lab's server plays a recording (internal/lab/omnibot/default.yaml) for the
+# omnibot step, so the run goes the same way every time.
+title: Triage the alarm queue
+description: Filter the fleet's alarm queue to the worst severities, acknowledge one alarm, snooze another and hand a third to omnibot, from the rows.
+setup:
+  - post: /components
+    body: { name: queue-demo-display, label: Queue demo display, product: boreal-edge-55, location: bay-2 }
+  - post: /components/queue-demo-display/alarms
+    body: { severity: disaster, message: Queue demo panel dark, dedup_key: walkthrough-queue-dark }
+  - post: /components/queue-demo-display/alarms
+    body: { severity: high, message: Queue demo fan failing, dedup_key: walkthrough-queue-fan }
+  - post: /components/queue-demo-display/alarms
+    body: { severity: high, message: Queue demo input lost, dedup_key: walkthrough-queue-input }
+steps:
+  - goto: /alarms?state=active&severity=disaster,high
+    caption: The alarm queue is every active alarm you can read, worst first. The address carries the filter, so a link to it shows the same queue.
+  - wait: { text: Queue demo panel dark }
+    caption: Severity, component, system, location and since when, one row each. The filter chip is the worst two levels.
+  - click: 'tr:has-text("Queue demo panel dark") >> button:has-text("Acknowledge")'
+    caption: Acknowledge records that you have seen it. It does not fix it, and the alarm stays raised.
+  - wait: { selector: 'tr:has-text("Queue demo panel dark") >> text=acked' }
+    caption: The row reads acked at once, without a reload.
+  - click: { role: button, name: Snooze Queue demo fan failing, exact: true }
+    caption: Snooze silences another alarm's notifications for a while, for everyone.
+  - click: { role: button, name: 1 hour }
+    caption: An hour.
+  - wait: { selector: 'tr:has-text("Queue demo fan failing") >> text=snoozed until' }
+    caption: The row wears its snooze. The alarm is still raised.
+    poster: true
+  - click: { role: button, name: Troubleshoot Queue demo input lost with omnibot, exact: true }
+    caption: Hand the third to omnibot. It is given the alarm by its component and when it was raised, never what the screen shows.
+  - wait: { selector: '[data-testid=omnibot-step] >> nth=2', timeout: 30000 }
+    caption: Omnibot runs the triage skill and reads the component, its alarms and its reachability, under your grants.

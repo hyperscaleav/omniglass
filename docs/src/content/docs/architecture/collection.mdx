@@ -28,7 +28,7 @@ the samples dropped, the rest of that minute only counted (the next warning says
 every one is added to the outpost's `orphaned_batches` (with `last_orphaned_at`) on `GET /outposts/{name}`,
 written once a minute rather than once a batch. A non-answering icmp target is DATA (`icmp-reachable` reads `down`, with a reason);
 an error means the outpost cannot do ICMP at all (a once-cached loopback self-check tells them apart).
-The outpost computes the per-endpoint verdict `endpoint-reachable` (the AND of its probe results) as
+The outpost computes the per-endpoint reachability `endpoint-reachable` (the AND of its probe results) as
 a built-in **property**; the wire is **per-lane arrays** (`metrics` / `properties` / `events` /
 `logs`, [ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)),
 each entry validated against its own catalog
@@ -60,7 +60,7 @@ connection, their match rules claim the device's pushes, and the claimed line la
 sample with no poll involved ([ADR-0151](/architecture/decisions/#adr-0151-a-held-line-session-routes-every-inbound-line-listeners-first-answers-by-reply-shape)).
 The arc's closeout is #818. Built since: **auth is a layer that gates the session** (#1049): a
 driver's declared login runs as the session's auth step before anything rides the connection, its
-verdict the `endpoint-authenticated` rung, and a refusal retrying cannot fix reads `rejected` and
+reachability the `endpoint-authenticated` rung, and a refusal retrying cannot fix reads `rejected` and
 stops dialing ([ADR-0155](/architecture/decisions/#adr-0155-auth-is-a-layer-that-gates-a-held-session-and-a-terminal-refusal-reads-rejected),
 [ADR-0156](/architecture/decisions/#adr-0156-a-driver-declares-its-terminal-replies-and-a-transport-classifies-its-own-refusals)).
 Built since: **the line protocol over tls** (#1035): `tls` is its own held line transport whose
@@ -246,7 +246,7 @@ Built (#1049). **Auth is a layer that gates the session**, the held-session form
 stateless probes climb (dialed, responds, authenticated). Each attempt runs in order: dial, then the
 **auth step**, then the listeners' arm, then `up`. The auth step is declared by the driver (a login
 dialog in its `session` block) or by the transport (a transport that authenticates on its own); its
-verdict lands as the `endpoint-authenticated` property (`yes` or `no`, published when it changes),
+reachability lands as the `endpoint-authenticated` property (`yes` or `no`, published when it changes),
 the same rung the ssh probe writes. A login that never prompts or a connection that drops mid-login
 decides nothing: it is an ordinary failed attempt.
 
@@ -321,11 +321,11 @@ carries as data, and offers **Trust this key**: a confirm that teaches why a key
 the refusal on record still names it ([ADR-0159](/architecture/decisions/#adr-0159-a-refused-keys-evidence-rides-its-gate-and-trusting-a-key-is-checked-against-the-one-offered));
 the `trust-a-changed-host-key` walkthrough drives it against the simulated panel's ssh console.
 
-An endpoint with no verdict yet says why (#981): the reachability read carries `pending` beside the
-null `verdict`, derived at read time and never stored. `no-outpost` means the endpoint has no outpost
+An endpoint with no reachability yet says why (#981): the reachability read carries `pending` beside the
+null `reachability`, derived at read time and never stored. `no-outpost` means the endpoint has no outpost
 assigned, so nothing will probe it until one is (a fresh install ships none); `awaiting-probe` means
-an outpost is assigned and its first probe has not landed. The field is absent once a verdict exists and
-on a push endpoint, which has no verdict to wait for. The CLI prints it in the read's JSON, and the
+an outpost is assigned and its first probe has not landed. The field is absent once a reachability exists and
+on a push endpoint, which has no reachability yet to wait for. The CLI prints it in the read's JSON, and the
 Endpoints panel shows it beneath the row with a link to the Outposts page or the assigned outpost's blade.
 
 ### The connection fingerprint and the layered gate
@@ -338,7 +338,7 @@ bottom up on the existing ladder:
   component that blocks ping never reads down for it, and a cloud API is never pinged. The
   driver's ladder lands `icmp-reachable` beside the endpoint's probe (observed on every probe,
   stored when it flips),
-  after the verdict is judged. A layer-2 presence rung below it is #1062.
+  after the reachability is judged. A layer-2 presence rung below it is #1062.
 - **responsive**, the transport rung and **the gate**: a TCP connect on the transport's port, the
   protocol's handshake (the ssh key exchange, tls), or, where an open port cannot be detected
   (udp, snmp), the driver's named request answered (snmp's a standard get). A wrong host, address or port
@@ -356,10 +356,10 @@ verification mode is one of its driver's inputs, so editing it moves the fingerp
 stays observed while auth is rejected, except where the transport rung itself carries the credential:
 an snmp get carries the community, so beneath an snmp auth gate nothing is sent and the rung reads
 down, rejected ([snmp](#snmp)), a reading that is the refusal's echo and so no reachability
-verdict. **The gate is a set of reasons** (#1650,
+reachability. **The gate is a set of reasons** (#1650,
 [ADR-1650](/architecture/decisions/#adr-1650-an-endpoint-gate-holds-a-set-of-reasons)): the
 refusal above is one kind, `refused`, scoped to its rung and fingerprint; `unreachable`, added when
-the reachability probe reads down twice running and removed on its next up verdict, is another,
+the reachability probe reads down twice running and removed on its next up reading, is another,
 holding the whole host's polls ([outposts](/architecture/outposts/#implicit-reachability)), and
 `upstream` (#1652) is the gate a component inherits from what it is reached through: while any
 endpoint of a `path` upstream has a closed gate, the dependent's in-band endpoints are held, polls
@@ -402,7 +402,7 @@ across a restart too, and authenticates after a params edit.
 ### The push lane refuses a native key
 
 Every key a native probe writes, its samples ([below](#poll-protocols-and-their-config)) and the
-outpost's account of its own connection (the verdict and its rungs, the probe metrics and their
+outpost's account of its own connection (the reachability and its rungs, the probe metrics and their
 timings, a held session's state and reason, the host key or tls public key it trusted, a tls
 endpoint's certificate facts, the gate it publishes), and the `collection-failed` a task lands when it
 cannot collect (#1086), is the outpost's own observation, and the console reads it as one. So `POST
@@ -449,7 +449,7 @@ of its own:
 | `poll-cpu-time` | the outpost | the mean CPU time the kernel charged each of those runs on its own thread, in ms: a floor on a poll's cost, leaving out work on other goroutines (a held session's reader among them) and the GC's background workers ([outposts](/architecture/outposts/#self-monitoring-the-outpost-reports-itself)) | when a poll ran, on a platform with a thread clock |
 | `poll-failure-count` | the outpost | the polls that failed: a run that faulted and landed nothing, or a due poll a refusal on the endpoint's gate stopped | when nonzero |
 | `poll-held-count` | the outpost | the due polls held, not sent, while the endpoint's gate held `unreachable` (its probe read down twice running) or `disrupted` (a disruptive command such as a reboot is in flight): not loss, so never a failure, and no backoff booked | when nonzero |
-| `hold-expiry-count` | the outpost | the disruptions the backstop ended: a disruptive command's held endpoint reopened at the type's `hold_seconds` with no up verdict since its quiet period, a device that did not come back in time | when nonzero |
+| `hold-expiry-count` | the outpost | the disruptions the backstop ended: a disruptive command's held endpoint reopened at the type's `hold_seconds` with no up reading since its quiet period, a device that did not come back in time | when nonzero |
 | `poll-due-count` | the outpost | the polls that fell due, each on its own interval, held, refused and skipped ones included | when nonzero |
 | `poll-skipped-count` | the outpost | the due polls skipped because the poll's last run was still in flight: counted, never queued behind it, so skipped over due is the endpoint's schedule loss | when nonzero |
 | `push-message-count` | the outpost | the messages its held session or udp socket delivered that a listener claimed | every window while held, zero included |
@@ -708,7 +708,7 @@ row cannot say:
 - A probe lands a key only when its fact exists: the connect time only on an open port, a timing
   only from an answer (a lost request lands none), the certificate's expiry and days left only for a
   certificate the `tls-mode` accepted, and `endpoint-authenticated` only when a credential was tried.
-  `endpoint-reachable` is the verdict the outpost rolls the samples into, landed on a transition.
+  `endpoint-reachable` is the reachability the outpost rolls the samples into, landed on a transition.
 - `tls-mode` is `verify`, `pin` or `skip`, derived from the driver's `tls-mode` input (verify when
   unset); `https` and `wss` take it as `tls` does, and `listen-port` is derived from a udp driver's
   input of that name (unset, the outpost picks one).
@@ -718,7 +718,7 @@ row cannot say:
   `username` and `password` are optional (secret references arrive with the driver spec).
 - `udp` and `snmp` have no port to open: their rung is the driver's named request answered
   (`snmp` gets `sysUpTime.0` with the endpoint's community, a secret the worklist unseals, not a
-  param), so `endpoint-responsive` is the verdict there too and neither lands `tcp-open`. A bare
+  param), so `endpoint-responsive` is the reachability there too and neither lands `tcp-open`. A bare
   `udp` endpoint has no request to send and lands nothing.
 
 The `tcp` row above is built in its driver form as well: the line protocol over `tcp` holds a session
@@ -728,7 +728,7 @@ answered WONT, WILL is answered DONT, a literal 0xFF escaped), its login the dri
 as the session's auth step on establish and every recover; proven against the simulated panel's
 `nvp-telnet` face (login, poll, command, push, recover with a fresh login, and a wrong password
 rejected after one attempt); while the outpost holds an endpoint's telnet session and it reads up, the
-reachability probe takes its verdict from the session rather than dial a second connection (gear that
+reachability probe takes its result from the session rather than dial a second connection (gear that
 admits one telnet client would refuse it). And so is `ssh` (#1032): the line protocol over a shell
 channel (with a PTY when the driver's `session.pty` asks, or an exec channel, `session.exec`), its
 userauth the session's auth step with the credential the driver names (`session.credential`, a
@@ -1041,7 +1041,7 @@ opens it: one that holds the head back until its first event never opens while q
 stream gates them through the one fingerprint gate; a refusal a poll or a command meets stops the
 stream too (it restarts rejected, and every reconnect checks the gate before it sends), and the
 stream coming up never lifts a gate one of them met; and while the stream makes its first attempt
-under a fingerprint, the endpoint's polls and commands wait for its verdict rather than sending the
+under a fingerprint, the endpoint's polls and commands wait for its reachability rather than sending the
 same credential beside it. A poll's own fault (a 404, a redirect) waits its interval, whatever the
 stream beside it reads.
 
@@ -1181,7 +1181,7 @@ silent component reads not responsive (`timeout`), and a port the host reports u
 `refused`. The socket is not connected (a connected socket filters other sources in the kernel, and
 they must be counted), so the outpost turns on the socket's error queue (`IP_RECVERR`) to hear that
 report; it names a cause and never gates. With no port to open, the responsive rung is the
-endpoint's verdict too, and no `tcp-open` lands; the ping stays informational, so a component that
+endpoint's reachability too, and no `tcp-open` lands; the ping stays informational, so a component that
 blocks ping but answers reads up, and one that answers ping but not the request reads down. Each
 answered probe lands one `udp-response-time`, an error-shaped answer included, timed from the
 request's first send, so a lost datagram's retry shows as time (a rung-specific name until #1063 folds probe timings into `rtt`); loss shows through `endpoint-responsive` and its reason. The reachability read
@@ -1228,7 +1228,7 @@ probe as it does to the polls, so a rotated community moves the fingerprint like
 response is an answer, a `noSuchObject` included, as any http status is: the rung reads responsive,
 lands one `snmp-response-time` (a rung-specific name until #1063 folds probe timings into `rtt`),
 and, since a v2c agent answers only a community it accepts, `endpoint-authenticated yes`. With no
-port to open, the rung decides the endpoint's verdict, and no `tcp-open` lands; the ping stays
+port to open, the rung decides the endpoint's reachability, and no `tcp-open` lands; the ping stays
 informational, so an agent that blocks ping but answers reads up.
 
 **The v2c limit, stated plainly:** a wrong community is dropped silently by the protocol (RFC
@@ -1238,8 +1238,11 @@ detectably: a terminal `auth` refusal at the session rung, `endpoint-authenticat
 v2c has no request without the community, nothing is sent under that fingerprint, neither the
 probe's get nor a poll's (a restarted outpost adopts the gate too), until the fingerprint moves
 (rotating the community secret brings it up within a tick). The get is snmp's only transport
-probe, so beneath the gate the agent is unobserved: the rung reads down, rejected, and the verdict
-with it, rather than freezing at the last answer. An snmp driver must declare its community, a
+probe, so beneath the gate nothing is sent, but the refusal that holds it was an answer: the rung reads
+up with the reason `held: auth since <ts>` (the class and when the hold began), never a down it did
+not observe, and `endpoint-authenticated` stays no. A held reading gives the gate no
+reading for reachability: it neither adds to the unreachable streak nor resets it. A udp rung reads the same under its
+own terminal reply and the holds after it; a timeout is never held and still reads down. An snmp driver must declare its community, a
 secret input named `community` of type `snmp-community`, which the poll and the rung both read. SNMP v3, whose report PDUs make auth detectable, is #1083. The read serves the rung
 as a `request` layer timed by `snmp-response-time`, and the Endpoints panel names it the get, its
 why-line naming the v2c limit instead of a control port. A v2c scalar get only: no walk, no tables,
@@ -1258,7 +1261,7 @@ a line protocol like any other ([ADR-0153](/architecture/decisions/#adr-0153-the
 
 The `raw-tcp` endpoint type an earlier design tabled here is the built `tcp` transport: a line protocol held as a session, driven by its driver's polls and emits rather than per-task `command` and `extract` params ([ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)).
 
-`icmp`/`tcp` are inline probes (config on `endpoint.params`); `snmp` is built as its own stateless transport, configured by its driver's inputs ([snmp](#snmp)), and `http` and `https` as request transports configured by their driver's spec, a declared stream held as a session ([http and https](#http-and-https)); the rest, in the design model, are held connections: the connection lives on the endpoint, the task names what to read. The ship-with transport registry seeds the probe built-ins above, the endpoint verdicts, and `session-state` (`internal/seed/metric_types.yaml`, `internal/seed/property_types.yaml`; the [metrics](/admin/metrics/) and [properties](/admin/properties/) guides render each set from the seed); the wider per-transport set (`<proto>-reachable`/`<proto>-response-time` for the remaining text family; an http answer's status is a poll fault's reason, never a sample of its own; `telnet-response-time`, `udp-response-time` and `snmp-response-time` are seeded, and there is no `udp-open`, since an open udp port cannot be detected) is Design, and unregistered names would be reject-not-project dropped at ingest.
+`icmp`/`tcp` are inline probes (config on `endpoint.params`); `snmp` is built as its own stateless transport, configured by its driver's inputs ([snmp](#snmp)), and `http` and `https` as request transports configured by their driver's spec, a declared stream held as a session ([http and https](#http-and-https)); the rest, in the design model, are held connections: the connection lives on the endpoint, the task names what to read. The ship-with transport registry seeds the probe built-ins above, the endpoint readings, and `session-state` (`internal/seed/metric_types.yaml`, `internal/seed/property_types.yaml`; the [metrics](/admin/metrics/) and [properties](/admin/properties/) guides render each set from the seed); the wider per-transport set (`<proto>-reachable`/`<proto>-response-time` for the remaining text family; an http answer's status is a poll fault's reason, never a sample of its own; `telnet-response-time`, `udp-response-time` and `snmp-response-time` are seeded, and there is no `udp-open`, since an open udp port cannot be detected) is Design, and unregistered names would be reject-not-project dropped at ingest.
 
 Built for every transport above: a driver's spec, not the task, declares what to read; the lane is
 decided by catalog membership, baked into each emit at attach, never by the value's type (an snmp
@@ -1346,7 +1349,7 @@ A **push endpoint** is one a sender pushes to rather than one an outpost dials
 ([ADR-1024](/architecture/decisions/#adr-1024-omniglass-receives-webhooks-on-the-server-and-a-webhook-token-is-a-sealed-secret)).
 `webhook` is the first push transport in the transport registry: nothing is dialed, so its endpoint has no
 reachability task and no ladder (a ladder declared on one refuses at write), and it reads **last
-heard**, stamped by every post that lands, in place of a verdict. It is never shown down for
+heard**, stamped by every post that lands, in place of a reachability. It is never shown down for
 silence. A webhook endpoint is hosted by the server (it takes no outpost) and names one component.
 
 Every message pushed at omniglass runs one pipeline, the **listener primitive**, whichever host
@@ -1570,7 +1573,7 @@ place a value on an owner without the conduit end's consent (ADR-1282, point 8).
 fanned key judges it on its owner like any of the owner's samples; a system owner's rule waits on
 event rules judging system samples (#1002).
 
-**Best practice**: map SaaS / cloud telemetry to system-owned samples wired into system health via a system-scoped `event_rule`; the vendor's own status is an input to that judgment, not the verdict, so corroborate a reported "offline" before downing the room ([health](/architecture/health/)).
+**Best practice**: map SaaS / cloud telemetry to system-owned samples wired into system health via a system-scoped `event_rule`; the vendor's own status is an input to that judgment, not the health, so corroborate a reported "offline" before downing the room ([health](/architecture/health/)).
 
 ### discovery_rule: orphans become candidates
 

@@ -29,10 +29,10 @@ the dispatcher), or does it **trigger** automation (`run:*`)?
 
 ### `area:<subsystem>` describes
 
-The subsystem a change touches, named to match the architecture glossary. The set grows as
+The subsystem a change touches, named to match the [glossary](/reference/glossary/). The set grows as
 subsystems land; today:
 
-`area:foundation` `area:api` `area:storage` `area:auth` `area:identity`
+`area:foundation` `area:api` `area:storage` `area:auth` `area:identity` `area:fleet`
 `area:collection` `area:expr` `area:messaging` `area:ui` `area:outpost` `area:lab` `area:docs`
 
 Purely descriptive: it filters the issue list by subsystem. An issue can carry more than
@@ -149,8 +149,9 @@ breaks the promise above.
 ## The fixed set
 
 That is the whole taxonomy: a native Issue Type, the Project priority field, `area:*`,
-`tier:*` and `risk:*` for the dispatcher, and `run:*`. There are no stock GitHub labels (`bug`,
-`enhancement`, `good first issue` and the rest were removed) and no bare `type:*` or `prio:*`
+`tier:*` and `risk:*` for the dispatcher, and `run:*`. The only kind-of-work labels left are `bug` and `flaky-test`, which the
+`regression-test` gate reads alongside the `Bug` type; the other stock GitHub labels (`enhancement`,
+`good first issue` and the rest) were removed, and there are no bare `type:*` or `prio:*`
 labels. Adding a label means a new subsystem (`area:*`) or a new automation task (`run:*`); the
 `tier:*` and `risk:*` sets are closed, they are what the dispatcher's lint accepts; anything
 else belongs in a field.

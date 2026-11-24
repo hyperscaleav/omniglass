@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@solidjs/te
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/solid-query";
 import Components from "./Components";
+import { withTopBar } from "../lib/testheader";
 import { FLEET_VIEW_KEY, type FleetView } from "../lib/fleet";
 import { COMPONENTS_KEY, type Component } from "../lib/components";
 import { componentSystemsKey } from "../lib/members";
@@ -10,6 +11,7 @@ import { REACHABILITY_KEY, type Reachability } from "../lib/reachability";
 import { componentAlarmsReadKey } from "../lib/alarms";
 import { effectivePropertiesKey } from "../lib/component_properties";
 import { effectiveMetricsKey } from "../lib/component_metrics";
+import { metricBucketsKey } from "../lib/series";
 import { outpostKey, type Outpost } from "../lib/outposts";
 import { PRODUCTS_KEY } from "../lib/products";
 import { LOCATIONS_KEY } from "../lib/locations";
@@ -24,6 +26,8 @@ import { DRIVERS_KEY } from "../lib/drivers";
 import { uuidFor } from "../lib/testids";
 import { LOGS_KEY } from "../lib/logs";
 import { seedSeverityLevels } from "../lib/testseverity";
+import { tipOf } from "../test-tip";
+import { pageHeader } from "../lib/handover";
 
 const acked: string[] = [];
 vi.mock("../lib/alarms", async (orig) => {
@@ -116,7 +120,7 @@ function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: un
   return render(() => (
     <QueryClientProvider client={qc}>
       <Router base="/web">
-        <Route path="/components/:id" component={Components} />
+        <Route path="/components/:id" component={withTopBar(Components)} />
         <Route path="/explore" component={() => <div data-testid="fleet-page" />} />
       </Router>
     </QueryClientProvider>
@@ -126,24 +130,44 @@ function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: un
 afterEach(cleanup);
 
 describe("the component leaf", () => {
-  // The path names the room once (#872): the room holds one system, so the
-  // room's crumb IS the system's, whose view is the room's.
-  it("arriving directly walks the places to its one-system room, named once, as the system", () => {
-    mount();
-    const trail = screen.getByTestId("breadcrumb");
-    expect(within(trail).getByText("Explore")).toBeTruthy();
-    expect(within(trail).getByText("Headquarters")).toBeTruthy();
-    expect(within(trail).getByText("Boardroom System")).toBeTruthy();
-    expect(within(trail).queryByText("Boardroom A")).toBeNull();
-    expect(within(trail).queryByText("Video Bar 1")).toBeNull();
-    expect(screen.getByRole("heading", { name: "Video Bar 1" })).toBeTruthy();
+  // The Timeline view (#2425): the overlay and the metrics grid on one cursor,
+  // under the page's one time range.
+  it("offers a Timeline view with the time range, the overlay and the metrics on it", () => {
+    mount(`/web/components/${uuidFor("cf-c-bar")}?tab=timeline`);
+    expect(screen.getByRole("tab", { name: "Timeline" })).toBeTruthy();
+    expect(screen.getByTestId("timeline-overlay")).toBeTruthy();
+    expect(screen.getByTestId("time-range-trigger")).toBeTruthy();
   });
 
-  it("links Explore back to this component's row in the outline", async () => {
+  it("links Explore back to this component's row in the outline, first crumb of line 2", async () => {
     mount();
-    fireEvent.click(within(screen.getByTestId("breadcrumb")).getByRole("link", { name: "Explore" }));
+    const trail = screen.getByTestId("breadcrumb");
+    expect(within(trail).getByRole("link", { name: "Explore" })).toBeTruthy();
+    expect(within(trail).getAllByRole("link").filter((a) => !a.closest('[data-testid="lead-system"]'))[0].textContent).toBe("Explore");
+    fireEvent.click(within(trail).getByRole("link", { name: "Explore" }));
     expect(await screen.findByTestId("fleet-page")).toBeTruthy();
     expect(window.location.pathname + window.location.search).toBe(`/web/explore?node=${uuidFor("cf-c-bar")}`);
+  });
+
+  // The two-line header (#2575): line 1 is the kind's list, the label as the one
+  // h1 and the primary system; line 2 is the location path, as links.
+  it("line 1 reads Components / label (system), line 2 the location path, one h1, no body breadcrumb", () => {
+    mount();
+    const bar = document.querySelector("header")!;
+    const line1 = within(bar).getByTestId("header-line-1");
+    expect(within(line1).getByRole("link", { name: "Components" })).toBeTruthy();
+    expect(within(line1).getByRole("link", { name: "Boardroom System" })).toBeTruthy();
+    expect(line1.textContent).toBe("Components/Video Bar 1(Boardroom System)");
+    const trail = within(bar).getByTestId("breadcrumb");
+    expect(line1.contains(trail)).toBe(false);
+    expect(within(trail).getByRole("link", { name: "Headquarters" })).toBeTruthy();
+    expect(within(trail).queryByText("Video Bar 1")).toBeNull();
+    const h1s = screen.getAllByRole("heading", { level: 1 });
+    expect(h1s).toHaveLength(1);
+    expect(h1s[0].textContent).toBe("Video Bar 1");
+    expect(pageHeader()?.title).toBe("Video Bar 1");
+    expect(screen.getAllByTestId("breadcrumb")).toHaveLength(1);
+    expect(document.querySelector("section")!.querySelector('[data-testid="breadcrumb"]')).toBeNull();
   });
 
   it("says what it is: product (label with its handle), vendor, driver, once each", () => {
@@ -337,9 +361,45 @@ describe("the leaf's dispatch facts (#786)", () => {
     expect(within(card).getByText("6.1")).toBeTruthy();
   });
 
+  // #2424: the component page charts what Vitals lists, over the page's
+  // range (the address's ?range), one card per effective metric.
+  it("charts every effective metric in the metrics grid over the page's range", async () => {
+    mount(`/web/components/${uuidFor("cf-c-bar")}?range=1h`);
+    const t = new Date(Date.now() - 10 * 60_000).toISOString();
+    leafClient!.setQueryData([...metricBucketsKey("components", uuidFor("cf-c-bar"), "icmp-rtt-avg", 1, 60)], {
+      coveredFrom: null,
+      buckets: [{ ts: t, count: 2, min: 5.9, max: 6.3, avg: 6.1, last: 6.1 }],
+    });
+    const grid = await screen.findByTestId("metrics-grid");
+    expect(within(grid).getByText("Last 1 hour")).toBeTruthy();
+    const card = within(grid).getByTestId("metric-card-icmp-rtt-avg");
+    expect(await within(card).findByTestId("timeseries-chart")).toBeTruthy();
+  });
+
+  it("the range picker on the tab rail re-reads the metrics grid over the picked range", async () => {
+    mount();
+    expect(await screen.findByTestId("metrics-grid")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("time-range-trigger"));
+    fireEvent.click(await screen.findByTestId("time-range-preset-7d"));
+    await waitFor(() => expect(window.location.search).toContain("range=7d"));
+    await waitFor(() => expect(within(screen.getByTestId("metrics-grid")).getByText("Last 7 days")).toBeTruthy());
+    await waitFor(() => expect(leafClient!.getQueryCache().find({ queryKey: [...metricBucketsKey("components", uuidFor("cf-c-bar"), "icmp-rtt-avg", 168, 3600)] })).toBeTruthy());
+  });
+
+  // #2432: a vitals row offers "Alarm on this", which opens the new-rule form
+  // reading that metric on this component.
+  it("a vitals row links to a new rule reading that metric on this component", () => {
+    const admin: Me = { ...me, fleet_permissions: [">"], grants: [{ role: "owner", scope_kind: "all" }] };
+    mount(undefined, undefined, undefined, admin, undefined, {
+      metrics: [{ metric_type_name: "uptime", label: "Uptime", data_type: "float", unit: "s", value: 306, is_sampled: true, from_contract: false, required: false }],
+    });
+    const link = within(screen.getByTestId("vital-uptime")).getByRole("link", { name: "Alarm on Uptime" });
+    expect(link.getAttribute("href")).toBe(`/web/event-rules?new=1&reads=uptime&component=${uuidFor("cf-c-bar")}`);
+  });
+
   // #1550: a metric's unit rides after its value in the muted style, and a
   // float is rounded to a sane precision with the raw value in the title.
-  it("a vitals value carries its unit, rounded, with the raw value in the title", () => {
+  it("a vitals value carries its unit, rounded, with the raw value in the title", async () => {
     mount(undefined, undefined, undefined, undefined, undefined, {
       metrics: [
         { metric_type_name: "uptime", label: "Uptime", data_type: "float", unit: "s", value: 306, is_sampled: true, from_contract: false, required: false },
@@ -351,7 +411,7 @@ describe("the leaf's dispatch facts (#786)", () => {
     const poll = screen.getByTestId("vital-poll-duration");
     expect(poll.textContent).toContain("0.15 ms");
     expect(poll.textContent).not.toContain("0.1527895");
-    expect(poll.querySelector('[title="0.1527895"]')).toBeTruthy();
+    expect(await tipOf(poll.querySelector("[tabindex]"))).toBe("0.1527895");
     // A type with no unit reads as a bare number, as before.
     expect(screen.getByTestId("vital-icmp-rtt-avg").textContent).toContain("6.1");
     expect(screen.getByTestId("vital-icmp-rtt-avg").querySelector('[data-testid="vital-unit"]')).toBeNull();
@@ -577,6 +637,23 @@ describe("acknowledging from Why (#872)", () => {
     await waitFor(() => expect(acked).toEqual([`${uuidFor("cf-c-bar")}:al-1`]));
   });
 
+  // #2115: Acknowledge, Snooze and the timeline toggle are one non-wrapping
+  // group on one center line, not three flex items on a baseline row.
+  it("renders Acknowledge, Snooze and the timeline toggle in one center-aligned group", () => {
+    const withSnooze: Me = { ...ackOnly, permissions: [...ackOnly.permissions, "alarm:snooze"] };
+    mount(undefined, undefined, bar, withSnooze);
+    const groups = screen.getByTestId("leaf-alarms").querySelectorAll("[data-alarm-actions]");
+    expect(groups).toHaveLength(1);
+    const group = groups[0] as HTMLElement;
+    expect(group.className).toContain("items-center");
+    expect(group.className).toContain("flex-nowrap");
+    expect(within(group).getByRole("button", { name: "Acknowledge" })).toBeTruthy();
+    expect(within(group).getByRole("button", { name: /^Snooze/ })).toBeTruthy();
+    expect(within(group).getByRole("button", { name: /^Timeline of/ })).toBeTruthy();
+    // Nothing of the three sits outside the group on the row.
+    expect(screen.getByTestId("leaf-alarms").querySelectorAll("button.btn-xs")).toHaveLength(group.querySelectorAll("button.btn-xs").length);
+  });
+
   it("offers nothing to a caller without the acknowledge permission", () => {
     const readOnly: Me = { ...ackOnly, permissions: ["component:read", "system:read", "location:read"] };
     mount(undefined, undefined, bar, readOnly);
@@ -663,6 +740,22 @@ describe("the component leaf refreshes (#934)", () => {
     // Nothing the tab polls grows with the fleet: no fleet view, no outpost list.
     expect(count("/views/fleet")).toBe(0);
     expect(count("/outposts")).toBe(0);
+  });
+
+  // #2006: a name address redirects to the uuid; the reads keyed on the
+  // resolved uuid are already cached, so the redirect must not refetch them
+  // (a refetch sent the sections back to loading and collapsed them).
+  it("does not refetch its reads when a name address resolves to the uuid", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => json({}));
+    mount("/web/components/videobar-1");
+    await vi.waitFor(() => expect(window.location.pathname).toBe(`/web/components/${uuidFor("cf-c-bar")}`));
+    await new Promise((r) => setTimeout(r, 50));
+    const paths = fetchSpy.mock.calls.map((c) => new URL((c[0] as Request).url).pathname);
+    // Every read keyed on the component is already cached under its uuid.
+    // (The sections the mount does not seed read once either way.)
+    const seeded = ["/systems", "/reachability", "/alarms", "/properties", "/metrics"];
+    expect(paths.filter((x) => x.includes("/components/") && seeded.some((p) => x.endsWith(p)))).toEqual([]);
+    expect(screen.getByTestId("leaf-alarms").textContent).toContain("No route to host");
   });
 
   it("holds the poll while the tab is hidden", async () => {

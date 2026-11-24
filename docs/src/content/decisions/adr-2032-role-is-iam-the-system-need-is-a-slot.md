@@ -6,7 +6,7 @@ summary: "Role keeps its IAM sense alone. The place in a system a component fill
 refs: [2032, 2028, 2061]
 ---
 
-- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [glossary](/architecture/glossary/),
+- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [glossary](/reference/glossary/),
   [core entities](/architecture/core-entities/), [health](/architecture/health/),
   [identity and access](/architecture/identity-access/)
 - **Decision:** (#2032.) **Role** means one thing: the IAM permission bundle granted to a

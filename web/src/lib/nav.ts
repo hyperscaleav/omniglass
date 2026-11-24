@@ -4,17 +4,17 @@ import * as Icons from "../components/icons";
 // The operator console IA, from the "Omniglass Console" design. Routes are flat
 // and identity-based (a page addresses its entity, never its menu cluster); the
 // sidebar groups them for browsing. `live` marks a route backed by a real page;
-// everything else renders the generic SectionStub until its backend lands.
+// an entry exists only for a page that is built (nothing in the console says "soon").
 export type NavChild = {
   label: string;
   path: string;
   hint: string;
   live?: boolean;
-  issue?: number; // tracking issue for a not-yet-built section, shown on its stub
+  issue?: number; // tracking issue, when an entry carries one
   // The authorization resource this tab needs to read. When set, the sidebar hides
   // the tab from a user without <resource>:read. Set it when the entity goes
   // live (its server route already gates on the same resource); leave unset while
-  // the section is a stub so its "soon" entry stays visible.
+  // the section has no gate.
   resource?: string;
   // The exact permission a sensitive tab requires, as a topic string, for when a
   // bare <resource>:read does not describe the route's gate (the audit route
@@ -28,6 +28,11 @@ export type NavChild = {
   // section, never as a collapsible fold; filterNav still judges each entry on
   // its own gate, so a section whose entries are all hidden loses its header too.
   section?: string;
+  // An explicit "no gate": every signed-in person may open this entry. Set it on
+  // purpose (a stub whose "soon" door stays visible, an entry that filters its own
+  // contents); nav.test.ts fails an entry that declares no gate and is not public,
+  // so a new door cannot ship ungated by omission (#2442).
+  public?: boolean;
 };
 
 export type NavItem = {
@@ -45,6 +50,7 @@ export type NavItem = {
   // entries), a single resource would silently lock a reader of only one kind
   // out of the whole page; the faces inside permission-filter themselves.
   anyResource?: string[];
+  public?: boolean; // see NavChild.public
   // A runtime condition the entry also waits on, beyond its permission: the
   // sidebar shows the entry only while the condition holds (filterWhen). The
   // route itself stays registered and gated as usual, so a bookmark still
@@ -56,16 +62,19 @@ export type NavItem = {
 
 export type NavCondition = "simulator";
 
+// The one name of the Platform health page: its sidebar door, its top bar
+// section and its page heading all read this (#2446).
+export const PLATFORM_HEALTH_NAME = "Platform health";
+
 export const navItems: NavItem[] = [
-  { label: "Home", path: "/", icon: Icons.Home, live: true, hint: "Your environment at a glance, and what needs attention right now." },
+  { label: "Home", path: "/", icon: Icons.Home, live: true, public: true, hint: "Your environment at a glance, and what needs attention right now." },
   // Explore (#826): the sidebar's one door into the fleet ("fleet" stays the
   // noun, ADR-0122), the outline of locations (#861). It
   // replaced the Fleet entry and the Explore stub once reserved for a data
   // explorer, which takes a later name. Gated like the location tree it draws;
   // the projection scopes each tier on its own read underneath.
   { label: "Explore", path: "/explore", icon: Icons.Compass, live: true, anyResource: ["location", "system", "component"], hint: "Every location in the fleet, the systems that sit there, and what is in them." },
-  { label: "Dashboards", path: "/dashboards", icon: Icons.LayoutDashboard, hint: "Official, shared, and your own dashboards." },
-  { label: "Alarms", path: "/alarms", icon: Icons.Bell, hint: "What is firing now, with drill-down to the triggering sample." },
+  { label: "Alarms", path: "/alarms", icon: Icons.Bell, live: true, anyResource: ["component"], hint: "What is firing now across the fleet: acknowledge, snooze, or hand one to omnibot." },
   // The fleet has ONE door (#798, the reconciliation ruled on the #795 review):
   // the old fleet group dissolved into the entry above, whose outline lists
   // every location, system and component, and the old index URLs redirect
@@ -82,7 +91,6 @@ export const navItems: NavItem[] = [
     children: [
       { label: "Variables", path: "/variables", live: true, resource: "variable", hint: "Free interpolated values (macros), resolved down the scope cascade." },
       { label: "Secrets", path: "/secrets", live: true, resource: "secret", hint: "Shared device and platform credentials, resolved down the scope cascade." },
-      { label: "Declared", path: "/config", hint: "The state operators declare for components and systems, optionally observed back from the device to detect drift and reconcile." },
       // Files are operator-uploaded content, not a cascaded value: a flat, tenant-wide
       // store of opaque bytes kept beside the fleet. It sits in Values as the
       // non-cascading member (deliberately off the exclusive arc).
@@ -97,8 +105,7 @@ export const navItems: NavItem[] = [
   // exactly the catalogs it may read, while each catalog page keeps its own
   // route-guard gate. The per-catalog pages stay declared off-rail (OFF_RAIL
   // below): that carries their top-bar identity and their route-guard gates.
-  { label: "Catalog", path: "/catalog", icon: Icons.Layers, live: true, hint: "Everything the fleet is typed by: every catalog, browsable in one place." },
-  { label: "Learn", path: "/learn", icon: Icons.GraduationCap, hint: "How collection turns a device into owned samples." },
+  { label: "Catalog", path: "/catalog", icon: Icons.Layers, live: true, public: true, hint: "Everything the fleet is typed by: every catalog, browsable in one place." },
   {
     label: "Admin", icon: Icons.Settings,
     children: [
@@ -109,11 +116,12 @@ export const navItems: NavItem[] = [
       // Outposts and Platform health (#1644) are administration: enrolling an outpost
       // is an admin's job, and whether Omniglass itself is well is read off the
       // platform components every outpost and server already has. Both sit here
-      // (#1767; every tab is one word, so Platform health is Status), behind
-      // outpost:read because Status's rows are the outpost list.
+      // (#1767), behind outpost:read because the page's rows are the outpost list.
+      // The door, the top bar and the page heading all say "Platform health"
+      // (#2446): one name, not the one-word "Status" the door wore before.
       { label: "Outposts", path: "/outposts", live: true, resource: "outpost", hint: "Collection daemons: their health, enrollment, and the collection tasks assigned to each." },
-      { label: "Status", path: "/platform", live: true, resource: "outpost", hint: "Whether Omniglass itself is well: the build running, how long it has been up, and each outpost's check-in, schedule and command queue." },
-      { label: "Settings", path: "/settings", live: true, hint: "Platform preferences resolved down the cascade: the theme, defaults, and keybindings, each with its provenance and lock state." },
+      { label: "Platform health", path: "/platform", live: true, resource: "outpost", hint: "Whether Omniglass itself is well: the build running, how long it has been up, and each outpost's check-in, schedule and command queue." },
+      { label: "Settings", path: "/settings", live: true, resource: "settings", hint: "Platform preferences resolved down the cascade: the theme, defaults, and keybindings, each with its provenance and lock state." },
     ],
   },
 ];
@@ -158,9 +166,8 @@ export function filterWhen(items: NavItem[], holds: (c: NavCondition) => boolean
 // /templates set the precedent when it left the rail (#608). Each entry's
 // resource/perm feeds navPerms exactly as a rail entry's would, so collapsing
 // the rail loosened no gate: /secret-types still demands secret:read. A
-// not-yet-built page's tracking issue rides here too, shown on its stub
-// through navByPath exactly as a rail entry's would be.
-export const OFF_RAIL: { path: string; label: string; hint: string; resource?: string; perm?: string; issue?: number }[] = [
+// page's tracking issue, when it has one, rides here too.
+export const OFF_RAIL: { path: string; label: string; hint: string; resource?: string; perm?: string; issue?: number; public?: boolean }[] = [
   // The fleet kinds (#798, #861): Explore's outline lists them and each bare
   // URL redirects there, but the detail view routes (/locations/{id} and
   // friends) still resolve identity and gate here.
@@ -183,7 +190,6 @@ export const OFF_RAIL: { path: string; label: string; hint: string; resource?: s
   { path: "/event-rules", label: "Event rules", resource: "rule", hint: "The event rules: what each one reads, when it opens and clears an alarm, and what it holds open right now." },
   { path: "/calc-rules", label: "Calc rules", resource: "rule", hint: "The calc rules: what each derives a value from, how it folds its inputs, and what it last computed on each owner." },
   { path: "/severity-levels", label: "Severity levels", resource: "severity_level", hint: "The severity levels: how bad an alarm is, ranked, each with its color and whether it takes its component out." },
-  { path: "/log-types", label: "Logs", hint: "The log shape catalog. The log lane arrives untyped today; typing what a line can be is still to come." },
   { path: "/notifications", label: "Notifications", resource: "notification_type", hint: "The notification types: what a message about an alarm says, as a subject and a text, previewed against a real alarm." },
   { path: "/action-rules", label: "Action rules", resource: "rule", hint: "The action rules: when a message about an alarm is sent, on which transitions, under which predicate, and to which targets." },
   { path: "/notification-targets", label: "Notification targets", resource: "notification_target", hint: "The notification targets: where a message about an alarm goes, a webhook, a mailbox, a user group or a person. Admin-only." },
@@ -193,7 +199,7 @@ export const OFF_RAIL: { path: string; label: string; hint: string; resource?: s
 ];
 
 // Flattened title + hint (+ icon + tracking issue) lookup by base-relative path,
-// for the generic stub. A child inherits its parent group's icon (that is the icon
+// for the top bar and tests. A child inherits its parent group's icon (that is the icon
 // the sidebar shows it under), so the placeholder matches the sidebar. A sectioned
 // child also carries its group and section labels so the top bar can spell out the
 // full address. Off-rail pages keep their identity here too: a bookmark to
@@ -210,16 +216,6 @@ export const navByPath: Record<string, NavMeta> = (() => {
   return m;
 })();
 
-// Stubbed sections: backends not built yet, each rendering SectionStub in the
-// router. The router renders from the route manifest (#760), and
-// route-manifest-guard.test.ts pins the manifest's stub entries to this list,
-// so every unlive rail entry resolves to a registered stub rather than NotFound.
-export const STUBS = [
-  "/dashboards", "/alarms",
-  "/learn",
-  "/config", "/log-types",
-];
-
 // The router base; nav paths are base-relative.
 const BASE = "/web";
 function relative(pathname: string): string {
@@ -228,7 +224,7 @@ function relative(pathname: string): string {
 }
 
 export function lookupNav(pathname: string): NavMeta {
-  return navByPath[relative(pathname)] ?? { label: "Coming soon", hint: "This section is not built yet.", icon: Icons.Layers };
+  return navByPath[relative(pathname)] ?? { label: "Not found", hint: "That page does not exist in the console.", icon: Icons.Layers };
 }
 
 // sectionLabel resolves a pathname to its top-bar section by longest prefix, so
@@ -257,10 +253,31 @@ export function sectionLabel(pathname: string): string {
   return label;
 }
 
+// sectionTrail is sectionLabel without its last entry: the group and section a
+// page sits in, for the top bar of a page whose own header carries the title.
+// An unsectioned entry under a nav group falls back to that group, so the bar
+// still says where you are (Admin) without repeating the title.
+export function sectionTrail(pathname: string): string {
+  const label = sectionLabel(pathname);
+  const i = label.lastIndexOf(" · ");
+  if (i >= 0) return label.slice(0, i);
+  const path = relative(pathname);
+  let group = "";
+  let best = -1;
+  for (const [p, meta] of Object.entries(navByPath)) {
+    const hit = p === "/" ? path === "/" : path === p || path.startsWith(`${p}/`);
+    if (hit && p.length > best) {
+      group = meta.group ?? "";
+      best = p.length;
+    }
+  }
+  return group;
+}
+
 // navPerms maps a gated route path to the permission tokens it requires, from the
 // SAME nav config that hides the sidebar button (an explicit `perm`, else
 // `<resource>:read`), plus the off-rail pages, whose gates outlive their rail
-// entries. An ungated path (Home, Profile, the stubs) is absent. This is the
+// entries. An ungated path (Home, Profile) is absent. This is the
 // single source both the sidebar (hide the button) and the route guard (block
 // the URL) read, so the two can never diverge.
 const navPerms: Record<string, string[][]> = (() => {
@@ -297,6 +314,13 @@ export function routeTokens(pathname: string): string[] | null {
 export function routeAllowed(pathname: string, allow: (tokens: string[]) => boolean): boolean {
   const alts = routeAlternatives(pathname);
   return !alts || alts.some(allow);
+}
+
+// routeNeeds is routeTokens for every alternative, each as its
+// <resource>:<action> string (an empty list for an ungated route): what the denied
+// face names, so a person reads which permission opens the page.
+export function routeNeeds(pathname: string): string[] {
+  return (routeAlternatives(pathname) ?? []).map((t) => t.join(":"));
 }
 
 function routeAlternatives(pathname: string): string[][] | null {

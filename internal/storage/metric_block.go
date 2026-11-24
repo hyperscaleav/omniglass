@@ -111,7 +111,10 @@ func blockIntact(day, lane string) string {
 }
 
 // blockIntactFrom is the start of a series' window (t its metric type, lane
-// the metric lane's days): a day is intact when it starts at or after it.
+// the metric lane's days): a day is intact when it starts at or after it. A
+// day is foldable 48 hours after it starts (the day's close and the trend
+// horizon, MetricTrendHorizon), so a window of N days leaves the fold N-2
+// days wide: 3 days is the shortest window that folds (#2144).
 func blockIntactFrom(lane string) string {
 	return `now() - make_interval(days => coalesce(t.retention_days, ` + lane + `::int))`
 }
@@ -201,6 +204,11 @@ type BlockCompaction struct {
 	WeekThrough time.Time
 	// Blocks is how many blocks the two folds wrote.
 	Blocks int64
+	// Skipped is how many series-days the day fold passed without folding
+	// because the day had left its series' window, though each held at least
+	// BlockDayMin samples: a fold that fell behind the prune, which its mark
+	// moves past all the same (#2144).
+	Skipped int64
 	// Behind is true when closed days remain unfolded (the pass reached
 	// MaxDays), so the next pass should come soon.
 	Behind bool
@@ -454,6 +462,13 @@ func (p *PG) foldBlockBatch(ctx context.Context, f BlockFold, target time.Time, 
 		written = tag.RowsAffected()
 		m.blockedSeries = ids[len(ids)-1]
 	}
+	var skipped int64
+	if len(ids) > 0 {
+		skipped, err = skippedBlockDays(ctx, tx, ids, day, f.LaneDays)
+		if err != nil {
+			return m, err
+		}
+	}
 	if len(ids) < f.SeriesChunk {
 		m.blocked, m.blockedSeries = day.Add(24*time.Hour), 0
 	}
@@ -464,7 +479,24 @@ func (p *PG) foldBlockBatch(ctx context.Context, f BlockFold, target time.Time, 
 		return m, fmt.Errorf("storage: block the day from %s: %w", day.Format(time.RFC3339), err)
 	}
 	out.Blocks += written
+	out.Skipped += skipped
 	return m, nil
+}
+
+// skippedBlockDays counts the series among ids whose day the fold cannot
+// write because the day is no longer intact (blockIntact), though it holds
+// BlockDayMin samples or more: the days the mark passes unfolded.
+func skippedBlockDays(ctx context.Context, tx pgx.Tx, ids []int64, day time.Time, lane int) (int64, error) {
+	var n int64
+	err := tx.QueryRow(ctx, `select count(*) from (
+		select m.series_id from metric m join metric_series s on s.id = m.series_id and `+blockSeries+`
+		join metric_type t on t.id = s.metric_type_id
+		where m.series_id = any($1) and m.ts >= $2 and m.ts < $2 + interval '24 hours' and not `+blockIntact("$2::timestamptz", "$3")+`
+		group by m.series_id having count(*) >= `+fmt.Sprint(BlockDayMin)+`) k`, ids, day, lane).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("storage: count the skipped block days from %s: %w", day.Format(time.RFC3339), err)
+	}
+	return n, nil
 }
 
 // foldWeekBatch folds the next batch of series' leftover days of the week at

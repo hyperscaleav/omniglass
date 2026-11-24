@@ -136,8 +136,13 @@ inspect a single foreign arch:
 ```bash
 docker buildx create --use --name omni            # once
 docker buildx build --platform linux/amd64,linux/arm64 \
+  --build-arg GO_VERSION=$(bash scripts/go-version.sh) \
   -t ghcr.io/hyperscaleav/omniglass:dev --push .
 ```
+
+The Dockerfile has no default Go version: go.mod is its only source, so every
+direct `docker build` or `buildx build` passes `GO_VERSION` as above (`make` and
+`make image` do it for you).
 
 ## Where this fits
 

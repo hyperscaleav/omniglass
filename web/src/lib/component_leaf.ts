@@ -13,8 +13,9 @@ import type { Outpost } from "./outposts";
 import { outpostStatus } from "./outposts";
 import type { ReachEndpoint } from "./reachability";
 import { STALENESS_WINDOW_MS, endpointWord, lastSeenAt } from "./reachability";
-import { pollsHeld } from "./session";
+import { pollsHeld, silentDatagram } from "./session";
 import { entityLabel } from "./entities";
+import { isLifecycleDate, isLifecycleMetric } from "./lifecycle";
 
 // The leaf's poll (#934): a monitoring console's component view moves as
 // collection arrives. The component's own reads (reachability, vitals, and
@@ -39,7 +40,7 @@ export type CollectionState = {
   // (#1110, lib/session's pollsHeld).
   // listening: a push endpoint (#1024), which the server hosts and a sender
   // posts to; silence is never read as down, so it has no other state.
-  kind: "collecting" | "component-or-path" | "outpost-offline" | "no-outpost" | "down" | "rejected" | "session-down" | "unknown" | "listening";
+  kind: "collecting" | "component-or-path" | "outpost-offline" | "no-outpost" | "down" | "no-answer" | "rejected" | "session-down" | "unknown" | "listening";
   outpost?: string;
 };
 
@@ -60,6 +61,7 @@ export function collectionState(iface: ReachEndpoint, outpost: Outpost | undefin
   if (now - new Date(last).getTime() > STALENESS_WINDOW_MS) return { kind: missing ? "no-outpost" : outpostDown ? "outpost-offline" : "component-or-path", outpost: iface.outpost };
   if (iface.session?.state === "rejected" || pollsHeld(iface)) return { kind: "rejected", outpost: iface.outpost };
   if (iface.session?.state === "down") return { kind: "session-down", outpost: iface.outpost };
+  if (endpointWord(iface, now) === "down" && silentDatagram(iface)) return { kind: "no-answer", outpost: iface.outpost };
   if (endpointWord(iface, now) === "down") return { kind: "down", outpost: iface.outpost };
   return { kind: "collecting", outpost: iface.outpost };
 }
@@ -124,7 +126,7 @@ export type IdentityRow = { name: string; label: string; value: unknown; sourceR
 // hand-kept key list.
 export function identityRows(props: EffectivePropertyBody[]): IdentityRow[] {
   return (props ?? [])
-    .filter((p) => p.value !== null && p.value !== undefined)
+    .filter((p) => p.value !== null && p.value !== undefined && !isLifecycleDate(p.property_type_name))
     .map((p) => {
       const row: IdentityRow = { name: p.property_type_name, label: entityLabel({ name: p.property_type_name, label: p.label }), value: p.value };
       if (p.source_rule && p.source_rule_id) Object.assign(row, { sourceRule: p.source_rule, sourceRuleId: p.source_rule_id });
@@ -152,7 +154,7 @@ export type VitalSpread = { shown: string; count: number; instances: VitalInstan
 // contract's default standing in.
 export function vitalRows(metrics: EffectiveMetricBody[]): VitalRow[] {
   return (metrics ?? [])
-    .filter((m) => m.value !== null && m.value !== undefined)
+    .filter((m) => m.value !== null && m.value !== undefined && !isLifecycleMetric(m.metric_type_name))
     .map((m) => {
       const row: VitalRow = { name: m.metric_type_name, label: entityLabel({ name: m.metric_type_name, label: m.label }), value: m.value, sampled: m.is_sampled };
       if (m.unit) row.unit = m.unit;

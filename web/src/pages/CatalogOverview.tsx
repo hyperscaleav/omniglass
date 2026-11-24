@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
 import { useMe, can } from "../lib/auth";
 import { entryCount, entryHref, visibleGroups, type CatalogEntry, type CatalogGroup } from "../lib/catalog";
+import Tooltip from "../components/ui/Tooltip";
 
 // The Catalog overview (/catalog): the landing the shell's Overview entry
 // opens, inside the shell's pane. One card per catalog group, DERIVED from the
@@ -13,9 +14,7 @@ import { entryCount, entryHref, visibleGroups, type CatalogEntry, type CatalogGr
 // no card, through the same visibleGroups over the same can() the rail uses.
 // Each card teaches its group (the sentence lives on the table) and counts its
 // catalogs live through the list pages' own query keys (learning-tool
-// doctrine: the numbers are this fleet's real rows, not decoration); a soon
-// entry reads soon without a count, linking when its stub page is routed
-// (Notifications) and inert when none exists. A filtered slot (the Templates
+// doctrine: the numbers are this fleet's real rows, not decoration). A filtered slot (the Templates
 // slots) links with its query and counts its own kinds of the shared list. One
 // query per catalog, so a failing fetch marks its own row and nothing else
 // (the #598 lesson).
@@ -29,7 +28,7 @@ export default function CatalogOverview() {
       title="Catalog"
       subtitle="The authored model behind the fleet: what each group's catalogs hold, counted live from this install."
     >
-      <div class="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
+      <div class="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] items-start gap-4">
         <For each={groups()}>{(g) => <GroupCard group={g} />}</For>
       </div>
     </Page>
@@ -41,7 +40,9 @@ function GroupCard(props: { group: CatalogGroup }) {
     <section class="card border border-base-300 bg-base-200" data-card={props.group.header}>
       <div class="card-body gap-2 p-5">
         <h2 class="card-title text-base">{props.group.header}</h2>
-        <p class="text-sm text-base-content/60">{props.group.copy}</p>
+        {/* grow-0: daisyUI gives a card-body paragraph flex-grow, which would hand the
+            card's surplus height to the copy and push the counts to the bottom. */}
+        <p class="grow-0 text-sm text-base-content/60">{props.group.copy}</p>
         <ul class="mt-1 flex flex-col gap-0.5">
           <For each={props.group.entries}>
             {(e) => (
@@ -56,23 +57,15 @@ function GroupCard(props: { group: CatalogGroup }) {
   );
 }
 
-// One catalog row: the label, then the live count (or the soon badge). An
-// entry with a route is a link, a pageless soon slot is inert. The inner
-// content is built per branch (a JSX element is a real DOM node; one node
+// One catalog row: the label, then the live count. An entry with a route is a
+// link. The inner content is built per branch (a JSX element is a real DOM node; one node
 // cannot stand in two places).
 function EntryRow(props: { entry: CatalogEntry; catalogName: string }) {
   const rowClass = "-mx-2 flex items-center justify-between gap-2 rounded-field px-2 py-1.5";
   const inner = (): JSX.Element => (
     <>
-      <span class="truncate text-sm" classList={{ "text-base-content/50": props.entry.soon }}>
-        {props.entry.label}
-      </span>
-      <Show
-        when={!props.entry.soon}
-        fallback={<span class="badge badge-ghost badge-sm text-base-content/40">soon</span>}
-      >
-        <Count entry={props.entry} name={props.catalogName} />
-      </Show>
+      <span class="truncate text-sm">{props.entry.label}</span>
+      <Count entry={props.entry} name={props.catalogName} />
     </>
   );
   return (
@@ -101,12 +94,12 @@ function Count(props: { entry: CatalogEntry; name: string }) {
     <Show
       when={!q.isError}
       fallback={
-        <span
+        <Tooltip as="span" tabIndex={0}
           class="badge badge-sm border-error/40 text-error"
-          title={`The ${props.name} catalog did not load. The rest of the page stands; retry from its own page.`}
+          content={`The ${props.name} catalog did not load. The rest of the page stands; retry from its own page.`}
         >
           unavailable
-        </span>
+        </Tooltip>
       }
     >
       <Show when={q.data} fallback={<span class="skeleton h-4 w-7" aria-hidden="true" />}>

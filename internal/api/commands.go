@@ -81,7 +81,7 @@ type commandBody struct {
 	IssuerID            string              `json:"issuer_id,omitempty" doc:"The issuer's uuid, the actor on the command's audit row"`
 	CausedEventID       *int64              `json:"caused_event_id,omitempty" doc:"The command-issued event it put on the component's timeline"`
 	SettledEventID      *int64              `json:"settled_event_id,omitempty" doc:"The event its terminal status put there: command-settled, command-failed or command-timed-out"`
-	Settlement          string              `json:"settlement,omitempty" enum:"none,pending,settled,failed" doc:"On an issue's answer only: the computed settlement verdict at that moment (none/pending/settled/failed)"`
+	Settlement          string              `json:"settlement,omitempty" enum:"none,pending,settled,failed" doc:"On an issue's answer only: the computed settlement at that moment (none/pending/settled/failed)"`
 }
 
 // commandObservation is the sample that decided a command.
@@ -191,7 +191,7 @@ func registerCommandRoutes(api huma.API, a *authenticator, gw storage.Gateway, w
 		Method:      http.MethodPost,
 		Path:        "/components/{name}/commands:issue",
 		Summary:     "Issue a command to a component",
-		Description: "Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Answers with the command as it stands (as the command read returns it) and the computed settlement verdict; with wait, once it settles, fails or times out, or wait_timeout passes. Gated by command:issue, whose scope is resolved on the component tier from that permission (not from component:read); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not command is a 403.",
+		Description: "Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Answers with the command as it stands (as the command read returns it) and the computed settlement; with wait, once it settles, fails or times out, or wait_timeout passes. Gated by command:issue, whose scope is resolved on the component tier from that permission (not from component:read); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not command is a 403.",
 	}, "command", "issue"), func(ctx context.Context, in *issueCommandInput) (*commandOutput, error) {
 		// The ACTION scope comes from command:issue, so only the grants whose
 		// role actually carries the actuation contribute their scope. The READ

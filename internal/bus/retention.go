@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/logline"
 	"github.com/hyperscaleav/omniglass/internal/settings"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
 
 // The sample retention pass (#417): how often it runs, how long one pass may
@@ -277,6 +279,13 @@ func (s *Server) startSampleRetention() {
 	s.sweepDone.Add(1)
 	go func() {
 		defer s.sweepDone.Done()
+		// The lanes the last recorded pass flagged behind, so a lane that
+		// stops being reported is written 0 (#1673).
+		// Seeded from the stored flags, so a restart keeps it (#1673).
+		var flagged []string
+		if r, ok := s.store.(behindReader); ok {
+			flagged = seedFlaggedLanes(ctx, r, s.platformComponentID, sampleRetentionTimeout)
+		}
 		for {
 			start := time.Now()
 			rep, err := retentionPass(ctx, s.store, start, sampleRetentionChunk, sampleRetentionMaxChunks, sampleRetentionTimeout)
@@ -290,8 +299,11 @@ func (s *Server) startSampleRetention() {
 			tellHousekeeping(ctx, s.store, s.platformComponentID, retentionNotes(rep, err), time.Now(), sampleRetentionTimeout)
 			// The pass's figures land on the server's platform component
 			// (#1629); a failed write loses one pass's points, logged.
-			if err := recordRetention(ctx, s.store, s.platformComponentID, rep, time.Now(), sampleRetentionTimeout); err != nil && ctx.Err() == nil {
+			if err := recordRetention(ctx, s.store, s.platformComponentID, rep, flagged, time.Now(), sampleRetentionTimeout); err != nil && ctx.Err() == nil {
 				slog.Warn("retention figures not recorded", "facility", "retention", "error", err.Error())
+				flagged = slices.Compact(slices.Sorted(slices.Values(append(flagged, rep.Behind...))))
+			} else {
+				flagged = slices.Clone(rep.Behind)
 			}
 			t := time.NewTimer(nextRetentionWait(rep))
 			select {
@@ -302,4 +314,32 @@ func (s *Server) startSampleRetention() {
 			}
 		}
 	}()
+}
+
+// behindReader is the store half seedFlaggedLanes needs.
+type behindReader interface {
+	PlatformMetricInstancesAt(ctx context.Context, componentID, key string, value float64) ([]string, error)
+}
+
+// seedFlaggedLanes is the lanes whose newest stored retention-behind reads 1
+// on component, the loop's starting set (#1673): a restart must not forget a
+// lane flagged before it, or one that then stops reporting keeps its alarm. A
+// failed read, or no component, seeds none, logged.
+func seedFlaggedLanes(ctx context.Context, store behindReader, component string, timeout time.Duration) []string {
+	if component == "" {
+		return nil
+	}
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+	lanes, err := store.PlatformMetricInstancesAt(ctx, component, writerclass.RetentionBehind, 1)
+	if err != nil {
+		if ctx.Err() == nil {
+			slog.Warn("retention behind flags not read", "facility", "retention", "error", err.Error())
+		}
+		return nil
+	}
+	return lanes
 }

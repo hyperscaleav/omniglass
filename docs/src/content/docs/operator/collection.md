@@ -13,11 +13,12 @@ walkthroughs:
   - id: fix-a-rejected-session
   - id: trust-a-changed-host-key
   - id: fix-a-refused-probe
+  - id: test-an-endpoints-poll
 ---
 
 Collection is how the fleet learns whether a device is reachable and what it reports. An **edge
 outpost** runs the probes, a component's **endpoint** is the API the outpost reaches for, the component's
-**Reachability** panel shows the verdict, and its **Events** and **Logs** panels show recent occurrences
+**Reachability** panel shows the reachability, and its **Events** and **Logs** panels show recent occurrences
 the outpost ships back. This page walks the console surfaces; the model behind them is
 [data collection](/architecture/collection/), and every action here has the same
 [scope](/operator/#what-you-see-is-your-scope) and permission checks as the rest of the console.
@@ -53,9 +54,9 @@ The outpost detail also carries a read-only **Self-logs** panel (backed by `GET 
 gated by `outpost:read`): the outpost's own recent operational log lines, newest first, over the last
 24 hours, so an outpost that is up but misbehaving explains itself without a shell on the box.
 
-### Getting a first verdict from the command line
+### Getting a first reachability from the command line
 
-An empty install ships no outpost, so an endpoint added to a component reads a null verdict until a
+An empty install ships no outpost, so an endpoint added to a component reads a null reachability until a
 outpost probes it. The console path above and this CLI path do the same things, in this order:
 
 ```sh
@@ -70,13 +71,13 @@ omniglass outpost run --server http://localhost:8080 --name edge-1 --token <toke
 # 3. Assign the endpoint to the outpost. The endpoint's id and name are in the reachability read.
 omniglass endpoint update <endpoint> --outpost edge-1
 
-# 4. Read the verdict. The first probe lands within a probe interval of the outpost's next worklist pull.
+# 4. Read the reachability. The first probe lands within a probe interval of the outpost's next worklist pull.
 omniglass component reachability list <component>
 ```
 
 Until step 3, the endpoint's row carries `"reachability": null` and `"pending": "no-outpost"`: nothing is
 assigned to probe it. After step 3 and before the first probe lands, it reads `"pending":
-"awaiting-probe"`, and the field is gone once a verdict exists. The console's Endpoints panel says
+"awaiting-probe"`, and the field is gone once a reachability exists. The console's Endpoints panel says
 the same beneath the row, with a link to the Outposts page (or, once an outpost is assigned, to that outpost's
 blade). If it stays at `awaiting-probe`, the outpost is not running or not enrolled: check its liveness
 pill on **Outposts**.
@@ -97,6 +98,18 @@ give it one ("Control processor") to say what the connection is FOR, since `ssh`
 reached and reads the same on every component in the fleet. It is optional, and an endpoint
 without one reads its transport name exactly.
 
+An endpoint reads **the same whole story in two places**: the component's expanded endpoint row
+and the endpoint's own drawer (**Manage**) render one body, so neither shows less than the
+other. It holds the identity and target, the driver (a link into its drawer) and version, the
+availability strip with its uptime, the reach ladder with each rung's last result and time, the
+session and any reasons the gate is held, the parameters and inputs with where each value came
+from (set on this endpoint, the driver's default, or derived from inputs), the **names** of the
+secrets it is bound to (never a value), whether it is an out-of-band management path, and each
+poll with its interval, what it last read, and the **Test** that runs it now. The long
+sections fold under a one-line summary.
+
+- A new device gets its first endpoint in [the add-a-component flow](/operator/add-a-component/),
+  which picks the product's driver and credential and tests it before it ends.
 - With `endpoint:create`, **Add endpoint** on the component detail creates one, in either of
   two faces:
   - **Probe**: give it a **label** (optional, and the only name-like string you type here),
@@ -167,6 +180,36 @@ Because an endpoint belongs to a component, it inherits that component's scope: 
 on a component outside your scope is not shown. An outpost **purge cascades** its endpoints and
 their derived tasks.
 
+### Test a poll now
+
+A driver-attached endpoint ends with proof that it collects, not a wait for the next cycle. With
+`endpoint:run`, each poll the endpoint's driver declares carries a **Test** button, and an endpoint
+with several also carries **Test all**, on the endpoint's blade (which a new attach opens on) and
+under the endpoint in the component's **Collection** section. A person without the permission sees
+no Test control at all.
+
+A test runs the poll once, now, through the outpost that holds the endpoint, outside its schedule
+(which does not change), and draws the answer in place:
+
+- **Read:** each sample the poll extracted, with its value and unit, the round-trip time the
+  outpost measured, and the outpost that ran it. The samples land as a scheduled run's do. Emits
+  that did not locate their value are listed under the samples, and a poll that answered but
+  read nothing says so.
+- **Gated:** an endpoint the outpost holds (a refusal such as a wrong community, a changed key, an
+  unreachable probe, or a reboot in flight) refuses the run and nothing is sent. The card carries
+  the gate's own reason, the same one the endpoint's notice shows. The notice beside the card
+  offers the way to lift it (**Retry** or **Open endpoint**) where it shows one.
+- **No outpost:** the endpoint is placed on no outpost, or its outpost is not connected, so nothing
+  can run the poll.
+- **Failed or timed out:** the outpost ran the poll and could not complete it (it names why), or
+  did not answer within the run's budget; too many runs in flight at once is told apart too.
+
+Test all runs the polls one after another, since the outpost serves one request at a time per
+endpoint. The same run is one call from the CLI or the API (`run-endpoint-poll`,
+`POST /endpoints/{endpoint}/polls/{poll}:run`).
+
+::walkthrough{#test-an-endpoints-poll}
+
 ## Tasks
 
 A task is the **collection work** an outpost runs, and it is **derived**, not authored: creating an
@@ -184,15 +227,15 @@ collects, add or remove the **endpoint**; there is no task create, edit, or dele
 
 Every component's detail carries an **Endpoints** panel showing composed reachability: is each
 of its endpoints reachable, and why. One row per endpoint shows the endpoint (its label, or its
-transport name where it has none) and its address, a **verdict
-pill** (responding, down, stale, or unknown, the last for an endpoint with no verdict yet,
+transport name where it has none) and its address, a **reachability
+pill** (responding, down, stale, or unknown, the last for an endpoint with no reachability yet,
 whose row says why beneath it: no outpost is assigned to probe it, or its outpost has not landed a first
-probe; a verdict is stored only when it changes, so the
+probe; a reachability is stored only when it changes, so the
 pill ages an endpoint by when the server last received anything its task delivered, its **last
 seen**, and an endpoint answering every probe stays responding however long ago it last changed
 state), an **availability strip** drawn from the
-verdict's up/down transitions over time, and an expandable **gate breakdown** with each probe's signal and timing, then the composed
-verdict (the endpoint is up only when every applicable probe passed). Every row also wears its
+reachability's up/down transitions over time, and an expandable **gate breakdown** with each probe's signal and timing, then the composed
+reachability (the endpoint is up only when every applicable probe passed). Every row also wears its
 **reachability ladder**, the rungs a connection is checked on bottom up: **reachable** (a ping,
 informational only, so its chip is dashed and a component that blocks ping never reads down for
 it), **responsive** (the transport answering: a connect, the protocol's handshake, or, where an open
@@ -201,13 +244,19 @@ until it passes) and **authenticated** (the login, shown once a
 credential was actually tried). Hover or focus a rung for what it checks and what it says now. A
 rung a refusal holds wears the refusal glyph and the rungs above it read untried, while the rungs
 below keep their readings: an endpoint whose login was refused still shows its ping and its
-transport answering. A down endpoint also shows a plain-language **why** line. Every value is a
+transport answering. Over a datagram transport (udp, snmp) a silent **responsive** rung reads **no answer**,
+not down: silence proves nothing there. The host may be off, the agent or service stopped, the v2c
+community wrong (an agent drops a wrong community without a word), or the port filtered; a closed
+port (an ICMP port-unreachable, the affirmative **refused**) lands here too until the reading carries its reason (#2567). The rung's
+hint, the collection badge on the component and the row's pill all name those causes. The reachability reading and
+the unreachable streak are unchanged, so a run of silence still alarms; only what it says changed. A tcp connect that times out
+still reads down. A down endpoint also shows a plain-language **why** line. Every value is a
 real reading from the outpost, and the panel is also the authoring surface: its header carries **Add
 endpoint** (with `endpoint:create`) and each row that maps to an endpoint a **Manage** affordance
 opening that endpoint's detail.
 
 A **webhook** endpoint is a push endpoint, hosted by the server: a sender posts to its URL,
-nothing is dialed, so its row carries no ladder, no strip and no verdict. It reads **last heard**
+nothing is dialed, so its row carries no ladder, no strip and no reachability yet. It reads **last heard**
 (never heard until a post lands, and silence is never read as down), the scheme that checks each
 post (`hmac`, `token`, `basic`, or **unsigned** for scheme none, where anyone holding the URL can
 post), and a red count of the posts the scheme refused, whose hover names the latest reason and
@@ -267,7 +316,7 @@ an https endpoint does, and **Trust this key** works the same way
 ([websocket and wss](/architecture/collection/#websocket-and-wss)).
 
 A **udp** endpoint has no port to open, so its breakdown lists its **request** rung beside the ping:
-the driver's named request, answered (with its round trip) or not, which is the layer its verdict
+the driver's named request, answered (with its round trip) or not, which is the layer its reachability
 follows. A component
 that answers ping but not the request reads down, and its why line says the request goes
 unanswered (the service is down, the port is closed, or the datagrams are lost); one that blocks
@@ -398,8 +447,8 @@ filters narrow the read: **At least** a severity (that level and every more seve
 **From** a source, its choices the sources the window carries. The system detail view's Logs section
 takes the same filters. Most log lines never become events.
 
-Where a reachability verdict is a sampled state, an event or a log line is a past occurrence, so the
-panels are read differently: the verdict answers "is it reachable *now*", the logs and events answer
+Where a reachability is a sampled state, an event or a log line is a past occurrence, so the
+panels are read differently: the reachability answers "is it reachable *now*", the logs and events answer
 "what did it *say*, and when". Both land under the same [scope](/operator/#what-you-see-is-your-scope) and owner
 checks as every other reading, so an out-of-scope component's events and logs are a non-disclosing 404,
 exactly like its reachability. Every value is a real occurrence from the outpost.

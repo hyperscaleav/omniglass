@@ -220,7 +220,7 @@ export default function PropertiesPanel(
           // Override: set when new or the value changed (the set is idempotent).
           const current = p.is_set ? displayValue(p.set_value) : null;
           if (current === null || draft !== current) {
-            await setOwnerProperty(kind, name, p.property_type_name, parseInput(p.data_type as ValueType, draft));
+            await setOwnerProperty(kind, name, p.property_type_name, parseInput(p.data_type as ValueType, draft, p.property_type_name));
           }
         }
       } catch (e) {
@@ -276,7 +276,10 @@ export default function PropertiesPanel(
       <Show when={q.error}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{describeError(q.error)}</span></div>
       </Show>
-      <Show when={!q.isLoading && !q.error && !rows().length}>
+      {/* The empty line is the claim that nothing resolves: it never shows
+          while the owner has rows the Reconciliation table above lists from
+          this same read (#2439). */}
+      <Show when={!q.isLoading && !q.error && !rows().length && !(q.data ?? []).length}>
         <p class="text-sm text-base-content/50">{copy().empty}</p>
       </Show>
       <Show when={contract().length}>

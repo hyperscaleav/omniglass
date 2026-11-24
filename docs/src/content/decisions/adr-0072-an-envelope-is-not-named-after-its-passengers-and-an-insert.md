@@ -5,7 +5,7 @@ status: "Accepted"
 summary: "Two naming rules: a carrier is named for what it carries, never a passenger (the telemetry wire message is `TelemetryBatch`, since it carries samples, log lines, and later events), and a storage insert struct takes the **`Write`** suffix paired with the bare read struct (`MetricSampleWrite` / `MetricSample`), the pattern `LogLineWrite` set. Retires `MetricSampleEvent`, `StateSampleEvent`, `EventOccurrence`, and the proto `Event`"
 ---
 
-- **Date:** 2026-07-31 | **Status:** Accepted | **Pages:** [storage](/architecture/storage/), [glossary](/architecture/glossary/)
+- **Date:** 2026-07-31 | **Status:** Accepted | **Pages:** [storage](/architecture/storage/), [glossary](/reference/glossary/)
 - **Decision:** Two naming rules, both general. **A carrier is named for what it carries, never for one of
   its passengers.** The telemetry wire message is a **`TelemetryBatch`** (`proto/og/v1/telemetry.proto`): it
   carries samples and raw log lines and will carry natively caught events, so naming it `Event` named it after

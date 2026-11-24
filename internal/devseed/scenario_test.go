@@ -5,8 +5,10 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/devseed"
+	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/jackc/pgx/v5"
@@ -163,15 +165,15 @@ func TestReplicateCopiesWholeRoomsOnly(t *testing.T) {
 	}
 }
 
-// The degraded fleet raises only the severities and messages the example
-// fleet's own alarms use, at most one per component, so it can never name a
+// The degraded fleet raises only the severities and messages of the
+// fixture's alarm templates, at most one per component, so it can never name a
 // severity the boot seed does not ship or stack two conditions on one device.
 func TestDegradeRaisesKnownConditionsOncePerComponent(t *testing.T) {
 	t.Parallel()
 	base := fixturesDoc(t)
 	doc := degradeShipped(t)
 	known := map[string]bool{}
-	for _, a := range base.Alarms {
+	for _, a := range base.AlarmTemplates {
 		known[a.Severity+"|"+a.Message] = true
 	}
 	added := doc.Alarms[len(base.Alarms):]
@@ -184,7 +186,7 @@ func TestDegradeRaisesKnownConditionsOncePerComponent(t *testing.T) {
 	}
 	for _, a := range added {
 		if !known[a.Severity+"|"+a.Message] {
-			t.Errorf("degraded alarm %+v is not one the example fleet uses", a)
+			t.Errorf("degraded alarm %+v is not one of the fixture's templates", a)
 		}
 		if per[a.Component] != 1 {
 			t.Errorf("component %q carries %d alarms", a.Component, per[a.Component])
@@ -248,10 +250,13 @@ func TestDegradeFitsAlarmsToTheDeviceClass(t *testing.T) {
 	t.Parallel()
 	products := map[string]string{"beam": "projector", "panel": "interactive-display", "mic": "microphone", "dsp": "dsp"}
 	parents := map[string]string{"projector": "display-device", "interactive-display": "display", "display": "display-device"}
-	base := devseed.Doc{Alarms: []devseed.Alarm{
-		{Component: "seeded", Severity: "warning", Message: "Lamp hours approaching end of life", DedupKey: "lamp-hours", AppliesTo: []string{"projector", "display"}},
-		{Component: "seeded", Severity: "high", Message: "No route to host", DedupKey: "unreachable"},
-	}}
+	base := devseed.Doc{
+		Alarms: []devseed.Alarm{{Component: "seeded", Severity: "high", Message: "Standing", DedupKey: "standing"}},
+		AlarmTemplates: []devseed.Alarm{
+			{Severity: "warning", Message: "Lamp hours approaching end of life", DedupKey: "lamp-hours", AppliesTo: []string{"projector", "display"}},
+			{Severity: "high", Message: "No route to host", DedupKey: "unreachable"},
+		},
+	}
 	// Component 0 is alarmed already; every one of the rest is picked (n=1).
 	base.Components = []devseed.Component{{Key: "seeded", Product: "dsp"}}
 	for i, p := range []string{"mic", "beam", "mic", "panel", "dsp", "mic", "beam", "panel", "unknown-product"} {
@@ -412,5 +417,75 @@ func TestRunScenarioEmptySeedsNothing(t *testing.T) {
 	}
 	if got := countFleet(t, ctx, conn); got != (fleetCounts{}) {
 		t.Errorf("empty scenario seeded %+v", got)
+	}
+}
+
+// The storm scenario (#2333) is the alarm queue's scale fixture: the large
+// fleet in trouble, with at least StormFloor open alarms.
+func TestStormScenarioHoldsAnAlarmStorm(t *testing.T) {
+	t.Parallel()
+	if n := len(scenarioDoc(t, "storm").Alarms); n < devseed.StormFloor {
+		t.Fatalf("storm scenario has %d alarms, want at least %d", n, devseed.StormFloor)
+	}
+}
+
+// The alarm queue at scale (#2333): over the seeded storm the first page and a
+// filtered page each come back inside the stated budget, and the storm pages
+// through to its last alarm. The measured times are logged for the PR.
+func TestAlarmQueueAtStormScale(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("seeds the storm fleet")
+	}
+	const budget = 2 * time.Second
+	ctx, gw, _ := openSeededGateway(t)
+	s, err := devseed.LookupScenario("storm")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := devseed.RunScenario(ctx, gw, "", s, devseed.Options{}); err != nil {
+		t.Fatalf("seed storm: %v", err)
+	}
+	all := scope.Set{All: true}
+	timed := func(name string, f storage.AlarmFilter, limit int) ([]storage.Alarm, string) {
+		t.Helper()
+		start := time.Now()
+		got, next, err := gw.ListFleetAlarms(ctx, all, all, f, limit)
+		took := time.Since(start)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		t.Logf("%s: %d rows in %s", name, len(got), took)
+		if took > budget {
+			t.Errorf("%s took %s, over the %s budget", name, took, budget)
+		}
+		return got, next
+	}
+	first, next := timed("first page (100)", storage.AlarmFilter{}, 100)
+	if len(first) != 100 || next == "" {
+		t.Fatalf("first page = %d rows, next %q; want a full page with more behind it", len(first), next)
+	}
+	top := first[0].Severity
+	narrowed, _ := timed("filtered by severity "+top, storage.AlarmFilter{Severities: []string{top}}, 100)
+	if len(narrowed) == 0 {
+		t.Fatalf("no alarms at the worst severity %q", top)
+	}
+	unacked := false
+	timed("unacknowledged and not snoozed", storage.AlarmFilter{Acknowledged: &unacked, Snoozed: &unacked}, 100)
+	timed("location subtree", storage.AlarmFilter{Location: first[0].LocationPath[0]}, 100)
+	total := 0
+	for token := ""; ; {
+		page, n, err := gw.ListFleetAlarms(ctx, all, all, storage.AlarmFilter{PageToken: token}, 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		total += len(page)
+		if n == "" {
+			break
+		}
+		token = n
+	}
+	if total < devseed.StormFloor {
+		t.Errorf("paged the storm to %d alarms, want at least %d", total, devseed.StormFloor)
 	}
 }

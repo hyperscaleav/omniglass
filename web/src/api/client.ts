@@ -23,6 +23,26 @@ export function clearToken(): void {
 const origin = typeof globalThis.location !== "undefined" ? globalThis.location.origin : "";
 const BASE_URL = `${origin}/api/v1`;
 
+// A refusal (403) is an answer, not a fault: the person is signed in and the server
+// said no. The data layer throws the response body, so a caller tells a refusal
+// from a failure with isDenied (a Huma problem body carries status 403 already;
+// the tag covers a body that does not). The console only explains the refusal;
+// the server's permission check is the control (#2442).
+const denied = new WeakSet<object>();
+export function deniedError<T>(body: T): T | { status: 403; detail: string } {
+  if (body !== null && typeof body === "object") {
+    denied.add(body);
+    return body;
+  }
+  const wrapped = { status: 403 as const, detail: typeof body === "string" ? body : "forbidden" };
+  denied.add(wrapped);
+  return wrapped;
+}
+export function isDenied(err: unknown): boolean {
+  if (err === null || typeof err !== "object") return false;
+  return denied.has(err) || (err as { status?: unknown }).status === 403;
+}
+
 // onUnauthorized fires when a request to a protected route is rejected with 401,
 // which means a session that WAS valid has ended (expired, revoked by a password
 // reset, or the account locked out). The app registers a handler (in index.tsx)
@@ -105,7 +125,9 @@ function routeUrl(route: string, params: Params): string {
   const path = route.replace(/\{([^{}]+)\}/g, (_, name: string) => encodeURIComponent(String(params.path?.[name])));
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(params.query ?? {})) {
-    if (value !== undefined && value !== null) query.append(key, String(value));
+    // A list repeats the parameter (severity=a&severity=b), the form the API reads.
+    if (Array.isArray(value)) for (const v of value) query.append(key, String(v));
+    else if (value !== undefined && value !== null) query.append(key, String(value));
   }
   const search = query.toString();
   return search ? `${path}?${search}` : path;
@@ -134,6 +156,7 @@ async function call(method: string, route: string, init: { params?: Params; body
   } catch {
     // Not JSON: the error is the body's text.
   }
+  if (response.status === 403 && error !== null && typeof error === "object") deniedError(error);
   return { error, response };
 }
 

@@ -1,12 +1,13 @@
 # Outposts and Platform health's sidebar doors (#1767). Both are administration:
 # enrolling an outpost is an admin's job, and whether Omniglass itself is well is
-# read off the platform's own components. So both sit under Admin, Platform
-# health as Status, one word like every other tab, both behind outpost:read.
-title: Open Outposts and Status from Admin
-description: From Home, find Outposts and Status under Admin in the sidebar, open Outposts where a new outpost is set up, then open Status and read the build the server runs.
+# read off the platform's own components. So both sit under Admin, both behind
+# outpost:read. The door, the top bar and the page's heading all say Platform
+# health (#2446), one name. The walkthrough keeps its id: the docs link to it.
+title: Open Outposts and Platform health from Admin
+description: From Home, find Outposts and Platform health under Admin in the sidebar, open Outposts where a new outpost is set up, then open Platform health and read the build the server runs.
 steps:
   - goto: /
-    caption: The sidebar's Admin group holds the platform's administration, Outposts and Status among it.
+    caption: The sidebar's Admin group holds the platform's administration, Outposts and Platform health among it.
     hold: 1500
   - click: 'aside a[href$="/outposts"]'
     caption: Open Outposts under Admin.
@@ -14,8 +15,8 @@ steps:
     caption: The collection outposts, and New outpost, where an admin sets one up.
     hold: 1500
   - click: 'aside a[href$="/platform"]'
-    caption: Open Status under Admin.
+    caption: Open Platform health under Admin.
   - wait: { selector: '[data-testid=platform-version]' }
-    caption: Platform health, the build and uptime read off the platform's own components. The top bar reads Status.
+    caption: Platform health, the build and uptime read off the platform's own components. The sidebar, the top bar and the heading all say Platform health.
     poster: true
     hold: 2000

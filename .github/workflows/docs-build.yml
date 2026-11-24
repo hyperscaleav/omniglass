@@ -12,10 +12,12 @@ on:
   pull_request:
     paths:
       - docs/**
+      - api/openapi.yaml
   push:
     branches: [main, "release/**"]
     paths:
       - docs/**
+      - api/openapi.yaml
 
 permissions:
   contents: read

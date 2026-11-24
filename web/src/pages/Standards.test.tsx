@@ -98,11 +98,9 @@ describe("Standards page", () => {
   it("an official row is read-only: greyed pencil and delete, and a read-only contract", async () => {
     mount();
     const blade = await openBlade("Meeting room");
-    const editBtn = within(blade).getByLabelText("Edit") as HTMLButtonElement;
-    const deleteBtn = within(blade).getByRole("button", { name: /delete/i }) as HTMLButtonElement;
-    expect(editBtn.disabled).toBe(true);
-    expect(deleteBtn.disabled).toBe(true);
-    expect(editBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe("Official: ships with Omniglass and updates with it.");
+    expect(within(blade).getByTestId("footer-note").textContent).toBe("Official, read-only");
+    expect(within(blade).queryByLabelText("Edit")).toBeNull();
+    expect(within(blade).queryByText("Delete")).toBeNull();
     // Both contract lanes render read-only: neither panel offers a declare picker.
     expect(within(blade).getAllByText("official, read-only")).toHaveLength(2);
     expect(within(blade).queryByLabelText("Property to declare")).not.toBeInTheDocument();
@@ -219,8 +217,8 @@ describe("Standards page", () => {
     });
     mount();
     fireEvent.click(screen.getByRole("button", { name: /new standard/i }));
-    expect(await screen.findByRole("button", { name: "From scratch" })).toHaveAttribute("aria-pressed", "true");
-    fireEvent.click(screen.getByRole("button", { name: "From a template" }));
+    expect(await screen.findByRole("radio", { name: "From scratch" })).toBeChecked();
+    fireEvent.click(screen.getByRole("radio", { name: "From a template" }));
     const picker = (await screen.findByLabelText("Template")) as HTMLSelectElement;
     // Only this kind's templates.
     expect(Array.from(picker.options).map((o) => o.value)).toEqual(["", "huddle"]);
@@ -237,7 +235,7 @@ describe("Standards page", () => {
     mount({ ...admin, permissions: ["standard:read", "standard:create"] });
     fireEvent.click(screen.getByRole("button", { name: /new standard/i }));
     expect(await screen.findByText("Create standard")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "From a template" })).toBeNull();
+    expect(screen.queryByRole("radio", { name: "From a template" })).toBeNull();
   });
 
   // A standard created from a template lands here (#1329): ?open= opens its blade and

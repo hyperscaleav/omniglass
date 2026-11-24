@@ -6,8 +6,8 @@ description: "The CI gates on every PR and the manual release cut from a release
 `make test` is the local gate (the [test-driven](/contributing/test-driven/) doctrine says
 validate locally, do not lean on CI). CI is the backstop, and the release workflow cuts each
 release from a release branch.
-Thirteen workflows carry it: `test`, `pr-title`, `image`, `docs-shots`, `gen-drift`,
-`docs-build`, `migrations`, `preview-comment`, `demo`, `demo-tag`, `demo-prune`, `release`, and `goreleaser`.
+Fourteen workflows carry it: `test`, `pr-title`, `image`, `docs-shots`, `gen-drift`,
+`docs-build`, `migrations`, `preview-comment`, `demo`, `demo-tag`, `regression-test`, `demo-prune`, `release`, and `goreleaser`.
 The three agent workflows (`agent-build`, `agent-review`, `agent-fix`) run Claude Code agents
 on GitHub-hosted runners and have a page of their own, [Agents in CI](/contributing/agents-in-ci/).
 
@@ -39,7 +39,7 @@ on GitHub-hosted runners and have a page of their own, [Agents in CI](/contribut
 - **`gen-drift.yml`** runs `make gen` and fails the PR on any diff in the committed generated
   artifacts (the OpenAPI, the cobra tree, the CLI reference, the ERD, the typed SPA client,
   the protobuf wire), the drift gate [API first](/contributing/api-first/) promises.
-- **`docs-build.yml`** (path-filtered to `docs/**`) builds the Astro docs site, so a broken
+- **`docs-build.yml`** (path-filtered to `docs/**` and `api/openapi.yaml`) builds the Astro docs site, so a broken
   page fails the PR that introduces it instead of the next deploy.
 - **`migrations.yml`** (path-filtered to `db/**`) fails a PR that adds a migration whose
   version is not newer than the newest on the base branch's tip, fetched fresh, or is stamped
@@ -52,15 +52,51 @@ on GitHub-hosted runners and have a page of their own, [Agents in CI](/contribut
   each page's frontmatter, so the pinned browser's captures are byte-stable and the
   tolerance is zero).
 
-Three more PR workflows: **`image.yml`** builds the multi-arch container image (see
-[Container image](/deployment/container-image/)), **`preview-comment.yml`** reacts to the
+Three more PR workflows: **`image.yml`** publishes the multi-arch container image on `main` and
+release pushes (see [Container image](/deployment/container-image/) and [Fast iteration](#fast-iteration-on-a-pr) below), **`preview-comment.yml`** reacts to the
 `run:preview` label (see [PR previews](/developer/pr-previews/)), and **`demo.yml`**
 reacts to the `run:demo` label, recording the [demos](/contributing/demos/) the PR body tags
 (each on a runner of its own) to the PR's evidence ref, keeping one comment listing every demo and
 writing each demo's clip into the PR body (see [Labels](/contributing/labels/)); nightly, the same
 workflow re-records every demo on main and opens an issue when one fails. **`demo-tag.yml`** lints
-the PR body's demo tag on every PR. **`demo-prune.yml`** deletes an evidence ref 30 days after its
+the PR body's demo tag on every PR. **`regression-test.yml`** fails a PR that closes a bug or flaky-test
+issue (label or Bug type) without changing a test or carrying a reasoned `regression-test: none (<reason>)` line.
+**`demo-prune.yml`** deletes an evidence ref 30 days after its
 PR closes.
+
+## Fast iteration on a PR
+
+A push to a PR should cost what it changes (#2597). `test.yml` starts with a `changes` job that runs
+`scripts/ci-changes.sh` on the PR's changed files (a composite action, `.github/actions/changes`, shares it
+with `gen-drift.yml`); the script is the whole policy and is tested in `scripts/ci_changes_test.go`.
+
+| The push changes | Runs |
+|---|---|
+| docs only (`docs/**`, `*.md`, evidence screenshots, issue templates, `.claude/**`) | the docs checks (`docs-build.yml`, `docs-shots.yml`, their own path filters) |
+| web (`web/**`) | web unit tests, `gen-drift`, the shared build, `e2e`, `smoke-lab` |
+| Go (`**/*.go`, `go.mod`, `db/**`, `internal/**`, `cmd/**`, `api/**`, `proto/**`) | the Go shards, `gen-drift`, the shared build, `e2e`, `smoke-lab`; `api/openapi.yaml` also runs the docs checks (`docs-build.yml` reads it) |
+| generated docs (`docs/src/generated/**`, the reference pages, the data model page) | `gen-drift` |
+| workflows, the Dockerfile, the Makefile, `scripts/**`, or any path no area claims | everything |
+
+A draft runs the unit jobs its files call for and no image, `e2e` or `smoke-lab`; marking it ready
+for review (`ready_for_review`) runs everything. `main` pushes, release pushes and merge queue entries
+run everything. The image is built once, by the `build` job, with the BuildKit GitHub Actions cache, and
+handed to `e2e` and `smoke-lab` as one artifact (the image under both its tags, and the host binary); they
+load it and run with `SKIP_BUILD=1` (see the Makefile's `all`), so nothing on a PR push builds the image twice. `docs-shots.yml`
+and the opt-in `run:demo` pipeline still build their own, since their build id differs.
+
+Skipped work still reports, so a required check never waits forever: `e2e`, `smoke-lab` and `gen-drift`
+always run and pass in seconds when nothing needs them (and fail if the build or the change lookup
+failed), and `test` counts a skipped shard as a pass only when the change lookup succeeded. Publishing
+is off the PR path: the arm64 smoke runs on pushes and queue entries, the multi-arch push on `main`
+and release pushes only, and a PR gets one amd64 image (`pr-<n>` and its head sha) only with the
+`run:preview` label.
+
+The agents follow the same rule. `agent-review` waits for the `test`, `e2e`, `smoke-lab` and `gen-drift`
+checks to exist and finish on the same head commit, and holds (no review, the check red with the reason)
+if one is red or they have not finished in 40 minutes. `agent-fix` merges `main` only when the PR
+conflicts with it, or is behind it with a required check red (`scripts/agent-sync.sh needed`), because
+each merge is a new head commit that restarts every check.
 
 ## Merging through the queue
 
@@ -74,10 +110,11 @@ up-to-date rule met on the commit that actually lands, without a rebase loop or 
 The queue waits for each required check (`test`, `e2e`, `gen-drift`, `smoke-lab` and `lint`) to
 report on the queue entry, so every workflow that reports one also runs on `merge_group`. A
 queue entry has its own ref, so the workflows' `github.ref` concurrency groups give each entry a
-run of its own. Two lints have nothing to read there: `pr-title.yml` and `demo-tag.yml` checked
+run of its own. Three lints have nothing to read there: `pr-title.yml`, `demo-tag.yml` and `regression-test.yml` checked
 the PR's title and body before it could be queued, so on `merge_group` their `lint` job passes
-without reading a PR. `image.yml` runs only `smoke-lab` in the queue and publishes no image, since
-a queue entry's commit may never land; the arm64 smoke and the publish run on the PR and on `main`.
+without reading a PR. `image.yml` runs only the arm64 smoke in the queue and publishes no image, since
+a queue entry's commit may never land; the publish runs on `main` and release pushes. A queue entry runs
+every job in full: the path selection below applies to a PR push only.
 
 A guard test, `internal/build/merge_group_guard_test.go`, reads `.github/workflows/` and fails when
 a workflow that reports a required check lacks `merge_group`, or when no workflow reports one. The
@@ -187,10 +224,10 @@ automated. The steps, between a candidate and its final release:
    ```
 
 4. Commit the record the command wrote, by a PR to `main`. **No passing record for the
-   candidate's build, no final release.** A failing verdict exits 1, names every reason, and is also
+   candidate's build, no final release.** A failing soak verdict exits 1, names every reason, and is also
    recorded; fix the build and run a new week.
 
-The verdict is the platform's own, not a harness's figures derived again: it reads through the API
+The soak verdict is the platform's own, not a harness's figures derived again: it reads through the API
 the platform system's alarm history and the Platform health page's loss ratios, and nothing from
 the database. It passes when all of these hold:
 
@@ -205,11 +242,11 @@ A reading that cannot answer fails rather than passes: no build reported, two bu
 servers, no loss ratio on the page, a token that cannot read the whole page, or an alarm history
 that reached the API's 500-alarm cap. The thresholds are named in code (`SoakMinWindow`,
 `SoakAlarmTolerance` and `SoakLossCeiling` in `internal/lab/soak.go`), and the alarm history reaches back
-30 days, so a verdict is read within 30 days of the soak's start. It gets stricter as the
+30 days, so a soak verdict is read within 30 days of the soak's start. It gets stricter as the
 platform raises more alarms about itself: it judges by whatever the platform alarms on today.
 
 **The record** is one file per build, `docs/src/content/soak-records/<build>.md`, so the release's
-notes can link the soak it passed. Its front matter carries the facts and its body the verdict in
+notes can link the soak it passed. Its front matter carries the facts and its body the soak verdict in
 words (a failure lists its reasons):
 
 ```md
@@ -223,7 +260,7 @@ host: soak-1 linux/amd64 16 cpu machine-id:3f2a9c1d7b40
 ---
 ```
 
-The host is the machine the verdict ran on (name, platform, cores and a short digest of its
+The host is the machine the soak verdict ran on (name, platform, cores and a short digest of its
 machine id, never the id), which on a soak host is the machine the soak ran on.
 
 ## Binaries on the release

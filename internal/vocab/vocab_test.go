@@ -114,16 +114,16 @@ func TestConsoleNavSpeaksTheVocabulary(t *testing.T) {
 	}
 }
 
-// Every health verdict value is a term.
-func TestEveryVerdictIsATerm(t *testing.T) {
-	verdicts := MustLoad().Verdicts()
+// Every health value is a term.
+func TestEveryHealthIsATerm(t *testing.T) {
+	healths := MustLoad().Healths()
 	for v := health.Healthy; v <= health.Outage; v++ {
-		if _, ok := verdicts[v.String()]; !ok {
-			t.Errorf("verdict %q has no term", v)
+		if _, ok := healths[v.String()]; !ok {
+			t.Errorf("health %q has no term", v)
 		}
 	}
-	if len(verdicts) != int(health.Outage)+1 {
-		t.Errorf("terms.yaml names %d verdicts, health has %d", len(verdicts), int(health.Outage)+1)
+	if len(healths) != int(health.Outage)+1 {
+		t.Errorf("terms.yaml names %d healths, health has %d", len(healths), int(health.Outage)+1)
 	}
 }
 

@@ -107,6 +107,25 @@ func TestAnIdlePassTellsNothing(t *testing.T) {
 	}
 }
 
+// TestSkippedBlockDaysAreANoteAtWarning: the fold's skipped series-days are
+// told at the canonical "warning" severity, the one tellHousekeeping maps to
+// slog.LevelWarn and a log_line row accepts.
+func TestSkippedBlockDaysAreANoteAtWarning(t *testing.T) {
+	rep := retentionReport{Blocks: storage.BlockCompaction{Skipped: 3, Through: time.Date(2026, 11, 11, 0, 0, 0, 0, time.UTC)}}
+	var got *housekeepingNote
+	for _, n := range retentionNotes(rep, nil) {
+		if strings.Contains(n.Message, "without folding into blocks") {
+			got = &n
+		}
+	}
+	if got == nil {
+		t.Fatal("skipped series-days told no note")
+	}
+	if got.Severity != "warning" {
+		t.Errorf("skipped note severity = %q, want \"warning\" (tellHousekeeping maps only that to slog.LevelWarn)", got.Severity)
+	}
+}
+
 // TestPartitionNotesTellTheBootsCreations: the boot's partition check tells
 // the partitions it made, and nothing when it made none; a server with no
 // platform component maps any note to no line.
@@ -181,11 +200,19 @@ type housekeepingFixture struct {
 
 func newHousekeepingFixture(t *testing.T) housekeepingFixture {
 	t.Helper()
+	return newHousekeepingFixtureAt(t, time.Time{})
+}
+
+// newHousekeepingFixtureAt is the fixture with the database clock stopped at
+// at (the real instant when zero), so a run across UTC midnight cannot roll
+// another day's partitions under the test (#2375).
+func newHousekeepingFixtureAt(t *testing.T, at time.Time) housekeepingFixture {
+	t.Helper()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
 	ctx := context.Background()
-	dsn := storagetest.NewDSN(t)
+	dsn := stoppedDSN(t, at)
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
@@ -281,7 +308,18 @@ func (f housekeepingFixture) serverEvents(t *testing.T) int {
 // and leaves a line on its own carrying the retention facility and the
 // count. Neither raises an event.
 func TestTheServersHousekeepingNarratesOnItsComponent(t *testing.T) {
-	f := newHousekeepingFixture(t)
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	storagetest.AtEachMidnight(t, serversHousekeepingNarratesOnItsComponent)
+}
+
+func serversHousekeepingNarratesOnItsComponent(t *testing.T, at time.Time) {
+	f := newHousekeepingFixtureAt(t, at)
+	// The migration rolled the real days; roll the pinned clock's too.
+	if _, err := f.gw.EnsureMetricPartitions(f.ctx); err != nil {
+		t.Fatalf("roll the pinned days: %v", err)
+	}
 	f.plantOldDebug(t, 7)
 	var today time.Time
 	if err := f.conn.QueryRow(f.ctx, `select date_trunc('day', now() at time zone 'UTC') at time zone 'UTC'`).Scan(&today); err != nil {

@@ -1,328 +1,144 @@
 ---
 title: UI
-description: "The operator console: one renderer library in two composition modes, reads through views, and an identity-based information architecture."
-# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
+description: "How the operator console is built: a SolidJS SPA over the generated client, flat identity routes grouped by a sidebar, detail views and blades, and reads that poll or follow a view binding."
 sidebar:
-  hidden: true
+  order: 51
+  badge:
+    text: Partial
+    variant: note
 ---
 
-The console is one renderer over the same views the rest of the platform reads. This page is the renderer / page / dashboard model and the information architecture; the stack and the concrete primitives are the [design system](/contributing/design-system/).
+The console is a single-page app the server embeds and serves at `/web`. It reads and writes only
+through the [API](/architecture/api/), with the typed client `make gen` writes from the OpenAPI
+document, so it can do nothing a script with the same token could not. The stack and the components it
+is assembled from are the [design system](/contributing/design-system/); using it is the
+[operator](/operator/) and [admin](/admin/) sections. This page is how it is put together.
 
-:::note[What shipped vs the model below]
-Roughly 22 live pages (fleet, catalog, values, admin, plus the shell) ship as **config-driven
-`ListShell` pages (with `FlatList` / `TreeList` bodies) over the typed CRUD client**, not as the
-`ViewResult` renderer described next: a fleet list page is CRUD over a scoped resource. The
-**Explore** page (`/explore`, #826 and #861, which retired the #633 canvas) is the first
-surface that is neither: an outline of locations over one projection (`GET /views/fleet`) and
-the CRUD lists, and the detail views it opens. Its core is one pure model,
-`web/src/lib/outline.ts`, which nests the locations, puts each system on the location where it
-sits, folds single-child chains, counts what a row holds in the catalog's own type labels,
-and counts systems by verdict rather than rolling them up worst-wins; `components/Outline.tsx`
-renders it as an ARIA tree, and `lib/location_type_graph.ts` reads what may sit under a
-location from `allowed_parent_types`, never from a type's name (ADR-0137). **Platform health**
-(`/platform`, #1644) is the second: Omniglass watching itself, one page over the platform
-projection (`GET /views/platform`) with the running build, its uptime, the platform system's
-verdict, a panel set per server (Requests, Ingest, Queues, Retention, #1645: each key's current
-figure beside its last hour, a window's figure only while that window is current, ranked routes as the server cut them, a panel flagged only by an open
-alarm on its keys) and a row per outpost of its platform figures, each row opening onto the outpost's
-platform component. Its panels and columns are the groups the view returns, named with each key's
-catalog description, so the page holds no key list. Above the table it draws **where work is lost**
-(#1646): the hops the view returns, each read from the same three delivery keys with one loss rule,
-and a hop's explainer naming its keys and its components (`components/PipelineFlow.tsx`). With a
-simulator connected the page gains a closed-loop section (#1647, `GET /views/platform/simulation`):
-each outpost's hops as loss ratios over a sliding window, with impaired, restarted and warming-up
-readings, its protocols and its simulated devices. The views model, the renderer library, and composable
-dashboards remain the intended **read side** for the analytical surfaces (alarms, sample
-history, the cascade view, fleet dashboards), not built yet.
-Realized shell: the [design system](/contributing/design-system/); operating it: the
-[operator guide](/operator/); per-slice breakdown:
-[implementation status](/architecture/status/).
-:::
+## The stack
 
-## The renderer contract: ViewResult and the views BFF
-
-:::design[Target design: widgets over the binding, tracked in #1826]
-A coded page reads through its typed routes; a **dashboard widget** reads through a
-[view binding](/architecture/views/) (the read-side BFF), CRUD for writes, and the operator never queries
-raw tables. A binding answers typed series or rows per primitive, so one widget renders every binding
-of its primitive: adding a view never adds a bespoke renderer.
-:::
-
-The **dense-ops layout is an architectural pattern**: one counts line over the full set, keyboard
-chip filter, tree/list table, click-row blade plus an addressable page, the counts staying whole
-while the filter narrows the body. The list tier realizes it as the config-driven `ListShell` and
-its primitives ([design system](/contributing/design-system/)); the analytical surfaces will reuse it.
-
-## Tooltips, not prose
-
-An operator surface carries no inline explanatory text (ADR-0127): every explainer rides its
-label's `(i)` tooltip (`InfoTip`; `Eyebrow` for section labels), so the pedagogy doctrine is
-satisfied by hover and the page itself stays scannable. The standard-editor's vocabulary
-(choices, alternates, accepted types) never leads an operator view, and a system's body
-renders components-first: one row per component with its slot in a column, slot-level
-chrome only where it says something a column cannot (a quorum beyond one, a shortfall, an
-unstaffed slot). The platform-wide sweep of the older pages is tracked in #784.
-
-**A detail view is one per system, its place a card of context** (ADR-0139). Systems are the
-unit Omniglass monitors; locations are folders and metadata; components are pieces of systems.
-A system's view is its location card (type, tags, the location's own panel) above the system card
-(verdict, since, standard, size, slot arithmetic only while short) with three tabs as `?tab=`
-URL facts (`TabRail`): Overview (why, the components, the standard's declared map with live
-occupant state on each marker, ADR-0128, its labels laid out in pixels so none clips or collides, #1072, the data), Activity (the history, the events, the
-logs), and Configure (the one form). A location holding exactly one system lands on it; a location
-holding none or several keeps its own view, a brief card per system and the outline rooted
-there; a component's view carries its location card, marked as its own or its system's. Its Vitals
-card reads each metric's unit off the effective-metrics read (the metric type's, one source, #1550),
-so an uptime reads `306 s`; a float keeps at most two decimals (`lib/component_leaf.ts`,
-`vitalValueText`) and the raw value sits on the title. The
-model behind it is pure, in `lib/detail.ts` (where a location lands, the path that names each
-location once, the slots a component fills) and `lib/outline.ts` (`rootAt`). Since ADR-0129
-these faces ARE the identity routes' default, and since #800 the ONLY faces: one way to
-look, one altitude rule (Explore drills the location tree, systems open full screen,
-components open in blades), editing through the one `EntityForm` (ADR-0137). The side
-panel is the glance (verdict, why, context, identity and tags) and the configuration
-panels stay on Configure (ADR-0139). The classic detail face is retired; `?view=detail` is
-ignored and `?edit=1` lands Configure already editing.
-
-While a blade is open the shell (sidebar, top bar, banners and the routed page, the
-`data-app-shell` root) is `inert`, so keyboard focus, the accessibility tree and pointer clicks
-reach only the top blade; blades, toasts and the command palette portal outside that root and stay
-live.
-
-## Name-shaped addresses (#759, #853)
-
-A detail view accepts a name-shaped address as an operator convenience, resolved to the UUID and kept in the path:
-
-```
-/components/mic-1
-/systems/board-meeting
-/locations/hq
-```
-
-**A name resolves only when it names exactly one entity** (#627 allows duplicate names across placements); if ambiguous, the page shows "More than one [noun] has this name; open it from Explore" and does not redirect, guiding the operator to Explore where they can disambiguate by placement.
-
-## Handing the console to omnibot
-
-Each prompt hands [omnibot](/architecture/ai/) the page the person is on, as a reference, never as
-what the console rendered (#2162): its route and arguments, with a detail page's uuid replaced by its
-entity's name or address (the `Page` primitive's `name`). The panel shows it above the composer and
-reads it at send time, so a prompt follows the person; dismissing it leaves it out of one prompt. A uuid
-is never a subject. The per-row gathering this replaced (alt-click stamps, a tray, a hand-over key) is
-retired ([ADR-2162](/architecture/decisions/#adr-2162-omnibot-is-handed-the-page-not-what-the-person-gathers)).
-
-## One renderer library, two composition modes
-
-::::design[Target design: the renderer library and composable dashboards, tracked in #1826]
-Neither "every screen is hand-coded" nor "everything must be a dashboard":
-
-- **Renderer library** (coded once): `stat`, `table`, `status-grid`, `timeline`, `heatmap`,
-  `line` / `area`. Each takes a **binding's series or rows plus a field-mapping** (which field is the
-  value / label / time / series key); the set is closed but grown reactively.
-
-  :::caution[Open question]
-  The field-mapping contract between a binding's result and each renderer (the field roles per
-  renderer type).
-  :::
-- **Coded pages** compose renderers plus custom interaction: the built-in information architecture.
-- **Composable dashboards** (config-driven): operator-built grids, each
-  **widget = a [view binding](/architecture/views/) + a renderer + a field-mapping + params**, no
-  code per dashboard.
-  Dashboard-level params flow into widget view-params, so one "system overview" dashboard works
-  for any system.
-
-  :::caution[Open question]
-  The composable-dashboard schema: the widget placement grid, the view binding, and the dashboard
-  params.
-  :::
-
-  :::caution[Open question]
-  Whether dashboards are themselves resources (carrying the `official` boolean, saved like views) or
-  a thin layer over saved views.
-  :::
-::::
-
-## Coded pages keep typed reads; dashboards read views
-
-A built-in page reads through its **typed routes** (a component's Alarms panel reads
-`GET /components/{name}/alarms`); a view exists for the consumer no typed route can be written for
-in advance, a dashboard widget pointed at any system or an agent's query
-([ADR-1830](/architecture/decisions/#adr-1830-a-view-binding-reads-its-history-and-follows-the-tail-from-the-same-cursor)).
-A coded page may still read samples through a binding where it wants the live tail, as Platform health's
-sparklines do. Composable dashboards are the customization layer over the complete coded console.
-
-## Live updates: polling by default
-
-Live data is **query polling** (a refetch interval; slow-changing config uses a long stale time),
-except where a surface reads samples through a [view binding](/architecture/views/#bindings-the-scoped-read-of-the-sample-store):
-`createViewBinding` reads its history once and folds in the rows the page's one `/views:watch` stream
-carries, which Platform health's sparklines do (#1830).
-
-::::design[Views and the SSE live relay, tracked in #523; the unit catalog is #430]
-A read can also **stream over the view layer (a server-side SSE relay)** where latency or fan-out
-earns it. Config-dependent presentation (a severity level's name to label and color) resolves
-client-side from the config view (built today over polling: every severity chip reads the
-`/severity-levels` catalog, #917); a sample value converts on read to the operator's preferred
-display unit via a future unit catalog keyed by the
-[property_type](/architecture/properties/)'s canonical unit, so storage stays single-unit.
-
-:::caution[Open question]
-Which high-frequency surfaces move from polling to the SSE relay, and what latency earns it.
-:::
-::::
-
-## Configuration UIs
-
-CRUD forms over the typed resource API, one per primitive (components, templates, types, tags,
-rules, config, groups, schedules, severity levels, the IAM resources). The type catalogs each
-hold their own page: location types (CRUD; Catalog, under Locations: Types) and secret types
-(read-only, at `/secret-types` by URL with no subrail entry), the former tabbed Types page having split with the
-system and component kinds already moved to Standards and Products ([build log](/architecture/build-log/)).
-Editing a setting is editing **[a declared value](/architecture/variables/)**, an audited mutation, not a
-separate prop store ([audit](/architecture/audit/)).
-
-The standout is the **rule-authoring page**. Its **Expr editor** for a rule's criteria and a calc
-rule's expression is built (#975), the prepared-input contract surfaced
-([expressions](/architecture/expressions/)).
-
-:::design[The rest of the rule-authoring surface (ADR-0050); the AI seam is ADR-0001]
-- a **live blast-radius preview** (which entities a scope selects, which samples a rule would
-  have fired on);
-- the **AI-suggestion seam** ([AI](/architecture/ai/)): AI may propose a rule pre-filled with
-  provenance; the operator edits and approves (the ordinary audited create). AI never saves a rule
-  itself.
-:::
-
-## Exploration UIs
-
-:::design[Target design: the exploration surfaces over views, tracked in #523]
-Coded pages with rich interaction, all reading through views:
-
-- **The cascade resolve view** (the standout): "why did this value win", from the
-  [cascade](/architecture/cascade/) resolve output: effective value, winning source, the ordered
-  shadowed bindings it beat.
-- **Sample history**: `line` or `heatmap` over a time range, stale / unknown surfaced
-  ([time](/architecture/time/)).
-- **Alarm drill-down**: the alarm, its triggering sample and history, the actions it fired, and the
-  acknowledgement (built today on the component's Alarms panel, not on a drill-down of its own).
-  A resolve control is **not** part of this: it was refused, with a reason, in
-  [ADR-0109](/architecture/decisions/#adr-0109-an-alarm-carries-an-acknowledgement-and-not-a-snooze-or-a-resolve).
-  Snooze, refused there until there was a notification to suppress, is its own feature (#1318).
-- **Fleet and topology**: navigable location / system / component trees,
-  [health](/architecture/health/) (`status-grid`) at each level.
-- **Event exploration**: the event log by entity / time / category, with the audit trail.
-:::
+SolidJS with `@solidjs/router`, TanStack Query for every server read, Kobalte for the interactive
+primitives behind the in-house wrappers in `web/src/components/ui/`, and daisyUI 5 on Tailwind 4 for
+styling. The theme is dark-first on the brand palette (teal `#21cab9` on navy `#080c16`), and a
+component names semantic tokens only, never a hard-coded color. Logic that decides what a page shows
+lives in pure modules under `web/src/lib/` (the outline, the detail landing, the edit URL), unit-tested
+without a browser, and the components render what they return.
 
 ## Information architecture
 
-Two layers, deliberately decoupled:
+Two layers, deliberately separate:
 
-1. **Routes are flat and identity-based.** Every entity page is a top-level path (`/systems`,
-   `/components`, `/templates`, `/config`); a URL addresses the *entity*, never its position in the
-   menu, so deep links stay stable however the menu is reorganized. No taxonomy-nested routes, no
-   redirects to maintain.
-2. **The sidebar groups those flat routes into clusters for browsing**: Home, Explore (the one
-   door into the fleet, #826: its outline lists every location, system and component, #861),
-   Dashboards, Alarms, Outposts, Values (variables, secrets, config, files),
-   Catalog (a single entry opening the catalog shell, next), Learn, Admin (users, roles,
-   groups, audit, and the Settings leaf). A cluster is pure presentation, not a destination:
-   rearrangeable and user-customizable without touching a route.
+1. **Routes are flat and name the entity.** `/systems/{id}`, `/components/{id}`, `/products`,
+   `/variables`: a URL addresses the thing, never where the menu files it, so a link survives any
+   rearrangement of the sidebar.
+2. **The sidebar groups those routes for browsing** (`web/src/lib/nav.ts`): Home, Explore, Alarms,
+   Values (variables, secrets, files), Catalog, and Admin (users, roles, user groups, audit, outposts,
+   platform health, settings), plus Simulation while a simulator is connected. A group is presentation,
+   not a destination. An entry is shown only to a caller whose permissions open it, from the same
+   check the route itself makes.
 
-**A breadcrumb crumb is a link.** The `Breadcrumb` primitive renders each crumb that has a destination as a
-real `<a href>` (the router's `A`) inside `<nav aria-label="Breadcrumb">`: a click navigates in-app, a
-middle-click opens a tab, the address can be copied, a screen reader announces a link in a navigation
-landmark, and the target is in the DOM. A caller hands the crumb an `href`, the address it already knows;
-the last crumb, the current page, has none and renders as plain text marked `aria-current="page"`.
+Every sidebar entry is one word, with two exceptions whose page has no good single word, User groups
+and Platform health (`nav.test.ts` holds it). **Catalog** is one entry that opens a shell: a subrail
+grouped by the fleet noun each catalog serves (Telemetry, Actions, Components, Systems, Locations,
+Metadata) beside the routed page, and an overview at `/catalog` with a card per group
+([ADR-0083](/architecture/decisions/#adr-0083-the-catalog-rail-is-sectioned-by-the-estate-noun-each-registry-serves)).
+The rule its grouping teaches: Telemetry is what you receive, Actions is what you send or run.
 
-**The mode rides the URL too**
-([ADR-0120](/architecture/decisions/#adr-0120-the-edit-face-is-a-url-fact) established the rule;
-[ADR-0132](/architecture/decisions/#adr-0132-configure-is-the-one-deep-editor) retargets it):
-`?edit=1` beside a fleet address lands the detail view's Configure tab already editing, and beside
-an identity blade's id param (`?u=<id>&edit=1`) opens that blade editing, both behind the same
-`<resource>:update` permission the Edit button is behind; without it the link lands read-only.
-Leaving edit (Cancel or Save) strips the param via history replace, so a refresh mid-edit keeps the
-mode while Back never re-enters an edit the operator left. One hook (`web/src/lib/editurl.ts`) owns
-both directions, the create-as-route and row-pencil handoffs are those URLs rather than in-memory
-signals, and the name-to-uuid redirect keeps its query string so a name-shaped edit link survives
-resolution. Every URL-reachable state is also a state the
-[docs screenshot pipeline](/contributing/docs-with-everything/) can declare and capture, which is
-what retired the one-shot handoffs.
+Endpoints and tasks are not sidebar entries: an endpoint is a panel on its component, a task a panel on
+its outpost.
 
-**A blade or detail view edit keeps track of the edit.** The edit slot (`createEditSlot`, hosted by the
-blade stack and by the Configure face) is the one place that knows an editor is open, so three rules
-hang off it (#854):
+## Explore and the detail views
 
-1. **Invalidation set.** Deleting a component from its blade refreshes everything that read it: the
-   components list, the fleet view, the system slots and health reads (prefix keys, so every system's
-   copy), and the verdict read. A component that staffs a slot is refused by the server (409,
-   referenced); the blade stays open and says why, rather than closing on a delete that did not happen.
-2. **Error placement.** A failed Save keeps the editor open and the slot remembers the reason
-   (`saveError`). The host shows it in its footer beside Save (`SaveError`, in the blade footer and the
-   Configure footer), where the operator's eyes are, not at the top of a long form. A save that
-   rejects is never swallowed silently.
-3. **Dirty-leave prompt.** Switching tabs away from Configure with drafts that differ from the row
-   asks "Discard your unsaved changes?" (`lib/leave_guard.ts`, asked by `TabRail`). Confirming
-   discards the drafts; cancelling stays on Configure with them intact. The guard covers the form's
-   own drafts, a component's staged memberships (a picked primary, a removed chip) included; a
-   router-wide guard (a link out of the page, closing the tab) is not built.
+**Explore** (`/explore`) is the one door into the fleet: an outline of locations with the systems that
+sit at each, drawn from one projection, `GET /views/fleet`, rather than a component row per mark. Its
+model is one pure function (`web/src/lib/outline.ts`) that nests the locations, folds single-child
+chains, and counts systems by health; what may sit under a location is read from its type's
+`allowed_parent_types`, never from a type's name.
 
-A changed route id resets the edit too: each host keys its Configure face on the id
-(`<Show when={id()} keyed>`), so another location, system or component is a new face with a fresh slot and
-drafts, never the previous entity's half-typed edit under the new page.
+A **detail view** is one per system, with its location as context
+([ADR-0139](/architecture/decisions/)): a location card above the system card, then tabs that are URL
+facts (`?tab=`), Overview, Activity, Timeline, and Configure for a caller who may change it. A
+location holding exactly one system lands on that system; a component's view carries its location
+card. Where a view lands is pure (`web/src/lib/detail.ts`).
 
-**Catalog is one rail entry opening a shell.** Clicking Catalog opens a two-column catalog area: a
-grouped subrail (Telemetry, Actions, Components, Systems, Locations, Metadata) whose entries
-navigate to the catalogs' own canonical flat routes (`/products`, `/metrics`, ...), each real
-page rendering in the pane beside it, and an **Overview landing** at `/catalog` with one card per
-group and live catalog counts, the [learning-tool](/contributing/learning-tool/) answer to "what
-is all this". Subrail and cards derive from one group table judged through the same permission
-filter the rail uses, so a gated entry drops from both surfaces at once and a group whose entries
-are all gated away disappears with its header; secret types holds no subrail entry at all
-(`/secret-types` stays routed and gated, rendering in the pane). The naming rule
-([ADR-0083](/architecture/decisions/#adr-0083-the-catalog-rail-is-sectioned-by-the-estate-noun-each-registry-serves))
-carries into the subrail: a group is named for the fleet noun it serves, an entry keeps the
-catalog's own word, and where the catalog's only word is "type" the entry is Types with the
-group completing the sentence (Catalog, under Locations: Types). The organizing line the groups
-teach: **Telemetry is what you receive, Actions is what you send or run**; an event is a record of
-a happening (caught from the fleet or caused by the platform), never an outbound message, which
-is why Events sits in Telemetry while Rules, Commands, and Notifications (#618) sit in
-Actions, with the action rules that say when a message is sent and the targets it goes to beside
-them (#1346). Targets is the one Actions entry off the read floor: `notification_target` is a
-sensitive resource, so only an admin sees it.
+A **blade** is the right-hand panel a list row opens (`BladeStack`). A fleet blade renders the detail
+view's own body, so there is one way to look at a thing. While a blade is open the shell behind it is
+`inert`: focus, the accessibility tree and clicks reach only the top blade.
 
-**Values is its own top-level group**: values set on fleet entities and resolved
-down the cascade, a distinct kind of thing from the entities themselves. **Config is the CI store** (desired
-configuration, optionally observed back to detect drift and reconcile), distinct from platform
-Settings (preferences: severity scales, schedules, retention, defaults) and Variables (free
-interpolated values, no observed side); the full split is
-[variables, secrets, and declared values](/architecture/variables/).
+**A name-shaped address** (`/web/components/mic-1`) resolves to the uuid and redirects, keeping its query
+string, when it names exactly one visible entity; when it names several, the page says so and points
+to Explore rather than guess.
 
-**Explore holds the fleet entities**: locations, systems, and components, reached through its
-outline of locations. **Outposts**, the collection daemons, are infrastructure rather than fleet
-entities, and enrolling one is an admin's job, so their entry sits in Admin (live, gated on
-`outpost:read` plus ABAC scope; ADR-1767). **Endpoints and tasks are not nav items**: an endpoint is a
-panel on a component, a task a panel on an outpost, facets of the owning entity's detail page.
+## The edit lives in the URL
 
-Admin is the renamed Settings group: Users, Roles, User groups, Audit, Outposts, Status (the Platform
-health page, #1767: whether Omniglass itself is well is administration, not fleet work, so it sits
-here behind the same `outpost:read` gate as Outposts, whose rows it reads), plus the live Settings leaf, the
-platform-preferences page. **Every sidebar tab is one word**, a group, a leaf and a group's child
-alike (`nav.test.ts` holds it); a tab's word names the door, and the page it opens may carry a
-longer title.
+`?edit=1` on a detail address lands Configure already editing, and on a blade's address opens it
+editing, behind the same `<resource>:update` permission as the Edit button
+([ADR-0120](/architecture/decisions/#adr-0120-the-edit-face-is-a-url-fact),
+[ADR-0132](/architecture/decisions/#adr-0132-configure-is-the-one-deep-editor)). Leaving the edit
+strips the parameter with a history replace, so a refresh keeps the mode and Back never re-enters an
+edit someone left (`web/src/lib/editurl.ts`). Every state a URL reaches is one the
+[docs screenshot pipeline](/contributing/docs-with-everything/) can capture.
 
-**Home today** (`/`) is a row of tiles, each a scoped read of the platform rather than a
-placeholder: Locations, Systems and Open alarms (the last two from `GET /views/fleet`, whose
-`open_alarms` counts the alarms open on the components the caller may read), Outposts (the outpost
-list, shown to a caller who can read outposts) and Platform (the platform system's verdict and the
-outposts not up, same gate). Locations, Systems and Outposts open their lists; Open alarms is a plain
-figure until the alarm list exists. A tile that cannot count says why (loading, an error, a
-permission it needs), never a dash.
+One edit slot per host knows an editor is open, and three rules hang off it: a delete invalidates every
+read that held the row, a failed save keeps the editor open with the server's reason beside Save, and
+leaving Configure with unsaved drafts asks first (`web/src/lib/leave_guard.ts`). A changed route id
+keys a fresh Configure face, so one entity's half-typed edit never shows under another.
 
-:::design[The Home situation room and the Dashboards tier, tracked in #523]
-**Home is distinct from Dashboards.** Dashboards monitor the *fleet*; Home monitors the *monitor*:
-config lifecycle (stale templates), control-plane health (rules failing to evaluate, samples dropped
-with no matching rule), proactive suggestions. A dashboard cannot model that; "Overview" is the
-default dashboard's name, not the landing.
+## Tooltips, not prose
+
+An operator surface carries no explanatory paragraphs under its labels
+([ADR-0127](/architecture/decisions/)): every explainer rides its label's `(i)` tooltip (`InfoTip`),
+reachable by keyboard as well as hover, so the page teaches on demand and stays scannable.
+
+## The renderer contract: ViewResult and the views BFF
+
+A page built into the console reads through its **typed routes**: a component's alarms panel reads
+`GET /components/{name}/alarms`. A small set of composed reads, the views BFF, serve a screen whose
+shape no row read gives: `GET /views/fleet` for Explore and Home, `GET /views/platform` for Platform
+health, `GET /search` for the `⌘K` command palette.
+
+Where a surface draws samples, it binds a [view binding](/architecture/views/), whose answer is a
+`ViewResult`: typed series per entity and key for a metric or a property, a page of rows for events and
+logs. `createViewBinding` (`web/src/lib/binding.ts`) reads the history through the query cache, then
+folds in the live rows from the page's one `/views:watch` stream, so a chart moves as the server
+records rather than on a poll. Platform health's sparklines are drawn this way.
+
+::::design[The renderer library and composable dashboards, tracked in #1826]
+One renderer library, two ways to compose it:
+
+- **Renderers**, coded once (a stat, a table, a status grid, a timeline, a line), each taking a
+  binding's series or rows and a field mapping, so adding a view never adds a renderer.
+- **Coded pages** compose them with their own interaction: the console as shipped.
+- **Dashboards**, built by an operator with no code: a canvas of widgets, each a binding, a renderer,
+  a field mapping and parameters, with dashboard parameters flowing into every widget so one dashboard
+  points at any system.
+
+:::caution[Open question]
+The field-mapping contract between a binding's result and each renderer.
 :::
+::::
 
-The theme is **dark-first** (the NOC aesthetic) on the brand palette (teal `#21CAB9`, navy
-`#080c16`), semantic tokens only, no hardcoded colors in components.
+## Live data: polling, and the tail where it matters
+
+A read that changes is refetched on an interval by TanStack Query; a slow-changing one (a catalog, a
+setting) keeps a long stale time. A surface that draws samples follows the view binding's stream
+instead. A configured presentation, such as a severity level's label and color, resolves in the
+browser from its catalog read, so a result never bakes it in.
+
+## Handing the console to omnibot
+
+[omnibot](/architecture/ai/) opens in a panel from the top bar or the command palette. Each prompt
+hands it the page the person is on as a reference, never what the console rendered: its route and
+arguments, with a detail page's uuid replaced by the entity's name or address. The panel shows that
+reference above the composer and reads it at send time, so a prompt follows the person, and dismissing
+it leaves it out of one prompt
+([ADR-2162](/architecture/decisions/#adr-2162-omnibot-is-handed-the-page-not-what-the-person-gathers)).
+Each turn's reasoning and tool calls fold into one collapsed block, a tool with a renderer shows its
+result the way the console shows that thing elsewhere, and a call waiting on the person is a confirm
+card ([ADR-1167](/architecture/decisions/#adr-1167-the-omnibot-panel-shows-each-call-through-a-renderer-registry-over-a-generic-card)).
+
+## Home
+
+Home (`/`) is a row of tiles, each a real scoped read: Locations, Open alarms, Need attention and
+Systems from the fleet projection, and Outposts and Platform for a caller who may read outposts. A tile
+opens the page behind it, and one that cannot count says why (loading, an error, a permission it
+lacks), never a dash.

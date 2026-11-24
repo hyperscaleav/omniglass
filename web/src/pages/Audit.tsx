@@ -1,9 +1,12 @@
 import { For, Show, createSignal, onMount, type JSX } from "solid-js";
+import Page from "../components/Page";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import Button from "../components/Button";
 import KVStacked from "../components/KVStacked";
 import { type AuditEvent, AUDIT_PAGE, AUDIT_LOADING_ROWS, auditFilterKeys, listAuditLog, actorLabel, accountableLabel, resourceLabel, channelOf } from "../lib/audit";
-import { diffFields, type DiffRow } from "../lib/auditdiff";
+import { diffFields, humanizeField, isTimestamp, type DiffRow } from "../lib/auditdiff";
+import Time from "../components/Time";
+import Tooltip from "../components/ui/Tooltip";
 
 // Audit: the read-only audit trail, now a config over the shared FlatList (the flat
 // sibling of the inventory TreeList, both wearing ListShell's chrome). Every
@@ -44,25 +47,20 @@ const CHANNEL_HINT =
 // beside an impersonator: the person is accountable, the agent is who acted.
 const AgentTag = (p: { agent?: string }) => (
   <Show when={p.agent}>
-    <span class="badge badge-soft badge-secondary badge-xs whitespace-nowrap" title="The agent that acted on this person's behalf, from its agent token">agent {p.agent}</span>
+    <Tooltip as="span" tabIndex={0} class="badge badge-soft badge-secondary badge-xs whitespace-nowrap" content="The agent that acted on this person's behalf, from its agent token">agent {p.agent}</Tooltip>
   </Show>
 );
-
-const when = (ts: string): string => {
-  const d = new Date(ts);
-  return isNaN(d.getTime()) ? ts : d.toLocaleString();
-};
 
 // The trail columns. The accountable actor is the human who acted (the impersonator
 // when impersonating), tagged with the identity they assumed ("admin as bob").
 const columns: FlatColumn<AuditEvent>[] = [
-  { key: "when", label: "When", width: "190px", cell: (e) => <span class="whitespace-nowrap tnum text-xs text-base-content/60">{when(e.ts)}</span> },
+  { key: "when", label: "When", width: "190px", cell: (e) => <Time iso={e.ts} class="whitespace-nowrap text-xs text-base-content/60" /> },
   {
     key: "who", label: "Who", cell: (e) => (
       <span class="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm">
         <span class="font-data">{accountableLabel(e)}</span>
         <Show when={e.real_actor}>
-          <span class="badge badge-soft badge-warning badge-xs whitespace-nowrap" title="Acted while impersonating this user">as {actorLabel(e)}</span>
+          <Tooltip as="span" tabIndex={0} class="badge badge-soft badge-warning badge-xs whitespace-nowrap" content="Acted while impersonating this user">as {actorLabel(e)}</Tooltip>
         </Show>
         <AgentTag agent={e.agent} />
       </span>
@@ -74,7 +72,7 @@ const columns: FlatColumn<AuditEvent>[] = [
         <span class="flex flex-col items-start gap-0.5">
           <span data-testid="audit-channel" class={`badge badge-sm ${channelClass(e.channel!)} font-data`}>{e.channel}</span>
           <Show when={e.client}>
-            <span class="font-data text-[11px] text-base-content/50 truncate self-stretch" title={e.client}>{e.client}</span>
+            <Tooltip as="span" class="font-data text-[11px] text-base-content/50 truncate self-stretch" content={e.client}>{e.client}</Tooltip>
           </Show>
         </span>
       </Show>
@@ -82,7 +80,7 @@ const columns: FlatColumn<AuditEvent>[] = [
   },
   { key: "action", label: "Action", width: "120px", cell: (e) => <span class={`badge badge-sm ${verbClass(e.verb)} font-data`}>{e.verb}</span> },
   { key: "resource", label: "Resource", width: "170px", cell: (e) => <span class="font-data text-xs text-base-content/70">{e.resource}</span> },
-  { key: "id", label: "Id", cell: (e) => <span class="font-data text-[11px] text-base-content/40" title={e.resource_id && e.resource_id !== resourceLabel(e) ? e.resource_id : undefined}>{resourceLabel(e)}</span> },
+  { key: "id", label: "Id", cell: (e) => <Tooltip as="span" tabIndex={0} class="font-data text-[11px] text-base-content/40" content={e.resource_id && e.resource_id !== resourceLabel(e) ? e.resource_id : undefined}>{resourceLabel(e)}</Tooltip> },
 ];
 
 // The state-to-style vocabulary for a diff row: an added field tints the After
@@ -97,6 +95,19 @@ const diffCellClass = (row: DiffRow, side: "before" | "after"): string => {
 // A value cell keeps a JSON value's newlines and breaks a long unbroken one
 // (a base64 blob, a fingerprint) inside its column.
 const VALUE_CELL = "font-data text-xs align-top whitespace-pre-wrap wrap-break-word";
+
+// DiffValue is one side of a changed field: an instant reads as a date in the
+// console's own format (the exact RFC 3339 string on hover), anything else as the
+// recorded text; an absent side reads "(none)".
+function DiffValue(p: { v?: string }): JSX.Element {
+  return (
+    <Show when={p.v !== undefined} fallback="(none)">
+      <Show when={isTimestamp(p.v!)} fallback={p.v}>
+        <Time iso={p.v!} absolute />
+      </Show>
+    </Show>
+  );
+}
 
 // AuditDetail is the drawer body: who did what and when, then the field-level
 // before/after diff over the row images the write recorded. An auth event (no
@@ -114,7 +125,7 @@ function AuditDetail(p: { e: AuditEvent }): JSX.Element {
   return (
     <div class="flex flex-col gap-4">
       <div class="grid grid-cols-2 gap-3 text-sm">
-        <KVStacked label="When" value={<span class="tnum text-xs">{when(e.ts)}</span>} />
+        <KVStacked label="When" value={<span class="text-xs"><Time iso={e.ts} absolute /></span>} />
         <KVStacked
           label="Who"
           value={
@@ -128,7 +139,7 @@ function AuditDetail(p: { e: AuditEvent }): JSX.Element {
           }
         />
         <KVStacked label="Action" value={<span class={`badge badge-sm ${verbClass(e.verb)} font-data`}>{e.verb}</span>} />
-        <KVStacked label="Resource" value={<span class="font-data text-xs" title={e.resource_id || undefined}>{e.resource}{resourceLabel(e) ? ` ${resourceLabel(e)}` : ""}</span>} />
+        <KVStacked label="Resource" value={<Tooltip as="span" tabIndex={0} class="font-data text-xs" content={e.resource_id || undefined}>{e.resource}{resourceLabel(e) ? ` ${resourceLabel(e)}` : ""}</Tooltip>} />
         <KVStacked
           label="Channel"
           hint={CHANNEL_HINT}
@@ -187,12 +198,12 @@ function AuditDetail(p: { e: AuditEvent }): JSX.Element {
                 <For each={rows}>
                   {(r) => (
                     <tr>
-                      <td class="font-data text-xs align-top wrap-break-word">{r.key}</td>
+                      <td class="text-xs align-top"><Tooltip as="span" tabIndex={0} content={r.key}>{humanizeField(r.key)}</Tooltip></td>
                       <Show when={hasBefore}>
-                        <td class={`${VALUE_CELL} ${diffCellClass(r, "before")}`}>{r.before ?? "(none)"}</td>
+                        <td class={`${VALUE_CELL} ${diffCellClass(r, "before")}`}><DiffValue v={r.before} /></td>
                       </Show>
                       <Show when={hasAfter}>
-                        <td class={`${VALUE_CELL} ${diffCellClass(r, "after")}`}>{r.after ?? "(none)"}</td>
+                        <td class={`${VALUE_CELL} ${diffCellClass(r, "after")}`}><DiffValue v={r.after} /></td>
                       </Show>
                     </tr>
                   )}
@@ -236,11 +247,11 @@ export default function Audit() {
     return r.length ? r[r.length - 1].ts : undefined;
   };
 
-  // The document scrolls, so the list fills a box of definite height: the top
-  // bar, the main padding and room for the lab banner come off the viewport,
-  // and the rows scroll inside it (#1461).
+  // The list fills the box the shell gives the page (h-full of <main>), and
+  // the rows scroll inside it (#1461, #2433).
   return (
-    <div class="h-[calc(100dvh-9rem)] min-h-96">
+    <Page route="/audit" fill>
+    <div class="min-h-0 flex-1">
       <FlatList<AuditEvent>
         config={{
           entity: { name: "audit", plural: "events" },
@@ -257,7 +268,7 @@ export default function Audit() {
           columns,
           empty: "No events yet.",
           detail: (e) => ({
-            title: <span class="font-data text-sm" title={e.resource_id || undefined}>{e.verb} {e.resource}{resourceLabel(e) ? ` ${resourceLabel(e)}` : ""}</span>,
+            title: <Tooltip as="span" tabIndex={0} class="font-data text-sm" content={e.resource_id || undefined}>{e.verb} {e.resource}{resourceLabel(e) ? ` ${resourceLabel(e)}` : ""}</Tooltip>,
             body: <AuditDetail e={e} />,
             wide: true,
           }),
@@ -279,5 +290,6 @@ export default function Audit() {
         }}
       />
     </div>
+    </Page>
   );
 }

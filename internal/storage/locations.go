@@ -970,17 +970,19 @@ func (p *PG) GetLocation(ctx context.Context, name string, read scope.Set) (*Loc
 
 // CreateLocation inserts a location under an optional parent and writes the audit
 // row in the same transaction. A root location (no parent) requires an all create
-// scope; a child requires the parent to be within the create scope. The new
+// scope; a child requires the parent to be within the create scope, and a parent
+// outside the read scope is the same ErrParentNotFound as one that does not
+// exist (resolveCreateParent). The new
 // row's owner is itself, so create scope is evaluated on the parent's placement.
 // The child type's allowed_parent_types is enforced against the resolved parent
 // (or root) before the insert.
-func (p *PG) CreateLocation(ctx context.Context, actorID string, spec LocationSpec, create scope.Set) (*Location, error) {
+func (p *PG) CreateLocation(ctx context.Context, actorID string, spec LocationSpec, read, create scope.Set) (*Location, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin create location: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	l, err := p.createLocationTx(ctx, tx, actorID, spec, create)
+	l, err := p.createLocationTx(ctx, tx, actorID, spec, read, create)
 	if err != nil {
 		return nil, err
 	}
@@ -990,9 +992,47 @@ func (p *PG) CreateLocation(ctx context.Context, actorID string, spec LocationSp
 	return l, nil
 }
 
+// resolveCreateParent resolves a location create's parent reference: under the
+// create scope first, and, only when that refuses, under the caller's read
+// scope to decide which refusal the caller may be told (#1343, revising ruling
+// 2 of #627 for the create path).
+//
+//   - Inside create: the parent. Ambiguity is judged inside create, so an
+//     *ErrAmbiguousName's Candidates never name a location outside it.
+//   - Outside create but inside read: ErrLocationForbidden (403). The caller
+//     can already see the location, so saying it exists discloses nothing.
+//   - Outside read, or nowhere at all: ErrParentNotFound (404), one answer for
+//     both, so a location:create holder cannot probe location names it cannot
+//     read. This is the three-way split a targeted write already makes, and
+//     what POST /locations:instantiate answers for its target location.
+func resolveCreateParent(ctx context.Context, q querier, ref string, read, create scope.Set) (*Location, error) {
+	parent, err := resolveScopedRef(ctx, q, locationConfig, ref, "location", create)
+	if err == nil {
+		return parent, nil
+	}
+	if !errors.Is(err, ErrLocationNotFound) && !errors.Is(err, ErrLocationForbidden) {
+		return nil, err
+	}
+	// Not creatable here. Whether the caller may hear that the location exists is
+	// a read question, asked with the non-disclosing resolve.
+	_, rerr := scopedByNameInScope(ctx, q, locationConfig, ref, "location", read)
+	var ambig *ErrAmbiguousName
+	switch {
+	case rerr == nil, errors.As(rerr, &ambig):
+		// Readable (once, or more than once: either way none of it is
+		// creatable, and naming the readable candidates would only invite a
+		// retry that is refused the same).
+		return nil, ErrLocationForbidden
+	case errors.Is(rerr, ErrLocationNotFound):
+		return nil, ErrParentNotFound
+	default:
+		return nil, rerr
+	}
+}
+
 // createLocationTx is CreateLocation inside the caller's transaction: the
 // one create a location route and a planned subtree (CreatePlan) share.
-func (p *PG) createLocationTx(ctx context.Context, tx pgx.Tx, actorID string, spec LocationSpec, create scope.Set) (*Location, error) {
+func (p *PG) createLocationTx(ctx context.Context, tx pgx.Tx, actorID string, spec LocationSpec, read, create scope.Set) (*Location, error) {
 	// An operator-typed name is validated now, before any other resolve, so a
 	// bad slug fails fast (the existing behavior). A generated one is validated
 	// too, but later, inside generateName, the one place every generation site
@@ -1012,14 +1052,8 @@ func (p *PG) createLocationTx(ctx context.Context, tx pgx.Tx, actorID string, sp
 			return nil, ErrLocationForbidden
 		}
 	} else {
-		// resolveScopedRef, not locationByName-then-inScope: ruling 2 (#627)
-		// requires ambiguity judged inside create, not fleet-wide. A parent
-		// that exists only outside create scope stays ErrLocationForbidden
-		// (preserved, not collapsed into not-found).
-		parent, err := resolveScopedRef(ctx, tx, locationConfig, *spec.ParentName, "location", create)
-		if errors.Is(err, ErrLocationNotFound) {
-			return nil, ErrParentNotFound
-		} else if err != nil {
+		parent, err := resolveCreateParent(ctx, tx, *spec.ParentName, read, create)
+		if err != nil {
 			return nil, err
 		}
 		parentID = &parent.ID
@@ -1133,6 +1167,9 @@ func (p *PG) UpdateLocation(ctx context.Context, actorID, name string, patch Loc
 		if err := p.validateReclassify(ctx, tx, *typePatchID, before.ParentID); err != nil {
 			return nil, err
 		}
+		if err := p.validateChildrenUnder(ctx, tx, before.ID, *typePatchID); err != nil {
+			return nil, err
+		}
 	}
 	if typePatchID != nil && before.NameGenerated && *typePatchID != before.LocationTypeID {
 		newName, newOrdinal, err := generateNameForLocationType(ctx, tx, *typePatchID, before.ParentID, &before.ID)
@@ -1204,6 +1241,34 @@ func (p *PG) validateReclassify(ctx context.Context, q querier, newTypeID string
 		parentType = &pt
 	}
 	return p.validatePlacement(ctx, q, newType, parentType)
+}
+
+// validateChildrenUnder checks the direct children of a location being retyped
+// in place: each child's type must admit newTypeID as a parent (an empty
+// allowed set is unconstrained). The first offending child type, in name order,
+// is the PlacementError. Grandchildren sit under their own parent, not this
+// one, so they are not checked.
+func (p *PG) validateChildrenUnder(ctx context.Context, q querier, id, newTypeID string) error {
+	var newType string
+	if err := q.QueryRow(ctx, `select name from location_type where id = $1`, newTypeID).Scan(&newType); err != nil {
+		return fmt.Errorf("storage: load location_type %q: %w", newTypeID, err)
+	}
+	rows, err := q.Query(ctx, `
+		select distinct t.name from location c join location_type t on t.id = c.location_type
+		where c.parent_id = $1 order by t.name`, id)
+	if err != nil {
+		return fmt.Errorf("storage: load child types of location %q: %w", id, err)
+	}
+	childTypes, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return fmt.Errorf("storage: load child types of location %q: %w", id, err)
+	}
+	for _, ct := range childTypes {
+		if err := p.validatePlacement(ctx, q, ct, &newType); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // restatedType returns nil for a type ref that re-states what the row already
@@ -1590,7 +1655,7 @@ func writeAuditRes(ctx context.Context, tx pgx.Tx, actorID, verb, resource, reso
 	if err != nil {
 		return err
 	}
-	newJSON = withTemplateDetail(ctx, newJSON)
+	newJSON = withProvenanceDetail(ctx, newJSON)
 	// channel and client say how the action arrived (#1162): set on the context by
 	// the MCP dispatch, null for a direct API call. agent names the agent an
 	// agent token acts as (#1179), on the actor's behalf; null otherwise.

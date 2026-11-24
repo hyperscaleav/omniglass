@@ -354,3 +354,19 @@ describe("trustOfferedKey", () => {
     expect(trustRefusal({ permissions: ["endpoint:retry"] } as never)).toBeNull();
   });
 });
+
+describe("a silent datagram rung (#2296)", () => {
+  const ep = (transport: string) =>
+    ({ endpoint: "e", transport, reachability: { value: "down", ts: "2026-01-01T00:00:00Z" }, responsive: { value: "down", ts: "2026-01-01T00:00:00Z" }, layers: [], history: [] }) as unknown as Parameters<typeof ladder>[0];
+  it("says no answer and lists the causes for snmp and udp", () => {
+    for (const t of ["snmp", "udp"]) {
+      const hint = rungHint(ladder(ep(t))[1]);
+      expect(hint).toMatch(/no answer/i);
+      expect(hint).toMatch(/community/i);
+      expect(hint).toMatch(/filtered/i);
+    }
+  });
+  it("leaves a tcp connect's hint unchanged", () => {
+    expect(rungHint(ladder(ep("tcp"))[1])).not.toMatch(/no answer/i);
+  });
+});

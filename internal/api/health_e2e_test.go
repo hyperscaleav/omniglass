@@ -23,6 +23,10 @@ type alarmWire struct {
 	Acknowledged   bool    `json:"acknowledged"`
 	AcknowledgedAt *string `json:"acknowledged_at"`
 	AcknowledgedBy string  `json:"acknowledged_by"`
+	// The snooze rides beside it (#2448), so a system page offers Snooze or
+	// Unsnooze without opening each component.
+	SnoozedUntil *string `json:"snoozed_until"`
+	SnoozedBy    string  `json:"snoozed_by"`
 }
 
 type healthWire struct {
@@ -158,6 +162,17 @@ func TestHealthAPI(t *testing.T) {
 	}
 	if a := slot.Alarms[0]; !a.Acknowledged || a.AcknowledgedAt == nil || a.AcknowledgedBy == "" {
 		t.Fatalf("slot alarm after acknowledge = %+v, want acknowledged, with when and by whom", a)
+	}
+
+	// A snooze is read by the health read as well (#2448): an unsnoozed alarm
+	// carries none, a snoozed one says until when and by whom.
+	if a := slot.Alarms[0]; a.SnoozedUntil != nil || a.SnoozedBy != "" {
+		t.Fatalf("slot alarm = %+v, want no snooze before anybody snoozes", a)
+	}
+	c.do(ownerTok, http.MethodPost, snoozePath("bar-1", raised.ID, "snooze"), map[string]any{"duration": "1h"}, http.StatusOK)
+	slot = health(ownerTok, "/systems/hq-1/health").Slots[0]
+	if a := slot.Alarms[0]; a.SnoozedUntil == nil || a.SnoozedBy == "" {
+		t.Fatalf("slot alarm after snooze = %+v, want snoozed until a time, by whom", a)
 	}
 
 	// The system's members read carries each member's own verdict (#940): a

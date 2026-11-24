@@ -155,11 +155,13 @@ omniglass user grant create alice --role viewer --scope-kind location --scope-id
 ```
 
 A name only you can see resolves for you even where someone else's out-of-scope row shares it, and
-a name more than one row you can see answers to is a 404 listing each one in the spelling that
-resolves, so the error tells you what to type next:
+a name more than one row you can see answers to is a 409 listing each one in the spelling that
+resolves (a name nothing answers to stays a 404), and the CLI prints it as "the name matches N rows you can see; address one by its id or dotted address" followed by the matches, so the error tells you what to type next:
 
 ```text
-secret "demo-panel-login" not found: 2 you can see answer to it; address one as $platform/demo-panel-login or boi.17c/demo-panel-login
+the name matches 2 rows you can see; address one by its id or dotted address instead:
+  $platform/demo-panel-login
+  boi.17c/demo-panel-login
 ```
 
 A name is a lookup, so it lands on whatever the one row you can see by that name is now: a write
@@ -232,6 +234,29 @@ normalizes it to a 256x256 JPEG. An administrator manages **any** user's picture
 `omniglass user setAvatar alice --image-base64 …` and `omniglass user removeAvatar alice`
 (gated by `user:set-avatar`), reading one back with `omniglass user avatar list alice` (gated by
 `user:read:admin`). A user with no picture is a 404.
+
+## Creating in batches
+
+`omniglass location batchCreate`, `omniglass system batchCreate` and `omniglass component
+batchCreate` create many rows of one collection in one write (`POST /locations:batchCreate` and its
+siblings, [ADR-2368](/architecture/decisions/#adr-2368-fleet-entities-are-created-in-batches-one-collection-per-call)).
+`--requests` is a JSON list, each entry exactly the body the single create takes, so rows kept in a
+file go in with `jq`. Dry-run first, then write:
+
+```sh
+omniglass location batchCreate --validate-only --requests "$(jq -c .locations import.json)"
+omniglass location batchCreate --requests "$(jq -c .locations import.json)"   # prints the batch_id
+omniglass system batchCreate --requests "$(jq -c .systems import.json)"
+```
+
+The rows run in order, so a location may name as its `parent` one an earlier row of the same batch
+creates; a system or component names the locations an earlier batch created, by name, as its single
+create would. The dry run writes nothing and prints the rows and the names a write would mint, or the
+refusal, led by the row's position in the list (`requests[3]: ...`). A refused row refuses the whole
+batch. A write prints the `batch_id` every audit row it wrote carries as `from_batch`. A batch holds
+at most 1000 rows; split a bigger import (by building) and send each in turn: locations parents
+first, then systems, then components. A dry run of a later batch cannot see the rows an earlier batch
+has not written yet.
 
 ## Everything else is in the reference
 

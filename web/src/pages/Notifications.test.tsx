@@ -68,7 +68,9 @@ describe("Notifications page", () => {
   it("greys Edit on an official type", async () => {
     mount(admin);
     const blade = await openBlade("Alarm raised");
-    expect((within(blade).getByLabelText("Edit") as HTMLButtonElement).disabled).toBe(true);
+    expect(within(blade).getByTestId("footer-note").textContent).toBe("Official, read-only");
+    expect(within(blade).queryByLabelText("Edit")).toBeNull();
+    expect(within(blade).queryByText("Delete")).toBeNull();
   });
 
   it("previews against a component's alarm and lists the facts a rule reads", async () => {

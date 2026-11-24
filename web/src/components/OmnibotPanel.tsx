@@ -1,7 +1,8 @@
-import { For, Match, Show, Switch, createEffect, createSignal, onCleanup } from "solid-js";
+import { For, Index, Match, Show, Switch, createEffect, createMemo, createResource, createSignal, onCleanup } from "solid-js";
 import Button from "./Button";
 import Drawer from "./Drawer";
-import OmnibotStep, { StepArgs } from "./OmnibotStep";
+import OmnibotThought from "./OmnibotThought";
+import { StepArgs } from "./OmnibotStep";
 import CreateSecretForm from "./CreateSecretForm";
 import { Bot, Key, Plus, X } from "./icons";
 import {
@@ -9,11 +10,16 @@ import {
   ask,
   closed,
   fail,
+  groupThoughts,
+  type Block,
   initialRun,
+  omnibotFacts,
   reduce,
   runOmnibot,
   RunRefused,
+  RunUnmatched,
   startConversation,
+  unmatched,
   type RunInput,
   type RunState,
 } from "../lib/assistant";
@@ -33,7 +39,26 @@ import { contextEntries, pendingTriage, requestTriage, triageCall, type Subject 
 // entity's name, never what the console rendered. The person can leave it out
 // of the next prompt. A triage asked for from outside the panel runs the
 // embedded triage-alarm skill, its text the server's, on that alarm with the
-// page as context.
+// page as context. When the server plays a recording rather than a live model
+// (#2443), the panel says so, offers the recorded prompts as chips, and shows
+// the server's refusal of any other question; which prompts a recording
+// answers is the server's to decide, never the browser's.
+
+// RecordedPrompts are the questions the server's recording answers, each a
+// button that asks it.
+function RecordedPrompts(props: { prompts: string[]; disabled: boolean; onPick: (prompt: string) => void }) {
+  return (
+    <div data-testid="omnibot-prompts" class="flex flex-wrap gap-1.5" aria-label="Questions this recording answers">
+      <For each={props.prompts}>
+        {(p) => (
+          <Button intent="quiet" size="xs" class="h-auto min-h-0 py-1 text-left font-normal" disabled={props.disabled} onClick={() => props.onPick(p)}>
+            {p}
+          </Button>
+        )}
+      </For>
+    </div>
+  );
+}
 
 // SubjectChip is one handed-over subject: its kind and its name, address or
 // page, with a button that leaves it out of the next prompt.
@@ -51,8 +76,14 @@ function SubjectChip(props: { subject: Subject; onRemove?: () => void }) {
   );
 }
 
+// ofKind narrows a block to one kind, or undefined, for a Match's when.
+function ofKind<K extends Block["kind"]>(b: Block, kind: K): Extract<Block, { kind: K }> | undefined {
+  return b.kind === kind ? (b as Extract<Block, { kind: K }>) : undefined;
+}
+
 export default function OmnibotPanel(props: { open: boolean; onClose: () => void; prompt?: string; page?: Subject }) {
   const [state, setState] = createSignal<RunState>(initialRun);
+  const blocks = createMemo(() => groupThoughts(state().items));
   const [conversation, setConversation] = createSignal<string>();
   const [draft, setDraft] = createSignal("");
   const [credential, setCredential] = createSignal(false);
@@ -60,6 +91,10 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
   // prompt, brings the page back.
   const [leftOut, setLeftOut] = createSignal<string>();
   const page = () => (props.page && props.page.ref !== leftOut() ? props.page : undefined);
+  // What omnibot answers from: a recording plays only its prompts (#2443).
+  const [facts] = createResource(() => props.open || undefined, omnibotFacts);
+  const replay = () => facts()?.mode === "replay";
+  const recorded = () => (replay() ? (facts()?.prompts ?? []) : []);
   let controller: AbortController | undefined;
   let end: HTMLDivElement | undefined;
   let composer: HTMLTextAreaElement | undefined;
@@ -93,6 +128,10 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
       setState(closed);
     } catch (err) {
       if (controller.signal.aborted) return;
+      if (err instanceof RunUnmatched) {
+        setState((s) => unmatched(s, err.message));
+        return;
+      }
       const message = err instanceof Error ? err.message : describeError(err);
       setState((s) => fail(s, message, err instanceof RunRefused));
     }
@@ -101,9 +140,16 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
   function send() {
     const text = draft().trim();
     if (!text || busy()) return;
+    setDraft("");
+    submit(text);
+  }
+
+  // submit asks a question with the page, whether typed or a recorded prompt
+  // chosen from the chips.
+  function submit(text: string) {
+    if (!text || busy()) return;
     const p = page();
     const context = contextEntries(p ? [p] : []);
-    setDraft("");
     setLeftOut(undefined);
     setState((s) => ask(s, text, context));
     void run({ prompt: text, context });
@@ -215,22 +261,35 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
         footer={composerBar}
       >
         <div class="flex flex-col gap-3">
+          <Show when={replay()}>
+            <div data-testid="omnibot-replay" class="alert alert-info alert-soft py-1.5 text-xs">
+              <span>
+                <span class="font-medium">Recorded demo.</span> This lab plays a recording, not a live model, so it answers only the questions recorded for it.
+              </span>
+            </div>
+          </Show>
           <Show when={state().items.length === 0}>
             <div data-testid="omnibot-empty" class="flex flex-col gap-2 text-sm text-base-content/70">
+              <p>Omnibot acts as you, through the API you use, and asks before it writes; it never sees a secret's value.</p>
+              <Show when={recorded().length > 0}>
+                <RecordedPrompts prompts={recorded()} disabled={busy()} onPick={submit} />
+              </Show>
               <p>
-                Omnibot acts as you, through the same API you use: it reads what you may read and changes what you may change, and the
-                audit log records each call as omnibot's, on your behalf.
-              </p>
-              <p>
-                Your agent policy decides each write: always, ask, or never. A write it asks about waits here for you to confirm. Omnibot
-                never sees a secret's value; give it a credential with Add a credential, and it gets only the secret's name.
+                <Show when={page()} fallback="No page goes with your question.">
+                  {(p) => (
+                    <>
+                      It will read the page you are on: <span class="font-data break-all">{p().ref}</span>
+                    </>
+                  )}
+                </Show>
               </p>
             </div>
           </Show>
-          <For each={state().items}>
-            {(item) => (
+          {/* Index, not For: groupThoughts builds fresh blocks each event, and keying by reference would rebuild (and shut) an opened block (#2457). */}
+          <Index each={blocks()}>
+            {(block, idx) => (
               <Switch>
-                <Match when={item.kind === "user" && item}>
+                <Match when={ofKind(block(), "user")}>
                   {(u) => (
                     <div class="self-end flex max-w-[85%] flex-col items-end gap-1">
                       <Show when={u().context}>
@@ -244,21 +303,21 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
                     </div>
                   )}
                 </Match>
-                <Match when={item.kind === "text" && item}>
+                <Match when={ofKind(block(), "text")}>
                   {(t) => <div class="text-sm whitespace-pre-wrap">{t().text}</div>}
                 </Match>
-                <Match when={item.kind === "reasoning" && item}>
-                  {(r) => (
-                    <details data-testid="omnibot-thinking" class="text-xs text-base-content/60">
-                      <summary class="cursor-pointer select-none">Thinking</summary>
-                      <div class="mt-1 whitespace-pre-wrap border-l-2 border-base-300 pl-2">{r().text}</div>
-                    </details>
+                <Match when={ofKind(block(), "thought")}>
+                  {(t) => (
+                    <OmnibotThought
+                      thought={t()}
+                      live={busy() && idx === blocks().length - 1}
+                      waitingId={state().interrupt?.id}
+                    />
                   )}
                 </Match>
-                <Match when={item.kind === "step" && item}>{(s) => <OmnibotStep step={s()} waiting={state().interrupt?.id === s().id} />}</Match>
               </Switch>
             )}
-          </For>
+          </Index>
           <Show when={state().interrupt}>
             {(i) => (
               <div data-testid="omnibot-ask" class="rounded-box border border-warning/50 bg-warning/5 p-3 text-sm">
@@ -270,6 +329,9 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
                   <p class="mt-1 text-xs text-error">This cannot be undone.</p>
                 </Show>
                 <p class="mt-1 text-xs text-base-content/60">Your agent policy asks about this call. It runs as omnibot, on your behalf.</p>
+                <Show when={replay()}>
+                  <p class="mt-1 text-xs text-base-content/60">This step is part of the recording; Confirm still runs it for real.</p>
+                </Show>
                 <div class="mt-2 flex gap-2">
                   <Button intent={i().destructive ? "danger" : "action"} size="sm" onClick={() => decide(true)}>
                     Confirm
@@ -296,6 +358,14 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
               <div data-testid="omnibot-status" data-status="refused" role="alert" class="alert alert-warning alert-soft py-1.5 text-xs">
                 <span>Omnibot cannot run here: {state().error}</span>
               </div>
+            </Match>
+            <Match when={state().status === "unmatched"}>
+              <div data-testid="omnibot-status" data-status="unmatched" role="status" class="alert alert-soft py-1.5 text-xs">
+                <span>{state().error}</span>
+              </div>
+              <Show when={recorded().length > 0}>
+                <RecordedPrompts prompts={recorded()} disabled={busy()} onPick={submit} />
+              </Show>
             </Match>
             <Match when={state().status === "error"}>
               <div data-testid="omnibot-status" data-status="error" role="alert" class="alert alert-error alert-soft py-1.5 text-xs">

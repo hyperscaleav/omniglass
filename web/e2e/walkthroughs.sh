@@ -180,7 +180,12 @@ if [ "$mode" = record ]; then
 fi
 
 lab_init ogwalk
-lab_up
+# A walkthrough whose lab runs the identity provider (lab: [sso], #2362) has
+# the lab run it, with single sign-on configured against it; the others are
+# recorded on a lab without one.
+lab_flags=()
+if [ "$mode" = record ] && grep -qE '^lab:.*\bsso\b' "${files[@]}"; then lab_flags+=(--sso); fi
+lab_up ${lab_flags[@]+"${lab_flags[@]}"}
 [ "$mode" != record ] || : >"$OUT/stack-up"
 
 if [ "$mode" = record ]; then

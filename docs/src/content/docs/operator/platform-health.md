@@ -18,7 +18,20 @@ screenshots:
   # every capture, so the panel grid is masked whole in the baseline.
   - id: platform-health
     path: /web/platform
-    alt: "Platform health: the platform system's verdict linking to its system, the build the server runs and how long it has been up, then where work is lost hop by hop, then the server's panel set open on its Requests, Ingest, Queues and Retention panels, each row a key's last hour as a sparkline beside its current figure, the Requests panel ranking the slowest routes of the newest window."
+    alt: "Platform health with every section folded to one line: the platform system's health linking to its system, the build the server runs and how long it has been up, then Where work is lost with its end to end loss, the server with its health and open alarms, the outposts with how many are up, and With a simulator with its loss and device count, each its health and the one number that matters."
+    steps:
+      - action: wait
+        selector: "[data-testid=section-server-server] [data-testid=section-summary]"
+    mask:
+      - "[data-testid=platform-version] >> xpath=ancestor::div[3]"
+      - "[data-testid=platform-uptime] >> xpath=ancestor::div[3]"
+      # The end to end loss reads the server's own delivery windows, which land
+      # once a report window passes, so its figure moves with when the capture
+      # reaches the page.
+      - "[data-testid=section-pipeline] [data-testid=section-summary]"
+  - id: platform-health-server
+    path: /web/platform?open=server-server
+    alt: "Platform health with the server's section open on its Requests, Ingest, Queues and Retention panels, each row a key's last hour as a sparkline beside its current figure, the Requests panel ranking the slowest routes of the newest window."
     steps:
       - action: wait
         selector: "[data-testid=server-panel-requests] tr[data-testid=panel-row-http-request-duration-max][aria-expanded]"
@@ -26,19 +39,14 @@ screenshots:
     mask:
       - "[data-testid=platform-version] >> xpath=ancestor::div[3]"
       - "[data-testid=platform-uptime] >> xpath=ancestor::div[3]"
-      - "[data-testid=server-panels-server] >> xpath=./div"
-      # Where work is lost reads the server's own delivery windows, which land
-      # once a report window (60s here) passes, so whether its kinds and figures
-      # show yet moves with when the capture reaches the page. Its tab row and
-      # its hop row are full width and one line tall whatever they hold.
-      - "[data-testid=pipeline] [role=group] >> xpath=.."
-      - "[data-testid=pipeline] ol >> xpath=.."
+      - "[data-testid=section-pipeline] [data-testid=section-summary]"
+      - "[data-testid=server-panels-server] .grid"
   # The Requests panel's database rows sit below its ranked routes, past the
   # viewport, so this shot hovers the last row's figure: the hover scrolls the
   # rows into view and, the figure not being a tooltip trigger, covers none of
   # them. The figures move with every capture, so the panel grid is masked.
   - id: platform-health-connections
-    path: /web/platform
+    path: /web/platform?open=server-server
     alt: "The Requests panel scrolled to its database rows: Pool In Use against the pool's size, Pool Waits against Pool Acquires with Pool Wait Time beside them, then Database Connections Held against the database's limit, Idle In Transaction against those held, and the Oldest Transaction age under them."
     steps:
       - action: wait
@@ -49,21 +57,14 @@ screenshots:
     mask:
       - "[data-testid=platform-version] >> xpath=ancestor::div[3]"
       - "[data-testid=platform-uptime] >> xpath=ancestor::div[3]"
-      - "[data-testid=server-panels-server] >> xpath=./div"
-      - "[data-testid=pipeline] [role=group] >> xpath=.."
-      - "[data-testid=pipeline] ol >> xpath=.."
-  # The outpost table sits under where work is lost and the server panels, whose height moves with the
-  # routes a window saw, so this shot closes the server's panel set first: the
-  # table then sits at a fixed position under the header and the closed set.
+      - "[data-testid=section-pipeline] [data-testid=section-summary]"
+      - "[data-testid=server-panels-server] .grid"
+  # The outposts section opens under the folded ones, so the table sits at a
+  # fixed position under the header.
   - id: platform-health-outposts
-    path: /web/platform
-    alt: "Platform health with the server's panel set closed to its heading, the server's name and verdict, over the outpost table: one row per outpost, its liveness pill and verdict, and the Checkin and Schedule groups in view, with the rest of the columns past the table's right edge."
+    path: /web/platform?open=outposts
+    alt: "Platform health with the outposts section open under the folded ones: one row per outpost, its liveness pill and health, and every group of platform keys (Checkin, Schedule, Commands, Worklist and Loss) in view, headed in two or three lines so the table fits the page."
     steps:
-      - action: wait
-        selector: "[data-testid=server-panel-requests] tr[data-testid=panel-row-http-request-duration-max][aria-expanded]"
-        timeout: 150000
-      - action: click
-        selector: "[data-testid=server-panels-server] > summary .eyebrow"
       # The lab's outpost never checks in, and the outpost-silent alarm raises
       # partway through a capture: the liveness pill reads healthy before and
       # outage after, so the shot holds until the alarm has landed (#2168).
@@ -75,21 +76,20 @@ screenshots:
       - "[data-testid=platform-version] >> xpath=ancestor::div[3]"
       - "[data-testid=platform-uptime] >> xpath=ancestor::div[3]"
       - "[data-figure=checkin-age]"
-      - "[data-testid=pipeline] [role=group] >> xpath=.."
-      - "[data-testid=pipeline] ol >> xpath=.."
-  # The outpost table's columns run past its right edge at the docs viewport, so
-  # this shot hovers the Worklist Pull Loss header: the hover scrolls the table
-  # across to it and opens the key's description. The lab's outpost never checks
-  # in, so its figures read not reported.
+      - "[data-testid=section-pipeline] [data-testid=section-summary]"
+  # This shot hovers the Worklist Pull Loss header and opens the key's
+  # description. The lab's outpost never checks in, so its figures read not
+  # reported.
   - id: platform-health-outpost-worklist
-    path: /web/platform
-    alt: "The outpost table scrolled across to the Worklist group with the Worklist Pull Loss header hovered: its tooltip says the figure is the share of the outpost's worklist pulls the bus refused or the outpost could not read, 0 healthy and 1 an outpost running a stale worklist. The lab's outpost has never checked in, so its figure reads not reported."
+    path: /web/platform?open=outposts
+    alt: "The outpost table with the Worklist Pull Loss header hovered: its tooltip says the figure is the share of the outpost's worklist pulls the bus refused or the outpost could not read, 0 healthy and 1 an outpost running a stale worklist. The lab's outpost has never checked in, so its figure reads not reported."
     steps:
+      # Same table as platform-health-outposts: hold until the outpost-silent
+      # alarm has raised, so the row's tone and pill read the same every run (#2291).
       - action: wait
-        selector: "[data-testid=server-panel-requests] tr[data-testid=panel-row-http-request-duration-max][aria-expanded]"
-        timeout: 150000
-      - action: click
-        selector: "[data-testid=server-panels-server] > summary .eyebrow"
+        selector: "table >> text=outage"
+        timeout: 60000
+        message: "the outpost-silent alarm never raised, so the liveness pill never read outage"
       - action: hover
         selector: "[data-testid=platform-outposts] button[aria-label='Worklist Pull Loss']"
       - action: wait
@@ -98,15 +98,14 @@ screenshots:
       - "[data-testid=platform-version] >> xpath=ancestor::div[3]"
       - "[data-testid=platform-uptime] >> xpath=ancestor::div[3]"
       - "[data-figure=checkin-age]"
-      - "[data-testid=pipeline] [role=group] >> xpath=.."
-      - "[data-testid=pipeline] ol >> xpath=.."
+      - "[data-testid=section-pipeline] [data-testid=section-summary]"
   # The ingest hop's explainer: what it does, what counts as lost there and
   # the keys it is read from are the hop's own text; its components column
   # holds the server's figures once a window lands, so it is masked with the
   # rows above. It waits for the server's panels, as the shots above do, so the
   # panel set under the explainer is filled and masked the same way.
   - id: platform-health-hop
-    path: /web/platform
+    path: /web/platform?open=pipeline,server-server
     steps:
       - action: wait
         selector: "[data-testid=server-panel-requests] tr[data-testid=panel-row-http-request-duration-max][aria-expanded]"
@@ -117,11 +116,11 @@ screenshots:
     mask:
       - "[data-testid=platform-version] >> xpath=ancestor::div[3]"
       - "[data-testid=platform-uptime] >> xpath=ancestor::div[3]"
-      - "[data-figure=checkin-age]"
       - "[data-testid=pipeline] [role=group] >> xpath=.."
       - "[data-testid=pipeline] ol >> xpath=.."
       - "[data-testid=pipeline-hop-detail] > div:nth-child(2)"
-      - "[data-testid=server-panels-server] >> xpath=./div"
+      - "[data-testid=section-pipeline] [data-testid=section-summary]"
+      - "[data-testid=server-panels-server] .grid"
 walkthroughs:
   - id: read-platform-health
   - id: find-where-work-is-lost
@@ -133,12 +132,33 @@ collect. **Platform health** is Omniglass watching itself. It answers one questi
 platform is well, and it answers it the way you would answer it about any system: from the samples
 on the platform's own components.
 
-Open it from **Status** under Admin in the sidebar, or from the **Platform** tile on Home, which
-carries the platform's verdict and how many outposts are not up. You need `outpost:read` to open it; the
+Open it from **Platform health** under Admin in the sidebar, or from the **Platform** tile on Home, which
+carries the platform's health and how many outposts are not up. You need `outpost:read` to open it; the
 tile and the sidebar entry are hidden without it, and Admin shows it to an `outpost:read` holder who has
 none of its other tabs.
 
 ::screenshot{#platform-health}
+
+## The sections
+
+Under the header the page is four sections, each folded to one line: its name, a reading and the one
+number that matters. The first screen therefore answers whether the platform is well and, if not,
+where, with nothing opened:
+
+- **Where work is lost**: the end to end loss over the last hour, and the hop it is worst at when
+  there is any, or `0% lost end to end`.
+- **Server**: the server's health, and its open alarms with the panels they flag (`1 open alarm,
+  Ingest flagged`), or `no open alarms`. Each server has its own section.
+- **Outposts**: how many are up (`3 of 4 up, 1 not up`).
+- **With a simulator**: the worst gap nothing explains (`losing at published, not landed (8.3%)`), or
+  `no loss` and how many devices the simulator serves. It appears only with a simulator connected.
+
+Every line is derived from the figures the page already reads; the page adds no threshold. Click a
+section's line, or tab to it and press Enter or Space, to open it. A closed section reads nothing it
+does not need: the server's sparklines load only when you open it. What is open is held in the
+address (`?open=pipeline,server-server,outposts,simulation`), so a reload, the back button and a
+shared link keep the sections you were reading. The Lab instance banner under the top bar says when the
+page is on a lab; the page does not say it a second time.
 
 The server panels in this screenshot draw an hour of made-up history, seeded for the capture so its
 sparklines run the full hour; your own lab's draw what its server has measured since it started. The
@@ -148,18 +168,17 @@ windowed figure no one writes goes unreported after two report windows, however 
 
 ## The header
 
-- **Platform** is the verdict of the platform system, the system every outpost and every server is
-  a component of. It links to that system's own view, which explains the verdict the way every
+- **Platform** is the health of the platform system, the system every outpost and every server is
+  a component of. It links to that system's own view, which explains the health the way every
   system's view does, so the reasons are written once.
 - **Version** is the build the server runs, written by the server on its own platform component
   each time it boots.
 - **Up for** is how long the server has been running: the page's read time minus the start time
   its boot wrote. A restart moves the start time forward.
-- On a lab instance the page says so beside its title.
 
 ## Where work is lost
 
-Under the header, **Where work is lost** draws the path a collected item takes from the run that
+Open **Where work is lost** to see it draw the path a collected item takes from the run that
 produced it to the store, one hop at a time, in the order an item crosses them:
 
 - **Outpost**: the outpost's spool, from a run's output to the stream. An item is out when the stream
@@ -209,8 +228,9 @@ where its series read; the page draws them as the path's first hop.
 
 ## The server panels
 
-Each server has a panel set: a disclosure headed with the server's name, its verdict and how many
-alarms are open on it, the first one open. The name links to the server's platform component. The
+Each server has a section: its line carries the server's name, its health and how many alarms are
+open on it, and opening it shows the panel set; a link inside leads to the server's platform
+component. The
 four panels are **Requests**, **Ingest**, **Queues** and **Retention**, and the keys in each are the
 groups the platform view returns for a server, so the page holds no key list of its own. The page is
 the summary, not the whole record: every figure a server or an outpost writes of itself is either on it
@@ -237,7 +257,7 @@ panel is the same open alarm the console shows everywhere else.
 
 Each open panel's sparklines are one [view binding](/architecture/views/#bindings-the-scoped-read-of-the-sample-store):
 the panel reads its keys' last hour once, then follows the server's new samples live over the page's one
-stream, so a line moves as the server records instead of on a poll. A closed panel set reads no series:
+stream, so a line moves as the server records instead of on a poll. A closed section reads no series:
 its figures are already on the page, and its sparklines load when you open it.
 
 ### Requests
@@ -333,7 +353,7 @@ keeps up), and the database's size with each table's. **Retention Pass Failures*
 
 One row per outpost. **Status** is the same liveness pill the [Outposts](/operator/collection/)
 page shows (`up`, `down` or `never`), judged at the same moment the uptime is, beside the outpost's
-verdict. A row's tone is that verdict: the seeded rules on the platform keys decide it, and the
+health. A row's tone is that health: the seeded rules on the platform keys decide it, and the
 page adds no threshold of its own.
 
 The columns are the platform keys, grouped:
@@ -381,13 +401,13 @@ The platform components belong to no location, so only a fleet-wide (all-scope) 
 If your component read is scoped to part of the fleet, the page still lists every outpost with its
 pill, and one line says the platform figures need a fleet-wide read: the figures are left out, not
 shown as zero, and the server panels are left out whole. Where work is lost is left out with them,
-and the Loss column reads not reported. Without a fleet-wide system read the Platform verdict reads
+and the Loss column reads not reported. Without a fleet-wide system read the Platform health reads
 `-`.
 
 ## With a simulator
 
 While a [simulator](/operator/simulation/) is connected, and you hold `simulation:read`, the page
-gains a section below the outpost table: the same condition that shows **Simulation** in the sidebar, so the
+gains a section below the outposts: the same condition that shows **Simulation** in the sidebar, so the
 two appear and disappear together. Everything above it is the platform's own account of itself. The
 simulator is the one witness outside the platform: it counts what each simulated device saw arrive and
 how it answered, while the outpost counts what it sent and the server counts what landed. Set side by side,
@@ -397,9 +417,8 @@ infers. Only a simulator can say what a device was asked, so a fleet of real gea
 ### The closed loop
 
 Each outpost with a simulator gets a card. Its first figures are the telemetry batches the server landed
-for the outpost over the window and the most requests the simulator held at once. **Queue depth** and
-**Busy workers** read `not wired yet`: the outpost does not report them to the server yet, and a blank
-reads truer than a 0.
+for the outpost over the window and the most requests the simulator held at once. An outpost's command queue
+depth is a column of the outposts table (**Pending Commands**), read from the platform's own keys.
 
 The gap table is the loop itself, one row per hop a request or a batch travels:
 
@@ -423,13 +442,16 @@ Below the gaps, the protocol table says what each protocol drew from the simulat
 connections **Accepted**, requests **Received** and **Answered**, the simulator's own p95 service time,
 the outpost's **Poll targets** on the protocol, and the most requests it held at once. A probe that only
 connects (a tcp reachability check), or logs in and asks nothing, draws a connection and no request, so
-those rows count accepted connections beside 0 received. The device table lists every simulated device
-with the requests it received by protocol: a device due a poll that saw none reads **due, never seen**
-and sorts first, then the impaired ones. A device's name opens its drawer on the Simulation page. The
+those rows count accepted connections beside 0 received. The device table lists the simulated devices a page at a time (25 rows), with the requests each
+received by protocol. A filter above it narrows the list by name, system or location, every word of what
+you type, so a name the seeded fleet repeats (`amp-1` in four rooms) is told apart by the system and
+the locations from the root down that sit beside it. The **State** column is never blank: a device is
+**answering**, **impaired** (the simulator impairs it on purpose), or **due, never seen** (a poll
+target due over the window that saw no request); the ones that need a look sort first. A device's name
+opens its drawer on the Simulation page.
 
-:::design[Target design, tracked in #1721 and #1724]
-The device table also shows what each device answered, and tells a repeated device name apart by the
-system it belongs to.
+:::design[Target design, tracked in #1721]
+The device table also shows what each device answered.
 :::
 
 ### The sliding window
@@ -465,7 +487,15 @@ server that restarts starts it over, and nothing of it is stored.
   again, or the fleet the simulator serves changed (a device added or removed, or the simulator's
   first sync of its fleet). A request sent to a device the simulator had not bound yet is never
   received, and is no loss of the path. No figure from that window means anything, so the card says
-  so and shows none until the window slides past the restart or the change.
+  so and shows none until the window slides past the restart or the change. That is the ring's span
+  plus two brackets (a window of sliding brackets, so a few minutes at the defaults), which is the
+  stretch with no measured reading after a real fleet change.
+- **a target the simulator does not serve**: the outpost's worklist and the simulator's device list move
+  on their own clocks (the simulator re-pulls every 10 seconds), so for a moment the outpost polls a device
+  the simulator has not bound yet, or one it has stopped serving, with no change to the served fleet
+  inside the window. The simulator names the devices it serves, and the polls sent to any other target
+  print as masked on the gap, never as loss. A real loss on a served device still reads loss. A fleet
+  past 2000 devices is not named, so nothing is masked this way.
 - **not observed by the sim**: the kernel answers it (a ping), so the simulator never sees it.
 
 An impairment that drops packets shows where the protocol rides on them. Snmp is datagrams: a dropped
@@ -482,15 +512,15 @@ so a dropped tcp connect opens a gap too (#1723).
 
 ## From the CLI
 
-`omniglass platform health` reads this page for a terminal or a script: the verdicts, the open alarms,
+`omniglass platform health` reads this page for a terminal or a script: the health values, the open alarms,
 each hop's loss and the end to end, the outposts with loss, and every failure above zero, as one table or
 `--json`, exiting nonzero when the platform is not healthy or a part of it is not visible to the token.
 The [CLI reference](/reference/cli/#omniglass-platform-health) lists its sampling flags.
 
 The page is one read of the platform view, so `omniglass view platform list` returns the same
-answer: the system verdict, each server's build and start time with its panel groups (each key's
+answer: the system health, each server's build and start time with its panel groups (each key's
 current figure, a ranked key's routes, and the alarms open on the server), the outpost key groups,
-each outpost's verdict with its current figures and its `loss`, and the `pipeline` with each hop's
+each outpost's health with its current figures and its `loss`, and the `pipeline` with each hop's
 figures per kind and per component. A key an outpost has not reported is absent from its `figures`,
 and a hop or an outpost with nothing to compose has no `loss`, never zero, so the command reads
 not-reported the same way the page does.
@@ -501,10 +531,10 @@ state, start and end, its gaps with their ratios and readings, its protocols and
 
 ## Walkthroughs
 
-From Home, open the tile and read the header, read each hop under where work is lost as a loss ratio
-and open the outpost hop's explainer, fold the server's panels to read the outpost table and the simulator's
-gaps under it, open the panels again on the Requests panel, then follow the slowest route's figure from
-its tooltip onto its series on the server's platform component.
+From Home, open the tile and read the header and each section's one-line reading, open where work is
+lost and read each hop as a loss ratio and the outpost hop's explainer, open the outposts and the
+simulator's gaps, then open the server's panels on the Requests panel and follow the slowest route's
+figure from its tooltip onto its series on the server's platform component.
 
 ::walkthrough{#read-platform-health}
 

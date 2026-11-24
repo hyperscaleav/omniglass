@@ -1,12 +1,13 @@
 import { For, Index, Show, createContext, createEffect, createMemo, createSignal, createUniqueId, on, useContext, type JSX } from "solid-js";
 import { createStore } from "solid-js/store";
-import { A, useSearchParams } from "@solidjs/router";
+import { A } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import Drawer from "../components/Drawer";
 import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
 import KVStacked from "../components/KVStacked";
+import CatalogRef, { KeyRef } from "../components/CatalogRef";
 import Eyebrow from "../components/Eyebrow";
 import InfoTip from "../components/InfoTip";
 import ExpressionField from "../components/ExpressionField";
@@ -56,6 +57,9 @@ import {
   validateCalcDraft,
   withInputKey,
 } from "../lib/calc_rules";
+import { confirmDelete } from "../lib/confirm";
+import Tooltip from "../components/ui/Tooltip";
+import Truncate from "../components/ui/Truncate";
 
 // Calc rules (Catalog > Actions > Calc rules, #999, #1018; epic #525): the
 // calc rule catalog, a sibling of Rules and Severity in the catalog's Actions
@@ -111,7 +115,7 @@ function ownerBadge(kind: OwnerKind): JSX.Element {
 
 function inputsCell(r: CalcRule): JSX.Element {
   return (
-    <span class="flex min-w-0 flex-col leading-snug" title={r.inputs.map((i) => `${i.alias} = ${i.key}`).join(", ")}>
+    <Tooltip as="span" tabIndex={0} class="flex min-w-0 flex-col leading-snug" content={r.inputs.map((i) => `${i.alias} = ${i.key}`).join(", ")}>
       <For each={r.inputs.slice(0, 2)}>
         {(i) => (
           <span class="truncate text-[12px]">
@@ -122,7 +126,7 @@ function inputsCell(r: CalcRule): JSX.Element {
       <Show when={r.inputs.length > 2}>
         <span class="text-[11px] text-base-content/40">and {r.inputs.length - 2} more</span>
       </Show>
-    </span>
+    </Tooltip>
   );
 }
 
@@ -131,12 +135,12 @@ function ReduceCell(p: { rule: CalcRule }): JSX.Element {
     <Show
       when={!p.rule.calc_error}
       fallback={
-        <span data-calc-error={p.rule.name} class="text-[12px] leading-snug text-error" title={p.rule.calc_error!.message}>
+        <Tooltip as="span" tabIndex={0} data-calc-error={p.rule.name} class="text-[12px] leading-snug text-error" content={p.rule.calc_error!.message}>
           reduce does not compile
-        </span>
+        </Tooltip>
       }
     >
-      <code class="truncate font-data text-[12px]" title={p.rule.reduce.expr}>{p.rule.reduce.expr}</code>
+      <Truncate as="code" class="font-data text-[12px]" text={p.rule.reduce.expr} />
     </Show>
   );
 }
@@ -147,7 +151,7 @@ function ReduceCell(p: { rule: CalcRule }): JSX.Element {
 function CalcLive(p: { rule: CalcRule }): JSX.Element {
   const r = () => p.rule;
   return (
-    <span class="inline-flex flex-wrap items-center gap-1" data-live={r().name} title={liveWords(r())}>
+    <Tooltip as="span" tabIndex={0} class="inline-flex flex-wrap items-center gap-1" data-live={r().name} content={liveWords(r())}>
       <Show when={!r().enabled}>
         <span class="badge badge-ghost badge-sm">disabled</span>
       </Show>
@@ -166,7 +170,7 @@ function CalcLive(p: { rule: CalcRule }): JSX.Element {
       <Show when={r().enabled && r().owners_computed + r().owners_pending + r().owners_unsupported + r().owners_failed === 0}>
         <span class="text-[12px] text-base-content/40">nothing yet</span>
       </Show>
-    </span>
+    </Tooltip>
   );
 }
 
@@ -186,28 +190,9 @@ export default function CalcRules(): JSX.Element {
     setEditing(null);
     blades.push({ kind: "calc-rule", id: name });
   };
-  // A link may name a rule (/calc-rules?rule=<name or uuid>): a calculated
-  // value on a component or a system points at the rule that derived it.
-  const [search, setSearch] = useSearchParams();
-  const linked = () => (typeof search.rule === "string" && search.rule ? search.rule : undefined);
-  createEffect(
-    on(linked, (ref) => {
-      if (!ref) return;
-      const top = blades.stack().at(-1);
-      if (top?.kind === "calc-rule" && top.id === ref) return;
-      blades.close();
-      blades.push({ kind: "calc-rule", id: ref });
-    }),
-  );
-  createEffect(
-    on(
-      () => blades.stack().length,
-      (n, prev) => {
-        if (n === 0 && (prev ?? 0) > 0 && linked()) setSearch({ rule: undefined });
-      },
-      { defer: true },
-    ),
-  );
+  // A link names a calc rule through the list's drawer address (/calc-rules?open=<name
+  // or uuid>, drawerHref): a calculated value on a component or a system points at the
+  // rule that derived it. The older ?rule= still opens.
 
   const columns: FlatColumn<CalcRule>[] = [
     identityColumn<CalcRule>(),
@@ -238,6 +223,8 @@ export default function CalcRules(): JSX.Element {
             columns,
             empty: "No calc rules yet. A calc rule derives a value from others: whether a component is busy from its call state and occupancy, a system's average temperature from its members.",
             rowId: (r) => r.name,
+            rowAlt: (r) => r.id,
+            legacyParam: "rule",
             blades: { registry: { "calc-rule": calcRuleBlade }, rootKind: "calc-rule", controller: blades },
             railExtra: () => (
               <span class="mr-1 inline-flex items-center gap-1.5 text-[12px] text-base-content/50">
@@ -306,7 +293,7 @@ function SelectorFacts(p: { rule: CalcRule }): JSX.Element {
   return (
     <Show when={types().length + ids().length > 0} fallback={<span class="text-sm text-base-content/60">{sys() ? "Every system" : "Every component"}</span>}>
       <div class="flex flex-wrap gap-1.5">
-        <For each={types()}>{(t) => <span class="badge badge-ghost badge-sm font-data" title={sys() ? "System type" : "Component type"}>{t}</span>}</For>
+        <For each={types()}>{(t) => <Tooltip as="span" tabIndex={0} class="badge badge-ghost badge-sm" content={sys() ? "System type" : "Component type"}><CatalogRef kind={sys() ? "system_type" : "component_type"} name={t} /></Tooltip>}</For>
         <For each={ids()}>
           {(id) => <A href={`/${sys() ? "systems" : "components"}/${id}`} class="badge badge-outline badge-sm hover:underline">{nameOf(id)}</A>}
         </For>
@@ -351,10 +338,10 @@ function StateRow(p: { o: CalcOwnerState }): JSX.Element {
         </Show>
         <span class="ml-auto flex flex-none items-center gap-2">
           <Show when={p.o.pending}>
-            <span class="badge badge-soft badge-info badge-sm" title={p.o.due_at ? `due ${fmtTime(p.o.due_at)}` : "computes on the next tick"}>pending</span>
+            <Tooltip as="span" tabIndex={0} class="badge badge-soft badge-info badge-sm" content={p.o.due_at ? `due ${fmtTime(p.o.due_at)}` : "computes on the next tick"}>pending</Tooltip>
           </Show>
           <Show when={p.o.computed_at}>
-            {(at) => <span class="w-16 text-right text-[11px] text-base-content/50" title={`${fmtTime(at())}, version ${p.o.rule_version}`}>{rel(at())}</span>}
+            {(at) => <Tooltip as="span" tabIndex={0} class="w-16 text-right text-[11px] text-base-content/50" content={`${fmtTime(at())}, version ${p.o.rule_version}`}>{rel(at())}</Tooltip>}
           </Show>
         </span>
       </span>
@@ -435,7 +422,7 @@ function CalcBladeBody(p: { name: string }): JSX.Element {
   }
 
   async function remove(r: CalcRule) {
-    if (!confirm(`Delete calc rule "${r.name}"? The values it wrote stay on their owners, as history naming it.`)) return;
+    if (!(await confirmDelete({ kind: "calc rule", name: r.name, consequence: "The values it wrote stay on their owners, as history naming it." }))) return;
     setErr(null);
     try {
       await deleteCalcRule(r.name);
@@ -510,7 +497,7 @@ function CalcBladeBody(p: { name: string }): JSX.Element {
               }
             />
             <KVStacked label="Version" value={<span class="tabular-nums">{r().version}</span>} />
-            <KVStacked label="Writes" value={<span class="inline-flex items-center gap-1.5"><span class="font-data">{r().output_key}</span><span class="text-[11px] text-base-content/40">{r().output_lane}</span><InfoTip label="output" text={CALC_HINTS.output} /></span>} />
+            <KVStacked label="Writes" value={<span class="inline-flex items-center gap-1.5"><CatalogRef kind={r().output_lane === "property" ? "property" : "metric"} name={r().output_key} /><span class="text-[11px] text-base-content/40">{r().output_lane}</span><InfoTip label="output" text={CALC_HINTS.output} /></span>} />
           </div>
           <Show when={r().description}>
             <KVStacked label="Description" value={<span class="text-base-content/80">{r().description}</span>} />
@@ -525,7 +512,7 @@ function CalcBladeBody(p: { name: string }): JSX.Element {
                 {(i) => (
                   <>
                     <code class="font-data text-[12px] text-base-content/60">{i.alias}</code>
-                    <span class="font-data text-[12px]">{i.key}</span>
+                    <span class="text-[12px]"><KeyRef name={i.key} /></span>
                   </>
                 )}
               </For>
@@ -833,6 +820,9 @@ export function CalcRuleForm(p: { mode: "create" | "edit"; rule?: CalcRule; onSa
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
+      <FieldRow bind="label">
+        <input class="input input-bordered w-full" value={d.label} placeholder="Busy" onInput={(e) => setD("label", e.currentTarget.value)} />
+      </FieldRow>
       <FieldRow bind="name" info={CALC_HINTS.name}>
         <input
           class="input input-bordered w-full font-data"
@@ -844,9 +834,6 @@ export function CalcRuleForm(p: { mode: "create" | "edit"; rule?: CalcRule; onSa
           onBlur={() => setNameTouched(true)}
         />
         <Show when={nameErr()}>{(m) => <p class="text-[11px] text-error">{m()}</p>}</Show>
-      </FieldRow>
-      <FieldRow bind="label">
-        <input class="input input-bordered w-full" value={d.label} placeholder="Busy" onInput={(e) => setD("label", e.currentTarget.value)} />
       </FieldRow>
 
       <FieldRow label="Derives on" info={CALC_HINTS.owner}>

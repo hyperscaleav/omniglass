@@ -1,5 +1,6 @@
+import { drawerHref } from "./drawer_address";
 import { api } from "../api/client";
-import type { EndpointWebhookBody, ReachRejectionBody, ReachSessionBody, ReachTLSBody } from "../api/api.gen";
+import type { EndpointWebhookBody, ReachGateReasonBody, ReachRejectionBody, ReachSessionBody, ReachTLSBody } from "../api/api.gen";
 import { share, spans } from "./timeline";
 
 // The reachability data layer: a thin typed wrapper over the generated client
@@ -55,6 +56,9 @@ export type ReachEndpoint = {
   // rung and class (ADR-0158), for a changed key the pinned and offered keys
   // (#1035), and why it holds and since when (#1110).
   rejection?: ReachRejectionBody;
+  // Every other reason the gate holds (#1650, #1657): a disruptive command, an
+  // unreachable probe, an upstream gateway. Absent when none holds.
+  gate_reasons?: ReachGateReasonBody[];
   // A tls endpoint's handshake and certificate (#1035): lib/tls reads it.
   tls?: ReachTLSBody;
   // A webhook endpoint's block (#1024): a push endpoint, no ladder, read by
@@ -102,7 +106,7 @@ export function pendingNotice(iface: ReachEndpoint): PendingNotice | null {
     case "awaiting-probe":
       return {
         text: `Waiting for outpost ${iface.outpost}'s first probe of this endpoint.`,
-        href: `/outposts?n=${encodeURIComponent(iface.outpost ?? "")}`,
+        href: drawerHref("outpost", iface.outpost ?? ""),
         linkLabel: "Open outpost",
       };
     default:

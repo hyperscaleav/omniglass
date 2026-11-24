@@ -21,10 +21,9 @@ Built today: the **alarm as a held row**, raised on a **component** by a caller 
 [event rule](#the-event_rule) (#819), carrying a `severity`
 (a level of the [severity catalog](#severity-a-catalog-of-named-levels), by name), a message, a
 `raised_at`, and a nullable `cleared_at` (clearing keeps the row). Any active alarm reaches a system
-through the component's own verdict (any active alarm degrades it, one at or above the `high` level
-is an outage), and such an alarm impairs every [slot](/architecture/health/) that component occupies
+through the component's own health (by the effect its level declares: none, degraded or outage), and such an alarm impairs every [slot](/architecture/health/) that component occupies
 while it stays open, since only an outage
-component stops occupying its slots; a lesser alarm degrades the component but leaves it in place
+component stops occupying its slots; a degraded-effect alarm degrades the component but leaves it in place, and a none-effect one leaves it healthy
 (#626: an alarm no longer names what it degrades).
 
 Also built: the **event rule** that raises and clears alarms on its own as samples land, with
@@ -83,7 +82,7 @@ component does today, and retention will, #1339) never touches `audit_log` ([aud
 [ADR-1442](/architecture/decisions/#adr-1442-an-audit-row-outlives-its-subject-both-images-and-a-string-reference)).
 
 An alarm write is **not sample-silent**: raising or clearing one recomputes
-[health](/architecture/health/) in the same transaction, and the rollup records the verdict
+[health](/architecture/health/) in the same transaction, and the rollup records the health
 transition as a **calculated-provenance `property` sample** (`provenance='calculated'`,
 `source_rule='health-rollup'`). Cycle safety therefore rests on **provenance, not topology**
 ([ADR-0069](/architecture/decisions/#adr-0069-cycle-safety-is-provenance-based-not-topology-based),
@@ -131,7 +130,7 @@ any of these states:
 person:
 
 - **It does not recompute health.** Acknowledging is not fixing. A recompute here would record a
-  verdict transition at a moment when nothing about the fleet changed, and the health history is
+  health transition at a moment when nothing about the fleet changed, and the health history is
   meant to be edges and only edges.
 - **It carries its own permission and its own scope**, resolved on the component tier from
   `alarm:acknowledge` itself rather than from `component:update`. Recording that somebody looked is
@@ -359,6 +358,19 @@ an edge, not when the edge falls. Creating a rule, enabling one, or a material e
 each selected series' newest sample, so fire criteria that already hold start their sustain then (or
 fires at once with no sustain) instead of waiting for a change the input may never send.
 
+The same holds from the component's side. A rule's selection of a component can change without the
+rule changing, when the component moves to another type (a new product, a product's type, a type's
+parent). The storage step for that move (`reselectComponentRules`, #2475) takes the component's
+selection (its id and its type's lineage) from before and after the write. It runs in the write's
+transaction and reads only the enabled rules that name a type in either lineage, locking them as a rule
+write does, so it waits for an ingest batch judging by one of them and then sees what that batch wrote. A rule the component
+came into primes from the newest sample of each of the component's series of its input, so a
+`reachable` already down opens its condition after the rule's sustain. A rule it left ends its
+conditions there (each with its clear event, resolving its alarm) and drops its streaks there. A
+rule that held it before and after is left alone. No component, product or type write calls the
+step yet: a component's product edit gains it with #941, a product's type with #1920, and a type's
+parent move with #1921.
+
 Two narrow races can still cost one decision on an input that reports only on change: a rule enabled
 (or re-keyed) while an ingest batch carrying its key is uncommitted primes from committed samples only,
 so the batch's sample is judged by neither side; and a judgment Postgres aborts on a deadlock rolls back
@@ -382,7 +394,7 @@ passes and then dropped with an error logged, while the pass moves on. The platf
 
 <SeededSet kind="event_rules" />
 
-An endpoint whose verdict reads `down` for the sustain opens a `high` alarm on its component, and
+An endpoint whose reachability reads `down` for the sustain opens a `high` alarm on its component, and
 reading `up` clears it, so unplugging a simulated component takes its system out and plugging it back recovers it, with no
 operator in between. That takes the system out only when the component fills a slot whose impact
 is `outage` and losing it drops the slot below quorum; otherwise the system reads whatever the slot's
@@ -554,8 +566,8 @@ at most 200 a pass, so a fleet of trend rules never starves the repair of a miss
 are rejudged on a later pass. The shape, a window field on the rule and generic list functions
 shared with calc rules rather than a trend operator, is [ADR-1985](/architecture/decisions/#adr-1985-a-trend-rule-reads-its-series-window-through-list-functions).
 
-A rule does not declare a health verdict itself: the alarm it raises impairs its owner's own
-verdict (any active alarm degrades it, one at or above `high` is an outage). Only an outage owner stops
+A rule does not declare a health value itself: the alarm it raises impairs its owner's own
+health by the effect its severity level declares (none, degraded or outage). Only an outage owner stops
 occupying the [system slots](/architecture/core-entities/#system-slots-what-a-system-needs-filled)
 it fills; a lesser alarm degrades it but leaves it in place. When it does drop out (#626), how much
 that matters is the slot's **impact** ([health](/architecture/health/)).
@@ -595,21 +607,21 @@ word), the five official levels above from the boot seed, and operator levels at
 all-scope grant; a name or rank
 already taken is a 409, an official level is read-only). An alarm's `severity` references a level
 **by name** (a rename carries its alarms; a level an alarm names cannot be deleted). A component's
-own verdict reads the rank: **`high` and above is an outage**, anything lower degrades. The retired
+own health reads the level's declared **`health_effect`** (#2558): `none` (listed, the component stays healthy), `degraded`, or `outage`. The shipped levels declare `info` none, `warning` and `average` degraded, `high` and `disaster` outage; a custom level declares its own on create, or, if omitted, takes the effect its rank would have had under the old floors (below `warning` none, below `high` degraded, else outage). The API's `outage` flag stays as a deprecated alias of `health_effect` being `outage`. Changing a level's effect recomputes every component with an open alarm at it, and so does the first boot after an upgrade that declares `info` none. The retired
 three values mapped by meaning: `critical` became `high`, `info` and `warning` kept their names.
 The console reads the catalog everywhere a severity shows: every alarm chip (the component's
 alarms, a system's and a location's "why", a rule's open alarms) renders the level's label in its color
 and sorts by its rank, so an operator level renders like a shipped one with no console change, and
 **Catalog > Actions > Severity levels** (#921) lists the levels worst first with their rank, color and
-effect, and authors operator levels in a drawer (#930): create, rename, relabel, recolor, re-rank and
+health effect, and authors operator levels in a drawer (#930): create, rename, relabel, recolor, re-rank and
 delete, gated `severity_level:*` on an all-scope grant like a rule write (ADR-0144, ruled
-2026-10-20): a level's rank moves health fleet-wide, so a holder whose grant stops at one location reads
+2026-10-20): a level's health effect moves health fleet-wide, so a holder whose grant stops at one location reads
 the levels but writes none (a 403). Official levels are read-only. Its form teaches the rank as it is typed: where the rank sits among the
-levels, and whether an alarm at it would take its component out or degrade it.
+levels, and its health-effect picker starts at the effect the rank would derive. An alarm whose level declares none says on the component that it does not affect health.
 
 :::caution[Open question]
-Whether a severity level is purely a label, color, and order, or also carries policy such as a
-default ack-timeout per level.
+A severity level already carries one policy beside its label, color and order: its health effect
+(#2558). Still open: whether it should carry more, such as a default ack-timeout per level.
 :::
 
 ## Notifications
@@ -630,7 +642,7 @@ their own beside it, and renames one with `:rename`.
 
 <SeededSet kind="notification_types" />
 
-Each is written in the language a [label rule](/architecture/glossary/) is written in, run by the same
+Each is written in the language a [label rule](/architecture/decisions/#adr-2033-a-template-is-cloned-once-a-standard-is-built-to-and-the-label-string-is-a-rule) is written in, run by the same
 sandbox (`internal/sandbox`, lifted out of the label engine so there is one): a closed grammar
 (`if`, the comparisons and the label rule's functions; `printf`, `call`, `index`, `range` and
 variables are refused when the rule is written, a 422 naming the construct, and it is never
@@ -785,7 +797,7 @@ and the API refuses an edit of those, or a delete, with a 409. What an operator 
 **disabling the rule or a target survives a restart**, a target's label is theirs, and so are targets an
 operator adds to the rule beside the shipped ones. The shipped rows live in the `og` namespace, so the
 targets are a catalog like the rules: an operator's own `platform-admins` lands in `local` beside the
-shipped one and the bare name reaches theirs ([the search path](/architecture/glossary/)), while the
+shipped one and the bare name reaches theirs ([the search path](/architecture/decisions/#adr-0318-every-catalog-key-is-a-namespace-and-a-key)), while the
 shipped rule keeps the shipped target it links:
 
 ```bash
@@ -1215,7 +1227,7 @@ upgrade backfilled from the rule-raised alarms open at the time. The severity ca
 
 <SchemaTable table="notification_type" notes={{ subject: 'The one-line subject rule, rendered over the alarm facts; whitespace collapses', text: 'The body text rule; its lines are kept' }} />
 
-<SchemaTable table="severity_level" notes={{ rank: 'Higher is worse; at or above the health rule\'s outage floor an active alarm is an outage (the shipped levels, each marked, are on the rules guide)' }} />
+<SchemaTable table="severity_level" notes={{ rank: 'Higher is worse; compares levels only. What an alarm does to its component is the level\'s health_effect (the shipped levels, each marked, are on the rules guide)' }} />
 
 A command **is two real tables**: the `command_type` catalog and the `command` invocation row with
 its computed settlement; see [commands](/architecture/commands/). The `action_rule` config row lives

@@ -6,7 +6,7 @@ summary: "Template keeps one meaning, the catalog entry the binary ships and an 
 refs: [2033, 2028, 2065, 2034]
 ---
 
-- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [glossary](/architecture/glossary/),
+- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [glossary](/reference/glossary/),
   [templates](/architecture/templates/), [storage](/architecture/storage/)
 - **Decision:** (#2033.) Both words stay, and each keeps one relationship. A **template** is an
   entry in the catalog the binary ships (`/templates`, the four kinds `standard_template`,

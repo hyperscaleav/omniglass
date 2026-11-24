@@ -7,6 +7,7 @@ import { ALARM_TIMELINE_POLL_MS, ageWords, alarmTimeline, alarmTimelineKey, retr
 import { useMe, can } from "../lib/auth";
 import { describeError, fmtTime } from "../lib/format";
 import { createToggles } from "../lib/toggles";
+import Tooltip from "./ui/Tooltip";
 
 // The kind chip's word and its tooltip: a notification line wears "notify",
 // the word that fits the chip's column.
@@ -40,18 +41,22 @@ export default function AlarmTimeline(props: { component: string; alarmId: strin
     queryFn: () => alarmTimeline(props.component, props.alarmId),
     refetchInterval: ALARM_TIMELINE_POLL_MS,
     refetchOnWindowFocus: false,
+    retry: false,
   }));
   const now = createMemo(() => (q.data, Date.now()));
   const [retryErr, setRetryErr] = createSignal<string | null>(null);
   return (
     <div id={props.id} class="flex flex-col gap-1 rounded-box bg-base-200/40 px-2.5 py-2">
       <Show when={q.error}>
-        <div role="alert" class="alert alert-error alert-soft py-1 text-xs"><span>{describeError(q.error)}</span></div>
+        <div role="alert" class="alert alert-error alert-soft flex items-center justify-between gap-2 py-1 text-xs">
+          <Tooltip as="span" class="min-w-0 truncate" content={describeError(q.error)}>Could not read this alarm's timeline.</Tooltip>
+          <Button size="xs" intent="quiet" onClick={() => void q.refetch()}>Retry</Button>
+        </div>
       </Show>
       <Show when={retryErr()}>
         <div role="alert" class="alert alert-error alert-soft py-1 text-xs"><span>{retryErr()}</span></div>
       </Show>
-      <Show when={q.isLoading}>
+      <Show when={q.isLoading && !q.error}>
         <span class="text-[11px] text-base-content/45">Reading the timeline…</span>
       </Show>
       <Show when={q.data}>
@@ -64,13 +69,13 @@ export default function AlarmTimeline(props: { component: string; alarmId: strin
               <For each={entries()}>
                 {(e) => (
                   <li class="grid grid-cols-[5.5rem_3.25rem_minmax(0,1fr)] items-baseline gap-x-2 text-[11.5px]">
-                    <span class="tabular-nums text-base-content/45" title={fmtTime(e.at)}>{ageWords(e.at, now())}</span>
-                    <span
+                    <Tooltip as="span" tabIndex={0} class="tabular-nums text-base-content/45" content={fmtTime(e.at)}>{ageWords(e.at, now())}</Tooltip>
+                    <Tooltip as="span" tabIndex={0}
                       class={`badge badge-xs w-full justify-center ${(KIND_CHIP[e.kind] ?? KIND_CHIP.audit).cls}`}
-                      title={(KIND_CHIP[e.kind] ?? KIND_CHIP.audit).tip}
+                      content={(KIND_CHIP[e.kind] ?? KIND_CHIP.audit).tip}
                     >
                       {(KIND_CHIP[e.kind] ?? KIND_CHIP.audit).word}
-                    </span>
+                    </Tooltip>
                     <Show when={e.kind === "notification"} fallback={<Sentence e={e} />}>
                       <NotifyRow e={e} component={props.component} alarmId={props.alarmId} onRetryError={setRetryErr} />
                     </Show>
@@ -116,24 +121,24 @@ function NotifyRow(props: { e: AlarmTimelineEntry; component: string; alarmId: s
   return (
     <span class="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
       <Show when={to()}>
-        <span class="font-data text-base-content/85" title={e().message}>
+        <Tooltip as="span" tabIndex={0} class="font-data text-base-content/85" content={e().message}>
           {to()}
           <Show when={!e().target && e().channel}>
             <span class="font-sans text-base-content/55"> ({e().channel})</span>
           </Show>
-        </span>
+        </Tooltip>
       </Show>
       <NotificationStatusPill status={e().what} size="xs" />
       <Show when={e().action_rule}>
         <span class="text-base-content/55">action rule <span class="font-data text-base-content/70">{e().action_rule}</span></span>
       </Show>
       <Show when={e().what === "suppressed" && e().error}>
-        <span class="min-w-0 truncate text-base-content/45" title={e().error}>{e().error}</span>
+        <Tooltip as="span" class="min-w-0 truncate text-base-content/45" content={e().error}>{e().error}</Tooltip>
       </Show>
       <Show when={e().what === "failed"}>
-        <span class="min-w-0 truncate text-error/80" title={e().error}>
+        <Tooltip as="span" class="min-w-0 truncate text-error/80" content={e().error}>
           {e().error}{e().attempts ? ` (${e().attempts} attempts)` : ""}
-        </span>
+        </Tooltip>
         <Show when={e().attempts ? e().notification : undefined}>
           {(id) => <RetryButton id={id()} component={props.component} alarmId={props.alarmId} onError={props.onRetryError} />}
         </Show>

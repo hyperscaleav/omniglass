@@ -322,25 +322,41 @@ func EndToEndOf(rows []DeliveryRow) map[delivery.Kind]float64 {
 // of the same outposts minted after from, which says whether a boot that never
 // settled was ended by its outpost starting again (#1692).
 //
-// It reads the table once, placing each receipt by window functions over its
-// boot and its outpost. A correlated subquery per receipt rescans the table for
-// each one, which at 3,000 systems ran for hours and starved the ingest it
-// was measuring (#1841).
+// It costs what its window holds (#1947): the boots come from the minted
+// index over the receipts minted after from, each boot's receipts from the
+// (boot, seq) index, and the restart probe reads each candidate boot's first
+// receipt the same way. A window function over the whole table (#1841's
+// answer to a subquery per row) sorted every receipt of the day, which while
+// ingest was behind loaded the database the lab was measuring.
 func ReceiptsQuery(from, to time.Time) string {
 	return fmt.Sprintf(`select row_to_json(r) from (
-		with ledgered as (
-			select outpost, boot, seq, minted, resolved, deliveries, ledger, outcome, outpost_loss,
-				min(seq) filter (where minted > to_timestamp(%[1]s) and minted <= to_timestamp(%[2]s))
-					over (partition by boot) as first_in,
-				min(seq) over (partition by boot) as boot_first
-			from telemetry_receipt where ledger is not null),
-		placed as (
-			select *, max(seq) filter (where seq < first_in) over (partition by boot) as below,
-				bool_or(first_in is not null) over (partition by outpost) as outpost_in
-			from ledgered)
-		select outpost, boot, seq, minted, resolved, deliveries, ledger, outcome, outpost_loss from placed
-		where (first_in is not null and (seq >= first_in or seq = below))
-			or (first_in is null and outpost_in and seq = boot_first and minted > to_timestamp(%[1]s))
+		with recent as (
+			select outpost, boot,
+				min(seq) filter (where minted <= to_timestamp(%[2]s)) as first_in
+			from telemetry_receipt
+			where ledger is not null and boot is not null and minted > to_timestamp(%[1]s)
+			group by outpost, boot),
+		open_outpost as (select distinct outpost from recent where first_in is not null)
+		select t.outpost, t.boot, t.seq, t.minted, t.resolved, t.deliveries, t.ledger, t.outcome, t.outpost_loss
+		from recent b cross join lateral (
+			select outpost, boot, seq, minted, resolved, deliveries, ledger, outcome, outpost_loss
+			from telemetry_receipt where boot = b.boot and ledger is not null and seq >= b.first_in) t
+		where b.first_in is not null
+		union all
+		select n.outpost, n.boot, n.seq, n.minted, n.resolved, n.deliveries, n.ledger, n.outcome, n.outpost_loss
+		from recent b cross join lateral (
+			select outpost, boot, seq, minted, resolved, deliveries, ledger, outcome, outpost_loss
+			from telemetry_receipt where boot = b.boot and ledger is not null and seq < b.first_in
+			order by seq desc limit 1) n
+		where b.first_in is not null
+		union all
+		select f.outpost, f.boot, f.seq, f.minted, f.resolved, f.deliveries, f.ledger, f.outcome, f.outpost_loss
+		from recent b cross join lateral (
+			select outpost, boot, seq, minted, resolved, deliveries, ledger, outcome, outpost_loss
+			from telemetry_receipt where boot = b.boot and ledger is not null
+			order by seq limit 1) f
+		where b.first_in is null and f.minted > to_timestamp(%[1]s)
+			and exists (select 1 from open_outpost o where o.outpost is not distinct from b.outpost)
 		order by outpost, boot, seq) r`,
 		epoch(from), epoch(to))
 }
@@ -435,6 +451,16 @@ func (b Backlog) Settled(p time.Time) (bool, string) {
 		return false, fmt.Sprintf("the consumer's ack floor was never read after the stream's last sequence %s", count(head))
 	}
 	return false, fmt.Sprintf("the ack floor reached %s, not yet past the stream's last sequence %s", count(floor), count(head))
+}
+
+// LatestFloor is the newest ack floor any report carried, and whether one did.
+func (b Backlog) LatestFloor() (float64, bool) {
+	for i := len(b) - 1; i >= 0; i-- {
+		if b[i].SeenFloor {
+			return b[i].Floor, true
+		}
+	}
+	return 0, false
 }
 
 // BacklogQuery is every stream head and ack floor gauge the server published

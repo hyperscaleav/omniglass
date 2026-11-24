@@ -18,6 +18,9 @@ type FieldError struct {
 	Namespace string
 	Key       string
 	Message   string
+	// Safe marks a message that quotes a number the operator typed and nothing
+	// secret, so an env load may show it whole.
+	Safe bool
 }
 
 func (e *FieldError) Error() string {
@@ -56,7 +59,8 @@ func Validate(namespace string, patch map[string]any) error {
 		}
 		if check, ok := valueChecks[namespace+"."+key]; ok {
 			if err := check(val); err != nil {
-				return &FieldError{Namespace: namespace, Key: key, Message: err.Error()}
+				var se *safeError
+				return &FieldError{Namespace: namespace, Key: key, Message: err.Error(), Safe: errors.As(err, &se)}
 			}
 		}
 	}
@@ -84,6 +88,15 @@ func withoutNulls(v any) any {
 // says, checked where the value is accepted so a value nothing can use is
 // refused naming the entry, rather than stored and failing every later use.
 var valueChecks = map[string]func(any) error{
+	// The metric lane folds a day into a block 48 hours after it starts, so a
+	// window under 3 days folds nothing (#2144): refused where it loads.
+	"retention.metric_days": func(v any) error {
+		n, ok := v.(float64)
+		if !ok || n >= MetricMinDays {
+			return nil // the schema check above already refused a non-number
+		}
+		return &safeError{fmt.Sprintf("the metric lane's window of %v days is under the %d-day minimum (a day folds into blocks 48 hours after it starts)", n, MetricMinDays)}
+	},
 	// The egress allow list (#618): every entry a CIDR, an address or a host
 	// name, parsed by the primitive that reads it.
 	"notification.egress_allow": func(v any) error {
@@ -112,3 +125,12 @@ var valueChecks = map[string]func(any) error{
 		return nil
 	},
 }
+
+// MetricMinDays is the shortest metric window that folds (#2144): a day folds
+// 48 hours after it starts, so a window of N days leaves N-2 days to fold.
+const MetricMinDays = 3
+
+// safeError is a check's error whose text holds only the operator's number.
+type safeError struct{ msg string }
+
+func (e *safeError) Error() string { return e.msg }

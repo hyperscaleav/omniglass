@@ -7,6 +7,7 @@ import { ME_KEY, type Me } from "../lib/auth";
 import { REACHABILITY_KEY, type ReachEndpoint } from "../lib/reachability";
 import { ENDPOINTS_KEY } from "../lib/endpoints";
 import { uuidFor } from "../lib/testids";
+import { isOff } from "../test-tip";
 
 // A changed key, trusted from the console (#1078). A session rejected for a
 // changed ssh host key names both keys, read off the gate as data (never out
@@ -119,8 +120,8 @@ describe("PinnedKeyNotice", () => {
     await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: [...REACHABILITY_KEY(compId)] }));
     await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
     // Until the session moves, neither Trust nor Retry can stack a second redial.
-    await waitFor(() => expect(trustButton().disabled).toBe(true));
-    expect((screen.getByRole("button", { name: /retry/i }) as HTMLButtonElement).disabled).toBe(true);
+    await waitFor(() => expect(isOff(trustButton())).toBe(true));
+    expect(isOff(screen.getByRole("button", { name: /retry/i }))).toBe(true);
   });
 
   // The stale offered key: the component's key changed again while the
@@ -135,7 +136,7 @@ describe("PinnedKeyNotice", () => {
     await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/offers a different key/i));
     expect(d.textContent).toContain(offered);
     const confirm = confirmButton();
-    expect(confirm.disabled).toBe(true);
+    expect(isOff(confirm)).toBe(true);
     fireEvent.click(confirm);
     await new Promise((r) => setTimeout(r, 20));
     expect(fetchMock).not.toHaveBeenCalled();
@@ -158,7 +159,7 @@ describe("PinnedKeyNotice", () => {
   it("greys Trust with its reason for a caller without endpoint:retry, and never opens or calls", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch");
     mount(hostKeyRejected(), viewer);
-    expect(trustButton().disabled).toBe(true);
+    expect(isOff(trustButton())).toBe(true);
     expect(screen.getByLabelText(/trusting a key needs the endpoint:retry permission/i)).toBeTruthy();
     fireEvent.click(trustButton());
     expect(screen.queryByRole("alertdialog")).toBeNull();
@@ -204,12 +205,12 @@ describe("PinnedKeyNotice for a probe's gate, no session held", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
     expect(await (fetchMock.mock.calls[0][0] as Request).json()).toEqual({ host_key: offered });
     await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: [...REACHABILITY_KEY(compId)] }));
-    await waitFor(() => expect(trustButton().disabled).toBe(true));
+    await waitFor(() => expect(isOff(trustButton())).toBe(true));
   });
 
   it("greys Trust for a caller without endpoint:retry, the keys still read", () => {
     mount(hostKeyRejected({ session: undefined, rejection: { rung: "responsive", class: "host-key", ts: ago(40_000), pinned_key: pinned, offered_key: offered } }), viewer);
-    expect(trustButton().disabled).toBe(true);
+    expect(isOff(trustButton())).toBe(true);
     expect(screen.getByTestId("offered-key").textContent).toBe(offered);
   });
 });

@@ -6,7 +6,7 @@ summary: "The edge process that polls, listens, carries commands and holds sessi
 refs: [2031, 2028, 2059]
 ---
 
-- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [glossary](/architecture/glossary/),
+- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [glossary](/reference/glossary/),
   [nodes](/architecture/nodes/)
 - **Decision:** (#2031.) The process that runs near the gear on the server's behalf is an
   **outpost**, on every surface: the run mode (`omniglass outpost run`), the API (`/outposts`, the
