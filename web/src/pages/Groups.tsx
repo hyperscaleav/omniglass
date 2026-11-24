@@ -33,10 +33,9 @@ const filterKeys: FilterKey<Group>[] = [
 
 export default function Groups() {
   const me = useMe();
-  const [params, setParams] = useSearchParams();
+  const [, setParams] = useSearchParams();
   const groups = useQuery(() => ({ queryKey: GROUPS_KEY, queryFn: listGroups }));
-  // ?g=<id> deep-links to a group (e.g. the cross-over from a user's inherited grant).
-  const openId = () => (Array.isArray(params.g) ? params.g[0] : params.g) || undefined;
+  // ?open=<id> deep-links to a group (the drawer address, #2429); the older ?g=<id> still opens it.
 
   return (
     <FlatList<Group>
@@ -50,13 +49,14 @@ export default function Groups() {
         columns,
         empty: "No user groups yet.",
         rowId: (g) => g.id,
-        openId,
+        rowAlt: (g) => g.name,
+        legacyParam: "g",
         blades: { registry: identityRegistry, rootKind: "group" },
         create: can(me.data, "user_group", "create")
-          // The handoff is the URL (#762): ?g=<id>&edit=1 opens the new group's
+          // The handoff is the URL (#762): ?open=<id>&edit=1 opens the new group's
           // blade already editing, so members and grants are added without a
           // second step.
-          ? { label: "New user group", can: () => can(me.data, "user_group", "create"), body: (ctx) => <CreateGroupForm onCreated={(g) => { setParams({ g: g.id, edit: "1" }); ctx.close(); }} onClose={ctx.close} /> }
+          ? { label: "New user group", can: () => can(me.data, "user_group", "create"), body: (ctx) => <CreateGroupForm onCreated={(g) => { setParams({ open: g.id, g: undefined, edit: "1" }); ctx.close(); }} onClose={ctx.close} /> }
           : undefined,
       }}
     />

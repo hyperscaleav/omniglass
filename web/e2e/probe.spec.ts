@@ -143,13 +143,19 @@ test.describe("probe", () => {
 
   for (const file of SCRIPTS) {
     const id = file.replace(/\.yaml$/, "");
-    test(`walkthrough ${id}`, async () => {
+    test(`walkthrough ${id}`, async ({ browser }) => {
       const surface = `walkthrough:${id}`;
       const w = parseWalkthrough(readFileSync(join(WALKTHROUGHS, file), "utf8"), file);
       // Room for every step's own wait, so a slow step is the walkthrough's
       // recorded failure rather than the test runner's timeout.
       test.setTimeout(30_000 + (w.ready?.timeout ?? 0) + w.steps.reduce((t: number, s: { timeout?: number }) => t + (s.timeout ?? STEP_TIMEOUT), 0));
-      const page = await ctx.newPage();
+      // A walkthrough on the identity provider's lab signs in through it
+      // (#2362), as someone other than the owner, so it plays in a context of
+      // its own, started from the owner's session: the walkthroughs after it
+      // still play as the owner.
+      const own = w.lab.includes("sso") ? await browser.newContext({ storageState: await ctx.storageState() }) : null;
+      if (own) await own.addInitScript(VITALS);
+      const page = await (own ?? ctx).newPage();
       trackRequests(page);
       watch(page, surface);
       emit({ kind: "visit", surface });
@@ -188,6 +194,7 @@ test.describe("probe", () => {
       if (!failed) await settle(page, surface);
       emit({ kind: "walkthrough", surface, ok: !failed, ...(failed ?? {}) });
       await page.close();
+      await own?.close();
     });
   }
 });

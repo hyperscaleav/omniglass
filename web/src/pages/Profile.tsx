@@ -5,14 +5,17 @@ import PasswordField from "../components/PasswordField";
 import Button from "../components/Button";
 import Drawer from "../components/Drawer";
 import KVStacked from "../components/KVStacked";
+import Collapsible from "../components/ui/Collapsible";
 import FieldRow from "../components/FieldRow";
 import { useFormActions } from "../lib/formactions";
 import SessionsList from "../components/SessionsList";
+import SelfIdentityLinks from "../components/SelfIdentityLinks";
 import { passwordError, isPasswordPolicyMessage, tokenTtlError } from "../lib/validate";
 import { can, useMe, useUpdateProfile, useChangePassword, setMyAvatar, removeMyAvatar, fetchMyAvatar } from "../lib/auth";
 import { useSessions, useRevokeSession, useRevokeAllSelfSessions, createSelfToken, type Session } from "../lib/sessions";
 import { Bell, Check, Copy, Key, LogOut, Plus, Save, Trash } from "../components/icons";
 import { kindLabel } from "../lib/users";
+import { confirmAction } from "../lib/confirm";
 
 // Profile is the signed-in operator's own account surface: edit your label
 // and email, change your password, and (pedagogically) see the identity model you
@@ -47,7 +50,7 @@ export default function Profile() {
   const [revokingAll, setRevokingAll] = createSignal<"session" | "token" | null>(null);
   async function revokeAll(purpose: "session" | "token") {
     const noun = purpose === "session" ? "other sessions" : "API tokens";
-    if (!window.confirm(`Revoke all your ${noun}? You stay signed in on this one.`)) return;
+    if (!(await confirmAction({ title: `Revoke all your ${noun}?`, body: "You stay signed in on this one.", confirmLabel: `Revoke ${noun}`, tone: "danger" }))) return;
     setRevokingAll(purpose);
     const r = await revokeAllSelf(purpose);
     if (!r.ok) setProfileMsg({ tone: "error", text: r.message });
@@ -117,7 +120,7 @@ export default function Profile() {
 
   const [current, setCurrent] = createSignal("");
   const [next, setNext] = createSignal("");
-  const [confirm, setConfirm] = createSignal("");
+  const [confirmation, setConfirmation] = createSignal("");
   const [pwMsg, setPwMsg] = createSignal<Note>(null);
   const [pwBusy, setPwBusy] = createSignal(false);
   // A password-policy rejection (the server denylist) renders inline under the new
@@ -127,7 +130,7 @@ export default function Profile() {
   // Profile + Access, rather than a third stacked form.
   const [pwOpen, setPwOpen] = createSignal(false);
   async function savePassword() {
-    if (next() !== confirm()) {
+    if (next() !== confirmation()) {
       setPwMsg({ tone: "error", text: "The new passwords do not match." });
       return;
     }
@@ -138,7 +141,7 @@ export default function Profile() {
     if (r.ok) {
       setCurrent("");
       setNext("");
-      setConfirm("");
+      setConfirmation("");
       setPwMsg(null);
       setPwOpen(false);
       // Feedback lands on the page (the drawer just closed).
@@ -198,7 +201,7 @@ export default function Profile() {
       submitIcon: Save,
       submit: () => void savePassword(),
       busy: pwBusy,
-      disabled: () => !current() || !next() || next() !== confirm() || !!passwordError(next(), human()?.username),
+      disabled: () => !current() || !next() || next() !== confirmation() || !!passwordError(next(), human()?.username),
       cancel: () => setPwOpen(false),
     });
     return (
@@ -228,12 +231,12 @@ export default function Profile() {
             type="password"
             autocomplete="new-password"
             class="input input-bordered w-full font-data"
-            value={confirm()}
-            onInput={(e) => setConfirm(e.currentTarget.value)}
+            value={confirmation()}
+            onInput={(e) => setConfirmation(e.currentTarget.value)}
             disabled={pwBusy()}
             aria-required="true"
           />
-          <Show when={confirm() && next() !== confirm()}>
+          <Show when={confirmation() && next() !== confirmation()}>
             <p class="mt-1 text-[11px] text-error">Passwords do not match.</p>
           </Show>
         </div>
@@ -395,14 +398,18 @@ export default function Profile() {
                   </For>
                 </div>
               </div>
-              <div>
-                <div class="eyebrow mb-1.5">Permissions ({me.data?.permissions.length ?? 0})</div>
+              {/* Closed by default: an admin holds well over a hundred, and the
+                  count is the fact most visits want. */}
+              <Collapsible
+                title={<>Permissions ({me.data?.permissions.length ?? 0})</>}
+                triggerClass="eyebrow group mb-1.5 flex cursor-pointer items-center gap-1 rounded-field focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/60"
+              >
                 <div class="flex flex-wrap gap-1.5">
                   <For each={me.data?.permissions ?? []} fallback={<span class="text-xs text-base-content/40">none</span>}>
                     {(p) => <span class="badge badge-ghost font-data text-[11px]">{p}</span>}
                   </For>
                 </div>
-              </div>
+              </Collapsible>
             </div>
           </div>
         </div>
@@ -425,6 +432,9 @@ export default function Profile() {
             </div>
           </div>
         </Show>
+
+        {/* Single sign-on (#2362): the caller's own identity links. */}
+        <SelfIdentityLinks />
 
         {/* Sessions: the browsers and devices the caller is signed in from, each revocable. */}
         <div class="card border border-base-300 bg-base-200">

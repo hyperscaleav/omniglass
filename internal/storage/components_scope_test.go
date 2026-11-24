@@ -32,10 +32,10 @@ func TestComponentScopeCRUD(t *testing.T) {
 	// official type allowed at root; the type is incidental here, only the
 	// name (rm-1) is asserted below. rm-2 is a second placement, so the
 	// same-name-different-bucket case below has somewhere legal to land.
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "rm-1", LocationType: "campus"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "rm-1", LocationType: "campus"}, all, all); err != nil {
 		t.Fatalf("seed location: %v", err)
 	}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "rm-2", LocationType: "campus"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "rm-2", LocationType: "campus"}, all, all); err != nil {
 		t.Fatalf("seed location: %v", err)
 	}
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-1"}, all, all); err != nil {

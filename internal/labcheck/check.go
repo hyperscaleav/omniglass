@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/hyperscaleav/omniglass/internal/devseed"
+	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/transport"
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
@@ -57,6 +58,10 @@ type Component struct {
 	Location  string
 	Endpoints []Endpoint
 	Values    []Value
+	// Impaired is a device someone broke on purpose in the simulator (a
+	// seeded fault, #2434, or an unplug on its page): it owes nothing while
+	// it is.
+	Impaired bool
 }
 
 // System is one system and the keys it carries a value for.
@@ -114,6 +119,24 @@ func ownValue(vs []Value) bool {
 	})
 }
 
+// platformProducts are the products of the platform's own components (the
+// server, a node, an outpost). They report platform metrics themselves and
+// have no endpoint by design, so the endpoint-driven built-in and collected
+// tiers do not apply to them; they are held to the platform tier instead.
+var platformProducts = []string{storage.ServerProductName, storage.OutpostProductName}
+
+// isPlatform reports whether c is one of the platform's own components.
+func (c Component) isPlatform() bool { return slices.Contains(platformProducts, c.Product) }
+
+// carriesPlatformValue is whether vs holds a self-reported platform metric: a
+// platform-class value other than the health rollup, which the server writes
+// about every component and so says nothing about the component itself.
+func carriesPlatformValue(vs []Value) bool {
+	return slices.ContainsFunc(vs, func(v Value) bool {
+		return v.Class == writerclass.Platform && writerclass.ProcessSelf(v.Key)
+	})
+}
+
 // owner names a component for a finding. A component's name is unique within
 // its room, not across the fleet, so the product and location say which one.
 func (c Component) owner() string {
@@ -164,7 +187,17 @@ func Evaluate(s Snapshot, gaps Gaps) []Finding {
 	}
 
 	for _, c := range s.Components {
+		if c.Impaired {
+			continue
+		}
 		owner := c.owner()
+		if c.isPlatform() && len(c.Endpoints) == 0 {
+			// Held to the tier it carries: its own platform metrics.
+			if !carriesPlatformValue(c.Values) {
+				fail(devseed.TierBuiltIn, c.Product, owner, "platform component reports no platform metric")
+			}
+			continue
+		}
 		cover(devseed.TierBuiltIn, c.Product)
 		cover(devseed.TierCollected, c.Product)
 		if len(c.Endpoints) == 0 {

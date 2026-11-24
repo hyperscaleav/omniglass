@@ -7,6 +7,8 @@ import { USERS_KEY, ROLES_KEY, type User } from "../lib/users";
 import { GROUPS_KEY } from "../lib/groups";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
+import { userIdentityLinksKey } from "../lib/identityLinks";
+import { answerConfirms } from "../lib/confirm.testkit";
 
 // The Users page is a config over the shared FlatList: a directory row per
 // user, a row opening the detail blade (facts, the groups it belongs to, grants,
@@ -29,6 +31,10 @@ function mount() {
   qc.setQueryData([...USERS_KEY, false], seed);
   for (const pr of seed) qc.setQueryData([...USERS_KEY, pr.id], pr);
   qc.setQueryData([...ME_KEY], me);
+  // Alice's single sign-on links (#2362); the others have none.
+  qc.setQueryData([...userIdentityLinksKey(uuidFor("u-alice"))], [
+    { id: uuidFor("l1"), identifier: "https://login.example.com|alice-sub", issuer: "https://login.example.com", subject: "alice-sub", linked_by: "root", self: false, created_at: "2026-11-20T10:00:00Z" },
+  ]);
   // The grant builder's catalogs; empty is enough for the detail Drawer to render.
   qc.setQueryData([...ROLES_KEY], []);
   qc.setQueryData(["locations"], []);
@@ -215,7 +221,7 @@ describe("Users page", () => {
       // The Sessions section's per-user list fetch: no rows needed here.
       return new Response(JSON.stringify({ sessions: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
     });
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    answerConfirms(true);
 
     mount();
     fireEvent.click(screen.getByText("Alice Ng"));
@@ -306,7 +312,7 @@ describe("Users page", () => {
     // Archive hides the user from the directory, so its blade closes (the account
     // still exists and is restorable, unlike a purge). The POST 204s and the refetch
     // returns the directory without her.
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    answerConfirms(true);
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       const url = typeof input === "string" ? input : req.url;
@@ -332,7 +338,7 @@ describe("Users page", () => {
     // The blade must close, and the now-dead detail query must not be refetched (an
     // orphan 404 that would keep the blade in a broken state).
     let detailRefetched = false;
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    answerConfirms(true);
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       const url = typeof input === "string" ? input : req.url;
@@ -559,5 +565,30 @@ describe("edit as a URL fact", () => {
     mount();
     // The blade footer's edit pair is the witness: Save renders only in edit mode.
     await waitFor(() => expect(screen.getByText("Save")).toBeTruthy());
+  });
+
+  it("lists a person's identity links and links a new one by iss|sub", async () => {
+    mount();
+    fireEvent.click(screen.getByText("Alice Ng"));
+    const blade = await waitFor(() => {
+      const el = document.querySelector("aside[data-blade]");
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    expect(within(blade).getByText("Single sign-on")).toBeTruthy();
+    expect(within(blade).getByText("alice-sub")).toBeTruthy();
+    expect(within(blade).getByText(/Linked by root/)).toBeTruthy();
+    const calls: { method: string; url: string; body: string }[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (req: Request) => {
+      calls.push({ method: req.method, url: req.url, body: await req.clone().text() });
+      return Response.json({ links: [] }, { status: req.method === "POST" ? 201 : 200 });
+    }));
+    fireEvent.input(within(blade).getByLabelText("Identity (iss|sub)"), { target: { value: "https://login.example.com|alice-2" } });
+    fireEvent.click(within(blade).getByText("Link"));
+    await waitFor(() => expect(calls.some((c) => c.method === "POST")).toBe(true));
+    const post = calls.find((c) => c.method === "POST")!;
+    expect(post.url).toContain(`/users/${uuidFor("u-alice")}/identity-links`);
+    expect(JSON.parse(post.body)).toEqual({ identifier: "https://login.example.com|alice-2" });
+    vi.unstubAllGlobals();
   });
 });

@@ -36,6 +36,8 @@ import FieldRow from "./FieldRow";
 import CreateIdentity from "./CreateIdentity";
 import SystemTypeSelect from "./SystemTypeSelect";
 import MembershipsField from "./MembershipsField";
+import MoveEntity from "./MoveEntity";
+import type { PickerOption } from "./ui/Picker";
 import { Plus } from "./icons";
 import { bucketPhrase, nameBucket, penIncomplete } from "../lib/namegen";
 import { nameRefused, recoverFromMovedName, useLabelDraft } from "../lib/labeldraft";
@@ -201,6 +203,8 @@ export default function EntityForm(props: {
   // deep link) until the operator picks; seeding resets it, with no effect.
   const [primaryDraft, setPrimaryDraft] = createSignal<string | undefined>(undefined);
   const [removedMembers, setRemovedMembers] = createSignal<ReadonlySet<string>>(new Set());
+  // "Also serves..." (#1804): systems staged to be added, apart from the primary.
+  const [addedMembers, setAddedMembers] = createSignal<ReadonlySet<string>>(new Set());
   const memberList = () => memberships.data ?? [];
   const serverPrimary = () => memberList().find((m) => m.primary)?.system_id ?? "";
   // Membership is its own verb (system:update on the system AND component:update
@@ -223,8 +227,50 @@ export default function EntityForm(props: {
     return p === undefined || p === serverPrimary() ? null : p;
   };
   const draftState = () =>
-    JSON.stringify([pen.overridden(), pen.value(), name(), standard(), systemType(), locationType(), parentName(), stagedPrimary(), [...removedMembers()].sort()]);
+    JSON.stringify([pen.overridden(), pen.value(), name(), standard(), systemType(), locationType(), parentName(), stagedPrimary(), [...removedMembers()].sort(), [...addedMembers()].sort()]);
   let seeded = "";
+
+  // Everything a write to this entity can have changed: the kind's list, the
+  // fleet view, and for a component both ends of the membership relation (the
+  // component's own list and every system's member list, which SystemZoom polls).
+  // A move can also re-mint a platform-generated name and shifts the place
+  // every breadcrumb and slot list reads, so the slots refresh too.
+  const refresh = async () => {
+    const key = props.kind === "system" ? SYSTEMS_KEY : props.kind === "location" ? LOCATIONS_KEY : COMPONENTS_KEY;
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: [...key] }),
+      qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] }),
+      ...(props.kind !== "location" ? [qc.invalidateQueries({ queryKey: ["system-slots"] }), qc.invalidateQueries({ queryKey: [...SYSTEMS_KEY] })] : []),
+      ...(props.kind === "component" ? MEMBERSHIP_KEYS.map((k) => qc.invalidateQueries({ queryKey: [...k] })) : []),
+    ]);
+  };
+
+  // Move to... (#1804): the destinations, each told apart by where it is. A
+  // place by its ancestors, a system or component by the place it sits in.
+  const placeLabel = (locId?: string) => {
+    const l = locId ? (locations.data ?? []).find((x) => x.id === locId || x.name === locId) : undefined;
+    return l ? entityLabel(l) : undefined;
+  };
+  const ancestry = (parentId: string | null | undefined): string | undefined => {
+    const out: string[] = [];
+    for (let id = parentId, n = 0; id && n < 16; n++) {
+      const l = (locations.data ?? []).find((x) => x.id === id);
+      if (!l) break;
+      out.unshift(entityLabel(l));
+      id = l.parent_id;
+    }
+    return out.length ? out.join(" / ") : undefined;
+  };
+  const placeOptions = createMemo<PickerOption[]>(() => (locations.data ?? []).map((l) => ({ value: l.id, label: entityLabel(l), detail: ancestry(l.parent_id) })));
+  const parentOptions = createMemo<PickerOption[]>(() => {
+    const list = (props.kind === "system" ? systems.data : components.data) as { id: string; name: string; label?: string; location_id?: string }[] | undefined;
+    return (list ?? []).filter((r) => r.id !== props.id).map((r) => ({ value: r.id, label: entityLabel(r), detail: placeLabel(r.location_id) }));
+  });
+  const moveSystemOptions = createMemo<PickerOption[]>(() =>
+    mayWriteMembership()
+      ? bindableSystemNodes(systems.data ?? []).map((n) => ({ value: n.id, label: n.label, detail: placeLabel((systems.data ?? []).find((s) => s.id === n.id)?.location_id) }))
+      : [],
+  );
 
   slot.bind({
     dirty: () => draftState() !== seeded,
@@ -245,6 +291,7 @@ export default function EntityForm(props: {
       if (props.kind === "component") {
         setPrimaryDraft(undefined);
         setRemovedMembers(new Set<string>());
+        setAddedMembers(new Set<string>());
       }
       if (props.kind === "location") {
         setLocationType((rec.location_type as string) ?? "");
@@ -276,7 +323,7 @@ export default function EntityForm(props: {
           // update, before the rename: addressed by uuid, so the rename moving
           // the name changes nothing here, and a refusal keeps the face open.
           if (mayWriteMembership()) {
-            await applyMembershipSteps(r.id, planMembershipChanges(memberList(), primaryDraft(), removedMembers()));
+            await applyMembershipSteps(r.id, planMembershipChanges(memberList(), primaryDraft(), removedMembers(), addedMembers()));
           }
         }
         if (renamed) {
@@ -293,14 +340,7 @@ export default function EntityForm(props: {
         // title and the workspace header all read the view, so refreshing the
         // list alone left the old label, name or placement drawn behind a form
         // that had just saved the new one.
-        const key = props.kind === "system" ? SYSTEMS_KEY : props.kind === "location" ? LOCATIONS_KEY : COMPONENTS_KEY;
-        await Promise.all([
-          qc.invalidateQueries({ queryKey: [...key] }),
-          qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] }),
-          // Both ends of the membership relation: the component's own list and
-          // every system's member list (SystemZoom polls it), whichever write ran.
-          ...(props.kind === "component" ? MEMBERSHIP_KEYS.map((k) => qc.invalidateQueries({ queryKey: [...k] })) : []),
-        ]);
+        await refresh();
       }
     },
     destructive: props.destructive,
@@ -380,15 +420,9 @@ export default function EntityForm(props: {
       <Show when={raw()} fallback={<div class="skeleton h-24 w-full" />}>
         <div class={SECTION}>
           <span class={EYEBROW}>Identity</span>
-          {/* Reading in a blade, the label IS the blade's title, so it is
-              not said again; editing, the pen is where it changes (#872). */}
           <Show
             when={slot.editing()}
-            fallback={
-              <Show when={props.host !== "blade"}>
-                <BladeField bind="label" edit={slot} value={() => (raw() ? entityLabel(raw()!) : "")} />
-              </Show>
-            }
+            fallback={<BladeField bind="label" edit={slot} value={() => (raw() ? entityLabel(raw()!) : "")} />}
           >
             <LabelPenField pen={pen} entity={() => raw()!} placeholder="Operator label" />
           </Show>
@@ -444,14 +478,33 @@ export default function EntityForm(props: {
           </Show>
         </div>
 
-        {/* A system's or component's location is the blade's own location card
-            (#872); only a location's parent, which is the location's own to
-            move, stays in the blade's form. */}
-        <Show when={props.host !== "blade" || props.kind === "location"}>
         <div class={SECTION}>
           <span class={EYEBROW}>Placement</span>
           <Show when={props.kind === "location"} fallback={
-            <BladeField label="Where it sits" edit={slot} value={() => placementLine(props.kind, row(), locations.data)} />
+            <>
+              <BladeField label="Where it sits" edit={slot} value={() => placementLine(props.kind, row(), locations.data)} />
+              <Show when={slot.editing() && canMove()}>
+                <MoveEntity
+                  kind={props.kind as "component" | "system"}
+                  id={props.id}
+                  currentPlace={((row()?.location_id ?? row()?.location) as string | undefined) ?? undefined}
+                  currentParent={(row()?.parent_id as string | undefined) ?? undefined}
+                  places={placeOptions()}
+                  parents={parentOptions()}
+                  systems={props.kind === "component" ? moveSystemOptions() : undefined}
+                  members={props.kind === "component" ? memberList() : undefined}
+                  onMoved={async () => {
+                    // The move already wrote the membership change; a staged draft over the old one would undo it on Save.
+                    if (props.kind === "component") {
+                      setPrimaryDraft(undefined);
+                      setRemovedMembers(new Set<string>());
+                      setAddedMembers(new Set<string>());
+                    }
+                    await refresh();
+                  }}
+                />
+              </Show>
+            </>
           }>
             <BladeField label="Parent" edit={slot}
               value={() => {
@@ -477,7 +530,6 @@ export default function EntityForm(props: {
             />
           </Show>
         </div>
-        </Show>
 
         <Show when={props.kind === "component"}>
           <div class={SECTION}>
@@ -495,18 +547,29 @@ export default function EntityForm(props: {
                 setRemovedMembers((prev) => { const next = new Set(prev); next.delete(id); return next; });
               }}
               removed={removedMembers}
-              onRemove={(id) => setRemovedMembers((prev) => new Set(prev).add(id))}
+              onRemove={(id) => {
+                setRemovedMembers((prev) => new Set(prev).add(id));
+                // A removed chip cannot stay the staged primary.
+                if (primaryDraft() === id) setPrimaryDraft(undefined);
+              }}
+              added={addedMembers}
+              onAdd={(id) => {
+                setAddedMembers((prev) => new Set(prev).add(id));
+                setRemovedMembers((prev) => { const next = new Set(prev); next.delete(id); return next; });
+              }}
+              onUnadd={(id) => {
+                setAddedMembers((prev) => { const next = new Set(prev); next.delete(id); return next; });
+                if (primaryDraft() === id) setPrimaryDraft(undefined);
+              }}
+              placeOf={(sy) => placeLabel(sy.location_id)}
             />
           </div>
         </Show>
 
         {/* The kind's panels are configuration (slots, properties and their
-            cascade, reconciliation, endpoints): the page host's Configure tab
-            carries them, and the blade stays the glance an operator landed on
-            from a row (#872). */}
-        <Show when={props.host !== "blade"}>
-          <div class={SECTION}>{panels()}</div>
-        </Show>
+            cascade, reconciliation, endpoints), in every host: a blade shows
+            what the page shows (#2423). */}
+        <div class={SECTION}>{panels()}</div>
 
         <div class={SECTION}>
           <TagAdder kind={props.kind} name={props.id} canUpdate={slot.editing() && canUpdate()} canCreateKey={can(me.data, "tag", "create")} />
@@ -595,13 +658,21 @@ export function EntityCreateForm(props: {
   // the answer is a known 422 and the browser would log it as a failed request
   // (#1548), so the form states the refusal itself (unclassifiedSystem below).
   const unclassifiedSystem = () => isSystem() && !systemType() && namePen.value().trim() === "";
+  // A location type with no name rule cannot mint a name, and the shipped
+  // vocabulary is all of them (#2465): the type list says so (name_rule absent),
+  // so the form states the refusal itself rather than ask for a guaranteed 422.
+  const unnamedLocation = () => {
+    if (!isLocation() || namePen.value().trim() !== "") return false;
+    const t = (locationTypes.data ?? []).find((x) => x.name === locationType().trim());
+    return !!t && !t.name_rule;
+  };
   const labelDraft = useLabelDraft(() => {
     if (isSystem()) {
       if (unclassifiedSystem()) return null;
       return { kind: "system" as const, body: { system_type_id: systemType() || undefined, standard_id: standard() || undefined, name: namePen.value().trim() || undefined, parent: parent() || undefined, location: location() || undefined } };
     }
     if (isLocation()) {
-      return locationType().trim()
+      return locationType().trim() && !unnamedLocation()
         ? { kind: "location" as const, body: { location_type: locationType().trim(), name: namePen.value().trim() || undefined, parent: parent() || undefined } }
         : null;
     }
@@ -778,7 +849,7 @@ export function EntityCreateForm(props: {
         kind={props.kind}
         draft={() => labelDraft.data}
         pending={() => labelDraft.isFetching}
-        nameRefused={() => unclassifiedSystem() || nameRefused(labelDraft.error)}
+        nameRefused={() => unclassifiedSystem() || unnamedLocation() || nameRefused(labelDraft.error)}
         bucket={bucketText}
         namePen={namePen}
         displayPen={displayPen}

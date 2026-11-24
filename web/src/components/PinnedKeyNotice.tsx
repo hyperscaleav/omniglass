@@ -2,7 +2,7 @@ import { For, Show, createSignal, type Component } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
-import ConfirmDialog from "./ConfirmDialog";
+import ConfirmDialog from "./ui/ConfirmDialog";
 import Eyebrow from "./Eyebrow";
 import InfoTip from "./InfoTip";
 import KVStacked from "./KVStacked";

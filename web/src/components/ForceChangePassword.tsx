@@ -18,14 +18,14 @@ export default function ForceChangePassword() {
 
   const [current, setCurrent] = createSignal("");
   const [next, setNext] = createSignal("");
-  const [confirm, setConfirm] = createSignal("");
+  const [confirmation, setConfirmation] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
   const [fieldError, setFieldError] = createSignal<string | null>(null);
 
   async function submit(e: SubmitEvent) {
     e.preventDefault();
-    if (next() !== confirm()) {
+    if (next() !== confirmation()) {
       setError("The new passwords do not match.");
       return;
     }
@@ -44,10 +44,10 @@ export default function ForceChangePassword() {
   }
 
   const canSubmit = () =>
-    !busy() && !!current() && !!next() && next() === confirm() && !passwordError(next(), username());
+    !busy() && !!current() && !!next() && next() === confirmation() && !passwordError(next(), username());
 
   return (
-    <div class="flex min-h-screen items-center justify-center bg-base-100 p-4">
+    <div class="flex min-h-0 flex-1 items-center justify-center bg-base-100 p-4">
       <form onSubmit={submit} class="card w-full max-w-md border border-base-300 bg-base-200 shadow-lg">
         <div class="card-body gap-3">
           <h1 class="card-title text-base">Set a new password</h1>
@@ -89,8 +89,8 @@ export default function ForceChangePassword() {
               type="password"
               autocomplete="new-password"
               class="input input-bordered w-full font-data"
-              value={confirm()}
-              onInput={(e) => setConfirm(e.currentTarget.value)}
+              value={confirmation()}
+              onInput={(e) => setConfirmation(e.currentTarget.value)}
               disabled={busy()}
             />
           </div>

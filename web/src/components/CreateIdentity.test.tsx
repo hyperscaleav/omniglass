@@ -48,7 +48,8 @@ function mount(draft?: DraftLabel, opts: { refused?: boolean; pending?: boolean;
   const name = screen.getByPlaceholderText("mic-2") as HTMLInputElement;
   const display = screen.getByPlaceholderText("Ceiling Mic 2") as HTMLInputElement;
   // The lock actions sit in their field's join, one per field, in field order.
-  const toggles = () => screen.getAllByRole("button") as HTMLButtonElement[];
+  // The label's (i) (the rule behind the preview, #2465) is a button too, but not a lock.
+  const toggles = () => (screen.getAllByRole("button") as HTMLButtonElement[]).filter((b) => !b.getAttribute("aria-label")?.startsWith("More about"));
   return {
     ...r,
     name,
@@ -98,7 +99,11 @@ describe("CreateIdentity", () => {
     expect(display.value).toBe("Display 3");
     expect(display.readOnly).toBe(true);
     expect(display.disabled).toBe(false);
-    expect(screen.getByText(/Rendered from \{\{\.TypeName\}\} \{\{\.Ordinal\}\}/)).toBeTruthy();
+    // The hint reads as a preview; the raw template is behind the label's (i)
+    // and never printed in the form body (#2465).
+    expect(screen.getByText(/Rendered by the platform from a label rule/)).toBeTruthy();
+    expect(screen.queryByText(/\{\{\.TypeName\}\}/)).toBeNull();
+    expect(screen.getByRole("button", { name: "More about Label" })).toBeTruthy();
   });
 
   it("posts nothing from either locked field, so the platform keeps both pens", () => {
@@ -293,11 +298,13 @@ describe("CreateIdentity", () => {
     // affordance would have left the override unreachable entirely.
     const { name, display, toggles } = mount(labelled("Display 3", "{{.TypeName}}"));
     const stops = tabStops();
-    expect(stops).toHaveLength(4);
+    // name, its lock, the label's (i), the label field, its lock.
+    expect(stops).toHaveLength(5);
     expect(stops[0]).toBe(name);
     expect(stops[1]).toBe(toggles()[0]);
-    expect(stops[2]).toBe(display);
-    expect(stops[3]).toBe(toggles()[1]);
+    expect(stops[2].getAttribute("aria-label")).toBe("More about Label");
+    expect(stops[3]).toBe(display);
+    expect(stops[4]).toBe(toggles()[1]);
   });
 
   it("keeps every state on the keyboard once a field is overridden", () => {
@@ -306,11 +313,13 @@ describe("CreateIdentity", () => {
     const { name, display, toggles, unlockName } = mount(labelled("Display 3", "{{.TypeName}}"));
     unlockName();
     const stops = tabStops();
-    expect(stops).toHaveLength(4);
+    // name, its lock, the label's (i), the label field, its lock.
+    expect(stops).toHaveLength(5);
     expect(stops[0]).toBe(name);
     expect(stops[1]).toBe(toggles()[0]);
-    expect(stops[2]).toBe(display);
-    expect(stops[3]).toBe(toggles()[1]);
+    expect(stops[2].getAttribute("aria-label")).toBe("More about Label");
+    expect(stops[3]).toBe(display);
+    expect(stops[4]).toBe(toggles()[1]);
   });
 
   it("takes the pen when the operator clicks the locked field", () => {

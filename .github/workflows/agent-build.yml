@@ -42,7 +42,7 @@ jobs:
       # permission, so the agent cannot change these files.
       - name: Mint the agent App token
         id: app
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ vars.AGENT_APP_CLIENT_ID }}
           private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
@@ -175,7 +175,7 @@ jobs:
           echo "bot_name=${SLUG}[bot]" >> "$GITHUB_OUTPUT"
           echo "bot_id=$(gh api "users/${SLUG}%5Bbot%5D" --jq .id)" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         if: steps.gate.outputs.decision == 'run'
         with:
           go-version-file: go.mod
@@ -322,7 +322,7 @@ jobs:
       - name: Mint a fresh App token
         id: fresh
         if: always() && steps.agent.outcome != 'skipped'
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ vars.AGENT_APP_CLIENT_ID }}
           private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}

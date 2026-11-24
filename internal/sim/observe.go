@@ -269,8 +269,10 @@ func (d *deviceObservation) openStream(p obsProtocol) func() {
 		return func() {}
 	}
 	row := &d.rows[p]
-	row.openStreams.Add(1)
+	// Total before gauge, and counters() reads them in the reverse order, so a
+	// reader never sees OpenStreams above StreamsOpened.
 	row.streamsOpened.Add(1)
+	row.openStreams.Add(1)
 	var once sync.Once
 	return func() { once.Do(func() { row.openStreams.Add(-1) }) }
 }
@@ -332,8 +334,8 @@ func (d *deviceObservation) counters(p obsProtocol) ObservationCounters {
 	c.Error = r.outcomes[OutcomeError].Load()
 	c.Dropped = r.outcomes[OutcomeDropped].Load()
 	c.Withheld = r.outcomes[OutcomeWithheld].Load()
-	c.StreamsOpened = r.streamsOpened.Load()
 	c.OpenStreams = r.openStreams.Load()
+	c.StreamsOpened = r.streamsOpened.Load()
 	c.Overlapped = r.overlapped.Load()
 	return c
 }
@@ -346,8 +348,10 @@ type ObservationSnapshot struct {
 	// the snapshot was read.
 	FleetGeneration int64
 	FleetChanging   bool
-	Protocols       []ProtocolObservation
-	Devices         []DeviceObservation
+	// ServedIDs is the ids of the devices served when the snapshot was read.
+	ServedIDs []string
+	Protocols []ProtocolObservation
+	Devices   []DeviceObservation
 	// Faces lists only the faces that saw an overlap, so the snapshot stays
 	// small at fleet scale; the per-protocol overlap totals are on each row.
 	Faces []FaceOverlap
@@ -466,6 +470,11 @@ func (e *Engine) Observation() ObservationSnapshot {
 	after := e.fleetNow()
 	snap.FleetGeneration = after.generation
 	snap.FleetChanging = before != after || after.changing
+	e.mu.Lock()
+	for _, d := range e.devices {
+		snap.ServedIDs = append(snap.ServedIDs, d.DeviceID)
+	}
+	e.mu.Unlock()
 	return snap
 }
 

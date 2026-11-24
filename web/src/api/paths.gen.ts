@@ -264,6 +264,36 @@ export interface paths {
       error: og.getAuthMeAvatarResponseError["data"];
     };
   };
+  "/auth/me/identity-links": {
+    get: {
+      path: never;
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.listAuthMeIdentityLinksResponseSuccess["data"];
+      error: og.listAuthMeIdentityLinksResponseError["data"];
+    };
+  };
+  "/auth/me/identity-links/{link}:unlink": {
+    post: {
+      path: { "link": string };
+      query: never;
+      body: NonNullable<Parameters<typeof og.unlinkAuthMeIdentityLink>[1]>;
+      bodyRequired: true;
+      data: og.unlinkAuthMeIdentityLinkResponseSuccess["data"];
+      error: og.unlinkAuthMeIdentityLinkResponseError["data"];
+    };
+  };
+  "/auth/me/identity-links:start": {
+    post: {
+      path: never;
+      query: never;
+      body: NonNullable<Parameters<typeof og.startAuthMeIdentityLink>[0]>;
+      bodyRequired: true;
+      data: og.startAuthMeIdentityLinkResponseSuccess["data"];
+      error: og.startAuthMeIdentityLinkResponseError["data"];
+    };
+  };
   "/auth/me/notifications": {
     get: {
       path: never;
@@ -571,7 +601,7 @@ export interface paths {
   "/components": {
     get: {
       path: never;
-      query: never;
+      query: NonNullable<Parameters<typeof og.listComponents>[0]>;
       body: never;
       bodyRequired: false;
       data: og.listComponentsResponseSuccess["data"];
@@ -776,6 +806,16 @@ export interface paths {
       bodyRequired: false;
       data: og.listComponentEventsResponseSuccess["data"];
       error: og.listComponentEventsResponseError["data"];
+    };
+  };
+  "/components/{name}/health": {
+    get: {
+      path: { "name": string };
+      query: NonNullable<Parameters<typeof og.getComponentHealth>[1]>;
+      body: never;
+      bodyRequired: false;
+      data: og.getComponentHealthResponseSuccess["data"];
+      error: og.getComponentHealthResponseError["data"];
     };
   };
   "/components/{name}/identity-bindings": {
@@ -1553,7 +1593,7 @@ export interface paths {
   "/locations/{name}/health": {
     get: {
       path: { "name": string };
-      query: never;
+      query: NonNullable<Parameters<typeof og.getLocationHealth>[1]>;
       body: never;
       bodyRequired: false;
       data: og.getLocationHealthResponseSuccess["data"];
@@ -2004,6 +2044,16 @@ export interface paths {
       error: og.addOutpostSimulationComponentResponseError["data"];
     };
   };
+  "/outposts/{name}/simulation/components:plan": {
+    get: {
+      path: { "name": string };
+      query: NonNullable<Parameters<typeof og.planOutpostSimulationComponent>[1]>;
+      body: never;
+      bodyRequired: false;
+      data: og.planOutpostSimulationComponentResponseSuccess["data"];
+      error: og.planOutpostSimulationComponentResponseError["data"];
+    };
+  };
   "/outposts/{name}/simulation/observation": {
     get: {
       path: { "name": string };
@@ -2077,7 +2127,7 @@ export interface paths {
   "/products": {
     get: {
       path: never;
-      query: never;
+      query: NonNullable<Parameters<typeof og.listProducts>[0]>;
       body: never;
       bodyRequired: false;
       data: og.listProductsResponseSuccess["data"];
@@ -2246,6 +2296,16 @@ export interface paths {
       bodyRequired: false;
       data: og.listRolesResponseSuccess["data"];
       error: og.listRolesResponseError["data"];
+    };
+  };
+  "/search": {
+    get: {
+      path: never;
+      query: NonNullable<Parameters<typeof og.search>[0]>;
+      body: never;
+      bodyRequired: false;
+      data: og.searchResponseSuccess["data"];
+      error: og.searchResponseError["data"];
     };
   };
   "/secret-types": {
@@ -2623,7 +2683,7 @@ export interface paths {
   "/systems": {
     get: {
       path: never;
-      query: never;
+      query: NonNullable<Parameters<typeof og.listSystems>[0]>;
       body: never;
       bodyRequired: false;
       data: og.listSystemsResponseSuccess["data"];
@@ -2667,7 +2727,7 @@ export interface paths {
   "/systems/{name}/alarms": {
     get: {
       path: { "name": string };
-      query: never;
+      query: NonNullable<Parameters<typeof og.listSystemAlarms>[1]>;
       body: never;
       bodyRequired: false;
       data: og.listSystemAlarmsResponseSuccess["data"];
@@ -2687,7 +2747,7 @@ export interface paths {
   "/systems/{name}/health": {
     get: {
       path: { "name": string };
-      query: never;
+      query: NonNullable<Parameters<typeof og.getSystemHealth>[1]>;
       body: never;
       bodyRequired: false;
       data: og.getSystemHealthResponseSuccess["data"];
@@ -3296,6 +3356,34 @@ export interface paths {
       bodyRequired: false;
       data: og.revokeGrantResponseSuccess["data"];
       error: og.revokeGrantResponseError["data"];
+    };
+  };
+  "/users/{id}/identity-links": {
+    get: {
+      path: { "id": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.listUserIdentityLinksResponseSuccess["data"];
+      error: og.listUserIdentityLinksResponseError["data"];
+    };
+    post: {
+      path: { "id": string };
+      query: never;
+      body: NonNullable<Parameters<typeof og.createUserIdentityLink>[1]>;
+      bodyRequired: true;
+      data: og.createUserIdentityLinkResponseSuccess["data"];
+      error: og.createUserIdentityLinkResponseError["data"];
+    };
+  };
+  "/users/{id}/identity-links/{link}": {
+    delete: {
+      path: { "id": string; "link": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.deleteUserIdentityLinkResponseSuccess["data"];
+      error: og.deleteUserIdentityLinkResponseError["data"];
     };
   };
   "/users/{id}/sessions": {

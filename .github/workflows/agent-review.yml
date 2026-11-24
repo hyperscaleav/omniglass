@@ -139,7 +139,7 @@ jobs:
     steps:
       - name: Mint the agent App token
         id: app
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ vars.AGENT_APP_CLIENT_ID }}
           private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
@@ -253,8 +253,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           NUMBER: ${{ steps.what.outputs.number }}
           HEAD_SHA: ${{ steps.what.outputs.head_sha }}
-          # This workflow's own checks, and agent-fix's.
-          IGNORE: '^(plan|agent-review|oneshot|fix|lens \(.*\))$'
+          # This workflow's own checks, and agent-fix's; and docs-shots freshness,
+          # which the reviewer does not wait on while main recaptures the docs
+          # shots after merges (#2561), so a PR need not re-render them.
+          IGNORE: '^(plan|agent-review|oneshot|fix|lens \(.*\)|freshness)$'
         run: |
           set -euo pipefail
           script=$GITHUB_WORKSPACE/trusted/scripts/agent-review.sh
@@ -289,7 +291,7 @@ jobs:
       - name: Mint the reviewer App token
         id: reviewer
         if: steps.what.outputs.mode == 'review' && vars.REVIEWER_APP_CLIENT_ID != ''
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ vars.REVIEWER_APP_CLIENT_ID }}
           private-key: ${{ secrets.REVIEWER_APP_PRIVATE_KEY }}
@@ -428,7 +430,7 @@ jobs:
     steps:
       - name: Mint the agent App token
         id: app
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ vars.AGENT_APP_CLIENT_ID }}
           private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
@@ -443,7 +445,7 @@ jobs:
           fetch-depth: 0
 
       # A lens may build and test the PR's Go code to settle a finding.
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache: true
@@ -611,7 +613,7 @@ jobs:
       - name: Mint the agent App token
         id: app
         if: steps.review.outputs.to_verify != '[]'
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ vars.AGENT_APP_CLIENT_ID }}
           private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
@@ -620,7 +622,7 @@ jobs:
           permission-contents: read
           permission-pull-requests: read
 
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         if: steps.review.outputs.to_verify != '[]'
         with:
           go-version-file: go.mod
@@ -727,7 +729,7 @@ jobs:
       - name: Mint the agent App token
         id: app
         if: needs.plan.outputs.mode != 'skip'
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ vars.AGENT_APP_CLIENT_ID }}
           private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
@@ -744,7 +746,7 @@ jobs:
       - name: Mint the reviewer App token
         id: reviewer
         if: needs.plan.outputs.mode != 'skip' && vars.REVIEWER_APP_CLIENT_ID != ''
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ vars.REVIEWER_APP_CLIENT_ID }}
           private-key: ${{ secrets.REVIEWER_APP_PRIVATE_KEY }}

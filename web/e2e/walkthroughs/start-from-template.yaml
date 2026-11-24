@@ -11,7 +11,7 @@ steps:
     caption: New creates something here.
   - click: { role: button, name: System, exact: true }
     caption: A system, sitting on this floor.
-  - click: { role: button, name: From a template }
+  - click: { role: radio, name: From a template }
     caption: Rather than from scratch, start from one of the examples Omniglass ships.
   - select: { target: 'role=combobox[name="Template"]', value: mr55-system }
     caption: Choose the Meeting Room 55 system template.

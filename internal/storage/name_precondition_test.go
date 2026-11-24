@@ -300,7 +300,7 @@ func TestTheNamePreconditionHoldsOnEveryTierThatGenerates(t *testing.T) {
 	}
 	l, err := gw.CreateLocation(ctx, "", storage.LocationSpec{
 		LocationType: "deck", ParentName: &hq.Name, ExpectedName: &locDraft.Name,
-	}, all)
+	}, all, all)
 	if err != nil {
 		t.Fatalf("create location with the expected name: %v", err)
 	}
@@ -309,7 +309,7 @@ func TestTheNamePreconditionHoldsOnEveryTierThatGenerates(t *testing.T) {
 	}
 	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{
 		LocationType: "deck", ParentName: &hq.Name, ExpectedName: &locDraft.Name,
-	}, all); !errors.Is(err, storage.ErrDraftedNameMoved) {
+	}, all, all); !errors.Is(err, storage.ErrDraftedNameMoved) {
 		t.Errorf("location create expecting the taken name = %v, want ErrDraftedNameMoved", err)
 	}
 }

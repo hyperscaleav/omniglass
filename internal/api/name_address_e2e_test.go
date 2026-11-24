@@ -107,8 +107,8 @@ func TestEndpointAddressAPI(t *testing.T) {
 		t.Errorf("patch by address answered endpoint %s, want %s", got, s.httpsA)
 	}
 
-	msg := detail(t, s.c.do(s.owner, http.MethodGet, refPath("/endpoints", "display-1/https", ""), nil, http.StatusNotFound))
-	for _, want := range []string{`endpoint "display-1/https" not found`, refA, s.addrB + "/https"} {
+	msg := detail(t, s.c.do(s.owner, http.MethodGet, refPath("/endpoints", "display-1/https", ""), nil, http.StatusConflict))
+	for _, want := range []string{`endpoint "display-1/https" is ambiguous`, refA, s.addrB + "/https"} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("ambiguous refusal %q does not name %q", msg, want)
 		}
@@ -166,8 +166,8 @@ func TestSecretNameAPI(t *testing.T) {
 	room := s.idOf(s.c.do(s.owner, http.MethodPost, "/secrets", map[string]any{"name": "demo-panel-login", "secret_type": "basic-auth", "owner_kind": "location", "owner": "campus.room-a",
 		"fields": map[string]string{"username": "admin", "password": "room"}}, http.StatusCreated))
 
-	msg := detail(t, s.c.do(s.owner, http.MethodPatch, refPath("/secrets", "demo-panel-login", ""), rotate, http.StatusNotFound))
-	for _, want := range []string{`secret "demo-panel-login" not found`, "$platform/demo-panel-login", "campus.room-a/demo-panel-login"} {
+	msg := detail(t, s.c.do(s.owner, http.MethodPatch, refPath("/secrets", "demo-panel-login", ""), rotate, http.StatusConflict))
+	for _, want := range []string{`secret "demo-panel-login" is ambiguous`, "$platform/demo-panel-login", "campus.room-a/demo-panel-login"} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("ambiguous refusal %q does not name %q", msg, want)
 		}
@@ -291,8 +291,8 @@ func TestUserNameNeedsTheDirectoryAPI(t *testing.T) {
 	}
 	shared := userWithGrants(t, s.ctx, s.dsn, "alice", nil)
 	_ = shared
-	msg := detail(t, s.c.do(s.owner, http.MethodGet, "/users/alice", nil, http.StatusNotFound))
-	if !strings.Contains(msg, `user "alice" not found`) || !strings.Contains(msg, alice) {
+	msg := detail(t, s.c.do(s.owner, http.MethodGet, "/users/alice", nil, http.StatusConflict))
+	if !strings.Contains(msg, `user "alice" is ambiguous`) || !strings.Contains(msg, alice) {
 		t.Errorf("the owner's GET of a name both a person and a machine user carry = %q, want it named with both uuids", msg)
 	}
 	if strings.Contains(refusal("alice", "", http.MethodGet), alice) {

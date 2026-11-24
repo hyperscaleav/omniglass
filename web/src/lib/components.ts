@@ -115,6 +115,20 @@ export async function resetComponentName(name: string): Promise<Component> {
   return data as Component;
 }
 
+// A move is its own call, not a field on the patch body (#1804): the API gates
+// it with `component:move` rather than `component:update`, because a placement change
+// is an authorization act. Both fields are three-state: omitted is unchanged,
+// "" clears, a name (or uuid) sets. `parent` re-parents inside the component tree
+// and is cycle-guarded by the server; `location` relocates. At least one is
+// required (the server 422s neither).
+export type MoveComponent = { location?: string; parent?: string };
+
+export async function moveComponent(name: string, body: MoveComponent): Promise<Component> {
+  const { data, error } = await api.POST("/components/{name}:move", { params: { path: { name } }, body });
+  if (error) throw error;
+  return data as Component;
+}
+
 export type NameCheck = { valid: boolean; available: boolean; reason?: string };
 
 // checkComponentName checks availability against a placement bucket (#627:

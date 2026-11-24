@@ -1,10 +1,11 @@
-import { type Accessor, type JSX, For, Show, createEffect, createMemo, createSignal } from "solid-js";
+import { type Accessor, type JSX, For, Show, createEffect, createMemo, createSignal, untrack } from "solid-js";
 import ListShell from "./ListShell";
 import Drawer from "./Drawer";
 import BladeStack from "./BladeStack";
 import { type BladeController, type BladeDef, BladesContext, createBladeController } from "../lib/blades";
 import { ChevronDown, ChevronRight, Plus } from "./icons";
 import Button from "./Button";
+import { useDrawerAddress } from "../lib/drawer_address";
 import { resolveFilterKeys, type Chip, type FilterKeys } from "../lib/predicate";
 
 // FlatList is the body for a flat (non-tree) list surface: a sortable table over
@@ -49,13 +50,18 @@ export type FlatConfig<T> = {
   columns: FlatColumn<T>[];
   empty?: string; // no rows at all
   rowClass?: (r: T) => string;
+  // The name a row's open control announces ("Open <name>"); absent, the entity's
+  // singular noun and the row's address (rowId) stand in, so rows still differ.
+  rowLabel?: (r: T) => string;
   // A row opens this side Drawer detail. Omit for a read-only table (the audit log).
   detail?: (r: T) => FlatDetail;
   // The primary create action: a rail button that opens a Drawer with `body`. The
   // body receives a small context: `close` dismisses the create Drawer; `select`
   // opens a row's detail Drawer (closing create), so a successful create can land
   // the operator straight on the new row.
-  create?: { label: string; can: () => boolean; body: (ctx: { close: () => void; select: (row: T) => void }) => JSX.Element };
+  // openInitially opens the create Drawer on first render: a link that carries a
+  // new-row intent (an "Alarm on this" that arrives with the form's fields filled).
+  create?: { label: string; can: () => boolean; openInitially?: boolean; body: (ctx: { close: () => void; select: (row: T) => void }) => JSX.Element };
   // An extra control in the action rail, left of the create button (e.g. a "show
   // archived" toggle on the Users directory).
   railExtra?: () => JSX.Element;
@@ -67,7 +73,13 @@ export type FlatConfig<T> = {
   // supplies the key; when `openId` changes to a new value whose row is loaded, its
   // detail Drawer opens once (closing it does not re-open, until openId changes).
   rowId?: (r: T) => string;
+  // A second address a row answers to (its uuid, where rowId is its name), so a link
+  // minted before a rename still lands on it (ADR-0062: the route takes either).
+  rowAlt?: (r: T) => string | undefined;
   openId?: () => string | undefined;
+  // An older bespoke id param (`u`, `g`, `n`) this page's links used before the
+  // drawer address (`?open=`, #2429): still read on load, swept on the next write.
+  legacyParam?: string;
   // When present, a row (and openId) opens a cross-entity blade stack instead of
   // the single Drawer detail. `rootKind` is the kind a row opens; `catalog` maps
   // each kind to its blade renderers; a body drills via useBlades(). Requires rowId.
@@ -96,17 +108,58 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
   const cfg = props.config;
   const [sort, setSort] = createSignal<SortState>(null);
   const [selected, setSelected] = createSignal<T | null>(null);
-  const [createOpen, setCreateOpen] = createSignal(false);
+  const [createOpen, setCreateOpen] = createSignal(!!cfg.create?.openInitially && cfg.create.can());
 
   // A row opens either a blade (cross-entity stack) or the single Drawer detail.
+  // With a rowId the open row is the URL's `?open=` address (lib/drawer_address):
+  // opening pushes it, closing clears it, Back closes it, and a loaded address
+  // opens the same drawer. Without a rowId (the audit log) the drawer is local.
   const blades = cfg.blades?.controller ?? createBladeController();
-  const openRow = (r: T) => {
-    if (cfg.blades && cfg.rowId) blades.push({ kind: cfg.blades.rowKind?.(r) ?? cfg.blades.rootKind, id: cfg.rowId(r) });
-    else setSelected(() => r);
+  const openName = (r: T) => cfg.rowLabel?.(r) ?? (cfg.rowId ? `${cfg.entity.name} ${cfg.rowId(r)}` : cfg.entity.name);
+  const rowOf = (id: string) => (cfg.rowId ? cfg.rows().find((r) => cfg.rowId!(r) === id || cfg.rowAlt?.(r) === id) : undefined);
+  // The row object a click or create just handed over, so a drawer opens before
+  // the refetch that will list it (a freshly created row) lands.
+  const [handed, setHanded] = createSignal<{ id: string; row: T } | null>(null);
+  createEffect(() => {
+    const h = handed();
+    if (h && rowOf(h.id)) setHanded(null);
+  });
+  const exists = (id: string): boolean | undefined => {
+    if (rowOf(id) || handed()?.id === id) return true;
+    return cfg.loading?.() ? undefined : false;
   };
+  const addressed = !!cfg.rowId && (!!cfg.detail || !!cfg.blades);
+  const addr = useDrawerAddress({
+    exists,
+    legacy: cfg.legacyParam,
+    blades: cfg.blades ? blades : undefined,
+    rootRef: (id) => {
+      const row = rowOf(id) ?? handed()?.row;
+      return { kind: (row && cfg.blades?.rowKind?.(row)) ?? cfg.blades?.rootKind ?? "", id };
+    },
+  });
+  const openRow = (r: T) => {
+    if (addressed) {
+      const id = cfg.rowId!(r);
+      setHanded({ id, row: r });
+      addr.open(id);
+    } else setSelected(() => r);
+  };
+  const detailRow = createMemo<T | null>(() => {
+    if (!cfg.detail) return null;
+    if (!addressed) return selected();
+    const id = addr.address();
+    return id ? (rowOf(id) ?? (handed()?.id === id ? handed()!.row : null)) : null;
+  });
+  // The drawer mounts once per opened row (keyed on the address, not the row
+  // object), so a background refetch never remounts a body mid-edit.
+  const detailKey = createMemo(() => {
+    const r = detailRow();
+    return r ? (addressed ? addr.address()! : "local") : undefined;
+  });
 
-  // Deep-link: when openId names a loaded row, open its detail once. Guarded by the
-  // last-opened id so closing the Drawer does not immediately re-open it.
+  // Programmatic deep link (openId): opens the row once it is loaded. Guarded by the
+  // last-opened id so closing the drawer does not immediately re-open it.
   const [openedId, setOpenedId] = createSignal<string | undefined>();
   createEffect(() => {
     const id = cfg.openId?.();
@@ -144,11 +197,9 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
     </>
   );
 
-  const Th = (p: { col: FlatColumn<T> }) => (
-    <th
-      class={`${p.col.headClass ?? ""} ${p.col.sortVal ? "cursor-pointer select-none" : ""}`}
-      onClick={() => toggleSort(p.col.key)}
-    >
+  const ariaSort = (key: string) => (sort()?.key !== key ? "none" : sort()!.dir === 1 ? "ascending" : "descending");
+  const Th = (p: { col: FlatColumn<T> }) => {
+    const label = (
       <span class="inline-flex items-center gap-1">
         {p.col.label}
         <Show when={sort()?.key === p.col.key}>
@@ -157,8 +208,17 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
           </span>
         </Show>
       </span>
-    </th>
-  );
+    );
+    return (
+      <th class={p.col.headClass ?? ""} aria-sort={p.col.sortVal ? ariaSort(p.col.key) : undefined}>
+        <Show when={p.col.sortVal} fallback={label}>
+          <button type="button" class="cursor-pointer select-none [font:inherit] [letter-spacing:inherit] [text-transform:inherit]" onClick={() => toggleSort(p.col.key)}>
+            {label}
+          </button>
+        </Show>
+      </th>
+    );
+  };
 
   return (
     <BladesContext.Provider value={blades}>
@@ -170,9 +230,11 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
         chips={cfg.chips}
         onChips={cfg.onChips}
         fill={cfg.fill}
+        counted
         error={cfg.error?.()}
         errorLabel={`Could not load ${cfg.entity.plural.toLowerCase()}`}
         trailing={trailing}
+        missing={addressed && addr.miss() ? { noun: cfg.entity.name, address: addr.miss()!, onDismiss: addr.close } : undefined}
       >
         {(filtered, chips) => {
           const shown = createMemo(() => applySort(filtered()));
@@ -197,12 +259,17 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
                       <Show when={openable}><col style={{ width: "40px" }} /></Show>
                     </colgroup>
                   </Show>
+                  {/* A list with nothing in it has no columns to head: the empty state
+                      stands alone (#2431). Loading keeps the head (the rows land
+                      under it), and a filter that matches nothing keeps it too. */}
+                  <Show when={cfg.loading?.() || cfg.rows().length > 0}>
                   <thead>
                     <tr>
                       <For each={cfg.columns}>{(c) => <Th col={c} />}</For>
                       <Show when={openable}><th /></Show>
                     </tr>
                   </thead>
+                  </Show>
                   <tbody>
                     <For
                       each={shown()}
@@ -234,7 +301,12 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
                         >
                           <For each={cfg.columns}>{(c) => <td>{c.cell(r)}</td>}</For>
                           <Show when={openable}>
-                            <td class="text-base-content/30"><ChevronRight size={15} /></td>
+                            <td class="text-base-content/30">
+                              {/* The keyboard stop for the row: Enter/Space clicks it and the click bubbles to the row's onClick, so no second handler. */}
+                              <button type="button" class="inline-flex cursor-pointer" aria-label={`Open ${openName(r)}`}>
+                                <ChevronRight size={15} />
+                              </button>
+                            </td>
                           </Show>
                         </tr>
                       )}
@@ -252,11 +324,11 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
         }}
       </ListShell>
 
-      <Show when={cfg.detail && selected()}>
+      <Show when={detailKey()} keyed>
         {(_) => {
-          const d = cfg.detail!(selected()!);
+          const d = cfg.detail!(untrack(detailRow)!);
           return (
-            <Drawer open={true} onClose={() => setSelected(null)} title={d.title} wide={d.wide}>
+            <Drawer open={true} onClose={() => (addressed ? addr.close() : setSelected(null))} title={d.title} wide={d.wide}>
               {d.body}
             </Drawer>
           );

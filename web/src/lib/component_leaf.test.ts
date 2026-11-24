@@ -20,6 +20,18 @@ const iface = (reachability: { value: string; ts: string } | null, outpost?: str
 const outpost = (heartbeatSecondsAgo: number | null): Outpost =>
   ({ name: "edge-1", enrolled: true, last_heartbeat_at: heartbeatSecondsAgo === null ? undefined : iso(heartbeatSecondsAgo), tags: {} }) as Outpost;
 
+describe("collectionState: silence over a datagram transport (#2296)", () => {
+  const down = (transport: string): ReachEndpoint =>
+    ({ endpoint: "e", transport, outpost: "edge-1", reachability: { value: "down", ts: iso(10) }, responsive: { value: "down", ts: iso(10) }, layers: [], history: [] }) as unknown as ReachEndpoint;
+  it("a silent snmp or udp rung reads no answer, not down", () => {
+    expect(collectionState(down("snmp"), outpost(5), now).kind).toBe("no-answer");
+    expect(collectionState(down("udp"), outpost(5), now).kind).toBe("no-answer");
+  });
+  it("a timed-out tcp connect still reads down", () => {
+    expect(collectionState(down("tcp"), outpost(5), now).kind).toBe("down");
+  });
+});
+
 describe("collectionState", () => {
   // A push endpoint (#1024) is never down for silence: no outpost collects it,
   // so neither a missing outpost nor an old last heard reads as offline or stale.

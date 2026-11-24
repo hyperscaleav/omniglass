@@ -27,6 +27,10 @@ key a variable can set, one `OMNIGLASS_SETTING__*` row per key. A scalar or a co
 can come from a variable; a keyed map (`agent.roles`, `agent.tools`) cannot, and is set in the
 settings file or the console.
 
+In the console, **Settings** shows every namespace; **Edit** opens each key for change, its save
+button writes that one key, and a notice in the corner (`ui.theme saved`) confirms the save landed. A
+refused value stays on its row, beside the field.
+
 From the CLI, `omniglass setting list` reads every namespace, and `omniglass setting update` applies a
 merge patch to one, where a `null` restores a key:
 
@@ -37,8 +41,9 @@ omniglass setting update retention --body '{"metric_days": null}'
 
 This page teaches the two namespaces that shape what your fleet keeps. The others are taught where
 they act: `notification` (the mail relay and `egress_allow`) on
-[notifications](/admin/notifications/), and `agent` (what an AI agent may do unasked) on
-[agents](/developer/agents/).
+[notifications](/admin/notifications/), `agent` (what an AI agent may do unasked) on
+[agents](/developer/agents/), and `sso` (the identity provider people sign in through) on
+[single sign-on](/deployment/production/#single-sign-on).
 
 ## How long data is kept
 

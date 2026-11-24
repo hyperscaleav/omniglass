@@ -1,0 +1,43 @@
+# Read what happened on the timeline (#2425): a system's Timeline view lays
+# its health, every alarm raised in range, events, logs and commands on one
+# axis. Off camera the huddle room's display drops off the network (its
+# simulator unplugs it), the seeded reachability-lost rule raises an alarm, an
+# operator sends a reboot, and the display comes back, so the alarm clears.
+# The scene then reads that story straight off the timeline: the degraded
+# span, the alarm's span from raise to clear with how long it was raised, and
+# the command's marker where it was sent.
+title: Read what happened on the timeline
+description: A display drops off the network and recovers; open its system's Timeline, rest the pointer on the alarm's span to read when it was raised, when it cleared and for how long, then on the command sent while it was down.
+setup:
+  - until: { get: '/components/hq.west.level-2.huddle.$comp.display-1/simulation', contains: '"status":"running"', timeout: 240000 }
+  - pause: 20
+  - put: '/components/hq.west.level-2.huddle.$comp.display-1/impairment'
+    body: { unplugged: true, latency_ms: 0, jitter_ms: 0, loss_pct: 0, rate_kbit: 0 }
+  - until: { get: '/components/hq.west.level-2.huddle.$comp.display-1/alarms', contains: raised_at, timeout: 180000 }
+  - post: '/components/hq.west.level-2.huddle.$comp.display-1/commands:issue'
+    body: { command_type: reboot }
+  - pause: 240
+  - put: '/components/hq.west.level-2.huddle.$comp.display-1/impairment'
+    body: { unplugged: false, latency_ms: 0, jitter_ms: 0, loss_pct: 0, rate_kbit: 0 }
+  - until: { get: '/components/hq.west.level-2.huddle.$comp.display-1/alarms?include_cleared=true', contains: cleared_at, timeout: 240000 }
+# The lanes' first reads warm off camera, so the scene spends its budget on
+# the timeline, not on a cold lab.
+ready:
+  goto: /systems/huddle?tab=timeline&range=1h
+  wait: { selector: '[data-testid=timeline-alarm-span]', timeout: 120000 }
+steps:
+  - goto: /systems/huddle?tab=timeline&range=1h
+    caption: The huddle room's system, its Timeline over the last hour. Its display dropped off the network for a few minutes, then came back.
+  - wait: { selector: '[data-testid=timeline-alarm-span]', timeout: 60000 }
+    caption: Health on top went degraded while the display, on its own row, was in outage; under it, the reachability alarm's span.
+  - hover: '[data-testid=timeline-alarm-span]'
+    caption: Rest the pointer on the alarm's span.
+  - wait: { text: raised for }
+    caption: When it was raised, when it cleared, and how long it was high, read off the span.
+    hold: 2500
+    poster: true
+  - hover: '[data-testid=timeline-commands-row] [role=button]'
+    caption: Then on the command marker, where the operator sent a reboot while the display was down.
+  - wait: { text: reboot on display-1 }
+    caption: The command, its status and who sent it, on the same axis as the alarm it answered.
+    hold: 2000

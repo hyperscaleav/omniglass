@@ -1,11 +1,9 @@
 package storage
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
@@ -169,12 +167,23 @@ func (p *PG) writeLogLines(ctx context.Context, tx pgx.Tx, lines []LogLineWrite)
 		sevs[i], facs[i], corrs[i], attrs[i], labels[i] = textOrNull(sev), textOrNull(fac), textOrNull(corr), textOrNull(attr), textOrNull(label)
 		instances[i], sources[i], messages[i] = logline.Clean(l.Instance), logline.Clean(l.Source), message
 	}
-	rows, err := tx.Query(ctx, `insert into log_line (ts, component_id, instance, source, severity, facility, message, attributes, labels, correlation_id)
-		select u.ts, u.arc::uuid, u.instance, u.source, u.severity, u.facility, u.message, u.attributes::jsonb, u.labels::jsonb, u.correlation_id
-		from unnest($1::timestamptz[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[], $10::text[])
-			with ordinality as u(ts, arc, instance, source, severity, facility, message, attributes, labels, correlation_id, ord)
-		order by u.ord
-		returning id, received_at`,
+	// Each row's id is drawn in its own CTE row beside its ordinal and the
+	// insert writes that id, so the ids come back paired with the batch's
+	// order by construction, not by trusting the sequence to follow the
+	// insert's row order (the pattern InsertEvents uses).
+	rows, err := tx.Query(ctx, `with u as (
+			select * from unnest($1::timestamptz[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[], $10::text[])
+				with ordinality as u(ts, arc, instance, source, severity, facility, message, attributes, labels, correlation_id, ord)
+		), a as (
+			select u.ord, nextval(pg_get_serial_sequence('log_line', 'id')) as id from u
+		), ins as (
+			insert into log_line (id, ts, component_id, instance, source, severity, facility, message, attributes, labels, correlation_id)
+			overriding system value
+			select a.id, u.ts, u.arc::uuid, u.instance, u.source, u.severity, u.facility, u.message, u.attributes::jsonb, u.labels::jsonb, u.correlation_id
+			from u join a on a.ord = u.ord
+			returning id, received_at
+		)
+		select a.id, ins.received_at from a join ins on ins.id = a.id order by a.ord`,
 		ts, arcs, instances, sources, sevs, facs, messages, attrs, labels, corrs)
 	type landedLine struct {
 		id       int64
@@ -190,9 +199,9 @@ func (p *PG) writeLogLines(ctx context.Context, tx pgx.Tx, lines []LogLineWrite)
 	if err != nil {
 		return fmt.Errorf("storage: insert log lines %s: %w", logOwners(lines), err)
 	}
-	// The rows took ids in the lines' order (order by u.ord); returning
-	// carries no order of its own, so the ids are sorted back onto it.
-	slices.SortFunc(landed, func(a, b landedLine) int { return cmp.Compare(a.id, b.id) })
+	if len(landed) != n {
+		return fmt.Errorf("storage: insert log lines: %d rows landed for a batch of %d", len(landed), n)
+	}
 	for i, l := range landed {
 		landedRows(ctx, tail.Row{Lane: tail.LaneLog, OwnerKind: "component", OwnerID: arcs[i], Instance: instances[i], TS: ts[i],
 			ID: l.id, ReceivedAt: l.received, Message: messages[i], Severity: nullText(sevs[i]), Facility: nullText(facs[i]), Channel: sources[i],

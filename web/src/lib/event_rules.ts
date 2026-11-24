@@ -335,17 +335,17 @@ export function validateDraft(d: RuleDraft, editing?: string): DraftErrors {
   if (!name) e.name = "A name for the rule.";
   else if (name !== editing && entityNameError(name)) e.name = entityNameError(name)!;
   if (!d.sampleKey) e.sampleKey = "The property or metric the rule reads.";
-  else {
-    const f = readValue(d.fireValue, d.lane);
-    if (d.fireExpr !== null) {
-      if (!d.fireExpr.trim()) e.fireExpr = "An expression that is true when the rule fires.";
-    } else if (f.error) e.fireValue = f.error;
-    if (d.clearMode === "custom" && d.clearExpr !== null) {
-      if (!d.clearExpr.trim()) e.clearExpr = "An expression that is true when it clears.";
-    } else if (d.clearMode === "custom") {
-      const c = readValue(d.clearValue, d.lane);
-      if (c.error) e.clearValue = c.error;
-    }
+  // The criteria are judged whether or not the key is chosen yet, so a submit
+  // names every gap at once instead of one after another (#2432).
+  const f = readValue(d.fireValue, d.lane);
+  if (d.fireExpr !== null) {
+    if (!d.fireExpr.trim()) e.fireExpr = "An expression that is true when the rule fires.";
+  } else if (f.error) e.fireValue = f.error;
+  if (d.clearMode === "custom" && d.clearExpr !== null) {
+    if (!d.clearExpr.trim()) e.clearExpr = "An expression that is true when it clears.";
+  } else if (d.clearMode === "custom") {
+    const c = readValue(d.clearValue, d.lane);
+    if (c.error) e.clearValue = c.error;
   }
   const fs = readDuration(d.fireSustain);
   if (fs) e.fireSustain = fs;
@@ -524,4 +524,15 @@ export function previewBody(d: RuleDraft): PreviewEventRule {
     fire_criteria: fireOut(d),
     clear_criteria: d.clearMode === "custom" ? clearOut(d) : undefined,
   };
+}
+
+// conditionWords is the draft's fire condition as one phrase the preview and the
+// form read back: "Temperature above 40 °C", "Endpoint reachable is down". A
+// metric's unit rides after its number; an expression the builder cannot say is
+// quoted as written.
+export function conditionWords(d: Pick<RuleDraft, "lane" | "fireOp" | "fireValue" | "fireExpr">, reads: string, unit?: string): string {
+  if (d.fireExpr !== null) return `${reads} where ${d.fireExpr}`;
+  if (d.lane === "property") return `${reads} ${d.fireOp === "ne" ? "is anything but" : "is"} ${d.fireValue}`;
+  const n = unit ? `${d.fireValue} ${unit}` : d.fireValue;
+  return `${reads} ${{ eq: "equals", ne: "does not equal", gt: "above", ge: "at or above", lt: "below", le: "at or below" }[d.fireOp]} ${n}`;
 }

@@ -677,7 +677,7 @@ func TestTheProbePublishesTheGateWhenItCloses(t *testing.T) {
 	}
 }
 
-// A refused community holds snmp's get, and the rung's held reading (down,
+// A refused community holds snmp's get, and the rung's held reading (up,
 // rejected) is the refusal's echo, not the agent's answer: it never adds
 // unreachable, so once the refusal lifts nothing else holds the endpoint.
 func TestARefusedSNMPEndpointNeverReadsUnreachable(t *testing.T) {
@@ -715,12 +715,12 @@ func TestARefusedUDPEndpointNeverReadsUnreachable(t *testing.T) {
 		t.Fatal("the terminal reply did not refuse the endpoint")
 	}
 	if r, held := l.sessions.holding("ep-1"); held {
-		t.Fatalf("the refusal's own down readings added %+v", r)
+		t.Fatalf("the refusal's own readings added %+v", r)
 	}
 }
 
-// probeReachability drops only a refusal's echo: a responsive rung that reads down,
-// rejected, with no probe result beside it. A port that did not open is the
+// probeReachability drops only a refusal's echo: a responsive rung that reads up,
+// held, with no probe result beside it. A port that did not open is the
 // endpoint's own down, and so is a rung that timed out.
 func TestProbeVerdictDropsOnlyARefusalsEcho(t *testing.T) {
 	t.Parallel()
@@ -734,10 +734,10 @@ func TestProbeVerdictDropsOnlyARefusalsEcho(t *testing.T) {
 		dps    []collection.Sample
 		up, ok bool
 	}{
-		{"a held rung", []collection.Sample{responsive(collection.VerdictDown, rejectedReason+driver.ClassAuth)}, false, false},
+		{"a held rung", []collection.Sample{responsive(collection.VerdictUp, heldReason+driver.ClassAuth+" since "+gateT0.Format(time.RFC3339))}, false, false},
 		{"a silent rung", []collection.Sample{responsive(collection.VerdictDown, string(collection.Timedout))}, false, true},
 		{"an answered rung", []collection.Sample{responsive(collection.VerdictUp, string(collection.Responded))}, true, true},
-		{"a closed port beside a held rung", []collection.Sample{closedPort, responsive(collection.VerdictDown, rejectedReason+driver.ClassAuth)}, false, true},
+		{"a closed port beside a held rung", []collection.Sample{closedPort, responsive(collection.VerdictUp, heldReason+driver.ClassAuth)}, false, true},
 		{"nothing", nil, false, false},
 	} {
 		if up, ok := probeReachability(tc.dps); up != tc.up || ok != tc.ok {

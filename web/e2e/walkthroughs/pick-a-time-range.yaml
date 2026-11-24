@@ -1,0 +1,23 @@
+# The page's one time range (#2304): the control at the end of the system
+# page's tab rail sets the window for every chart on Overview, and the
+# address carries it, so a copied link opens on the same window.
+title: Pick the time range a system page charts
+description: Open the Huddle Room, open the time range on its tab rail, pick the last 7 days, and read the metrics grid redrawn over the week.
+steps:
+  - goto: /systems/huddle
+    caption: The Huddle Room. Its charts read the last 24 hours until you pick another range.
+  - wait: { selector: '[data-testid=time-range-trigger]' }
+    caption: The time range sits at the end of the tab rail and governs every chart on the page.
+  - click: '[data-testid=time-range-trigger]'
+    caption: Open it.
+  - wait: { selector: '[data-testid=time-range-panel]' }
+    caption: Presets slide to now; a custom range holds a fixed start and end, in your local time.
+    hold: 1500
+  - click: '[data-testid=time-range-preset-7d]'
+    caption: Pick the last 7 days. The address now says range=7d, so a copied link opens on the same week.
+  - wait: { text: Last 7 days }
+    caption: The control names the range in force.
+  - wait: { selector: '[data-testid=metrics-grid] [data-testid=timeseries-chart]' }
+    caption: Every metric in the grid now reads the week, in hourly buckets with each one's lowest to highest reading behind the line.
+    poster: true
+    hold: 2000
