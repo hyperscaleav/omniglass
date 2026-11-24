@@ -39,7 +39,7 @@ on GitHub-hosted runners and have a page of their own, [Agents in CI](/contribut
 - **`gen-drift.yml`** runs `make gen` and fails the PR on any diff in the committed generated
   artifacts (the OpenAPI, the cobra tree, the CLI reference, the ERD, the typed SPA client,
   the protobuf wire), the drift gate [API first](/contributing/api-first/) promises.
-- **`docs-build.yml`** (path-filtered to `docs/**`) builds the Astro docs site, so a broken
+- **`docs-build.yml`** (path-filtered to `docs/**` and `api/openapi.yaml`) builds the Astro docs site, so a broken
   page fails the PR that introduces it instead of the next deploy.
 - **`migrations.yml`** (path-filtered to `db/**`) fails a PR that adds a migration whose
   version is not newer than the newest on the base branch's tip, fetched fresh, or is stamped
