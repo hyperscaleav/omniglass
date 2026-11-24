@@ -10,8 +10,8 @@ import Tooltip from "./ui/Tooltip";
 // OccurrenceRow is the one row an event or a log line wears wherever it is listed
 // (#2437), laid out as a grid: the relative time (the absolute on hover), a kind
 // badge (an event's key, or a log's severity colored by level, info muted), the
-// source where the list spans several entities, a log's facility, and the message
-// clamped to one line with the full text on hover, so a long unbroken
+// source where the list spans several entities, and the message (a log's facility
+// inline before it) clamped to one line with the full text on hover, so a long unbroken
 // message never widens the row. Clicking the row opens its detail in place: the
 // message wrapped in full, its source, correlation id, structured attributes, the
 // rule that derived it and the alarm it moved. An internal id in a message (a task's
@@ -43,10 +43,12 @@ export default function OccurrenceRow(p: { o: Occurrence; showSource?: boolean }
   const timelines = createTimelineToggles();
   const attrs = createMemo(() => formatAttributes(p.o.attributes));
   const labels = createMemo(() => formatAttributes(p.o.labels));
-  // A log is a fixed-width grid so its fields line up down the list: time,
-  // severity, source (only where entries come from several), facility, then the
-  // message taking the rest. An event uses the same slots without a facility.
-  const columns = () => ["4.5rem", "5.5rem", p.showSource ? "9rem" : "", p.o.kind === "log" ? "6.5rem" : "", "minmax(0,1fr)"].filter(Boolean).join(" ");
+  // Every row is the same fixed-width grid so its fields line up down the list, and
+  // across an events list and a logs list stacked on one page: time, the kind badge
+  // (an event's key or a log's severity), source (only where entries come from
+  // several), then the message taking the rest. A log's facility rides inline before
+  // its message, so no row carries an empty slot.
+  const columns = () => ["4.5rem", "8rem", p.showSource ? "9rem" : "", "minmax(0,1fr)"].filter(Boolean).join(" ");
   const muted = () => p.o.kind === "log" && ["info", "informational", "debug", "trace"].includes(p.o.badge.toLowerCase());
   const detailId = `occ-${Math.random().toString(36).slice(2, 9)}`;
   const facts = createMemo(() => {
@@ -75,14 +77,16 @@ export default function OccurrenceRow(p: { o: Occurrence; showSource?: boolean }
           onClick={() => setOpen((v) => !v)}
         >
           <span data-testid="occurrence-time" class="text-[11px] text-base-content/45"><Time iso={p.o.ts} /></span>
-          <span class={`badge badge-sm max-w-full justify-self-start truncate font-data text-[10px] ${muted() ? "badge-ghost text-base-content/45" : p.o.badgeClass}`}>{p.o.badge}</span>
+          <Tooltip as="span" data-testid="occurrence-badge" content={p.o.badge} class={`badge badge-sm min-w-0 max-w-full justify-self-start font-data text-[10px] ${muted() ? "badge-ghost text-base-content/45" : p.o.badgeClass}`}><span class="truncate">{p.o.badge}</span></Tooltip>
           <Show when={p.showSource}>
             <Tooltip as="span" data-testid="occurrence-source" class="truncate font-data text-[11px] text-base-content/60" content={p.o.owner ?? p.o.source}>{p.o.owner ?? p.o.source}</Tooltip>
           </Show>
-          <Show when={p.o.kind === "log"}>
-            <Tooltip as="span" data-testid="occurrence-facility" class="truncate font-data text-[11px] text-base-content/40" content={p.o.facility}>{p.o.facility}</Tooltip>
-          </Show>
-          <Tooltip as="span" class="min-w-0 truncate text-sm text-base-content/80" content={p.o.message} data-testid="occurrence-message"><Message text={p.o.message} /></Tooltip>
+          <Tooltip as="span" class="min-w-0 truncate text-sm text-base-content/80" content={p.o.message} data-testid="occurrence-message">
+            <Show when={p.o.kind === "log" && p.o.facility}>
+              <span data-testid="occurrence-facility" class="mr-2 font-data text-[11px] text-base-content/40">{p.o.facility}</span>
+            </Show>
+            <Message text={p.o.message} />
+          </Tooltip>
         </button>
         {/* A rule's event names the rule and carries the alarm it moved (#951):
             beside the row's button, never inside it. */}

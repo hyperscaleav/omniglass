@@ -19,7 +19,7 @@ export const ruleHref = (ref: string) => drawerHref("event_rule", ref);
 // written under, which a rename since (#977) has moved, and the id has not.
 export default function RuleLink(props: { name: string; id?: string }): JSX.Element {
   return (
-    <span class="shrink-0 text-[11px] text-base-content/45">
+    <span class="max-w-[16rem] shrink-0 truncate text-[11px] text-base-content/45">
       by rule{" "}
       <Show
         when={props.id}
