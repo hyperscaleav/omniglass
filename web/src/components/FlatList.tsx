@@ -48,7 +48,9 @@ export type FlatConfig<T> = {
   filterPlaceholder?: string;
   initialChips?: Chip[];
   columns: FlatColumn<T>[];
-  empty?: string; // no rows at all
+  // No rows at all: a line, or a teaching face (a function, given the create
+  // action when the viewer may create) that replaces the line, as Inbox does.
+  empty?: string | ((ctx: { create?: () => void }) => JSX.Element);
   rowClass?: (r: T) => string;
   // The name a row's open control announces ("Open <name>"); absent, the entity's
   // singular noun and the row's address (rowId) stand in, so rows still differ.
@@ -278,9 +280,18 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
                           when={cfg.loading?.() && cfg.loadingRows}
                           fallback={
                             <tr>
-                              <td colspan={span()} class="py-8 text-center text-base-content/40">
-                                {cfg.loading?.() ? "Loading…" : filtering() ? `No ${cfg.entity.plural.toLowerCase()} match the filter.` : (cfg.empty ?? `No ${cfg.entity.plural.toLowerCase()} yet.`)}
-                              </td>
+                              <Show
+                                when={!cfg.loading?.() && !filtering() && typeof cfg.empty === "function"}
+                                fallback={
+                                  <td colspan={span()} class="py-8 text-center text-base-content/40">
+                                    {cfg.loading?.() ? "Loading…" : filtering() ? `No ${cfg.entity.plural.toLowerCase()} match the filter.` : ((cfg.empty as string | undefined) ?? `No ${cfg.entity.plural.toLowerCase()} yet.`)}
+                                  </td>
+                                }
+                              >
+                                <td colspan={span()} class="p-0" data-testid="list-empty">
+                                  {(cfg.empty as (ctx: { create?: () => void }) => JSX.Element)({ create: cfg.create?.can() ? () => setCreateOpen(true) : undefined })}
+                                </td>
+                              </Show>
                             </tr>
                           }
                         >

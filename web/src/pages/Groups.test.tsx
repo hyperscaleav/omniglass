@@ -17,9 +17,9 @@ const members: GroupMember[] = [{ user_id: uuidFor("u-alice"), kind: "person", n
 const alice: User = { id: uuidFor("u-alice"), kind: "person", active: true, person: { username: "alice", email: "alice@example.com", label: "Alice Ng" }, grants: [], groups: [{ id: uuidFor("g-hd"), name: "Help Desk" }] };
 const me: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
 
-function mount() {
+function mount(rows: Group[] = [group]) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-  qc.setQueryData([...GROUPS_KEY], [group]);
+  qc.setQueryData([...GROUPS_KEY], rows);
   qc.setQueryData([...GROUPS_KEY, uuidFor("g-hd")], group);
   qc.setQueryData([...GROUPS_KEY, uuidFor("g-hd"), "members"], members);
   qc.setQueryData([...GROUPS_KEY, uuidFor("g-hd"), "grants"], []);
@@ -260,5 +260,23 @@ describe("edit as a URL fact", () => {
     mount();
     // The blade footer's edit pair is the witness: Save renders only in edit mode.
     await waitFor(() => expect(screen.getByText("Save")).toBeTruthy());
+  });
+});
+
+// The page wears the nav header, and an empty directory teaches what a group is for
+// and offers the create action (#2447), as Inbox and Subscriptions do.
+describe("Groups page chrome (#2447)", () => {
+  it("wears the Page header with the nav hint", () => {
+    mount();
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("User groups");
+    expect(screen.getByTestId("page-header").textContent).toContain("membership and the grants members inherit");
+  });
+
+  it("an empty directory says what a group is for and offers New user group", async () => {
+    mount([]);
+    const empty = await screen.findByTestId("list-empty");
+    expect(empty.textContent).toMatch(/grants/i);
+    fireEvent.click(within(empty).getByRole("button", { name: /New user group/ }));
+    expect(await screen.findByRole("dialog")).toBeTruthy();
   });
 });

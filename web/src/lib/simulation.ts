@@ -1,6 +1,7 @@
 import { api } from "../api/client";
 import type * as S from "../api/api.gen";
 import { entityNameError } from "./names";
+import { fmtCount } from "./format";
 import { can, type Me } from "./auth";
 export { ENTITY_NAME_RE, entityNameError } from "./names";
 
@@ -251,7 +252,7 @@ export function parseImpairment(d: ImpairmentDraft): { value: Impairment | null;
       return 0;
     }
     const n = Number(raw);
-    if (n > max) errors[k] = `At most ${max.toLocaleString("en-US")} ${what}.`;
+    if (n > max) errors[k] = `At most ${fmtCount(max)} ${what}.`;
     return n;
   };
   const latency = int("latency_ms", IMPAIRMENT_LIMITS.latency_ms, "ms");

@@ -1,4 +1,5 @@
 import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
+import Page from "../components/Page";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import { identityColumn } from "../components/IdentityCell";
@@ -6,6 +7,7 @@ import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
 import BladeField from "../components/BladeField";
 import KVStacked from "../components/KVStacked";
+import SecretTypeCell from "../components/SecretTypeCell";
 import SecretFields from "../components/SecretFields";
 import CreateSecretForm from "../components/CreateSecretForm";
 import {
@@ -57,7 +59,7 @@ function fieldsPreview(s: Secret): JSX.Element {
 
 const columns: FlatColumn<Secret>[] = [
   identityColumn<Secret>(),
-  { key: "type", label: "Type", width: "170px", sortVal: (s) => s.secret_type, cell: (s) => <span class="badge badge-ghost badge-sm">{s.secret_type}</span> },
+  { key: "type", label: "Type", width: "170px", sortVal: (s) => s.secret_type, cell: (s) => <SecretTypeCell name={s.secret_type} /> },
   { key: "owner", label: "Scope", width: "220px", sortVal: (s) => s.owner_kind, cell: (s) => <span class="text-base-content/70">{ownerLabel(s)}</span> },
   { key: "fields", label: "Fields", cell: (s) => fieldsPreview(s) },
 ];
@@ -70,28 +72,30 @@ export default function Secrets() {
   const rows = createMemo(() => secrets.data ?? []);
 
   return (
-    <FlatList<Secret>
-      config={{
-        entity: { name: "secret", plural: "secrets" },
-        rows,
-        loading: () => secrets.isPending,
-        error: () => secrets.error,
-        filterKeys: [
-          { key: "name", type: "string", hint: "substring", get: (s) => `${s.name} ${s.secret_type}`, values: () => [] },
-          { key: "scope", type: "string", hint: "exact", get: (s) => s.owner_kind, values: (rs) => [...new Set(rs.map((r) => r.owner_kind))].sort() },
-          { key: "type", type: "string", hint: "exact", get: (s) => s.secret_type, values: (rs) => [...new Set(rs.map((r) => r.secret_type))].sort() },
-        ],
-        filterPlaceholder: "filter secrets by name, type, scope…",
-        columns,
-        empty: "No secrets yet.",
-        rowId: (s) => s.id,
-        rowAlt: (s) => s.name,
-        blades: { registry: { secret: secretBlade }, rootKind: "secret" },
-        create: can(me.data, "secret", "create")
-          ? { label: "New secret", can: () => can(me.data, "secret", "create"), body: (ctx) => <CreateSecretForm onCreated={ctx.select} /> }
-          : undefined,
-      }}
-    />
+    <Page route="/secrets">
+      <FlatList<Secret>
+        config={{
+          entity: { name: "secret", plural: "secrets" },
+          rows,
+          loading: () => secrets.isPending,
+          error: () => secrets.error,
+          filterKeys: [
+            { key: "name", type: "string", hint: "substring", get: (s) => `${s.name} ${s.secret_type}`, values: () => [] },
+            { key: "scope", type: "string", hint: "exact", get: (s) => s.owner_kind, values: (rs) => [...new Set(rs.map((r) => r.owner_kind))].sort() },
+            { key: "type", type: "string", hint: "exact", get: (s) => s.secret_type, values: (rs) => [...new Set(rs.map((r) => r.secret_type))].sort() },
+          ],
+          filterPlaceholder: "filter secrets by name, type, scope…",
+          columns,
+          empty: "No secrets yet.",
+          rowId: (s) => s.id,
+          rowAlt: (s) => s.name,
+          blades: { registry: { secret: secretBlade }, rootKind: "secret" },
+          create: can(me.data, "secret", "create")
+            ? { label: "New secret", can: () => can(me.data, "secret", "create"), body: (ctx) => <CreateSecretForm onCreated={ctx.select} /> }
+            : undefined,
+        }}
+      />
+    </Page>
   );
 }
 
@@ -215,7 +219,8 @@ function SecretBladeBody(p: { id: string }): JSX.Element {
           </Show>
           <BladeField bind="label" value={() => s().label ?? ""} draft={label} onInput={setLabel} />
           <div class="grid grid-cols-2 gap-3 text-sm">
-            <KVStacked label="Type" value={<span class="badge badge-ghost badge-sm">{s().secret_type}</span>} />
+            <KVStacked bind="name" value={<span class="font-data text-xs" data-testid="secret-name">{s().name}</span>} />
+            <KVStacked label="Type" value={<SecretTypeCell name={s().secret_type} />} />
             <KVStacked label="Scope" value={<span>{ownerLabel(s())}</span>} />
           </div>
           <Show when={!isEnvSecret(s())}>

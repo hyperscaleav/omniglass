@@ -1,5 +1,6 @@
 import type { RulePreview } from "./expressions";
 import { sustainWords } from "./event_rules";
+import { fmtCount } from "./format";
 
 // What a rule preview says, in words (#2432): the pure function from the
 // server's answer (POST /event-rules:preview) and the draft's own words to the
@@ -92,6 +93,6 @@ export function previewWords(r: RulePreview, c: PreviewContext): PreviewWords {
       unknown.length > 0
         ? `${plural(unknown.length, "series", "series")} (${names(unknown)}) had no sample in the week before the window, so ${unknown.length === 1 ? "its first reading set its" : "their first reading set their"} state and counted no firing.`
         : null,
-    cap: r.truncated ? `Judged ${r.series_judged} of ${r.series_total} series: the rest would pass the ${r.row_cap.toLocaleString("en-US")}-sample cap.` : null,
+    cap: r.truncated ? `Judged ${r.series_judged} of ${r.series_total} series: the rest would pass the ${fmtCount(r.row_cap)}-sample cap.` : null,
   };
 }

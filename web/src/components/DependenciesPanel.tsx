@@ -192,7 +192,7 @@ export default function DependenciesPanel(props: { component: string; canUpdate:
               <input
                 type="search"
                 class="input input-bordered input-sm w-44 font-data"
-                placeholder="Filter components"
+                placeholder="filter components"
                 aria-label="Filter components"
                 value={query()}
                 onInput={(e) => {

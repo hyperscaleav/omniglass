@@ -1,4 +1,4 @@
-import { Show, For, createSignal, createEffect, createResource } from "solid-js";
+import { Show, For, createSignal, createEffect, createResource, type JSX } from "solid-js";
 import { A } from "@solidjs/router";
 import InfoTip from "../components/InfoTip";
 import PasswordField from "../components/PasswordField";
@@ -14,15 +14,30 @@ import { passwordError, isPasswordPolicyMessage, tokenTtlError } from "../lib/va
 import { can, useMe, useUpdateProfile, useChangePassword, setMyAvatar, removeMyAvatar, fetchMyAvatar } from "../lib/auth";
 import { useSessions, useRevokeSession, useRevokeAllSelfSessions, createSelfToken, type Session } from "../lib/sessions";
 import { Bell, Check, Copy, Key, LogOut, Plus, Save, Trash } from "../components/icons";
-import { kindLabel } from "../lib/users";
+import { kindLabel, getUser } from "../lib/users";
+import { scopeWords, permissionLabel } from "../lib/access";
+import { useQuery } from "@tanstack/solid-query";
 import { confirmAction } from "../lib/confirm";
 
 // Profile is the signed-in operator's own account surface: edit your label
 // and email, change your password, and (pedagogically) see the identity model you
 // operate under, your user, its permissions, and its role grants. Every field
 // here is self-scoped; the server edits only the caller's own user.
+// One row of the Access card: the label on the left, its value on the right.
+function AccessRow(p: { label: string; value: JSX.Element }) {
+  return (
+    <div class="flex items-baseline gap-4 px-3 py-2">
+      <dt class="eyebrow w-20 shrink-0">{p.label}</dt>
+      <dd class="min-w-0 flex-1 text-sm">{p.value}</dd>
+    </div>
+  );
+}
+
 export default function Profile() {
   const me = useMe();
+  // The caller's own groups, read from their user record; a caller who may not read
+  // it simply gets no Groups row rather than a wrong "none".
+  const groups = useQuery(() => ({ queryKey: ["users", "me-groups", me.data?.user.id], queryFn: async () => (await getUser(me.data!.user.id)).groups ?? [], enabled: !!me.data?.user.id, retry: false }));
   const updateProfile = useUpdateProfile();
   const changePassword = useChangePassword();
   const sessions = useSessions();
@@ -385,19 +400,34 @@ export default function Profile() {
               permissions are the flattened union of the roles granted to you; the server enforces them on every request
               (this is a hint, not the authority).
             </p>
-            <div class="grid gap-3 sm:grid-cols-2">
-              <div>
-                <div class="eyebrow mb-1.5">Role grants</div>
-                <div class="flex flex-wrap gap-1.5">
-                  <For each={me.data?.grants ?? []} fallback={<span class="text-xs text-base-content/40">none</span>}>
-                    {(g) => (
-                      <span class="badge badge-soft badge-primary font-data text-[11px]">
-                        {g.role} @ {g.scope_kind}{g.scope_id ? `:${g.scope_id}` : ""}
+            <dl class="flex flex-col divide-y divide-base-300 rounded-box border border-base-300" data-testid="access-rows">
+              <For each={me.data?.grants ?? []} fallback={<AccessRow label="Roles" value={<span class="text-base-content/40">none</span>} />}>
+                {(g) => (
+                  <AccessRow
+                    label="Role"
+                    value={
+                      <span class="flex flex-wrap items-baseline gap-x-2">
+                        <span class="font-data text-sm">{g.role}</span>
+                        <span class="text-xs text-base-content/60" title={g.scope_id}>{scopeWords(g)}</span>
                       </span>
-                    )}
-                  </For>
-                </div>
-              </div>
+                    }
+                  />
+                )}
+              </For>
+              <Show when={groups.data}>
+                <AccessRow
+                  label="Groups"
+                  value={
+                    <Show when={groups.data!.length} fallback={<span class="text-base-content/40">none</span>}>
+                      <span class="flex flex-wrap gap-1.5">
+                        <For each={groups.data}>{(g) => <span class="badge badge-ghost badge-sm">{g.name}</span>}</For>
+                      </span>
+                    </Show>
+                  }
+                />
+              </Show>
+            </dl>
+            <div>
               {/* Closed by default: an admin holds well over a hundred, and the
                   count is the fact most visits want. */}
               <Collapsible
@@ -406,7 +436,7 @@ export default function Profile() {
               >
                 <div class="flex flex-wrap gap-1.5">
                   <For each={me.data?.permissions ?? []} fallback={<span class="text-xs text-base-content/40">none</span>}>
-                    {(p) => <span class="badge badge-ghost font-data text-[11px]">{p}</span>}
+                    {(p) => <span class="badge badge-ghost font-data text-[11px]" title={p === ">" ? "The > wildcard: every permission" : undefined}>{permissionLabel(p)}</span>}
                   </For>
                 </div>
               </Collapsible>

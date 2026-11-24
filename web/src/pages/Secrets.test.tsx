@@ -177,7 +177,7 @@ describe("Secrets create lands on the new row (#471)", () => {
       if (!el) throw new Error("no blade yet");
       return el as HTMLElement;
     });
-    expect(within(blade).getByText("door_code")).toBeInTheDocument();
+    expect(within(blade).getByTestId("secret-name").textContent).toBe("door_code");
   });
 });
 
@@ -214,5 +214,37 @@ describe("Secrets create owner picker survives duplicate names (#627)", () => {
     expect(await selectedTree(ownerSelect)).toEqual([1]);
     await pickTree(ownerSelect, 2);
     expect(await selectedTree(ownerSelect)).toEqual([2]);
+  });
+});
+
+// The type reads the same in the form, the list and the drawer (#2447): the label
+// as the primary line, the name beneath it in the data face; the drawer also
+// shows the secret's own name.
+describe("Secrets type and name presentation (#2447)", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("wears the Page header and lists each type by label with its name beneath", async () => {
+    mount(owner);
+    expect(await screen.findByRole("heading", { level: 1, name: "Secrets" })).toBeInTheDocument();
+    const cell = screen.getAllByTestId("secret-type")[0];
+    expect(within(cell).getByText("SNMP community")).toBeInTheDocument();
+    const nameLine = within(cell).getByText("snmp-community");
+    expect(nameLine.className).toContain("font-data");
+  });
+
+  it("the drawer shows the type by label and the secret's own name", async () => {
+    mount(owner);
+    const blade = await openBlade("poll_community");
+    expect(within(blade).getByTestId("secret-name").textContent).toBe("poll_community");
+    expect(within(blade).getByText("SNMP community")).toBeInTheDocument();
+  });
+
+  it("the create form names the chosen type beneath the picker", async () => {
+    mount(owner);
+    await screen.findByText("poll_community");
+    fireEvent.click(screen.getByRole("button", { name: /new secret/i }));
+    const typeSelect = screen.getByLabelText("Type") as HTMLSelectElement;
+    fireEvent.change(typeSelect, { target: { value: "snmp-community" } });
+    expect(screen.getByTestId("type-name").textContent).toBe("snmp-community");
   });
 });

@@ -1,4 +1,5 @@
 import { Show, createMemo, createSignal, type JSX } from "solid-js";
+import Page from "../components/Page";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams } from "@solidjs/router";
 import TreeList, { type FormState, type ListConfig, type ListCtx, type ListNode, type PageDescriptor } from "../components/TreeList";
@@ -18,7 +19,8 @@ import {
   dataUrlToBase64,
 } from "../lib/files";
 import { useMe, can } from "../lib/auth";
-import { describeError, fmtTime } from "../lib/format";
+import { describeError } from "../lib/format";
+import Time from "../components/Time";
 import { confirmDelete } from "../lib/confirm";
 
 // Files: the tenant-wide file directory, built on the generic TreeList in flat
@@ -137,7 +139,7 @@ export default function Files() {
                   : <span class="text-sm text-base-content/50">Normal</span>
               }
             />
-            <KVStacked label="Added" value={<span class="text-sm">{fmtTime(n().created_at)}</span>} />
+            <KVStacked label="Added" value={<span class="text-sm"><Time iso={n().created_at} /></span>} />
             <KVStacked label="ID" value={<span class="font-data text-xs text-base-content/50">{n().raw.id}</span>} />
           </div>
         </div>
@@ -165,12 +167,13 @@ export default function Files() {
     focus: () => params.id,
     loading: () => files.isLoading,
     error: () => files.error,
-    filterPlaceholder: "Filter by name, type…",
+    filterPlaceholder: "filter by name, type…",
+    rowChevron: true,
     cellFor: (key, n) => {
       if (key === "content_type") return <span class="badge badge-ghost badge-sm">{n.content_type}</span>;
       if (key === "size") return <span class="text-base-content/70">{humanSize(n.size)}</span>;
       if (key === "sensitive") return n.sensitive ? <span class="badge badge-warning badge-sm">Sensitive</span> : <span class="text-base-content/40">—</span>;
-      if (key === "created_at") return <span class="text-base-content/70">{fmtTime(n.created_at)}</span>;
+      if (key === "created_at") return <span class="text-base-content/70"><Time iso={n.created_at} /></span>;
       return null;
     },
     filterKeys: () => [
@@ -192,15 +195,19 @@ export default function Files() {
     renderDetail: (n, ctx) => <FileDetail node={n} ctx={ctx} />,
   };
 
-  // No page H1: inventory pages built on TreeList let the top bar label them, and
-  // the full-page detail renders its own heading (see Page.tsx).
-  return (
-    <div class="og-stack flex flex-col">
+  // The list wears the Page header; the full-page detail renders its own heading.
+  const body = (
+    <>
       <Show when={err()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
       </Show>
       <TreeList config={cfg} />
-    </div>
+    </>
+  );
+  return (
+    <Show when={params.id} fallback={<Page route="/files">{body}</Page>}>
+      <div class="og-stack flex flex-col">{body}</div>
+    </Show>
   );
 }
 

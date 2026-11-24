@@ -115,6 +115,9 @@ export default function CreateSecretForm(p: { onCreated: (s: Secret) => void; ty
           <option value="" disabled>Choose a type…</option>
           <For each={types.data}>{(t) => <option value={t.name}>{t.label}</option>}</For>
         </select>
+        <Show when={typeId()}>
+          <span class="font-data text-xs text-base-content/50" data-testid="type-name">{typeId()}</span>
+        </Show>
       </FieldRow>
       <div class="grid grid-cols-2 gap-3">
         <FieldRow

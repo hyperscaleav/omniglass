@@ -2,7 +2,7 @@ import { type Accessor, type JSX, Show, createEffect, createMemo, createSignal, 
 import FilterBar from "./FilterBar";
 import Button from "./Button";
 import { buildPredicate, type Chip, type FilterKey } from "../lib/predicate";
-import { describeError } from "../lib/format";
+import { describeError, fmtCount } from "../lib/format";
 
 // ListShell is the chrome every list surface shares, body-agnostic: the FilterBar
 // (it owns the chip state and applies the client-side predicate), the outer card,
@@ -97,9 +97,9 @@ export default function ListShell<T>(props: {
         {props.children(filtered, chips)}
         <Show when={props.pageSize && matched().length > filtered().length}>
           <div class="flex items-center justify-between gap-3 border-t border-base-300 px-3 py-2 text-xs text-base-content/60" data-testid="list-more">
-            <span class="tnum">Showing {filtered().length.toLocaleString()} of {matched().length.toLocaleString()}</span>
+            <span class="tnum">Showing {fmtCount(filtered().length)} of {fmtCount(matched().length)}</span>
             <Button size="xs" onClick={() => setShown(shown() + props.pageSize!)}>
-              Show {Math.min(props.pageSize!, matched().length - filtered().length).toLocaleString()} more
+              Show {fmtCount(Math.min(props.pageSize!, matched().length - filtered().length))} more
             </Button>
           </div>
         </Show>

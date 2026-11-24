@@ -14,7 +14,9 @@ export default function TopBar(props: { section: string; onOpenPalette: () => vo
   const hint = shortcutHint(hostPlatform(), "K");
   return (
     <header class="navbar sticky top-0 z-20 min-h-14 gap-3 border-b border-base-300 bg-base-100/80 px-6 backdrop-blur">
-      <span class="eyebrow text-base-content/70">{props.section}</span>
+      <Show when={props.section}>
+        <span class="eyebrow text-base-content/70">{props.section}</span>
+      </Show>
       <div class="flex-1" />
       <button
         class="hidden h-8 w-56 items-center gap-2 rounded-field border border-base-300 bg-base-200 px-3 text-sm text-base-content/40 sm:flex"

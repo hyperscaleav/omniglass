@@ -325,7 +325,7 @@ export default function OutlineWorkspace(props: { rootId?: string; host?: "page"
                   chips={chips}
                   onChips={setChips}
                   onDraft={setDraftChip}
-                  placeholder="Filter by name, location, health, type, standard, product or tag; Enter pins it as a chip"
+                  placeholder="filter by name, location, health, type, standard, product or tag; Enter pins it as a chip"
                 >
                   {(filtered) => (
                     <Show

@@ -1,4 +1,5 @@
 import { createIdentity } from "../lib/entities";
+import Page from "../components/Page";
 import { Show, For, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import ModalDialog, { DialogHeading } from "../components/ui/ModalDialog";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
@@ -114,7 +115,7 @@ export default function Outposts() {
   };
 
   return (
-    <>
+    <Page route="/outposts">
       <FlatList<Outpost>
         config={{
           entity: { name: "outpost", plural: "outposts" },
@@ -136,7 +137,7 @@ export default function Outposts() {
         }}
       />
       <EnrollTokenModal result={enrollResult()} onClose={() => setEnrollResult(null)} />
-    </>
+    </Page>
   );
 }
 

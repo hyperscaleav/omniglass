@@ -1,4 +1,5 @@
 import { For, Show, createMemo, createSignal } from "solid-js";
+import Page from "../components/Page";
 import { A, useSearchParams } from "@solidjs/router";
 import SegmentedControl from "../components/ui/SegmentedControl";
 import AlarmDuration from "../components/AlarmDuration";
@@ -15,6 +16,7 @@ import { drawerHref } from "../lib/drawer_address";
 import { alarmFilterKeys, chipsFromParams, paramsFromChips, queryFromChips, stateFromParams, type AlarmState } from "../lib/alarmqueue";
 import { LEAF_POLL_MS } from "../lib/component_leaf";
 import { can, useMe } from "../lib/auth";
+import Time from "../components/Time";
 import { fmtTime, rel } from "../lib/format";
 import { useSeverity } from "../lib/severity";
 import type { Chip } from "../lib/predicate";
@@ -138,7 +140,7 @@ export default function Alarms() {
         // A fixed-width box: the age reads from the clock (9s, 17m ago), and its
         // width must not size the column, or the columns after it move between
         // two captures of the same page (the docs shot masks this cell).
-        <span class="inline-block w-[8ch] whitespace-nowrap text-xs tnum text-base-content/60" title={fmtTime(a.raised_at)}>{rel(a.raised_at, now())}</span>
+        <Time iso={a.raised_at} now={now()} class="inline-block w-[8ch] whitespace-nowrap text-xs text-base-content/60" />
       ),
     },
     {
@@ -179,7 +181,8 @@ export default function Alarms() {
   };
 
   return (
-    <div class="h-full min-h-96" data-testid="alarm-queue">
+    <Page route="/alarms" fill>
+    <div class="min-h-0 flex-1" data-testid="alarm-queue">
       <FlatList<Alarm>
         config={{
           entity: { name: "alarm", plural: "alarms" },
@@ -212,7 +215,7 @@ export default function Alarms() {
               <div class="flex flex-col gap-4">
                 <div class="grid grid-cols-2 gap-3 text-sm">
                   <KVStacked label="Severity" value={<SeverityBadge name={a.severity} />} />
-                  <KVStacked label="Raised" value={<span class="tnum text-xs">{fmtTime(a.raised_at)}</span>} />
+                  <KVStacked label="Raised" value={<span class="text-xs"><Time iso={a.raised_at} now={now()} /></span>} />
                   <Show when={a.cleared_at}>
                     {(at) => <KVStacked label="Cleared" value={<span class="tnum text-xs">{fmtTime(at())}</span>} />}
                   </Show>
@@ -245,5 +248,6 @@ export default function Alarms() {
         }}
       />
     </div>
+    </Page>
   );
 }

@@ -1,4 +1,5 @@
 import type { ReachTLSBody } from "../api/api.gen";
+import { fmtDay } from "./format";
 
 // A tls endpoint's handshake and certificate as the console reads them
 // (#1035): the reachability read carries the mode, the pinned key, the latest
@@ -68,6 +69,5 @@ export function shortKey(key: string): string {
 // certificate routinely outlives the calendar year, so a date without one
 // misleads.
 export function expiryDay(iso: string): string {
-  const d = new Date(iso);
-  return isNaN(d.getTime()) ? iso : d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
+  return fmtDay(iso, { year: true });
 }
