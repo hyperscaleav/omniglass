@@ -1179,3 +1179,113 @@ func TestAgentReviewGate(t *testing.T) {
 		t.Fatalf("bad input: exit %d, want 2", code)
 	}
 }
+
+// The reviewer on its threads (#2253).
+
+func TestAgentReviewReplyGate(t *testing.T) {
+	base := `{"sender":"fred","sender_type":"User","in_reply_to_id":5,"root_author":"hyperscale-reviewer","bots":["hyperscale-reviewer[bot]","hyperscale-agent[bot]"]}`
+	cases := map[string]string{
+		"run":                     base,
+		"skip: a top-level":       strings.Replace(base, `"in_reply_to_id":5`, `"in_reply_to_id":null`, 1),
+		"skip: the reply is from": strings.Replace(base, `"User"`, `"Bot"`, 1),
+		"skip: the thread is not": strings.Replace(base, `"root_author":"hyperscale-reviewer"`, `"root_author":"fred"`, 1),
+	}
+	for want, in := range cases {
+		out, code := agentReview(t, in, "reply-gate")
+		if code != 0 || !strings.HasPrefix(out, want) {
+			t.Errorf("%s: got %q (%d)", want, out, code)
+		}
+	}
+	if _, code := agentReview(t, "[]", "reply-gate"); code != 2 {
+		t.Errorf("bad input exit %d", code)
+	}
+}
+
+func TestAgentReviewReplyPromptCarriesOnlyTheThread(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "mocked-sut.md"), []byte("ENTRY-TEXT"), 0o644)
+	in := `{"path":"x.go","line":7,"lines":"LINE-SEVEN","comments":[
+		{"author":"hyperscale-reviewer","body":"**❌ t**\n<!-- agent-review severity=blocking lens=a rule=mocked-sut -->"},
+		{"author":"fred","body":"it is fine"}]}`
+	out, code := agentReview(t, in, "reply-prompt", dir)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, out)
+	}
+	for _, w := range []string{"x.go:7", "LINE-SEVEN", "ENTRY-TEXT", "it is fine"} {
+		if !strings.Contains(out, w) {
+			t.Errorf("prompt lacks %q", w)
+		}
+	}
+}
+
+func TestAgentReviewReplyResult(t *testing.T) {
+	for in, want := range map[string]string{
+		`{"resolve":true,"reply":"Agreed — fine."}`:                 `{"body":"Agreed - fine.","resolve":true}`,
+		"Here:\n```json\n{\"resolve\":false,\"reply\":\"no\"}\n```": `{"body":"no","resolve":false}`,
+		`garbage`: `{"body":"","resolve":false}`,
+	} {
+		if out, _ := agentReview(t, in, "reply-result"); out != want {
+			t.Errorf("%q: got %s want %s", in, out, want)
+		}
+	}
+}
+
+// A thread the reviewer verified fixed is resolved in the same run, an
+// advisory one included; the thread id is found from the comment when the
+// open-thread list has none.
+func TestAgentReviewVerifiedFixedAdvisoryThreadResolves(t *testing.T) {
+	r := `{"head_sha":"abcdef1234","expected":["recheck"],
+		"open_threads":[{"path":"w.yml","line":135,"rule":"r","severity":"advisory","comment_id":21,"thread_id":"T21"}],
+		"lenses":[{"name":"recheck","findings":[],"rechecks":[{"comment_id":21,"status":"fixed","note":""}]}]}`
+	out, _ := agentReview(t, r, "followups")
+	if !strings.Contains(out, `"resolve":true`) {
+		t.Fatalf("advisory fixed thread not resolved: %s", out)
+	}
+	threads := `{"threads":[{"id":"TX","comments":{"nodes":[{"databaseId":4}]}},{"id":"TY","comments":{"nodes":[{"databaseId":21},{"databaseId":22}]}}]}`
+	if out, _ := agentReview(t, threads, "thread-of", "22"); out != "TY" {
+		t.Fatalf("thread-of = %q", out)
+	}
+	if out, _ := agentReview(t, threads, "thread-of", "9"); out != "" {
+		t.Fatalf("thread-of unknown = %q", out)
+	}
+}
+
+func TestAgentReviewReviewOpensWithHeadAndCarriesRoundMarker(t *testing.T) {
+	r := reviewOf(t, `{"head_sha":"abcdef1234","expected":["a"],"lenses":[{"name":"a","findings":[{"severity":"blocking","path":"x.go","line":1,"rule":"r","failure":"f","fix":"x"}]}]}`)
+	if !strings.HasPrefix(r.Body, "❌ Changes requested · 1 blocking · 0 advisory · head `abcdef1`") || !strings.Contains(r.Body, "<!-- agent-review round blocking=1 head=abcdef1234 -->") {
+		t.Fatalf("body: %q", r.Body)
+	}
+	// The verdict still reads the blocking count under the head line.
+	out, _ := agentTrust(t, "verdict", `{"app_bot":"b[bot]","head_sha":"h","reviews":[{"user":"b[bot]","state":"COMMENTED","commit_id":"h","body":`+strconv.Quote(r.Body)+`}]}`)
+	if !strings.HasPrefix(out, "block") {
+		t.Fatalf("verdict = %q", out)
+	}
+}
+
+func TestAgentReviewRoundsSurviveDismissal(t *testing.T) {
+	reviews := `[
+	 {"user":"hyperscale-reviewer[bot]","state":"DISMISSED","body":"x\n<!-- agent-review round blocking=2 head=a -->"},
+	 {"user":"hyperscale-reviewer[bot]","state":"DISMISSED","body":"Superseded by review 9."},
+	 {"user":"hyperscale-reviewer[bot]","state":"COMMENTED","body":"clean\n<!-- agent-review round blocking=0 head=b -->"},
+	 {"user":"hyperscale-reviewer[bot]","state":"CHANGES_REQUESTED","body":"old, no marker"},
+	 {"user":"fred","state":"CHANGES_REQUESTED","body":"<!-- agent-review round blocking=3 -->"}]`
+	if out, _ := agentReview(t, reviews, "rounds", "hyperscale-reviewer[bot],hyperscale-agent[bot]"); out != "2" {
+		t.Fatalf("rounds = %q, want 2", out)
+	}
+}
+
+func TestAgentReviewSupersede(t *testing.T) {
+	reviews := `[
+	 {"id":1,"node_id":"N1","user":"hyperscale-reviewer[bot]","state":"CHANGES_REQUESTED"},
+	 {"id":2,"node_id":"N2","user":"hyperscale-reviewer[bot]","state":"COMMENTED"},
+	 {"id":3,"node_id":"N3","user":"hyperscale-reviewer[bot]","state":"COMMENTED"},
+	 {"id":4,"node_id":"N4","user":"fred","state":"CHANGES_REQUESTED"}]`
+	out, _ := agentReview(t, reviews, "supersede", "hyperscale-reviewer[bot]", "3")
+	var got []struct {
+		ID      int  `json:"id"`
+		Dismiss bool `json:"dismiss"`
+	}
+	if err := json.Unmarshal([]byte(out), &got); err != nil || len(got) != 2 || got[0].ID != 1 || !got[0].Dismiss || got[1].ID != 2 || got[1].Dismiss {
+		t.Fatalf("supersede = %s (%v)", out, err)
+	}
+}
