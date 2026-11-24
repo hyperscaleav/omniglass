@@ -42,7 +42,7 @@ classifier is its own catalog rather than a use of a standard's own parent-varia
   standard.
 - **New standard** (with `standard:create`, an admin permission) opens a create drawer: give it a
   **name** (unique tenant-wide, e.g. `lecture-hall`) and a **label**, and
-  optionally pick a **parent standard**. An unknown parent is refused (422).
+  optionally pick a **Variant of** standard. An unknown parent is refused (422).
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `standard:update`) edits the
   label and parent. The blade does not edit the **name**: rename a standard you created with
   `omniglass standard rename <name> --name <new>` (`standard:rename`), which keeps every system that
