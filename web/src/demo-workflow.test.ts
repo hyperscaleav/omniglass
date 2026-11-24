@@ -13,7 +13,7 @@ import { CLIP_END, CLIP_START, PENDING_SHA } from "../e2e/walkthroughpr.mjs";
 // holds no write token), the matrix fan-in, and the splice the publish job
 // runs to write the clip into the PR body, played here against fixtures
 // exactly as the job plays it.
-type Step = { name?: string; if?: string; uses?: string; run?: string; env?: Record<string, string>; with?: Record<string, unknown> };
+type Step = { name?: string; id?: string; if?: string; uses?: string; run?: string; env?: Record<string, string>; with?: Record<string, unknown> };
 type Job = { permissions?: Record<string, string>; steps: Step[]; needs?: string | string[]; if?: string; strategy?: { "fail-fast"?: boolean; matrix?: unknown } };
 type Workflow = { on: Record<string, unknown>; permissions: Record<string, string>; concurrency?: unknown; jobs: Record<string, Job> };
 
@@ -103,13 +103,51 @@ describe("the run:demo workflow's matrix", () => {
     expect(mark).toBeLessThan(steps.findIndex((s) => s.name === "Install web deps"));
   });
 
-  it("builds the lab with make before recording, since every recorder rides the lab (#1197), and opts the socket in only there", () => {
+  // Build once, distribute once (#2020): the lab is the binary and the image
+  // built from the tree plus Postgres, and a hundred record jobs each pulling
+  // Postgres from Docker Hub anonymously hit its rate limit. The select job pulls
+  // and builds once, only when demos were chosen, and saves one artifact.
+  it("builds the lab and pulls Postgres once, in the select job, and saves them as one artifact", () => {
+    const steps = demo.jobs.select.steps;
+    const named = (n: string) => steps.find((s) => s.name === n)!;
+    const pull = named("Pull the lab's Postgres once");
+    const build = named("Build the lab once");
+    const save = named("Save the lab's images and binary");
+    const upload = named("Upload the lab's images");
+    expect(build.run?.trim()).toBe("make");
+    expect(pull.run).toContain("mirror.gcr.io");
+    expect(save.run).toContain("docker save");
+    expect(upload.uses).toContain("actions/upload-artifact");
+    expect(upload.with?.name).toBe("demo-images");
+    // Only when demos were chosen, and in order: pull, build, save, upload.
+    for (const s of [pull, build, save, upload]) expect(s.if).toContain("steps.select.outputs.ids != ''");
+    const at = (n: string) => steps.findIndex((s) => s.name === n);
+    const choose = steps.findIndex((s) => s.id === "select");
+    expect(choose).toBeGreaterThan(-1);
+    expect(at("Pull the lab's Postgres once")).toBeGreaterThan(choose);
+    expect(at("Build the lab once")).toBeGreaterThan(at("Pull the lab's Postgres once"));
+    expect(at("Save the lab's images and binary")).toBeGreaterThan(at("Build the lab once"));
+    expect(at("Upload the lab's images")).toBeGreaterThan(at("Save the lab's images and binary"));
+    // Select only reads; the artifact needs no write token.
+    expect(writes(demo.jobs.select)).toBe(false);
+  });
+
+  it("loads the lab's images in each record job before recording, pulling no Postgres and building no omniglass image, and opts the socket in only there", () => {
     const steps = demo.jobs.record.steps;
-    const build = steps.findIndex((s) => s.run?.trim() === "make");
+    const download = steps.findIndex((s) => s.uses?.startsWith("actions/download-artifact") && s.with?.name === "demo-images");
+    const load = steps.findIndex((s) => s.name === "Load the lab's images and binary");
     const record = steps.findIndex((s) => s.name === "Record");
-    expect(build).toBeGreaterThan(steps.findIndex((s) => s.uses?.startsWith("actions/checkout")));
-    expect(build).toBeLessThan(record);
+    expect(download).toBeGreaterThan(steps.findIndex((s) => s.uses?.startsWith("actions/checkout")));
+    expect(load).toBeGreaterThan(download);
+    expect(load).toBeLessThan(record);
+    expect(steps[load].run).toContain("docker load");
     expect(steps[record].run).toContain("web/e2e/demo.sh record");
+    // The criterion of #2020: a record job pulls no Postgres and runs no image build.
+    for (const s of steps) {
+      expect(s.run?.trim()).not.toBe("make");
+      expect(s.run ?? "").not.toMatch(/docker\s+(pull|build)\b/);
+      expect(s.run ?? "").not.toContain("mirror.gcr.io");
+    }
     const socket = steps.filter((s) => JSON.stringify(s.env ?? {}).includes("DEMO_DOCKER_SOCKET"));
     expect(socket.map((s) => s.name)).toEqual(["Record"]);
   });

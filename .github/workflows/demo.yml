@@ -102,7 +102,8 @@ jobs:
       github.actor != 'github-actions[bot]') ||
       (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Choosing is seconds; building the lab's image once (below) is minutes.
+    timeout-minutes: 25
     permissions:
       contents: read
       pull-requests: read
@@ -183,12 +184,67 @@ jobs:
             fi
           fi
 
+      # Build once, distribute once (#2020). A run starts up to a hundred record
+      # jobs at once, and each used to pull the lab's Postgres from Docker Hub
+      # anonymously (a limit counted per shared runner address: HTTP 429, a demo
+      # failed before it recorded anything) and build the omniglass image from the
+      # tree. This job does both once, only when demos were chosen, saves the
+      # images and the lab binary as one artifact, and every record job loads
+      # that: it pulls nothing and builds no omniglass image. The Postgres comes
+      # from Google's Docker Hub mirror, retried, and from Docker Hub only if the
+      # mirror cannot serve it; the lab's own pull (internal/lab/pull.go) retries a
+      # 429 for anything that still pulls. The name is the lab's own constant.
+      - name: Pull the lab's Postgres once
+        if: ${{ steps.select.outputs.ids != '' }}
+        run: |
+          set -uo pipefail
+          img=$(sed -n 's/^[[:space:]]*PostgresImage = "\(.*\)"$/\1/p' internal/lab/plan.go)
+          [ -n "$img" ] || { echo "::error::cannot read PostgresImage from internal/lab/plan.go"; exit 1; }
+          for attempt in 1 2 3; do
+            if docker pull "mirror.gcr.io/library/${img}" && docker tag "mirror.gcr.io/library/${img}" "$img"; then
+              exit 0
+            fi
+            sleep $((attempt * 10))
+          done
+          echo "::warning::could not pull ${img} through mirror.gcr.io; pulling it from Docker Hub"
+          for attempt in 1 2 3 4; do
+            docker pull "$img" && exit 0
+            sleep $((attempt * 15))
+          done
+          echo "::error::could not pull ${img} from the mirror or from Docker Hub"
+          exit 1
+
+      - name: Build the lab once
+        if: ${{ steps.select.outputs.ids != '' }}
+        run: make
+
+      - name: Save the lab's images and binary
+        if: ${{ steps.select.outputs.ids != '' }}
+        run: |
+          set -euo pipefail
+          img=$(sed -n 's/^[[:space:]]*PostgresImage = "\(.*\)"$/\1/p' internal/lab/plan.go)
+          mkdir -p "$RUNNER_TEMP/demo-images"
+          mapfile -t built < <(docker image ls omniglass --format '{{.Repository}}:{{.Tag}}')
+          [ "${#built[@]}" -gt 0 ] || { echo "::error::make left no omniglass image"; exit 1; }
+          docker save "${built[@]}" "$img" | zstd -T0 -3 -o "$RUNNER_TEMP/demo-images/images.tar.zst"
+          cp bin/omniglass "$RUNNER_TEMP/demo-images/omniglass"
+
+      - name: Upload the lab's images
+        if: ${{ steps.select.outputs.ids != '' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: demo-images
+          path: ${{ runner.temp }}/demo-images/
+          # Already compressed; the artifact serves this run's record jobs.
+          compression-level: 0
+          retention-days: 1
+
   record:
     needs: select
     if: ${{ needs.select.outputs.ids != '' }}
     name: record ${{ matrix.id }}
     runs-on: ubuntu-latest
-    # Generous: building the images, the lab and the demo with its encodes;
+    # Generous: loading the images, the lab and the demo with its encodes;
     # a wedged container must not hold the runner for the default six hours.
     timeout-minutes: 30
     permissions:
@@ -230,31 +286,24 @@ jobs:
         if: ${{ matrix.kind == 'walkthrough' }}
         run: cd web && npm ci
 
-      # The lab is the binary and the image make builds from this tree (one
-      # build id, which the lab checks), so every recorder needs make first,
-      # and needs only Docker for it. A failed build leaves no stack-up mark,
-      # so combine names the leg as never run rather than blaming the demo.
-      # The nightly run starts about a hundred of these jobs at once, and every
-      # lab pulls its Postgres from Docker Hub anonymously, a limit counted per
-      # shared runner address: some got HTTP 429 and failed before recording
-      # anything (#2020). Pull it from Google's Docker Hub mirror first and tag it
-      # as the lab expects, so the lab finds it local and never asks Docker Hub. The
-      # name comes from the lab's own constant. If the mirror cannot serve it the
-      # lab pulls as before (and retries a 429 with backoff).
-      - name: Get the lab's Postgres from a mirror
-        run: |
-          img=$(sed -n 's/^[[:space:]]*PostgresImage = "\(.*\)"$/\1/p' internal/lab/plan.go)
-          [ -n "$img" ] || { echo "::error::cannot read PostgresImage from internal/lab/plan.go"; exit 1; }
-          for attempt in 1 2 3; do
-            if docker pull "mirror.gcr.io/library/${img}" && docker tag "mirror.gcr.io/library/${img}" "$img"; then
-              exit 0
-            fi
-            sleep $((attempt * 10))
-          done
-          echo "::warning::could not pull ${img} through mirror.gcr.io; the lab pulls it from Docker Hub"
+      # The lab is the binary and the image select built from this tree (one
+      # build id, which the lab checks), and the Postgres it pulled: loaded
+      # from the artifact, so this job pulls no Postgres and builds no omniglass
+      # image (#2020). A job that cannot load them leaves no stack-up mark, so
+      # combine names the leg as never run rather than blaming the demo.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: demo-images
+          path: ${{ runner.temp }}/demo-images
 
-      - name: Build the lab
-        run: make
+      - name: Load the lab's images and binary
+        run: |
+          set -euo pipefail
+          zstd -dc "$RUNNER_TEMP/demo-images/images.tar.zst" | docker load
+          mkdir -p bin
+          install -m 0755 "$RUNNER_TEMP/demo-images/omniglass" bin/omniglass
+          img=$(sed -n 's/^[[:space:]]*PostgresImage = "\(.*\)"$/\1/p' internal/lab/plan.go)
+          docker image inspect omniglass:dev "$img" >/dev/null
 
       # The demo's recorder brings up a lab of its own, all in Docker (the
       # outpost's NET_ADMIN, for its simulator's impairments, is a container

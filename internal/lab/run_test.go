@@ -384,6 +384,27 @@ func TestRunCreatesAPulledImageFromItsID(t *testing.T) {
 	}
 }
 
+// A demo run builds the omniglass image and pulls Postgres once and loads both
+// into every record job (#2020): a lab that finds both images already local
+// pulls and builds nothing, so a hundred labs never ask Docker Hub.
+func TestRunPullsNothingWhenTheImagesAreAlreadyLoaded(t *testing.T) {
+	srv := fakeServer(t)
+	eng := newFakeEngine(strings.TrimPrefix(srv.URL, "http://"))
+	cfg := testConfig()
+	eng.images[cfg.Image.Ref] = map[string]string{VersionLabel: "abc123"}
+	eng.images[PostgresImage] = map[string]string{}
+	var out bytes.Buffer
+	if _, err := testRunner(eng, &out).Run(context.Background(), cfg); err != nil {
+		t.Fatalf("%v\n%s", err, out.String())
+	}
+	if len(eng.pulls) != 0 {
+		t.Fatalf("pulled %v with both images already loaded, want no pull", eng.pulls)
+	}
+	if strings.Contains(out.String(), "pulling") {
+		t.Fatalf("the lab announced a pull:\n%s", out.String())
+	}
+}
+
 // A rate limited pull of the lab's Postgres is retried, not fatal (#2020): the
 // nightly demo run starts a hundred labs at once against Docker Hub's anonymous
 // limit.
