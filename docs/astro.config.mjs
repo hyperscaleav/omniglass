@@ -197,41 +197,6 @@ export default defineConfig({
           label: 'Being rebuilt',
           items: [
             {
-              label: 'Architecture',
-              collapsed: true,
-              items: [
-                // the fleet model, then the shapes it pins
-                { label: 'Core entities', slug: 'architecture/core-entities' },
-                // the journey, in the order the data travels
-                { label: 'Data collection', slug: 'architecture/collection' },
-                { label: 'Metrics and properties', slug: 'architecture/properties' },
-                { label: 'Commands', slug: 'architecture/commands' },
-                { label: 'Config & credentials', slug: 'architecture/variables' },
-                { label: 'Cascade', slug: 'architecture/cascade' },
-                { label: 'Health & KPIs', slug: 'architecture/health' },
-                { label: 'Alarms and actions', slug: 'architecture/alarms-actions' },
-                { label: 'Messaging', slug: 'architecture/messaging' },
-                // the foundations underneath
-                { label: 'Outposts', slug: 'architecture/outposts' },
-                { label: 'Simulation', slug: 'architecture/simulation' },
-                { label: 'Data model', slug: 'architecture/data-model' },
-                { label: 'Workers', slug: 'architecture/workers' },
-              ],
-            },
-            {
-              // The pages that describe entirely unbuilt capability: every one is a
-              // :::design sketch, and graduates out of this group as its subsystem
-              // lands (#434).
-              label: 'Design sketches',
-              collapsed: true,
-              items: [
-                { label: 'Templates', slug: 'architecture/templates' },
-                { label: 'Calculations', slug: 'architecture/calculations' },
-                { label: 'Expressions', slug: 'architecture/expressions' },
-                { label: 'Time', slug: 'architecture/time' },
-              ],
-            },
-            {
               label: 'Contributing',
               collapsed: true,
               items: [

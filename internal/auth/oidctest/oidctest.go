@@ -4,7 +4,8 @@
 // code (PKCE S256 checked) and redeems a refresh token, issuing RS256
 // id_tokens. Knobs let a test tamper with the next id_token, sign it with a
 // key the JWKS does not hold, withhold refresh tokens, refuse a subject's
-// refresh (invalid_grant) or answer every refresh 503.
+// refresh (invalid_grant), change a subject's claims at refresh, or answer
+// every refresh 503.
 package oidctest
 
 import (
@@ -46,6 +47,7 @@ type Provider struct {
 	codes    map[string]grant
 	refresh  map[string]grant
 	revoked  map[string]bool
+	regroup  map[string]map[string]any
 	// Refreshes counts refresh_token grants answered, refused or not.
 	refreshes int
 }
@@ -63,7 +65,8 @@ type grant struct {
 func New(t testing.TB) *Provider {
 	t.Helper()
 	p := &Provider{key: mustKey(t), foreign: mustKey(t), subject: "alice-sub",
-		codes: map[string]grant{}, refresh: map[string]grant{}, revoked: map[string]bool{}}
+		codes: map[string]grant{}, refresh: map[string]grant{}, revoked: map[string]bool{},
+		regroup: map[string]map[string]any{}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/.well-known/openid-configuration", p.discovery)
 	mux.HandleFunc("/jwks", p.jwks)
@@ -127,6 +130,15 @@ func (p *Provider) Revoke(subject string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.revoked[subject] = true
+}
+
+// Regroup makes every later refresh for subject issue its id_token with
+// claims instead of the sign-in's, as a provider does once an admin changes
+// the person's groups.
+func (p *Provider) Regroup(subject string, claims map[string]any) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.regroup[subject] = claims
 }
 
 // Down answers every refresh 503 while down is true.
@@ -224,6 +236,9 @@ func (p *Provider) token(w http.ResponseWriter, r *http.Request) {
 		}
 		delete(p.refresh, r.PostForm.Get("refresh_token"))
 		c.nonce = ""
+		if claims, ok := p.regroup[c.subject]; ok {
+			c.claims = claims
+		}
 		g = c
 	default:
 		oauthErr(w, http.StatusBadRequest, "unsupported_grant_type")

@@ -395,6 +395,8 @@ func TestAPushToABranchWithNoPRStartsNoReviewAndNoCI(t *testing.T) {
 			for ev := range wf.On {
 				switch ev {
 				case "pull_request", "merge_group", "workflow_dispatch":
+				case "pull_request_review_comment":
+					// A review comment exists only on an open PR, so it cannot start a review before there is one.
 				default:
 					t.Errorf("agent-review.yml starts on %q: a branch push would start a review before there is a PR", ev)
 				}

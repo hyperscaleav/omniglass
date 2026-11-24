@@ -79,7 +79,56 @@ where a user's access comes from. To change an inherited grant, edit the group, 
 
 From the CLI the surface is `omniglass user-group list` / `get` / `create` / `update` / `rename` /
 `delete`, plus its
-member and grant subcommands (see the [CLI reference](/reference/cli/)).
+member, grant and identity provider mapping subcommands (see the [CLI reference](/reference/cli/)).
+
+### Identity provider groups
+
+When people sign in with [single sign-on](/deployment/production/#single-sign-on), the groups they
+already keep at the identity provider can decide their Omniglass groups, so a building's support team
+in Entra ID or Okta gets exactly the grants of its Omniglass group without anyone adding members by hand.
+In a group's blade, **Edit** opens **Identity provider groups**: type a value of the provider's groups
+claim (the claim the `sso` setting `groups_claim` names, `groups` by default), press **Add**, and
+**Save**. The mapping is keyed by the provider's issuer, which the console fills in from the configured
+provider (the API's `POST /user-groups/{group}/idp-mappings` takes an `issuer` as well). Several values
+may map to one group, and one value to several groups.
+
+What happens next, and when:
+
+- **At each SSO sign-in**, in the transaction that signs the person in, their memberships from that
+  provider are set to exactly the groups their token's claim values map to: a newly mapped group is
+  joined, a group no value maps to any more is left. A token with **no groups claim at all** counts as
+  no groups (fail closed), so a provider that stops sending the claim removes these memberships rather
+  than freezing them.
+- **At each re-check** (every `recheck_minutes`, 15 by default), the refresh the sweep redeems usually
+  answers with a fresh id_token; when that token carries the groups claim, the same sync runs on it,
+  so a group removed at the provider lands at the first re-check whose token reflects it. How quickly a
+  provider's tokens reflect a group change is the provider's: Entra ID can take up to a day.
+- **Removing a group's last mapping** from a provider removes, at once, every membership that provider
+  brought into the group, since nothing can justify them any more. Removing one of several mappings
+  waits for each person's next sign-in or re-check.
+
+The group's **Members** list shows which members single sign-on brought: they read **from SSO** with
+the provider's host. Those are the only rows the sync ever touches. A member you add by hand is a local
+membership and stays whatever the provider says, and a local membership in a mapped group stands in for
+the provider's, so nothing is added twice. Adding by hand a member the provider brought makes that row
+local: it stops following the provider. Removing one the provider brought lasts only until the
+person's next sign-in or re-check while a mapping still puts them there; to keep someone out, change
+their groups at the provider or remove the mapping.
+
+**No provider group reaches an owner.** A group that carries an `owner` grant at any scope cannot be
+mapped, and a mapped group cannot be given an `owner` grant: both are refused with a `409`. Owner stays
+a grant an owner makes, never one the provider's administrators can hand out
+([ADR-2361](/architecture/decisions/#adr-2361-single-sign-on-links-a-person-to-an-identity-provider-subject-never-by-email)).
+
+Every add and remove the sync makes is in the audit log as a `user_group_member` change with
+`source: idp` and the issuer; a mapping's create and delete are `user_group_idp_mapping` rows.
+
+:::caution[Google sends no groups claim]
+Google's id_token carries no groups claim, so with Google as the provider a mapping has nothing to
+sync from: every person's provider-brought memberships are empty. Manage those groups' members by hand.
+Only the claim's values are read: no nested-group expansion, no userinfo call, and a provider that
+leaves an oversized groups list out of the token (Entra ID's group overage) syncs as no groups.
+:::
 
 ## The grant builder
 

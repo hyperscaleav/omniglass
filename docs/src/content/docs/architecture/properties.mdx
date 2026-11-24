@@ -1,430 +1,380 @@
 ---
 title: Metrics and properties
-description: "The two sample lanes: a metric is a quantity, a property is a value, each with its own catalog. Series, provenance, declared values as rows, current values derived, divergence, fusion, and how a value reads back."
-# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
+description: "How the two sample lanes are built: a metric is a quantity and a property is a value, each typed by its own catalog, with provenance, the writer class, current values read from the series, and reconciliation."
 sidebar:
-  hidden: true
+  order: 8
+  badge:
+    text: Partial
+    variant: note
 ---
 
 import SchemaTable from '../../../components/SchemaTable.astro';
 import WriterClasses from '../../../components/WriterClasses.astro';
 
-:::note[Partial]
-Built: both sample lanes end to end, fed by reachability. The **metric** path: the tcp probe's
-`tcp-connect-time` and the icmp (ping) probe's `icmp-rtt-avg` are timings, so the ingest consumer
-writes them to `metric` with `provenance=observed`, owner bound server-side from the task's
-endpoint (`owner_kind=component`), reject-not-project against the `metric_type` catalog. The
-**property** path: each probe's state is a word (`tcp-open` is `open` or `closed`,
-`icmp-reachable` is `up` or `down`) and the outpost computes the per-endpoint reachability
-`endpoint-reachable` (the AND of its probe results); the consumer lands all three in `property`
-under the same owner-confinement, **transition-only** (one row per flip, the guard inside the
-ingest's insert; a steady fleet writes a probe's state once,
-[ADR-1592](/architecture/decisions/#adr-1592-a-probes-state-is-a-transition-only-property-not-a-metric-row)).
-Raw lines land on the
-`log_line` / `outpost_log` lanes, never here
-([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)).
-**Two ingest lanes**, one write path: the outpost lane (an outpost publishes on its own subject; the
-server binds the owner from the task's endpoint) and the **API push lane** (`POST /telemetry:push`:
-a scoped caller declares the owner, the scope check is the fence, and a native probe key is refused
-by name, since only the outpost observes one:
-[the push lane refuses a native key](/architecture/collection/#the-push-lane-refuses-a-native-key)).
-Every write, on either lane and every other path, is held to the key's **writer class** at the
-Storage Gateway ([below](#who-writes-a-key-the-writer-class)). A push publishes onto the data
-lane, not Postgres, so pushed samples reach the stream consumers; both lanes call one `land()` and
-share its semantics (reject-not-project per lane, the transition-only property guard, held in the
-insert itself, and one transaction per batch under its receipt, so a redelivered batch lands once:
-[ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)). Inside that transaction a batch resolves each owner and reads the clock once, lands every metric series it carries once in one statement (a series it carries more than once, one row at a time), and judges every observation in the order it arrived ([ADR-1274](/architecture/decisions/#adr-1274-a-batch-lands-its-metric-lane-in-one-statement-except-a-series-it-carries-twice)). The wire is
-the protobuf `TelemetryBatch` with **per-lane arrays** (`metrics`, `properties`, `events`, `logs`).
-Declared values are series rows and current values are derived from the series
-([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)).
-The `instance` column has one meaning, stamped per provenance, and reconciliation and command
-settlement resolve an owner-level question across every instance of a key
-([ADR-0456](/architecture/decisions/#adr-0456-an-instance-names-which-value-of-one-key-on-one-owner-a-row-is-and-an-owner-level-read-reduces-across-every-instance),
-[below](#the-instance-dimension-many-values-of-one-name-on-one-owner)); the authored
-`name[instance]` form is design. A push may name a **system** as its owner: its metrics, properties
-and events land on the system's own arc at the owner level, and a system owns no log line
-([ADR-0422](/architecture/decisions/#adr-0422-a-system-owns-its-own-telemetry-and-a-location-owns-no-observed-sample); outpost-collected system telemetry arrives through the shared-API
-[fan-out](/architecture/collection/#shared-api-collection-one-component-many-owners), #1282). The `calculated` producer is built for
-component- and system-owned calc rules (#996, #997; a system's output is not yet judged by event rules,
-#1002): a calc rule's output is written through the same sample-write path
-as an observed sample, with `provenance = calculated`, `source_rule` and `source_rule_version`, on a
-server tick rather than the stream ([ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer)). See
-[ADR-0037](/architecture/decisions/#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer)
-and [ADR-0038](/architecture/decisions/#adr-0038-the-reachability-verdict-is-a-built-in-state).
-:::
-
-This page owns the value model: the two sample lanes and their catalogs, series and current values, the provenance axis, and how values reconcile, diverge, and read back. Physical layout (tables, partitioning, the lineage CHECK, tiering, retention) lives in [storage](/architecture/storage/); the model in one pass is [the model](/start/the-model/); see [events](/architecture/events/), [commands](/architecture/commands/), [calculations](/architecture/calculations/), and [alarms and actions](/architecture/alarms-actions/).
-
-:::design[The two-lane data plane, tracked in #430]
-Samples are the **data lane**: NATS-native, consumed live by the rule engine, the persistence
-consumer batch-writing the durable copy as an async sink. Events, alarms, and actions are the
-**record/state lane**: Postgres-first, CDC-out. Both lanes and the ingest paths are described once
-on [messaging](/architecture/messaging/#two-lanes-one-bus); this page owns what a sample *is*.
-:::
+Omniglass records what it knows about the fleet as **samples** in two lanes: a **metric** is a
+quantity, a **property** is a value. This page is the value model: the lanes and their catalogs,
+provenance, who may write a key, and how a value reads back. How samples arrive is
+[collection](/architecture/collection/) and [messaging](/architecture/messaging/); the physical
+tables are [storage](/architecture/storage/). To manage the catalogs, see
+[metrics](/admin/metrics/) and [properties](/admin/properties/).
 
 ## Metric and property: quantity and value
 
-The telemetry model is **five lanes** with five names and no overlap: a **metric**, a **property**, an [**event**](/architecture/events/), a [**command**](/architecture/commands/), and a [**log line**](/architecture/events/). This page owns the two **sample** lanes:
+The telemetry model is five lanes with no overlap: a **metric**, a **property**, an
+[event](/architecture/events/), a [command](/architecture/commands/) and a
+[log line](/architecture/events/). This page owns the two sample lanes:
 
-- A **metric is a quantity**: a numeric reading of a registered `metric_type`, a float8 row in `metric`. Quantities **aggregate**: `AVG(volume)`, a p95 latency, a rate over time are all meaningful. The firehose.
-- A **property is a value**: what something *is* right now, a jsonb row in `property` typed by a registered `property_type`. A value can be a **number used as a name** (input 3, zone 4): averaging inputs is meaningless. A probe's **state** is a value too (`icmp-reachable` is `up` or `down`, `tcp-open` is `open` or `closed`): nothing is averaged over it and the operator's question is when it flipped, so it is written transition-only while the probe's timing beside it stays a metric ([ADR-1592](/architecture/decisions/#adr-1592-a-probes-state-is-a-transition-only-property-not-a-metric-row)). Values do not aggregate, they **have duration**: "how long was the input 3?" is the question the lane answers, so it is written transition-only and the series is its own edge history.
+- A **metric is a quantity**: a number of a registered `metric_type`, stored as a float. Quantities
+  aggregate: an average volume, a p95 latency and a rate are all meaningful. It is the firehose, and
+  every observation is kept.
+- A **property is a value**: what something *is*, stored as jsonb and typed by a registered
+  `property_type`. A value can be a number used as a name (input 3), which is meaningless to
+  average. Values have **duration** instead ("how long was it on input 3?"), so the lane is written
+  **transition-only**: one row per change.
 
-A **sample** is one timestamped reading in either lane, `(owner, type, instance, ts, value, provenance, source, lineage)`. A **series** is one stream of them, `(type, owner, instance, provenance)`. The **current value** is the latest sample of a series, derived by reading it, never stored beside it: on the property lane its latest row, on the metric lane its newest raw row unless a folded block holds a newer sample (`metricNewestSQL`) ([below](#current-value-is-the-latest-series-sample)).
+A probe's state is a property (`icmp-reachable` is `up` or `down`, `tcp-open` is `open` or
+`closed`), written once per flip, while its timing beside it (`icmp-rtt-avg`, `tcp-connect-time`)
+is a metric
+([ADR-1592](/architecture/decisions/#adr-1592-a-probes-state-is-a-transition-only-property-not-a-metric-row)).
 
-The two lanes are one shape in code and two tables in storage, split because they answer different questions and retain differently, not because they differ conceptually. The lane a name belongs to is decided by **catalog membership**: `volume` is a metric because `metric_type` holds it. There is no per-key `kind` column; the split catalog made it redundant ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)).
-
-A log line is **not** a third sample lane: it is untyped raw arrival on its own lane (`log_line` for a component's lines, `outpost_log` for an outpost's self-logs), no registered name, no catalog gate, where a sample is a *value of a named type at a time* ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)). A driver collects one as it collects a sample, by an emit that declares a log line instead of a key ([an emit lands on any lane](/architecture/collection/#an-emit-lands-on-any-lane), [ADR-1145](/architecture/decisions/#adr-1145-a-driver-emit-lands-on-any-of-the-four-lanes-and-a-log-lines-severity-is-rfc-5424s)). An **event** is not a sample either: *our semantic assertion that something happened*, not an observed value ([the razor](#the-has-a-value-now-razor-sample-vs-event), [events](/architecture/events/)).
+A **sample** is one timestamped reading, `(owner, type, instance, ts, value, provenance, source,
+lineage)`. A **series** is one stream of them, `(type, owner, instance, provenance)`. Which lane a
+name belongs to is decided by catalog membership alone: `volume` is a metric because `metric_type`
+holds it
+([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)).
 
 ### Ownership: the exclusive-arc
 
-The owner is the **exclusive-arc**: an `owner_kind` enum (`component` / `system` / `location` / `outpost`) plus the matching typed FK, a CHECK enforcing exactly one set. No platform or fleet-root arm (a fleet-wide series is a design question). The same arc owns `event` and `command` rows and is the design for `alarm` (component-local today). System- and outpost-level samples are first-class, fixing Zabbix's inability to put a health on a group of hosts: a system owns its [health](/architecture/health/), what a [calc rule](/architecture/calculations/) derives from its members, and what a push reports for it as a whole (a cloud service's account of the room it serves; `owner.kind: system`, read back on the system's own metrics, properties, events and a property's change history), and an outpost owns its self-health. A **location owns no observed sample**: nothing collects or pushes telemetry for a location, so its arm of the arc holds only an operator's declared properties and its calculated health ([ADR-0422](/architecture/decisions/#adr-0422-a-system-owns-its-own-telemetry-and-a-location-owns-no-observed-sample)). See the [storage](/architecture/storage/) DDL.
+A sample is owned by exactly one component, system, location or outpost
+([the exclusive-arc](/architecture/core-entities/#ownership-the-exclusive-arc)). A system owns what
+a push or a calc rule reports for it as a whole, and its health; an outpost owns its self-health; a
+location owns only an operator's declared values and its calculated health, never an observed sample
+([ADR-0422](/architecture/decisions/#adr-0422-a-system-owns-its-own-telemetry-and-a-location-owns-no-observed-sample)).
 
 ### The instance dimension: many values of one name on one owner
 
-One owner can hold several values of the *same* name (three fan speeds, per-port counters). The catalog holds **one** row per measurement (`fan-speed`, not `fan-speed-intake`); the discriminator is an `instance text NOT NULL DEFAULT ''` column on both sample tables. Series identity is **`(owner, type, instance, provenance)`**: each instance its own series, the singleton (`instance = ''`) the default; aggregation groups by name and ignores `instance`, so per-instance trends stay distinct.
+One owner can hold several values of one name (three fan speeds, per-port counters). The catalog
+holds one row per measurement (`fan-speed`), and an `instance` text column, empty by default,
+discriminates. Each provenance has exactly one stamper
+([ADR-0456](/architecture/decisions/#adr-0456-an-instance-names-which-value-of-one-key-on-one-owner-a-row-is-and-an-owner-level-read-reduces-across-every-instance)):
 
-**An instance names which one of several values of one key on one owner a row is**, and each provenance has exactly one stamper ([ADR-0456](/architecture/decisions/#adr-0456-an-instance-names-which-value-of-one-key-on-one-owner-a-row-is-and-an-owner-level-read-reduces-across-every-instance)):
+- **observed**: the observer. An outpost-lane sample is stamped with the name of the endpoint whose
+  task collected it, so two endpoints reporting one name stay two series. A push names an endpoint
+  of its owner, or lands owner-level; naming anything else is a 422 that lists the owner's endpoints.
+  A value a conduit fans out to another owner lands owner-level, its observer named in `source`
+  ([ADR-1282](/architecture/decisions/#adr-1282-a-conduit-fans-each-identified-value-out-to-the-owner-its-binding-names-and-a-binding-costs-a-write-on-both-of-its-ends)).
+- **declared**: owner-level, the empty instance, on every shipped route.
+- **intended**: the command's instance, empty for an owner-level command.
+- **calculated** and **health**: always the empty instance. An entity has one health.
 
-- **observed**: the observer. The ingest stamps an outpost-lane sample with the **name of the endpoint whose task collected it** where the sample names none, so two endpoints reporting one name stay distinct series (a driver naming its own instance, one series per port, is the authored form below, still design); a webhook's samples carry the endpoint the post arrived at; a value a conduit [fans out](/architecture/collection/#shared-api-collection-one-component-many-owners) to another owner lands at the **empty instance**, its observer named in `source` as `<conduit>/<endpoint>`, since the conduit's endpoint is no endpoint of that owner (a system has none) and would read as a retired observer ([ADR-1282](/architecture/decisions/#adr-1282-a-conduit-fans-each-identified-value-out-to-the-owner-its-binding-names-and-a-binding-costs-a-write-on-both-of-its-ends)); two conduits reporting one key on one owner stay told apart by `source`, and their values form one owner-level series; a push names an endpoint of its owner as its instance (an endpoint's name is its transport), else it lands on the owner-level series. A push naming an instance that is no endpoint on its owner is refused whole with a 422 that names the instance and lists the owner's endpoint names (at most ten, then a count), so a series no observer stands behind is never written.
-- **declared**: the operator. Every shipped route declares owner-level (the empty instance), and a per-instance declaration waits for a surface that addresses instances; an endpoint's key pin is the one declared row written under an endpoint.
-- **intended**: the command's instance, empty for an owner-level intent.
-- **calculated**: the empty instance. A calc rule reads every instance of an input key and writes its output aggregate ([calculations](/architecture/calculations/#how-a-calc-rule-runs)); per-instance outputs are a separate capability, not a silent gap.
-- **health**: the empty instance, always and on purpose: an entity has exactly one [health](/architecture/health/).
+A question about the owner reduces across every **live** instance of the key; a question naming an
+instance reads that series alone. An instance is not live once its endpoint is deleted, or once its
+driver's current spec no longer emits the key, so a frozen last reading never stands against the
+owner forever. [Reconciliation](#reconciliation-want-told-is) reduces worst-case,
+[command settlement](/architecture/commands/#settlement-the-settlement-is-computed-the-outcome-is-recorded)
+reduces any-instance-agrees, and a current-value read shows the newest live value and says which
+instance it came from, with `instance_count` and each instance's latest beside it.
 
-**How a read resolves an instance.** A question about the owner (the empty instance) over an instanced key reduces across every live instance of the key on that owner; a question that names an instance reads exactly that series and never reduces. A **retired observer** is not live: an instance naming a transport the owner has no endpoint of names an endpoint since deleted (an endpoint's name is its transport), and its frozen last reading is left out of the reduction rather than held against the owner forever, while an instance naming no transport (a series a push wrote before the push lane required an endpoint) stays live, since nothing extends it. So is an endpoint that still exists but whose driver's current spec no longer emits the key (a poll's or a listener's emit, read off the spec at every read): nothing refreshes the key on it, so its last reading is as frozen as a deleted endpoint's (#1217). A native probe key is the outpost's own, not a driver's emit, so it stays live on its endpoint whatever the spec emits, and an endpoint with no driver has no spec to have dropped a key. The same test will cover a driver-named per-port instance once the authored form below lands (#430), by matching the bracketed instance as well as the name. [Reconciliation](#reconciliation-want-told-is) reduces worst-case, [command settlement](/architecture/commands/#settlement-the-settlement-is-computed-the-outcome-is-recorded) reduces any-instance-agrees, and a current-value display shows the newest value across the live instances and says which one it is: the owner's metrics read names the instance its value came from (`instance`), counts the live instances holding a sample (`instance_count`), and lists each one's latest when there is more than one (`instances`), applying the same liveness test reconciliation does, so a deleted endpoint's frozen reading is neither shown nor counted (#1020). A component's **Vitals** row renders it as "latest of 2 endpoints (tcp)" and opens to each endpoint's value; a key one instance holds, and every system's metric (a system has no endpoints), reads as a single value.
-
-:::design[The authored instance form, tracked in #1252]
-The instance rides the pipeline as a reserved **`instance` label**, authored in the extract spec as a
-`name[instance]` suffix (`fan-speed[intake]=<oid>`); the parser strips the bracket into the label so
-the catalog lookup matches the bare name, and the derive step reads it into the column.
+:::design[A driver names its own instance, tracked in #1252]
+A driver's extract spec names the instance with a `name[instance]` suffix
+(`fan-speed[intake]=<oid>`): the parser strips the bracket so the catalog lookup matches the bare
+name, and the instance rides into the column, one series per port.
 :::
 
 ### The has-a-value-now razor (sample vs event)
 
-A sample records a value; an event records an occurrence.
-
-- `"input is 1"` is a value, so it is a **sample** (a property).
-- `"call started"` is an occurrence, "what is call-started now?" is meaningless, so it is an **event** ([events](/architecture/events/)).
-
-An unnormalized raw occurrence (a syslog line, a raw webhook frame) is neither: it lands on `log_line`; a derivation rule may later promote it to an `event`, though most lines never become one.
+A sample records a value; an event records an occurrence. "Input is 1" is a value, so a property.
+"Call started" is an occurrence ("what is call-started now?" means nothing), so an
+[event](/architecture/events/). An unnormalized raw line (a syslog line, a raw webhook frame) is
+neither: it is a [log line](/architecture/events/), untyped and with no catalog gate.
 
 ## The two catalogs
 
-Each lane that carries typed data has its own catalog: `metric_type` and `property_type` for the sample lanes, [`event_type`](/architecture/events/) for occurrences, [`command_type`](/architecture/commands/) for invocations. The two sample catalogs split on **`data_type`, the lane key**: the lane *is* the value type, so no discriminator column exists and none is needed.
+Each typed lane has its catalog: `metric_type` and `property_type` for samples, `event_type` and
+`command_type` beside them. The two sample catalogs split on what the value is:
 
-- **`metric_type`** describes every numeric name: `(name, data_type: int | float, unit, precision, fusion_policy, official)`. The numeric facts, **unit** and display **precision**, live here and only here.
-- **`property_type`** describes every value name: `(name, data_type: string | bool | json, validation, fusion_policy, official)`. The value domain (a JSON Schema in `validation`) lives here; no unit, no precision.
+- **`metric_type`**: `data_type` `int` or `float`, a `unit`, a display `precision`, an optional
+  `retention_days`. Unit and precision live here and only here.
+- **`property_type`**: `data_type` `string`, `bool` or `json`, an optional JSON Schema `validation`,
+  an optional `retention_days`. No unit.
 
-The three ingest catalogs (`metric_type`, `property_type`, `event_type`) share one name space: a name resolves to one row across all three, so an operator's create is refused when the name exists in a sibling catalog. Every catalog row also has a **namespace** ([ADR-0318](/architecture/decisions/#adr-0318-every-catalog-key-is-a-namespace-and-a-key)): `og` for the platform's, which only the boot seed writes, and `local` for the operator's. A bare name resolves along the **search path** (#1432): the operator's `local` row first, in whichever of the three catalogs, then the `og` row. So when a release ships a name an operator already coined, the shipped row lands beside theirs and theirs **shadows** it at ingest and in every reader, and their series keep landing where they did ([ADR-1307](/architecture/decisions/#adr-1307-an-operators-row-shadows-an-official-row-of-the-same-name-in-another-registry), the cross-catalog case). The catalog reports the shadowed name on a rebuild and hourly, and the shipped one answers once the operator deletes theirs (`DELETE /metric-types/{name}` or its sibling on the catalog it lives in). An operator's own create never takes a name `og` holds: a shadow arises only from a release. Two `local` rows of one name across the catalogs, or two `og` ones, still resolve to nothing.
+A name is **one kebab segment** (at most 100 characters, no dots) naming a **measurement, never its
+owner**: `temperature`, not `room-temperature`; `fan-speed` with unit `rpm`, not `fan-rpm`. One
+canonical name is one comparable signal across vendors. The shipped set seeds from
+`internal/seed/metric_types.yaml` and `property_types.yaml`.
 
-**Naming is owner-agnostic and single-token**: a name is one kebab segment (at most 100 characters, no dots: `icmp-rtt-avg`, `power-state`, `video-input`), naming a **measurement, never its owner** (`temperature`, not `room-temperature`), with the canonical unit in `metric_type.unit` (`fan-speed` + `unit: rpm`, not `fan-rpm`). One canonical name is one comparable signal across vendors, the normalization cross-fleet dashboards and AI hinge on. The official set seeds from `internal/seed/metric_types.yaml` and `internal/seed/property_types.yaml` (the probe and ladder metrics, the endpoint readings and `session-state`, `health`, and a handful of device facts; the [metrics](/admin/metrics/) and [properties](/admin/properties/) guides render each set from the seed); the OpenTelemetry-semconv-aligned IT leaves and the [OpenAV minimum-device-functionality guidelines](https://github.com/OpenAVCloud/specifications/blob/main/min-device-functionality/OAVC-AV-Device-Minimum-Functionality-Guidelines.md) set are still to come.
+**One name space, two tiers.** The metric, property and event catalogs share one name space, so a
+name resolves to one row across all three. Every row has a **namespace**: `og` for the platform's,
+which only the boot seed writes, and `local` for an admin's
+([ADR-0318](/architecture/decisions/#adr-0318-every-catalog-key-is-a-namespace-and-a-key)). A bare
+name resolves along a **search path**, `local` first, then `og`, through one function,
+`storage.ResolveNameLane`, which ingest, event rules, calc rules and driver emits all share. So when a
+release ships a name an admin already coined, theirs **shadows** it and their series keep landing
+where they did
+([ADR-1307](/architecture/decisions/#adr-1307-an-operators-row-shadows-an-official-row-of-the-same-name-in-another-registry));
+the server logs the shadow at catalog build and hourly. An admin's create never takes a name `og`
+holds. A shipped rule or driver resolves its own names inside `og`.
 
-**Validation on insert.** Ingest checks per lane: **(1)** the name resolves in the lane's own catalog; an unresolved name is **reject-not-project**, kept out of the typed series. The ingest consumer holds the three catalogs as one catalog between batches and rebuilds it when their fingerprint moves, read at most once every five seconds and at once for a name the catalog lacks, so a type created is honored by its first sample and one renamed or retired within a few seconds ([ADR-1279](/architecture/decisions/#adr-1279-the-ingest-registry-is-kept-until-the-catalogs-fingerprint-moves), [ADR-1928](/architecture/decisions/#adr-1928-a-telemetry-batch-reads-and-locks-once-and-stamps-seen-inside-its-transaction)). Beside it the consumer keeps the property types some command type targets, the observations settlement watches, and hands them to each batch, so a new command type is honored within the same few seconds ([ADR-1299](/architecture/decisions/#adr-1299-the-command-targeted-property-names-ride-the-kept-registry)). A name more than one row holds resolves by one rule, `storage.ResolveNameLane` (the search path), which the catalog, an event rule's sample key, a calc rule's key and a driver's emit all share (#1307, #1432): the operator's `local` row shadows an `og` row of the same name, and any other name two rows hold in the answering tier (a collision: two `local` rows, two `og` ones, or a reserved key held in both tiers) resolves on no lane, so every sample carrying it is refused. A shipped rule or driver resolves its own names inside `og`, the catalog it shipped against. The server logs a collision, and separately a shadowed name, when it builds the catalog and once an hour while it persists, rather than on every batch (#1298). A push of the official row of a shadowed name is refused with a reason that says so. **(2)** The value conforms: a metric is numeric by wire shape; a property's value must parse as the type's `data_type` and satisfy its `validation` schema when one is declared, and a violating push is refused before anything publishes. The cascade-resolved `validation_policy` modes (bypass / audit / enforce) and the `collection.failed` raw carry are design, tracked in #430.
+**Checked on ingest.** A sample whose name does not resolve in its lane's catalog is refused
+(reject-not-project), and a property value must parse as the type's `data_type` and satisfy its
+`validation`. The ingest consumer keeps the catalogs between batches and rebuilds them when their
+fingerprint moves, so a new type is honored within seconds
+([ADR-1279](/architecture/decisions/#adr-1279-the-ingest-registry-is-kept-until-the-catalogs-fingerprint-moves)).
+
+### Key scope: org and official
+
+The `official` flag and the namespace together say whose a row is: a shipped, read-only `og` row, or
+an admin's `local` one. Every sample is typed by a catalog row (the foreign key is non-null), and a
+driver's emit names a catalog row, checked when the spec is written. A
+[template](/architecture/templates/) is never a scope: it is cloned, never pointed at
+([ADR-0827](/architecture/decisions/#adr-0827-the-template-layer-owns-the-clone-model-and-the-componenttemplate-authoring-model-is-superseded-by-the-driver-spec)).
+
+:::design[Catalog content from outside the release, tracked in #318]
+Beyond `og` and `local`, a catalog accepts content from outside the binary (a community or private
+tier) and a `local` key merges into any key. Trust comes from distribution: a shipped name is in the
+release and not spoofable; an imported one is the admin's to vet.
+:::
 
 ## Units: one canonical unit per metric
 
-Only a **metric** carries a unit (and the display `precision`); even a dimensionless metric has one (`ratio` or `count`); a property has neither. **Storage is canonical-at-rest**: every `metric_type` declares **one canonical unit**, stored values are always in it, and every threshold, calc, and fusion compares like with like. Mixed units are never stored, the unit never rides the `instance` dimension, and a genuinely different measurement is a different `metric_type`: units convert only **within one family**.
+Only a metric has a unit, and even a dimensionless one has one (`ratio`, `count`). **Storage is
+canonical at rest**: each metric type declares one unit, every stored value is in it, and every
+threshold and calc compares like with like. A driver normalizes at the edge (a Fahrenheit display's
+driver emits Celsius), so the native unit is a collection fact, never a storage fact. A ratio is
+stored `0..1` (`cpu-utilization` is `0.9`, shown as 90%). `precision` is a display default; storage
+keeps full precision.
 
-**Dimensionless is still a unit.** The `ratio` family is canonical `ratio` (`0..1`) with `percent` an alternate (`ratio * 100`): `cpu-utilization` is stored as `0.9`, shown as `90%`. A bare **count** is a cardinal `count`, distinct from a ratio.
-
-Conversion happens only at the edges and in expressions:
-
-- **Normalize-in at the edge.** The edge parse converts native to canonical before the sample is emitted: a Fahrenheit display's driver emits `celsius`. The native unit is a [collection](/architecture/collection/)-time fact, never a storage fact.
-- **Convert-out on read.** The [UI](/architecture/ui/) and [views](/architecture/views/) convert to the operator's per-user / per-locale display unit via the `unit` catalog, off the same rows.
-- **Expressions: `convert(value, "<unit>")`.** A stdlib function in [expressions](/architecture/expressions/): the source unit is inferred from the bound sample; the target must be a registered unit in the **same family** (a compile error otherwise). `convert(value, "fahrenheit") > 100` authors a Fahrenheit threshold over Celsius storage. Available wherever expressions run: event rule and alarm criteria, calc leaves, list filters.
-
-**Display precision is part of the type.** The optional **`precision`** (significant digits to render) is a presentation default: the stored `data_type` keeps full precision, the [UI](/architecture/ui/) or a locale can override, and dropping noise at *ingest* is a separate collection-time rounding.
-
-:::design[The `unit` catalog, tracked in #430]
-The **`unit` catalog** groups units by **family** (temperature, data-size, bitrate, ...): one
-canonical unit per family plus alternates, each carrying **`to_canonical`** / **`from_canonical`**
-transforms, **affine** or (dB) an **Expr**; official / org scoped like the other catalogs.
-Temperature is canonical `celsius`; `fahrenheit` carries `to_canonical: (v - 32) * 5/9` and
-`from_canonical: v * 9/5 + 32`. `metric_type.unit` would reference a canonical row and
-`convert(value, "<unit>")` resolves same-family targets through it. No table exists today.
+:::design[The unit catalog and conversion, tracked in #2613 and #2609]
+A `unit` catalog groups units by family (temperature, data size, bitrate), one canonical unit per
+family plus alternates, each with transforms to and from canonical
+([#2613](https://github.com/hyperscaleav/omniglass/issues/2613)). A read converts out to a user's
+display unit off the same rows, and `convert(value, "fahrenheit") > 100` authors a Fahrenheit
+threshold over Celsius storage, same-family targets only
+([#2609](https://github.com/hyperscaleav/omniglass/issues/2609)).
 :::
-
-## Key scope: org and official
-
-Built: the **`official`** boolean on both catalogs (names unique per catalog, `official: true` the
-seeded canonical set, `official: false` operator-authored).
-
-:::design[The catalog scope ladder, tracked in #318]
-The target is a **`scope`** on the catalogs (the built boolean folding into the enum's top value),
-deciding where a name is unique and where its trust comes from:
-
-| scope | identity (uniqueness) | trust | who defines it |
-|---|---|---|---|
-| **org** | `name`, unique within the deployment | local custom canonical | the org / operator |
-| **official** | `name`, globally | shipped with the distro | the distro |
-
-Trust comes from **distribution**, not a label: an official name is **in the release**, not
-spoofable; an org name is authoritative within its one database (one database is one tenant). The
-community and private tiers of a catalog that accepts content from outside the binary are the rest of
-[#318](https://github.com/hyperscaleav/omniglass/issues/318).
-
-**The promotion ladder is org -> official**, a cheap re-scope, not a migration: official is earned by
-shipping in the distribution, and collected samples keep resolving. Normalization is optional but
-encouraged: aligning buys cross-fleet comparability, and most drivers just **reference** a shipped
-official name.
-
-**Governance is curation, not runtime enforcement**: Omniglass is a Postgres database an operator
-runs; we vouch for what we **ship**, you vet what you import.
-:::
-
-There is no **template** rung. An earlier design scoped a name to the template that declared it,
-`(template_id, name)`; a [template](/architecture/templates/) is a clonable example that is never a
-row, so nothing can be scoped to one, and that rung retired
-([ADR-0827](/architecture/decisions/#adr-0827-the-template-layer-owns-the-clone-model-and-the-componenttemplate-authoring-model-is-superseded-by-the-driver-spec)).
-**Every sample is typed by a catalog row**: the sample-to-catalog FK is **non-null** in both lanes,
-and a driver's emit names a catalog row, checked when the spec is written.
 
 ## Provenance: how we know a value
 
-Lane is a property of the **name**, fixed by catalog membership (`power-state` is always a property); provenance is a property of the **row**: the same name can be observed, calculated, intended, or declared at different moments. Each provenance points at the immutable record that produced it (its **lineage**), the populated lineage column mutually exclusive per provenance, CHECK-enforced.
+Lane is a property of the **name**; provenance is a property of the **row**. The same name can be
+observed, calculated, intended or declared, side by side in one table, each pointing at what produced
+it (its **lineage**):
 
-| Provenance | How we know it | Lineage points at |
+| Provenance | How we know it | Lineage |
 |---|---|---|
-| **observed** | measured from a component | on-row: `source_rule` (+ version), the edge function that parsed it |
-| **calculated** | derived from other samples | on-row: `source_rule` (+ version), the calc_rule |
-| **intended** | the declared effect of a command we issued, pending reconciliation | `command_id`, the [command](/architecture/commands/) that opened it |
-| **declared** | asserted by an operator | none: no rule, no event, no command |
+| **observed** | reported by a component, an outpost or a push | `source_rule` and its version, where an edge parse produced it |
+| **calculated** | derived by a [calc rule](/architecture/calculations/) | `source_rule`, its id and version |
+| **intended** | the effect a [command](/architecture/commands/) we issued expects | `command_id` |
+| **declared** | set by an operator | none |
 
-All four land in the same series tables, side by side for the same name, making divergence detection free. The property lane admits all four; the metric lane admits the first three today (there is no declared-metric writer yet, and its schema refuses the row until one exists).
-
-A separate **`source`** column records *which sensor or path* produced an observed value (`codec-cec` vs `display-lan` vs `control-system`): three sensors on one display's power are three observed rows differing only in source, the basis of [fusion](#fusion).
-
-**Trace columns, orthogonal to lineage.** `correlation_id` and `source_event_id` (the causation parent) live on `event`, `correlation_id` on `log_line` and `outpost_log`; the sample tables carry none today. The design adds them to samples, nullable and outside the lineage CHECK, so an action's command can propagate its `correlation_id` onto the adaptive-poll's observed sample, feeding [the DAG invariant](#the-dag-invariant)'s cycle guard ([alarms and actions](/architecture/alarms-actions/)).
+The property lane admits all four; the metric lane admits the first three. A separate **`source`**
+column records which sensor or path produced an observed value (`codec-cec` against `display-lan`),
+so three sensors on one display's power are three observed rows differing only in source.
 
 ### observed: from a component, via an edge parse
 
-"Measured from a component," not "from a device": every device is a component, not the reverse. The outpost parses the payload at the edge and **publishes the observed sample to the JetStream raw ingress subject** (admission confines its owner before the trusted stream); it never writes to Postgres. Lineage rides the row: `source_rule` + `source_rule_version` (the backtest hinge). The verbatim payload is **not** kept (no telemetry table): raw surfaces only on a `collection.failed` event, a dev raw-mode tap, or the bounded opt-in `raw_sample` policy ([collection](/architecture/collection/)). No separate execution table: a derived sample is itself the evidence of its function's run.
+The outpost parses the device's answer at the edge and publishes the sample onto the bus; it never
+writes to Postgres. The raw payload is not kept. Two lanes feed one write path: the **outpost lane**,
+where the server binds the owner from the task's endpoint, and the **push lane**
+(`POST /telemetry:push`), where a scoped caller names the owner and the scope check is the fence.
+Both land a batch in one transaction under its receipt, so a redelivered batch lands once
+([ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)).
 
 ### calculated: derived by a calc rule
 
-Built for component and system owners (#996, #997; event rules judge component outputs only, #1002): a calc rule's tick reduces the inputs' current values and writes
-the result through the sample-write path as a calculated row naming the rule and its version, where
-event rules judge it and downstream calc rules are marked; an unchanged result writes nothing. A
-property a calc rule writes resolves as the owner's value where nothing declares one, after a declared
-value and before the contract default, naming the rule (`source_rule`, `source_rule_id`) as an
-effective metric does (#999, #1018); reconciliation's want stays the declared value alone. How it runs
-is on [calculations](/architecture/calculations/#how-a-calc-rule-runs).
-
-:::design[The calculated producer on the stream, tracked in #430]
-
-Parallel to observed, but the input is **other samples**, not a device payload. A calc consumer reads the trusted JetStream `samples` stream and **publishes its derived sample back onto it** (a trusted server producer, no admission pass), so calculated values re-enter the data lane and feed downstream calc and the rule engine. Both producers carry `source_rule` + `source_rule_version`; the **`provenance` column** distinguishes them. Inputs are reconstructable from the rule version (backtest); an immutable snapshot, if ever needed, is a nullable `inputs jsonb` column. The rule lives on [calculations](/architecture/calculations/).
-:::
+A calc rule's tick reduces its inputs' current values and writes the result through the same write
+path as a calculated row naming the rule, on a server tick rather than the stream
+([ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer)).
+An unchanged result writes nothing. A calculated property resolves as the owner's value where nothing
+is declared, after a declared value and before the contract default. How a rule runs is on
+[calculations](/architecture/calculations/).
 
 ### intended: the declared effect of a command
 
-Issuing a command records the invocation, a caused **event**, and the **intended** value it expects, in one transaction. The intended row's lineage is **the command itself** (`command_id`): the value points at what caused it, not at the event derived from the cause. It reconciles against the observed value the device round trip produces, and the command's **recorded status** carries the outcome ([commands](/architecture/commands/)). **Intended vs observed** is the central razor: intent in progress versus measured reality.
-
-```text
-1. command issued:  "power on display-5"  -> the command row + a caused event
-2. intended write:  display-5 power = on, provenance=intended, command_id=<the command>
-                    a bet: intended, not measured
-3. the evidence:    the device's reply when its binding settles from the response,
-                    else the next poll (adaptive: sooner than the normal interval)
-4. observed arrives:
-     observed = on  -> settled (the bet paid off; the command records it)
-     observed = off -> failed (the command did not land)
-```
-
-No separate "mapping" primitive exists: which value a command intends lives on the command definition, and a command may target either lane (set an input is a property, set a volume is a metric). A command intends its value in the canon, so `set-volume` intends a ratio (`0.41`), and the driver's command `transform` scales it to the device's own 0 to 100 on the way out, as the emit's scales it back on the way in. **Only commands set intended values**; an external event implying a value ("meeting started, so the room is occupied") is observed reality, landing as **observed** through the edge parse.
-
-| The source says | Means | Path |
-|---|---|---|
-| "eth0 **is** down" | a component reporting measured reality | edge parse, then an **observed** row, directly |
-| we sent "**power on**" | intent in progress, not yet confirmed | command, then an **intended** row naming it |
+Issuing a settleable command writes, in one transaction, the command row, a caused event and an
+**intended** row in its target lane, whose lineage is the command itself. It is a bet, settled by the
+observation that follows: intended against observed is the central razor, intent in progress against
+measured reality. Only a command writes an intended row; an outside event implying a value ("meeting
+started, so the room is occupied") is an observation.
 
 ### declared: an operator's assertion, as a series row
 
-mac, ip, serial, locked-input: anything an operator *sets* on an owner is a **declared series row**, `provenance='declared'`, in the same `property` table as every other row ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)). Three consequences fall out of rows-not-store:
+Anything an operator sets on an owner (an asset tag, a locked input) is a **declared row** in the
+property series:
 
-- **An edit appends.** Changing a declared value writes a new row; the old one stays. The edit history is the series, for free, with no shadow audit table.
-- **Unset is a tombstone.** Clearing a declared value appends a declared row whose value is JSON null; every reader resolves that latest row as absence. The unset is itself part of the history, and an unset-of-unset is an explicit miss, not a growing pile of tombstones.
-- **The current declared value is the latest row**, like every other provenance; the **effective** read (`EffectiveProperties`) coalesces the owner's classifier-contract default in when the series says nothing ([core entities](/architecture/core-entities/#declared-properties-the-classifier-contracts-and-the-declared-rows)).
+- **An edit appends**, so the edit history is the series.
+- **Unset is a tombstone**: a declared row whose value is JSON null, read as absence.
+- **An identical re-set writes nothing.**
 
-An identical re-set appends nothing: a same-value save is a no-op, which the PUT route's idempotency and the dev seed's second-run-adds-nothing invariant both require.
-
-The cascade-resolved **config** items, **variables**, and **secrets** remain their own primitive ([variables, secrets, and declared values](/architecture/variables/)): a declared property is a fact about one owner; a config binding is a policy resolved down a tree.
-
-### Precedence: spec versus status
-
-Which side wins is a per-item `reconcile` policy ([declared values](/architecture/variables/#drift-and-reconcile)):
-
-- **observed wins** (`reconcile: observe` or `warn`): the declaration was a hint, reality is truth; a differing observed MAC surfaces as divergence (silent, or an alarm under `warn`); adopting it as declared is a separate one-shot import.
-- **declared wins** (`reconcile: enforce`): the declaration is the spec; converge via the set command (the Kubernetes spec-and-status pattern), alarm if the set fails.
-
-Sample provenances never contest: intended is a pending bet that observed confirms or refutes ([intended](#intended-the-declared-effect-of-a-command)), superseded on arrival. Device-swap is handled by [maintenance mode](/architecture/core-entities/#operational-mode-active-maintenance-disabled), which suppresses drift.
+The [effective read](/architecture/core-entities/#declared-properties-the-classifier-contracts-and-the-declared-rows)
+coalesces the classifier's contract default in when the series says nothing.
 
 ## Who writes a key: the writer class
 
 Provenance says how a row knows its value; the **writer class** says who may write the key at all
 ([ADR-0161](/architecture/decisions/#adr-0161-every-key-has-one-writer-class-held-at-the-storage-gateway)).
-Every metric, property and event type has exactly one, resolved from its name and the catalogs, never
-stored, and the [Storage Gateway](/architecture/storage/#every-key-has-one-writer) refuses any sample
-or event write whose writer the class does not admit, the way it injects scope on every query. The type
-reads carry it as `writer_class`. The ruling, rendered from the code the gateway enforces:
+Every metric, property and event type has exactly one, resolved from its name and never stored, and
+the [Storage Gateway](/architecture/storage/#every-key-has-one-writer) refuses any write the class
+does not admit. Type reads carry it as `writer_class`:
 
 <WriterClasses />
 
-Three classes form the **reserved system family**, fixed and internal: `outpost-probe` (the outpost's own
-account of an endpoint, declared in `internal/collection/probekeys`), `platform` (what only the
-Omniglass process writes: the health rollup's `health`, and the webhook receiver's counts of the posts
-it accepted and refused, #1369; and each outpost's account of itself on its platform component, the
-server's `checkin-age` and the outpost's schedule, spool, session and process figures, #1625, listed in
-[collection](/architecture/collection/#self-monitoring-every-outposts-account-of-itself); and the server's
-account of itself on its own, its request and database figures, #1627, listed in
-[collection](/architecture/collection/#self-monitoring-the-servers-account-of-itself)) and
-`command-lifecycle` (`command-issued`, the event a command's issue puts on its owner's timeline, and
-`command-settled`, `command-failed` and `command-timed-out`, the one its terminal status puts there). Their
-names are declared in code and closed to an operator-created type on every lane, and no product,
-standard or location-type contract declares one or gives it a default. A **writer** is the entry
-point a write comes through, and it fixes the provenance: the outpost lane and the push lane write
-`observed`, a calc rule `calculated`, a command `intended`, an operator `declared`. So operator and
-command are writers, not classes: a declared or intended row is never an observation and contests no
-observer, which is why a collected key keeps all four provenances side by side.
+Three classes are reserved and internal: `outpost-probe` (an outpost's own account of an endpoint),
+`platform` (what only Omniglass writes: the health rollup, and each outpost's and the server's
+account of itself, listed on
+[collection](/architecture/self-monitoring/#self-monitoring-every-outposts-account-of-itself)) and
+`command-lifecycle` (the events a command's issue and terminal status write). Their names are closed
+to an admin's catalog row and to every contract. A **writer** is the entry point a write comes
+through, and it fixes the provenance: the outpost and push lanes write observed, a calc rule
+calculated, a command intended, an operator declared.
 
-- **An outpost-probe key reads only as the outpost's observation.** The reachability panel, the session pill
-  and the ingest's transition guard read the observed series alone, so no other provenance stands in
-  for the outpost's; the one declared row the family admits, a key pin (the ssh host key, the tls
-  certificate), is set only through an endpoint's audited `:retry` (its row's `source` is `key-pin`,
-  the one mark a read trusts it by) and read only as the pin. An outpost-probe sample dated more than five
-  minutes past the database's clock is stored at the database's now, so the outpost's account cannot
-  outlive its tenure. Likewise the health reads serve the rollup's calculated rows alone. Rows written
-  before the ruling that it refuses were retired into `retired_sample`
-  ([ADR-1100](/architecture/decisions/#adr-1100-legacy-rows-and-stored-declarations-honor-the-one-writer-ruling)).
-- **Fusion is within a class.** The same-key, multi-source reconcile [below](#fusion) is between the
-  perspectives of a `collected` key (a driver's emits on the outpost lane, a push), told apart by
-  `source`: the class is the trust boundary, the source the sensor path within it. A reserved key has
-  one observer and never fuses.
-- **A calc rule owns its output.** A calc output is never a reserved key nor a key a stored driver
-  emits ([calculations](/architecture/calculations/)), and once a rule outputs a key, a push, an outpost
-  lane or a driver spec writing it is refused; an operator's declared value still resolves ahead of
-  the calculated one.
+- **An outpost-probe key reads only as the outpost's observation.** The one declared row the family
+  admits is a key pin (an ssh host key, a tls certificate), set only through an endpoint's audited
+  `:retry`.
+- **A calc rule owns its output.** Once a rule outputs a key, a push, outpost lane or driver spec
+  writing it is refused.
+- **Fusion is within a class**: the perspectives of a `collected` key, told apart by `source`.
 
 ## Current value is the latest series sample
 
-"What is this property now?" is answered by **reading the series**: the latest row per `(type, owner, instance, provenance)`. What orders a series depends on the lane, because the lanes differ in who supplies `ts`:
+"What is this now?" is answered by reading the series: the latest row per
+`(type, owner, instance, provenance)`. No current-value cache is kept beside it
+([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)).
 
-- **A declared or intended series orders by insertion** (`id desc`). Neither lane's row ever carries a caller's timestamp: the set and the clear insert a declared row with `ts` defaulted to the transaction's clock, and a command opens its intended row the same way. So `ts` is an annotation and the row id, a bigint identity column, is the authoritative sequence. A database clock stepping backwards between two writes therefore cannot make the earlier write win, and two values written in the same tick resolve to the one written second, every time. The same rule picks the told value across the instances a command named, and the intended row one command opened.
-- **An observed or calculated series orders by `ts`, then id** (`ts desc, id desc`). The observed lane accepts a caller-supplied timestamp (an outpost backfilling, a device reporting a reading it took a minute ago), and a late-arriving older sample must not become current merely by being written last. Here the id only breaks a same-instant tie, again by insertion order. The price of `ts` leading is a stated dependency: a clock stepping backwards between two writes to one such series resolves to the earlier-written row, and nothing in the ordering can reach it, because there is no tie.
+- **A declared or intended series orders by insertion.** Neither carries a caller's timestamp, so
+  the row id is the sequence, and a database clock stepping backwards cannot make the earlier write
+  win.
+- **An observed or calculated series orders by `ts`, then id.** The lane accepts a caller's
+  timestamp (an outpost backfilling), and a late-arriving older sample must not become current by
+  being written last.
 
-There is no maintained latest-value store: the one-catalog design kept one (a `property` cache upserted from the sink) and it retired with the fold ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)), because a derived copy of a fact the series already holds is a second thing to keep honest. The property lane is transition-only and sparse, so the read is an index probe, not a firehose scan; the metric lane's current-value read (`metricNewestSQL`) probes the newest raw row and the newest block sample and takes the later, so a folded series still answers.
+The property lane is sparse, so the read is an index probe. A metric is stored narrow,
+`(id, series_id, ts, value)`, beside a `metric_series` row naming what it is a sample of
+([ADR-1275](/architecture/decisions/#adr-1275-the-metric-lane-is-narrow-rows-on-a-series-dimension-partitioned-by-month)),
+partitioned by month, with intended rows in their own table no retention pass touches.
 
-Two rules keep the read honest under [retention](/architecture/storage/#retention-what-is-kept-and-for-how-long), which prunes metric samples past 14 days and property transitions past 90 by default through the **`PruneSamples`** primitive (#417): a prune **never deletes a declared or intended row** (an operator's assertion is the whole truth however old, not a sample), and on the property lane **never deletes the latest row of any series** (a transition-only series still measured may hold one row for months). On the metric lane the floor is the latest row **within retention** ([ADR-1275](/architecture/decisions/#adr-1275-the-metric-lane-is-narrow-rows-on-a-series-dimension-partitioned-by-month)): a quantity stores every observation, so a series still measured always has a recent row, and one with none inside its window reads as no reading within retention. A metric sample is stored narrow, `(id, series_id, ts, value)`, beside a `metric_series` row naming what it is a sample of ([storage](/architecture/storage/#the-narrow-metric-lane)); every read joins the two, merging the series of one key, owner and instance that a change of collecting outpost or source started.
+Retention prunes metric samples past `retention.metric_days` (14 by default) and property
+transitions past `retention.property_days` (90), or a type's own `retention_days` (`:setRetention`).
+A prune never deletes a declared or intended row, and on the property lane never deletes the latest
+row of a series, since a steady value may hold one row for months.
 
 ## A series chart is truthful at every zoom (#1269)
 
-A raw read of a series is capped at its newest rows, so a chart over a long range drew a short tail and called it the range. The same route (`GET /{components,systems}/{name}/metrics/{metric}/samples`, and `.../properties/{property}/samples`) answers a different question when it is given a **`resolution`**, in seconds: every regular bucket of the window, oldest first, rather than the samples.
+The samples routes (`GET /{components,systems}/{name}/metrics/{metric}/samples` and
+`.../properties/{property}/samples`) answer a different question when given a **`resolution`** in
+seconds: every regular bucket of the window, oldest first.
 
-- **The grid is epoch-aligned and complete.** A bucket starts at a multiple of the resolution, and the response holds every one that overlaps the window, so 30 days at one hour is exactly 720 buckets and a bucket keeps its boundaries from one read to the next. A bucket with nothing in it is still there, with `count: 0` and null values: a gap is told, not skipped. A request that would exceed 5,000 buckets is refused with a 422 that says to widen the resolution.
-- **A metric bucket keeps what an average loses.** `min`, `max`, `avg`, `count` and `last`. The chart draws the min/max band under the avg line, so a one-sample spike survives any zoom, and the newest bucket's `last` is the end label and dot: the line runs on from the newest avg to that dot, at the bucket's end (or now), so the dot sits on the line and no band runs past it.
-- **A property bucket is `count` and `last`.** A property has duration, not a mean, so it is drawn as steps (a value held until it changes), and `last` is the value the bucket ends on.
-- **A bucket is one series.** It aggregates one instance of the type on the owner, and only its measured rows (observed and calculated): a declared or intended row is a want, not a reading, and never moves `min`, `max`, `avg` or `last`. The read takes an optional `instance`; unset, it is the one instance with measured rows in the window, and when several have them the read is a 422 whose problem detail lists each, so the caller picks one rather than charting a blend. Rows of one instance from different sources or collector outposts stay one series, so an outpost move does not split a chart. The range's lower bound and the coverage floor sit in the sample table's own `where`, so the daily partitions outside the range are never read; a `resolution` is at most 30 days.
-- **Nothing is read past what is kept.** The response carries `covered_from`: the later of the grid start and the edge of what is kept. For a read of the samples that edge is the type's effective retention (its own `retention_days`, else the install's `retention.metric_days` or `property_days`); for a whole-hour read of a series with hourly trends it is how far back the trends are kept. Buckets before `covered_from` are empty because retention left nothing, not because nothing happened.
-- **A wide metric read is whole hours (#1566).** Over more than 48 hours, or past the series' retention, a metric read's resolution is raised to whole hours, at least one, and `resolution_seconds` is the width applied: 30 days asked at five minutes answers 720 hourly buckets rather than a refusal. At whole hours an observed series takes every closed hour from its [hourly trend](/architecture/storage/#the-narrow-metric-lane) and only its open hours from the samples, so a month's chart reads 720 rows, not 86,400 samples, and answers the same buckets ([ADR-1566](/architecture/decisions/#adr-1566-a-wide-bucketed-read-is-whole-hours-and-takes-closed-hours-from-the-trends)). A property read keeps the resolution it was asked.
-- **A step chart starts on the value in force (#1488).** A property that last changed before the window opens would otherwise draw blank until its first change. A bucketed property read carries `carried_in`: the newest measured row of the same instance older than the first bucket, no older than the retention edge, and a declared row or another instance's value is never it. Each bucket also carries `held`, the value in force across it: its own `last`, else the one before it, with `carried_in` seeding the leading empty buckets. `last` stays the bucket's own newest change, so an empty bucket still says nothing happened in it. The raw property read carries the same `carried_in` for its `hours` window (omitted when nothing is held before it), and `chartLayout`'s step mode draws it flat from the window's left edge to the first change. It is no sample, so the crosshair never snaps to it. A metric read has neither field.
-
-Without a `resolution` the read is unchanged. The chart's geometry is pure (`web/src/lib/chart.ts`: `bucketLayout` for bands, `stepPath` for steps), and the metrics grid on a component's or a system's page (#2424) reads the page's time range at a step that keeps it a few hundred buckets wide (a day at five-minute buckets by default).
+- **The grid is epoch-aligned and complete.** Thirty days at one hour is exactly 720 buckets, and an
+  empty bucket is still there with `count: 0`: a gap is told, not skipped. More than 5,000 buckets is
+  a 422.
+- **A metric bucket keeps what an average loses**: `min`, `max`, `avg`, `count` and `last`, so a
+  one-sample spike survives any zoom as the band under the line.
+- **A property bucket is `count`, `last` and `held`**, the value in force across it, drawn as steps,
+  with `carried_in` the value in force when the window opened.
+- **A bucket is one series of measured rows**: a declared or intended row never moves it, and several
+  instances with readings make the read a 422 that lists them, so a caller picks one rather than
+  charting a blend.
+- **Nothing is read past what is kept**: `covered_from` says where retention ends.
+- **A wide metric read is whole hours.** Past 48 hours, the resolution rises to whole hours and
+  closed hours come from the series' hourly trend, so a month reads 720 rows rather than 86,400
+  samples
+  ([ADR-1566](/architecture/decisions/#adr-1566-a-wide-bucketed-read-is-whole-hours-and-takes-closed-hours-from-the-trends)).
 
 ## Reconciliation: want, told, is
 
-The read side pivots three values per property of an owner, and carries them on the owner's **properties read** itself (`GET /{components,systems,locations}/{name}/properties`), not a route of its own ([ADR-1297](/architecture/decisions/#adr-1297-the-properties-read-carries-reconciliation-and-the-reconciliation-route-retires)): one row per property the owner has, declared, calculated, observed or told, so a key the owner only observes is listed too. The pivot is **want** (the current declared value, with the contract default coalesced in; null when nothing declares the key), **told** (intended, nil until a command opens one), **is** (observed). A calculated row carries none: a calc rule's output is not what anyone asked for. The reserved keys (a native probe key, `health`) are not rows: a probe key reads on the [reachability read](/architecture/api/), which withholds a gated rung's frozen fact. All three are series reads, and the question is the owner's, so told and is [resolve across every instance](#the-instance-dimension-many-values-of-one-name-on-one-owner) of the key: told is the newest intended value on any instance a command named, and is is worst-case over the live instances, an instance that disagrees with want when any does (the newest such), else the newest agreeing one, named by the instance it came from (`is_instance`). **Drift** is any observed instance disagreeing with `want`, false when nothing is declared (there is nothing to drift from), computed on read so it cannot go stale ([`disagree`](#disagree-and-divergence)). The [command pillar](/architecture/commands/) adds the **windowed** form: settlement is `told` vs `is` gated on the command's settle window, and the command records the outcome as its status.
+An owner's **properties read** (`GET /{components,systems,locations}/{name}/properties`) carries the
+reconciliation on each row
+([ADR-1297](/architecture/decisions/#adr-1297-the-properties-read-carries-reconciliation-and-the-reconciliation-route-retires)):
 
-**Typed on both sides (#1202).** An observed row stores the JSON string of its value's text form (the ingest writes a bool `true` as `"true"`, a number as `"3"`, an object as its compact text), where a declared or intended row keeps typed jsonb. Every read that sets one beside the other first reads the observed value typed by the property's `data_type`: a `bool`'s `"true"` and `"false"` as booleans, a `json` value's text as the JSON it spells, a `string` as stored (its text is its value, so `"1.10"` and `"1.1"` stay different). `is` therefore reads as the type of `want`, and the one comparison reconciliation's drift, settlement's result and its any-instance-agrees share treats `3` and `3.0`, or an object's key order, as the same value. A `json` value that is a JSON string spelling another JSON value (the string `"3"`) reads as that value, the one ambiguity the text encoding leaves ([ADR-1202](/architecture/decisions/#adr-1202-an-observed-property-value-is-read-typed-where-it-is-compared)).
+- **want**: the current declared value, else the contract default; null when nothing declares one.
+- **told**: the newest intended value on any instance a command named.
+- **is**: the observed value, worst-case over the live instances (one that disagrees with want, if
+  any does), named by `is_instance`.
+- **drift**: true when an observed instance disagrees with want, false when nothing is declared.
+  Computed on read, so it cannot go stale.
 
-## Ground truth versus derived
-
-- **Raw payload: not stored.** The sample is authoritative; see [observed](#observed-from-a-component-via-an-edge-parse).
-- **Live on NATS, durable in PG.** The live sample is the message on the JetStream `samples` stream; the durable copy in `metric` / `property` is the persistence write, and samples **do not go through CDC** ([messaging](/architecture/messaging/#two-lanes-one-bus)).
-- **Ground truth, logs** (immutable, append-only, the actor's own record): **`log_line`** (a component's words, the platform's own narration included, on its platform component), **`outpost_log`** (an outpost's self-narration), **`audit_log`**, and the design-stage **`session_log`** and **`collection_log`**. No rule-execution table: a derived row *is* the evidence of its rule's run, carrying `source_rule` + `source_rule_version` itself.
-- **Derived** (produced by rules, reconstructable in principle): **`metric`**, **`property`**, **event**, **alarm**, **action**.
+An observed value is stored as its text form, so every comparison first reads it typed by the
+property's `data_type`: `3` and `3.0`, or an object's key order, compare equal
+([ADR-1202](/architecture/decisions/#adr-1202-an-observed-property-value-is-read-typed-where-it-is-compared)).
+A reserved key (a probe key, `health`) is not a row here; a probe key reads on the reachability
+read. The [command](/architecture/commands/) adds the windowed form: settlement is told against is,
+gated on the settle window.
 
 ## The DAG invariant
 
-The pipeline must stay acyclic.
+The pipeline stays acyclic:
 
-> A rule may **read** observed and calculated values as truth. It may **compare** an intended or declared value against observed (drift). It may **not** treat an intended value *as truth* to infer a new fact.
+> A rule may **read** observed and calculated values as truth. It may **compare** an intended or
+> declared value against observed. It may **not** treat an intended value as truth to infer a new
+> fact.
 
-A drift rule reads the *pair* (intended, observed): the intended value is tested, not trusted. The one forward edge, command-to-intended-value, is terminal, so event rules reading only observed/calculated keep the graph acyclic with no runtime guard, except the command -> device -> observed-sample round trip, invisible to the static graph. The propagated `correlation_id` closes that gap: the cycle-guard walk follows a **real carried id** across the round trip instead of inferring lineage.
+The one forward edge, a command to its intended row, is terminal, so rules reading only observed and
+calculated values keep the graph acyclic with no runtime guard.
+
+:::design[disagree and divergence, tracked in #2609]
 
 ## disagree and divergence
 
-Drift is a condition operator, **`disagree(A, B)`**, usable inside event rule criteria, comparing two provenances (or two sources) of one name:
+Drift becomes an operator, **`disagree(A, B)`**, usable in event rule criteria over two provenances
+or two sources of one key: `disagree(intended, observed)` (a command did not land),
+`disagree(declared, observed)` (the world drifted from a declared value), and
+`disagree(observed, observed)` across `source` (sensors conflict). Any two provenances of one name
+that disagree are one anomaly, with one detector.
+:::
 
-- `disagree(intended, observed)`: the command did not land (reconciliation)
-- `disagree(declared, observed)`: the world drifted from intent (drift from the declared value, device swap)
-- `disagree(observed, observed)` across `source`: sensors conflict (a failing sensor)
-
-> Any two provenances of the same name that disagree = an anomaly. One detector.
-
-:::design[Fusion, tracked in #430]
+:::design[Fusion, tracked in #2614]
 
 ## Fusion
 
-Multiple sources reporting one signal land as **perspectives**: source-tagged observed rows, **all preserved**. A reduce-on-read **policy** produces the effective value:
-
-- **same-name, many sources** reduces on read, among the perspectives of one writer class (a `collected` key's; [the writer class](#who-writes-a-key-the-writer-class)). **`fusion_policy`** is a **default/hint, not a mandate** (the right reduce is often unknowable a priori): a policy may default from the type, be source-weighted, per-instance, or **left open** for read time, an operator, or AI. When it reduces (`mode`: priority / weighted / majority / worst / average / latest, plus tie-break and per-source weights), the reduced value is what current-value reads and event_rule evaluation see; perspectives stay queryable. event_rule evaluation reduces over the **latest-per-source perspective set** held from the live `samples` stream (bounded, in-memory), never a firehose scan. A `source` catalog carries default trust weights. A fused series materializes only if a profile earns it.
-- **cross-name / system-level** is a **`calc_rule`** (the only fusion that authors a rule): `room-in-use` from display power + codec call-state + occupancy, a higher-order fact with a new name, not a same-name consensus. See [calculations](/architecture/calculations/).
-
-Conflict detection (`disagree(observed, observed)` across sources) is complementary: a perspective disagreeing beyond tolerance is itself a signal.
+Several sources reporting one key land as **perspectives**, source-tagged observed rows, all kept. A
+reduce-on-read policy produces the effective value: priority, weighted, majority, worst, average or
+latest, with a tie-break and per-source weights, defaulting from the type's `fusion_policy` (stored
+today, read by nothing) and left open for read time where no default is right. Event rules judge the
+fused value; the perspectives stay queryable. Fusion across different names (`room-in-use` from
+display power, call state and occupancy) is a [calc rule](/architecture/calculations/), never fusion.
 :::
 
 ## The sample tables
 
-The [physical layout, partitioning, and the lineage CHECK](/architecture/storage/) live on storage. `metric` is the firehose (BRIN on ts, numeric aggregation); `property` is sparse and transition-only (time-in-value and dwell).
+The partitioning and lineage CHECKs are on [storage](/architecture/storage/).
 
 <SchemaTable
-  table="metric"
+  table="metric_series"
   notes={{
-    metric_type_id: 'The canonical name this sample is a reading of',
-    instance: 'Discriminates many values of one name on one owner; empty string is the default series',
-    value: 'The numeric payload; aggregation happens here',
-    provenance: 'How we know it: observed, calculated, intended',
-    command_id: 'Lineage of an intended value: the command that opened it',
+    metric_type_id: 'The canonical name the series is a reading of',
+    instance: 'Which of several values of one name on one owner; empty is the owner-level series',
+    provenance: 'observed, calculated or intended',
+    source: 'The sensor or path that produced an observed value',
   }}
 />
+
+<SchemaTable table="metric" notes={{ series_id: 'The series this sample belongs to', value: 'The number; aggregation happens here' }} />
 
 <SchemaTable
   table="property"
   notes={{
     property_type_id: 'The canonical name this sample is a value of',
-    instance: 'Same series discrimination as metric',
-    value: 'The jsonb payload; transitions only, no steady-state rows; JSON null is the declared tombstone',
-    provenance: 'How we know it: observed, calculated, intended, declared',
+    instance: 'Same series discrimination as a metric',
+    value: 'The jsonb value; transitions only; JSON null is the declared tombstone',
+    provenance: 'observed, calculated, intended or declared',
     command_id: 'Lineage of an intended value: the command that opened it',
   }}
 />
 
-`log_line` and `outpost_log` are not sample tables: no registered name, no provenance, no lineage CHECK ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)); `severity` / `facility` are their retention and routing axes.
-
-A metric's `ts` is whole milliseconds, on `metric` and `metric_declared` (a property's keeps the instant it was sent): NTP-synced outpost clocks are accurate to a few milliseconds, so the digits below are noise, and a raw row then agrees exactly with the compacted block that later holds it. The outpost and the ingest both truncate; the [time page](/architecture/time/) has the rule.
-
-Common sample columns (both lanes): `ts`, the **owner arc** (`owner_kind` plus `component_id` / `system_id` / `location_id` / `outpost_id`), the type FK, `instance, provenance, source`, and the lineage columns `source_rule, source_rule_version, event_id, command_id`; only the value column differs (float8 / jsonb). A union view over the lanes is deliberately not built: the retired `datapoint` name stays free, and any union a caller wants is a query.
-
-The catalogs typing these tables:
-
 <SchemaTable
   table="metric_type"
   notes={{
-    official: 'Shipped-canonical versus org-local; official rows are read-only',
     data_type: 'The lane key: int or float',
-    unit: 'The canonical unit label; the numeric fact the split moved here',
+    unit: 'The canonical unit every stored value is in',
     precision: 'Display significant digits; a presentation default',
+    namespace: 'og for a shipped row, local for an admin one',
   }}
 />
 
 <SchemaTable
   table="property_type"
   notes={{
-    official: 'Shipped-canonical versus org-local; official rows are read-only',
-    data_type: 'The lane key: string, bool, or json',
-    validation: 'JSON Schema the value must satisfy',
+    data_type: 'The lane key: string, bool or json',
+    validation: 'The JSON Schema a value must satisfy',
+    namespace: 'og for a shipped row, local for an admin one',
   }}
 />
-
-The end-to-end pipeline diagram lives on [messaging](/architecture/messaging/#the-pipeline-end-to-end).
-
-Related: [events](/architecture/events/), [commands](/architecture/commands/), [calculations](/architecture/calculations/), [variables, secrets, and declared values](/architecture/variables/), [collection](/architecture/collection/), [alarms and actions](/architecture/alarms-actions/), and [the glossary](/reference/glossary/).

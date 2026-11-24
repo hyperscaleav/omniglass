@@ -6,7 +6,7 @@ form: bullet
 ---
 
 - **Field: an operator-defined typed attribute on a type (slice 0).** The first cut of the
-  [field](/architecture/variables/#property-one-typed-name-a-product-contract-a-stored-value) primitive: an operator declares a typed
+  [field](/architecture/core-entities/#declared-properties-the-classifier-contracts-and-the-declared-rows) primitive: an operator declares a typed
   field on a `component_type` (a `field_definition`: a `name`, a `data_type` of `string`/`int`/`float`/`bool`/`json`, and an
   optional type-level default validated against the `data_type`, unique per `(component_type, name)`), a component sets a
   **literal** for a field defined on its type (a `field_value`), and the component's **effective** value resolves to the set

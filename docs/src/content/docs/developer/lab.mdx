@@ -952,7 +952,7 @@ in turn on an outpost that runs only the outpost:
   step's tasks, so the sweep instead halves the step, down to just above the last step it measured,
   and caps any later growth there.
 - **The cross-check.** CPU per run is the CPU slope over the driver's run rate. Beside it sits the
-  outpost's own [`poll-cpu-time`](/architecture/outposts/#self-monitoring-the-outpost-reports-itself), the
+  outpost's own [`poll-cpu-time`](/architecture/self-monitoring/#self-monitoring-every-outposts-account-of-itself), the
   polling thread's kernel clock, averaged over the reports wholly inside each step's window and read
   once the last has landed, after two of the lab's live report windows. Thread share is the one over
   the other: the part of a run's cost the thread clock sees. A low share is work the run hands
@@ -1148,6 +1148,7 @@ standards:
       main-display: boreal-edge-65
       touch-control: newtron-panel-7
       scheduling-panel: newtron-slate-5
+    control: [main-display]     # optional: slots whose devices also take commands
 archetypes:
   - name: hq
     label: Headquarters
@@ -1193,7 +1194,11 @@ simulator that runs it, never the plan or a log. A webhook face (one naming the 
 endpoint and the route that adds a room, [simulation](/architecture/simulation/#a-simulated-service-posts-from-the-start))
 makes a webhook sender: a component with an endpoint of that driver, a signing secret minted on
 every run and sealed in the server, and an identity binding per system on the driver's room
-identity, named for the system. The validator collects every problem at once and names
+identity, named for the system. A standard's `control` names the slots whose devices also take
+commands: each is wired with its product's control face beside the driver that reads it (the Boreal
+displays' web admin beside their SNMP agent, behind the simulated login), so a demo can fix a fault
+from the console. Name few: each is one more endpoint polling every such device across every site.
+A slot under `control` must be one the standard fills. The validator collects every problem at once and names
 each with the manifest line to fix:
 
 ```text

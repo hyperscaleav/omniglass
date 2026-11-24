@@ -126,7 +126,11 @@ jobs:
           open=$(gh pr list --repo "$REPO" --head "$standing" --state open --json number --jq '.[0].number // empty')
           fresh=false
           if [ -n "$open" ]; then
-            queued=$(gh pr view "$open" --repo "$REPO" --json isInMergeQueue --jq .isInMergeQueue)
+            # The runner's gh pr view has no merge queue field (#2636); it is
+            # read from GraphQL's PullRequest.
+            queued=$(gh api graphql -F owner="${REPO%%/*}" -F name="${REPO##*/}" -F number="$open" \
+              -f query='query($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) { pullRequest(number: $number) { isInMergeQueue } } }' \
+              --jq .data.repository.pullRequest.isInMergeQueue)
             if [ "$queued" = true ]; then fresh=true; fi
           fi
           if [ ${#keep[@]} -eq 0 ]; then

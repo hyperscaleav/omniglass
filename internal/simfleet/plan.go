@@ -34,6 +34,9 @@ const (
 	// RecordingKeySecret is the simulated recording service's api key
 	// (#1363), sent in the header its API demands.
 	RecordingKeySecret = "sim-recording-key"
+	// BorealLoginSecret is the simulated Boreal display's web admin login
+	// (admin / boreal), the digest its control face demands (#2649).
+	BorealLoginSecret = "sim-boreal-login"
 )
 
 // AttachSecret is the platform secret each driver's simulated attach
@@ -59,6 +62,17 @@ var AttachSecret = map[string]string{
 	"ferrite-pdu-snmp":       CommunitySecret,
 	"meridian-mx-snmp":       CommunitySecret,
 	"meridian-xl-snmp":       CommunitySecret,
+	"boreal-edge-web":        BorealLoginSecret,
+}
+
+// Control is the driver of a device's control face, keyed by the driver its
+// product names, for a component planned to take commands (#2649): the
+// product's own driver only reads the device (the Boreal display's SNMP
+// agent), and the face that switches it answers on another port behind a
+// login. A control face is planned only where it is asked for
+// (Component.Control), never fleet wide.
+var Control = map[string]string{
+	"boreal-edge-snmp": "boreal-edge-web",
 }
 
 // AddressCap is how many addresses the simulated block holds: 256 third
@@ -84,6 +98,9 @@ func FreeAddress(used map[string]bool) (string, bool) {
 type Component struct {
 	ID      string
 	Product string
+	// Control asks for the device's control face as well, where its driver
+	// has one (Control).
+	Control bool
 }
 
 // Endpoint is one endpoint to create: a driver attach (Driver and Inputs) or
@@ -152,6 +169,9 @@ func Plan(comps []Component, used map[string]bool, cat Catalog) ([]Device, error
 		} else if e, ok := probeFor(prof, addr, shift); ok {
 			dev.Endpoints = append(dev.Endpoints, e)
 		}
+		if ctl, ok := Control[driver]; ok && c.Control && (cat.Attachable == nil || cat.Attachable(ctl)) {
+			dev.Endpoints = append(dev.Endpoints, Endpoint{Driver: ctl, Inputs: Attach[ctl](addr, shift)})
+		}
 		out = append(out, dev)
 	}
 	return out, nil
@@ -198,6 +218,11 @@ var Attach = map[string]func(addr string, shift func(int) int) map[string]string
 	// use, its token in the header the platform demands.
 	"ucc-rooms": func(addr string, shift func(int) int) map[string]string {
 		return map[string]string{"host": addr, "port": strconv.Itoa(shift(443)), "token": UCCTokenSecret}
+	},
+	// The Boreal display's web admin on 80, behind its digest login: its
+	// control face (Control), never a product's own driver.
+	"boreal-edge-web": func(addr string, shift func(int) int) map[string]string {
+		return map[string]string{"host": addr, "port": strconv.Itoa(shift(80)), "login": BorealLoginSecret}
 	},
 }
 

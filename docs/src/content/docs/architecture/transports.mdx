@@ -1,0 +1,384 @@
+---
+title: Transports
+description: "How each transport is built: the probe it runs, how it holds or does not hold a connection, how it authenticates and refuses, and the server-hosted webhook that receives pushes."
+sidebar:
+  order: 31
+  badge:
+    text: Partial
+    variant: note
+---
+
+import SeededSet from '../../../components/SeededSet.astro';
+
+A **transport** is the wire an endpoint speaks over. Transports are code the binary ships
+(`internal/transport`), not rows
+([ADR-0073](/architecture/decisions/#adr-0073-a-driver-consumes-transports-a-transport-is-code-not-a-row)):
+each entry declares its connection params, its default ladder rung, whether it is held, and the probe
+keys it lands. The protocol knowledge for a device (its OIDs, its commands, its paths) lives in a
+[driver](/architecture/collection/#drivers-the-declarative-menu), never here.
+
+This page is how each transport behaves on the wire. The model they share (sessions, listeners, the
+gate and its fingerprint) is on [data collection](/architecture/collection/), and the spec fields a
+driver author writes are on [the driver spec](/developer/driver-spec/).
+
+<SeededSet kind="transports" />
+
+## Poll protocols and their config
+
+Every transport that dials has a **probe**, run on the outpost's probe interval, that climbs the ladder
+as far as the transport allows. A probe's config rides the endpoint's `params`; on an attached endpoint
+they are derived from the driver's inputs.
+
+<SeededSet kind="transports" of="probes" />
+
+The table is generated from the transport registry and the probe keys, and a test drives each probe
+against a fake wire, failing when it lands a key its entry does not declare or the reverse. What a row
+cannot say:
+
+- A probe lands a key only when its fact exists: a connect time only on an open port, a timing only
+  from an answer, a certificate's expiry only for a certificate the mode accepted, and
+  `endpoint-authenticated` only when a credential was tried. `endpoint-reachable` is the reachability
+  the outpost rolls up, landed on a transition.
+- `http` draws one `GET /` with no credential, any status an answer, so reachability stays observed
+  beneath a refused credential. `websocket` and `wss` run the `http` and `https` probe.
+- `udp` and `snmp` have no port to open: their rung is the driver's named request answered, so
+  `endpoint-responsive` is their reachability and neither lands `tcp-open`.
+- A task whose config cannot be used lands a `collection-failed` naming the task, never a silent skip.
+
+There is no serial transport: an RS-232 or RS-485 device is reached through an IP-to-serial gateway,
+which is `tcp`, `tls` or `telnet` like any other line protocol
+([ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)).
+
+## The line family: tcp, telnet and ssh
+
+The **line protocol** is the held-session proof: a request is a line, an answer is a line, and pushes
+arrive between them. It is held over `tcp`, `tls`, `telnet` and `ssh`, and polls, commands and
+listeners on one endpoint share its one connection
+([sessions](/architecture/collection/#sessions)).
+
+- **`tcp`** is the line protocol over a raw socket; its probe is the connect.
+- **`telnet`** is the same behind a filter that strips option negotiation and refuses every option
+  (DO answered WONT, WILL answered DONT). Its login is the driver's login dialog, run as the session's
+  auth step on every connection. While a telnet session reads `up`, the probe takes its result from the
+  session rather than open a second connection, since gear that admits one telnet client would refuse
+  it.
+- **`ssh`** runs the line protocol over a shell channel (with a PTY when `session.pty` asks) or an exec
+  channel (`session.exec`). Its userauth is the auth step, with a password, a private key, or
+  keyboard-interactive answered by the login dialog. The probe runs a real key exchange and, when the
+  params carry a credential, tries it once per fingerprint.
+
+**The ssh host key is pinned on first use**
+([ADR-0157](/architecture/decisions/#adr-0157-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use)).
+The outpost trusts the first key it sees and publishes it as `ssh-host-key`; the server delivers it back
+as the pin on every worklist; a changed key reads `rejected`, class `host-key`, naming both
+fingerprints. An operator who trusts the new key (a replaced device) retries with it (`:retry` with
+`host_key`, audited), which declares the new pin; a key the refusal on record does not name is refused.
+A pin is trusted only as that path wrote it, so a pin the worklist stops delivering is forgotten and the
+next key is trusted on first use again
+([ADR-1100](/architecture/decisions/#adr-1100-legacy-rows-and-stored-declarations-honor-the-one-writer-ruling)).
+
+### tls
+
+`tls` is the line protocol over a TLS connection, its own transport rather than an option on `tcp`,
+because an endpoint is named by its transport (a device may hold a raw port and a TLS one side by side)
+and its rung is the handshake
+([ADR-0160](/architecture/decisions/#adr-0160-tls-is-its-own-transport-over-a-shared-primitive-and-its-pin-is-the-public-key)).
+The handshake is one shared primitive that `https` and `wss` consume too. Each connection runs under the
+endpoint's **verification mode**, the driver's `tls-mode` input:
+
+- **verify** (the default) checks the certificate against the outpost's system roots, the host input as
+  server name. Any failure is a `certificate` refusal carrying its reason, never a timeout.
+- **pin** trusts the first **public key** offered and refuses any other. The pin is the key, not the
+  certificate, so a renewal that keeps the key is no change. The outpost publishes it as
+  `tls-certificate` and the server delivers it back, one pin per endpoint shared by its session and its
+  probe; a changed key is trusted with `:retry` and `certificate`. The seeded `newtron-nvp-tls` pins by
+  default, since the gear it speaks to signs its own certificate.
+- **skip** checks nothing: an operator's explicit choice, never a driver's default (a spec defaulting to
+  it is refused at write), shown on the endpoint as **unverified**.
+
+The probe lands `tls-handshake-time` and, for an accepted certificate, `tls-certificate-expiry` and
+`tls-certificate-days-left`, the number a threshold rule reads. Under a `certificate` gate the probe
+only connects, so those freeze, and the reachability read withholds them rather than show them as
+current. TLS 1.2 is the floor; there are no client certificates and no per-endpoint CA bundle.
+
+## http and https
+
+`http` is stateless: every poll and every command is a request of its own
+([ADR-0902](/architecture/decisions/#adr-0902-http-polls-and-commands-send-real-requests-read-through-one-extraction-authenticated-by-a-declared-scheme)).
+`https` is the same over the TLS primitive, its own entry by the same rule as `tls`, its certificate
+judged and pinned exactly as [tls](#tls) does.
+
+**The request** declares a method, path, query, headers, body and the response's `format` (`json`,
+`xml`, `html` or `text`), declared rather than sniffed, since gear mislabels its content. A command's
+`${value}` and `${arg.key}` references render injection-safe: a path segment is escaped as one segment,
+a query value is encoded, a header value with a control character is refused, and a JSON body is
+rendered leaf by leaf, so a whole-leaf reference keeps its type. A request never sets `Authorization`
+or `Cookie` and never names a secret.
+
+**The answer** is read through the one extraction primitive: `jsonpath` on json, `xpath` on xml or on
+html parsed as a browser would, `regex` on any body. A selector yields exactly one value; one that finds
+nothing or several faults that emit alone. A body past 1 MiB (64 KiB for a command's reply) faults.
+
+**Auth is the session block's scheme**: `session.credential` names the secret input and
+`session.scheme` says how it rides every request: `basic`, `bearer`, `api-key` (a header or a query
+parameter), or `digest`. The credential is written only into the request: it is masked in every URL the
+outpost names and scrubbed from every reason.
+
+**The status table.** A rule the driver declares terminal (on a status, a body, or both) decides first.
+Then:
+
+| Answer | Reads as |
+|---|---|
+| 2xx | success: the body is the payload |
+| 401 to a credentialed request | a terminal `auth` refusal at the session rung (over a login session, a lapse first) |
+| 408, 429, 5xx | retryable: the poll backs off, never sooner than `Retry-After`, never later than its interval |
+| 3xx | not followed: the request's own fault (a redirect to the declared login page is a lapse) |
+| any other 4xx | the request's own fault: a `collection-failed` naming the status, nothing gated |
+| no answer | retryable, at the transport rung |
+| a certificate the mode refuses | `certificate` at the transport rung |
+
+A credentialed 2xx lands `endpoint-authenticated yes` and a refusal `no`; any other answer never judged
+the credential. A refusal gates the endpoint for its fingerprint, so no credentialed request is sent
+beneath it until the secret rotates, an input is edited, or an operator retries.
+
+**Commands** carry their rendered request and never a credential: the outpost applies the endpoint's
+scheme from what its worklist delivered, so a credentialed http driver with commands needs a poll to
+carry its credential (refused at write otherwise). A binding may settle from the reply's body through
+the same extraction ([commands](/architecture/commands/)).
+
+:::design[A credentialed probe and OAuth2 client credentials, tracked in #1120 and #1119]
+The probe sends no credential, so a driver with commands and no polls has no session rung of its own;
+a declared credentialed probe request is #1120. An OAuth2 client-credentials grant needs no new
+primitive (a login step posting the client's secret fields, a captured `access_token` and its
+`expires_in`, a bearer header), but its seeded proof is #1119.
+:::
+
+### Logging in over http
+
+Much gear's web API has no per-request credential: it has a sign-in, a form post that sets a cookie or
+a JSON login that answers a token. An http session declares it as `session.login`, the same login dialog
+a line session runs, each step a `request` rather than a prompt
+([ADR-1114](/architecture/decisions/#adr-1114-an-http-login-is-the-login-dialog-carried-over-to-http-and-its-session-lives-in-node-memory-alone)):
+
+```yaml
+session:
+  login:
+    steps:
+      - request: { method: POST, path: /api/login, body: { username: "${secret.login.username}", password: "${secret.login.password}" } }
+    capture: [{ name: token, extract: { jsonpath: token } }]
+    expiry: { jsonpath: expires_in }
+    headers: { Authorization: "Bearer ${session.token}" }
+    expired: { regex: "token expired" }
+```
+
+- **The session lives in the outpost's memory alone.** Each http endpoint has one auth state, shared by
+  its polls and commands: a cookie jar, the captured values and the headers they fill, and a digest
+  challenge. It is never logged, published or persisted, and it is dropped whole when the fingerprint
+  moves, on a terminal refusal, and with the process. A login runs before the first request and again
+  before a declared expiry lapses, never once per poll.
+- **A lapse logs in once.** A 401, a redirect to the declared login path, or the declared `expired`
+  text logs in once more and replays the request once. A lapse right after a fresh login is the
+  credential's terminal refusal, never a second login.
+- **A refused login is one attempt.** A 401, a redirect back to the login page, another 4xx, or a final
+  2xx without its `ready` text or capture is a terminal `auth`, held until the fingerprint moves, so no
+  retry loop can lock an account out. A login that draws no verdict after its secrets were sent counts
+  against the same three-attempt budget a line session's does.
+- **Digest** (RFC 7616) is `scheme: digest` on a `basic-auth` secret: the outpost answers the challenge
+  (MD5, SHA-256 or their `-sess` forms), holds it with a rising count, and answers a `stale` or rotated
+  nonce afresh rather than read it as a refusal.
+
+Everything the auth state holds is scrubbed from every reason, error and URL as the credential is, and
+a request is never sent to an address the endpoint's worklist does not name, so a session opened with
+one device never rides a request to another.
+
+### A server-sent events stream
+
+Many devices' web pages update live from a server-sent events stream, so a driver can hold that stream
+and land each change the moment the page would, with no poll
+([ADR-1038](/architecture/decisions/#adr-1038-an-http-session-holds-a-server-sent-events-stream-and-a-held-connection-carries-messages)):
+
+```yaml
+session:
+  credential: login
+  scheme: basic
+  stream: { path: /api/events }
+listeners:
+  - name: volume-change
+    match: { event: change, field: { path: path, equals: status.audio.volume } }
+    emits:
+      - { name: volume, extract: { jsonpath: value } }
+```
+
+**The stream is a held session.** Its connect is the TCP connect (and the handshake over https), its
+auth step the login when one is declared, then the stream's `GET` with the scheme's credential and the
+jar. A 200 carrying `text/event-stream` opens it; a refusal is judged as any request's; anything else is
+a failed attempt on the backoff. Its unit is one event, offered to the listeners like a line, claimed
+by event name, a data `prefix` or `regex`, or a JSON field. A stream has no upstream, so its listeners
+declare no `arm`.
+
+**Resume.** A dropped stream reads `recovering` and reconnects with `Last-Event-ID` after the server's
+`retry` (held between 250 ms and 30 s), so nothing is lost and nothing lands twice. The resume point
+lives in the outpost's memory, never persisted. An event past 1 MiB is dropped whole and named unclaimed.
+
+**Beside polls.** The endpoint's polls and commands stay requests of their own, sharing the stream's
+auth state, so one login serves them all. A refusal on either side gates the other through the one
+fingerprint gate.
+
+## websocket and wss
+
+A websocket carries a subscription's pushes and the answers to requests on one socket. `websocket` holds
+it, and `wss` holds it over the TLS primitive, pinned as `tls` is
+([ADR-1034](/architecture/decisions/#adr-1034-a-websocket-is-a-held-session-of-text-frames-and-a-reply-is-matched-by-a-minted-id)).
+A message is a **text frame**, routed by the same precedence a line session uses, and a request is a
+frame: a `line` sent verbatim or a JSON `body` rendered injection-safe.
+
+```yaml
+transport: wss
+session:
+  credential: login
+  scheme: basic
+  upgrade: { path: /api/ws }
+listeners:
+  - name: volume-change
+    arm: ['{"type":"subscribe","paths":["status.audio.volume"]}']
+    match: { field: { path: path, equals: status.audio.volume } }
+    emits:
+      - { name: volume, extract: { jsonpath: value } }
+polls:
+  - name: volume
+    schedule: { every: 60s }
+    request: { body: { type: get, path: status.audio.volume }, reply: { correlate: id } }
+    emits:
+      - { name: volume, extract: { jsonpath: value } }
+```
+
+- **The upgrade is the auth step**: a `GET` built as any http request is (path, query, headers, the
+  scheme's credential, a login's session). A `101` opens the socket. A `401` or `403` to the upgrade is
+  a terminal `auth`, since the upgrade is one request; a lapsed login logs in once more first. `digest`
+  is refused at validation, since it answers a challenge per request.
+- **A reply is matched by a minted id.** A request whose reply declares `correlate: <field>` has a fresh
+  random id written into that field when the frame is sent, and its answer is the frame carrying the id
+  back, whatever pushes interleave. A correlated request with no answer in time fails alone, keeping the
+  socket.
+- **Keepalive and bounds.** The outpost pings every 30 s and the socket is dead after two silent
+  intervals, so a device that stops answering reads `recovering` without waiting for a poll. A frame
+  past 1 MiB, or a binary frame, is dropped and named unclaimed. The outpost sends no `Origin` unless
+  the upgrade's headers declare one.
+
+## udp
+
+`udp` is the line protocol as datagrams, one line each, and stateless: no connection, no
+`session-state`
+([ADR-0163](/architecture/decisions/#adr-0163-a-udp-endpoint-binds-its-own-socket-and-its-rung-is-a-request-answered)).
+
+- **Each endpoint binds its own socket** on the outpost, on its driver's `listen-port` input (unset, the
+  kernel picks one), so the device's replies and pushes arrive on one socket with no table of sources.
+  The operator points the device at the outpost's address and that port. A shared port routed by
+  source was rejected, since two endpoints behind one address (an IP-to-serial gateway) would be
+  indistinguishable. A datagram from any other address is counted, self-logged and dropped.
+- **A DNS name is followed**: the target is re-resolved once per tick, and a moved address moves the
+  socket's peer in place.
+- **The rung is the driver's named request answered** (`ladder.transport.request`, required): an answer
+  reads responsive, silence reads not responsive, and a port the host reports unreachable reads
+  `refused` (heard through the socket's error queue). Each answered probe lands `udp-response-time`.
+- **Every request declares its reply shape**, so a push arriving mid-exchange still reaches its
+  listener. A lost datagram is re-sent (`request.retries`, default 2 for a poll and the rung), the
+  attempts sharing one timeout. A **command is sent once** unless its binding declares retries, since a
+  relative command (a volume step) must not be sent twice.
+- **Listeners ride the socket**: their `arm` is sent once when the socket opens and again when the rung
+  recovers, since a rebooted device forgot its subscriber.
+
+Text payloads only, unicast only. A reply the driver declares terminal gates the endpoint at the
+transport rung, since nothing logs in over udp.
+
+## snmp
+
+`snmp` is v2c and stateless
+([ADR-0821](/architecture/decisions/#adr-0821-snmps-rung-is-a-standard-get-answered-and-only-an-authorizationerror-reads-as-auth)).
+Its rung is a **get of a standard OID answered** (`ladder.transport.request.get`, by default
+`1.3.6.1.2.1.1.3.0`, sysUpTime.0) carrying the endpoint's community, a secret the driver's `community`
+input references. Any response is an answer, `noSuchObject` included: the rung reads responsive, lands
+`snmp-response-time`, and, since a v2c agent answers only a community it accepts,
+`endpoint-authenticated yes`.
+
+**The v2c limit, stated plainly:** a wrong community is dropped silently by the protocol, so it reads
+not responsive and retryable, indistinguishable from a stopped agent. Only an agent that answers
+`authorizationError` refuses detectably: a terminal `auth` at the session rung, and since v2c has no
+request without the community, nothing more is sent under that fingerprint. Beneath that gate the rung
+reads up with the reason `held: auth since <ts>`, never a down it did not observe. Polls are scalar gets
+only: no walk, no tables, no v1.
+
+:::design[The held transports and protocol features still ahead, tracked in #1036, #1039, #1040, #1041, #1083, #1057 and #1252]
+- **mqtt** (#1036), **modbus/tcp** (#1039), **bacnet/ip** (#1040) and **knxnet/ip** (#1041) are each
+  their own transport issue.
+- **snmp v3** with USM, whose report PDUs make an auth refusal detectable, is #1083.
+- A held session's answer is delimited by its declared reply shape today; a driver's declared
+  **prompt** delimiting it (Q-SYS-style framing) is #1057.
+- An extract's trailing **`name[instance]`** suffix (`fan-speed[intake]`) filling the sample's
+  `instance` label is #1252 ([the instance dimension](/architecture/properties/#the-instance-dimension-many-values-of-one-name-on-one-owner)).
+:::
+
+:::design[Probe timings as one observation, tracked in #1063]
+Each transport lands a timing under its own name (`udp-response-time`, `snmp-response-time`). Every
+probe becoming one observation, with round trip, variation and loss derived from it, is #1063.
+:::
+
+## Push ingress: webhooks on the server
+
+A **push endpoint** is one a sender pushes to rather than one an outpost dials
+([ADR-1024](/architecture/decisions/#adr-1024-omniglass-receives-webhooks-on-the-server-and-a-webhook-token-is-a-sealed-secret)).
+`webhook` is the first: hosted by the server (it takes no outpost), naming one component, with no probe
+and no ladder (one declared on it is refused at write). In place of a reachability it reads **last
+heard**, stamped by every post that lands, and it is never shown down for silence.
+
+Every pushed message runs one pipeline, the **listener primitive**: **bound** (token buckets per source,
+per endpoint and per listener, a cap on posts in flight, a 1 MiB body, a read deadline),
+**authenticate**, **attribute**, **route** (listeners first), **extract**, **land**. A sender's source is
+the client address the server resolves: the connection's peer, or the rightmost forwarded hop outside
+`OMNIGLASS_TRUSTED_PROXIES` when the peer is a trusted proxy
+([ADR-1185](/architecture/decisions/#adr-1185-the-client-address-believes-a-forwarded-header-only-from-a-configured-proxy)).
+
+**The URL and its token.** Creating a webhook endpoint mints its token (128 random bits) as a
+`webhook-token` secret on the component: sealed, revealed only under `secret:reveal`, deleted with the
+endpoint, and rotated by `POST /endpoints/{endpoint}:rotateToken`. A sender posts to
+`/api/v1/webhooks/<token>`. The token names one endpoint and so one component, which is the conduit for
+any identities a post names ([shared-API collection](/architecture/collection/#shared-api-collection-one-component-many-owners)).
+
+**The scheme** is declared by the driver, never defaulted:
+
+| `session.scheme` | Credential | What is checked |
+|---|---|---|
+| `hmac` | an `hmac-key` secret | a signature header over the body, optionally over a signed timestamp joined to it |
+| `token` | a `bearer-token` secret | a shared token in a declared header |
+| `basic` | a `basic-auth` secret | the request's basic login |
+| `none` | none | nothing: the endpoint reads **unsigned**, with no replay protection |
+
+hmac over a signed timestamp is the one to reach for first. A timestamp more than five minutes from
+arrival refuses, and a declared delivery id is remembered for that window, so a redelivery lands once.
+Every comparison runs in constant time, and a scheme whose secret no longer resolves refuses every post.
+
+**The body** has a declared format (`json`, `xml`, `form`, `text`), and the listeners claim and read it
+through the one extraction primitive; a listener may also match a header the sender sets. What no
+listener claims lands as a log line.
+
+**The answers.** Senders retry on anything but 2xx, so: `202` only once the post is published; `401`
+for a refused scheme, saying nothing of which part failed; `404` for an unknown, rotated or malformed
+token, byte for byte the same; `409` with `Retry-After` for a redelivery still landing; `413` past 1 MiB;
+`429` with `Retry-After` past a limit. A `GET` verifying the URL echoes the driver's declared challenge
+parameter, or answers `204`.
+
+**Writers, refusals and strangers.** A post lands with its component as owner under a writer that admits
+only `collected` keys, so a leaked token writes only collected keys on one component. A refused post is
+counted, never gated: it lands as `webhook-refusal-count` beside `webhook-post-count`
+([collection telemetry](/architecture/collection/#collection-telemetry-every-endpoints-account-of-itself)).
+A post to a token no endpoint holds lands its sender in the **unclaimed sources** inbox
+(`GET /unclaimed-sources`, `outpost:read`): one row per source address with a count and the last message
+cut to 512 bytes, at most 256 sources, aged out after seven days. The token a stranger tried is never
+kept.
+
+:::design[Outpost-hosted push: shared tcp and udp ports, syslog and SNMP traps, tracked in #1148, #1149 and #1150]
+An outpost hosts the same listener primitive for pushes that should not cross a WAN: a shared udp or tcp
+port routed by source address (#1148), syslog over udp, tcp and tls (#1149), and SNMP traps and informs
+(#1150). The source address authorizes the endpoints placed on that outpost that declare it, and a
+payload's identity only selects within that set.
+:::

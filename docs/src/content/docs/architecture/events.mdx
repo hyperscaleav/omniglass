@@ -67,7 +67,7 @@ a rule's fire event names the alarm it opened and its clear event the alarm it r
 and system event reads return the rule and the alarm on each such row. Layout and partitioning live on
 [storage](/architecture/storage/).
 
-:::design[The CDC publisher for event consumers, tracked in #430]
+:::design[The CDC publisher for event consumers, tracked in #2611]
 An event is born in a Postgres transaction on the record lane, and a change-data-capture publisher
 would fan the committed row onto JetStream for the action consumers, with no dual write
 ([messaging](/architecture/messaging/)). The publisher is not built.

@@ -3254,6 +3254,34 @@ export interface paths {
       error: og.revokeGroupGrantResponseError["data"];
     };
   };
+  "/user-groups/{group}/idp-mappings": {
+    get: {
+      path: { "group": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.listGroupIdpMappingsResponseSuccess["data"];
+      error: og.listGroupIdpMappingsResponseError["data"];
+    };
+    post: {
+      path: { "group": string };
+      query: never;
+      body: NonNullable<Parameters<typeof og.createGroupIdpMapping>[1]>;
+      bodyRequired: true;
+      data: og.createGroupIdpMappingResponseSuccess["data"];
+      error: og.createGroupIdpMappingResponseError["data"];
+    };
+  };
+  "/user-groups/{group}/idp-mappings/{mappingId}": {
+    delete: {
+      path: { "group": string; "mappingId": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.deleteGroupIdpMappingResponseSuccess["data"];
+      error: og.deleteGroupIdpMappingResponseError["data"];
+    };
+  };
   "/user-groups/{group}/members": {
     get: {
       path: { "group": string };

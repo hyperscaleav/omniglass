@@ -129,6 +129,28 @@ when the recheck lens says fixed and no other lens raised it again, or when a pe
 so a blocker nobody fixed keeps the check red. A finding a lens raises again on an open thread is
 not posted twice.
 
+### The reviewer on its threads
+
+The reviewer talks on the threads it opened, and its newest review is the one that counts.
+
+- **Replies.** A person's reply on a thread the reviewer opened starts `agent-review` on
+  `pull_request_review_comment: created`; a top-level comment, an App's reply and a reply on a person's
+  thread do not (`agent-review.sh reply-gate`). One model call, no agent and no tools, sees only the
+  thread, the lines it points at and the finding's catalog entry (`reply-prompt`). The reviewer answers on
+  the thread and resolves it when the reply settles the point, because the finding was wrong or the reason
+  given holds. Otherwise it says what is still missing and leaves the thread open. A reply that also
+  mentions `@claude` still starts agent-fix.
+- **Verified fixed resolves.** A thread the reviewer replies "Verified fixed" on is resolved in the same run,
+  advisory threads included; `thread-of` finds a thread from its comment when the open list has no id.
+- **Supersede.** Each review's first line carries the head it covers (`... · head <sha>`). After posting,
+  the reviewer minimizes its earlier reviews as outdated (`minimizeComment`, OUTDATED), edits one GitHub
+  will not minimize down to `Superseded by review <id>.`, and dismisses each earlier Changes requested
+  review, so the PR's review state is the newest review's: a clean review no longer leaves the PR blocked
+  (`supersede`). The verdict still reads the reviewer's latest review on the head.
+- **Round count.** Dismissed reviews no longer say CHANGES_REQUESTED, so agent-fix counts the
+  `<!-- agent-review round blocking=N ... -->` marker in each review body instead (`rounds`), and the
+  five-round park still holds.
+
 The review posts as a second GitHub App, `hyperscale-reviewer`, when one is set up. GitHub lets
 no App request changes on a PR it wrote, and the agents' App writes most PRs here, so without
 the second App a blocking review on one of those can only comment. The check still fails, since
@@ -200,8 +222,12 @@ are skipped.
 ## Green before it pushes
 
 Both agents run `make preflight` before their last push, and before an agent-build PR is marked ready, and push the finished work only when it passes (agent-build's earlier pushes, [below](#work-survives-an-early-stop), need the step's own tests). It runs what
-the PR's required checks run: `make gen` with a drift check, `make test`, the docs build and
-the migration check against `origin/main`. The e2e tier and the image smoke stay CI-only.
+the PR's required checks run for the files the change touches: it pipes them through
+`scripts/ci-changes.sh`, the rule CI's changes job uses, and runs `make gen` with a drift check
+(gen area), the web tests (web), the Go and netadmin tests and the migration check against
+`origin/main` (go), and the docs build (docs). A docs-only change runs no Go or web tests; a
+path no area claims, or anything under `scripts/`, runs everything. The agent-config guard runs
+on every push. The e2e tier and the image smoke stay CI-only.
 `scripts/preflight_test.go` fails if the target and the workflows it mirrors drift apart.
 Run it yourself before you push a PR by hand; it needs Docker and a fetched `origin/main`.
 

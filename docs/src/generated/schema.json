@@ -3933,6 +3933,56 @@
      }
     ]
    },
+   "user_group_idp_mapping": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "uuidv7()",
+      "pk": true
+     },
+     {
+      "name": "group_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "user_group.id"
+     },
+     {
+      "name": "issuer",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "claim_value",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ],
+    "checks": [
+     {
+      "name": "user_group_idp_mapping_claim_value_check",
+      "expr": "CHECK ((claim_value \u003c\u003e ''::text))"
+     },
+     {
+      "name": "user_group_idp_mapping_issuer_check",
+      "expr": "CHECK ((issuer \u003c\u003e ''::text))"
+     }
+    ],
+    "uniques": [
+     {
+      "name": "user_group_idp_mapping_group_id_issuer_claim_value_key",
+      "definition": "CREATE UNIQUE INDEX user_group_idp_mapping_group_id_issuer_claim_value_key ON public.user_group_idp_mapping USING btree (group_id, issuer, claim_value)"
+     }
+    ]
+   },
    "user_group_member": {
     "columns": [
      {
@@ -3956,6 +4006,23 @@
       "type": "timestamp with time zone",
       "nullable": false,
       "default": "now()"
+     },
+     {
+      "name": "source",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
+     },
+     {
+      "name": "issuer",
+      "type": "text",
+      "nullable": true
+     }
+    ],
+    "checks": [
+     {
+      "name": "user_group_member_source_check",
+      "expr": "CHECK (\nCASE\n    WHEN (source = 'idp'::text) THEN ((issuer IS NOT NULL) AND (issuer \u003c\u003e ''::text))\n    WHEN (source = 'local'::text) THEN (issuer IS NULL)\n    ELSE false\nEND)"
      }
     ]
    },

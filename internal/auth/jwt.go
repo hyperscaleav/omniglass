@@ -109,6 +109,31 @@ func (c *JWTClaims) StringClaim(name string) string {
 	return s
 }
 
+// StringsClaim reads a claim holding a list of strings, as a groups claim
+// does: a JSON array (its non-string members skipped) or, as some providers
+// send a single value, one string. ok is false when the claim is absent or
+// neither shape, which a groups sync reads as the empty set. Pure.
+func (c *JWTClaims) StringsClaim(name string) (values []string, ok bool) {
+	switch v := c.Raw[name].(type) {
+	case []any:
+		out := make([]string, 0, len(v))
+		for _, e := range v {
+			if s, isStr := e.(string); isStr && s != "" {
+				out = append(out, s)
+			}
+		}
+		return out, true
+	case []string:
+		return v, true
+	case string:
+		if v == "" {
+			return []string{}, true
+		}
+		return []string{v}, true
+	}
+	return nil, false
+}
+
 // BoolClaim reads a boolean claim, which some providers send as a string.
 func (c *JWTClaims) BoolClaim(name string) bool {
 	switch v := c.Raw[name].(type) {

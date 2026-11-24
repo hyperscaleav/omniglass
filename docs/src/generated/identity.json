@@ -529,6 +529,11 @@
       "labelled": true
     },
     {
+      "table": "user_group_idp_mapping",
+      "shape": "id only",
+      "labelled": false
+    },
+    {
       "table": "user_group_member",
       "shape": "id only",
       "labelled": false

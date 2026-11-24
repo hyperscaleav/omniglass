@@ -135,6 +135,15 @@ func (UnimplementedGateway) RevokeGroupGrant(context.Context, string, string, st
 func (UnimplementedGateway) ListGroupGrants(context.Context, string, scope.Set) ([]Grant, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) ListGroupIdPMappings(context.Context, string, scope.Set) ([]GroupIdPMapping, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) CreateGroupIdPMapping(context.Context, string, string, string, string, scope.Set) (*GroupIdPMapping, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) DeleteGroupIdPMapping(context.Context, string, string, string, scope.Set) error {
+	return nil
+}
 func (UnimplementedGateway) SetUserActive(context.Context, string, string, bool, scope.Set) error {
 	return nil
 }
@@ -1372,7 +1381,7 @@ func (UnimplementedGateway) SignInByIdentity(context.Context, SSOSignIn) (*User,
 func (UnimplementedGateway) LinksToRecheck(context.Context, string) ([]LinkRecheck, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) AcceptLinkRefresh(context.Context, string, string, time.Duration) error {
+func (UnimplementedGateway) AcceptLinkRefresh(context.Context, string, string, time.Duration, *IdPGroups) error {
 	return nil
 }
 func (UnimplementedGateway) RevokeLink(context.Context, string, string) (int, error) { return 0, nil }

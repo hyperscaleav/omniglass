@@ -134,3 +134,49 @@ func TestFreeAddressIsTheLowestUnused(t *testing.T) {
 		t.Fatalf("FreeAddress = %s %v, want 127.60.0.2", a, ok)
 	}
 }
+
+// A component asked to take commands gets its device's control face beside
+// the driver that reads it, at the same address behind its login (#2649); one
+// not asked, or whose control face cannot be attached, keeps the one endpoint.
+func TestPlanAddsTheControlFaceOnlyWhereAsked(t *testing.T) {
+	prof := &profile.DeviceProfile{Interfaces: []profile.Interface{{Protocol: "http", Port: 80}, {Protocol: "snmp", Port: 161}}}
+	cat := Catalog{
+		ProfileFor: func(string) (*profile.DeviceProfile, bool) { return prof, true },
+		DriverOf:   func(string) string { return "boreal-edge-snmp" },
+		PortOffset: 10000,
+	}
+	got, err := Plan([]Component{{ID: "c1", Product: "x", Control: true}, {ID: "c2", Product: "x"}}, nil, cat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctl := got[0].Endpoints
+	if len(ctl) != 2 || ctl[0].Driver != "boreal-edge-snmp" || ctl[1].Driver != "boreal-edge-web" {
+		t.Fatalf("controlled endpoints = %+v, want the snmp attach then the web admin", ctl)
+	}
+	if in := ctl[1].Inputs; in["host"] != got[0].Address || in["port"] != "10080" || in["login"] != BorealLoginSecret {
+		t.Fatalf("control face inputs = %v, want the device's address, its shifted port 80 and the simulated login", in)
+	}
+	if e := got[1].Endpoints; len(e) != 1 || e[0].Driver != "boreal-edge-snmp" {
+		t.Fatalf("uncontrolled endpoints = %+v, want the snmp attach alone", e)
+	}
+	cat.Attachable = func(d string) bool { return d != "boreal-edge-web" }
+	got, err = Plan([]Component{{ID: "c1", Product: "x", Control: true}}, nil, cat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e := got[0].Endpoints; len(e) != 1 {
+		t.Fatalf("endpoints = %+v, want no control face when its login is out of reach", e)
+	}
+}
+
+// Every control face is an attach the plan knows the inputs and secret of.
+func TestEveryControlFaceIsAnAttach(t *testing.T) {
+	for reads, ctl := range Control {
+		if _, ok := Attach[ctl]; !ok {
+			t.Errorf("%s's control face %s has no attach", reads, ctl)
+		}
+		if _, ok := AttachSecret[ctl]; !ok {
+			t.Errorf("%s's control face %s names no secret", reads, ctl)
+		}
+	}
+}

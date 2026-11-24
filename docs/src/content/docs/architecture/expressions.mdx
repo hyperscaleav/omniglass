@@ -1,248 +1,190 @@
 ---
 title: Expressions
-description: "Omniglass expressions: one engine built on Expr and extended with Omniglass functions, behind every operator-authored expression leaf."
-# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
+description: "How expressions are built: one sandboxed engine on Expr, declared per site with its bindings, builtins and budget, and a registry of diagnostics that explain a mistake where it is."
 sidebar:
-  hidden: true
+  order: 43
+  badge:
+    text: Partial
+    variant: note
 ---
 
 import ExpressionSites from '../../../components/ExpressionSites.astro';
 import ExpressionDiagnostics from '../../../components/ExpressionDiagnostics.astro';
 
-Expressions let an operator reshape and judge collected values in plain text wherever the
-platform needs a small computation, with exactly one language to learn: every site goes through
-**one engine, Omniglass expressions**, built on **Expr**
-([expr-lang/expr](https://github.com/expr-lang/expr), pinned at v1.17.8). The engine is
-`internal/expression` (#524); its first consumer is the event rule's criteria
-([alarms and actions](/architecture/alarms-actions/#the-event_rule)).
+An **expression** is a small piece of text an operator writes wherever the platform needs a computation
+or a judgement: an event rule's criteria (`value > 80 && instance != "aux"`), a calc rule's reduce
+(`avg(temp)`), an action rule's `when` (`severity_rank >= 40`). Every one of them runs on **one engine**,
+so there is exactly one language to learn: `internal/expression`, built on
+[Expr](https://github.com/expr-lang/expr) (pinned at v1.17.8) (#524). To write one in the console, see
+[rules](/admin/rules/) and [calc rules](/admin/calc-rules/).
 
-## Compiling, once
+## Sites
 
-A site declares its environment as a Go struct (the names an expression may use, their types and
-docs), the type an expression must yield (a criteria yields true or false), the builtins it admits
-and its run budget. An expression compiles against that declaration: a name outside it, a result of
-another type, or a parse error is refused with a **diagnostic** carrying the line, the column and an
-operator-readable message (a nested binding is named by its path, `component`, never by a Go type). A
-name nothing binds is said by name (`unbound`, so an editor can offer to bind it), and a `let` that
-would shadow a binding is refused where it is declared. Expr trusts a function call's type on its final
-check without looking inside its arguments again, so the engine clears it, and a fault inside a call's
-argument (an unknown name in `max(fan)`) is never passed over.
-A compiled program is **cached** by its source and its site's declaration in a bounded cache, so a
-hot path (a criteria judged per sample) never recompiles; an event rule also holds its compiled
-criteria per rule version, a failed compile included.
-
-## Safety
-
-Expressions are **sandboxed**: no I/O, no network, no unbounded loops, bounded execution.
-
-- **An allowlist of builtins.** Every Expr builtin is off, and **each site declares the builtins it
-  admits**. A builtin is admitted only once vetted: its cost linear in what the run is charged for,
-  its output no larger than its inputs. The criteria set is comparison, arithmetic, `in`, `contains`
-  / `startsWith` / `endsWith`, `matches` with a constant pattern (capped in compiled size, and charged
-  its subject's length times that size), `len`, `abs` / `ceil` / `floor` / `round` / `min` / `max`
-  on numbers only, `lower` / `upper` / `trim` / `trimPrefix` / `trimSuffix`, and `all` / `any` /
-  `none` / `one` / `count` / `filter` over a bound list with no predicate nested in another.
-  Equality and `in` take scalars and lists of scalars (and a key in a map), never a record, a map,
-  or a list of lists, whose deep comparison no charge covers.
-- **List functions** (#1018) are vetted the same way, each with its cost argument (one charged pass
-  over a list, one value out), and admitted by name where a site binds lists: `max` and `min` over one
-  list of numbers (or over numbers), `avg`, `sum` (with or without a predicate), `majority` (the most
-  common text or bool, its strings charged their bytes, a tie to the value that sorts first), and the
-  one-list `any` and `all` over bools beside their predicate forms. The **trend functions** (#1985)
-  read a list of timestamped points, each a record or map with a number `value` and its `at` in unix
-  seconds: **`slope`** is the least-squares rise per second through them, **`span`** the seconds from
-  the oldest to the newest, and **`growth`** the fitted rise across that span as a share of the
-  points' mean (`slope * span / |mean|`), so `growth(window) > 0.25` reads "rose by more than a
-  quarter of its level" whatever the key's unit. Each is one pass, and a list with fewer than two
-  points, or no time between them, has no trend: 0. A fit, not the newest point less the oldest, so a
-  noisy flat series reads near 0 and one outlier at either end does not read as a rise. They are
-  admitted where a site binds such a list: an [event rule's `window`](/architecture/alarms-actions/#a-trend-rule-reads-a-window-not-a-sample)
-  (beside its number `age`, how long the series has run, the gate that keeps a fill or a restart's
-  refill from reading as a trend) and a calc rule's windowed input. A list function given anything but
-  its list is refused at compile time on the argument. Their names, like every builtin's, can never be
-  bound, so admitting one later never changes what a stored expression means. Expr parses `any`, `all`
-  and `sum` as predicate builtins only, so a call of one with a single argument is told apart before
-  parsing, lexically, and renamed in place to the engine's own function of the same length, which keeps
-  every position in the source where the author wrote it. Builders and encoders (`map`,
-  `reduce`, `repeat`, `replace`, `join`, `uniq`, `flatten`, `toJSON`, the range `..`) are never
-  admitted: their cost is native work that no input charge bounds.
-- **Determinism.** The clock and zone builtins (**`now`**, **`date`**, **`duration`**,
-  **`timezone`**) can never be vetted; a time an expression needs is bound by its caller as data.
-  An expression calls builtins only, never a method or a bound value, and a site's environment
-  holds concrete data types (no interface, so no value whose behavior is chosen at run time). A `$`
-  name (Expr's dynamic `$env`, or the engine's own plumbing) is refused, so a site's bindings are
-  the whole namespace.
-- **Caps and budgets.** A source is at most 4096 bytes and 1000 syntax outposts, and a list or map
-  literal at most 64 entries. A run is bounded by **its site's budget** of what it allocates and
-  what it walks, deterministically; a criteria's is small, and no site's exceeds a fixed ceiling. A
-  wall-clock deadline backs the budget for charged work only: it cannot interrupt a native call,
-  which is why the allowlist exists.
-- **Values are data.** A value bound in the environment (a sample's text, however hostile) is
-  evaluated literally and never executed. Integer arithmetic wraps on overflow, as Go's does,
-  rather than failing.
-- **Compiled unoptimized, and refused rather than crashed.** Expr's optimizer is off: in v1.17.8 it
-  rewrites `filter(list, p)[0]` and `[-1]` into `find` and `findLast` and loses the record's field
-  table on the way, so a field read on the result (`filter(members, .has.a)[0].value.a`) panicked
-  in Expr's compiler. It comes back on when upstream is fixed (#1006). Nothing is charged
-  differently without it: every charge wraps its operand before Expr would fold it. A panic in any
-  compile stage, the engine's own or Expr's, is refused as a type error naming the stage and the
-  construct it was on, never a crash or a nil pointer.
-
-## Sites: the bindings, builtins and budget of each
-
-Each place an expression is written is a **site**, declared once in code. The tables below are
-generated from those declarations (`make gen`), and **`POST /expressions:validate`** (`omniglass
-expression validate`, gated `rule:read`) answers from the same ones: given a site, a source and,
-for criteria, the sample key (for calc, the output key and the rule's inputs), it says whether the
-expression compiles, with each diagnostic's line and column, and returns the site's bindings,
-builtins and budget. The **calc** site (#995) is the first whose bindings are authored with each
-expression: a calc rule's inputs, each bound by its alias as the list of its current values (#1018),
-from a struct type built when the rule is written, so its table describes them rather than listing them,
-with the list functions it admits and the names an alias may not take (both generated, and the
-console's alias check is generated from the same list). The **action** site (#618) is an
-[action rule](/architecture/alarms-actions/#the-action_rule-when-a-message-is-sent)'s `when`: true or
-false for one alarm transition, its bindings the alarm facts a notification's subject and text read in
-snake_case plus the severity's rank, held to that one declaration by a test, so a predicate and a
-rule see the same alarm. The console's **expression field**
-(the rule drawer's **Write as an expression**, #960, and the calc rule's reduce) is that route's face, a
-code editor on CodeMirror 6 (#1000) driven entirely by the route's answer: Expr highlighted as it is
-written, completion of exactly the site's bindings and builtins (as a word is begun, or on Ctrl-Space),
-a binding's doc on hover, and each diagnostic underlined where it sits as well as pointed at beneath under
-its line and column, with the site's bindings and functions listed under the field. The field asks for
-the site's vocabulary while the source is still empty, so the first word completes too. A site's form
-may offer starters (the calc rule's list functions, inserted with the cursor in the slot)
-and an action on a name nothing binds (the calc rule's **Bind it to a key**, in the fault's tooltip and
-beside it). The editor is named by its field's visible label. The editor is a chunk of its own, loaded
-only by a page with an expression site; a page that cannot load it says so and refuses the source. Built today:
+Each place an expression is written is a **site**, declared once in code as a Go struct: the names an
+expression may use and their types and docs, the type it must yield (a criterion yields true or false),
+the builtins it admits, and its run budget. The table below is generated from those declarations
+(`make gen`):
 
 <ExpressionSites />
 
+- **criteria**: an [event rule's](/architecture/alarms-actions/#the-event_rule) fire and clear criteria,
+  over one sample (`value`, `key`, `instance`, `component`) and, for a trend rule, its `window` and
+  `age`.
+- **calc**: a [calc rule's](/architecture/calculations/) reduce. Its bindings are authored with each
+  rule: every input by its alias as the list of its values, from a struct type built when the rule is
+  written, so the table describes them rather than listing them.
+- **action**: an [action rule's](/architecture/alarms-actions/#the-action_rule-when-a-message-is-sent)
+  `when`, over one alarm transition: the alarm facts a notification renders, in snake_case, plus the
+  severity's rank. A test holds the two to one declaration, so a predicate and a message see the same
+  alarm.
+
+**`POST /expressions:validate`** (`omniglass expression validate`, gated `rule:read`) answers from the
+same declarations: given a site, a source and its context (the sample key for criteria; the output key
+and inputs for calc), it says whether the expression compiles, with each diagnostic, and returns the
+site's bindings, builtins and budget.
+
+## Compiling once
+
+An expression compiles against its site's declaration. A name outside it, a result of the wrong type,
+or a parse error is refused with a **diagnostic**: the line, the column and an operator-readable message
+(a nested binding is named by its path, `component`, never by a Go type). A name nothing binds is said
+by name, so an editor can offer to bind it; a `let` that would shadow a binding is refused where it is
+declared. A fault inside a call's argument (an unknown name in `max(fan)`) is checked by the engine
+itself, since Expr trusts a call's result type without looking inside again.
+
+A compiled program is **cached** by its source and its site in a bounded cache, so a hot path (criteria
+judged per sample) never recompiles; an event rule also holds its compiled criteria per rule version, a
+failed compile included.
+
+## Safety
+
+Expressions are **sandboxed**: no I/O, no network, no unbounded loops, bounded execution
+([ADR-0146](/architecture/decisions/#adr-0146-expressions-run-on-pinned-expr-with-an-allowlist-and-per-site-budgets-and-rule-criteria-are-expressions)).
+
+- **An allowlist of builtins.** Every Expr builtin is off, and each site declares the builtins it admits.
+  A builtin is admitted only once vetted: its cost linear in what the run is charged for, its output no
+  larger than its inputs. The criteria set is comparison, arithmetic, `in`, `contains`, `startsWith`,
+  `endsWith`, `matches` with a constant pattern (capped in compiled size and charged its subject's length
+  times that size), `len`, `abs`, `ceil`, `floor`, `round`, `min` and `max` on numbers, `lower`, `upper`,
+  `trim`, `trimPrefix`, `trimSuffix`, and `all`, `any`, `none`, `one`, `count` and `filter` over a bound
+  list with no predicate nested in another. Equality and `in` take scalars and lists of scalars, never a
+  record or a list of lists, whose deep comparison no charge covers. Builders and encoders (`map`,
+  `reduce`, `repeat`, `replace`, `join`, `uniq`, `flatten`, `toJSON`, the range `..`) are never admitted:
+  their cost is native work no input charge bounds.
+- **List functions** (#1018), vetted the same way and admitted where a site binds lists: `max` and `min`
+  over a list of numbers, `avg`, `sum` (with or without a predicate), `majority` (the most common text
+  or bool, a tie to the value that sorts first), and one-list `any` and `all` over bools beside their
+  predicate forms. Expr parses `any`, `all` and `sum` as predicate builtins only, so a one-argument call
+  is told apart lexically before parsing and renamed in place to the engine's own function of the same
+  length, keeping every position in the source where the author wrote it.
+- **Trend functions** (#1985) read a list of timestamped points, each with a number `value` and its `at`
+  in unix seconds: `slope` is the least-squares rise per second, `span` the seconds from oldest to
+  newest, and `growth` the fitted rise across that span as a share of the points' mean
+  (`slope * span / |mean|`), so `growth(window) > 0.25` reads "rose by more than a quarter of its level"
+  whatever the unit. Fewer than two points, or no time between them, is no trend: 0. They are admitted
+  where a site binds such a list: an
+  [event rule's window](/architecture/alarms-actions/#a-trend-rule-reads-a-window-not-a-sample) and a
+  calc rule's [windowed input](/architecture/calculations/#windowed-inputs).
+- **Names stay owned.** A builtin's or list function's name can never be bound, so admitting one later
+  never changes what a stored expression means. A `$` name (Expr's dynamic `$env`) is refused, so a
+  site's bindings are the whole namespace.
+- **Determinism.** The clock and zone builtins (`now`, `date`, `duration`, `timezone`) can never be
+  vetted; a time an expression needs is bound by its caller as data. An expression calls builtins only,
+  never a method, and a site's environment holds concrete data types, so no value chooses its behavior at
+  run time.
+- **Caps and budgets.** A source is at most 4,096 bytes and 1,000 parse-tree elements, a list or map
+  literal at most 64 entries. A run is bounded deterministically by its site's budget of what it
+  allocates and walks, under a fixed ceiling; a wall-clock deadline backs the budget for charged work
+  only, which is why the allowlist exists.
+- **Values are data.** A bound value (a sample's text, however hostile) is evaluated literally, never
+  executed. Integer arithmetic wraps on overflow, as Go's does.
+- **Refused, never crashed.** Expr's optimizer is off: in v1.17.8 it rewrites `filter(list, p)[0]` in a
+  way that panics on a field read of the result, and it comes back on when upstream is fixed (#1006). A
+  panic in any compile stage is refused as a type error naming the stage and the construct.
+
+## The expression field
+
+The console's **expression field** (an event rule's **Write as an expression**, #960; a calc rule's
+reduce; an action rule's `when`) is the validate route's face: a CodeMirror 6 editor (#1000) driven
+entirely by the route's answer. It highlights Expr as it is typed, completes exactly the site's bindings
+and builtins (as a word begins, or on Ctrl-Space, the first word included), shows a binding's doc on
+hover, and underlines each diagnostic where it sits as well as listing it beneath with its line and
+column. A site's form may offer starters (a calc rule's list functions) and an action on an unbound name
+(a calc rule's **Bind it to a key**). The editor is a chunk of its own, loaded only by a page with an
+expression site; a page that cannot load it says so and refuses the source.
+
 ## Diagnostics: clear messages and quick fixes
 
-Expr's own refusals are accurate but speak the checker's language (`sum(members, .has.t) > 0` is
-refused as an operator mismatch at the `>`, when the mistake is the `sum`), and an expression can compile
+Expr's own refusals are accurate but speak the checker's language: `sum(members, .has.t) > 0` is
+refused as an operator mismatch at the `>`, when the mistake is the `sum`. And an expression can compile
 and still probably be wrong. So the engine keeps a **registry of diagnostics** (#1021,
-`internal/expression/diagnostics.go`): each common mistake is one declared rule with
+`internal/expression/diagnostics.go`). Each common mistake is one declared rule with:
 
-- a stable **code** (`sum-of-bools`), a **severity** (an **error** refuses the expression; a **warning**,
-  probably wrong, and a **hint**, could be simpler, ride along with one that compiles and never refuse it),
-  and the **sites** it applies at (criteria, calc, or every site; a site names itself on its environment);
+- a stable **code** (`sum-of-bools`), a **severity** and the **sites** it applies at. An **error** refuses
+  the expression; a **warning** (probably wrong) and a **hint** (could be simpler) ride along with one
+  that compiles and never refuse it.
 - a **trigger**: a **refine** rule runs when the engine refuses an expression and recognises the shape
-  behind the refusal, replacing the message with a clearer one at the place the mistake is (it explains a
-  refusal, so it is always an error); a **lint** rule runs on an expression that compiles, on its checked
-  tree, and flags a likely mistake;
-- a **matcher**, a pure function over the typed tree (and, for a refine rule, the refusal), returning the
-  positions it found;
-- a **message**, and an optional **fix**: one text edit (a range and its replacement) an editor offers as
-  a quick fix;
-- **fixtures** beside it in Go: expressions it must give its diagnostic for and must not, each compiled
-  against a site-shaped environment, with the fixed source a fix must yield (which must compile without
-  it). A rule without both kinds of fixture refuses to register, and a fixture that disagrees with its rule
-  fails the build.
+  behind the refusal, replacing the message with a clearer one at the mistake; a **lint** rule runs on an
+  expression that compiles and flags a likely mistake.
+- a **matcher**, a pure function over the typed tree, returning the positions it found.
+- a **message**, and an optional **fix**: one text edit an editor offers as a quick fix.
+- **fixtures** in Go: expressions it must and must not flag, with the source a fix must yield (which must
+  compile clean). A rule without both kinds of fixture refuses to register, and a fixture that disagrees
+  with its rule fails the build.
 
-`Compile` and `Check` run a site's rules once per compile, through `expr.Compile` itself (a refine rule
-reads the refused expression's tree, typed as far as Expr's checker got, through a visitor that only
-records its root), so a cached program carries its warnings and hints, and a matcher that panics is a bug in the rule: the expression is judged as if the rule were absent,
-never refused by it and never crashing the server.
+A site's rules run once per compile, so a cached program carries its warnings and hints. A matcher that
+panics is a bug in the rule: the expression is judged as if the rule were absent, never refused by it.
 
-`POST /expressions:validate` answers each diagnostic's `severity`, and a registered one's `code` and `fix`,
-so the console's **expression field** shows them where they arise (#1053): an error is underlined with a
-wavy red line and refuses the source, a warning with a wavy amber one and a hint with a dotted line, neither
-marking the field invalid nor stopping a save. Beneath the field each diagnostic names its severity, links
-its code to its entry in the table below, and offers its fix as a button (a keyboard user reaches it with
-Tab; in the editor, F8 moves to the next diagnostic and Mod-Shift-M lists them with their fixes). A fix is
-an edit of the author's own, so Ctrl-Z takes it back. A stored rule's warnings show on its blade as a note,
-never an error banner.
+The validate route answers each diagnostic's `severity`, and a registered one's `code` and `fix`, so the
+expression field shows them where they arise (#1053): an error is a wavy red underline and refuses the
+source, a warning a wavy amber one, a hint a dotted one, neither stopping a save. Beneath the field each
+diagnostic names its severity, links its code to its entry below, and offers its fix as a button (F8
+moves to the next diagnostic; Mod-Shift-M lists them). A fix is the author's own edit, so Ctrl-Z takes it
+back. A stored rule's warnings show on its blade as a note.
 
-The first rules (#1054) are the mistakes authors made first: counting with `sum`, comparing a measured
-number to a decimal with `==`, spelling `all` as a count against a length, and an input the reduce never
-names (a calc site declares its aliases as the expression's inputs). Each is in the table below, with its
-severity and fix.
-
-Every registered diagnostic, generated from the registry (`make gen`): its code, its severity and when it
-runs, its sites, a summary (the diagnostic itself says it in the expression's own terms), and its examples,
-read from its fixtures with the site, inputs and result each is written against: what it flags, with what
-its fix gives, and what it leaves alone, including another refusal the engine makes on its own. The build
-holds the rule to each. Built today:
+Every registered diagnostic, generated from the registry (`make gen`), with the examples its fixtures
+hold it to:
 
 <ExpressionDiagnostics />
 
-:::design[Omniglass functions, with the driver transform and guard sites, tracked in #1331]
+## Not every input is an expression
 
-## Extended with Omniglass functions
+No driver evaluates an expression today. A [driver spec](/architecture/collection/#drivers-the-declarative-menu)
+locates and transforms values with declared selectors and a `cast`, `scale` or enum `map`, and its
+configuration values are typed **inputs** supplied at attach, a secret input a reference resolved under
+the caller's own secret scope. So an operator's value is always data the interpreter reads, never text
+it runs.
 
-Expr is the core, chosen because it is transform-oriented, fast, and sandboxable: a rich operator
-set suited to reshaping collected values (`raw / 100.0`, `int(groups[1])`, `groups[2] == 'true'`).
-On top ride **Omniglass functions**: helpers Expr does not ship, including frame **`encode` /
-`decode`** and the output-format helpers (**hex / ascii / base64**) that binary and raw-TCP
-protocols need, each vetted into the sites that need it. The engine is **not pluggable**: one
-dialect everyone authors in; where an expression is not even needed, prefer a straightforward
-native path.
+:::design[Driver transforms, guards and Omniglass functions, tracked in #1331]
+A driver emit gains an expression **transform** (`raw / 100.0`, `int(groups[1])`) beyond the built
+`cast`, `scale` and `map`, and a driver function gains a **guard** (a false guard skips the poll or the
+step it gates). On top of Expr ride **Omniglass functions** that binary and raw-TCP protocols need: frame
+`encode` and `decode`, and hex, ascii and base64 helpers, each vetted into the sites that need it. A
+driver site binds `$var:<name>` (a variable through the cascade), `$prop.<key>` (a property, readable for
+branching), `$event` (a listener's payload) and the extractor's own inputs (`raw`, `groups`, `outpost`,
+`item`). Configuration values stay data in the environment, never spliced into text, and a secret field
+rendered into a request is masked at interpolation and never surfaces in a log or an error. The engine is
+not pluggable: one dialect everyone authors in.
 :::
 
-:::design[Unit conversion, tracked in #430]
-
-## Unit conversion: `convert(value, "<unit>")`
-
-Stored values are always in their `property_type`'s **canonical unit**; **`convert(value,
-"<unit>")`** lets an operator author against a non-canonical one. The **source unit is
-inferred** from the bound property's canonical unit; the **target** must be a registered unit
-in the **same family** (a compile error otherwise). The conversion comes from the
-[unit catalog](/architecture/properties/#units-one-canonical-unit-per-metric): `to_canonical` /
-`from_canonical` transforms, **affine** or an **Expr** for the rare nonlinear one. So
-`convert(value, "fahrenheit") > 100` reads in Fahrenheit while storage stays in canonical
-celsius. A function rather than a per-unit method: data-driven, general, available wherever
-expressions run.
+:::design[The remaining sites, tracked in #1023]
+| Site | What it evaluates |
+|---|---|
+| rule `scope` | which components or instances a rule applies to, beside the built type-and-id selector |
+| views and lists `filter` | the predicate a structured query composes |
+| dynamic group membership | which entities a group holds, recomputed |
+| calc `filter`, `worst`, `time_in_state` | per-input filters, a fold by a property's declared order, and the windowed time in a state that service levels need |
 :::
 
-:::design[The remaining expression sites, tracked in #1023 and #1331 per row]
+:::design[Unit conversion and divergence, tracked in #2609]
+**`convert(value, "<unit>")`** lets an operator write against a unit other than the key's canonical one:
+`convert(value, "fahrenheit") > 100` reads in Fahrenheit while storage stays in canonical Celsius. The
+source unit is inferred from the bound key, the target must be a registered unit of the same family (a
+compile error otherwise), and the transform comes from the
+[unit catalog](/architecture/properties/#units-one-canonical-unit-per-metric).
 
-## Where expressions will be used
-
-| Site | Leaf | What it evaluates | Tracked in |
-|---|---|---|---|
-| driver emit | transform | reshape a located raw value into the typed sample value, beyond the built `cast` / `scale` / enum `map` | #1331 |
-| driver function | guard | a branch guard (a false guard skips the poll or the step it gates) | #1331 |
-| `calc_rule` | `filter` | per-input filters, `worst` (once property types declare an order) and windowed `time_in_state` for SLIs, beside the built calc site's list functions | #1023 |
-| rule | `scope` | which instances a rule fires for (the Expr scope escape) | #1023 |
-| views / list | `filter` | the structured-query predicate operators compose | #1023 |
-| dynamic group | membership `filter` | recomputed membership | #1023 |
-:::
-
-:::note[Built: a driver's inputs are data, never expression text]
-No driver site evaluates an expression today: a [driver spec](/architecture/collection/#drivers-the-declarative-menu)
-locates and transforms with declared selectors and a `cast` / `scale` / enum `map`, and the expression
-engine is not its dependency. Its configuration values are typed **inputs** supplied at attach, a
-secret input a reference resolved under the caller's own secret scope and delivered to the outpost
-unsealed in its worklist, so an operator value is always data the interpreter reads, never text it
-runs.
-:::
-
-:::design[Function-run bindings, tracked in #1331]
-
-## In-scope bindings
-
-When a driver site gains an expression ([#1331](https://github.com/hyperscaleav/omniglass/issues/1331)),
-its environment exposes: `$var:<name>` (a variable through the cascade), `$prop.<key>` (properties,
-readable for branching; was `$dp.<key>`, renamed with the ADR-0065 vocabulary), `$event` (a
-listener's payload), and the extractor-local inputs a transform reads (`raw`, `groups`, `outpost`,
-`item`). Rule and view contexts bind their own documented environments (the candidate entity, the
-property, the resource row).
-
-## Configuration values and secrets
-
-Operator-supplied configuration values are bound as **data in the environment**, never spliced
-into expression text, so a hostile value is evaluated literally and never executed. Secret
-fields rendered into a request are masked at interpolation time and never surface in a log
-line, error string, or property label.
-:::
-
-:::design[Divergence, tracked in #430]
-
-## Divergence and `disagree(A, B)`
-
-**`disagree(A, B)`** compares two provenances or sources of one key: drift from the declared value, reconcile
-conflict, and cross-source disagreement are all the one operator, surfacing **divergence**,
-the universal anomaly signal. Reading both sides as inputs (never writing a health back into
-either) keeps the pipeline's DAG acyclic.
+**`disagree(A, B)`** compares two provenances or sources of one key, one operator for drift from a
+declared value, a reconcile conflict and cross-source disagreement: divergence, the universal anomaly
+signal. It reads both sides as inputs and never writes back into either, which keeps the pipeline
+acyclic.
 :::
