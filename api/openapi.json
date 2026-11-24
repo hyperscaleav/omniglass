@@ -3157,7 +3157,7 @@
             "type": "string"
           },
           "served_by_id": {
-            "description": "The uuid of served_by, the address the console opens it by (names repeat across places).",
+            "description": "The uuid of served_by, the address the console opens it by (names repeat across locations).",
             "type": "string"
           },
           "simulated": {

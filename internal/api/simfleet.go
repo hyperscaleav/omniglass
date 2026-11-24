@@ -149,7 +149,7 @@ type componentSimOutput struct {
 	Body struct {
 		Simulated   bool                           `json:"simulated" doc:"The component has an endpoint on an outpost and a product a profile simulates."`
 		Outpost     string                         `json:"outpost,omitempty"`
-		ServedByID  string                         `json:"served_by_id,omitempty" doc:"The uuid of served_by, the address the console opens it by (names repeat across places)."`
+		ServedByID  string                         `json:"served_by_id,omitempty" doc:"The uuid of served_by, the address the console opens it by (names repeat across locations)."`
 		ServedBy    string                         `json:"served_by,omitempty" doc:"The simulated component that answers for this one, when this component's endpoint is aimed at that component's address: it is served by that simulation and is not a simulation of its own (everything else here is that device's)."`
 		Connected   bool                           `json:"connected" doc:"The outpost's simulator pulled recently."`
 		Activity    *simDeviceBody                 `json:"activity,omitempty" doc:"What the simulator reports for the component: serving, hits, and its impairment."`
