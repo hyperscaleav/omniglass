@@ -159,3 +159,29 @@ describe("Picker in a drawer", () => {
     expect(screen.getByRole("dialog")).toBeTruthy();
   });
 });
+
+describe("Picker groups", () => {
+  const GROUPED: PickerOption[] = [
+    { value: "m1", label: "Temperature", detail: "temperature-c", group: "Metrics" },
+    { value: "m2", label: "Latency", detail: "latency-ms", group: "Metrics" },
+    { value: "p1", label: "Firmware", detail: "firmware", group: "Properties" },
+  ];
+
+  it("heads each group, keeps their order, and drops a heading with no match", async () => {
+    render(() => <Single options={GROUPED} />);
+    input().focus();
+    fireEvent.keyDown(input(), { key: "ArrowDown" });
+    const list = await listbox();
+    expect(within(list).getAllByRole("presentation").map((h) => h.textContent)).toEqual(["Metrics", "Properties"]);
+    expect(within(list).getAllByRole("option").map((o) => o.firstElementChild?.textContent)).toEqual(["Temperature", "Latency", "Firmware"]);
+    type("firm");
+    await waitFor(() => expect(within(screen.getByRole("listbox")).queryAllByRole("presentation").map((h) => h.textContent)).toEqual(["Properties"]));
+  });
+
+  it("selects a grouped option by value", async () => {
+    render(() => <Single options={GROUPED} />);
+    type("latency");
+    fireEvent.click(within(await listbox()).getByRole("option"));
+    await waitFor(() => expect(screen.getByTestId("value").textContent).toBe("m2"));
+  });
+});

@@ -99,11 +99,9 @@ describe("Metrics page", () => {
     expect(within(blade).getByText("1")).toBeInTheDocument();
     // Official row: the Edit / Delete pair stays in the footer, greyed, with the
     // lock reason on each button's tooltip wrapper.
-    const editBtn = within(blade).getByLabelText("Edit") as HTMLButtonElement;
-    const deleteBtn = within(blade).getByRole("button", { name: /delete/i }) as HTMLButtonElement;
-    expect(editBtn.disabled).toBe(true);
-    expect(deleteBtn.disabled).toBe(true);
-    expect(editBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe("Official: ships with Omniglass and updates with it.");
+    expect(within(blade).getByTestId("footer-note").textContent).toBe("Official, read-only");
+    expect(within(blade).queryByLabelText("Edit")).toBeNull();
+    expect(within(blade).queryByText("Delete")).toBeNull();
   });
 
   it("lets a role-scoped metric_type user edit a custom row", async () => {

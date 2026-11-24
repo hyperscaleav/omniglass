@@ -218,13 +218,13 @@ Coded pages with rich interaction, all reading through views:
 Two layers, deliberately decoupled:
 
 1. **Routes are flat and identity-based.** Every entity page is a top-level path (`/systems`,
-   `/components`, `/templates`, `/config`); a URL addresses the *entity*, never its position in the
+   `/components`, `/templates`, `/variables`); a URL addresses the *entity*, never its position in the
    menu, so deep links stay stable however the menu is reorganized. No taxonomy-nested routes, no
    redirects to maintain.
 2. **The sidebar groups those flat routes into clusters for browsing**: Home, Explore (the one
    door into the fleet, #826: its outline lists every location, system and component, #861),
-   Dashboards, Alarms, Outposts, Values (variables, secrets, config, files),
-   Catalog (a single entry opening the catalog shell, next), Learn, Admin (users, roles,
+   Alarms, Outposts, Values (variables, secrets, files),
+   Catalog (a single entry opening the catalog shell, next), Admin (users, roles,
    groups, audit, and the Settings leaf). A cluster is pure presentation, not a destination:
    rearrangeable and user-customizable without touching a route.
 
@@ -291,8 +291,8 @@ them (#1346). Targets is the one Actions entry off the read floor: `notification
 sensitive resource, so only an admin sees it.
 
 **Values is its own top-level group**: values set on fleet entities and resolved
-down the cascade, a distinct kind of thing from the entities themselves. **Config is the CI store** (desired
-configuration, optionally observed back to detect drift and reconcile), distinct from platform
+down the cascade, a distinct kind of thing from the entities themselves. **Declared values** (desired
+configuration, optionally observed back to detect drift and reconcile) have no console page yet (#1248, #404), so the group holds no entry for them; they stay distinct from platform
 Settings (preferences: severity scales, schedules, retention, defaults) and Variables (free
 interpolated values, no observed side); the full split is
 [variables, secrets, and declared values](/architecture/variables/).
@@ -303,11 +303,13 @@ entities, and enrolling one is an admin's job, so their entry sits in Admin (liv
 `outpost:read` plus ABAC scope; ADR-1767). **Endpoints and tasks are not nav items**: an endpoint is a
 panel on a component, a task a panel on an outpost, facets of the owning entity's detail page.
 
-Admin is the renamed Settings group: Users, Roles, User groups, Audit, Outposts, Status (the Platform
-health page, #1767: whether Omniglass itself is well is administration, not fleet work, so it sits
+Admin is the renamed Settings group: Users, Roles, User groups, Audit, Outposts, Platform health (#1767:
+whether Omniglass itself is well is administration, not fleet work, so it sits
 here behind the same `outpost:read` gate as Outposts, whose rows it reads), plus the live Settings leaf, the
 platform-preferences page. **Every sidebar tab is one word**, a group, a leaf and a group's child
-alike (`nav.test.ts` holds it); a tab's word names the door, and the page it opens may carry a
+alike (`nav.test.ts` holds it), with two exceptions that name a page whose own name has no good
+single word: User groups and Platform health (ADR-2446: the door, the top bar and the page heading
+all read that one name). Any other tab's word names the door, and the page it opens may carry a
 longer title.
 
 **Home today** (`/`) is a row of tiles, each a scoped read of the platform rather than a

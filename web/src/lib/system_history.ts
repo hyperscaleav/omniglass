@@ -106,6 +106,9 @@ export function stretchesOf(spans: Span<string>[], now: number): UnhealthyStretc
     cur = [];
   };
   for (const s of spans) {
+    // A stretch that held under half a second (an edge recorded the instant
+    // the next one was) is not an entry: "Commissioning, 0s" says nothing.
+    if (s.to - s.from < 500 && Math.abs(s.to - now) >= 1000) continue;
     if (s.value === "healthy") flush();
     else cur.push(s);
   }

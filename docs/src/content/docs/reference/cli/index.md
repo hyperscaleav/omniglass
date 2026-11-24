@@ -164,13 +164,13 @@ Commands for the alarm resource
 
 ### `omniglass alarm list`
 
-List the fleet's active alarms
+List the fleet's alarms
 
 ```
 omniglass alarm list [flags]
 ```
 
-What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Each row names its component's location and the systems it belongs to that the caller may read. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.
+What is wrong now across every component the caller may read, in one read: by default the active alarms (state=cleared is the history, each row carrying when it cleared, and state=all both; since and until keep the alarms whose raised-to-cleared interval overlaps that range, so one raised before it and still open in it is kept, and since after until is a 400), worst severity first and newest first within a severity, each naming its component. Each row names its component's location and the systems it belongs to that the caller may read. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -179,8 +179,11 @@ What is wrong now across every component the caller may read, in one read: the a
 | `--location` | string | (none) | Only alarms whose component sits in this location or any location below it, by name |
 | `--page-token` | string | (none) | The next_page_token of the previous page: resumes the same worst-first order after it, however many alarms there are |
 | `--severity` | stringSlice | `[]` | Only alarms at these severity levels, by name (see /severity-levels); repeat the parameter for several |
+| `--since` | string | (none) | Only the alarms still raised at or after this RFC 3339 time: active, or cleared at or after it |
 | `--snoozed` | string | (none) | true keeps the snoozed alarms, false the ones not snoozed; absent keeps both |
+| `--state` | string | (none) | Which alarms: active (still raised, the default), cleared (a cleared alarm is history, with when it cleared), or all |
 | `--unacknowledged` | bool | `false` | Only the alarms nobody has looked at: the queue an operator, or an agent, works |
+| `--until` | string | (none) | Only the alarms raised at or before this RFC 3339 time; must not be earlier than since |
 
 Example:
 
@@ -1263,7 +1266,7 @@ List a component's alarms
 omniglass component alarm list <name> [flags]
 ```
 
-What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set, and since/until to keep only the alarms raised during a range (still raised at since or later, raised by until), newest first and capped at 500. since after until is a 400. Gated by component:read; an out-of-scope component is a non-disclosing 404.
 
 Arguments:
   <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
@@ -1271,7 +1274,9 @@ Arguments:
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--include-cleared` | bool | `false` | Include cleared alarms, so the list is the history rather than what is wrong now |
+| `--since` | string | (none) | Only the alarms still raised at or after this RFC 3339 time: active, or cleared at or after it. With include_cleared, a timeline's read of what was raised during a range |
 | `--unacknowledged` | bool | `false` | Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the alarms that came and went unattended |
+| `--until` | string | (none) | Only the alarms raised at or before this RFC 3339 time; must not be earlier than since |
 
 Example:
 
@@ -1519,7 +1524,7 @@ Delete a component
 omniglass component delete <name>
 ```
 
-Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
+Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
 
 Arguments:
   <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
@@ -1862,10 +1867,17 @@ omniglass component impairment set <name>
 List components in scope
 
 ```
-omniglass component list
+omniglass component list [flags]
 ```
 
-Lists the components the caller may read, each filtered to its scope subtree. Gated by component:read.
+Lists the components the caller may read, each filtered to its scope subtree. Optional product, driver and component_type filters narrow to the components a catalog row classifies or a driver serves, and limit caps the page while total counts every match (the catalog drawers' used-by reads). Gated by component:read.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--component-type` | string | (none) | Only components of a product classified under exactly this component type (name or uuid) |
+| `--driver` | string | (none) | Only components of a product this driver serves (name or uuid) |
+| `--limit` | int | `0` | Cap the page at this many rows; 0 or absent is no cap. total still counts every match. |
+| `--product` | string | (none) | Only components of this product (name or uuid) |
 
 Example:
 
@@ -3516,7 +3528,7 @@ Delete a location
 omniglass location delete <name>
 ```
 
-Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
+Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
 
 Arguments:
   <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
@@ -5075,10 +5087,15 @@ omniglass product get boreal-edge-55
 List products
 
 ```
-omniglass product list
+omniglass product list [flags]
 ```
 
-Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
+Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. declares_metric and declares_property narrow it to the products whose contract declares that key. Gated by product:read.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--declares-metric` | string | (none) | Only products whose contract declares this metric (name or uuid) |
+| `--declares-property` | string | (none) | Only products whose contract declares this property (name or uuid) |
 
 Example:
 
@@ -5961,6 +5978,26 @@ Example:
 omniglass simulation get
 ```
 
+### `omniglass simulation plan-component`
+
+Plan a simulated component
+
+```
+omniglass simulation plan-component <name> [flags]
+```
+
+Previews what adding a simulated component of a product would create (see add-outpost-simulation-component): the lowest free address in the simulated block (127.60.0.0/16) and the endpoints the collector would reach it through, a driver attach with its inputs (a secret input names the platform secret, never its value) or a reachability probe with its target, planned exactly as the add plans them. Creates nothing and reserves nothing: the address is not held, so an add or another plan in between may take it, and an add made after this plan then lands on the next free address instead. Gated by simulation:read, and needs outpost:read on the outpost. An outpost that does not exist is a 404, one with no simulator connected a 409, a product no profile simulates a 422, and a full block or a profile with no surface the collector can reach a 409.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--product` | string | (none) | A product a simulator profile simulates |
+
+Example:
+
+```sh
+omniglass simulation plan-component <name>
+```
+
 ### `omniglass simulation plan-system`
 
 Plan a simulated system to a standard
@@ -6323,13 +6360,18 @@ Commands for the alarm resource
 List a system's members' alarms
 
 ```
-omniglass system alarm list <name>
+omniglass system alarm list <name> [flags]
 ```
 
-Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its alarms, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. With since (and optionally until) it is instead every alarm raised during that range, active or cleared, the same cap applying. It is what a system's Activity reads to explain its alarms, one request however many members the system has. since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.
 
 Arguments:
   <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--since` | string | (none) | Read the alarms raised during since..until instead of the default (active ones, and those cleared in the last 30 days): active, or cleared at or after since, and raised at or before until |
+| `--until` | string | (none) | The range's end, with since; defaults to now and must not be earlier than since |
 
 Example:
 
@@ -6440,7 +6482,7 @@ Delete a system
 omniglass system delete <name>
 ```
 
-Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
+Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
 
 Arguments:
   <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
@@ -6517,7 +6559,7 @@ Read a system's health
 omniglass system health list <name> [flags]
 ```
 
-The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Transitions are the recorded edges inside since..until (default the last 30 days), one entry per change; since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Members lists every component bound into the system, slotted or not, with its own health, its open alarms and the slot it fills; a member outside every slot is shown and not rolled up, since only slots decide the health (ADR-2459). Reason names the slots behind the health. Transitions are the recorded edges inside since..until (default the last 30 days), one entry per change; since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.
 
 Arguments:
   <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
@@ -6538,10 +6580,15 @@ omniglass system health list <name>
 List systems in scope
 
 ```
-omniglass system list
+omniglass system list [flags]
 ```
 
-Lists the systems the caller may read, each filtered to its scope subtree. Gated by system:read.
+Lists the systems the caller may read, each filtered to its scope subtree. An optional standard filter narrows to the systems built to one standard, and limit caps the page while total counts every match. Gated by system:read.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--limit` | int | `0` | Cap the page at this many rows; 0 or absent is no cap. total still counts every match. |
+| `--standard` | string | (none) | Only systems built to this standard (name or uuid) |
 
 Example:
 

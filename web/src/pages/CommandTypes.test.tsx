@@ -99,14 +99,9 @@ describe("Command Types page", () => {
       return el as HTMLElement;
     });
     expect(within(blade).queryByRole("alert")).toBeNull();
-    const editBtn = within(blade).getByLabelText("Edit") as HTMLButtonElement;
-    const deleteBtn = within(blade).getByText("Delete").closest("button") as HTMLButtonElement;
-    expect(editBtn.disabled).toBe(true);
-    expect(deleteBtn.disabled).toBe(true);
-    expect(editBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe("Official: ships with Omniglass and updates with it.");
-    expect(deleteBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe("Official: ships with Omniglass and updates with it.");
-    fireEvent.click(editBtn);
-    expect(within(blade).queryByText("Save")).toBeNull();
+    expect(within(blade).getByTestId("footer-note").textContent).toBe("Official, read-only");
+    expect(within(blade).queryByLabelText("Edit")).toBeNull();
+    expect(within(blade).queryByText("Delete")).toBeNull();
   });
 
   it("shows a metric-armed target with its lane hint", () => {

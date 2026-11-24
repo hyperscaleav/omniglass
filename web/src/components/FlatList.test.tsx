@@ -106,3 +106,26 @@ describe("FlatList loading placeholder", () => {
     expect(screen.queryAllByTestId("list-loading-row")).toHaveLength(0);
   });
 });
+
+// #2431 item 6: an empty list shows its empty state alone, no column header row
+// above it; a filter that matches nothing keeps the head.
+describe("FlatList empty state", () => {
+  const cfg = (data: R[]) => ({
+    entity: { name: "thing", plural: "things" },
+    rows: () => data,
+    empty: "No things yet.",
+    filterKeys: [{ key: "name", type: "string" as const, hint: "substring" as const, get: (r: R) => r.id, values: () => [] }],
+    columns: [{ key: "id", label: "Id", cell: (r: R) => <span>{r.id}</span> }],
+  });
+
+  it("renders no column header row when there are no rows", () => {
+    render(() => <FlatList<R> config={cfg([])} />);
+    expect(screen.getByText("No things yet.")).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader")).toBeNull();
+  });
+
+  it("keeps the column headers when rows exist", () => {
+    render(() => <FlatList<R> config={cfg(rows)} />);
+    expect(screen.getByRole("columnheader", { name: "Id" })).toBeInTheDocument();
+  });
+});

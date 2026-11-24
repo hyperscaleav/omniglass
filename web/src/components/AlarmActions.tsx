@@ -4,6 +4,7 @@ import { SnoozeControl } from "./SnoozeButton";
 import TroubleshootButton from "./TroubleshootButton";
 import Button from "./Button";
 import { Check } from "./icons";
+import SendCommandButton, { useSendCommand } from "./SendCommandButton";
 import type { createTimelineToggles } from "./AlarmTimeline";
 import { can, useMe } from "../lib/auth";
 
@@ -38,6 +39,9 @@ export type AlarmActionsShow = {
   ack?: boolean;
   snooze?: boolean;
   troubleshoot?: boolean;
+  // Send command (#2466): the command form with this component filled in, drawn
+  // for a caller who may issue and only where a driver binds a command.
+  command?: boolean;
   // The open state of the caller's timelines, from createTimelineToggles.
   timeline?: ReturnType<typeof createTimelineToggles>;
   // Clear, for a surface that offers it: the caller owns the write.
@@ -56,6 +60,8 @@ export default function AlarmActions(props: {
 }): JSX.Element {
   const me = useMe();
   const snoozeAllowed = () => props.allow?.snooze ?? can(me.data, "alarm", "snooze");
+  const sendCommand = useSendCommand(() => props.componentId);
+  const commandable = () => !!props.show.command && sendCommand.available();
   const troubleshootable = () =>
     props.show.troubleshoot && props.alarm.component && props.alarm.raised_at
       ? { component: props.alarm.component, raised_by_rule: props.alarm.raised_by_rule, raised_at: props.alarm.raised_at, message: props.alarm.message }
@@ -68,6 +74,7 @@ export default function AlarmActions(props: {
       (props.show.ack && !props.alarm.acknowledged && (props.allow?.ack ?? can(me.data, "alarm", "acknowledge"))) ||
       (props.show.clear && props.show.clear.allowed) ||
       (props.show.snooze && snoozeAllowed()) ||
+      commandable() ||
       (troubleshootable() && can(me.data, "assistant", "use")) ||
       props.show.timeline
     );
@@ -86,6 +93,9 @@ export default function AlarmActions(props: {
       </Show>
       <Show when={props.show.snooze}>
         <SnoozeControl componentId={props.componentId} alarm={props.alarm} surface={props.surface ?? "alarm-actions"} allowed={snoozeAllowed()} />
+      </Show>
+      <Show when={commandable()}>
+        <SendCommandButton componentId={props.componentId} name={props.alarm.component} bound={sendCommand.bound()} />
       </Show>
       <Show when={troubleshootable()}>{(t) => <TroubleshootButton alarm={t()} />}</Show>
       <Show when={props.show.timeline}>{(tl) => tl().button(props.alarm.id, props.alarm.message ?? "")}</Show>

@@ -3,13 +3,13 @@ import { render, fireEvent, screen, waitFor, within } from "@solidjs/testing-lib
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import SeverityLevels from "./SeverityLevels";
 import { ME_KEY, type Me } from "../lib/auth";
-import { OFFICIAL_LOCK } from "../lib/catalog";
 import { MAJOR_LEVEL, SEEDED_LEVELS, seedSeverityLevels } from "../lib/testseverity";
 import { componentAlarmsKey } from "../lib/alarms";
 import { SYSTEM_HEALTHS_KEY, locationHealthKey, systemHealthKey } from "../lib/health";
 import { FLEET_VIEW_KEY } from "../lib/fleet";
 import { COMPONENTS_KEY } from "../lib/components";
 import { EVENT_RULES_KEY } from "../lib/event_rules";
+import { answerConfirms } from "../lib/confirm.testkit";
 
 // The severity levels page (#921, authored since #930): the catalog an event
 // rule raises at, beside the rules. Each level shows its rank, its label in its
@@ -221,9 +221,9 @@ describe("Severity levels page", () => {
     mount();
     openLevel("high");
     const b = await blade();
-    const editBtn = within(b).getByLabelText("Edit") as HTMLButtonElement;
-    expect(editBtn.disabled).toBe(true);
-    expect(editBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe(OFFICIAL_LOCK);
+    expect(within(b).getByTestId("footer-note").textContent).toBe("Official, read-only");
+    expect(within(b).queryByLabelText("Edit")).toBeNull();
+    expect(within(b).queryByText("Delete")).toBeNull();
   });
 
   it("greys an operator level's Edit for a reader with what it needs", async () => {
@@ -237,7 +237,7 @@ describe("Severity levels page", () => {
 
   it("deletes an operator level after a confirmation", async () => {
     const writes = catchWrites();
-    const ask = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const ask = answerConfirms(true);
     mount();
     openLevel("major");
     const b = await blade();
@@ -250,7 +250,7 @@ describe("Severity levels page", () => {
 
   it("says why the server refused a delete: a level in use stays", async () => {
     catchWrites({ status: 409, detail: "an alarm or an event rule still names this severity level" });
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    answerConfirms(true);
     mount();
     openLevel("major");
     const b = await blade();

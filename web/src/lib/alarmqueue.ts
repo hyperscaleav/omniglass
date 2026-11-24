@@ -5,14 +5,27 @@ import type { Alarm, FleetAlarmsQuery } from "./alarms";
 // address (`/alarms?state=active&severity=critical&ack=no`) so the page can be
 // handed to a colleague or to omnibot (pageSubject) and read back the same.
 // Four facets, each a chip: severity (one or more levels), location (a subtree,
-// by name), ack (yes | no) and snoozed (yes | no). `state=active` is the one
-// state the queue has (cleared alarms are history, not queue) and is accepted
-// so a link that names it still reads.
+// by name), ack (yes | no) and snoozed (yes | no). The state is
+// not a chip: `state=active` is the queue an operator works, `state=cleared`
+// and `state=all` read the history (#2426), each cleared row with when it
+// cleared and how long it was raised.
+
+export type AlarmState = "active" | "cleared" | "all";
+export const ALARM_STATES: AlarmState[] = ["active", "cleared", "all"];
+
+// stateFromParams reads the address's state; anything unknown is the queue.
+export function stateFromParams(p: Params): AlarmState {
+  const v = list(p.state)[0];
+  return (ALARM_STATES as string[]).includes(v) ? (v as AlarmState) : "active";
+}
 
 export const SEVERITY = "severity";
 export const LOCATION = "location";
 export const ACK = "ack";
 export const SNOOZED = "snoozed";
+// The rule that raised an alarm, by name (#2432). The server does not narrow by it
+// (no `rule` query parameter yet), so it holds over the rows loaded, like the free-text filter.
+export const RULE = "rule";
 
 const YES_NO = ["yes", "no"];
 
@@ -29,6 +42,8 @@ export function chipsFromParams(p: Params): Chip[] {
   if (sev.length) chips.push({ key: SEVERITY, op: "eq", values: sev });
   const loc = list(p.location)[0];
   if (loc) chips.push({ key: LOCATION, op: "eq", values: [loc] });
+  const rule = list(p.rule)[0];
+  if (rule) chips.push({ key: RULE, op: "eq", values: [rule] });
   for (const [key, param] of [[ACK, p.ack], [SNOOZED, p.snoozed]] as const) {
     const v = list(param)[0];
     if (v && YES_NO.includes(v)) chips.push({ key, op: "eq", values: [v] });
@@ -38,12 +53,13 @@ export function chipsFromParams(p: Params): Chip[] {
 
 // paramsFromChips writes chips back to the address: the inverse of
 // chipsFromParams, `state=active` always first so the link names what it shows.
-export function paramsFromChips(chips: Chip[]): Record<string, string | undefined> {
-  const out: Record<string, string | undefined> = { state: "active", severity: undefined, location: undefined, ack: undefined, snoozed: undefined };
+export function paramsFromChips(chips: Chip[], state: AlarmState = "active"): Record<string, string | undefined> {
+  const out: Record<string, string | undefined> = { state, severity: undefined, location: undefined, ack: undefined, snoozed: undefined, rule: undefined };
   for (const c of chips) {
     if (c.op !== "eq" || !c.values.length) continue;
     if (c.key === SEVERITY) out.severity = c.values.join(",");
     else if (c.key === LOCATION) out.location = c.values[0];
+    else if (c.key === RULE) out.rule = c.values[0];
     else if (c.key === ACK || c.key === SNOOZED) out[c.key] = c.values[0];
   }
   return out;
@@ -52,8 +68,9 @@ export function paramsFromChips(chips: Chip[]): Record<string, string | undefine
 // queryFromChips is the server's own filter for the chips: the queue is
 // narrowed where it is read, so a filter holds over a queue longer than the
 // pages loaded, and the rows that land are already the filtered set.
-export function queryFromChips(chips: Chip[]): FleetAlarmsQuery {
+export function queryFromChips(chips: Chip[], state: AlarmState = "active"): FleetAlarmsQuery {
   const q: FleetAlarmsQuery = {};
+  if (state !== "active") q.state = state;
   for (const c of chips) {
     if (c.op !== "eq" || !c.values.length) continue;
     if (c.key === SEVERITY) q.severity = c.values;
@@ -84,7 +101,13 @@ export function alarmFilterKeys(chips: () => Chip[], severities: () => string[])
       },
       values: (rows) => [...new Set(rows.map((a) => a.location).filter((l): l is string => !!l))].sort(),
     },
+    { key: RULE, type: "string", hint: "exact", get: (a) => a.raised_by_rule ?? "", values: (rows) => [...new Set(rows.map((a) => a.raised_by_rule).filter((r): r is string => !!r))].sort() },
     { key: ACK, type: "string", hint: "exact", get: (a) => (a.acknowledged ? "yes" : "no"), values: () => YES_NO },
     { key: SNOOZED, type: "string", hint: "exact", get: (a) => (a.snoozed_until ? "yes" : "no"), values: () => YES_NO },
   ];
+}
+
+// alarmsForRuleHref is the queue filtered to the alarms one rule raised (#2432).
+export function alarmsForRuleHref(rule: string): string {
+  return `/alarms?${new URLSearchParams({ state: "active", rule }).toString()}`;
 }
